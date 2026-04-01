@@ -9,13 +9,17 @@ import (
 )
 
 type identityCacheStub struct {
-	maskedSessionID string
+	maskedSessionID     string
+	fingerprint         *Fingerprint
+	setFingerprintCount int
 }
 
 func (s *identityCacheStub) GetFingerprint(_ context.Context, _ int64) (*Fingerprint, error) {
-	return nil, nil
+	return cloneFingerprintForTest(s.fingerprint), nil
 }
-func (s *identityCacheStub) SetFingerprint(_ context.Context, _ int64, _ *Fingerprint) error {
+func (s *identityCacheStub) SetFingerprint(_ context.Context, _ int64, fp *Fingerprint) error {
+	s.setFingerprintCount++
+	s.fingerprint = cloneFingerprintForTest(fp)
 	return nil
 }
 func (s *identityCacheStub) GetMaskedSessionID(_ context.Context, _ int64) (string, error) {
@@ -79,4 +83,12 @@ func TestIdentityService_RewriteUserIDWithMasking_PreservesTopLevelFieldOrder(t 
 
 func strconvQuote(v string) string {
 	return `"` + strings.ReplaceAll(strings.ReplaceAll(v, `\`, `\\`), `"`, `\"`) + `"`
+}
+
+func cloneFingerprintForTest(fp *Fingerprint) *Fingerprint {
+	if fp == nil {
+		return nil
+	}
+	cloned := *fp
+	return &cloned
 }
