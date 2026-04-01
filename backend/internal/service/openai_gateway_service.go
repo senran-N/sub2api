@@ -1022,6 +1022,10 @@ func isOpenAITransientProcessingError(upstreamStatusCode int, upstreamMsg string
 	return match(string(upstreamBody))
 }
 
+func isOpenAIPoolModeRetryableStatus(statusCode int) bool {
+	return statusCode == http.StatusTooManyRequests
+}
+
 // ExtractSessionID extracts the raw session ID from headers or body without hashing.
 // Used by ForwardAsAnthropic to pass as prompt_cache_key for upstream cache.
 func (s *OpenAIGatewayService) ExtractSessionID(c *gin.Context, body []byte) string {
@@ -1362,32 +1366,35 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 				}
 				if !clearSticky && account.IsSchedulable() && account.IsOpenAI() &&
 					(requestedModel == "" || account.IsModelSupported(requestedModel)) {
-					account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
-					if account == nil {
-						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
-					} else {
-						result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
-						if err == nil && result.Acquired {
+					result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
+					if err == nil && result.Acquired {
+						verified := s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
+						if verified == nil {
+							if result.ReleaseFunc != nil {
+								result.ReleaseFunc()
+							}
+							_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+						} else {
 							_ = s.refreshStickySessionTTL(ctx, groupID, sessionHash, openaiStickySessionTTL)
 							return &AccountSelectionResult{
-								Account:     account,
+								Account:     verified,
 								Acquired:    true,
 								ReleaseFunc: result.ReleaseFunc,
 							}, nil
 						}
+					}
 
-						waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, accountID)
-						if waitingCount < cfg.StickySessionMaxWaiting {
-							return &AccountSelectionResult{
-								Account: account,
-								WaitPlan: &AccountWaitPlan{
-									AccountID:      accountID,
-									MaxConcurrency: account.Concurrency,
-									Timeout:        cfg.StickySessionWaitTimeout,
-									MaxWaiting:     cfg.StickySessionMaxWaiting,
-								},
-							}, nil
-						}
+					waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, accountID)
+					if waitingCount < cfg.StickySessionMaxWaiting {
+						return &AccountSelectionResult{
+							Account: account,
+							WaitPlan: &AccountWaitPlan{
+								AccountID:      accountID,
+								MaxConcurrency: account.Concurrency,
+								Timeout:        cfg.StickySessionWaitTimeout,
+								MaxWaiting:     cfg.StickySessionMaxWaiting,
+							},
+						}, nil
 					}
 				}
 			}
@@ -1504,21 +1511,62 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	}
 
 	// ============ Layer 3: Fallback wait ============
-	sortAccountsByPriorityAndLastUsed(candidates, false)
-	for _, acc := range candidates {
-		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel)
-		if fresh == nil {
-			continue
+	if len(candidates) > 0 {
+		waitLoadMap := loadMap
+		if waitLoadMap == nil {
+			waitLoadMap = map[int64]*AccountLoadInfo{}
 		}
-		return &AccountSelectionResult{
-			Account: fresh,
-			WaitPlan: &AccountWaitPlan{
-				AccountID:      fresh.ID,
-				MaxConcurrency: fresh.Concurrency,
-				Timeout:        cfg.FallbackWaitTimeout,
-				MaxWaiting:     cfg.FallbackMaxWaiting,
-			},
-		}, nil
+		bestWaitIdx := 0
+		for i := 1; i < len(candidates); i++ {
+			current := candidates[i]
+			best := candidates[bestWaitIdx]
+			currentLoad := waitLoadMap[current.ID]
+			bestLoad := waitLoadMap[best.ID]
+			if currentLoad == nil {
+				currentLoad = &AccountLoadInfo{AccountID: current.ID}
+			}
+			if bestLoad == nil {
+				bestLoad = &AccountLoadInfo{AccountID: best.ID}
+			}
+			if currentLoad.WaitingCount != bestLoad.WaitingCount {
+				if currentLoad.WaitingCount < bestLoad.WaitingCount {
+					bestWaitIdx = i
+				}
+				continue
+			}
+			if currentLoad.LoadRate != bestLoad.LoadRate {
+				if currentLoad.LoadRate < bestLoad.LoadRate {
+					bestWaitIdx = i
+				}
+				continue
+			}
+			if current.Priority != best.Priority {
+				if current.Priority < best.Priority {
+					bestWaitIdx = i
+				}
+				continue
+			}
+			switch {
+			case current.LastUsedAt == nil && best.LastUsedAt != nil:
+				bestWaitIdx = i
+			case current.LastUsedAt != nil && best.LastUsedAt == nil:
+			case current.LastUsedAt != nil && best.LastUsedAt != nil && current.LastUsedAt.Before(*best.LastUsedAt):
+				bestWaitIdx = i
+			}
+		}
+
+		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, candidates[bestWaitIdx], requestedModel)
+		if fresh != nil {
+			return &AccountSelectionResult{
+				Account: fresh,
+				WaitPlan: &AccountWaitPlan{
+					AccountID:      fresh.ID,
+					MaxConcurrency: fresh.Concurrency,
+					Timeout:        cfg.FallbackWaitTimeout,
+					MaxWaiting:     cfg.FallbackMaxWaiting,
+				},
+			}, nil
+		}
 	}
 
 	return nil, ErrNoAvailableAccounts
@@ -2261,7 +2309,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				return nil, &UpstreamFailoverError{
 					StatusCode:             resp.StatusCode,
 					ResponseBody:           respBody,
-					RetryableOnSameAccount: account.IsPoolMode() && (isPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
+					RetryableOnSameAccount: account.IsPoolMode() && (isOpenAIPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
 				}
 			}
 			return s.handleErrorResponse(ctx, resp, c, account, body)

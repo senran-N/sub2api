@@ -261,6 +261,12 @@ func (h *ConcurrencyHelper) AcquireUserSlotWithWait(c *gin.Context, userID int64
 	return h.waitForSlotWithPing(c, "user", userID, maxConcurrency, isStream, streamStarted)
 }
 
+// AcquireUserSlotAfterQueueing waits for a user slot without repeating the caller's
+// immediate acquire attempt. Used by hot paths that already performed a fast try.
+func (h *ConcurrencyHelper) AcquireUserSlotAfterQueueing(c *gin.Context, userID int64, maxConcurrency int, isStream bool, streamStarted *bool) (func(), error) {
+	return h.waitForSlotWithPingTimeout(c, "user", userID, maxConcurrency, maxConcurrencyWait, isStream, streamStarted, false)
+}
+
 // AcquireAccountSlotWithWait acquires an account concurrency slot, waiting if necessary.
 // For streaming requests, sends ping events during the wait.
 // streamStarted is updated if streaming response has begun.
@@ -374,6 +380,12 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 // AcquireAccountSlotWithWaitTimeout acquires an account slot with a custom timeout (keeps SSE ping).
 func (h *ConcurrencyHelper) AcquireAccountSlotWithWaitTimeout(c *gin.Context, accountID int64, maxConcurrency int, timeout time.Duration, isStream bool, streamStarted *bool) (func(), error) {
 	return h.waitForSlotWithPingTimeout(c, "account", accountID, maxConcurrency, timeout, isStream, streamStarted, true)
+}
+
+// AcquireAccountSlotAfterQueueingWithWaitTimeout waits for an account slot
+// without repeating the caller's immediate acquire attempt.
+func (h *ConcurrencyHelper) AcquireAccountSlotAfterQueueingWithWaitTimeout(c *gin.Context, accountID int64, maxConcurrency int, timeout time.Duration, isStream bool, streamStarted *bool) (func(), error) {
+	return h.waitForSlotWithPingTimeout(c, "account", accountID, maxConcurrency, timeout, isStream, streamStarted, false)
 }
 
 // nextBackoff 计算下一次退避时间

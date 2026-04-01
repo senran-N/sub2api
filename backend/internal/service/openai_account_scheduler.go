@@ -564,6 +564,87 @@ func buildOpenAIWeightedSelectionOrder(
 	return order
 }
 
+func buildOpenAIImmediateSelectionOrder(
+	candidates []openAIAccountCandidateScore,
+	topK int,
+	req OpenAIAccountScheduleRequest,
+) []openAIAccountCandidateScore {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	rankedTopK := selectTopKOpenAICandidates(candidates, topK)
+	if len(rankedTopK) == 0 {
+		return nil
+	}
+	if len(rankedTopK) == len(candidates) {
+		return buildOpenAIWeightedSelectionOrder(rankedTopK, req)
+	}
+
+	selectionOrder := buildOpenAIWeightedSelectionOrder(rankedTopK, req)
+	selected := make(map[int64]struct{}, len(selectionOrder))
+	for _, candidate := range selectionOrder {
+		if candidate.account != nil {
+			selected[candidate.account.ID] = struct{}{}
+		}
+	}
+
+	remaining := make([]openAIAccountCandidateScore, 0, len(candidates)-len(selectionOrder))
+	for _, candidate := range candidates {
+		if candidate.account == nil {
+			continue
+		}
+		if _, exists := selected[candidate.account.ID]; exists {
+			continue
+		}
+		remaining = append(remaining, candidate)
+	}
+	sort.Slice(remaining, func(i, j int) bool {
+		return isOpenAIAccountCandidateBetter(remaining[i], remaining[j])
+	})
+
+	return append(selectionOrder, remaining...)
+}
+
+func chooseOpenAIWaitCandidate(candidates []openAIAccountCandidateScore) *openAIAccountCandidateScore {
+	if len(candidates) == 0 {
+		return nil
+	}
+	best := &candidates[0]
+	for i := 1; i < len(candidates); i++ {
+		candidate := &candidates[i]
+		if candidate.loadInfo == nil {
+			continue
+		}
+		if best == nil || best.loadInfo == nil {
+			best = candidate
+			continue
+		}
+		if candidate.loadInfo.WaitingCount != best.loadInfo.WaitingCount {
+			if candidate.loadInfo.WaitingCount < best.loadInfo.WaitingCount {
+				best = candidate
+			}
+			continue
+		}
+		if candidate.loadInfo.LoadRate != best.loadInfo.LoadRate {
+			if candidate.loadInfo.LoadRate < best.loadInfo.LoadRate {
+				best = candidate
+			}
+			continue
+		}
+		if candidate.account != nil && best.account != nil && candidate.account.Priority != best.account.Priority {
+			if candidate.account.Priority < best.account.Priority {
+				best = candidate
+			}
+			continue
+		}
+		if isOpenAIAccountCandidateBetter(*candidate, *best) {
+			best = candidate
+		}
+	}
+	return best
+}
+
 func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	ctx context.Context,
 	req OpenAIAccountScheduleRequest,
@@ -700,16 +781,11 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	if topK <= 0 {
 		topK = 1
 	}
-	rankedCandidates := selectTopKOpenAICandidates(candidates, topK)
-	selectionOrder := buildOpenAIWeightedSelectionOrder(rankedCandidates, req)
+	selectionOrder := buildOpenAIImmediateSelectionOrder(candidates, topK, req)
 
 	for i := 0; i < len(selectionOrder); i++ {
 		candidate := selectionOrder[i]
 		fresh := s.service.resolveFreshSchedulableOpenAIAccount(ctx, candidate.account, req.RequestedModel)
-		if fresh == nil || !s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
-			continue
-		}
-		fresh = s.service.recheckSelectedOpenAIAccountFromDB(ctx, fresh, req.RequestedModel)
 		if fresh == nil || !s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
 			continue
 		}
@@ -718,11 +794,18 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			return nil, len(candidates), topK, loadSkew, acquireErr
 		}
 		if result != nil && result.Acquired {
+			verified := s.service.recheckSelectedOpenAIAccountFromDB(ctx, fresh, req.RequestedModel)
+			if verified == nil || !s.isAccountTransportCompatible(verified, req.RequiredTransport) {
+				if result.ReleaseFunc != nil {
+					result.ReleaseFunc()
+				}
+				continue
+			}
 			if req.SessionHash != "" {
-				_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, fresh.ID)
+				_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, verified.ID)
 			}
 			return &AccountSelectionResult{
-				Account:     fresh,
+				Account:     verified,
 				Acquired:    true,
 				ReleaseFunc: result.ReleaseFunc,
 			}, len(candidates), topK, loadSkew, nil
@@ -731,20 +814,20 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 
 	cfg := s.service.schedulingConfig()
 	// WaitPlan.MaxConcurrency 使用 Concurrency（非 EffectiveLoadFactor），因为 WaitPlan 控制的是 Redis 实际并发槽位等待。
-	for _, candidate := range selectionOrder {
-		fresh := s.service.resolveFreshSchedulableOpenAIAccount(ctx, candidate.account, req.RequestedModel)
-		if fresh == nil || !s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
-			continue
+	waitCandidate := chooseOpenAIWaitCandidate(candidates)
+	if waitCandidate != nil {
+		fresh := s.service.resolveFreshSchedulableOpenAIAccount(ctx, waitCandidate.account, req.RequestedModel)
+		if fresh != nil && s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
+			return &AccountSelectionResult{
+				Account: fresh,
+				WaitPlan: &AccountWaitPlan{
+					AccountID:      fresh.ID,
+					MaxConcurrency: fresh.Concurrency,
+					Timeout:        cfg.FallbackWaitTimeout,
+					MaxWaiting:     cfg.FallbackMaxWaiting,
+				},
+			}, len(candidates), topK, loadSkew, nil
 		}
-		return &AccountSelectionResult{
-			Account: fresh,
-			WaitPlan: &AccountWaitPlan{
-				AccountID:      fresh.ID,
-				MaxConcurrency: fresh.Concurrency,
-				Timeout:        cfg.FallbackWaitTimeout,
-				MaxWaiting:     cfg.FallbackMaxWaiting,
-			},
-		}, len(candidates), topK, loadSkew, nil
 	}
 
 	return nil, len(candidates), topK, loadSkew, ErrNoAvailableAccounts

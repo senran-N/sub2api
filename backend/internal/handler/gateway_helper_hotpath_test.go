@@ -311,6 +311,45 @@ func TestAcquireAccountSlotWithWaitTimeout_ImmediateAttemptBeforeBackoff(t *test
 	require.GreaterOrEqual(t, cache.accountAcquireCalls, 1)
 }
 
+func TestAcquireSlotAfterQueueing_SkipsRedundantImmediateAttempt(t *testing.T) {
+	t.Run("account_slot_wait_does_not_retry_immediately", func(t *testing.T) {
+		cache := &helperConcurrencyCacheStub{
+			accountSeq: []bool{false},
+		}
+		concurrency := service.NewConcurrencyService(cache)
+		helper := NewConcurrencyHelper(concurrency, SSEPingFormatNone, 5*time.Millisecond)
+		c, _ := newHelperTestContext(http.MethodPost, "/v1/messages")
+		streamStarted := false
+
+		release, err := helper.AcquireAccountSlotAfterQueueingWithWaitTimeout(c, 302, 1, 30*time.Millisecond, false, &streamStarted)
+		require.Nil(t, release)
+		var cErr *ConcurrencyError
+		require.ErrorAs(t, err, &cErr)
+		require.True(t, cErr.IsTimeout)
+		require.Equal(t, 0, cache.accountAcquireCalls, "queued wait should not repeat an immediate account acquire before backoff")
+	})
+
+	t.Run("user_slot_wait_does_not_retry_immediately", func(t *testing.T) {
+		cache := &helperConcurrencyCacheStub{
+			userSeq: []bool{false},
+		}
+		concurrency := service.NewConcurrencyService(cache)
+		helper := NewConcurrencyHelper(concurrency, SSEPingFormatNone, 5*time.Millisecond)
+		c, _ := newHelperTestContext(http.MethodPost, "/v1/messages")
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Millisecond)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		streamStarted := false
+
+		release, err := helper.AcquireUserSlotAfterQueueing(c, 402, 1, false, &streamStarted)
+		require.Nil(t, release)
+		var cErr *ConcurrencyError
+		require.ErrorAs(t, err, &cErr)
+		require.True(t, cErr.IsTimeout)
+		require.Equal(t, 0, cache.userAcquireCalls, "queued wait should not repeat an immediate user acquire before backoff")
+	})
+}
+
 type helperConcurrencyCacheStubWithError struct {
 	helperConcurrencyCacheStub
 	err error
