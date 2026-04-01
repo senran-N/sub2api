@@ -62,3 +62,18 @@ func TestDeriveCompatPromptCacheKey_DiffersAcrossSessions(t *testing.T) {
 	k2 := deriveCompatPromptCacheKey(req2, "gpt-5.4")
 	require.NotEqual(t, k1, k2, "different first user messages should yield different keys")
 }
+
+func TestDeriveCompatPromptCacheKey_PreservesCodexSparkRoutingModel(t *testing.T) {
+	req := &apicompat.ChatCompletionsRequest{
+		Model: "gpt-5.3-codex-spark",
+		Messages: []apicompat.ChatMessage{
+			{Role: "user", Content: mustRawJSON(t, `"Question A"`)},
+		},
+	}
+
+	sparkKey := deriveCompatPromptCacheKey(req, "gpt-5.3-codex-spark")
+	codexKey := deriveCompatPromptCacheKey(req, "gpt-5.3-codex")
+
+	require.NotEmpty(t, sparkKey)
+	require.NotEqual(t, codexKey, sparkKey, "spark passthrough should not collapse to codex cache key")
+}

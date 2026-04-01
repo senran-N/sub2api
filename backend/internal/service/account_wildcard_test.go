@@ -358,6 +358,9 @@ func TestAccountGetModelMapping_AntigravityEnsuresGeminiDefaultPassthroughs(t *t
 	if mapping["gemini-3.1-pro-low"] != "gemini-3.1-pro-low" {
 		t.Fatalf("expected gemini-3.1-pro-low passthrough to be auto-filled, got: %q", mapping["gemini-3.1-pro-low"])
 	}
+	if mapping["gemini-3.1-pro-preview-customtools"] != "gemini-3.1-pro-preview-customtools" {
+		t.Fatalf("expected gemini-3.1-pro-preview-customtools passthrough to be auto-filled, got: %q", mapping["gemini-3.1-pro-preview-customtools"])
+	}
 }
 
 func TestAccountGetModelMapping_AntigravityRespectsWildcardOverride(t *testing.T) {
@@ -379,6 +382,9 @@ func TestAccountGetModelMapping_AntigravityRespectsWildcardOverride(t *testing.T
 	}
 	if _, exists := mapping["gemini-3.1-pro-low"]; exists {
 		t.Fatalf("did not expect explicit gemini-3.1-pro-low passthrough when wildcard already exists")
+	}
+	if _, exists := mapping["gemini-3.1-pro-preview-customtools"]; exists {
+		t.Fatalf("did not expect explicit gemini-3.1-pro-preview-customtools passthrough when wildcard already exists")
 	}
 	if mapped := account.GetMappedModel("gemini-3-flash"); mapped != "gemini-3.1-pro-high" {
 		t.Fatalf("expected wildcard mapping to stay effective, got: %q", mapped)

@@ -23,9 +23,9 @@ func deriveCompatPromptCacheKey(req *apicompat.ChatCompletionsRequest, mappedMod
 		return ""
 	}
 
-	normalizedModel := normalizeCodexModel(strings.TrimSpace(mappedModel))
+	normalizedModel := resolveOpenAIUpstreamModel(strings.TrimSpace(mappedModel))
 	if normalizedModel == "" {
-		normalizedModel = normalizeCodexModel(strings.TrimSpace(req.Model))
+		normalizedModel = resolveOpenAIUpstreamModel(strings.TrimSpace(req.Model))
 	}
 	if normalizedModel == "" {
 		normalizedModel = strings.TrimSpace(req.Model)

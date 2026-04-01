@@ -2,6 +2,8 @@
 // It is used when upstream model listing is unavailable (e.g. OAuth token missing AI Studio scopes).
 package gemini
 
+import "strings"
+
 type Model struct {
 	Name                       string   `json:"name"`
 	DisplayName                string   `json:"displayName,omitempty"`
@@ -23,6 +25,7 @@ func DefaultModels() []Model {
 		{Name: "models/gemini-3-flash-preview", SupportedGenerationMethods: methods},
 		{Name: "models/gemini-3-pro-preview", SupportedGenerationMethods: methods},
 		{Name: "models/gemini-3.1-pro-preview", SupportedGenerationMethods: methods},
+		{Name: "models/gemini-3.1-pro-preview-customtools", SupportedGenerationMethods: methods},
 		{Name: "models/gemini-3.1-flash-image", SupportedGenerationMethods: methods},
 	}
 }
@@ -36,8 +39,32 @@ func FallbackModel(model string) Model {
 	if model == "" {
 		return Model{Name: "models/unknown", SupportedGenerationMethods: methods}
 	}
-	if len(model) >= 7 && model[:7] == "models/" {
-		return Model{Name: model, SupportedGenerationMethods: methods}
+	if normalized := normalizeFallbackModelName(model); normalized != "" {
+		return Model{Name: normalized, SupportedGenerationMethods: methods}
 	}
-	return Model{Name: "models/" + model, SupportedGenerationMethods: methods}
+	return Model{Name: "models/unknown", SupportedGenerationMethods: methods}
+}
+
+func HasFallbackModel(model string) bool {
+	normalized := normalizeFallbackModelName(model)
+	if normalized == "" {
+		return false
+	}
+	for _, candidate := range DefaultModels() {
+		if candidate.Name == normalized {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeFallbackModelName(model string) string {
+	trimmed := strings.TrimSpace(model)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "models/") {
+		return trimmed
+	}
+	return "models/" + trimmed
 }

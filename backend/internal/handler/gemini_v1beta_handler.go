@@ -69,7 +69,7 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		googleError(c, http.StatusBadGateway, err.Error())
 		return
 	}
-	if shouldFallbackGeminiModels(res) {
+	if shouldFallbackGeminiModels(res, "") {
 		c.JSON(http.StatusOK, gemini.FallbackModelsList())
 		return
 	}
@@ -121,7 +121,7 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 		googleError(c, http.StatusBadGateway, err.Error())
 		return
 	}
-	if shouldFallbackGeminiModels(res) {
+	if shouldFallbackGeminiModels(res, modelName) {
 		c.JSON(http.StatusOK, gemini.FallbackModel(modelName))
 		return
 	}
@@ -655,8 +655,11 @@ func writeUpstreamResponse(c *gin.Context, res *service.UpstreamHTTPResult) {
 	c.Data(res.StatusCode, contentType, res.Body)
 }
 
-func shouldFallbackGeminiModels(res *service.UpstreamHTTPResult) bool {
+func shouldFallbackGeminiModels(res *service.UpstreamHTTPResult, requestedModel string) bool {
 	if res == nil {
+		return true
+	}
+	if res.StatusCode == http.StatusNotFound && gemini.HasFallbackModel(requestedModel) {
 		return true
 	}
 	if res.StatusCode != http.StatusUnauthorized && res.StatusCode != http.StatusForbidden {
