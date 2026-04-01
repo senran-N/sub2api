@@ -3966,6 +3966,127 @@ func injectClaudeCodePrompt(body []byte, system any) []byte {
 	return result
 }
 
+// computeAttributionFingerprint 计算 Claude Code 归因指纹。
+// Algorithm: SHA256(SALT + msg[4] + msg[7] + msg[20] + version)[:3]
+//
+// 这里必须跟真实 Claude Code 一致，直接使用当前 CLI 版本；
+// 否则会出现 User-Agent 与 cc_version 不一致的额外特征。
+func computeAttributionFingerprint(firstMessageText, version string) string {
+	if strings.TrimSpace(version) == "" {
+		return ""
+	}
+	indices := [3]int{4, 7, 20}
+	var chars [3]byte
+	for i, idx := range indices {
+		if idx < len(firstMessageText) {
+			chars[i] = firstMessageText[idx]
+		} else {
+			chars[i] = '0'
+		}
+	}
+	input := "59cf53e54c78" + string(chars[:]) + version
+	hash := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", hash[:2])[:3] // 取前3个hex字符
+}
+
+// extractFirstUserMessageText 从 Anthropic messages body 中提取首条用户消息文本。
+// 用于计算归因指纹。仅读取 messages[0]（如果是 user role）的 text 内容。
+func extractFirstUserMessageText(body []byte) string {
+	messages := gjson.GetBytes(body, "messages")
+	if !messages.IsArray() {
+		return ""
+	}
+	var text string
+	messages.ForEach(func(_, msg gjson.Result) bool {
+		if msg.Get("role").String() != "user" {
+			return true // continue
+		}
+		content := msg.Get("content")
+		if content.Type == gjson.String {
+			text = content.String()
+			return false
+		}
+		if content.IsArray() {
+			content.ForEach(func(_, block gjson.Result) bool {
+				if block.Get("type").String() == "text" {
+					text = block.Get("text").String()
+					return false
+				}
+				return true
+			})
+			return false
+		}
+		return true
+	})
+	return text
+}
+
+// buildAttributionHeaderText 构造归因 header 文本（注入到 system prompt 首个 text block）。
+// 格式与真实 Claude Code 一致：
+//
+//	x-anthropic-billing-header: cc_version=VERSION.FINGERPRINT; cc_entrypoint=cli;
+//
+// VERSION 必须与当前 User-Agent 中的 CLI 版本保持一致，否则会形成额外特征。
+func buildAttributionHeaderText(body []byte, fingerprintUA string) string {
+	version := ExtractCLIVersion(fingerprintUA)
+	if version == "" {
+		return ""
+	}
+	msgText := extractFirstUserMessageText(body)
+	fp := computeAttributionFingerprint(msgText, version)
+	if fp == "" {
+		return ""
+	}
+	return fmt.Sprintf("x-anthropic-billing-header: cc_version=%s.%s; cc_entrypoint=cli;", version, fp)
+}
+
+// injectAttributionHeaderBlock 将归因 header 作为 system array 的第一个 text block 插入。
+// 真实 Claude Code 始终将 attribution header 置于 system prompt 最前面。
+// 如果 system 已经是 array 格式（injectClaudeCodePrompt 执行后通常如此），
+// 则在 array 开头 prepend；否则包装为 array。
+func injectAttributionHeaderBlock(body []byte, attrHeader string) []byte {
+	if attrHeader == "" {
+		return body
+	}
+	attrBlock, err := marshalAnthropicSystemTextBlock(attrHeader, false)
+	if err != nil {
+		return body
+	}
+
+	systemResult := gjson.GetBytes(body, "system")
+	if !systemResult.Exists() || systemResult.Type == gjson.Null {
+		// 无 system，创建只含 attribution 的 array
+		result, ok := setJSONRawBytes(body, "system", buildJSONArrayRaw([][]byte{attrBlock}))
+		if ok {
+			return result
+		}
+		return body
+	}
+
+	if systemResult.IsArray() {
+		// 已是 array，在开头插入
+		var items [][]byte
+		items = append(items, attrBlock)
+		systemResult.ForEach(func(_, item gjson.Result) bool {
+			// 跳过已存在的 attribution header block（幂等）
+			if item.Get("type").String() == "text" {
+				text := item.Get("text").String()
+				if strings.HasPrefix(text, "x-anthropic-billing-header:") {
+					return true
+				}
+			}
+			items = append(items, []byte(item.Raw))
+			return true
+		})
+		result, ok := setJSONRawBytes(body, "system", buildJSONArrayRaw(items))
+		if ok {
+			return result
+		}
+	}
+	// system 是字符串或其他格式，不处理（injectClaudeCodePrompt 已将其转为 array）
+	return body
+}
+
 type cacheControlPath struct {
 	path string
 	log  string
@@ -4162,6 +4283,16 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		if !strings.Contains(strings.ToLower(reqModel), "haiku") &&
 			!systemIncludesClaudeCodePrompt(parsed.System) {
 			body = injectClaudeCodePrompt(body, parsed.System)
+		}
+
+		// 注入归因 header 到 system prompt 首个 text block（真实 Claude Code 始终包含）。
+		// 版本必须与客户端指纹 UA 保持一致，避免额外的交叉字段特征。
+		if s.identityService != nil {
+			if fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header); err == nil && fp != nil {
+				if attrHeader := buildAttributionHeaderText(body, fp.UserAgent); attrHeader != "" {
+					body = injectAttributionHeaderBlock(body, attrHeader)
+				}
+			}
 		}
 
 		normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: true}
@@ -5926,7 +6057,7 @@ func applyClaudeOAuthHeaderDefaults(req *http.Request) {
 	if getHeaderRaw(req.Header, "Accept") == "" {
 		setHeaderRaw(req.Header, "Accept", "application/json")
 	}
-	for key, value := range claude.DefaultHeaders {
+	for key, value := range claude.StableDefaultHeaders {
 		if value == "" {
 			continue
 		}
@@ -6220,18 +6351,16 @@ func buildBetaTokenSet(tokens []string) map[string]struct{} {
 
 var defaultDroppedBetasSet = buildBetaTokenSet(claude.DroppedBetas)
 
-// applyClaudeCodeMimicHeaders forces "Claude Code-like" request headers.
-// This mirrors opencode-anthropic-auth behavior: do not trust downstream
-// headers when using Claude Code-scoped OAuth credentials.
+// applyClaudeCodeMimicHeaders normalizes a minimal set of stable Claude Code headers.
+// 版本化/设备相关字段优先透传或复用缓存指纹，不再在这里硬编码。
 func applyClaudeCodeMimicHeaders(req *http.Request, isStream bool) {
 	if req == nil {
 		return
 	}
-	// Start with the standard defaults (fill missing).
+	// 先补齐稳定默认头。
 	applyClaudeOAuthHeaderDefaults(req)
-	// Then force key headers to match Claude Code fingerprint regardless of what the client sent.
-	// 使用 resolveWireCasing 确保 key 与真实 wire format 一致（如 "x-app" 而非 "X-App"）
-	for key, value := range claude.DefaultHeaders {
+	// 再强制稳定字段，避免被下游请求改写。
+	for key, value := range claude.StableDefaultHeaders {
 		if value == "" {
 			continue
 		}
@@ -6241,6 +6370,11 @@ func applyClaudeCodeMimicHeaders(req *http.Request, isStream bool) {
 	setHeaderRaw(req.Header, "Accept", "application/json")
 	if isStream {
 		setHeaderRaw(req.Header, "x-stainless-helper-method", "stream")
+	}
+	// 真实 Claude Code 每次请求都生成 x-client-request-id (UUID v4)。
+	// mimic 模式下客户端可能不发此头，缺失即为特征差异。
+	if getHeaderRaw(req.Header, "x-client-request-id") == "" {
+		setHeaderRaw(req.Header, "x-client-request-id", uuid.New().String())
 	}
 }
 

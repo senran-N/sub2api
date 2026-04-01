@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { emitAuthTokenRefreshed } from '@/stores/authSync'
 
 // Mock authAPI
 const mockLogin = vi.fn()
@@ -210,6 +211,25 @@ describe('useAuthStore', () => {
       store.checkAuth()
 
       expect(store.isAuthenticated).toBe(true)
+    })
+
+    it('收到刷新事件后同步最新 token 到 store', async () => {
+      localStorage.setItem('auth_token', 'saved-token')
+      localStorage.setItem('auth_user', JSON.stringify(fakeUser))
+      localStorage.setItem('refresh_token', 'saved-refresh')
+
+      mockGetCurrentUser.mockResolvedValue({ data: fakeUser })
+
+      const store = useAuthStore()
+      store.checkAuth()
+
+      emitAuthTokenRefreshed({
+        access_token: 'rotated-token',
+        refresh_token: 'rotated-refresh',
+        expires_at: Date.now() + 7200_000,
+      })
+
+      expect(store.token).toBe('rotated-token')
     })
   })
 

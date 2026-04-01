@@ -113,7 +113,7 @@ func RunCLI() error {
 
 	fmt.Println()
 	fmt.Print("Testing database connection... ")
-	if err := TestDatabaseConnection(&cfg.Database); err != nil {
+	if err := EnsureDatabaseConnection(&cfg.Database); err != nil {
 		fmt.Println("FAILED")
 		return fmt.Errorf("database connection failed: %w", err)
 	}

@@ -160,17 +160,16 @@ func NeedsSetup() bool {
 	return true
 }
 
-// TestDatabaseConnection tests the database connection and creates database if not exists
+// TestDatabaseConnection verifies that the target database is reachable.
 func TestDatabaseConnection(cfg *DatabaseConfig) error {
-	// First, connect to the default 'postgres' database to check/create target database
-	defaultDSN := fmt.Sprintf(
+	dsn := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode,
 	)
 
-	db, err := sql.Open("postgres", defaultDSN)
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return fmt.Errorf("failed to connect to PostgreSQL: %w", err)
+		return fmt.Errorf("failed to connect to database '%s': %w", cfg.DBName, err)
 	}
 
 	defer func() {
@@ -186,10 +185,47 @@ func TestDatabaseConnection(cfg *DatabaseConfig) error {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("ping failed: %w", err)
+		return fmt.Errorf("ping database '%s' failed: %w", cfg.DBName, err)
 	}
 
-	// Check if target database exists
+	return nil
+}
+
+// EnsureDatabaseConnection makes sure the target database exists and is reachable.
+// It first tries the target database directly, and only falls back to a maintenance
+// database when creation is required.
+func EnsureDatabaseConnection(cfg *DatabaseConfig) error {
+	targetErr := TestDatabaseConnection(cfg)
+	if targetErr == nil {
+		return nil
+	}
+
+	maintenanceDSN := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, "postgres", cfg.SSLMode,
+	)
+
+	db, err := sql.Open("postgres", maintenanceDSN)
+	if err != nil {
+		return fmt.Errorf("target database unavailable (%v); failed to connect to maintenance database 'postgres': %w", targetErr, err)
+	}
+
+	defer func() {
+		if db == nil {
+			return
+		}
+		if err := db.Close(); err != nil {
+			logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("target database unavailable (%v); ping maintenance database 'postgres' failed: %w", targetErr, err)
+	}
+
 	var exists bool
 	row := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", cfg.DBName)
 	if err := row.Scan(&exists); err != nil {
@@ -208,36 +244,7 @@ func TestDatabaseConnection(cfg *DatabaseConfig) error {
 		logger.LegacyPrintf("setup", "Database '%s' created successfully", cfg.DBName)
 	}
 
-	// Now connect to the target database to verify
-	if err := db.Close(); err != nil {
-		logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
-	}
-	db = nil
-
-	targetDSN := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode,
-	)
-
-	targetDB, err := sql.Open("postgres", targetDSN)
-	if err != nil {
-		return fmt.Errorf("failed to connect to database '%s': %w", cfg.DBName, err)
-	}
-
-	defer func() {
-		if err := targetDB.Close(); err != nil {
-			logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
-		}
-	}()
-
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel2()
-
-	if err := targetDB.PingContext(ctx2); err != nil {
-		return fmt.Errorf("ping target database failed: %w", err)
-	}
-
-	return nil
+	return TestDatabaseConnection(cfg)
 }
 
 // TestRedisConnection tests the Redis connection
@@ -290,7 +297,7 @@ func Install(cfg *SetupConfig) error {
 	}
 
 	// Test connections
-	if err := TestDatabaseConnection(&cfg.Database); err != nil {
+	if err := EnsureDatabaseConnection(&cfg.Database); err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
 
@@ -588,7 +595,7 @@ func AutoSetupFromEnv() error {
 
 	// Test database connection
 	logger.LegacyPrintf("setup", "%s", "Testing database connection...")
-	if err := TestDatabaseConnection(&cfg.Database); err != nil {
+	if err := EnsureDatabaseConnection(&cfg.Database); err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
 	logger.LegacyPrintf("setup", "%s", "Database connection successful")

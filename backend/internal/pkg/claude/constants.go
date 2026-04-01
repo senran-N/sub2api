@@ -44,10 +44,9 @@ const APIKeyBetaHeader = BetaClaudeCode + "," + BetaInterleavedThinking + "," + 
 // APIKeyHaikuBetaHeader Haiku 模型在 API-key 账号下使用的 anthropic-beta header（不包含 oauth / claude-code）
 const APIKeyHaikuBetaHeader = BetaInterleavedThinking
 
-// DefaultHeaders 是 Claude Code 客户端默认请求头。
+// DefaultHeaders 保留给测试和诊断使用；生产转发链路不应依赖其中的版本化值。
+// 这些字段里的版本号天然易过时，转发逻辑应优先透传/缓存真实客户端值。
 var DefaultHeaders = map[string]string{
-	// Keep these in sync with recent Claude CLI traffic to reduce the chance
-	// that Claude Code-scoped OAuth credentials are rejected as "non-CLI" usage.
 	"User-Agent":                                "claude-cli/2.1.22 (external, cli)",
 	"X-Stainless-Lang":                          "js",
 	"X-Stainless-Package-Version":               "0.70.0",
@@ -58,6 +57,15 @@ var DefaultHeaders = map[string]string{
 	"X-Stainless-Retry-Count":                   "0",
 	"X-Stainless-Timeout":                       "600",
 	"X-App":                                     "cli",
+	"Anthropic-Dangerous-Direct-Browser-Access": "true",
+}
+
+// StableDefaultHeaders 仅包含相对稳定、非版本化的默认头。
+// 用于 OAuth 转发链路的最小补齐，避免把陈旧版本号硬编码到线上流量里。
+var StableDefaultHeaders = map[string]string{
+	"X-Stainless-Retry-Count": "0",
+	"X-Stainless-Timeout":     "600",
+	"X-App":                   "cli",
 	"Anthropic-Dangerous-Direct-Browser-Access": "true",
 }
 

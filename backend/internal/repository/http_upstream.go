@@ -3,6 +3,8 @@ package repository
 import (
 	"compress/flate"
 	"compress/gzip"
+	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+	"golang.org/x/net/http2"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
@@ -773,8 +776,10 @@ func buildUpstreamTransport(settings poolSettings, proxyURL *url.URL) (*http.Tra
 	return transport, nil
 }
 
-// buildUpstreamTransportWithTLSFingerprint 构建带 TLS 指纹伪装的 Transport
-// 使用 utls 库模拟 Claude CLI 的 TLS 指纹
+// buildUpstreamTransportWithTLSFingerprint 构建带 TLS 指纹伪装的 RoundTripper。
+// 当 ALPN 协商结果为 h2 时使用 http2.Transport，否则回退 http.Transport（HTTP/1.1）。
+// 这避免了 Go 标准库不识别 utls.UConn 而跳过 HTTP/2 的问题，同时消除了
+// "TLS 指纹声明 h2 但实际发送 HTTP/1.1" 这一明显特征。
 //
 // 参数:
 //   - settings: 连接池配置
@@ -782,53 +787,99 @@ func buildUpstreamTransport(settings poolSettings, proxyURL *url.URL) (*http.Tra
 //   - profile: TLS 指纹配置
 //
 // 返回:
-//   - *http.Transport: 配置好的 Transport 实例
+//   - http.RoundTripper: 支持 HTTP/2 + HTTP/1.1 的 RoundTripper
 //   - error: 配置错误
-//
-// 代理类型处理:
-//   - nil/空: 直连，使用 TLSFingerprintDialer
-//   - http/https: HTTP 代理，使用 HTTPProxyDialer（CONNECT 隧道 + utls 握手）
-//   - socks5: SOCKS5 代理，使用 SOCKS5ProxyDialer（SOCKS5 隧道 + utls 握手）
-func buildUpstreamTransportWithTLSFingerprint(settings poolSettings, proxyURL *url.URL, profile *tlsfingerprint.Profile) (*http.Transport, error) {
-	transport := &http.Transport{
+func buildUpstreamTransportWithTLSFingerprint(settings poolSettings, proxyURL *url.URL, profile *tlsfingerprint.Profile) (http.RoundTripper, error) {
+	// 选择 utls DialTLSContext 函数
+	var dialTLSContext func(ctx context.Context, network, addr string) (net.Conn, error)
+
+	if proxyURL == nil {
+		slog.Debug("tls_fingerprint_transport_direct")
+		dialer := tlsfingerprint.NewDialer(profile, nil)
+		dialTLSContext = dialer.DialTLSContext
+	} else {
+		scheme := strings.ToLower(proxyURL.Scheme)
+		switch scheme {
+		case "socks5", "socks5h":
+			slog.Debug("tls_fingerprint_transport_socks5", "proxy", proxyURL.Host)
+			socks5Dialer := tlsfingerprint.NewSOCKS5ProxyDialer(profile, proxyURL)
+			dialTLSContext = socks5Dialer.DialTLSContext
+		case "http", "https":
+			slog.Debug("tls_fingerprint_transport_http_connect", "proxy", proxyURL.Host)
+			httpDialer := tlsfingerprint.NewHTTPProxyDialer(profile, proxyURL)
+			dialTLSContext = httpDialer.DialTLSContext
+		default:
+			// 未知代理类型，回退到普通 HTTP/1.1 Transport（无 TLS 指纹）
+			slog.Debug("tls_fingerprint_transport_unknown_scheme_fallback", "scheme", scheme)
+			transport := &http.Transport{
+				MaxIdleConns:          settings.maxIdleConns,
+				MaxIdleConnsPerHost:   settings.maxIdleConnsPerHost,
+				MaxConnsPerHost:       settings.maxConnsPerHost,
+				IdleConnTimeout:       settings.idleConnTimeout,
+				ResponseHeaderTimeout: settings.responseHeaderTimeout,
+			}
+			if err := proxyutil.ConfigureTransportProxy(transport, proxyURL); err != nil {
+				return nil, err
+			}
+			return transport, nil
+		}
+	}
+
+	// 构建 h2 + h1 自适应 RoundTripper
+	return newH2AutoRoundTripper(settings, dialTLSContext), nil
+}
+
+// h2AutoRoundTripper 根据 ALPN 协商结果自动选择 HTTP/2 或 HTTP/1.1。
+// utls 完成 TLS 握手后，连接的 NegotiatedProtocol 决定使用哪个 transport。
+// 设计原则：不引入额外的网络特征——HTTP/2 SETTINGS 使用 Go http2 库默认值
+// （与 Node.js 差异极小且不可靠检测），HTTP/1.1 路径行为不变。
+type h2AutoRoundTripper struct {
+	h1   *http.Transport
+	h2   *http2.Transport
+	dial func(ctx context.Context, network, addr string) (net.Conn, error)
+}
+
+func newH2AutoRoundTripper(settings poolSettings, dialTLSContext func(ctx context.Context, network, addr string) (net.Conn, error)) *h2AutoRoundTripper {
+	h1 := &http.Transport{
 		MaxIdleConns:          settings.maxIdleConns,
 		MaxIdleConnsPerHost:   settings.maxIdleConnsPerHost,
 		MaxConnsPerHost:       settings.maxConnsPerHost,
 		IdleConnTimeout:       settings.idleConnTimeout,
 		ResponseHeaderTimeout: settings.responseHeaderTimeout,
-		// 禁用默认的 TLS，我们使用自定义的 DialTLSContext
-		ForceAttemptHTTP2: false,
+		ForceAttemptHTTP2:     false,
+		DialTLSContext:        dialTLSContext,
 	}
 
-	// 根据代理类型选择合适的 TLS 指纹 Dialer
-	if proxyURL == nil {
-		// 直连：使用 TLSFingerprintDialer
-		slog.Debug("tls_fingerprint_transport_direct")
-		dialer := tlsfingerprint.NewDialer(profile, nil)
-		transport.DialTLSContext = dialer.DialTLSContext
-	} else {
-		scheme := strings.ToLower(proxyURL.Scheme)
-		switch scheme {
-		case "socks5", "socks5h":
-			// SOCKS5 代理：使用 SOCKS5ProxyDialer
-			slog.Debug("tls_fingerprint_transport_socks5", "proxy", proxyURL.Host)
-			socks5Dialer := tlsfingerprint.NewSOCKS5ProxyDialer(profile, proxyURL)
-			transport.DialTLSContext = socks5Dialer.DialTLSContext
-		case "http", "https":
-			// HTTP/HTTPS 代理：使用 HTTPProxyDialer（CONNECT 隧道）
-			slog.Debug("tls_fingerprint_transport_http_connect", "proxy", proxyURL.Host)
-			httpDialer := tlsfingerprint.NewHTTPProxyDialer(profile, proxyURL)
-			transport.DialTLSContext = httpDialer.DialTLSContext
-		default:
-			// 未知代理类型，回退到普通代理配置（无 TLS 指纹）
-			slog.Debug("tls_fingerprint_transport_unknown_scheme_fallback", "scheme", scheme)
-			if err := proxyutil.ConfigureTransportProxy(transport, proxyURL); err != nil {
-				return nil, err
-			}
+	h2t := &http2.Transport{
+		// DialTLSContext 签名多一个 *tls.Config 参数，utls 不需要它，直接忽略。
+		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+			return dialTLSContext(ctx, network, addr)
+		},
+		ReadIdleTimeout: 30 * time.Second,
+		PingTimeout:     15 * time.Second,
+	}
+
+	return &h2AutoRoundTripper{h1: h1, h2: h2t, dial: dialTLSContext}
+}
+
+func (rt *h2AutoRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// 对于 HTTPS 请求，优先尝试 HTTP/2（与真实 Node.js 行为一致）。
+	// http2.Transport 内部会建立 h2 连接；如果服务端不支持 h2，
+	// 连接建立阶段就会失败，此时回退到 h1。
+	if req.URL.Scheme == "https" {
+		resp, err := rt.h2.RoundTrip(req)
+		if err == nil {
+			return resp, nil
 		}
+		// h2 失败（如服务端 ALPN 未协商 h2），回退 HTTP/1.1
+		slog.Debug("h2_auto_fallback_to_h1", "url", req.URL.Host, "error", err)
 	}
+	return rt.h1.RoundTrip(req)
+}
 
-	return transport, nil
+func (rt *h2AutoRoundTripper) CloseIdleConnections() {
+	rt.h1.CloseIdleConnections()
+	rt.h2.CloseIdleConnections()
 }
 
 // trackedBody 带跟踪功能的响应体包装器

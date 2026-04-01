@@ -7,6 +7,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
 import { authAPI, isTotp2FARequired, type LoginResponse } from '@/api'
 import type { User, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
+import { setAuthTokenRefreshHandler, type AuthTokenRefreshedDetail } from './authSync'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 const AUTH_USER_KEY = 'auth_user'
@@ -25,6 +26,25 @@ export const useAuthStore = defineStore('auth', () => {
   const runMode = ref<'standard' | 'simple'>('standard')
   let refreshIntervalId: ReturnType<typeof setInterval> | null = null
   let tokenRefreshTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+  function bindTokenRefreshListener(): void {
+    setAuthTokenRefreshHandler((detail: AuthTokenRefreshedDetail) => {
+      if (!detail?.access_token) {
+        return
+      }
+
+      token.value = detail.access_token
+      if (detail.refresh_token) {
+        refreshTokenValue.value = detail.refresh_token
+      }
+      if (typeof detail.expires_at === 'number' && Number.isFinite(detail.expires_at)) {
+        tokenExpiresAt.value = detail.expires_at
+        scheduleTokenRefreshAt(detail.expires_at)
+      }
+    })
+  }
+
+  bindTokenRefreshListener()
 
   // ==================== Computed ====================
 

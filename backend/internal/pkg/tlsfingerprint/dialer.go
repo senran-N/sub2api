@@ -358,7 +358,8 @@ func buildClientHelloSpecFromProfile(profile *Profile) *utls.ClientHelloSpec {
 		}
 	}
 
-	alpnProtocols := []string{"http/1.1"}
+	// Node.js 始终协商 h2 + http/1.1；默认值必须与之一致以避免 ALPN 特征。
+	alpnProtocols := []string{"h2", "http/1.1"}
 	if profile != nil && len(profile.ALPNProtocols) > 0 {
 		alpnProtocols = profile.ALPNProtocols
 	}

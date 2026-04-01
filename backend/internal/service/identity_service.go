@@ -24,16 +24,8 @@ var (
 	userAgentVersionRegex = regexp.MustCompile(`/(\d+)\.(\d+)\.(\d+)`)
 )
 
-// 默认指纹值（当客户端未提供时使用）
-var defaultFingerprint = Fingerprint{
-	UserAgent:               "claude-cli/2.1.22 (external, cli)",
-	StainlessLang:           "js",
-	StainlessPackageVersion: "0.70.0",
-	StainlessOS:             "Linux",
-	StainlessArch:           "arm64",
-	StainlessRuntime:        "node",
-	StainlessRuntimeVersion: "v24.13.0",
-}
+// 默认指纹值保持最小化，避免在未观测到真实客户端特征时注入陈旧版本字段。
+var defaultFingerprint = Fingerprint{}
 
 // Fingerprint represents account fingerprint data
 type Fingerprint struct {
@@ -165,6 +157,14 @@ func mergeHeader(headers http.Header, key string, target *string) {
 	}
 }
 
+func metadataFormatVersionFromUA(ua string) string {
+	if version := ExtractCLIVersion(ua); version != "" {
+		return version
+	}
+	// 当上游链路没有真实 CLI UA 可用时，默认使用新格式，避免退回旧 metadata.user_id 拼接格式。
+	return NewMetadataFormatMinVersion
+}
+
 // getHeaderOrDefault 获取header值，如果不存在则返回默认值
 func getHeaderOrDefault(headers http.Header, key, defaultValue string) string {
 	if v := headers.Get(key); v != "" {
@@ -247,7 +247,7 @@ func (s *IdentityService) RewriteUserID(body []byte, accountID int64, accountUUI
 	newSessionHash := generateUUIDFromSeed(seed)
 
 	// 根据客户端版本选择输出格式
-	version := ExtractCLIVersion(fingerprintUA)
+	version := metadataFormatVersionFromUA(fingerprintUA)
 	newUserID := FormatMetadataUserID(cachedClientID, accountUUID, newSessionHash, version)
 	if newUserID == userID {
 		return body, nil
@@ -320,7 +320,7 @@ func (s *IdentityService) RewriteUserIDWithMasking(ctx context.Context, body []b
 	}
 
 	// 用 FormatMetadataUserID 重建（保持与 RewriteUserID 相同的格式）
-	version := ExtractCLIVersion(fingerprintUA)
+	version := metadataFormatVersionFromUA(fingerprintUA)
 	newUserID := FormatMetadataUserID(uidParsed.DeviceID, uidParsed.AccountUUID, maskedSessionID, version)
 
 	slog.Debug("session_id_masking_applied",
@@ -412,15 +412,24 @@ func isNewerVersion(newUA, cachedUA string) bool {
 	// 校验产品名一致性
 	newProduct := extractProduct(newUA)
 	cachedProduct := extractProduct(cachedUA)
-	if newProduct == "" || cachedProduct == "" || newProduct != cachedProduct {
+	if newProduct == "" {
+		return false
+	}
+	if cachedProduct == "" {
+		return true
+	}
+	if newProduct != cachedProduct {
 		return false
 	}
 
 	newMajor, newMinor, newPatch, newOk := parseUserAgentVersion(newUA)
 	cachedMajor, cachedMinor, cachedPatch, cachedOk := parseUserAgentVersion(cachedUA)
 
-	if !newOk || !cachedOk {
+	if !newOk {
 		return false
+	}
+	if !cachedOk {
+		return true
 	}
 
 	// 比较版本号

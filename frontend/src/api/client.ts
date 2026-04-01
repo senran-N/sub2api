@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
 import { getLocale } from '@/i18n'
+import { emitAuthTokenRefreshed } from '@/stores/authSync'
 
 // ==================== Axios Instance Configuration ====================
 
@@ -195,11 +196,17 @@ apiClient.interceptors.response.use(
 
             if (refreshData.code === 0 && refreshData.data) {
               const { access_token, refresh_token: newRefreshToken, expires_in } = refreshData.data
+              const expiresAt = Date.now() + expires_in * 1000
 
               // Update tokens in localStorage (convert expires_in to timestamp)
               localStorage.setItem('auth_token', access_token)
               localStorage.setItem('refresh_token', newRefreshToken)
-              localStorage.setItem('token_expires_at', String(Date.now() + expires_in * 1000))
+              localStorage.setItem('token_expires_at', String(expiresAt))
+              emitAuthTokenRefreshed({
+                access_token,
+                refresh_token: newRefreshToken,
+                expires_at: expiresAt
+              })
 
               // Notify subscribers with new token
               onTokenRefreshed(access_token)
