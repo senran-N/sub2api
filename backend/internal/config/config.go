@@ -467,6 +467,21 @@ type GatewayConfig struct {
 	// UserMessageQueue: 用户消息串行队列配置
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
+
+	// ClaudeCodeSync: 启动时自动从 npm 同步 Claude Code 伪装画像
+	ClaudeCodeSync ClaudeCodeSyncConfig `mapstructure:"claude_code_sync"`
+}
+
+type ClaudeCodeSyncConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	// RegistryURL npm registry base URL，默认 https://registry.npmjs.org
+	RegistryURL string `mapstructure:"registry_url"`
+	// PackageName 默认 @anthropic-ai/claude-code
+	PackageName string `mapstructure:"package_name"`
+	// RequestTimeoutSeconds 单次抓取超时（秒）
+	RequestTimeoutSeconds int `mapstructure:"request_timeout_seconds"`
+	// RefreshIntervalHours 周期同步间隔（小时），0 表示仅启动时同步一次
+	RefreshIntervalHours int `mapstructure:"refresh_interval_hours"`
 }
 
 // UserMessageQueueConfig 用户消息串行队列配置
@@ -1461,6 +1476,11 @@ func setDefaults() {
 	viper.SetDefault("gateway.user_message_queue.min_delay_ms", 200)
 	viper.SetDefault("gateway.user_message_queue.max_delay_ms", 2000)
 	viper.SetDefault("gateway.user_message_queue.cleanup_interval_seconds", 60)
+	viper.SetDefault("gateway.claude_code_sync.enabled", true)
+	viper.SetDefault("gateway.claude_code_sync.registry_url", "https://registry.npmjs.org")
+	viper.SetDefault("gateway.claude_code_sync.package_name", "@anthropic-ai/claude-code")
+	viper.SetDefault("gateway.claude_code_sync.request_timeout_seconds", 20)
+	viper.SetDefault("gateway.claude_code_sync.refresh_interval_hours", 12)
 
 	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
 	viper.SetDefault("concurrency.ping_interval", 10)

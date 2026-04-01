@@ -170,6 +170,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	claudeCodeProfileSyncService := service.ProvideClaudeCodeProfileSyncStarter(configConfig)
 	billingService := service.NewBillingService(configConfig, pricingService)
 	identityService := service.NewIdentityService(identityCache)
 	deferredService := service.ProvideDeferredService(accountRepository, timingWheelService)
@@ -244,7 +245,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	accountExpiryService := service.ProvideAccountExpiryService(accountRepository)
 	subscriptionExpiryService := service.ProvideSubscriptionExpiryService(userSubscriptionRepository)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, soraMediaCleanupService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, soraMediaCleanupService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -287,6 +288,7 @@ func provideCleanup(
 	usageCleanup *service.UsageCleanupService,
 	idempotencyCleanup *service.IdempotencyCleanupService,
 	pricing *service.PricingService,
+	claudeProfileSync *service.ClaudeCodeProfileSyncService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
@@ -366,6 +368,12 @@ func provideCleanup(
 			{"IdempotencyCleanupService", func() error {
 				if idempotencyCleanup != nil {
 					idempotencyCleanup.Stop()
+				}
+				return nil
+			}},
+			{"ClaudeCodeProfileSyncService", func() error {
+				if claudeProfileSync != nil {
+					claudeProfileSync.Stop()
 				}
 				return nil
 			}},

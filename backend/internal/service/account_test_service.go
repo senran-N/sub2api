@@ -127,7 +127,7 @@ func generateSessionString() (string, error) {
 	}
 	hex64 := hex.EncodeToString(b)
 	sessionUUID := uuid.New().String()
-	uaVersion := ExtractCLIVersion(claude.DefaultHeaders["User-Agent"])
+	uaVersion := ExtractCLIVersion(claude.DefaultUserAgent())
 	return FormatMetadataUserID(hex64, "", sessionUUID, uaVersion), nil
 }
 
@@ -157,7 +157,7 @@ func createTestPayload(modelID string) (map[string]any, error) {
 		"system": []map[string]any{
 			{
 				"type": "text",
-				"text": claudeCodeSystemPrompt,
+				"text": claude.SystemPromptText(),
 				"cache_control": map[string]string{
 					"type": "ephemeral",
 				},
@@ -285,16 +285,16 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	req.Header.Set("anthropic-version", "2023-06-01")
 
 	// Apply Claude Code client headers
-	for key, value := range claude.DefaultHeaders {
+	for key, value := range claude.DefaultHeaderSet() {
 		req.Header.Set(key, value)
 	}
 
 	// Set authentication header
 	if useBearer {
-		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
+		req.Header.Set("anthropic-beta", claude.DefaultAnthropicBetaHeader())
 		req.Header.Set("Authorization", "Bearer "+authToken)
 	} else {
-		req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
+		req.Header.Set("anthropic-beta", claude.APIKeyAnthropicBetaHeader())
 		req.Header.Set("x-api-key", authToken)
 	}
 

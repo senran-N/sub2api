@@ -44,6 +44,7 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 - **Rate Limiting** - Configurable request and token rate limits
 - **Admin Dashboard** - Web interface for monitoring and management
 - **External System Integration** - Embed external systems (e.g. payment, ticketing) via iframe to extend the admin dashboard
+- **Claude Code Runtime Mimic Sync** - Automatically pulls the latest Claude Code package from npm at startup and refreshes mimic headers/prompts on a schedule
 
 ## Don't Want to Self-Host?
 
@@ -106,7 +107,7 @@ One-click installation script that downloads pre-built binaries from GitHub Rele
 #### Installation Steps
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/senran-N/sub2api/main/deploy/install.sh | sudo bash
 ```
 
 The script will:
@@ -156,7 +157,7 @@ sudo journalctl -u sub2api -f
 sudo systemctl restart sub2api
 
 # Uninstall
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
+curl -sSL https://raw.githubusercontent.com/senran-N/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
 ```
 
 ---
@@ -179,7 +180,7 @@ Use the automated deployment script for easy setup:
 mkdir -p sub2api-deploy && cd sub2api-deploy
 
 # Download and run deployment preparation script
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh | bash
+curl -sSL https://raw.githubusercontent.com/senran-N/sub2api/main/deploy/docker-deploy.sh | bash
 
 # Start services
 docker compose up -d
@@ -201,7 +202,7 @@ If you prefer manual setup:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/Wei-Shaw/sub2api.git
+git clone https://github.com/senran-N/sub2api.git
 cd sub2api/deploy
 
 # 2. Copy environment configuration
@@ -340,7 +341,7 @@ Build and run from source code for development or customization.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/Wei-Shaw/sub2api.git
+git clone https://github.com/senran-N/sub2api.git
 cd sub2api
 
 # 2. Install pnpm (if not already installed)
@@ -512,6 +513,20 @@ export ANTHROPIC_BASE_URL="http://localhost:8080/antigravity"
 export ANTHROPIC_AUTH_TOKEN="sk-xxx"
 ```
 
+By default, Sub2API automatically fetches the latest `@anthropic-ai/claude-code` package from npm at startup and periodically refreshes the runtime mimic profile used for Claude Code reverse proxying. This keeps `x-app`, beta headers, prompt prefixes, and version-derived `User-Agent` aligned with the current upstream release without manual edits.
+
+Relevant config keys in [`deploy/config.example.yaml`](deploy/config.example.yaml):
+
+```yaml
+gateway:
+  claude_code_sync:
+    enabled: true
+    registry_url: "https://registry.npmjs.org"
+    package_name: "@anthropic-ai/claude-code"
+    request_timeout_seconds: 20
+    refresh_interval_hours: 12
+```
+
 ### Hybrid Scheduling Mode
 
 Antigravity accounts support optional **hybrid scheduling**. When enabled, the general endpoints `/v1/messages` and `/v1beta/` will also route requests to Antigravity accounts.
@@ -566,11 +581,11 @@ sub2api/
 
 ## Star History
 
-<a href="https://star-history.com/#Wei-Shaw/sub2api&Date">
+<a href="https://star-history.com/#senran-N/sub2api&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=senran-N/sub2api&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=senran-N/sub2api&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=senran-N/sub2api&type=Date" />
  </picture>
 </a>
 

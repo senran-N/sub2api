@@ -4,7 +4,7 @@
 # Copy this file to /etc/sub2api/config.yaml and modify as needed
 # 复制此文件到 /etc/sub2api/config.yaml 并根据需要修改
 #
-# Documentation / 文档: https://github.com/Wei-Shaw/sub2api
+# Documentation / 文档: https://github.com/senran-N/sub2api
 
 # =============================================================================
 # Server Configuration
@@ -378,6 +378,14 @@ gateway:
     #     name: "Custom Profile 1"
     #   profile_2:
     #     name: "Custom Profile 2"
+  # Auto sync latest Claude Code mimic profile from npm on startup and periodically
+  # 服务启动时自动从 npm 抓取最新 Claude Code 伪装画像，并按周期刷新
+  claude_code_sync:
+    enabled: true
+    registry_url: "https://registry.npmjs.org"
+    package_name: "@anthropic-ai/claude-code"
+    request_timeout_seconds: 20
+    refresh_interval_hours: 12
 
 # =============================================================================
 # Logging Configuration

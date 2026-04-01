@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -102,6 +105,98 @@ func TestGatewayService_BuildUpstreamRequest_OAuthMimicPreservesObservedFingerpr
 	require.Equal(t, "v24.15.0", getHeaderRaw(req.Header, "x-stainless-runtime-version"))
 }
 
+func TestGatewayService_BuildUpstreamRequest_OAuthInjectsClaudeCodeSessionHeaderFromMetadata(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	svc := &GatewayService{
+		identityService: NewIdentityService(&identityCacheStub{}),
+	}
+	account := &Account{
+		ID:       103,
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeOAuth,
+		Extra: map[string]any{
+			"account_uuid": "acc-uuid",
+		},
+	}
+
+	originalUserID := FormatMetadataUserID(
+		"downstream-client",
+		"",
+		"7578cf37-aaca-46e4-a45c-71285d9dbb83",
+		"2.1.78",
+	)
+	req, err := svc.buildUpstreamRequest(
+		context.Background(),
+		c,
+		account,
+		[]byte(`{"model":"claude-sonnet-4-5","metadata":{"user_id":`+strconv.Quote(originalUserID)+`}}`),
+		"oauth-token",
+		"oauth",
+		"claude-sonnet-4-5",
+		true,
+		false,
+	)
+	require.NoError(t, err)
+
+	bodyBytes := readRequestBodyForTest(t, req)
+	rewritten := gjson.GetBytes(bodyBytes, "metadata.user_id").String()
+	parsed := ParseMetadataUserID(rewritten)
+	require.NotNil(t, parsed)
+	require.Equal(t, parsed.SessionID, getHeaderRaw(req.Header, "X-Claude-Code-Session-Id"))
+}
+
+func TestGatewayService_BuildUpstreamRequest_OAuthOverridesExistingClaudeCodeSessionHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	c.Request.Header.Set("X-Claude-Code-Session-Id", "00000000-1111-4222-8333-444444444444")
+
+	svc := &GatewayService{
+		identityService: NewIdentityService(&identityCacheStub{}),
+	}
+	account := &Account{
+		ID:       104,
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeOAuth,
+		Extra: map[string]any{
+			"account_uuid": "acc-uuid",
+		},
+	}
+
+	originalUserID := FormatMetadataUserID(
+		"downstream-client",
+		"",
+		"7578cf37-aaca-46e4-a45c-71285d9dbb83",
+		"2.1.78",
+	)
+	req, err := svc.buildUpstreamRequest(
+		context.Background(),
+		c,
+		account,
+		[]byte(`{"model":"claude-sonnet-4-5","metadata":{"user_id":`+strconv.Quote(originalUserID)+`}}`),
+		"oauth-token",
+		"oauth",
+		"claude-sonnet-4-5",
+		true,
+		false,
+	)
+	require.NoError(t, err)
+
+	bodyBytes := readRequestBodyForTest(t, req)
+	rewritten := gjson.GetBytes(bodyBytes, "metadata.user_id").String()
+	parsed := ParseMetadataUserID(rewritten)
+	require.NotNil(t, parsed)
+	require.NotEqual(t, "00000000-1111-4222-8333-444444444444", parsed.SessionID)
+	require.Equal(t, parsed.SessionID, getHeaderRaw(req.Header, "X-Claude-Code-Session-Id"))
+}
+
 func TestIdentityService_RewriteUserID_EmptyFingerprintUAUsesNewMetadataFormat(t *testing.T) {
 	cache := &identityCacheStub{}
 	svc := NewIdentityService(cache)
@@ -128,4 +223,16 @@ func TestIdentityService_RewriteUserID_EmptyFingerprintUAUsesNewMetadataFormat(t
 func TestIsNewerVersion_TreatsObservedUAAsUpgradeFromEmptyCache(t *testing.T) {
 	require.True(t, isNewerVersion("claude-cli/2.1.88 (darwin; arm64)", ""))
 	require.False(t, isNewerVersion("Mozilla/5.0", ""))
+}
+
+func readRequestBodyForTest(t *testing.T, req *http.Request) []byte {
+	t.Helper()
+	require.NotNil(t, req)
+	require.NotNil(t, req.Body)
+
+	body, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	require.NoError(t, req.Body.Close())
+	req.Body = io.NopCloser(strings.NewReader(string(body)))
+	return body
 }

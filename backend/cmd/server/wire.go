@@ -84,6 +84,7 @@ func provideCleanup(
 	usageCleanup *service.UsageCleanupService,
 	idempotencyCleanup *service.IdempotencyCleanupService,
 	pricing *service.PricingService,
+	claudeProfileSync *service.ClaudeCodeProfileSyncService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
@@ -164,6 +165,12 @@ func provideCleanup(
 			{"IdempotencyCleanupService", func() error {
 				if idempotencyCleanup != nil {
 					idempotencyCleanup.Stop()
+				}
+				return nil
+			}},
+			{"ClaudeCodeProfileSyncService", func() error {
+				if claudeProfileSync != nil {
+					claudeProfileSync.Stop()
 				}
 				return nil
 			}},

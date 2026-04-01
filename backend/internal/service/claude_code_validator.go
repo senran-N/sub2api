@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
 
@@ -24,28 +25,6 @@ var (
 	// System prompt 相似度阈值（默认 0.5，和 claude-relay-service 一致）
 	systemPromptThreshold = 0.5
 )
-
-// Claude Code 官方 System Prompt 模板
-// 从 claude-relay-service/src/utils/contents.js 提取
-var claudeCodeSystemPrompts = []string{
-	// claudeOtherSystemPrompt1 - Primary
-	"You are Claude Code, Anthropic's official CLI for Claude.",
-
-	// claudeOtherSystemPrompt3 - Agent SDK
-	"You are a Claude agent, built on Anthropic's Claude Agent SDK.",
-
-	// claudeOtherSystemPrompt4 - Compact Agent SDK
-	"You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.",
-
-	// exploreAgentSystemPrompt
-	"You are a file search specialist for Claude Code, Anthropic's official CLI for Claude.",
-
-	// claudeOtherSystemPromptCompact - Compact (用于对话摘要)
-	"You are a helpful AI assistant tasked with summarizing conversations.",
-
-	// claudeOtherSystemPrompt2 - Secondary (长提示词的关键部分)
-	"You are an interactive CLI tool that helps users",
-}
 
 // NewClaudeCodeValidator 创建验证器实例
 func NewClaudeCodeValidator() *ClaudeCodeValidator {
@@ -173,7 +152,7 @@ func (v *ClaudeCodeValidator) bestSimilarityScore(text string) float64 {
 	normalizedText := normalizePrompt(text)
 	bestScore := 0.0
 
-	for _, template := range claudeCodeSystemPrompts {
+	for _, template := range claudeCodeSystemPromptTemplates() {
 		normalizedTemplate := normalizePrompt(template)
 		score := diceCoefficient(normalizedText, normalizedTemplate)
 		if score > bestScore {
@@ -182,6 +161,16 @@ func (v *ClaudeCodeValidator) bestSimilarityScore(text string) float64 {
 	}
 
 	return bestScore
+}
+
+func claudeCodeSystemPromptTemplates() []string {
+	templates := claude.SystemPromptTemplates()
+	templates = append(templates,
+		"You are a file search specialist for Claude Code, Anthropic's official CLI for Claude.",
+		"You are a helpful AI assistant tasked with summarizing conversations.",
+		"You are an interactive CLI tool that helps users",
+	)
+	return templates
 }
 
 // normalizePrompt 标准化提示词文本（去除多余空白）

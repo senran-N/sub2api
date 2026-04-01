@@ -63,23 +63,21 @@ func NewIdentityService(cache IdentityCache) *IdentityService {
 	return &IdentityService{cache: cache}
 }
 
-// GetOrCreateFingerprint 获取或创建账号的指纹
-// 如果缓存存在，检测user-agent版本，新版本则更新
-// 如果缓存不存在，生成随机ClientID并从请求头创建指纹，然后缓存
+// GetOrCreateFingerprint 获取或创建账号的指纹。
+// 设计目标是让 OAuth 账号长期表现为同一个稳定客户端人格：
+// 1. 首次观测时建档；
+// 2. 已建档后只续期，不因后续更高版本的下游请求自动“换脸”；
+// 3. 仅当历史缓存仍是空白占位人格时，才允许用首次观测到的真实头补全。
 func (s *IdentityService) GetOrCreateFingerprint(ctx context.Context, accountID int64, headers http.Header) (*Fingerprint, error) {
 	// 尝试从缓存获取指纹
 	cached, err := s.cache.GetFingerprint(ctx, accountID)
 	if err == nil && cached != nil {
 		needWrite := false
 
-		// 检查客户端的user-agent是否是更新版本
-		clientUA := headers.Get("User-Agent")
-		if clientUA != "" && isNewerVersion(clientUA, cached.UserAgent) {
-			// 版本升级：merge 语义 — 仅更新请求中实际携带的字段，保留缓存值
-			// 避免缺失的头被硬编码默认值覆盖（如新 CLI 版本 + 旧 SDK 默认值的不一致）
+		if shouldBootstrapFingerprint(cached, headers) {
 			mergeHeadersIntoFingerprint(cached, headers)
 			needWrite = true
-			logger.LegacyPrintf("service.identity", "Updated fingerprint for account %d: %s (merge update)", accountID, clientUA)
+			logger.LegacyPrintf("service.identity", "Bootstrapped blank fingerprint for account %d from observed client headers", accountID)
 		} else if time.Since(time.Unix(cached.UpdatedAt, 0)) > 24*time.Hour {
 			// 距上次写入超过24小时，续期TTL
 			needWrite = true
@@ -110,6 +108,33 @@ func (s *IdentityService) GetOrCreateFingerprint(ctx context.Context, accountID 
 	return fp, nil
 }
 
+func shouldBootstrapFingerprint(cached *Fingerprint, headers http.Header) bool {
+	return !fingerprintHasObservedHeaders(cached) && headersContainObservedFingerprint(headers)
+}
+
+func fingerprintHasObservedHeaders(fp *Fingerprint) bool {
+	if fp == nil {
+		return false
+	}
+	return fp.UserAgent != "" ||
+		fp.StainlessLang != "" ||
+		fp.StainlessPackageVersion != "" ||
+		fp.StainlessOS != "" ||
+		fp.StainlessArch != "" ||
+		fp.StainlessRuntime != "" ||
+		fp.StainlessRuntimeVersion != ""
+}
+
+func headersContainObservedFingerprint(headers http.Header) bool {
+	return headers.Get("User-Agent") != "" ||
+		headers.Get("X-Stainless-Lang") != "" ||
+		headers.Get("X-Stainless-Package-Version") != "" ||
+		headers.Get("X-Stainless-OS") != "" ||
+		headers.Get("X-Stainless-Arch") != "" ||
+		headers.Get("X-Stainless-Runtime") != "" ||
+		headers.Get("X-Stainless-Runtime-Version") != ""
+}
+
 // createFingerprintFromHeaders 从请求头创建指纹
 func (s *IdentityService) createFingerprintFromHeaders(headers http.Header) *Fingerprint {
 	fp := &Fingerprint{}
@@ -132,16 +157,12 @@ func (s *IdentityService) createFingerprintFromHeaders(headers http.Header) *Fin
 	return fp
 }
 
-// mergeHeadersIntoFingerprint 将请求头中实际存在的字段合并到现有指纹中（用于版本升级场景）
-// 关键语义：请求中有的字段 → 用新值覆盖；缺失的头 → 保留缓存中的已有值
-// 与 createFingerprintFromHeaders 的区别：后者用于首次创建，缺失头回退到 defaultFingerprint；
-// 本函数用于升级更新，缺失头保留缓存值，避免将已知的真实值退化为硬编码默认值
+// mergeHeadersIntoFingerprint 将请求头中实际存在的字段合并到现有指纹中。
+// 仅用于空白占位人格的首次补全：请求中有的字段才覆盖，缺失字段继续保留原值。
 func mergeHeadersIntoFingerprint(fp *Fingerprint, headers http.Header) {
-	// User-Agent：版本升级的触发条件，一定存在
 	if ua := headers.Get("User-Agent"); ua != "" {
 		fp.UserAgent = ua
 	}
-	// X-Stainless-* 头：仅在请求中实际携带时才更新，否则保留缓存值
 	mergeHeader(headers, "X-Stainless-Lang", &fp.StainlessLang)
 	mergeHeader(headers, "X-Stainless-Package-Version", &fp.StainlessPackageVersion)
 	mergeHeader(headers, "X-Stainless-OS", &fp.StainlessOS)
@@ -415,6 +436,10 @@ func isNewerVersion(newUA, cachedUA string) bool {
 	if newProduct == "" {
 		return false
 	}
+	newMajor, newMinor, newPatch, newOk := parseUserAgentVersion(newUA)
+	if !newOk {
+		return false
+	}
 	if cachedProduct == "" {
 		return true
 	}
@@ -422,12 +447,7 @@ func isNewerVersion(newUA, cachedUA string) bool {
 		return false
 	}
 
-	newMajor, newMinor, newPatch, newOk := parseUserAgentVersion(newUA)
 	cachedMajor, cachedMinor, cachedPatch, cachedOk := parseUserAgentVersion(cachedUA)
-
-	if !newOk {
-		return false
-	}
 	if !cachedOk {
 		return true
 	}
