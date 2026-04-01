@@ -127,7 +127,7 @@ func (s *ClaudeCodeProfileSyncService) refreshOnce(ctx context.Context) error {
 	return nil
 }
 
-func (s *ClaudeCodeProfileSyncService) fetchLatestPackage(ctx context.Context, conf config.ClaudeCodeSyncConfig) (*npmLatestPackage, error) {
+func (s *ClaudeCodeProfileSyncService) fetchLatestPackage(ctx context.Context, conf resolvedClaudeCodeSyncConfig) (*npmLatestPackage, error) {
 	base := strings.TrimRight(conf.RegistryURL, "/")
 	endpoint := base + "/" + url.PathEscape(conf.PackageName) + "/latest"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -153,6 +153,10 @@ func (s *ClaudeCodeProfileSyncService) fetchLatestPackage(ctx context.Context, c
 	return &latest, nil
 }
 
+// maxTarballSize limits the decompressed tarball to 64 MiB to prevent OOM from
+// malicious gzip bombs or oversized packages.
+const maxTarballSize = 64 << 20
+
 func (s *ClaudeCodeProfileSyncService) fetchAndBuildProfile(ctx context.Context, latest *npmLatestPackage) (claude.MimicProfile, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latest.Dist.Tarball, nil)
 	if err != nil {
@@ -167,15 +171,30 @@ func (s *ClaudeCodeProfileSyncService) fetchAndBuildProfile(ctx context.Context,
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return claude.MimicProfile{}, fmt.Errorf("tarball returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	files, err := extractClaudeCodePackageFiles(resp.Body)
+	// Wrap with a size limit to guard against gzip bombs.
+	limitedBody := io.LimitReader(resp.Body, maxTarballSize)
+	files, err := extractClaudeCodePackageFiles(limitedBody)
 	if err != nil {
 		return claude.MimicProfile{}, err
 	}
-	return buildClaudeCodeProfile(latest, files)
+	// Build profile, then clear extracted content so large strings are GC-eligible.
+	profile, buildErr := buildClaudeCodeProfile(latest, files)
+	for k := range files {
+		delete(files, k)
+	}
+	return profile, buildErr
 }
 
-func (s *ClaudeCodeProfileSyncService) syncConfig() config.ClaudeCodeSyncConfig {
-	conf := config.ClaudeCodeSyncConfig{
+type resolvedClaudeCodeSyncConfig struct {
+	Enabled               bool
+	RegistryURL           string
+	PackageName           string
+	RequestTimeoutSeconds int
+	RefreshIntervalHours  int
+}
+
+func (s *ClaudeCodeProfileSyncService) syncConfig() resolvedClaudeCodeSyncConfig {
+	conf := resolvedClaudeCodeSyncConfig{
 		Enabled:               true,
 		RegistryURL:           "https://registry.npmjs.org",
 		PackageName:           "@anthropic-ai/claude-code",
@@ -198,7 +217,9 @@ func (s *ClaudeCodeProfileSyncService) syncConfig() config.ClaudeCodeSyncConfig 
 	if cfg.RefreshIntervalHours >= 0 {
 		conf.RefreshIntervalHours = cfg.RefreshIntervalHours
 	}
-	conf.Enabled = cfg.Enabled
+	if cfg.Enabled != nil {
+		conf.Enabled = *cfg.Enabled
+	}
 	return conf
 }
 
@@ -218,6 +239,9 @@ func buildClaudeCodeProfileHTTPClient(cfg *config.Config) *http.Client {
 		Transport: transport,
 	}
 }
+
+// maxExtractedFileSize limits any single file extracted from the tarball to 32 MiB.
+const maxExtractedFileSize = 32 << 20
 
 func extractClaudeCodePackageFiles(r io.Reader) (map[string]string, error) {
 	gzReader, err := gzip.NewReader(r)
@@ -243,7 +267,10 @@ func extractClaudeCodePackageFiles(r io.Reader) (map[string]string, error) {
 		if _, ok := targets[header.Name]; !ok {
 			continue
 		}
-		content, readErr := io.ReadAll(tarReader)
+		if header.Size > maxExtractedFileSize {
+			return nil, fmt.Errorf("file %s too large: %d bytes (limit %d)", header.Name, header.Size, maxExtractedFileSize)
+		}
+		content, readErr := io.ReadAll(io.LimitReader(tarReader, maxExtractedFileSize))
 		if readErr != nil {
 			return nil, readErr
 		}

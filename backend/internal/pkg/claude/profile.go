@@ -69,11 +69,11 @@ func DefaultUserAgent() string {
 }
 
 func DefaultHeaderSet() map[string]string {
-	return currentProfile().DefaultHeaders
+	return cloneStringMap(currentProfile().DefaultHeaders)
 }
 
 func StableHeaders() map[string]string {
-	return currentProfile().StableDefaultHeaders
+	return cloneStringMap(currentProfile().StableDefaultHeaders)
 }
 
 func SystemPromptText() string {

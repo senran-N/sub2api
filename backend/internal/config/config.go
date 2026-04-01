@@ -473,7 +473,7 @@ type GatewayConfig struct {
 }
 
 type ClaudeCodeSyncConfig struct {
-	Enabled bool `mapstructure:"enabled"`
+	Enabled *bool `mapstructure:"enabled"`
 	// RegistryURL npm registry base URL，默认 https://registry.npmjs.org
 	RegistryURL string `mapstructure:"registry_url"`
 	// PackageName 默认 @anthropic-ai/claude-code

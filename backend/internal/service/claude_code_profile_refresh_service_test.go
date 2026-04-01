@@ -41,7 +41,8 @@ var agent="You are a Claude agent, built on Anthropic's Claude Agent SDK.";`,
 	defer registryServer.Close()
 
 	cfg := &config.Config{}
-	cfg.Gateway.ClaudeCodeSync.Enabled = true
+	enabled := true
+	cfg.Gateway.ClaudeCodeSync.Enabled = &enabled
 	cfg.Gateway.ClaudeCodeSync.RegistryURL = registryServer.URL
 	cfg.Gateway.ClaudeCodeSync.PackageName = "@anthropic-ai/claude-code"
 	cfg.Gateway.ClaudeCodeSync.RequestTimeoutSeconds = 5
