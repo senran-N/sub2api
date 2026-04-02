@@ -10,14 +10,13 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/claude"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
 type ClaudeCodeProfileSyncService struct {
@@ -37,20 +36,14 @@ type npmLatestPackage struct {
 }
 
 var (
-	reBetaToken   = regexp.MustCompile(`(?:oauth|claude-code|interleaved-thinking|fine-grained-tool-streaming|token-counting|context-1m|fast-mode|redact-thinking|token-efficient-tools|effort|task-budgets|prompt-caching-scope|structured-outputs|web-search|advanced-tool-use|tool-search-tool|summarize-connector-text|afk-mode|cli-internal|advisor-tool|mcp-servers|files-api|environments|ccr-byoc)-\d{4}-\d{2}-\d{2}|claude-code-\d{8}`)
+	reBetaToken   = regexp.MustCompile(`oauth-\d{4}-\d{2}-\d{2}|claude-code-\d{8}|interleaved-thinking-\d{4}-\d{2}-\d{2}|fine-grained-tool-streaming-\d{4}-\d{2}-\d{2}|token-counting-\d{4}-\d{2}-\d{2}|context-1m-\d{4}-\d{2}-\d{2}|fast-mode-\d{4}-\d{2}-\d{2}`)
 	reXAppLiteral = regexp.MustCompile(`["']x-app["']\s*:\s*["']([^"']+)["']`)
 	rePackageName = regexp.MustCompile(`"name"\s*:\s*"([^"]+)"`)
-
-	// Dynamic system prompt extraction: match strings starting with known
-	// prefixes that can evolve across versions, rather than hardcoding full text.
-	// NOTE: Longest prefix MUST come first — Go regexp uses leftmost-first matching,
-	// so "You are Claude Code...running within" must precede "You are Claude Code...".
-	reSystemPrompt = regexp.MustCompile(`"(You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK[^"]{0,300})"|"(You are Claude Code, Anthropic's official CLI for Claude[^"]{0,300})"|"(You are a Claude agent, built on Anthropic's Claude Agent SDK[^"]{0,300})"`)
-
-	// Attribution fingerprint extraction patterns.
-	reAttributionAnchor  = regexp.MustCompile(`cc_entrypoint`)
-	reAttributionHexSalt = regexp.MustCompile(`["']([0-9a-f]{8,24})["']`)
-	reAttributionIntArr  = regexp.MustCompile(`\[\s*(\d{1,3}(?:\s*,\s*\d{1,3}){1,9})\s*\]`)
+	systemPrompts = []string{
+		"You are Claude Code, Anthropic's official CLI for Claude.",
+		"You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.",
+		"You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+	}
 )
 
 func NewClaudeCodeProfileSyncService(cfg *config.Config) *ClaudeCodeProfileSyncService {
@@ -295,7 +288,7 @@ func buildClaudeCodeProfile(latest *npmLatestPackage, files map[string]string) (
 		return claude.MimicProfile{}, fmt.Errorf("cli bundle is empty")
 	}
 
-	profile := claude.BuiltinMimicProfile()
+	profile := claude.CurrentMimicProfile()
 	profile.Source = "npm:" + latest.Version
 	profile.PackageName = resolveClaudeCodePackageName(latest.Name, files["package/package.json"])
 	profile.PackageVersion = latest.Version
@@ -317,22 +310,8 @@ func buildClaudeCodeProfile(latest *npmLatestPackage, files map[string]string) (
 		return claude.MimicProfile{}, fmt.Errorf("failed to extract required Claude Code runtime traits from cli bundle")
 	}
 
-	// Extract attribution fingerprint salt and indices from the CLI bundle.
-	if salt, indices, ok := extractAttributionParams(cliBundle); ok {
-		profile.AttributionSalt = salt
-		profile.AttributionIndices = indices
-	}
-
-	// Extract SDK package version (X-Stainless-Package-Version) from the bundled SDK.
-	if sdkVersion := extractSDKVersion(cliBundle); sdkVersion != "" {
-		profile.SDKVersion = sdkVersion
-	}
-
 	defaultHeaders := claude.DefaultHeaderSet()
 	defaultHeaders["User-Agent"] = profile.UserAgent
-	if profile.SDKVersion != "" {
-		defaultHeaders["X-Stainless-Package-Version"] = profile.SDKVersion
-	}
 	profile.DefaultHeaders = defaultHeaders
 
 	stableHeaders := claude.StableHeaders()
@@ -371,55 +350,13 @@ func findBetaToken(source, prefix string) string {
 }
 
 func extractSystemPromptPrefixes(source string) []string {
-	matches := reSystemPrompt.FindAllStringSubmatch(source, -1)
-	seen := make(map[string]struct{}, len(matches))
-	out := make([]string, 0, len(matches))
-	for _, m := range matches {
-		// Each submatch group corresponds to one alternative in the regex.
-		for _, group := range m[1:] {
-			text := strings.TrimSpace(group)
-			if text == "" {
-				continue
-			}
-			if _, exists := seen[text]; exists {
-				continue
-			}
-			seen[text] = struct{}{}
-			out = append(out, text)
+	out := make([]string, 0, len(systemPrompts))
+	for _, prompt := range systemPrompts {
+		if strings.Contains(source, prompt) {
+			out = append(out, prompt)
 		}
 	}
-	return orderSystemPromptPrefixes(out)
-}
-
-func orderSystemPromptPrefixes(prompts []string) []string {
-	if len(prompts) == 0 {
-		return nil
-	}
-
-	preferredPrefixes := []string{
-		"You are Claude Code, Anthropic's official CLI for Claude.",
-		"You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.",
-		"You are a Claude agent, built on Anthropic's Claude Agent SDK.",
-	}
-
-	ordered := make([]string, 0, len(prompts))
-	used := make([]bool, len(prompts))
-	for _, preferred := range preferredPrefixes {
-		for i, prompt := range prompts {
-			if used[i] || !strings.HasPrefix(prompt, preferred) {
-				continue
-			}
-			ordered = append(ordered, prompt)
-			used[i] = true
-		}
-	}
-	for i, prompt := range prompts {
-		if used[i] {
-			continue
-		}
-		ordered = append(ordered, prompt)
-	}
-	return ordered
+	return out
 }
 
 func resolveClaudeCodePackageName(registryName, packageJSON string) string {
@@ -431,72 +368,4 @@ func resolveClaudeCodePackageName(registryName, packageJSON string) string {
 		return strings.TrimSpace(match[1])
 	}
 	return "@anthropic-ai/claude-code"
-}
-
-// extractAttributionParams extracts the attribution fingerprint salt and character
-// indices from the CLI bundle by locating the "cc_entrypoint" anchor and then
-// scanning backward for the hex salt and integer array.
-func extractAttributionParams(source string) (salt string, indices []int, ok bool) {
-	anchorLoc := reAttributionAnchor.FindStringIndex(source)
-	if anchorLoc == nil {
-		return "", nil, false
-	}
-	// Search in a window before the anchor (up to 4KB).
-	windowStart := anchorLoc[0] - 4096
-	if windowStart < 0 {
-		windowStart = 0
-	}
-	window := source[windowStart:anchorLoc[1]]
-
-	saltMatch := reAttributionHexSalt.FindAllStringSubmatch(window, -1)
-	if len(saltMatch) == 0 {
-		return "", nil, false
-	}
-	// Use the last match closest to the anchor.
-	salt = saltMatch[len(saltMatch)-1][1]
-
-	arrMatch := reAttributionIntArr.FindAllStringSubmatch(window, -1)
-	if len(arrMatch) == 0 {
-		return "", nil, false
-	}
-	arrStr := arrMatch[len(arrMatch)-1][1]
-	parts := strings.Split(arrStr, ",")
-	indices = make([]int, 0, len(parts))
-	for _, p := range parts {
-		v, err := strconv.Atoi(strings.TrimSpace(p))
-		if err != nil {
-			return "", nil, false
-		}
-		indices = append(indices, v)
-	}
-	if len(indices) == 0 {
-		return "", nil, false
-	}
-	return salt, indices, true
-}
-
-// extractSDKVersion extracts the @anthropic-ai/sdk package version from the CLI
-// bundle. The bundled SDK exports a VERSION constant near stainless platform
-// detection code. We anchor on "X-Stainless-Package-Version" to avoid matching
-// unrelated VERSION constants (Node.js, other libraries).
-var reSDKVersion = regexp.MustCompile(`VERSION\s*=\s*["'](\d+\.\d+\.\d+)["']`)
-
-func extractSDKVersion(source string) string {
-	const anchor = "X-Stainless-Package-Version"
-	idx := strings.Index(source, anchor)
-	if idx < 0 {
-		return ""
-	}
-	// Search within 8KB before the anchor for the VERSION constant.
-	windowStart := idx - 8192
-	if windowStart < 0 {
-		windowStart = 0
-	}
-	window := source[windowStart : idx+len(anchor)]
-	matches := reSDKVersion.FindAllStringSubmatch(window, -1)
-	if len(matches) == 0 {
-		return ""
-	}
-	// Use the last match closest to the anchor.
-	return matches[len(matches)-1][1]
 }

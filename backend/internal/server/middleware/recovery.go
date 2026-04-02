@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
+	"github.com/senran-N/sub2api/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 )
 

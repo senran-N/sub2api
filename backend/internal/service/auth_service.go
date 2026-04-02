@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	dbent "github.com/senran-N/sub2api/ent"
+	"github.com/senran-N/sub2api/internal/config"
+	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"

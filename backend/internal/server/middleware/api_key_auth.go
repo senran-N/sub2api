@@ -5,10 +5,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
+	"github.com/senran-N/sub2api/internal/pkg/ip"
+	"github.com/senran-N/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

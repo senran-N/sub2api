@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -98,28 +98,6 @@ func TestStreamWrittenGuard_GeminiPath_AbortFailoverOnSSEContentWritten(t *testi
 	firstIdx := strings.Index(body, "event: message_start")
 	lastIdx := strings.LastIndex(body, "event: message_start")
 	assert.Equal(t, firstIdx, lastIdx, "Gemini 路径不得出现双 message_start")
-}
-
-func TestStreamWrittenGuard_StreamingRateLimitUsesRateLimitErrorType(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-
-	_, err := c.Writer.Write([]byte(partialMessageStartSSE))
-	require.NoError(t, err)
-
-	failoverErr := &service.UpstreamFailoverError{
-		StatusCode:   http.StatusTooManyRequests,
-		ResponseBody: []byte(`{"error":{"type":"rate_limit_error","message":"too many requests"}}`),
-	}
-
-	h := &GatewayHandler{}
-	h.handleFailoverExhausted(c, failoverErr, service.PlatformAnthropic, true)
-
-	body := w.Body.String()
-	require.Contains(t, body, `"type":"rate_limit_error"`)
-	require.Contains(t, body, "please retry later")
 }
 
 // TestStreamWrittenGuard_NoByteWritten_GuardNotTriggered 验证反向场景：

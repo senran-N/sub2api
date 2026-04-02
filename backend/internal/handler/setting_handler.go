@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/handler/dto"
+	"github.com/senran-N/sub2api/internal/pkg/response"
+	"github.com/senran-N/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

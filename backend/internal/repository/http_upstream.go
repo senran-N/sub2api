@@ -20,12 +20,12 @@ import (
 	"github.com/andybalholm/brotli"
 	"golang.org/x/net/http2"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
-	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/proxyurl"
+	"github.com/senran-N/sub2api/internal/pkg/proxyutil"
+	"github.com/senran-N/sub2api/internal/pkg/tlsfingerprint"
+	"github.com/senran-N/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/util/urlvalidator"
 )
 
 // 默认配置常量

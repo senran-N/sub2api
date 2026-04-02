@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 

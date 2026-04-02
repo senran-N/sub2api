@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )

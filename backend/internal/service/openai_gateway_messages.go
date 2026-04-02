@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
+	"github.com/senran-N/sub2api/internal/pkg/apicompat"
+	"github.com/senran-N/sub2api/internal/pkg/claude"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
+	"github.com/senran-N/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -55,7 +55,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	isStream := true
 
 	// 2b. Handle BetaFastMode → service_tier: "priority"
-	if containsBetaToken(c.GetHeader("anthropic-beta"), claude.FastModeBetaToken()) {
+	if containsBetaToken(c.GetHeader("anthropic-beta"), claude.BetaFastMode) {
 		responsesReq.ServiceTier = "priority"
 	}
 

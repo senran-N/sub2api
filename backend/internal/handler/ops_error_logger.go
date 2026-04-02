@@ -14,10 +14,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
+	"github.com/senran-N/sub2api/internal/pkg/ip"
+	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
+	"github.com/senran-N/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
