@@ -9,6 +9,7 @@ type MimicProfile struct {
 	Source                       string
 	PackageName                  string
 	PackageVersion               string
+	SDKVersion                   string // @anthropic-ai/sdk version for X-Stainless-Package-Version
 	UserAgent                    string
 	XApp                         string
 	OAuthBeta                    string
@@ -22,6 +23,8 @@ type MimicProfile struct {
 	SystemPromptPrefixes         []string
 	DefaultHeaders               map[string]string
 	StableDefaultHeaders         map[string]string
+	AttributionSalt              string // Attribution fingerprint salt, e.g. "59cf53e54c78"
+	AttributionIndices           []int  // Attribution fingerprint char indices, e.g. [4, 7, 20]
 }
 
 var currentMimicProfile atomic.Value
@@ -35,6 +38,7 @@ func defaultMimicProfile() MimicProfile {
 		Source:                       "builtin",
 		PackageName:                  "@anthropic-ai/claude-code",
 		PackageVersion:               "2.1.22",
+		SDKVersion:                   DefaultHeaders["X-Stainless-Package-Version"],
 		UserAgent:                    DefaultHeaders["User-Agent"],
 		XApp:                         StableDefaultHeaders["X-App"],
 		OAuthBeta:                    BetaOAuth,
@@ -52,12 +56,20 @@ func defaultMimicProfile() MimicProfile {
 		},
 		DefaultHeaders:       cloneStringMap(DefaultHeaders),
 		StableDefaultHeaders: cloneStringMap(StableDefaultHeaders),
+		// Builtin fallback values extracted from Claude Code 2.1.88.
+		// These are overwritten at runtime by npm sync; kept here as last-resort defaults.
+		AttributionSalt:    "59cf53e54c78",
+		AttributionIndices: []int{4, 7, 20},
 	}
 }
 
 func CurrentMimicProfile() MimicProfile {
 	profile, _ := currentMimicProfile.Load().(MimicProfile)
 	return cloneMimicProfile(profile)
+}
+
+func BuiltinMimicProfile() MimicProfile {
+	return cloneMimicProfile(defaultMimicProfile())
 }
 
 func ApplyMimicProfile(profile MimicProfile) {
@@ -110,6 +122,24 @@ func Context1MBetaToken() string {
 
 func FastModeBetaToken() string {
 	return currentProfile().FastModeBeta
+}
+
+func SDKVersion() string {
+	return currentProfile().SDKVersion
+}
+
+func AttributionSalt() string {
+	return currentProfile().AttributionSalt
+}
+
+func AttributionIndices() []int {
+	src := currentProfile().AttributionIndices
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]int, len(src))
+	copy(dst, src)
+	return dst
 }
 
 func DefaultAnthropicBetaHeader() string {
@@ -201,8 +231,20 @@ func normalizeMimicProfile(profile MimicProfile) MimicProfile {
 	if len(profile.StableDefaultHeaders) == 0 {
 		profile.StableDefaultHeaders = cloneStringMap(fallback.StableDefaultHeaders)
 	}
+	if strings.TrimSpace(profile.AttributionSalt) == "" {
+		profile.AttributionSalt = fallback.AttributionSalt
+	}
+	if len(profile.AttributionIndices) == 0 {
+		profile.AttributionIndices = cloneIntSlice(fallback.AttributionIndices)
+	}
+	if strings.TrimSpace(profile.SDKVersion) == "" {
+		profile.SDKVersion = fallback.SDKVersion
+	}
 
 	profile.DefaultHeaders["User-Agent"] = profile.UserAgent
+	if profile.SDKVersion != "" {
+		profile.DefaultHeaders["X-Stainless-Package-Version"] = profile.SDKVersion
+	}
 	profile.StableDefaultHeaders["X-App"] = profile.XApp
 	return profile
 }
@@ -211,6 +253,7 @@ func cloneMimicProfile(profile MimicProfile) MimicProfile {
 	profile.SystemPromptPrefixes = cloneStringSlice(profile.SystemPromptPrefixes)
 	profile.DefaultHeaders = cloneStringMap(profile.DefaultHeaders)
 	profile.StableDefaultHeaders = cloneStringMap(profile.StableDefaultHeaders)
+	profile.AttributionIndices = cloneIntSlice(profile.AttributionIndices)
 	return profile
 }
 
@@ -222,6 +265,15 @@ func cloneStringMap(src map[string]string) map[string]string {
 	for key, value := range src {
 		dst[key] = value
 	}
+	return dst
+}
+
+func cloneIntSlice(src []int) []int {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]int, len(src))
+	copy(dst, src)
 	return dst
 }
 

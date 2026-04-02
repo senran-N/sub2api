@@ -55,7 +55,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	isStream := true
 
 	// 2b. Handle BetaFastMode → service_tier: "priority"
-	if containsBetaToken(c.GetHeader("anthropic-beta"), claude.BetaFastMode) {
+	if containsBetaToken(c.GetHeader("anthropic-beta"), claude.FastModeBetaToken()) {
 		responsesReq.ServiceTier = "priority"
 	}
 

@@ -64,6 +64,71 @@ var agent="You are a Claude agent, built on Anthropic's Claude Agent SDK.";`,
 	require.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude.", claude.SystemPromptText())
 }
 
+func TestBuildClaudeCodeProfile_UsesBuiltinFallbackForOptionalFields(t *testing.T) {
+	previous := claude.CurrentMimicProfile()
+	t.Cleanup(func() {
+		claude.ApplyMimicProfile(previous)
+	})
+
+	claude.ApplyMimicProfile(claude.MimicProfile{
+		Source:                  "test-current",
+		PackageName:             "@anthropic-ai/claude-code",
+		PackageVersion:          "99.99.99",
+		UserAgent:               "claude-cli/99.99.99 (external, cli)",
+		XApp:                    "current-x-app",
+		OAuthBeta:               "oauth-2099-12-31",
+		ClaudeCodeBeta:          "claude-code-20991231",
+		InterleavedThinkingBeta: "interleaved-thinking-2099-12-31",
+		SystemPrompt:            "You are Claude Code, Anthropic's official CLI for Claude.",
+		SystemPromptPrefixes: []string{
+			"You are Claude Code, Anthropic's official CLI for Claude.",
+		},
+		SDKVersion:         "9.9.9",
+		AttributionSalt:    "deadbeef1234",
+		AttributionIndices: []int{1, 2, 3},
+	})
+
+	profile, err := buildClaudeCodeProfile(&npmLatestPackage{
+		Name:    "@anthropic-ai/claude-code",
+		Version: "3.2.1",
+	}, map[string]string{
+		"package/cli.js": `var oauth="oauth-2030-01-01",cc="claude-code-20300101",thinking="interleaved-thinking-2030-01-01";
+var headers={"x-app":"cli-fresh"};
+var base="You are Claude Code, Anthropic's official CLI for Claude.";`,
+		"package/package.json": `{"name":"@anthropic-ai/claude-code"}`,
+	})
+	require.NoError(t, err)
+
+	builtin := claude.BuiltinMimicProfile()
+	require.Equal(t, builtin.SDKVersion, profile.SDKVersion)
+	require.Equal(t, builtin.AttributionSalt, profile.AttributionSalt)
+	require.Equal(t, builtin.AttributionIndices, profile.AttributionIndices)
+	require.Equal(t, builtin.SDKVersion, profile.DefaultHeaders["X-Stainless-Package-Version"])
+	require.Equal(t, "claude-cli/3.2.1 (external, cli)", profile.UserAgent)
+}
+
+func TestBuildClaudeCodeProfile_PrefersCanonicalSystemPrompt(t *testing.T) {
+	profile, err := buildClaudeCodeProfile(&npmLatestPackage{
+		Name:    "@anthropic-ai/claude-code",
+		Version: "3.2.1",
+	}, map[string]string{
+		"package/cli.js": `var oauth="oauth-2030-01-01",cc="claude-code-20300101",thinking="interleaved-thinking-2030-01-01";
+var headers={"x-app":"cli-fresh"};
+var sdk="You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.";
+var agent="You are a Claude agent, built on Anthropic's Claude Agent SDK.";
+var base="You are Claude Code, Anthropic's official CLI for Claude.";`,
+		"package/package.json": `{"name":"@anthropic-ai/claude-code"}`,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude.", profile.SystemPrompt)
+	require.Equal(t, []string{
+		"You are Claude Code, Anthropic's official CLI for Claude.",
+		"You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.",
+		"You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+	}, profile.SystemPromptPrefixes)
+}
+
 func buildClaudeCodeTarballForTest(t *testing.T, files map[string]string) []byte {
 	t.Helper()
 

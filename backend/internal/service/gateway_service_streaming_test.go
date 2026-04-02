@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -49,4 +50,65 @@ func TestGatewayService_StreamingReusesScannerBufferAndStillParsesUsage(t *testi
 	require.NotNil(t, result.usage)
 	require.Equal(t, 3, result.usage.InputTokens)
 	require.Equal(t, 7, result.usage.OutputTokens)
+}
+
+func TestGatewayService_StreamingErrorEventParsesStatusCodeFromPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &GatewayService{
+		cfg:              &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}},
+		rateLimitService: &RateLimitService{},
+	}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	pr, pw := io.Pipe()
+	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: pr}
+
+	go func() {
+		defer func() { _ = pw.Close() }()
+		_, _ = pw.Write([]byte("event: error\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"status_code\":429,\"message\":\"rate limited\"}}\n\n"))
+	}()
+
+	result, err := svc.handleStreamingResponse(context.Background(), resp, c, &Account{ID: 1}, time.Now(), "model", "model", false)
+	_ = pr.Close()
+	require.Nil(t, result)
+	require.Error(t, err)
+
+	var streamErr *upstreamStreamEventError
+	require.True(t, errors.As(err, &streamErr))
+	require.Equal(t, http.StatusTooManyRequests, streamErr.StatusCode())
+	require.JSONEq(t, `{"type":"error","error":{"type":"rate_limit_error","status_code":429,"message":"rate limited"}}`, string(streamErr.ResponseBody()))
+}
+
+func TestGatewayService_StreamingErrorEventFallsBackToForbiddenWhenHTTPStatusIs200(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &GatewayService{
+		cfg:              &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}},
+		rateLimitService: &RateLimitService{},
+	}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	pr, pw := io.Pipe()
+	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: pr}
+
+	go func() {
+		defer func() { _ = pw.Close() }()
+		_, _ = pw.Write([]byte("event: error\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"error\",\"error\":{\"message\":\"forbidden\"}}\n\n"))
+	}()
+
+	result, err := svc.handleStreamingResponse(context.Background(), resp, c, &Account{ID: 1}, time.Now(), "model", "model", false)
+	_ = pr.Close()
+	require.Nil(t, result)
+	require.Error(t, err)
+
+	var streamErr *upstreamStreamEventError
+	require.True(t, errors.As(err, &streamErr))
+	require.Equal(t, http.StatusForbidden, streamErr.StatusCode())
 }
