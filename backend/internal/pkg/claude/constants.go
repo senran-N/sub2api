@@ -3,46 +3,22 @@ package claude
 
 // Claude Code 客户端相关常量
 
-// Beta header 常量
+// Beta header 常量 — 仅作为 MimicProfile 的内置兜底默认值。
+// 生产转发链路应通过 profile 函数（如 OAuthBetaToken()）获取，
+// 以确保 npm 同步后自动更新。
 const (
-	BetaOAuth                    = "oauth-2025-04-20"
-	BetaClaudeCode               = "claude-code-20250219"
-	BetaInterleavedThinking      = "interleaved-thinking-2025-05-14"
+	BetaOAuth                   = "oauth-2025-04-20"
+	BetaClaudeCode              = "claude-code-20250219"
+	BetaInterleavedThinking     = "interleaved-thinking-2025-05-14"
 	BetaFineGrainedToolStreaming = "fine-grained-tool-streaming-2025-05-14"
-	BetaTokenCounting            = "token-counting-2024-11-01"
-	BetaContext1M                = "context-1m-2025-08-07"
-	BetaFastMode                 = "fast-mode-2026-02-01"
+	BetaTokenCounting           = "token-counting-2024-11-01"
+	BetaContext1M               = "context-1m-2025-08-07"
+	BetaFastMode                = "fast-mode-2026-02-01"
 )
 
 // DroppedBetas 是转发时需要从 anthropic-beta header 中移除的 beta token 列表。
 // 这些 token 是客户端特有的，不应透传给上游 API。
 var DroppedBetas = []string{}
-
-// DefaultBetaHeader Claude Code 客户端默认的 anthropic-beta header
-const DefaultBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking + "," + BetaFineGrainedToolStreaming
-
-// MessageBetaHeaderNoTools /v1/messages 在无工具时的 beta header
-//
-// NOTE: Claude Code OAuth credentials are scoped to Claude Code. When we "mimic"
-// Claude Code for non-Claude-Code clients, we must include the claude-code beta
-// even if the request doesn't use tools, otherwise upstream may reject the
-// request as a non-Claude-Code API request.
-const MessageBetaHeaderNoTools = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking
-
-// MessageBetaHeaderWithTools /v1/messages 在有工具时的 beta header
-const MessageBetaHeaderWithTools = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking
-
-// CountTokensBetaHeader count_tokens 请求使用的 anthropic-beta header
-const CountTokensBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking + "," + BetaTokenCounting
-
-// HaikuBetaHeader Haiku 模型使用的 anthropic-beta header（不需要 claude-code beta）
-const HaikuBetaHeader = BetaOAuth + "," + BetaInterleavedThinking
-
-// APIKeyBetaHeader API-key 账号建议使用的 anthropic-beta header（不包含 oauth）
-const APIKeyBetaHeader = BetaClaudeCode + "," + BetaInterleavedThinking + "," + BetaFineGrainedToolStreaming
-
-// APIKeyHaikuBetaHeader Haiku 模型在 API-key 账号下使用的 anthropic-beta header（不包含 oauth / claude-code）
-const APIKeyHaikuBetaHeader = BetaInterleavedThinking
 
 // DefaultHeaders 保留给测试和诊断使用；生产转发链路不应依赖其中的版本化值。
 // 这些字段里的版本号天然易过时，转发逻辑应优先透传/缓存真实客户端值。

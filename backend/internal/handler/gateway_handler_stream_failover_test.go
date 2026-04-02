@@ -100,6 +100,28 @@ func TestStreamWrittenGuard_GeminiPath_AbortFailoverOnSSEContentWritten(t *testi
 	assert.Equal(t, firstIdx, lastIdx, "Gemini 路径不得出现双 message_start")
 }
 
+func TestStreamWrittenGuard_StreamingRateLimitUsesRateLimitErrorType(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	_, err := c.Writer.Write([]byte(partialMessageStartSSE))
+	require.NoError(t, err)
+
+	failoverErr := &service.UpstreamFailoverError{
+		StatusCode:   http.StatusTooManyRequests,
+		ResponseBody: []byte(`{"error":{"type":"rate_limit_error","message":"too many requests"}}`),
+	}
+
+	h := &GatewayHandler{}
+	h.handleFailoverExhausted(c, failoverErr, service.PlatformAnthropic, true)
+
+	body := w.Body.String()
+	require.Contains(t, body, `"type":"rate_limit_error"`)
+	require.Contains(t, body, "please retry later")
+}
+
 // TestStreamWrittenGuard_NoByteWritten_GuardNotTriggered 验证反向场景：
 // 当 Forward 返回 UpstreamFailoverError 时若未向客户端写入任何 SSE 内容，
 // 守卫条件（c.Writer.Size() != sizeBeforeForward）为 false，不应中止 failover。

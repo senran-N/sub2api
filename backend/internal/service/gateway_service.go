@@ -521,6 +521,31 @@ func (e *UpstreamFailoverError) Error() string {
 	return fmt.Sprintf("upstream error: %d (failover)", e.StatusCode)
 }
 
+type upstreamStreamEventError struct {
+	statusCode   int
+	responseBody []byte
+}
+
+func (e *upstreamStreamEventError) Error() string {
+	return "have error in stream"
+}
+
+func (e *upstreamStreamEventError) StatusCode() int {
+	if e == nil {
+		return 0
+	}
+	return e.statusCode
+}
+
+func (e *upstreamStreamEventError) ResponseBody() []byte {
+	if e == nil || len(e.responseBody) == 0 {
+		return nil
+	}
+	out := make([]byte, len(e.responseBody))
+	copy(out, e.responseBody)
+	return out
+}
+
 // TempUnscheduleRetryableError 对 RetryableOnSameAccount 类型的 failover 错误触发临时封禁。
 // 由 handler 层在同账号重试全部用尽、切换账号时调用。
 func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accountID int64, failoverErr *UpstreamFailoverError) {
@@ -3997,8 +4022,11 @@ func computeAttributionFingerprint(firstMessageText, version string) string {
 	if strings.TrimSpace(version) == "" {
 		return ""
 	}
-	indices := [3]int{4, 7, 20}
-	var chars [3]byte
+	indices := claude.AttributionIndices()
+	if len(indices) == 0 {
+		return ""
+	}
+	chars := make([]byte, len(indices))
 	for i, idx := range indices {
 		if idx < len(firstMessageText) {
 			chars[i] = firstMessageText[idx]
@@ -4006,9 +4034,84 @@ func computeAttributionFingerprint(firstMessageText, version string) string {
 			chars[i] = '0'
 		}
 	}
-	input := "59cf53e54c78" + string(chars[:]) + version
+	salt := claude.AttributionSalt()
+	if salt == "" {
+		return ""
+	}
+	input := salt + string(chars) + version
 	hash := sha256.Sum256([]byte(input))
 	return fmt.Sprintf("%x", hash[:2])[:3] // 取前3个hex字符
+}
+
+func inferStreamingErrorStatusCode(httpStatus int, responseBody []byte) int {
+	if code := extractStreamingErrorStatusCode(responseBody); code != 0 {
+		return code
+	}
+	if httpStatus >= 400 {
+		return httpStatus
+	}
+	if errType := strings.TrimSpace(gjson.GetBytes(responseBody, "error.type").String()); errType != "" {
+		switch errType {
+		case "authentication_error":
+			return http.StatusUnauthorized
+		case "permission_error":
+			return http.StatusForbidden
+		case "rate_limit_error":
+			return http.StatusTooManyRequests
+		case "not_found_error":
+			return http.StatusNotFound
+		case "invalid_request_error":
+			return http.StatusBadRequest
+		case "overloaded_error":
+			return 529
+		case "api_error":
+			return http.StatusBadGateway
+		}
+	}
+	// Claude SSE error events are delivered after the HTTP stream is already 200.
+	// Preserve the prior failover behavior instead of downgrading them to 200.
+	return http.StatusForbidden
+}
+
+func extractStreamingErrorStatusCode(responseBody []byte) int {
+	if len(responseBody) == 0 {
+		return 0
+	}
+	for _, path := range []string{
+		"error.status_code",
+		"error.statusCode",
+		"status_code",
+		"statusCode",
+		"error.error_code",
+	} {
+		if code := gjson.GetBytes(responseBody, path); code.Exists() {
+			if parsed := parseStreamingErrorStatusValue(code); parsed != 0 {
+				return parsed
+			}
+		}
+	}
+
+	inner := strings.TrimSpace(gjson.GetBytes(responseBody, "error.message").String())
+	if strings.HasPrefix(inner, "{") {
+		return extractStreamingErrorStatusCode([]byte(inner))
+	}
+	return 0
+}
+
+func parseStreamingErrorStatusValue(value gjson.Result) int {
+	switch value.Type {
+	case gjson.Number:
+		code := int(value.Int())
+		if code > 0 {
+			return code
+		}
+	case gjson.String:
+		code, err := strconv.Atoi(strings.TrimSpace(value.String()))
+		if err == nil && code > 0 {
+			return code
+		}
+	}
+	return 0
 }
 
 // extractFirstUserMessageText 从 Anthropic messages body 中提取首条用户消息文本。
@@ -4300,16 +4403,18 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCode
 
 	if shouldMimicClaudeCode {
+		isHaikuModel := strings.Contains(strings.ToLower(reqModel), "haiku")
+
 		// 智能注入 Claude Code 系统提示词（仅 OAuth/SetupToken 账号需要）
 		// 条件：1) OAuth/SetupToken 账号  2) 不是 Claude Code 客户端  3) 不是 Haiku 模型  4) system 中还没有 Claude Code 提示词
-		if !strings.Contains(strings.ToLower(reqModel), "haiku") &&
-			!systemIncludesClaudeCodePrompt(parsed.System) {
+		if !isHaikuModel && !systemIncludesClaudeCodePrompt(parsed.System) {
 			body = injectClaudeCodePrompt(body, parsed.System)
 		}
 
 		// 注入归因 header 到 system prompt 首个 text block（真实 Claude Code 始终包含）。
+		// Haiku 不注入 Claude Code 提示词，也不应注入归因 header，保持特征一致。
 		// 版本必须与客户端指纹 UA 保持一致，避免额外的交叉字段特征。
-		if s.identityService != nil {
+		if !isHaikuModel && s.identityService != nil {
 			if fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header); err == nil && fp != nil {
 				if attrHeader := buildAttributionHeaderText(body, fp.UserAgent); attrHeader != "" {
 					body = injectAttributionHeaderBlock(body, attrHeader)
@@ -4795,9 +4900,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	if reqStream {
 		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, shouldMimicClaudeCode)
 		if err != nil {
-			if err.Error() == "have error in stream" {
+			var streamErr *upstreamStreamEventError
+			if errors.As(err, &streamErr) {
 				return nil, &UpstreamFailoverError{
-					StatusCode: 403,
+					StatusCode:   streamErr.StatusCode(),
+					ResponseBody: streamErr.ResponseBody(),
 				}
 			}
 			return nil, err
@@ -7023,7 +7130,11 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 		}
 
 		if eventName == "error" {
-			return nil, dataLine, nil, errors.New("have error in stream")
+			respBody := []byte(strings.TrimSpace(dataLine))
+			return nil, dataLine, nil, &upstreamStreamEventError{
+				statusCode:   inferStreamingErrorStatusCode(resp.StatusCode, respBody),
+				responseBody: respBody,
+			}
 		}
 
 		if dataLine == "" {
