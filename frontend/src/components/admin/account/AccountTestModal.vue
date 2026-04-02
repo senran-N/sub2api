@@ -72,6 +72,18 @@
         />
       </div>
 
+      <!-- Custom Prompt (for non-Gemini-image, non-Sora accounts) -->
+      <div v-else-if="!isSoraAccount" class="space-y-1.5">
+        <TextArea
+          v-model="testPrompt"
+          :label="t('admin.accounts.customPromptLabel')"
+          :placeholder="t('admin.accounts.customPromptPlaceholder')"
+          :hint="t('admin.accounts.customPromptHint')"
+          :disabled="status === 'connecting'"
+          rows="2"
+        />
+      </div>
+
       <!-- Terminal Output -->
       <div class="group relative">
         <div
@@ -162,7 +174,9 @@
               ? t('admin.accounts.soraTestMode')
               : supportsGeminiImageTest
                 ? t('admin.accounts.geminiImageTestMode')
-                : t('admin.accounts.testPrompt')
+                : testPrompt.trim()
+                  ? t('admin.accounts.customPromptMode')
+                  : t('admin.accounts.testPrompt')
           }}
         </span>
       </div>
@@ -399,7 +413,7 @@ const startTest = async () => {
           ? {}
           : {
               model_id: selectedModelId.value,
-              prompt: supportsGeminiImageTest.value ? testPrompt.value.trim() : ''
+              prompt: testPrompt.value.trim()
             }
       )
     })
