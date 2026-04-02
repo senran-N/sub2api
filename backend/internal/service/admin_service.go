@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	dbent "github.com/senran-N/sub2api/ent"
@@ -362,15 +363,33 @@ type ProxyQualityCheckResult struct {
 	ChallengeCount int                     `json:"challenge_count"`
 	CheckedAt      int64                   `json:"checked_at"`
 	Items          []ProxyQualityCheckItem `json:"items"`
+	// Extended IP risk fields
+	IPType         string                  `json:"ip_type,omitempty"`
+	IPRiskScore    int                     `json:"ip_risk_score,omitempty"`
+	ISP            string                  `json:"isp,omitempty"`
+	AS             string                  `json:"as,omitempty"`
+	AbuseScore     int                     `json:"abuse_score,omitempty"`
+	DNSLeakRisk    string                  `json:"dns_leak_risk,omitempty"`
+	CategoryScores *QualityCategoryScores  `json:"category_scores,omitempty"`
+}
+
+// QualityCategoryScores holds per-dimension scores (0-100) for the weighted quality model.
+type QualityCategoryScores struct {
+	Reachability int `json:"reachability"`  // AI endpoint reachability (weight 30%)
+	IPRisk       int `json:"ip_risk"`       // IP fraud/risk inverse (weight 25%)
+	IPType       int `json:"ip_type"`       // IP type quality (weight 20%)
+	AbuseHistory int `json:"abuse_history"` // Abuse history inverse (weight 15%)
+	Latency      int `json:"latency"`       // Latency score (weight 10%)
 }
 
 type ProxyQualityCheckItem struct {
 	Target     string `json:"target"`
-	Status     string `json:"status"` // pass/warn/fail/challenge
+	Status     string `json:"status"` // pass/warn/fail/challenge/skip
 	HTTPStatus int    `json:"http_status,omitempty"`
 	LatencyMs  int64  `json:"latency_ms,omitempty"`
 	Message    string `json:"message,omitempty"`
 	CFRay      string `json:"cf_ray,omitempty"`
+	Category   string `json:"category,omitempty"` // reachability, ip_risk, abuse, dns_leak
 }
 
 // ProxyExitInfo represents proxy exit information from ip-api.com
@@ -380,6 +399,12 @@ type ProxyExitInfo struct {
 	Region      string
 	Country     string
 	CountryCode string
+	ISP         string
+	Org         string
+	AS          string
+	Hosting     bool
+	Proxy       bool
+	Mobile      bool
 }
 
 // ProxyExitInfoProber tests proxy connectivity and retrieves exit information
@@ -462,6 +487,7 @@ type adminServiceImpl struct {
 	defaultSubAssigner   DefaultSubscriptionAssigner
 	userSubRepo          UserSubscriptionRepository
 	privacyClientFactory PrivacyClientFactory
+	ipRiskService        *IPRiskService
 }
 
 type userGroupRateBatchReader interface {
@@ -487,6 +513,7 @@ func NewAdminService(
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
+	ipRiskService *IPRiskService,
 ) AdminService {
 	return &adminServiceImpl{
 		userRepo:             userRepo,
@@ -506,6 +533,7 @@ func NewAdminService(
 		defaultSubAssigner:   defaultSubAssigner,
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
+		ipRiskService:        ipRiskService,
 	}
 }
 
@@ -2249,18 +2277,19 @@ func (s *adminServiceImpl) CheckProxyQuality(ctx context.Context, id int64) (*Pr
 		Score:     100,
 		Grade:     "A",
 		CheckedAt: time.Now().Unix(),
-		Items:     make([]ProxyQualityCheckItem, 0, len(proxyQualityTargets)+1),
+		Items:     make([]ProxyQualityCheckItem, 0, len(proxyQualityTargets)+4),
 	}
 
 	proxyURL := proxy.URL()
 	if s.proxyProber == nil {
 		result.Items = append(result.Items, ProxyQualityCheckItem{
-			Target:  "base_connectivity",
-			Status:  "fail",
-			Message: "代理探测服务未配置",
+			Target:   "base_connectivity",
+			Category: "reachability",
+			Status:   "fail",
+			Message:  "代理探测服务未配置",
 		})
 		result.FailedCount++
-		finalizeProxyQualityResult(result)
+		finalizeProxyQualityResultWeighted(result, nil)
 		s.saveProxyQualitySnapshot(ctx, id, result, nil)
 		return result, nil
 	}
@@ -2269,12 +2298,13 @@ func (s *adminServiceImpl) CheckProxyQuality(ctx context.Context, id int64) (*Pr
 	if err != nil {
 		result.Items = append(result.Items, ProxyQualityCheckItem{
 			Target:    "base_connectivity",
+			Category:  "reachability",
 			Status:    "fail",
 			LatencyMs: latencyMs,
 			Message:   err.Error(),
 		})
 		result.FailedCount++
-		finalizeProxyQualityResult(result)
+		finalizeProxyQualityResultWeighted(result, nil)
 		s.saveProxyQualitySnapshot(ctx, id, result, nil)
 		return result, nil
 	}
@@ -2285,6 +2315,7 @@ func (s *adminServiceImpl) CheckProxyQuality(ctx context.Context, id int64) (*Pr
 	result.BaseLatencyMs = latencyMs
 	result.Items = append(result.Items, ProxyQualityCheckItem{
 		Target:    "base_connectivity",
+		Category:  "reachability",
 		Status:    "pass",
 		LatencyMs: latencyMs,
 		Message:   "代理出口连通正常",
@@ -2298,18 +2329,48 @@ func (s *adminServiceImpl) CheckProxyQuality(ctx context.Context, id int64) (*Pr
 	})
 	if err != nil {
 		result.Items = append(result.Items, ProxyQualityCheckItem{
-			Target:  "http_client",
-			Status:  "fail",
-			Message: fmt.Sprintf("创建检测客户端失败: %v", err),
+			Target:   "http_client",
+			Category: "reachability",
+			Status:   "fail",
+			Message:  fmt.Sprintf("创建检测客户端失败: %v", err),
 		})
 		result.FailedCount++
-		finalizeProxyQualityResult(result)
+		finalizeProxyQualityResultWeighted(result, nil)
 		s.saveProxyQualitySnapshot(ctx, id, result, exitInfo)
 		return result, nil
 	}
 
-	for _, target := range proxyQualityTargets {
-		item := runProxyQualityTarget(ctx, client, target)
+	// Run AI reachability checks and IP risk assessment in parallel
+	var riskResult *IPRiskResult
+	var reachItems []ProxyQualityCheckItem
+	var wg sync.WaitGroup
+
+	// Branch 1: AI target reachability checks
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		items := make([]ProxyQualityCheckItem, 0, len(proxyQualityTargets))
+		for _, target := range proxyQualityTargets {
+			item := runProxyQualityTarget(ctx, client, target)
+			items = append(items, item)
+		}
+		reachItems = items
+	}()
+
+	// Branch 2: IP risk assessment
+	if s.ipRiskService != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			riskResult = s.ipRiskService.AssessIP(ctx, client, exitInfo)
+		}()
+	}
+
+	wg.Wait()
+
+	// Merge reachability items
+	for _, item := range reachItems {
+		item.Category = "reachability"
 		result.Items = append(result.Items, item)
 		switch item.Status {
 		case "pass":
@@ -2323,7 +2384,29 @@ func (s *adminServiceImpl) CheckProxyQuality(ctx context.Context, id int64) (*Pr
 		}
 	}
 
-	finalizeProxyQualityResult(result)
+	// Merge IP risk items and populate result fields
+	if riskResult != nil {
+		result.IPType = riskResult.IPType
+		result.IPRiskScore = riskResult.FraudScore
+		result.ISP = riskResult.ISP
+		result.AS = riskResult.AS
+		result.AbuseScore = riskResult.AbuseScore
+		result.DNSLeakRisk = riskResult.DNSLeakRisk
+		for _, item := range riskResult.Items {
+			result.Items = append(result.Items, item)
+			switch item.Status {
+			case "pass":
+				result.PassedCount++
+			case "warn":
+				result.WarnCount++
+			case "fail":
+				result.FailedCount++
+			// "skip" items don't count toward pass/warn/fail
+			}
+		}
+	}
+
+	finalizeProxyQualityResultWeighted(result, riskResult)
 	s.saveProxyQualitySnapshot(ctx, id, result, exitInfo)
 	return result, nil
 }
@@ -2364,10 +2447,10 @@ func runProxyQualityTarget(ctx context.Context, client *http.Client, target prox
 		body = body[:proxyQualityMaxBodyBytes]
 	}
 
-	if target.Target == "sora" && soraerror.IsCloudflareChallengeResponse(resp.StatusCode, resp.Header, body) {
+	if soraerror.IsCloudflareChallengeResponse(resp.StatusCode, resp.Header, body) {
 		item.Status = "challenge"
 		item.CFRay = soraerror.ExtractCloudflareRayID(resp.Header, body)
-		item.Message = "Sora 命中 Cloudflare challenge"
+		item.Message = fmt.Sprintf("%s 命中 Cloudflare challenge", target.Target)
 		return item
 	}
 
@@ -2393,23 +2476,130 @@ func runProxyQualityTarget(ctx context.Context, client *http.Client, target prox
 	return item
 }
 
-func finalizeProxyQualityResult(result *ProxyQualityCheckResult) {
+func finalizeProxyQualityResultWeighted(result *ProxyQualityCheckResult, riskResult *IPRiskResult) {
 	if result == nil {
 		return
 	}
-	score := 100 - result.WarnCount*10 - result.FailedCount*22 - result.ChallengeCount*30
-	if score < 0 {
-		score = 0
+
+	cats := &QualityCategoryScores{}
+
+	// Reachability score (weight 30%): based on AI target results
+	cats.Reachability = computeReachabilityScore(result)
+
+	// IP Risk score (weight 25%): inverse of fraud score
+	if riskResult != nil {
+		cats.IPRisk = clampScore(100 - riskResult.FraudScore)
+	} else {
+		cats.IPRisk = 70 // neutral default when risk service unavailable
 	}
-	result.Score = score
-	result.Grade = proxyQualityGrade(score)
+
+	// IP Type score (weight 20%)
+	cats.IPType = ipTypeScore(riskResult)
+
+	// Abuse History score (weight 15%)
+	cats.AbuseHistory = abuseHistoryScore(riskResult)
+
+	// Latency score (weight 10%)
+	cats.Latency = latencyScore(result.BaseLatencyMs)
+
+	result.CategoryScores = cats
+	result.Score = (cats.Reachability*30 + cats.IPRisk*25 + cats.IPType*20 + cats.AbuseHistory*15 + cats.Latency*10) / 100
+	result.Grade = proxyQualityGrade(result.Score)
 	result.Summary = fmt.Sprintf(
-		"通过 %d 项，告警 %d 项，失败 %d 项，挑战 %d 项",
+		"综合评分 %d（%s）| 通过 %d 项，告警 %d 项，失败 %d 项，挑战 %d 项",
+		result.Score,
+		result.Grade,
 		result.PassedCount,
 		result.WarnCount,
 		result.FailedCount,
 		result.ChallengeCount,
 	)
+}
+
+// computeReachabilityScore calculates reachability from AI target pass/warn/fail/challenge counts.
+// Only counts items in the "reachability" category (base_connectivity + AI targets).
+func computeReachabilityScore(result *ProxyQualityCheckResult) int {
+	var total, passed, warned, challenged, failed int
+	for _, item := range result.Items {
+		if item.Category != "reachability" {
+			continue
+		}
+		total++
+		switch item.Status {
+		case "pass":
+			passed++
+		case "warn":
+			warned++
+		case "challenge":
+			challenged++
+		case "fail":
+			failed++
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	// Each item contributes equally: pass=100, warn=60, challenge=20, fail=0
+	score := (passed*100 + warned*60 + challenged*20) / total
+	return clampScore(score)
+}
+
+func ipTypeScore(riskResult *IPRiskResult) int {
+	if riskResult == nil {
+		return 70 // neutral default
+	}
+	switch riskResult.IPType {
+	case "residential":
+		return 100
+	case "mobile":
+		return 85
+	case "datacenter":
+		return 40
+	case "vpn":
+		return 25
+	case "tor":
+		return 10
+	default:
+		return 60
+	}
+}
+
+func abuseHistoryScore(riskResult *IPRiskResult) int {
+	if riskResult == nil {
+		return 85 // neutral default
+	}
+	// No abuse data collected (service not enabled)
+	if riskResult.AbuseScore == 0 && riskResult.AbuseReports == 0 {
+		return 85
+	}
+	return clampScore(100 - riskResult.AbuseScore)
+}
+
+func latencyScore(baseLatencyMs int64) int {
+	switch {
+	case baseLatencyMs <= 0:
+		return 50 // unknown
+	case baseLatencyMs < 200:
+		return 100
+	case baseLatencyMs < 500:
+		return 85
+	case baseLatencyMs < 1000:
+		return 65
+	case baseLatencyMs < 2000:
+		return 40
+	default:
+		return 20
+	}
+}
+
+func clampScore(score int) int {
+	if score < 0 {
+		return 0
+	}
+	if score > 100 {
+		return 100
+	}
+	return score
 }
 
 func proxyQualityGrade(score int) string {
@@ -2476,6 +2666,7 @@ func (s *adminServiceImpl) saveProxyQualitySnapshot(ctx context.Context, proxyID
 	}
 	score := result.Score
 	checkedAt := result.CheckedAt
+	riskScore := result.IPRiskScore
 	info := &ProxyLatencyInfo{
 		Success:          proxyQualityBaseConnectivityPass(result),
 		Message:          result.Summary,
@@ -2485,6 +2676,9 @@ func (s *adminServiceImpl) saveProxyQualitySnapshot(ctx context.Context, proxyID
 		QualitySummary:   result.Summary,
 		QualityCheckedAt: &checkedAt,
 		QualityCFRay:     proxyQualityFirstCFRay(result),
+		IPType:           result.IPType,
+		IPRiskScore:      &riskScore,
+		ISP:              result.ISP,
 		UpdatedAt:        time.Now(),
 	}
 	if result.BaseLatencyMs > 0 {
@@ -2650,6 +2844,9 @@ func (s *adminServiceImpl) attachProxyLatency(ctx context.Context, proxies []Pro
 		proxies[i].QualityGrade = info.QualityGrade
 		proxies[i].QualitySummary = info.QualitySummary
 		proxies[i].QualityChecked = info.QualityCheckedAt
+		proxies[i].IPType = info.IPType
+		proxies[i].IPRiskScore = info.IPRiskScore
+		proxies[i].ISP = info.ISP
 	}
 }
 

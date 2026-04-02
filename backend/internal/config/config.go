@@ -83,6 +83,7 @@ type Config struct {
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	IPRisk                  IPRiskConfig                  `mapstructure:"ip_risk"`
 }
 
 type LogConfig struct {
@@ -163,6 +164,18 @@ type IdempotencyConfig struct {
 	CleanupIntervalSeconds int `mapstructure:"cleanup_interval_seconds"`
 	// CleanupBatchSize 每次清理的最大记录数。
 	CleanupBatchSize int `mapstructure:"cleanup_batch_size"`
+}
+
+// IPRiskConfig configures the IP risk assessment dimensions for proxy quality checks.
+type IPRiskConfig struct {
+	// AbuseIPDB API key (free tier: 1000 checks/day). Leave empty to skip abuse checks.
+	AbuseIPDBAPIKey string `mapstructure:"abuseipdb_api_key"`
+	// EnableIPTypeCheck enables IP type detection (residential/datacenter/mobile/vpn/tor).
+	EnableIPTypeCheck bool `mapstructure:"enable_ip_type_check"`
+	// EnableAbuseCheck enables AbuseIPDB abuse history check (requires API key).
+	EnableAbuseCheck bool `mapstructure:"enable_abuse_check"`
+	// EnableDNSLeakCheck enables DNS leak detection via Cloudflare trace.
+	EnableDNSLeakCheck bool `mapstructure:"enable_dns_leak_check"`
 }
 
 type LinuxDoConnectConfig struct {
@@ -1537,6 +1550,11 @@ func setDefaults() {
 	viper.SetDefault("subscription_maintenance.worker_count", 2)
 	viper.SetDefault("subscription_maintenance.queue_size", 1024)
 
+	// IP Risk Assessment
+	viper.SetDefault("ip_risk.abuseipdb_api_key", "")
+	viper.SetDefault("ip_risk.enable_ip_type_check", true)
+	viper.SetDefault("ip_risk.enable_abuse_check", false)
+	viper.SetDefault("ip_risk.enable_dns_leak_check", true)
 }
 
 func (c *Config) Validate() error {

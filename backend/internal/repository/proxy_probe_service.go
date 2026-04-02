@@ -50,7 +50,7 @@ var probeURLs = []struct {
 	url    string
 	parser string // "ip-api" or "httpbin"
 }{
-	{"http://ip-api.com/json/?lang=zh-CN", "ip-api"},
+	{"http://ip-api.com/json/?fields=status,message,query,country,countryCode,region,regionName,city,isp,org,as,hosting,proxy,mobile&lang=zh-CN", "ip-api"},
 	{"http://httpbin.org/ip", "httpbin"},
 }
 
@@ -136,6 +136,12 @@ func (s *proxyProbeService) parseIPAPI(body []byte, latencyMs int64) (*service.P
 		RegionName  string `json:"regionName"`
 		Country     string `json:"country"`
 		CountryCode string `json:"countryCode"`
+		ISP         string `json:"isp"`
+		Org         string `json:"org"`
+		AS          string `json:"as"`
+		Hosting     bool   `json:"hosting"`
+		Proxy       bool   `json:"proxy"`
+		Mobile      bool   `json:"mobile"`
 	}
 
 	if err := json.Unmarshal(body, &ipInfo); err != nil {
@@ -162,6 +168,12 @@ func (s *proxyProbeService) parseIPAPI(body []byte, latencyMs int64) (*service.P
 		Region:      region,
 		Country:     ipInfo.Country,
 		CountryCode: ipInfo.CountryCode,
+		ISP:         ipInfo.ISP,
+		Org:         ipInfo.Org,
+		AS:          ipInfo.AS,
+		Hosting:     ipInfo.Hosting,
+		Proxy:       ipInfo.Proxy,
+		Mobile:      ipInfo.Mobile,
 	}, latencyMs, nil
 }
 

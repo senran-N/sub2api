@@ -774,6 +774,36 @@
               {{ typeof qualityReport.base_latency_ms === 'number' ? `${qualityReport.base_latency_ms}ms` : '-' }}
             </div>
             <div>{{ t('admin.proxies.qualityCheckedAt') }}: {{ new Date(qualityReport.checked_at * 1000).toLocaleString() }}</div>
+            <div v-if="qualityReport.ip_type">
+              {{ t('admin.proxies.qualityIPType') }}:
+              <span class="badge ml-1" :class="ipTypeBadgeClass(qualityReport.ip_type)">{{ ipTypeLabel(qualityReport.ip_type) }}</span>
+            </div>
+            <div v-if="qualityReport.isp">ISP: {{ qualityReport.isp }}</div>
+            <div v-if="qualityReport.as">AS: {{ qualityReport.as }}</div>
+            <div v-if="qualityReport.dns_leak_risk && qualityReport.dns_leak_risk !== 'none'">
+              {{ t('admin.proxies.qualityDNSLeak') }}:
+              <span class="badge ml-1" :class="qualityReport.dns_leak_risk === 'possible' ? 'badge-yellow' : 'badge-red'">
+                {{ dnsLeakLabel(qualityReport.dns_leak_risk) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Scores -->
+        <div v-if="qualityReport.category_scores" class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+          <div class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.proxies.qualityCategoryTitle') }}</div>
+          <div class="space-y-2">
+            <div v-for="cat in categoryScoreEntries" :key="cat.key" class="flex items-center gap-2 text-xs">
+              <span class="w-28 shrink-0 text-gray-600 dark:text-gray-300">{{ cat.label }} ({{ cat.weight }}%)</span>
+              <div class="h-2 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  class="h-2 rounded-full transition-all"
+                  :class="scoreBarColor(cat.score)"
+                  :style="{ width: `${cat.score}%` }"
+                />
+              </div>
+              <span class="w-8 text-right text-gray-500 dark:text-gray-400">{{ cat.score }}</span>
+            </div>
           </div>
         </div>
 
@@ -1529,6 +1559,7 @@ const qualityStatusClass = (status: string) => {
   if (status === 'pass') return 'badge-success'
   if (status === 'warn') return 'badge-warning'
   if (status === 'challenge') return 'badge-danger'
+  if (status === 'skip') return 'badge-secondary'
   return 'badge-danger'
 }
 
@@ -1536,6 +1567,7 @@ const qualityStatusLabel = (status: string) => {
   if (status === 'pass') return t('admin.proxies.qualityStatusPass')
   if (status === 'warn') return t('admin.proxies.qualityStatusWarn')
   if (status === 'challenge') return t('admin.proxies.qualityStatusChallenge')
+  if (status === 'skip') return t('admin.proxies.qualityStatusSkip')
   return t('admin.proxies.qualityStatusFail')
 }
 
@@ -1565,10 +1597,66 @@ const qualityTargetLabel = (target: string) => {
       return 'Gemini'
     case 'sora':
       return 'Sora'
+    case 'ip_type':
+      return t('admin.proxies.qualityTargetIPType')
+    case 'abuse_check':
+      return t('admin.proxies.qualityTargetAbuse')
+    case 'dns_leak':
+      return t('admin.proxies.qualityTargetDNSLeak')
     default:
       return target
   }
 }
+
+const ipTypeBadgeClass = (ipType: string) => {
+  switch (ipType) {
+    case 'residential': return 'badge-success'
+    case 'mobile': return 'badge-info'
+    case 'datacenter': return 'badge-danger'
+    case 'vpn': return 'badge-warning'
+    case 'tor': return 'badge-danger'
+    default: return 'badge-secondary'
+  }
+}
+
+const ipTypeLabel = (ipType: string) => {
+  switch (ipType) {
+    case 'residential': return t('admin.proxies.qualityIPTypeResidential')
+    case 'mobile': return t('admin.proxies.qualityIPTypeMobile')
+    case 'datacenter': return t('admin.proxies.qualityIPTypeDatacenter')
+    case 'vpn': return t('admin.proxies.qualityIPTypeVPN')
+    case 'tor': return t('admin.proxies.qualityIPTypeTor')
+    default: return ipType
+  }
+}
+
+const dnsLeakLabel = (risk: string) => {
+  switch (risk) {
+    case 'none': return t('admin.proxies.qualityDNSLeakNone')
+    case 'possible': return t('admin.proxies.qualityDNSLeakPossible')
+    case 'detected': return t('admin.proxies.qualityDNSLeakDetected')
+    default: return risk
+  }
+}
+
+const scoreBarColor = (score: number) => {
+  if (score >= 80) return 'bg-green-500'
+  if (score >= 60) return 'bg-yellow-500'
+  if (score >= 40) return 'bg-orange-500'
+  return 'bg-red-500'
+}
+
+const categoryScoreEntries = computed(() => {
+  const cs = qualityReport.value?.category_scores
+  if (!cs) return []
+  return [
+    { key: 'reachability', label: t('admin.proxies.qualityCategoryReachability'), weight: 30, score: cs.reachability },
+    { key: 'ip_risk', label: t('admin.proxies.qualityCategoryIPRisk'), weight: 25, score: cs.ip_risk },
+    { key: 'ip_type', label: t('admin.proxies.qualityCategoryIPType'), weight: 20, score: cs.ip_type },
+    { key: 'abuse_history', label: t('admin.proxies.qualityCategoryAbuse'), weight: 15, score: cs.abuse_history },
+    { key: 'latency', label: t('admin.proxies.qualityCategoryLatency'), weight: 10, score: cs.latency },
+  ]
+})
 
 const fetchAllProxiesForBatch = async (): Promise<Proxy[]> => {
   const pageSize = 200

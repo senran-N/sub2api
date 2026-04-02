@@ -586,6 +586,9 @@ export interface Proxy {
   quality_grade?: string
   quality_summary?: string
   quality_checked?: number
+  ip_type?: string
+  ip_risk_score?: number
+  isp?: string
   created_at: string
   updated_at: string
 }
@@ -600,11 +603,20 @@ export interface ProxyAccountSummary {
 
 export interface ProxyQualityCheckItem {
   target: string
-  status: 'pass' | 'warn' | 'fail' | 'challenge'
+  status: 'pass' | 'warn' | 'fail' | 'challenge' | 'skip'
   http_status?: number
   latency_ms?: number
   message?: string
   cf_ray?: string
+  category?: string
+}
+
+export interface QualityCategoryScores {
+  reachability: number
+  ip_risk: number
+  ip_type: number
+  abuse_history: number
+  latency: number
 }
 
 export interface ProxyQualityCheckResult {
@@ -622,6 +634,13 @@ export interface ProxyQualityCheckResult {
   challenge_count: number
   checked_at: number
   items: ProxyQualityCheckItem[]
+  ip_type?: string
+  ip_risk_score?: number
+  isp?: string
+  as?: string
+  abuse_score?: number
+  dns_leak_risk?: string
+  category_scores?: QualityCategoryScores
 }
 
 // Gemini credentials structure for OAuth and API Key authentication

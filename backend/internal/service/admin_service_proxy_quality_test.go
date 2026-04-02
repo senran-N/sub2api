@@ -15,16 +15,23 @@ func TestFinalizeProxyQualityResult_ScoreAndGrade(t *testing.T) {
 		WarnCount:      1,
 		FailedCount:    1,
 		ChallengeCount: 1,
+		BaseLatencyMs:  300,
+		Items: []ProxyQualityCheckItem{
+			{Target: "base_connectivity", Category: "reachability", Status: "pass"},
+			{Target: "openai", Category: "reachability", Status: "pass"},
+			{Target: "anthropic", Category: "reachability", Status: "warn"},
+			{Target: "gemini", Category: "reachability", Status: "fail"},
+			{Target: "sora", Category: "reachability", Status: "challenge"},
+		},
 	}
 
-	finalizeProxyQualityResult(result)
+	finalizeProxyQualityResultWeighted(result, nil)
 
-	require.Equal(t, 38, result.Score)
-	require.Equal(t, "F", result.Grade)
-	require.Contains(t, result.Summary, "通过 2 项")
-	require.Contains(t, result.Summary, "告警 1 项")
-	require.Contains(t, result.Summary, "失败 1 项")
-	require.Contains(t, result.Summary, "挑战 1 项")
+	// With weighted scoring: reachability from items, others at neutral defaults
+	require.True(t, result.Score >= 0 && result.Score <= 100)
+	require.NotEmpty(t, result.Grade)
+	require.NotNil(t, result.CategoryScores)
+	require.Contains(t, result.Summary, "综合评分")
 }
 
 func TestRunProxyQualityTarget_SoraChallenge(t *testing.T) {

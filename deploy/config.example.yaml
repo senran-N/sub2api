@@ -1001,3 +1001,23 @@ update:
   # Leave empty for direct connection (recommended for overseas servers)
   # 留空表示直连（适用于海外服务器）
   proxy_url: ""
+
+# =============================================================================
+# IP Risk Assessment Configuration
+# IP 风险评估配置
+# =============================================================================
+ip_risk:
+  # AbuseIPDB API key for abuse history checks (free tier: 1000 checks/day)
+  # AbuseIPDB API 密钥，用于滥用历史检查（免费额度：每天 1000 次）
+  # Register at https://www.abuseipdb.com/ to get a free API key
+  # 在 https://www.abuseipdb.com/ 注册获取免费 API 密钥
+  abuseipdb_api_key: ""
+  # Enable IP type detection (residential/datacenter/mobile/vpn/tor)
+  # 启用 IP 类型检测（家庭宽带/数据中心/移动网络/VPN/Tor）
+  enable_ip_type_check: true
+  # Enable AbuseIPDB abuse history check (auto-enabled when API key is set)
+  # 启用 AbuseIPDB 滥用历史检查（设置 API 密钥后自动启用）
+  enable_abuse_check: false
+  # Enable DNS leak detection via Cloudflare trace
+  # 启用 DNS 泄漏检测（通过 Cloudflare trace）
+  enable_dns_leak_check: true

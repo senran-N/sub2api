@@ -51,6 +51,9 @@ type ProxyWithAccountCount struct {
 	QualityGrade   string
 	QualitySummary string
 	QualityChecked *int64
+	IPType         string
+	IPRiskScore    *int
+	ISP            string
 }
 
 type ProxyAccountSummary struct {
