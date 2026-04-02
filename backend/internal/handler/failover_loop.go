@@ -161,14 +161,17 @@ func needForceCacheBilling(hasBoundSession bool, failoverErr *service.UpstreamFa
 }
 
 // sleepWithContext 等待指定时长，返回 false 表示 context 已取消。
+// 使用 NewTimer 替代 time.After，避免 context 提前取消时 timer 泄漏到过期。
 func sleepWithContext(ctx context.Context, d time.Duration) bool {
 	if d <= 0 {
 		return true
 	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return false
-	case <-time.After(d):
+	case <-timer.C:
 		return true
 	}
 }
