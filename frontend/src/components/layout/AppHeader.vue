@@ -19,10 +19,14 @@
             {{ pageDescription }}
           </p>
         </div>
+        <!-- Mobile page title: truncated single line -->
+        <h1 class="max-w-[150px] truncate text-sm font-semibold text-gray-900 dark:text-white sm:max-w-[250px] lg:hidden">
+          {{ pageTitle }}
+        </h1>
       </div>
 
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5 sm:gap-3">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
@@ -42,7 +46,9 @@
         <LocaleSwitcher />
 
         <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" />
+        <div class="hidden sm:block">
+          <SubscriptionProgressMini v-if="user" />
+        </div>
 
         <!-- Balance Display -->
         <div
@@ -79,7 +85,7 @@
             >
               {{ userInitials }}
             </div>
-            <div class="hidden text-left md:block">
+            <div class="hidden text-left lg:block">
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ displayName }}
               </div>
@@ -87,7 +93,7 @@
                 {{ user.role }}
               </div>
             </div>
-            <Icon name="chevronDown" size="sm" class="hidden text-gray-400 md:block" />
+            <Icon name="chevronDown" size="sm" class="hidden text-gray-400 lg:block" />
           </button>
 
           <!-- Dropdown Menu -->

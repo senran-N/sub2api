@@ -411,7 +411,7 @@
           <label class="input-label">{{ t('admin.proxies.protocol') }}</label>
           <Select v-model="createForm.protocol" :options="protocolSelectOptions" />
         </div>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
           <div>
             <label class="input-label">{{ t('admin.proxies.host') }}</label>
             <input
@@ -616,7 +616,7 @@
           <label class="input-label">{{ t('admin.proxies.protocol') }}</label>
           <Select v-model="editForm.protocol" :options="protocolSelectOptions" />
         </div>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
           <div>
             <label class="input-label">{{ t('admin.proxies.host') }}</label>
             <input v-model="editForm.host" type="text" required class="input" />
@@ -766,7 +766,7 @@
               </div>
             </div>
           </div>
-          <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
+          <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs text-gray-600 dark:text-gray-300">
             <div>{{ t('admin.proxies.qualityExitIP') }}: {{ qualityReport.exit_ip || '-' }}</div>
             <div>{{ t('admin.proxies.qualityCountry') }}: {{ qualityReport.country || '-' }}</div>
             <div>

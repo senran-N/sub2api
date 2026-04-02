@@ -46,8 +46,21 @@ onUnmounted(() => {
 <style scoped>
 /* 桌面端：Flexbox 布局 */
 .table-page-layout {
-  @apply flex flex-col gap-6;
-  height: calc(100vh - 64px - 4rem); /* 减去 header + lg:p-8 的上下padding */
+  @apply flex flex-col gap-4 lg:gap-6;
+  /* 减去 header (64px) + main padding (随断点变化) */
+  height: calc(100vh - 64px - 2rem); /* p-4 对应 1rem*2 */
+}
+
+@media (min-width: 768px) {
+  .table-page-layout {
+    height: calc(100vh - 64px - 3rem); /* md:p-6 对应 1.5rem*2 */
+  }
+}
+
+@media (min-width: 1024px) {
+  .table-page-layout {
+    height: calc(100vh - 64px - 4rem); /* lg:p-8 对应 2rem*2 */
+  }
 }
 
 .layout-section-fixed {

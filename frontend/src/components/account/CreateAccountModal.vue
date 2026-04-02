@@ -1940,7 +1940,7 @@
             </button>
           </div>
 
-          <div v-if="windowCostEnabled" class="grid grid-cols-2 gap-4">
+          <div v-if="windowCostEnabled" class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label class="input-label">{{ t('admin.accounts.quotaControl.windowCost.limit') }}</label>
               <div class="relative">
@@ -2000,7 +2000,7 @@
             </button>
           </div>
 
-          <div v-if="sessionLimitEnabled" class="grid grid-cols-2 gap-4">
+          <div v-if="sessionLimitEnabled" class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label class="input-label">{{ t('admin.accounts.quotaControl.sessionLimit.maxSessions') }}</label>
               <input
@@ -2287,7 +2287,7 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
-      <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <div>
           <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
           <input v-model.number="form.concurrency" type="number" min="1" class="input"

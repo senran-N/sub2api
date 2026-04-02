@@ -514,7 +514,7 @@
       </div>
 
       <!-- Concurrency & Priority -->
-      <div class="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 dark:border-dark-600 lg:grid-cols-4">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 border-t border-gray-200 pt-4 dark:border-dark-600 lg:grid-cols-4">
         <div>
           <div class="mb-3 flex items-center justify-between">
             <label

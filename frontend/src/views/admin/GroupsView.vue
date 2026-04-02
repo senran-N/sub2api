@@ -530,7 +530,7 @@
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
             {{ t('admin.groups.soraPricing.description') }}
           </p>
-          <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
             <div>
               <label class="input-label">{{ t('admin.groups.soraPricing.image360') }}</label>
               <input
@@ -554,7 +554,7 @@
               />
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label class="input-label">{{ t('admin.groups.soraPricing.video') }}</label>
               <input
@@ -1320,7 +1320,7 @@
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
             {{ t('admin.groups.soraPricing.description') }}
           </p>
-          <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
             <div>
               <label class="input-label">{{ t('admin.groups.soraPricing.image360') }}</label>
               <input
@@ -1344,7 +1344,7 @@
               />
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label class="input-label">{{ t('admin.groups.soraPricing.video') }}</label>
               <input

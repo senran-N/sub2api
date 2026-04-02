@@ -70,7 +70,7 @@
             </p>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label class="input-label">{{ t('setup.database.host') }}</label>
               <input
@@ -103,7 +103,7 @@
             <Toggle v-model="formData.redis.enable_tls" />
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label class="input-label">{{ t('setup.database.username') }}</label>
               <input
@@ -124,7 +124,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label class="input-label">{{ t('setup.database.databaseName') }}</label>
               <input
@@ -195,7 +195,7 @@
             </p>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label class="input-label">{{ t('setup.redis.host') }}</label>
               <input
@@ -216,7 +216,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label class="input-label">{{ t('setup.redis.password') }}</label>
               <input
