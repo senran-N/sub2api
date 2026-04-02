@@ -1,5 +1,6 @@
 <template>
   <aside
+    ref="sidebarRef"
     class="sidebar"
     :class="[
       sidebarCollapsed ? 'w-[72px]' : 'w-64',
@@ -140,6 +141,7 @@
   <transition name="fade">
     <div
       v-if="mobileOpen"
+      ref="overlayRef"
       class="fixed inset-0 z-30 bg-black/50 lg:hidden"
       @click="closeMobile"
     ></div>
@@ -148,6 +150,7 @@
 
 <script setup lang="ts">
 import { computed, h, onMounted, ref, watch } from 'vue'
+import { useSwipe } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
@@ -174,6 +177,26 @@ const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
 const isAdmin = computed(() => authStore.isAdmin)
 const isDark = ref(document.documentElement.classList.contains('dark'))
+
+// Swipe-to-close on mobile
+const sidebarRef = ref<HTMLElement | null>(null)
+const overlayRef = ref<HTMLElement | null>(null)
+
+useSwipe(sidebarRef, {
+  onSwipeEnd(_e, direction) {
+    if (direction === 'left' && mobileOpen.value) {
+      appStore.setMobileOpen(false)
+    }
+  }
+})
+
+useSwipe(overlayRef, {
+  onSwipeEnd(_e, direction) {
+    if (direction === 'left' && mobileOpen.value) {
+      appStore.setMobileOpen(false)
+    }
+  }
+})
 
 // Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)

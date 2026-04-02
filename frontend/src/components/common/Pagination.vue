@@ -25,7 +25,7 @@
 
     <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
       <!-- Desktop pagination info -->
-      <div class="flex items-center space-x-4">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
         <p class="text-sm text-gray-700 dark:text-gray-300">
           {{ t('pagination.showing') }}
           <span class="font-medium">{{ fromItem }}</span>
@@ -36,8 +36,8 @@
           {{ t('pagination.results') }}
         </p>
 
-        <!-- Page size selector -->
-        <div v-if="showPageSizeSelector" class="flex items-center space-x-2">
+        <!-- Page size selector (hidden on sm, visible from md) -->
+        <div v-if="showPageSizeSelector" class="hidden md:flex items-center space-x-2">
           <span class="text-sm text-gray-700 dark:text-gray-300"
             >{{ t('pagination.perPage') }}:</span
           >
@@ -50,7 +50,8 @@
           </div>
         </div>
 
-        <div v-if="showJump" class="flex items-center space-x-2">
+        <!-- Jump to page (hidden on sm/md, visible from lg) -->
+        <div v-if="showJump" class="hidden lg:flex items-center space-x-2">
           <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('pagination.jumpTo') }}</span>
           <input
             v-model="jumpPage"

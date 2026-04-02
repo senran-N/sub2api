@@ -53,7 +53,11 @@
             </div>
           </div>
           <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
-            <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded"></slot>
+            <div class="-mx-1 overflow-x-auto scrollbar-hide">
+              <div class="flex items-center gap-1 px-1 min-w-max">
+                <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded"></slot>
+              </div>
+            </div>
           </div>
         </div>
       </div>

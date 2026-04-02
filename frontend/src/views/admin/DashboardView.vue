@@ -1,10 +1,35 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <!-- Loading State -->
-      <div v-if="loading" class="flex items-center justify-center py-12">
-        <LoadingSpinner />
-      </div>
+      <!-- Skeleton Loading State -->
+      <template v-if="loading">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+          <div v-for="i in 4" :key="i" class="card p-4">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 animate-pulse rounded-lg bg-gray-200 dark:bg-dark-700"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-3 w-16 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+                <div class="h-6 w-24 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+          <div v-for="i in 4" :key="i" class="card p-4">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 animate-pulse rounded-lg bg-gray-200 dark:bg-dark-700"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-3 w-16 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+                <div class="h-6 w-24 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card p-6">
+          <div class="h-5 w-40 mb-4 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+          <div class="h-72 animate-pulse rounded-xl bg-gray-200 dark:bg-dark-700"></div>
+        </div>
+      </template>
 
       <template v-else-if="stats">
         <!-- Row 1: Core Stats -->

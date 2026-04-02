@@ -32,6 +32,19 @@
     scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
   }
 
+  /* Touch devices: always show scrollbar since there's no hover state */
+  @media (hover: none) {
+    * {
+      scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+    }
+    .dark * {
+      scrollbar-color: rgba(75, 85, 99, 0.4) transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      @apply bg-gray-300/40 dark:bg-dark-600/40;
+    }
+  }
+
   ::-webkit-scrollbar {
     @apply h-2 w-2;
   }
@@ -378,6 +391,7 @@
     @apply fixed inset-0 z-50;
     @apply bg-black/50 backdrop-blur-sm;
     @apply flex items-center justify-center p-2 sm:p-4;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
   }
 
   .modal-content {
@@ -443,6 +457,19 @@
   .modal-leave-to .modal-content {
     transform: scale(0.95);
     opacity: 0;
+  }
+
+  /* Mobile: slide up from bottom instead of scale */
+  @media (max-width: 639px) {
+    .modal-enter-from .modal-content,
+    .modal-leave-to .modal-content {
+      transform: translateY(100%);
+      opacity: 1;
+    }
+    .modal-enter-to .modal-content,
+    .modal-leave-from .modal-content {
+      transform: translateY(0);
+    }
   }
 
   .modal-enter-to .modal-content,
@@ -529,6 +556,8 @@
     @apply border-r border-gray-200 dark:border-dark-800;
     @apply flex flex-col;
     @apply transition-transform duration-300;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .sidebar-header {
@@ -718,6 +747,18 @@
   /* 表格容器 - 默认仅支持水平滚动 */
   .table-wrapper {
     overflow-x: auto;
+  }
+
+  /* Touch devices: horizontal scroll fade hint on tables */
+  @media (hover: none) {
+    .table-wrapper.is-scrollable {
+      -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+      mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    }
+    .table-wrapper.is-scrollable:not(:dir(rtl)) {
+      /* Re-apply after any scroll to remove the fade */
+      scroll-snap-type: x proximity;
+    }
   }
 
   /* 表头固定时添加底部阴影，增强视觉层次 */

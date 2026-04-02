@@ -485,11 +485,13 @@ onMounted(() => {
 .terminal-container {
   position: relative;
   display: inline-block;
+  max-width: 100%;
+  width: 100%;
 }
 
 /* Terminal Window */
 .terminal-window {
-  width: 420px;
+  width: min(420px, 100%);
   background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
   border-radius: 14px;
   box-shadow:
@@ -550,6 +552,21 @@ onMounted(() => {
   font-family: ui-monospace, 'Fira Code', monospace;
   font-size: 14px;
   line-height: 2;
+}
+
+@media (max-width: 480px) {
+  .terminal-body {
+    padding: 14px 16px;
+    font-size: 11px;
+    line-height: 1.8;
+  }
+  .terminal-header {
+    padding: 10px 12px;
+  }
+  .terminal-buttons span {
+    width: 10px;
+    height: 10px;
+  }
 }
 
 .code-line {

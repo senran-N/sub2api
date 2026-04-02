@@ -3,7 +3,8 @@
     <Transition name="modal">
       <div
         v-if="show"
-        class="modal-overlay"
+        class="modal-overlay sm:items-center"
+        :class="{ 'items-end': true, 'sm:items-center': true }"
         :style="zIndexStyle"
         :aria-labelledby="dialogId"
         role="dialog"
@@ -11,7 +12,11 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
-        <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
+        <div ref="dialogRef" :class="['modal-content modal-sheet', widthClasses]" @click.stop>
+          <!-- Drag Handle (mobile only) -->
+          <div class="flex justify-center pt-2 pb-0 sm:hidden">
+            <div class="h-1 w-10 rounded-full bg-gray-300 dark:bg-dark-600"></div>
+          </div>
           <!-- Header -->
           <div class="modal-header">
             <h3 :id="dialogId" class="modal-title">
@@ -148,3 +153,19 @@ onUnmounted(() => {
   document.body.classList.remove('modal-open')
 })
 </script>
+
+<style scoped>
+/* Mobile bottom sheet styling */
+@media (max-width: 639px) {
+  .modal-sheet {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 1rem;
+    border-top-right-radius: 1rem;
+    max-height: 92vh;
+    width: 100%;
+    max-width: 100% !important;
+    margin: 0;
+  }
+}
+</style>

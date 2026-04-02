@@ -303,7 +303,7 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
-              <!-- Use Key Button -->
+              <!-- Use Key Button (primary, always visible) -->
               <button
                 @click="openUseKeyModal(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
@@ -311,30 +311,7 @@
                 <Icon name="terminal" size="sm" />
                 <span class="text-xs">{{ t('keys.useKey') }}</span>
               </button>
-              <!-- Import to CC Switch Button -->
-              <button
-                v-if="!publicSettings?.hide_ccs_import_button"
-                @click="importToCcswitch(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-              >
-                <Icon name="upload" size="sm" />
-                <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
-              </button>
-              <!-- Toggle Status Button -->
-              <button
-                @click="toggleKeyStatus(row)"
-                :class="[
-                  'flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors',
-                  row.status === 'active'
-                    ? 'text-gray-500 hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400'
-                    : 'text-gray-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
-                ]"
-              >
-                <Icon v-if="row.status === 'active'" name="ban" size="sm" />
-                <Icon v-else name="checkCircle" size="sm" />
-                <span class="text-xs">{{ row.status === 'active' ? t('keys.disable') : t('keys.enable') }}</span>
-              </button>
-              <!-- Edit Button -->
+              <!-- Edit Button (primary, always visible) -->
               <button
                 @click="editKey(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
@@ -342,14 +319,16 @@
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
-              <!-- Delete Button -->
-              <button
-                @click="confirmDelete(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-              >
-                <Icon name="trash" size="sm" />
-                <span class="text-xs">{{ t('common.delete') }}</span>
-              </button>
+              <!-- More actions overflow menu -->
+              <div class="relative" :ref="(el) => setMoreMenuRef(row.id, el)">
+                <button
+                  @click.stop="toggleMoreMenu(row.id)"
+                  class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+                >
+                  <Icon name="moreVertical" size="sm" />
+                  <span class="text-xs">{{ t('common.more') }}</span>
+                </button>
+              </div>
             </div>
           </template>
 
@@ -969,6 +948,43 @@
       </template>
     </BaseDialog>
 
+    <!-- Actions Overflow Menu -->
+    <Teleport to="body">
+      <div v-if="moreMenuKeyId !== null && moreMenuPosition">
+        <div class="fixed inset-0 z-[9998]" @click="closeMoreMenu"></div>
+        <div
+          class="fixed z-[9999] w-48 overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 dark:bg-dark-800 dark:ring-white/10"
+          :style="{ top: moreMenuPosition.top + 'px', left: moreMenuPosition.left + 'px' }"
+        >
+          <div class="py-1">
+            <button
+              v-if="!publicSettings?.hide_ccs_import_button"
+              @click="importToCcswitch(moreMenuRow!); closeMoreMenu()"
+              class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+            >
+              <Icon name="upload" size="sm" class="text-blue-500" />
+              {{ t('keys.importToCcSwitch') }}
+            </button>
+            <button
+              @click="toggleKeyStatus(moreMenuRow!); closeMoreMenu()"
+              class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+            >
+              <Icon :name="moreMenuRow?.status === 'active' ? 'ban' : 'checkCircle'" size="sm" :class="moreMenuRow?.status === 'active' ? 'text-yellow-500' : 'text-green-500'" />
+              {{ moreMenuRow?.status === 'active' ? t('keys.disable') : t('keys.enable') }}
+            </button>
+            <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
+            <button
+              @click="confirmDelete(moreMenuRow!); closeMoreMenu()"
+              class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <Icon name="trash" size="sm" />
+              {{ t('common.delete') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Group Selector Dropdown (Teleported to body to avoid overflow clipping) -->
     <Teleport to="body">
       <div
@@ -1136,6 +1152,47 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const dropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
 let abortController: AbortController | null = null
+
+// More actions overflow menu state
+const moreMenuKeyId = ref<number | null>(null)
+const moreMenuPosition = ref<{ top: number; left: number } | null>(null)
+const moreMenuButtonRefs = ref<Map<number, HTMLElement>>(new Map())
+
+const moreMenuRow = computed(() => {
+  if (moreMenuKeyId.value === null) return null
+  return apiKeys.value.find((k) => k.id === moreMenuKeyId.value) || null
+})
+
+const setMoreMenuRef = (keyId: number, el: Element | ComponentPublicInstance | null) => {
+  if (el instanceof HTMLElement) {
+    moreMenuButtonRefs.value.set(keyId, el)
+  } else {
+    moreMenuButtonRefs.value.delete(keyId)
+  }
+}
+
+const toggleMoreMenu = (keyId: number) => {
+  if (moreMenuKeyId.value === keyId) {
+    closeMoreMenu()
+    return
+  }
+  const buttonEl = moreMenuButtonRefs.value.get(keyId)
+  if (buttonEl) {
+    const rect = buttonEl.getBoundingClientRect()
+    const menuHeight = 180
+    const spaceBelow = window.innerHeight - rect.bottom
+    moreMenuPosition.value = {
+      top: spaceBelow < menuHeight ? rect.top - menuHeight : rect.bottom + 4,
+      left: Math.min(rect.left, window.innerWidth - 200)
+    }
+  }
+  moreMenuKeyId.value = keyId
+}
+
+const closeMoreMenu = () => {
+  moreMenuKeyId.value = null
+  moreMenuPosition.value = null
+}
 
 // Get the currently selected key for group change
 const selectedKeyForGroup = computed(() => {
