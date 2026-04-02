@@ -195,7 +195,8 @@ type ResponsesInputItem struct {
 type ResponsesContentPart struct {
 	Type     string `json:"type"` // "input_text" | "output_text" | "input_image"
 	Text     string `json:"text,omitempty"`
-	ImageURL string `json:"image_url,omitempty"` // data URI for input_image
+	ImageURL string `json:"image_url,omitempty"` // data URI or URL for input_image
+	Detail   string `json:"detail,omitempty"`    // "auto" | "low" | "high" (image resolution hint)
 }
 
 // ResponsesTool describes a tool in the Responses API.

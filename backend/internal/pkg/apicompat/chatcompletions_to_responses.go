@@ -340,10 +340,14 @@ func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesCont
 			}
 		case "image_url":
 			if p.ImageURL != nil && p.ImageURL.URL != "" {
-				responseParts = append(responseParts, ResponsesContentPart{
+				part := ResponsesContentPart{
 					Type:     "input_image",
 					ImageURL: p.ImageURL.URL,
-				})
+				}
+				if p.ImageURL.Detail != "" {
+					part.Detail = p.ImageURL.Detail
+				}
+				responseParts = append(responseParts, part)
 			}
 		}
 	}
