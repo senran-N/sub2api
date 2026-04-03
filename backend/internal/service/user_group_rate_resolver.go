@@ -5,10 +5,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/pkg/logger"
 	gocache "github.com/patrickmn/go-cache"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"golang.org/x/sync/singleflight"
 )
+
+func resolveUserGroupRateCacheTTL(cfg *config.Config) time.Duration {
+	if cfg == nil || cfg.Gateway.UserGroupRateCacheTTLSeconds <= 0 {
+		return defaultUserGroupRateCacheTTL
+	}
+	return time.Duration(cfg.Gateway.UserGroupRateCacheTTLSeconds) * time.Second
+}
 
 type userGroupRateResolver struct {
 	repo         UserGroupRateRepository
