@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/senran-N/sub2api/internal/config"
@@ -61,4 +62,50 @@ func TestSettingService_GetPublicSettings_ExposesRegistrationEmailSuffixWhitelis
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, []string{"@example.com", "@foo.bar"}, settings.RegistrationEmailSuffixWhitelist)
+}
+
+func TestSettingService_GetPublicSettingsForInjection_FiltersAdminMenuItems(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyCustomMenuItems: `[{"title":"Docs","url":"https://docs.example.com","visibility":"public"},{"title":"Admin","url":"https://admin.example.com","visibility":"admin"},{"title":"Default","url":"https://default.example.com"}]`,
+			SettingKeyCustomEndpoints: `invalid-json`,
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+	svc.SetVersion("1.2.3")
+
+	injected, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+
+	payload, err := json.Marshal(injected)
+	require.NoError(t, err)
+
+	var decoded struct {
+		CustomMenuItems []struct {
+			Title string `json:"title"`
+		} `json:"custom_menu_items"`
+		CustomEndpoints []any  `json:"custom_endpoints"`
+		Version         string `json:"version"`
+	}
+	require.NoError(t, json.Unmarshal(payload, &decoded))
+	require.Len(t, decoded.CustomMenuItems, 2)
+	require.Equal(t, "Docs", decoded.CustomMenuItems[0].Title)
+	require.Equal(t, "Default", decoded.CustomMenuItems[1].Title)
+	require.Equal(t, "1.2.3", decoded.Version)
+	require.Empty(t, decoded.CustomEndpoints)
+}
+
+func TestSettingService_GetFrameSrcOrigins_DeduplicatesSupportedOrigins(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyPurchaseSubscriptionEnabled: "true",
+			SettingKeyPurchaseSubscriptionURL:     " https://billing.example.com/checkout ",
+			SettingKeyCustomMenuItems:             `[{"url":"https://billing.example.com/embed"},{"url":"http://portal.example.com/path"},{"url":"javascript:alert(1)"},{"url":"notaurl"}]`,
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	origins, err := svc.GetFrameSrcOrigins(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"https://billing.example.com", "http://portal.example.com"}, origins)
 }

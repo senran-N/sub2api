@@ -458,34 +458,25 @@ func (s *TokenRefreshService) ensureOpenAIPrivacy(ctx context.Context, account *
 		return
 	}
 
-	token, _ := account.Credentials["access_token"].(string)
+	token := readAccountCredential(account, "access_token")
 	if token == "" {
 		return
 	}
 
-	var proxyURL string
-	if account.ProxyID != nil && s.proxyRepo != nil {
-		if p, err := s.proxyRepo.GetByID(ctx, *account.ProxyID); err == nil && p != nil {
-			proxyURL = p.URL()
+	mode := disableOpenAITraining(ctx, s.privacyClientFactory, token, resolveAccountProxyURL(ctx, s.proxyRepo, account.ProxyID))
+	persistAccountPrivacyMode(ctx, s.accountRepo, account, mode, nil, func(err error) {
+		if err != nil {
+			slog.Warn("token_refresh.update_privacy_mode_failed",
+				"account_id", account.ID,
+				"error", err,
+			)
+			return
 		}
-	}
-
-	mode := disableOpenAITraining(ctx, s.privacyClientFactory, token, proxyURL)
-	if mode == "" {
-		return
-	}
-
-	if err := s.accountRepo.UpdateExtra(ctx, account.ID, map[string]any{"privacy_mode": mode}); err != nil {
-		slog.Warn("token_refresh.update_privacy_mode_failed",
-			"account_id", account.ID,
-			"error", err,
-		)
-	} else {
 		slog.Info("token_refresh.privacy_mode_set",
 			"account_id", account.ID,
 			"privacy_mode", mode,
 		)
-	}
+	})
 }
 
 // ensureAntigravityPrivacy 后台刷新中检查 Antigravity OAuth 账号隐私状态。
@@ -502,35 +493,28 @@ func (s *TokenRefreshService) ensureAntigravityPrivacy(ctx context.Context, acco
 		}
 	}
 
-	token, _ := account.Credentials["access_token"].(string)
+	token := readAccountCredential(account, "access_token")
 	if token == "" {
 		return
 	}
 
-	projectID, _ := account.Credentials["project_id"].(string)
-
-	var proxyURL string
-	if account.ProxyID != nil && s.proxyRepo != nil {
-		if p, err := s.proxyRepo.GetByID(ctx, *account.ProxyID); err == nil && p != nil {
-			proxyURL = p.URL()
+	mode := setAntigravityPrivacy(
+		ctx,
+		token,
+		readAccountCredential(account, "project_id"),
+		resolveAccountProxyURL(ctx, s.proxyRepo, account.ProxyID),
+	)
+	persistAccountPrivacyMode(ctx, s.accountRepo, account, mode, applyAntigravityPrivacyMode, func(err error) {
+		if err != nil {
+			slog.Warn("token_refresh.update_antigravity_privacy_mode_failed",
+				"account_id", account.ID,
+				"error", err,
+			)
+			return
 		}
-	}
-
-	mode := setAntigravityPrivacy(ctx, token, projectID, proxyURL)
-	if mode == "" {
-		return
-	}
-
-	if err := s.accountRepo.UpdateExtra(ctx, account.ID, map[string]any{"privacy_mode": mode}); err != nil {
-		slog.Warn("token_refresh.update_antigravity_privacy_mode_failed",
-			"account_id", account.ID,
-			"error", err,
-		)
-	} else {
-		applyAntigravityPrivacyMode(account, mode)
 		slog.Info("token_refresh.antigravity_privacy_mode_set",
 			"account_id", account.ID,
 			"privacy_mode", mode,
 		)
-	}
+	})
 }

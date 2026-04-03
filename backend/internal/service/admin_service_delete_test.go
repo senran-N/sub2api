@@ -119,6 +119,21 @@ type groupRepoStub struct {
 	deleteCalls     []int64
 }
 
+type apiKeyRepoDeleteStub struct {
+	*apiKeyRepoStubForGroupUpdate
+	groupKeys          []string
+	listKeysGroupIDs   []int64
+	listKeysByGroupErr error
+}
+
+func (s *apiKeyRepoDeleteStub) ListKeysByGroupID(_ context.Context, groupID int64) ([]string, error) {
+	s.listKeysGroupIDs = append(s.listKeysGroupIDs, groupID)
+	if s.listKeysByGroupErr != nil {
+		return nil, s.listKeysByGroupErr
+	}
+	return append([]string(nil), s.groupKeys...), nil
+}
+
 func (s *groupRepoStub) Create(ctx context.Context, group *Group) error {
 	panic("unexpected Create call")
 }
@@ -438,6 +453,26 @@ func TestAdminService_DeleteGroup_Success_WithCacheInvalidation(t *testing.T) {
 		{userID: 11, groupID: 5},
 		{userID: 12, groupID: 5},
 	}, calls)
+}
+
+func TestAdminService_DeleteGroup_InvalidatesAuthCacheKeys(t *testing.T) {
+	repo := &groupRepoStub{}
+	apiKeyRepo := &apiKeyRepoDeleteStub{
+		apiKeyRepoStubForGroupUpdate: &apiKeyRepoStubForGroupUpdate{},
+		groupKeys:                    []string{"gk-1", "gk-2"},
+	}
+	invalidator := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{
+		groupRepo:            repo,
+		apiKeyRepo:           apiKeyRepo,
+		authCacheInvalidator: invalidator,
+	}
+
+	err := svc.DeleteGroup(context.Background(), 5)
+	require.NoError(t, err)
+	require.Equal(t, []int64{5}, repo.deleteCalls)
+	require.Equal(t, []int64{5}, apiKeyRepo.listKeysGroupIDs)
+	require.ElementsMatch(t, []string{"gk-1", "gk-2"}, invalidator.keys)
 }
 
 func TestAdminService_DeleteGroup_NotFound(t *testing.T) {
