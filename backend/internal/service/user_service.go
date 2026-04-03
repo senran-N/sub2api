@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/domain"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 )
@@ -16,18 +17,7 @@ var (
 	ErrInsufficientPerms = infraerrors.Forbidden("INSUFFICIENT_PERMISSIONS", "insufficient permissions")
 )
 
-// UserListFilters contains all filter options for listing users
-type UserListFilters struct {
-	Status     string           // User status filter
-	Role       string           // User role filter
-	Search     string           // Search in email, username
-	GroupName  string           // Filter by allowed group name (fuzzy match)
-	Attributes map[int64]string // Custom attribute filters: attributeID -> value
-	// IncludeSubscriptions controls whether ListWithFilters should load active subscriptions.
-	// For large datasets this can be expensive; admin list pages should enable it on demand.
-	// nil means not specified (default: load subscriptions for backward compatibility).
-	IncludeSubscriptions *bool
-}
+type UserListFilters = domain.UserListFilters
 
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
@@ -57,17 +47,9 @@ type UserRepository interface {
 }
 
 // UpdateProfileRequest 更新用户资料请求
-type UpdateProfileRequest struct {
-	Email       *string `json:"email"`
-	Username    *string `json:"username"`
-	Concurrency *int    `json:"concurrency"`
-}
+type UpdateProfileRequest = domain.UpdateProfileRequest
 
-// ChangePasswordRequest 修改密码请求
-type ChangePasswordRequest struct {
-	CurrentPassword string `json:"current_password"`
-	NewPassword     string `json:"new_password"`
-}
+type ChangePasswordRequest = domain.ChangePasswordRequest
 
 // UserService 用户服务
 type UserService struct {

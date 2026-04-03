@@ -6,7 +6,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/domain"
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 type schedulerOutboxRepository struct {
@@ -15,11 +16,11 @@ type schedulerOutboxRepository struct {
 
 const schedulerOutboxDedupWindow = time.Second
 
-func NewSchedulerOutboxRepository(db *sql.DB) service.SchedulerOutboxRepository {
+func NewSchedulerOutboxRepository(db *sql.DB) ports.SchedulerOutboxRepository {
 	return &schedulerOutboxRepository{db: db}
 }
 
-func (r *schedulerOutboxRepository) ListAfter(ctx context.Context, afterID int64, limit int) ([]service.SchedulerOutboxEvent, error) {
+func (r *schedulerOutboxRepository) ListAfter(ctx context.Context, afterID int64, limit int) ([]domain.SchedulerOutboxEvent, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -37,13 +38,13 @@ func (r *schedulerOutboxRepository) ListAfter(ctx context.Context, afterID int64
 		_ = rows.Close()
 	}()
 
-	events := make([]service.SchedulerOutboxEvent, 0, limit)
+	events := make([]domain.SchedulerOutboxEvent, 0, limit)
 	for rows.Next() {
 		var (
 			payloadRaw []byte
 			accountID  sql.NullInt64
 			groupID    sql.NullInt64
-			event      service.SchedulerOutboxEvent
+			event      domain.SchedulerOutboxEvent
 		)
 		if err := rows.Scan(&event.ID, &event.EventType, &accountID, &groupID, &payloadRaw, &event.CreatedAt); err != nil {
 			return nil, err
@@ -117,9 +118,9 @@ func enqueueSchedulerOutbox(ctx context.Context, exec sqlExecutor, eventType str
 
 func schedulerOutboxEventSupportsDedup(eventType string) bool {
 	switch eventType {
-	case service.SchedulerOutboxEventAccountChanged,
-		service.SchedulerOutboxEventGroupChanged,
-		service.SchedulerOutboxEventFullRebuild:
+	case domain.SchedulerOutboxEventAccountChanged,
+		domain.SchedulerOutboxEventGroupChanged,
+		domain.SchedulerOutboxEventFullRebuild:
 		return true
 	default:
 		return false

@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/model"
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/model"
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 const (
@@ -25,7 +25,7 @@ type errorPassthroughCache struct {
 }
 
 // NewErrorPassthroughCache 创建错误透传规则缓存
-func NewErrorPassthroughCache(rdb *redis.Client) service.ErrorPassthroughCache {
+func NewErrorPassthroughCache(rdb *redis.Client) ports.ErrorPassthroughCache {
 	return &errorPassthroughCache{
 		rdb: rdb,
 	}

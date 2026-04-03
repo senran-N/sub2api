@@ -2,46 +2,8 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"strconv"
-	"strings"
 	"time"
 )
-
-const (
-	SchedulerModeSingle = "single"
-	SchedulerModeMixed  = "mixed"
-	SchedulerModeForced = "forced"
-)
-
-type SchedulerBucket struct {
-	GroupID  int64
-	Platform string
-	Mode     string
-}
-
-func (b SchedulerBucket) String() string {
-	return fmt.Sprintf("%d:%s:%s", b.GroupID, b.Platform, b.Mode)
-}
-
-func ParseSchedulerBucket(raw string) (SchedulerBucket, bool) {
-	parts := strings.Split(raw, ":")
-	if len(parts) != 3 {
-		return SchedulerBucket{}, false
-	}
-	groupID, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil {
-		return SchedulerBucket{}, false
-	}
-	if parts[1] == "" || parts[2] == "" {
-		return SchedulerBucket{}, false
-	}
-	return SchedulerBucket{
-		GroupID:  groupID,
-		Platform: parts[1],
-		Mode:     parts[2],
-	}, true
-}
 
 // SchedulerCache 负责调度快照与账号快照的缓存读写。
 type SchedulerCache interface {

@@ -46,10 +46,9 @@ type AnnouncementCondition = domain.AnnouncementCondition
 
 type Announcement = domain.Announcement
 
-type AnnouncementListFilters struct {
-	Status string
-	Search string
-}
+type AnnouncementListFilters = domain.AnnouncementListFilters
+type CreateAnnouncementInput = domain.CreateAnnouncementInput
+type UpdateAnnouncementInput = domain.UpdateAnnouncementInput
 
 type AnnouncementRepository interface {
 	Create(ctx context.Context, a *Announcement) error

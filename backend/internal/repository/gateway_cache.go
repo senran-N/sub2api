@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 const stickySessionPrefix = "sticky_session:"
@@ -15,7 +15,7 @@ type gatewayCache struct {
 	rdb *redis.Client
 }
 
-func NewGatewayCache(rdb *redis.Client) service.GatewayCache {
+func NewGatewayCache(rdb *redis.Client) ports.GatewayCache {
 	return &gatewayCache{rdb: rdb}
 }
 

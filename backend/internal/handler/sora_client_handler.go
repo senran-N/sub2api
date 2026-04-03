@@ -13,12 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -149,7 +150,7 @@ func (h *SoraClientHandler) Generate(c *gin.Context) {
 
 	gen, err := h.genService.CreatePending(c.Request.Context(), userID, apiKeyID, req.Model, req.Prompt, req.MediaType)
 	if err != nil {
-		if errors.Is(err, service.ErrSoraGenerationConcurrencyLimit) {
+		if errors.Is(err, domain.ErrSoraGenerationConcurrencyLimit) {
 			response.Error(c, http.StatusTooManyRequests, "同时进行中的任务不能超过 3 个")
 			return
 		}
@@ -174,7 +175,7 @@ func (h *SoraClientHandler) processGeneration(genID int64, userID int64, groupID
 
 	// 标记为生成中
 	if err := h.genService.MarkGenerating(ctx, genID, ""); err != nil {
-		if errors.Is(err, service.ErrSoraGenerationStateConflict) {
+		if errors.Is(err, domain.ErrSoraGenerationStateConflict) {
 			logger.LegacyPrintf("handler.sora_client", "[SoraClient] 任务状态已变化，跳过生成 id=%d", genID)
 			return
 		}
@@ -261,7 +262,7 @@ func (h *SoraClientHandler) processGeneration(genID int64, userID int64, groupID
 		)
 		// 检查是否已取消
 		gen, _ := h.genService.GetByID(ctx, genID, userID)
-		if gen != nil && gen.Status == service.SoraGenStatusCancelled {
+		if gen != nil && gen.Status == domain.SoraGenStatusCancelled {
 			return
 		}
 		_ = h.genService.MarkFailed(ctx, genID, "生成失败: "+err.Error())
@@ -286,7 +287,7 @@ func (h *SoraClientHandler) processGeneration(genID int64, userID int64, groupID
 
 	// 检查任务是否已被取消
 	gen, _ := h.genService.GetByID(ctx, genID, userID)
-	if gen != nil && gen.Status == service.SoraGenStatusCancelled {
+	if gen != nil && gen.Status == domain.SoraGenStatusCancelled {
 		logger.LegacyPrintf("handler.sora_client", "[SoraClient] 任务已取消，跳过存储 id=%d", genID)
 		return
 	}
@@ -295,7 +296,7 @@ func (h *SoraClientHandler) processGeneration(genID int64, userID int64, groupID
 	storedURL, storedURLs, storageType, s3Keys, fileSize := h.storeMediaWithDegradation(ctx, userID, mediaType, mediaURL, mediaURLs)
 
 	usageAdded := false
-	if (storageType == service.SoraStorageTypeS3 || storageType == service.SoraStorageTypeLocal) && fileSize > 0 && h.quotaService != nil {
+	if (storageType == domain.SoraStorageTypeS3 || storageType == domain.SoraStorageTypeLocal) && fileSize > 0 && h.quotaService != nil {
 		if err := h.quotaService.AddUsage(ctx, userID, fileSize); err != nil {
 			h.cleanupStoredMedia(ctx, storageType, s3Keys, storedURLs)
 			var quotaErr *service.QuotaExceededError
@@ -311,7 +312,7 @@ func (h *SoraClientHandler) processGeneration(genID int64, userID int64, groupID
 
 	// 存储完成后再做一次取消检查，防止取消被 completed 覆盖。
 	gen, _ = h.genService.GetByID(ctx, genID, userID)
-	if gen != nil && gen.Status == service.SoraGenStatusCancelled {
+	if gen != nil && gen.Status == domain.SoraGenStatusCancelled {
 		logger.LegacyPrintf("handler.sora_client", "[SoraClient] 存储后检测到任务已取消，回滚存储 id=%d", genID)
 		h.cleanupStoredMedia(ctx, storageType, s3Keys, storedURLs)
 		if usageAdded && h.quotaService != nil {
@@ -322,7 +323,7 @@ func (h *SoraClientHandler) processGeneration(genID int64, userID int64, groupID
 
 	// 标记完成
 	if err := h.genService.MarkCompleted(ctx, genID, storedURL, storedURLs, storageType, s3Keys, fileSize); err != nil {
-		if errors.Is(err, service.ErrSoraGenerationStateConflict) {
+		if errors.Is(err, domain.ErrSoraGenerationStateConflict) {
 			h.cleanupStoredMedia(ctx, storageType, s3Keys, storedURLs)
 			if usageAdded && h.quotaService != nil {
 				_ = h.quotaService.ReleaseUsage(ctx, userID, fileSize)
@@ -378,7 +379,7 @@ func (h *SoraClientHandler) storeMediaWithDegradation(
 				accessURLs = append(accessURLs, accessURL)
 			}
 			if allOK && len(accessURLs) > 0 {
-				return accessURLs[0], accessURLs, service.SoraStorageTypeS3, keys, totalSize
+				return accessURLs[0], accessURLs, domain.SoraStorageTypeS3, keys, totalSize
 			}
 		}
 	}
@@ -392,13 +393,13 @@ func (h *SoraClientHandler) storeMediaWithDegradation(
 			if sizeErr != nil {
 				logger.LegacyPrintf("handler.sora_client", "[SoraClient] 统计本地文件大小失败 err=%v", sizeErr)
 			}
-			return firstPath, storedPaths, service.SoraStorageTypeLocal, nil, totalSize
+			return firstPath, storedPaths, domain.SoraStorageTypeLocal, nil, totalSize
 		}
 		logger.LegacyPrintf("handler.sora_client", "[SoraClient] 本地存储失败 err=%v", err)
 	}
 
 	// 第三层：保留上游临时 URL
-	return urls[0], urls, service.SoraStorageTypeUpstream, nil, 0
+	return urls[0], urls, domain.SoraStorageTypeUpstream, nil, 0
 }
 
 // buildAsyncRequestBody 构建 Sora 异步生成的 chat completions 请求体。
@@ -499,7 +500,7 @@ func (h *SoraClientHandler) ListGenerations(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	params := service.SoraGenerationListParams{
+	params := domain.SoraGenerationListParams{
 		UserID:      userID,
 		Status:      c.Query("status"),
 		StorageType: c.Query("storage_type"),
@@ -573,7 +574,7 @@ func (h *SoraClientHandler) DeleteGeneration(c *gin.Context) {
 	}
 
 	// 先尝试清理本地文件，再删除记录（清理失败不阻塞删除）。
-	if gen.StorageType == service.SoraStorageTypeLocal && h.mediaStorage != nil {
+	if gen.StorageType == domain.SoraStorageTypeLocal && h.mediaStorage != nil {
 		paths := gen.MediaURLs
 		if len(paths) == 0 && gen.MediaURL != "" {
 			paths = []string{gen.MediaURL}
@@ -637,7 +638,7 @@ func (h *SoraClientHandler) CancelGeneration(c *gin.Context) {
 	_ = gen
 
 	if err := h.genService.MarkCancelled(c.Request.Context(), id); err != nil {
-		if errors.Is(err, service.ErrSoraGenerationNotActive) {
+		if errors.Is(err, domain.ErrSoraGenerationNotActive) {
 			response.Error(c, http.StatusConflict, "任务已结束，无法取消")
 			return
 		}
@@ -669,7 +670,7 @@ func (h *SoraClientHandler) SaveToStorage(c *gin.Context) {
 		return
 	}
 
-	if gen.StorageType != service.SoraStorageTypeUpstream {
+	if gen.StorageType != domain.SoraStorageTypeUpstream {
 		response.Error(c, http.StatusBadRequest, "仅 upstream 类型的记录可手动保存")
 		return
 	}
@@ -742,7 +743,7 @@ func (h *SoraClientHandler) SaveToStorage(c *gin.Context) {
 		id,
 		accessURLs[0],
 		accessURLs,
-		service.SoraStorageTypeS3,
+		domain.SoraStorageTypeS3,
 		uploadedKeys,
 		totalSize,
 	); err != nil {
@@ -779,13 +780,13 @@ func (h *SoraClientHandler) GetStorageStatus(c *gin.Context) {
 
 func (h *SoraClientHandler) cleanupStoredMedia(ctx context.Context, storageType string, s3Keys []string, localPaths []string) {
 	switch storageType {
-	case service.SoraStorageTypeS3:
+	case domain.SoraStorageTypeS3:
 		if h.s3Storage != nil && len(s3Keys) > 0 {
 			if err := h.s3Storage.DeleteObjects(ctx, s3Keys); err != nil {
 				logger.LegacyPrintf("handler.sora_client", "[SoraClient] 清理 S3 文件失败 keys=%v err=%v", s3Keys, err)
 			}
 		}
-	case service.SoraStorageTypeLocal:
+	case domain.SoraStorageTypeLocal:
 		if h.mediaStorage != nil && len(localPaths) > 0 {
 			if err := h.mediaStorage.DeleteByRelativePaths(localPaths); err != nil {
 				logger.LegacyPrintf("handler.sora_client", "[SoraClient] 清理本地文件失败 paths=%v err=%v", localPaths, err)

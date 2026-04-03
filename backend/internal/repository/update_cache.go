@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 const updateCacheKey = "update:latest"
@@ -14,7 +14,7 @@ type updateCache struct {
 	rdb *redis.Client
 }
 
-func NewUpdateCache(rdb *redis.Client) service.UpdateCache {
+func NewUpdateCache(rdb *redis.Client) ports.UpdateCache {
 	return &updateCache{rdb: rdb}
 }
 

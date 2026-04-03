@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"time"
+
+	"github.com/senran-N/sub2api/internal/domain"
 )
 
 type OpsRepository interface {
@@ -235,40 +237,9 @@ type OpsInsertSystemLogInput struct {
 	ExtraJSON       string
 }
 
-type OpsSystemLogFilter struct {
-	StartTime *time.Time
-	EndTime   *time.Time
+type OpsSystemLogFilter = domain.OpsSystemLogFilter
 
-	Level     string
-	Component string
-
-	RequestID       string
-	ClientRequestID string
-	UserID          *int64
-	AccountID       *int64
-	Platform        string
-	Model           string
-	Query           string
-
-	Page     int
-	PageSize int
-}
-
-type OpsSystemLogCleanupFilter struct {
-	StartTime *time.Time
-	EndTime   *time.Time
-
-	Level     string
-	Component string
-
-	RequestID       string
-	ClientRequestID string
-	UserID          *int64
-	AccountID       *int64
-	Platform        string
-	Model           string
-	Query           string
-}
+type OpsSystemLogCleanupFilter = domain.OpsSystemLogCleanupFilter
 
 type OpsSystemLogList struct {
 	Logs     []*OpsSystemLog `json:"logs"`

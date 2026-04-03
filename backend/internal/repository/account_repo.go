@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	dbent "github.com/senran-N/sub2api/ent"
 	dbaccount "github.com/senran-N/sub2api/ent/account"
 	dbaccountgroup "github.com/senran-N/sub2api/ent/accountgroup"
@@ -28,7 +29,6 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/lib/pq"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqljson"
@@ -1554,13 +1554,13 @@ func (r *accountRepository) loadAccountGroups(ctx context.Context, accountIDs []
 
 	for _, ag := range entries {
 		groupSvc := groupEntityToService(ag.Edges.Group)
-		agSvc := service.AccountGroup{
+		link := service.AccountGroupLink{
 			AccountID: ag.AccountID,
 			GroupID:   ag.GroupID,
 			Priority:  ag.Priority,
 			CreatedAt: ag.CreatedAt,
-			Group:     groupSvc,
 		}
+		agSvc := service.NewAccountGroup(link, nil, groupSvc)
 		accountGroupsByAccount[ag.AccountID] = append(accountGroupsByAccount[ag.AccountID], agSvc)
 		groupIDsByAccount[ag.AccountID] = append(groupIDsByAccount[ag.AccountID], ag.GroupID)
 		if groupSvc != nil {

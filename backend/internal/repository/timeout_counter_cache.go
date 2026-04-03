@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 const timeoutCounterPrefix = "timeout_count:account:"
@@ -30,7 +30,7 @@ type timeoutCounterCache struct {
 }
 
 // NewTimeoutCounterCache 创建超时计数器缓存实例
-func NewTimeoutCounterCache(rdb *redis.Client) service.TimeoutCounterCache {
+func NewTimeoutCounterCache(rdb *redis.Client) ports.TimeoutCounterCache {
 	return &timeoutCounterCache{rdb: rdb}
 }
 

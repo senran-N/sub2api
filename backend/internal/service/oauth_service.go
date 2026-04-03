@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/senran-N/sub2api/internal/pkg/oauth"
 	"github.com/senran-N/sub2api/internal/pkg/openai"
 )
@@ -41,11 +42,7 @@ func NewOAuthService(proxyRepo ProxyRepository, oauthClient ClaudeOAuthClient) *
 	}
 }
 
-// GenerateAuthURLResult contains the authorization URL and session info
-type GenerateAuthURLResult struct {
-	AuthURL   string `json:"auth_url"`
-	SessionID string `json:"session_id"`
-}
+type GenerateAuthURLResult = domain.GenerateAuthURLResult
 
 // GenerateAuthURL generates an OAuth authorization URL with full scope
 func (s *OAuthService) GenerateAuthURL(ctx context.Context, proxyID *int64) (*GenerateAuthURLResult, error) {
@@ -106,25 +103,9 @@ func (s *OAuthService) generateAuthURLWithScope(ctx context.Context, scope strin
 	}, nil
 }
 
-// ExchangeCodeInput represents the input for code exchange
-type ExchangeCodeInput struct {
-	SessionID string
-	Code      string
-	ProxyID   *int64
-}
+type ExchangeCodeInput = domain.ExchangeCodeInput
 
-// TokenInfo represents the token information stored in credentials
-type TokenInfo struct {
-	AccessToken  string `json:"access_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int64  `json:"expires_in"`
-	ExpiresAt    int64  `json:"expires_at"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	Scope        string `json:"scope,omitempty"`
-	OrgUUID      string `json:"org_uuid,omitempty"`
-	AccountUUID  string `json:"account_uuid,omitempty"`
-	EmailAddress string `json:"email_address,omitempty"`
-}
+type TokenInfo = domain.TokenInfo
 
 // ExchangeCode exchanges authorization code for tokens
 func (s *OAuthService) ExchangeCode(ctx context.Context, input *ExchangeCodeInput) (*TokenInfo, error) {
@@ -158,12 +139,7 @@ func (s *OAuthService) ExchangeCode(ctx context.Context, input *ExchangeCodeInpu
 	return tokenInfo, nil
 }
 
-// CookieAuthInput represents the input for cookie-based authentication
-type CookieAuthInput struct {
-	SessionKey string
-	ProxyID    *int64
-	Scope      string // "full" or "inference"
-}
+type CookieAuthInput = domain.CookieAuthInput
 
 // CookieAuth performs OAuth using sessionKey (cookie-based auto-auth)
 func (s *OAuthService) CookieAuth(ctx context.Context, input *CookieAuthInput) (*TokenInfo, error) {

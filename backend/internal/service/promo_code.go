@@ -2,6 +2,8 @@ package service
 
 import (
 	"time"
+
+	"github.com/senran-N/sub2api/internal/domain"
 )
 
 // PromoCode 注册优惠码
@@ -53,21 +55,6 @@ func (p *PromoCode) IsExpired() bool {
 	return p.ExpiresAt != nil && time.Now().After(*p.ExpiresAt)
 }
 
-// CreatePromoCodeInput 创建优惠码输入
-type CreatePromoCodeInput struct {
-	Code        string
-	BonusAmount float64
-	MaxUses     int
-	ExpiresAt   *time.Time
-	Notes       string
-}
+type CreatePromoCodeInput = domain.CreatePromoCodeInput
 
-// UpdatePromoCodeInput 更新优惠码输入
-type UpdatePromoCodeInput struct {
-	Code        *string
-	BonusAmount *float64
-	MaxUses     *int
-	Status      *string
-	ExpiresAt   *time.Time
-	Notes       *string
-}
+type UpdatePromoCodeInput = domain.UpdatePromoCodeInput

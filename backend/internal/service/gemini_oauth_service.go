@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/senran-N/sub2api/internal/pkg/geminicli"
 	"github.com/senran-N/sub2api/internal/pkg/httpclient"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
@@ -58,10 +59,7 @@ type GeminiOAuthService struct {
 	cfg          *config.Config
 }
 
-type GeminiOAuthCapabilities struct {
-	AIStudioOAuthEnabled bool     `json:"ai_studio_oauth_enabled"`
-	RequiredRedirectURIs []string `json:"required_redirect_uris"`
-}
+type GeminiOAuthCapabilities = domain.GeminiOAuthCapabilities
 
 func NewGeminiOAuthService(
 	proxyRepo ProxyRepository,
@@ -92,11 +90,7 @@ func (s *GeminiOAuthService) GetOAuthConfig() *GeminiOAuthCapabilities {
 	}
 }
 
-type GeminiAuthURLResult struct {
-	AuthURL   string `json:"auth_url"`
-	SessionID string `json:"session_id"`
-	State     string `json:"state"`
-}
+type GeminiAuthURLResult = domain.GeminiAuthURLResult
 
 func (s *GeminiOAuthService) GenerateAuthURL(ctx context.Context, proxyID *int64, redirectURI, projectID, oauthType, tierID string) (*GeminiAuthURLResult, error) {
 	state, err := geminicli.GenerateState()
@@ -183,29 +177,8 @@ func (s *GeminiOAuthService) GenerateAuthURL(ctx context.Context, proxyID *int64
 	}, nil
 }
 
-type GeminiExchangeCodeInput struct {
-	SessionID string
-	State     string
-	Code      string
-	ProxyID   *int64
-	OAuthType string // "code_assist" 或 "ai_studio"
-	// TierID is a user-selected tier to be used when auto detection is unavailable or fails.
-	// If empty, the service will fall back to the tier stored in the OAuth session (if any).
-	TierID string
-}
-
-type GeminiTokenInfo struct {
-	AccessToken  string         `json:"access_token"`
-	RefreshToken string         `json:"refresh_token"`
-	ExpiresIn    int64          `json:"expires_in"`
-	ExpiresAt    int64          `json:"expires_at"`
-	TokenType    string         `json:"token_type"`
-	Scope        string         `json:"scope,omitempty"`
-	ProjectID    string         `json:"project_id,omitempty"`
-	OAuthType    string         `json:"oauth_type,omitempty"` // "code_assist" 或 "ai_studio"
-	TierID       string         `json:"tier_id,omitempty"`    // Canonical tier id (e.g. google_one_free, gcp_standard, aistudio_free)
-	Extra        map[string]any `json:"extra,omitempty"`      // Drive metadata
-}
+type GeminiExchangeCodeInput = domain.GeminiExchangeCodeInput
+type GeminiTokenInfo = domain.GeminiTokenInfo
 
 // validateTierID validates tier_id format and length
 func validateTierID(tierID string) error {

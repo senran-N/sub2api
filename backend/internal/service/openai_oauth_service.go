@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/domain"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/httpclient"
 	"github.com/senran-N/sub2api/internal/pkg/openai"
@@ -50,11 +51,7 @@ func (s *OpenAIOAuthService) SetPrivacyClientFactory(factory PrivacyClientFactor
 	s.privacyClientFactory = factory
 }
 
-// OpenAIAuthURLResult contains the authorization URL and session info
-type OpenAIAuthURLResult struct {
-	AuthURL   string `json:"auth_url"`
-	SessionID string `json:"session_id"`
-}
+type OpenAIAuthURLResult = domain.OpenAIAuthURLResult
 
 // GenerateAuthURL generates an OpenAI OAuth authorization URL
 func (s *OpenAIOAuthService) GenerateAuthURL(ctx context.Context, proxyID *int64, redirectURI, platform string) (*OpenAIAuthURLResult, error) {
@@ -116,30 +113,9 @@ func (s *OpenAIOAuthService) GenerateAuthURL(ctx context.Context, proxyID *int64
 	}, nil
 }
 
-// OpenAIExchangeCodeInput represents the input for code exchange
-type OpenAIExchangeCodeInput struct {
-	SessionID   string
-	Code        string
-	State       string
-	RedirectURI string
-	ProxyID     *int64
-}
+type OpenAIExchangeCodeInput = domain.OpenAIExchangeCodeInput
 
-// OpenAITokenInfo represents the token information for OpenAI
-type OpenAITokenInfo struct {
-	AccessToken      string `json:"access_token"`
-	RefreshToken     string `json:"refresh_token"`
-	IDToken          string `json:"id_token,omitempty"`
-	ExpiresIn        int64  `json:"expires_in"`
-	ExpiresAt        int64  `json:"expires_at"`
-	ClientID         string `json:"client_id,omitempty"`
-	Email            string `json:"email,omitempty"`
-	ChatGPTAccountID string `json:"chatgpt_account_id,omitempty"`
-	ChatGPTUserID    string `json:"chatgpt_user_id,omitempty"`
-	OrganizationID   string `json:"organization_id,omitempty"`
-	PlanType         string `json:"plan_type,omitempty"`
-	PrivacyMode      string `json:"privacy_mode,omitempty"`
-}
+type OpenAITokenInfo = domain.OpenAITokenInfo
 
 // ExchangeCode exchanges authorization code for tokens
 func (s *OpenAIOAuthService) ExchangeCode(ctx context.Context, input *OpenAIExchangeCodeInput) (*OpenAITokenInfo, error) {

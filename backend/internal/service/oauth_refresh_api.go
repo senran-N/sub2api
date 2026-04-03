@@ -19,12 +19,11 @@ type OAuthRefreshExecutor interface {
 
 const refreshLockTTL = 30 * time.Second
 
-// OAuthRefreshResult 统一刷新结果
 type OAuthRefreshResult struct {
-	Refreshed      bool           // 实际执行了刷新
-	NewCredentials map[string]any // 刷新后的 credentials（nil 表示未刷新）
-	Account        *Account       // 从 DB 重新读取的最新 account
-	LockHeld       bool           // 锁被其他 worker 持有（未执行刷新）
+	Refreshed      bool
+	NewCredentials map[string]any
+	Account        *Account
+	LockHeld       bool
 }
 
 // OAuthRefreshAPI 统一的 OAuth Token 刷新入口

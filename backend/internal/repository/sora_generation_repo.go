@@ -8,21 +8,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/domain"
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
-// soraGenerationRepository 实现 service.SoraGenerationRepository 接口。
+// soraGenerationRepository 实现 Sora generation 持久化端口。
 // 使用原生 SQL 操作 sora_generations 表。
 type soraGenerationRepository struct {
 	sql *sql.DB
 }
 
 // NewSoraGenerationRepository 创建 Sora 生成记录仓储实例。
-func NewSoraGenerationRepository(sqlDB *sql.DB) service.SoraGenerationRepository {
+func NewSoraGenerationRepository(sqlDB *sql.DB) ports.SoraGenerationRepository {
 	return &soraGenerationRepository{sql: sqlDB}
 }
 
-func (r *soraGenerationRepository) Create(ctx context.Context, gen *service.SoraGeneration) error {
+func (r *soraGenerationRepository) Create(ctx context.Context, gen *domain.SoraGeneration) error {
 	mediaURLsJSON, _ := json.Marshal(gen.MediaURLs)
 	s3KeysJSON, _ := json.Marshal(gen.S3ObjectKeys)
 
@@ -44,7 +45,7 @@ func (r *soraGenerationRepository) Create(ctx context.Context, gen *service.Sora
 // CreatePendingWithLimit 在单事务内执行“并发上限检查 + 创建”，避免 count+create 竞态。
 func (r *soraGenerationRepository) CreatePendingWithLimit(
 	ctx context.Context,
-	gen *service.SoraGeneration,
+	gen *domain.SoraGeneration,
 	activeStatuses []string,
 	maxActive int64,
 ) error {
@@ -55,7 +56,7 @@ func (r *soraGenerationRepository) CreatePendingWithLimit(
 		return r.Create(ctx, gen)
 	}
 	if len(activeStatuses) == 0 {
-		activeStatuses = []string{service.SoraGenStatusPending, service.SoraGenStatusGenerating}
+		activeStatuses = []string{domain.SoraGenStatusPending, domain.SoraGenStatusGenerating}
 	}
 
 	tx, err := r.sql.BeginTx(ctx, nil)
@@ -85,7 +86,7 @@ func (r *soraGenerationRepository) CreatePendingWithLimit(
 		return err
 	}
 	if activeCount >= maxActive {
-		return service.ErrSoraGenerationConcurrencyLimit
+		return domain.ErrSoraGenerationConcurrencyLimit
 	}
 
 	mediaURLsJSON, _ := json.Marshal(gen.MediaURLs)
@@ -108,8 +109,8 @@ func (r *soraGenerationRepository) CreatePendingWithLimit(
 	return tx.Commit()
 }
 
-func (r *soraGenerationRepository) GetByID(ctx context.Context, id int64) (*service.SoraGeneration, error) {
-	gen := &service.SoraGeneration{}
+func (r *soraGenerationRepository) GetByID(ctx context.Context, id int64) (*domain.SoraGeneration, error) {
+	gen := &domain.SoraGeneration{}
 	var mediaURLsJSON, s3KeysJSON []byte
 	var completedAt sql.NullTime
 	var apiKeyID sql.NullInt64
@@ -144,7 +145,7 @@ func (r *soraGenerationRepository) GetByID(ctx context.Context, id int64) (*serv
 	return gen, nil
 }
 
-func (r *soraGenerationRepository) Update(ctx context.Context, gen *service.SoraGeneration) error {
+func (r *soraGenerationRepository) Update(ctx context.Context, gen *domain.SoraGeneration) error {
 	mediaURLsJSON, _ := json.Marshal(gen.MediaURLs)
 	s3KeysJSON, _ := json.Marshal(gen.S3ObjectKeys)
 
@@ -174,7 +175,7 @@ func (r *soraGenerationRepository) UpdateGeneratingIfPending(ctx context.Context
 		SET status = $2, upstream_task_id = $3
 		WHERE id = $1 AND status = $4
 	`,
-		id, service.SoraGenStatusGenerating, upstreamTaskID, service.SoraGenStatusPending,
+		id, domain.SoraGenStatusGenerating, upstreamTaskID, domain.SoraGenStatusPending,
 	)
 	if err != nil {
 		return false, err
@@ -211,8 +212,8 @@ func (r *soraGenerationRepository) UpdateCompletedIfActive(
 			completed_at = $8
 		WHERE id = $1 AND status IN ($9, $10)
 	`,
-		id, service.SoraGenStatusCompleted, mediaURL, mediaURLsJSON, fileSizeBytes,
-		storageType, s3KeysJSON, completedAt, service.SoraGenStatusPending, service.SoraGenStatusGenerating,
+		id, domain.SoraGenStatusCompleted, mediaURL, mediaURLsJSON, fileSizeBytes,
+		storageType, s3KeysJSON, completedAt, domain.SoraGenStatusPending, domain.SoraGenStatusGenerating,
 	)
 	if err != nil {
 		return false, err
@@ -238,7 +239,7 @@ func (r *soraGenerationRepository) UpdateFailedIfActive(
 			completed_at = $4
 		WHERE id = $1 AND status IN ($5, $6)
 	`,
-		id, service.SoraGenStatusFailed, errMsg, completedAt, service.SoraGenStatusPending, service.SoraGenStatusGenerating,
+		id, domain.SoraGenStatusFailed, errMsg, completedAt, domain.SoraGenStatusPending, domain.SoraGenStatusGenerating,
 	)
 	if err != nil {
 		return false, err
@@ -257,7 +258,7 @@ func (r *soraGenerationRepository) UpdateCancelledIfActive(ctx context.Context, 
 		SET status = $2, completed_at = $3
 		WHERE id = $1 AND status IN ($4, $5)
 	`,
-		id, service.SoraGenStatusCancelled, completedAt, service.SoraGenStatusPending, service.SoraGenStatusGenerating,
+		id, domain.SoraGenStatusCancelled, completedAt, domain.SoraGenStatusPending, domain.SoraGenStatusGenerating,
 	)
 	if err != nil {
 		return false, err
@@ -290,7 +291,7 @@ func (r *soraGenerationRepository) UpdateStorageIfCompleted(
 			s3_object_keys = $6
 		WHERE id = $1 AND status = $7
 	`,
-		id, mediaURL, mediaURLsJSON, fileSizeBytes, storageType, s3KeysJSON, service.SoraGenStatusCompleted,
+		id, mediaURL, mediaURLsJSON, fileSizeBytes, storageType, s3KeysJSON, domain.SoraGenStatusCompleted,
 	)
 	if err != nil {
 		return false, err
@@ -307,7 +308,7 @@ func (r *soraGenerationRepository) Delete(ctx context.Context, id int64) error {
 	return err
 }
 
-func (r *soraGenerationRepository) List(ctx context.Context, params service.SoraGenerationListParams) ([]*service.SoraGeneration, int64, error) {
+func (r *soraGenerationRepository) List(ctx context.Context, params domain.SoraGenerationListParams) ([]*domain.SoraGeneration, int64, error) {
 	// 构建 WHERE 条件
 	conditions := []string{"user_id = $1"}
 	args := []any{params.UserID}
@@ -370,9 +371,9 @@ func (r *soraGenerationRepository) List(ctx context.Context, params service.Sora
 		_ = rows.Close()
 	}()
 
-	var results []*service.SoraGeneration
+	var results []*domain.SoraGeneration
 	for rows.Next() {
-		gen := &service.SoraGeneration{}
+		gen := &domain.SoraGeneration{}
 		var mediaURLsJSON, s3KeysJSON []byte
 		var completedAt sql.NullTime
 		var apiKeyID sql.NullInt64

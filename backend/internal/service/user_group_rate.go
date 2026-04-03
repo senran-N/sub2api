@@ -1,6 +1,10 @@
 package service
 
-import "context"
+import (
+	"context"
+
+	"github.com/senran-N/sub2api/internal/domain"
+)
 
 // UserGroupRateEntry 分组下用户专属倍率条目
 type UserGroupRateEntry struct {
@@ -12,11 +16,7 @@ type UserGroupRateEntry struct {
 	RateMultiplier float64 `json:"rate_multiplier"`
 }
 
-// GroupRateMultiplierInput 批量设置分组倍率的输入条目
-type GroupRateMultiplierInput struct {
-	UserID         int64   `json:"user_id"`
-	RateMultiplier float64 `json:"rate_multiplier"`
-}
+type GroupRateMultiplierInput = domain.GroupRateMultiplierInput
 
 // UserGroupRateRepository 用户专属分组倍率仓储接口
 // 允许管理员为特定用户设置分组的专属计费倍率，覆盖分组默认倍率

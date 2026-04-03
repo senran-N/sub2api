@@ -1,6 +1,10 @@
 package service
 
-import "time"
+import (
+	"time"
+
+	"github.com/senran-N/sub2api/internal/domain"
+)
 
 // Ops alert rule/event models.
 //
@@ -74,22 +78,4 @@ type OpsAlertSilence struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type OpsAlertEventFilter struct {
-	Limit int
-
-	// Cursor pagination (descending by fired_at, then id).
-	BeforeFiredAt *time.Time
-	BeforeID      *int64
-
-	// Optional filters.
-	Status    string
-	Severity  string
-	EmailSent *bool
-
-	StartTime *time.Time
-	EndTime   *time.Time
-
-	// Dimensions filters (best-effort).
-	Platform string
-	GroupID  *int64
-}
+type OpsAlertEventFilter = domain.OpsAlertEventFilter

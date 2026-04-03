@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/senran-N/sub2api/internal/domain"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 )
@@ -37,28 +38,9 @@ type GroupRepository interface {
 	UpdateSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error
 }
 
-// GroupSortOrderUpdate 分组排序更新
-type GroupSortOrderUpdate struct {
-	ID        int64 `json:"id"`
-	SortOrder int   `json:"sort_order"`
-}
-
-// CreateGroupRequest 创建分组请求
-type CreateGroupRequest struct {
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	RateMultiplier float64 `json:"rate_multiplier"`
-	IsExclusive    bool    `json:"is_exclusive"`
-}
-
-// UpdateGroupRequest 更新分组请求
-type UpdateGroupRequest struct {
-	Name           *string  `json:"name"`
-	Description    *string  `json:"description"`
-	RateMultiplier *float64 `json:"rate_multiplier"`
-	IsExclusive    *bool    `json:"is_exclusive"`
-	Status         *string  `json:"status"`
-}
+type GroupSortOrderUpdate = domain.GroupSortOrderUpdate
+type CreateGroupRequest = domain.CreateGroupRequest
+type UpdateGroupRequest = domain.UpdateGroupRequest
 
 // GroupService 分组管理服务
 type GroupService struct {

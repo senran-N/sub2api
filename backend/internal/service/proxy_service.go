@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/senran-N/sub2api/internal/domain"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 )
@@ -31,26 +32,8 @@ type ProxyRepository interface {
 	ListAccountSummariesByProxyID(ctx context.Context, proxyID int64) ([]ProxyAccountSummary, error)
 }
 
-// CreateProxyRequest 创建代理请求
-type CreateProxyRequest struct {
-	Name     string `json:"name"`
-	Protocol string `json:"protocol"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-// UpdateProxyRequest 更新代理请求
-type UpdateProxyRequest struct {
-	Name     *string `json:"name"`
-	Protocol *string `json:"protocol"`
-	Host     *string `json:"host"`
-	Port     *int    `json:"port"`
-	Username *string `json:"username"`
-	Password *string `json:"password"`
-	Status   *string `json:"status"`
-}
+type CreateProxyRequest = domain.CreateProxyRequest
+type UpdateProxyRequest = domain.UpdateProxyRequest
 
 // ProxyService 代理管理服务
 type ProxyService struct {

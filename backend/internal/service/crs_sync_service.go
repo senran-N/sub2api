@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/senran-N/sub2api/internal/pkg/httpclient"
 	"github.com/senran-N/sub2api/internal/util/urlvalidator"
 )
@@ -44,29 +45,9 @@ func NewCRSSyncService(
 	}
 }
 
-type SyncFromCRSInput struct {
-	BaseURL            string
-	Username           string
-	Password           string
-	SyncProxies        bool
-	SelectedAccountIDs []string // if non-empty, only create new accounts with these CRS IDs
-}
-
-type SyncFromCRSItemResult struct {
-	CRSAccountID string `json:"crs_account_id"`
-	Kind         string `json:"kind"`
-	Name         string `json:"name"`
-	Action       string `json:"action"` // created/updated/failed/skipped
-	Error        string `json:"error,omitempty"`
-}
-
-type SyncFromCRSResult struct {
-	Created int                     `json:"created"`
-	Updated int                     `json:"updated"`
-	Skipped int                     `json:"skipped"`
-	Failed  int                     `json:"failed"`
-	Items   []SyncFromCRSItemResult `json:"items"`
-}
+type SyncFromCRSInput = domain.SyncFromCRSInput
+type SyncFromCRSItemResult = domain.SyncFromCRSItemResult
+type SyncFromCRSResult = domain.SyncFromCRSResult
 
 type crsLoginResponse struct {
 	Success  bool   `json:"success"`
@@ -1323,20 +1304,8 @@ func shouldCreateAccount(crsID string, selectedSet map[string]struct{}) bool {
 	return ok
 }
 
-// PreviewFromCRSResult contains the preview of accounts from CRS before sync.
-type PreviewFromCRSResult struct {
-	NewAccounts      []CRSPreviewAccount `json:"new_accounts"`
-	ExistingAccounts []CRSPreviewAccount `json:"existing_accounts"`
-}
-
-// CRSPreviewAccount represents a single account in the preview result.
-type CRSPreviewAccount struct {
-	CRSAccountID string `json:"crs_account_id"`
-	Kind         string `json:"kind"`
-	Name         string `json:"name"`
-	Platform     string `json:"platform"`
-	Type         string `json:"type"`
-}
+type PreviewFromCRSResult = domain.PreviewFromCRSResult
+type CRSPreviewAccount = domain.CRSPreviewAccount
 
 // PreviewFromCRS connects to CRS, fetches all accounts, and classifies them
 // as new or existing by batch-querying local crs_account_id mappings.

@@ -12,42 +12,6 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
-// ConcurrencyCache 定义并发控制的缓存接口
-// 使用有序集合存储槽位，按时间戳清理过期条目
-type ConcurrencyCache interface {
-	// 账号槽位管理
-	// 键格式: concurrency:account:{accountID}（有序集合，成员为 requestID）
-	AcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error)
-	ReleaseAccountSlot(ctx context.Context, accountID int64, requestID string) error
-	GetAccountConcurrency(ctx context.Context, accountID int64) (int, error)
-	GetAccountConcurrencyBatch(ctx context.Context, accountIDs []int64) (map[int64]int, error)
-
-	// 账号等待队列（账号级）
-	IncrementAccountWaitCount(ctx context.Context, accountID int64, maxWait int) (bool, error)
-	DecrementAccountWaitCount(ctx context.Context, accountID int64) error
-	GetAccountWaitingCount(ctx context.Context, accountID int64) (int, error)
-
-	// 用户槽位管理
-	// 键格式: concurrency:user:{userID}（有序集合，成员为 requestID）
-	AcquireUserSlot(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error)
-	ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error
-	GetUserConcurrency(ctx context.Context, userID int64) (int, error)
-
-	// 等待队列计数（只在首次创建时设置 TTL）
-	IncrementWaitCount(ctx context.Context, userID int64, maxWait int) (bool, error)
-	DecrementWaitCount(ctx context.Context, userID int64) error
-
-	// 批量负载查询（只读）
-	GetAccountsLoadBatch(ctx context.Context, accounts []AccountWithConcurrency) (map[int64]*AccountLoadInfo, error)
-	GetUsersLoadBatch(ctx context.Context, users []UserWithConcurrency) (map[int64]*UserLoadInfo, error)
-
-	// 清理过期槽位（后台任务）
-	CleanupExpiredAccountSlots(ctx context.Context, accountID int64) error
-
-	// 启动时清理旧进程遗留槽位与等待计数
-	CleanupStaleProcessSlots(ctx context.Context, activeRequestPrefix string) error
-}
-
 var (
 	requestIDPrefix  = initRequestIDPrefix()
 	requestIDCounter atomic.Uint64
@@ -97,30 +61,6 @@ func NewConcurrencyService(cache ConcurrencyCache) *ConcurrencyService {
 type AcquireResult struct {
 	Acquired    bool
 	ReleaseFunc func() // Must be called when done (typically via defer)
-}
-
-type AccountWithConcurrency struct {
-	ID             int64
-	MaxConcurrency int
-}
-
-type UserWithConcurrency struct {
-	ID             int64
-	MaxConcurrency int
-}
-
-type AccountLoadInfo struct {
-	AccountID          int64
-	CurrentConcurrency int
-	WaitingCount       int
-	LoadRate           int // 0-100+ (percent)
-}
-
-type UserLoadInfo struct {
-	UserID             int64
-	CurrentConcurrency int
-	WaitingCount       int
-	LoadRate           int // 0-100+ (percent)
 }
 
 // AcquireAccountSlot attempts to acquire a concurrency slot for an account.

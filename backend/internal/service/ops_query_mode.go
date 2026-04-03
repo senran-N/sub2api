@@ -2,15 +2,16 @@ package service
 
 import (
 	"errors"
-	"strings"
+
+	"github.com/senran-N/sub2api/internal/domain"
 )
 
-type OpsQueryMode string
+type OpsQueryMode = domain.OpsQueryMode
 
 const (
-	OpsQueryModeAuto   OpsQueryMode = "auto"
-	OpsQueryModeRaw    OpsQueryMode = "raw"
-	OpsQueryModePreagg OpsQueryMode = "preagg"
+	OpsQueryModeAuto   = domain.OpsQueryModeAuto
+	OpsQueryModeRaw    = domain.OpsQueryModeRaw
+	OpsQueryModePreagg = domain.OpsQueryModePreagg
 )
 
 // ErrOpsPreaggregatedNotPopulated indicates that raw logs exist for a window, but the
@@ -18,26 +19,7 @@ const (
 // the forced `preagg` mode UX.
 var ErrOpsPreaggregatedNotPopulated = errors.New("ops pre-aggregated tables not populated")
 
-func ParseOpsQueryMode(raw string) OpsQueryMode {
-	v := strings.ToLower(strings.TrimSpace(raw))
-	switch v {
-	case string(OpsQueryModeRaw):
-		return OpsQueryModeRaw
-	case string(OpsQueryModePreagg):
-		return OpsQueryModePreagg
-	default:
-		return OpsQueryModeAuto
-	}
-}
-
-func (m OpsQueryMode) IsValid() bool {
-	switch m {
-	case OpsQueryModeAuto, OpsQueryModeRaw, OpsQueryModePreagg:
-		return true
-	default:
-		return false
-	}
-}
+var ParseOpsQueryMode = domain.ParseOpsQueryMode
 
 func shouldFallbackOpsPreagg(filter *OpsDashboardFilter, err error) bool {
 	return filter != nil &&

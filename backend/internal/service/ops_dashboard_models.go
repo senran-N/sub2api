@@ -1,18 +1,12 @@
 package service
 
-import "time"
+import (
+	"time"
 
-type OpsDashboardFilter struct {
-	StartTime time.Time
-	EndTime   time.Time
+	"github.com/senran-N/sub2api/internal/domain"
+)
 
-	Platform string
-	GroupID  *int64
-
-	// QueryMode controls whether dashboard queries should use raw logs or pre-aggregated tables.
-	// Expected values: auto/raw/preagg (see OpsQueryMode).
-	QueryMode OpsQueryMode
-}
+type OpsDashboardFilter = domain.OpsDashboardFilter
 
 type OpsRateSummary struct {
 	Current float64 `json:"current"`

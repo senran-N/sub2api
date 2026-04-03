@@ -214,6 +214,33 @@ type Announcement struct {
 	UpdatedAt  time.Time
 }
 
+type AnnouncementListFilters struct {
+	Status string
+	Search string
+}
+
+type CreateAnnouncementInput struct {
+	Title      string
+	Content    string
+	Status     string
+	NotifyMode string
+	Targeting  AnnouncementTargeting
+	StartsAt   *time.Time
+	EndsAt     *time.Time
+	ActorID    *int64
+}
+
+type UpdateAnnouncementInput struct {
+	Title      *string
+	Content    *string
+	Status     *string
+	NotifyMode *string
+	Targeting  *AnnouncementTargeting
+	StartsAt   **time.Time
+	EndsAt     **time.Time
+	ActorID    *int64
+}
+
 func (a *Announcement) IsActiveAt(now time.Time) bool {
 	if a == nil {
 		return false

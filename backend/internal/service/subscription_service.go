@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/ristretto"
 	dbent "github.com/senran-N/sub2api/ent"
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/domain"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
-	"github.com/dgraph-io/ristretto"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -142,14 +143,7 @@ func (s *SubscriptionService) InvalidateSubCache(userID, groupID int64) {
 	s.subCacheL1.Del(subCacheKey(userID, groupID))
 }
 
-// AssignSubscriptionInput 分配订阅输入
-type AssignSubscriptionInput struct {
-	UserID       int64
-	GroupID      int64
-	ValidityDays int
-	AssignedBy   int64
-	Notes        string
-}
+type AssignSubscriptionInput = domain.AssignSubscriptionInput
 
 // AssignSubscription 分配订阅给用户（不允许重复分配）
 func (s *SubscriptionService) AssignSubscription(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, error) {
@@ -324,14 +318,7 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 	return s.userSubRepo.GetByID(ctx, sub.ID)
 }
 
-// BulkAssignSubscriptionInput 批量分配订阅输入
-type BulkAssignSubscriptionInput struct {
-	UserIDs      []int64
-	GroupID      int64
-	ValidityDays int
-	AssignedBy   int64
-	Notes        string
-}
+type BulkAssignSubscriptionInput = domain.BulkAssignSubscriptionInput
 
 // BulkAssignResult 批量分配结果
 type BulkAssignResult struct {

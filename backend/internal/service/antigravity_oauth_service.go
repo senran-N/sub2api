@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/senran-N/sub2api/internal/pkg/antigravity"
 )
 
@@ -22,12 +23,7 @@ func NewAntigravityOAuthService(proxyRepo ProxyRepository) *AntigravityOAuthServ
 	}
 }
 
-// AntigravityAuthURLResult is the result of generating an authorization URL
-type AntigravityAuthURLResult struct {
-	AuthURL   string `json:"auth_url"`
-	SessionID string `json:"session_id"`
-	State     string `json:"state"`
-}
+type AntigravityAuthURLResult = domain.AntigravityAuthURLResult
 
 // GenerateAuthURL 生成 Google OAuth 授权链接
 func (s *AntigravityOAuthService) GenerateAuthURL(ctx context.Context, proxyID *int64) (*AntigravityAuthURLResult, error) {
@@ -72,26 +68,9 @@ func (s *AntigravityOAuthService) GenerateAuthURL(ctx context.Context, proxyID *
 	}, nil
 }
 
-// AntigravityExchangeCodeInput 交换 code 的输入
-type AntigravityExchangeCodeInput struct {
-	SessionID string
-	State     string
-	Code      string
-	ProxyID   *int64
-}
+type AntigravityExchangeCodeInput = domain.AntigravityExchangeCodeInput
 
-// AntigravityTokenInfo token 信息
-type AntigravityTokenInfo struct {
-	AccessToken      string `json:"access_token"`
-	RefreshToken     string `json:"refresh_token"`
-	ExpiresIn        int64  `json:"expires_in"`
-	ExpiresAt        int64  `json:"expires_at"`
-	TokenType        string `json:"token_type"`
-	Email            string `json:"email,omitempty"`
-	ProjectID        string `json:"project_id,omitempty"`
-	ProjectIDMissing bool   `json:"-"`
-	PlanType         string `json:"-"`
-}
+type AntigravityTokenInfo = domain.AntigravityTokenInfo
 
 // ExchangeCode 用 authorization code 交换 token
 func (s *AntigravityOAuthService) ExchangeCode(ctx context.Context, input *AntigravityExchangeCodeInput) (*AntigravityTokenInfo, error) {

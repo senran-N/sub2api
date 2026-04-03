@@ -6,7 +6,7 @@ import (
 	"github.com/senran-N/sub2api/ent"
 	"github.com/senran-N/sub2api/ent/errorpassthroughrule"
 	"github.com/senran-N/sub2api/internal/model"
-	"github.com/senran-N/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 type errorPassthroughRepository struct {
@@ -14,7 +14,7 @@ type errorPassthroughRepository struct {
 }
 
 // NewErrorPassthroughRepository 创建错误透传规则仓库
-func NewErrorPassthroughRepository(client *ent.Client) service.ErrorPassthroughRepository {
+func NewErrorPassthroughRepository(client *ent.Client) ports.ErrorPassthroughRepository {
 	return &errorPassthroughRepository{client: client}
 }
 

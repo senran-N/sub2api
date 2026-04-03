@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 const (
@@ -33,10 +35,7 @@ const (
 )
 
 // UpdateCache defines cache operations for update service
-type UpdateCache interface {
-	GetUpdateInfo(ctx context.Context) (string, error)
-	SetUpdateInfo(ctx context.Context, data string, ttl time.Duration) error
-}
+type UpdateCache = ports.UpdateCache
 
 // GitHubReleaseClient 获取 GitHub release 信息的接口
 type GitHubReleaseClient interface {

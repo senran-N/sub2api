@@ -7,22 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
-)
-
-var (
-	// ErrSoraGenerationConcurrencyLimit 表示用户进行中的任务数超限。
-	ErrSoraGenerationConcurrencyLimit = errors.New("sora generation concurrent limit exceeded")
-	// ErrSoraGenerationStateConflict 表示状态已发生变化（例如任务已取消）。
-	ErrSoraGenerationStateConflict = errors.New("sora generation state conflict")
-	// ErrSoraGenerationNotActive 表示任务不在可取消状态。
-	ErrSoraGenerationNotActive = errors.New("sora generation is not active")
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 const soraGenerationActiveLimit = 3
 
 type soraGenerationRepoAtomicCreator interface {
-	CreatePendingWithLimit(ctx context.Context, gen *SoraGeneration, activeStatuses []string, maxActive int64) error
+	CreatePendingWithLimit(ctx context.Context, gen *domain.SoraGeneration, activeStatuses []string, maxActive int64) error
 }
 
 type soraGenerationRepoConditionalUpdater interface {
@@ -35,14 +28,14 @@ type soraGenerationRepoConditionalUpdater interface {
 
 // SoraGenerationService 管理 Sora 客户端的生成记录 CRUD。
 type SoraGenerationService struct {
-	genRepo      SoraGenerationRepository
+	genRepo      ports.SoraGenerationRepository
 	s3Storage    *SoraS3Storage
 	quotaService *SoraQuotaService
 }
 
 // NewSoraGenerationService 创建生成记录服务。
 func NewSoraGenerationService(
-	genRepo SoraGenerationRepository,
+	genRepo ports.SoraGenerationRepository,
 	s3Storage *SoraS3Storage,
 	quotaService *SoraQuotaService,
 ) *SoraGenerationService {
@@ -54,24 +47,24 @@ func NewSoraGenerationService(
 }
 
 // CreatePending 创建一条 pending 状态的生成记录。
-func (s *SoraGenerationService) CreatePending(ctx context.Context, userID int64, apiKeyID *int64, model, prompt, mediaType string) (*SoraGeneration, error) {
-	gen := &SoraGeneration{
+func (s *SoraGenerationService) CreatePending(ctx context.Context, userID int64, apiKeyID *int64, model, prompt, mediaType string) (*domain.SoraGeneration, error) {
+	gen := &domain.SoraGeneration{
 		UserID:      userID,
 		APIKeyID:    apiKeyID,
 		Model:       model,
 		Prompt:      prompt,
 		MediaType:   mediaType,
-		Status:      SoraGenStatusPending,
-		StorageType: SoraStorageTypeNone,
+		Status:      domain.SoraGenStatusPending,
+		StorageType: domain.SoraStorageTypeNone,
 	}
 	if atomicCreator, ok := s.genRepo.(soraGenerationRepoAtomicCreator); ok {
 		if err := atomicCreator.CreatePendingWithLimit(
 			ctx,
 			gen,
-			[]string{SoraGenStatusPending, SoraGenStatusGenerating},
+			[]string{domain.SoraGenStatusPending, domain.SoraGenStatusGenerating},
 			soraGenerationActiveLimit,
 		); err != nil {
-			if errors.Is(err, ErrSoraGenerationConcurrencyLimit) {
+			if errors.Is(err, domain.ErrSoraGenerationConcurrencyLimit) {
 				return nil, err
 			}
 			return nil, fmt.Errorf("create generation: %w", err)
@@ -95,7 +88,7 @@ func (s *SoraGenerationService) MarkGenerating(ctx context.Context, id int64, up
 			return err
 		}
 		if !updated {
-			return ErrSoraGenerationStateConflict
+			return domain.ErrSoraGenerationStateConflict
 		}
 		return nil
 	}
@@ -104,10 +97,10 @@ func (s *SoraGenerationService) MarkGenerating(ctx context.Context, id int64, up
 	if err != nil {
 		return err
 	}
-	if gen.Status != SoraGenStatusPending {
-		return ErrSoraGenerationStateConflict
+	if gen.Status != domain.SoraGenStatusPending {
+		return domain.ErrSoraGenerationStateConflict
 	}
-	gen.Status = SoraGenStatusGenerating
+	gen.Status = domain.SoraGenStatusGenerating
 	gen.UpstreamTaskID = upstreamTaskID
 	return s.genRepo.Update(ctx, gen)
 }
@@ -121,7 +114,7 @@ func (s *SoraGenerationService) MarkCompleted(ctx context.Context, id int64, med
 			return err
 		}
 		if !updated {
-			return ErrSoraGenerationStateConflict
+			return domain.ErrSoraGenerationStateConflict
 		}
 		return nil
 	}
@@ -130,10 +123,10 @@ func (s *SoraGenerationService) MarkCompleted(ctx context.Context, id int64, med
 	if err != nil {
 		return err
 	}
-	if gen.Status != SoraGenStatusPending && gen.Status != SoraGenStatusGenerating {
-		return ErrSoraGenerationStateConflict
+	if gen.Status != domain.SoraGenStatusPending && gen.Status != domain.SoraGenStatusGenerating {
+		return domain.ErrSoraGenerationStateConflict
 	}
-	gen.Status = SoraGenStatusCompleted
+	gen.Status = domain.SoraGenStatusCompleted
 	gen.MediaURL = mediaURL
 	gen.MediaURLs = mediaURLs
 	gen.StorageType = storageType
@@ -152,7 +145,7 @@ func (s *SoraGenerationService) MarkFailed(ctx context.Context, id int64, errMsg
 			return err
 		}
 		if !updated {
-			return ErrSoraGenerationStateConflict
+			return domain.ErrSoraGenerationStateConflict
 		}
 		return nil
 	}
@@ -161,10 +154,10 @@ func (s *SoraGenerationService) MarkFailed(ctx context.Context, id int64, errMsg
 	if err != nil {
 		return err
 	}
-	if gen.Status != SoraGenStatusPending && gen.Status != SoraGenStatusGenerating {
-		return ErrSoraGenerationStateConflict
+	if gen.Status != domain.SoraGenStatusPending && gen.Status != domain.SoraGenStatusGenerating {
+		return domain.ErrSoraGenerationStateConflict
 	}
-	gen.Status = SoraGenStatusFailed
+	gen.Status = domain.SoraGenStatusFailed
 	gen.ErrorMessage = errMsg
 	gen.CompletedAt = &now
 	return s.genRepo.Update(ctx, gen)
@@ -179,7 +172,7 @@ func (s *SoraGenerationService) MarkCancelled(ctx context.Context, id int64) err
 			return err
 		}
 		if !updated {
-			return ErrSoraGenerationNotActive
+			return domain.ErrSoraGenerationNotActive
 		}
 		return nil
 	}
@@ -188,10 +181,10 @@ func (s *SoraGenerationService) MarkCancelled(ctx context.Context, id int64) err
 	if err != nil {
 		return err
 	}
-	if gen.Status != SoraGenStatusPending && gen.Status != SoraGenStatusGenerating {
-		return ErrSoraGenerationNotActive
+	if gen.Status != domain.SoraGenStatusPending && gen.Status != domain.SoraGenStatusGenerating {
+		return domain.ErrSoraGenerationNotActive
 	}
-	gen.Status = SoraGenStatusCancelled
+	gen.Status = domain.SoraGenStatusCancelled
 	gen.CompletedAt = &now
 	return s.genRepo.Update(ctx, gen)
 }
@@ -212,7 +205,7 @@ func (s *SoraGenerationService) UpdateStorageForCompleted(
 			return err
 		}
 		if !updated {
-			return ErrSoraGenerationStateConflict
+			return domain.ErrSoraGenerationStateConflict
 		}
 		return nil
 	}
@@ -221,8 +214,8 @@ func (s *SoraGenerationService) UpdateStorageForCompleted(
 	if err != nil {
 		return err
 	}
-	if gen.Status != SoraGenStatusCompleted {
-		return ErrSoraGenerationStateConflict
+	if gen.Status != domain.SoraGenStatusCompleted {
+		return domain.ErrSoraGenerationStateConflict
 	}
 	gen.MediaURL = mediaURL
 	gen.MediaURLs = mediaURLs
@@ -233,7 +226,7 @@ func (s *SoraGenerationService) UpdateStorageForCompleted(
 }
 
 // GetByID 获取记录详情（含权限校验）。
-func (s *SoraGenerationService) GetByID(ctx context.Context, id, userID int64) (*SoraGeneration, error) {
+func (s *SoraGenerationService) GetByID(ctx context.Context, id, userID int64) (*domain.SoraGeneration, error) {
 	gen, err := s.genRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -245,7 +238,7 @@ func (s *SoraGenerationService) GetByID(ctx context.Context, id, userID int64) (
 }
 
 // List 查询生成记录列表（分页 + 筛选）。
-func (s *SoraGenerationService) List(ctx context.Context, params SoraGenerationListParams) ([]*SoraGeneration, int64, error) {
+func (s *SoraGenerationService) List(ctx context.Context, params domain.SoraGenerationListParams) ([]*domain.SoraGeneration, int64, error) {
 	if params.Page <= 0 {
 		params.Page = 1
 	}
@@ -269,14 +262,14 @@ func (s *SoraGenerationService) Delete(ctx context.Context, id, userID int64) er
 	}
 
 	// 清理 S3 文件
-	if gen.StorageType == SoraStorageTypeS3 && len(gen.S3ObjectKeys) > 0 && s.s3Storage != nil {
+	if gen.StorageType == domain.SoraStorageTypeS3 && len(gen.S3ObjectKeys) > 0 && s.s3Storage != nil {
 		if err := s.s3Storage.DeleteObjects(ctx, gen.S3ObjectKeys); err != nil {
 			logger.LegacyPrintf("service.sora_gen", "[SoraGen] S3 清理失败 id=%d err=%v", id, err)
 		}
 	}
 
 	// 释放配额（S3/本地均释放）
-	if gen.FileSizeBytes > 0 && (gen.StorageType == SoraStorageTypeS3 || gen.StorageType == SoraStorageTypeLocal) && s.quotaService != nil {
+	if gen.FileSizeBytes > 0 && (gen.StorageType == domain.SoraStorageTypeS3 || gen.StorageType == domain.SoraStorageTypeLocal) && s.quotaService != nil {
 		if err := s.quotaService.ReleaseUsage(ctx, userID, gen.FileSizeBytes); err != nil {
 			logger.LegacyPrintf("service.sora_gen", "[SoraGen] 配额释放失败 id=%d err=%v", id, err)
 		}
@@ -287,12 +280,12 @@ func (s *SoraGenerationService) Delete(ctx context.Context, id, userID int64) er
 
 // CountActiveByUser 统计用户进行中的任务数（用于并发限制）。
 func (s *SoraGenerationService) CountActiveByUser(ctx context.Context, userID int64) (int64, error) {
-	return s.genRepo.CountByUserAndStatus(ctx, userID, []string{SoraGenStatusPending, SoraGenStatusGenerating})
+	return s.genRepo.CountByUserAndStatus(ctx, userID, []string{domain.SoraGenStatusPending, domain.SoraGenStatusGenerating})
 }
 
 // ResolveMediaURLs 为 S3 记录动态生成预签名 URL。
-func (s *SoraGenerationService) ResolveMediaURLs(ctx context.Context, gen *SoraGeneration) error {
-	if gen == nil || gen.StorageType != SoraStorageTypeS3 || s.s3Storage == nil {
+func (s *SoraGenerationService) ResolveMediaURLs(ctx context.Context, gen *domain.SoraGeneration) error {
+	if gen == nil || gen.StorageType != domain.SoraStorageTypeS3 || s.s3Storage == nil {
 		return nil
 	}
 	if len(gen.S3ObjectKeys) == 0 {

@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/model"
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/model"
+	"github.com/senran-N/sub2api/internal/ports"
 )
 
 const (
@@ -25,7 +25,7 @@ type tlsFingerprintProfileCache struct {
 }
 
 // NewTLSFingerprintProfileCache 创建 TLS 指纹模板缓存
-func NewTLSFingerprintProfileCache(rdb *redis.Client) service.TLSFingerprintProfileCache {
+func NewTLSFingerprintProfileCache(rdb *redis.Client) ports.TLSFingerprintProfileCache {
 	return &tlsFingerprintProfileCache{
 		rdb: rdb,
 	}

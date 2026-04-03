@@ -65,12 +65,7 @@ type Account struct {
 	modelMappingCacheRawSig         uint64
 }
 
-type TempUnschedulableRule struct {
-	ErrorCode       int      `json:"error_code"`
-	Keywords        []string `json:"keywords"`
-	DurationMinutes int      `json:"duration_minutes"`
-	Description     string   `json:"description"`
-}
+type TempUnschedulableRule = domain.TempUnschedulableRule
 
 func (a *Account) IsActive() bool {
 	return a.Status == StatusActive

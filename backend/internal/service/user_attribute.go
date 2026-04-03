@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"time"
 
+	"github.com/senran-N/sub2api/internal/domain"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 )
 
@@ -15,93 +15,26 @@ var (
 	ErrAttributeValidationFailed   = infraerrors.BadRequest("ATTRIBUTE_VALIDATION_FAILED", "attribute value validation failed")
 )
 
-// UserAttributeType represents supported attribute types
-type UserAttributeType string
+type UserAttributeType = domain.UserAttributeType
 
 const (
-	AttributeTypeText        UserAttributeType = "text"
-	AttributeTypeTextarea    UserAttributeType = "textarea"
-	AttributeTypeNumber      UserAttributeType = "number"
-	AttributeTypeEmail       UserAttributeType = "email"
-	AttributeTypeURL         UserAttributeType = "url"
-	AttributeTypeDate        UserAttributeType = "date"
-	AttributeTypeSelect      UserAttributeType = "select"
-	AttributeTypeMultiSelect UserAttributeType = "multi_select"
+	AttributeTypeText        = domain.AttributeTypeText
+	AttributeTypeTextarea    = domain.AttributeTypeTextarea
+	AttributeTypeNumber      = domain.AttributeTypeNumber
+	AttributeTypeEmail       = domain.AttributeTypeEmail
+	AttributeTypeURL         = domain.AttributeTypeURL
+	AttributeTypeDate        = domain.AttributeTypeDate
+	AttributeTypeSelect      = domain.AttributeTypeSelect
+	AttributeTypeMultiSelect = domain.AttributeTypeMultiSelect
 )
 
-// UserAttributeOption represents a select option for select/multi_select types
-type UserAttributeOption struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
-}
-
-// UserAttributeValidation represents validation rules for an attribute
-type UserAttributeValidation struct {
-	MinLength *int    `json:"min_length,omitempty"`
-	MaxLength *int    `json:"max_length,omitempty"`
-	Min       *int    `json:"min,omitempty"`
-	Max       *int    `json:"max,omitempty"`
-	Pattern   *string `json:"pattern,omitempty"`
-	Message   *string `json:"message,omitempty"`
-}
-
-// UserAttributeDefinition represents a custom attribute definition
-type UserAttributeDefinition struct {
-	ID           int64
-	Key          string
-	Name         string
-	Description  string
-	Type         UserAttributeType
-	Options      []UserAttributeOption
-	Required     bool
-	Validation   UserAttributeValidation
-	Placeholder  string
-	DisplayOrder int
-	Enabled      bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-}
-
-// UserAttributeValue represents a user's attribute value
-type UserAttributeValue struct {
-	ID          int64
-	UserID      int64
-	AttributeID int64
-	Value       string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
-
-// CreateAttributeDefinitionInput for creating new definition
-type CreateAttributeDefinitionInput struct {
-	Key         string
-	Name        string
-	Description string
-	Type        UserAttributeType
-	Options     []UserAttributeOption
-	Required    bool
-	Validation  UserAttributeValidation
-	Placeholder string
-	Enabled     bool
-}
-
-// UpdateAttributeDefinitionInput for updating definition
-type UpdateAttributeDefinitionInput struct {
-	Name        *string
-	Description *string
-	Type        *UserAttributeType
-	Options     *[]UserAttributeOption
-	Required    *bool
-	Validation  *UserAttributeValidation
-	Placeholder *string
-	Enabled     *bool
-}
-
-// UpdateUserAttributeInput for updating a single attribute value
-type UpdateUserAttributeInput struct {
-	AttributeID int64
-	Value       string
-}
+type UserAttributeOption = domain.UserAttributeOption
+type UserAttributeValidation = domain.UserAttributeValidation
+type UserAttributeDefinition = domain.UserAttributeDefinition
+type UserAttributeValue = domain.UserAttributeValue
+type CreateAttributeDefinitionInput = domain.CreateAttributeDefinitionInput
+type UpdateAttributeDefinitionInput = domain.UpdateAttributeDefinitionInput
+type UpdateUserAttributeInput = domain.UpdateUserAttributeInput
 
 // UserAttributeDefinitionRepository interface for attribute definition persistence
 type UserAttributeDefinitionRepository interface {

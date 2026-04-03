@@ -10,6 +10,7 @@ import (
 	"time"
 
 	dbent "github.com/senran-N/sub2api/ent"
+	"github.com/senran-N/sub2api/internal/domain"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 )
@@ -56,20 +57,7 @@ type RedeemCodeRepository interface {
 	SumPositiveBalanceByUser(ctx context.Context, userID int64) (float64, error)
 }
 
-// GenerateCodesRequest 生成兑换码请求
-type GenerateCodesRequest struct {
-	Count int     `json:"count"`
-	Value float64 `json:"value"`
-	Type  string  `json:"type"`
-}
-
-// RedeemCodeResponse 兑换码响应
-type RedeemCodeResponse struct {
-	Code      string    `json:"code"`
-	Value     float64   `json:"value"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-}
+type GenerateCodesRequest = domain.GenerateCodesRequest
 
 // RedeemService 兑换码服务
 type RedeemService struct {
