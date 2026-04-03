@@ -485,23 +485,23 @@ onMounted(async () => {
       <div v-if="loading" class="px-4 py-8 text-center text-sm text-gray-500">加载中...</div>
       <div v-else-if="!hasData" class="px-4 py-8 text-center text-sm text-gray-500">暂无系统日志</div>
       <div v-else class="overflow-auto">
-        <table class="min-w-full table-fixed divide-y divide-gray-200 dark:divide-dark-700">
+        <table class="w-full divide-y divide-gray-200 dark:divide-dark-700">
           <thead class="bg-gray-50 dark:bg-dark-900">
             <tr>
-              <th class="w-[170px] px-3 py-2 text-left text-[11px] font-semibold text-gray-500">时间</th>
-              <th class="w-[80px] px-3 py-2 text-left text-[11px] font-semibold text-gray-500">级别</th>
-              <th class="px-3 py-2 text-left text-[11px] font-semibold text-gray-500">日志详细信息</th>
+              <th class="whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold text-gray-500">时间</th>
+              <th class="whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold text-gray-500">级别</th>
+              <th class="w-full px-3 py-2 text-left text-[11px] font-semibold text-gray-500">日志详细信息</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-dark-800">
             <tr v-for="row in logs" :key="row.id" class="align-top">
-              <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ formatTime(row.created_at) }}</td>
-              <td class="px-3 py-2 text-xs">
+              <td class="whitespace-nowrap px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ formatTime(row.created_at) }}</td>
+              <td class="whitespace-nowrap px-3 py-2 text-xs">
                 <span class="inline-flex rounded-full px-2 py-0.5 font-semibold" :class="levelBadgeClass(row.level)">
                   {{ row.level }}
                 </span>
               </td>
-              <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-normal break-all">
+              <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-normal break-words">
                 {{ formatSystemLogDetail(row) }}
               </td>
             </tr>
