@@ -5,9 +5,7 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/senran-N/sub2api/ent"
@@ -101,203 +99,45 @@ func provideCleanup(
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		type cleanupStep struct {
-			name string
-			fn   func() error
-		}
-
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
-			{"OpsScheduledReportService", func() error {
-				if opsScheduledReport != nil {
-					opsScheduledReport.Stop()
-				}
-				return nil
-			}},
-			{"OpsCleanupService", func() error {
-				if opsCleanup != nil {
-					opsCleanup.Stop()
-				}
-				return nil
-			}},
-			{"OpsSystemLogSink", func() error {
-				if opsSystemLogSink != nil {
-					opsSystemLogSink.Stop()
-				}
-				return nil
-			}},
-			{"SoraMediaCleanupService", func() error {
-				if soraMediaCleanup != nil {
-					soraMediaCleanup.Stop()
-				}
-				return nil
-			}},
-			{"OpsAlertEvaluatorService", func() error {
-				if opsAlertEvaluator != nil {
-					opsAlertEvaluator.Stop()
-				}
-				return nil
-			}},
-			{"OpsAggregationService", func() error {
-				if opsAggregation != nil {
-					opsAggregation.Stop()
-				}
-				return nil
-			}},
-			{"OpsMetricsCollector", func() error {
-				if opsMetricsCollector != nil {
-					opsMetricsCollector.Stop()
-				}
-				return nil
-			}},
-			{"SchedulerSnapshotService", func() error {
-				if schedulerSnapshot != nil {
-					schedulerSnapshot.Stop()
-				}
-				return nil
-			}},
-			{"UsageCleanupService", func() error {
-				if usageCleanup != nil {
-					usageCleanup.Stop()
-				}
-				return nil
-			}},
-			{"IdempotencyCleanupService", func() error {
-				if idempotencyCleanup != nil {
-					idempotencyCleanup.Stop()
-				}
-				return nil
-			}},
-			{"ClaudeCodeProfileSyncService", func() error {
-				if claudeProfileSync != nil {
-					claudeProfileSync.Stop()
-				}
-				return nil
-			}},
-			{"TokenRefreshService", func() error {
-				tokenRefresh.Stop()
-				return nil
-			}},
-			{"AccountExpiryService", func() error {
-				accountExpiry.Stop()
-				return nil
-			}},
-			{"SubscriptionExpiryService", func() error {
-				subscriptionExpiry.Stop()
-				return nil
-			}},
-			{"SubscriptionService", func() error {
-				if subscriptionService != nil {
-					subscriptionService.Stop()
-				}
-				return nil
-			}},
-			{"PricingService", func() error {
-				pricing.Stop()
-				return nil
-			}},
-			{"EmailQueueService", func() error {
-				emailQueue.Stop()
-				return nil
-			}},
-			{"BillingCacheService", func() error {
-				billingCache.Stop()
-				return nil
-			}},
-			{"UsageRecordWorkerPool", func() error {
-				if usageRecordWorkerPool != nil {
-					usageRecordWorkerPool.Stop()
-				}
-				return nil
-			}},
-			{"OAuthService", func() error {
-				oauth.Stop()
-				return nil
-			}},
-			{"OpenAIOAuthService", func() error {
-				openaiOAuth.Stop()
-				return nil
-			}},
-			{"GeminiOAuthService", func() error {
-				geminiOAuth.Stop()
-				return nil
-			}},
-			{"AntigravityOAuthService", func() error {
-				antigravityOAuth.Stop()
-				return nil
-			}},
-			{"OpenAIWSPool", func() error {
+			stopStep("OpsScheduledReportService", opsScheduledReport),
+			stopStep("OpsCleanupService", opsCleanup),
+			stopStep("OpsSystemLogSink", opsSystemLogSink),
+			stopStep("SoraMediaCleanupService", soraMediaCleanup),
+			stopStep("OpsAlertEvaluatorService", opsAlertEvaluator),
+			stopStep("OpsAggregationService", opsAggregation),
+			stopStep("OpsMetricsCollector", opsMetricsCollector),
+			stopStep("SchedulerSnapshotService", schedulerSnapshot),
+			stopStep("UsageCleanupService", usageCleanup),
+			stopStep("IdempotencyCleanupService", idempotencyCleanup),
+			stopStep("ClaudeCodeProfileSyncService", claudeProfileSync),
+			stopStep("TokenRefreshService", tokenRefresh),
+			stopStep("AccountExpiryService", accountExpiry),
+			stopStep("SubscriptionExpiryService", subscriptionExpiry),
+			stopStep("SubscriptionService", subscriptionService),
+			stopStep("PricingService", pricing),
+			stopStep("EmailQueueService", emailQueue),
+			stopStep("BillingCacheService", billingCache),
+			stopStep("UsageRecordWorkerPool", usageRecordWorkerPool),
+			stopStep("OAuthService", oauth),
+			stopStep("OpenAIOAuthService", openaiOAuth),
+			stopStep("GeminiOAuthService", geminiOAuth),
+			stopStep("AntigravityOAuthService", antigravityOAuth),
+			callbackStep("OpenAIWSPool", func() {
 				if openAIGateway != nil {
 					openAIGateway.CloseOpenAIWSPool()
 				}
-				return nil
-			}},
-			{"ScheduledTestRunnerService", func() error {
-				if scheduledTestRunner != nil {
-					scheduledTestRunner.Stop()
-				}
-				return nil
-			}},
-			{"BackupService", func() error {
-				if backupSvc != nil {
-					backupSvc.Stop()
-				}
-				return nil
-			}},
+			}),
+			stopStep("ScheduledTestRunnerService", scheduledTestRunner),
+			stopStep("BackupService", backupSvc),
 		}
 
 		infraSteps := []cleanupStep{
-			{"Redis", func() error {
-				if rdb == nil {
-					return nil
-				}
-				return rdb.Close()
-			}},
-			{"Ent", func() error {
-				if entClient == nil {
-					return nil
-				}
-				return entClient.Close()
-			}},
+			closeStep("Redis", rdb),
+			closeStep("Ent", entClient),
 		}
 
-		runParallel := func(steps []cleanupStep) {
-			var wg sync.WaitGroup
-			for i := range steps {
-				step := steps[i]
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					if err := step.fn(); err != nil {
-						log.Printf("[Cleanup] %s failed: %v", step.name, err)
-						return
-					}
-					log.Printf("[Cleanup] %s succeeded", step.name)
-				}()
-			}
-			wg.Wait()
-		}
-
-		runSequential := func(steps []cleanupStep) {
-			for i := range steps {
-				step := steps[i]
-				if err := step.fn(); err != nil {
-					log.Printf("[Cleanup] %s failed: %v", step.name, err)
-					continue
-				}
-				log.Printf("[Cleanup] %s succeeded", step.name)
-			}
-		}
-
-		runParallel(parallelSteps)
-		runSequential(infraSteps)
-
-		// Check if context timed out
-		select {
-		case <-ctx.Done():
-			log.Printf("[Cleanup] Warning: cleanup timed out after 10 seconds")
-		default:
-			log.Printf("[Cleanup] All cleanup steps completed")
-		}
+		runCleanup(ctx, parallelSteps, infraSteps)
 	}
 }

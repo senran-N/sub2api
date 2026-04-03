@@ -6,33 +6,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
-	"github.com/senran-N/sub2api/internal/handler"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/server/routes"
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/senran-N/sub2api/internal/web"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
 
 const frameSrcRefreshTimeout = 5 * time.Second
 
 // SetupRouter 配置路由器中间件和路由
-func SetupRouter(
-	r *gin.Engine,
-	handlers *handler.Handlers,
-	jwtAuth middleware2.JWTAuthMiddleware,
-	adminAuth middleware2.AdminAuthMiddleware,
-	apiKeyAuth middleware2.APIKeyAuthMiddleware,
-	apiKeyService *service.APIKeyService,
-	subscriptionService *service.SubscriptionService,
-	opsService *service.OpsService,
-	settingService *service.SettingService,
-	cfg *config.Config,
-	redisClient *redis.Client,
-) *gin.Engine {
+func SetupRouter(r *gin.Engine, deps *RouteDependencies) *gin.Engine {
+	settingService := deps.Gateway.SettingService
+	cfg := deps.Config
+
 	// 缓存 iframe 页面的 origin 列表，用于动态注入 CSP frame-src
 	var cachedFrameOrigins atomic.Pointer[[]string]
 	emptyOrigins := []string{}
@@ -81,25 +68,13 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient)
+	registerRoutes(r, deps)
 
 	return r
 }
 
 // registerRoutes 注册所有 HTTP 路由
-func registerRoutes(
-	r *gin.Engine,
-	h *handler.Handlers,
-	jwtAuth middleware2.JWTAuthMiddleware,
-	adminAuth middleware2.AdminAuthMiddleware,
-	apiKeyAuth middleware2.APIKeyAuthMiddleware,
-	apiKeyService *service.APIKeyService,
-	subscriptionService *service.SubscriptionService,
-	opsService *service.OpsService,
-	settingService *service.SettingService,
-	cfg *config.Config,
-	redisClient *redis.Client,
-) {
+func registerRoutes(r *gin.Engine, deps *RouteDependencies) {
 	// 通用路由（健康检查、状态等）
 	routes.RegisterCommonRoutes(r)
 
@@ -107,9 +82,18 @@ func registerRoutes(
 	v1 := r.Group("/api/v1")
 
 	// 注册各模块路由
-	routes.RegisterAuthRoutes(v1, h, jwtAuth, redisClient, settingService)
-	routes.RegisterUserRoutes(v1, h, jwtAuth, settingService)
-	routes.RegisterSoraClientRoutes(v1, h, jwtAuth, settingService)
-	routes.RegisterAdminRoutes(v1, h, adminAuth)
-	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
+	routes.RegisterAuthRoutes(v1, deps.Handlers, deps.JWTAuth, deps.RedisClient, deps.Gateway.SettingService)
+	routes.RegisterUserRoutes(v1, deps.Handlers, deps.JWTAuth, deps.Gateway.SettingService)
+	routes.RegisterSoraClientRoutes(v1, deps.Handlers, deps.JWTAuth, deps.Gateway.SettingService)
+	routes.RegisterAdminRoutes(v1, deps.Handlers, deps.AdminAuth)
+	routes.RegisterGatewayRoutes(
+		r,
+		deps.Handlers,
+		deps.Gateway.APIKeyAuth,
+		deps.Gateway.APIKeyService,
+		deps.Gateway.SubscriptionService,
+		deps.Gateway.OpsService,
+		deps.Gateway.SettingService,
+		deps.Gateway.Config,
+	)
 }

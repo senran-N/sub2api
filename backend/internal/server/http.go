@@ -7,36 +7,24 @@ import (
 	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
-	"github.com/senran-N/sub2api/internal/handler"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
-	"github.com/senran-N/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
 
 // ProviderSet 提供服务器层的依赖
 var ProviderSet = wire.NewSet(
+	ProvideGatewayRouteDependencies,
+	ProvideRouteDependencies,
 	ProvideRouter,
 	ProvideHTTPServer,
 )
 
 // ProvideRouter 提供路由器
-func ProvideRouter(
-	cfg *config.Config,
-	handlers *handler.Handlers,
-	jwtAuth middleware2.JWTAuthMiddleware,
-	adminAuth middleware2.AdminAuthMiddleware,
-	apiKeyAuth middleware2.APIKeyAuthMiddleware,
-	apiKeyService *service.APIKeyService,
-	subscriptionService *service.SubscriptionService,
-	opsService *service.OpsService,
-	settingService *service.SettingService,
-	redisClient *redis.Client,
-) *gin.Engine {
+func ProvideRouter(cfg *config.Config, deps *RouteDependencies) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -56,7 +44,7 @@ func ProvideRouter(
 		}
 	}
 
-	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient)
+	return SetupRouter(r, deps)
 }
 
 // ProvideHTTPServer 提供 HTTP 服务器

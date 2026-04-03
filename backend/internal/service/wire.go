@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
-	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
 // BuildInfo contains build information
@@ -432,6 +432,9 @@ var ProviderSet = wire.NewSet(
 	NewIPRiskService,
 	NewGatewayService,
 	ProvideSoraMediaStorage,
+	NewSoraS3Storage,
+	NewSoraQuotaService,
+	NewSoraGenerationService,
 	ProvideSoraMediaCleanupService,
 	ProvideSoraSDKClient,
 	wire.Bind(new(SoraClient), new(*SoraSDKClient)),
