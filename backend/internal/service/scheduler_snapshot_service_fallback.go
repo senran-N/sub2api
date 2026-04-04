@@ -1,0 +1,209 @@
+package service
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/senran-N/sub2api/internal/config"
+)
+
+func (s *SchedulerSnapshotService) loadAccountsFromDB(ctx context.Context, bucket SchedulerBucket, useMixed bool) ([]Account, error) {
+	if s.accountRepo == nil {
+		return nil, ErrSchedulerCacheNotReady
+	}
+	groupID := bucket.GroupID
+	if s.isRunModeSimple() {
+		groupID = 0
+	}
+
+	if useMixed {
+		platforms := []string{bucket.Platform, PlatformAntigravity}
+		var (
+			accounts []Account
+			err      error
+		)
+		if groupID > 0 {
+			accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatforms(ctx, groupID, platforms)
+		} else if s.isRunModeSimple() {
+			accounts, err = s.accountRepo.ListSchedulableByPlatforms(ctx, platforms)
+		} else {
+			accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatforms(ctx, platforms)
+		}
+		if err != nil {
+			return nil, err
+		}
+		filtered := make([]Account, 0, len(accounts))
+		for _, acc := range accounts {
+			if acc.Platform == PlatformAntigravity && !acc.IsMixedSchedulingEnabled() {
+				continue
+			}
+			filtered = append(filtered, acc)
+		}
+		return filtered, nil
+	}
+
+	if groupID > 0 {
+		return s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, groupID, bucket.Platform)
+	}
+	if s.isRunModeSimple() {
+		return s.accountRepo.ListSchedulableByPlatform(ctx, bucket.Platform)
+	}
+	return s.accountRepo.ListSchedulableUngroupedByPlatform(ctx, bucket.Platform)
+}
+
+func (s *SchedulerSnapshotService) bucketFor(groupID *int64, platform string, mode string) SchedulerBucket {
+	return SchedulerBucket{
+		GroupID:  s.normalizeGroupID(groupID),
+		Platform: platform,
+		Mode:     mode,
+	}
+}
+
+func (s *SchedulerSnapshotService) normalizeGroupID(groupID *int64) int64 {
+	if s.isRunModeSimple() {
+		return 0
+	}
+	if groupID == nil || *groupID <= 0 {
+		return 0
+	}
+	return *groupID
+}
+
+func (s *SchedulerSnapshotService) normalizeGroupIDs(groupIDs []int64) []int64 {
+	if s.isRunModeSimple() {
+		return []int64{0}
+	}
+	if len(groupIDs) == 0 {
+		return []int64{0}
+	}
+	seen := make(map[int64]struct{}, len(groupIDs))
+	out := make([]int64, 0, len(groupIDs))
+	for _, id := range groupIDs {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	if len(out) == 0 {
+		return []int64{0}
+	}
+	return out
+}
+
+func (s *SchedulerSnapshotService) resolveMode(platform string, hasForcePlatform bool) string {
+	if hasForcePlatform {
+		return SchedulerModeForced
+	}
+	if platform == PlatformAnthropic || platform == PlatformGemini {
+		return SchedulerModeMixed
+	}
+	return SchedulerModeSingle
+}
+
+func (s *SchedulerSnapshotService) guardFallback(ctx context.Context) error {
+	if s.cfg == nil || s.cfg.Gateway.Scheduling.DbFallbackEnabled {
+		if s.fallbackLimit == nil || s.fallbackLimit.Allow() {
+			return nil
+		}
+		return ErrSchedulerFallbackLimited
+	}
+	return ErrSchedulerCacheNotReady
+}
+
+func (s *SchedulerSnapshotService) withFallbackTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if s.cfg == nil || s.cfg.Gateway.Scheduling.DbFallbackTimeoutSeconds <= 0 {
+		return context.WithCancel(ctx)
+	}
+	timeout := time.Duration(s.cfg.Gateway.Scheduling.DbFallbackTimeoutSeconds) * time.Second
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return context.WithCancel(ctx)
+		}
+		if remaining < timeout {
+			timeout = remaining
+		}
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func (s *SchedulerSnapshotService) isRunModeSimple() bool {
+	return s.cfg != nil && s.cfg.RunMode == config.RunModeSimple
+}
+
+func (s *SchedulerSnapshotService) outboxPollInterval() time.Duration {
+	if s.cfg == nil {
+		return time.Second
+	}
+	sec := s.cfg.Gateway.Scheduling.OutboxPollIntervalSeconds
+	if sec <= 0 {
+		return time.Second
+	}
+	return time.Duration(sec) * time.Second
+}
+
+func (s *SchedulerSnapshotService) fullRebuildInterval() time.Duration {
+	if s.cfg == nil {
+		return 0
+	}
+	sec := s.cfg.Gateway.Scheduling.FullRebuildIntervalSeconds
+	if sec <= 0 {
+		return 0
+	}
+	return time.Duration(sec) * time.Second
+}
+
+func derefAccounts(accounts []*Account) []Account {
+	if len(accounts) == 0 {
+		return []Account{}
+	}
+	out := make([]Account, 0, len(accounts))
+	for _, account := range accounts {
+		if account == nil {
+			continue
+		}
+		out = append(out, *account)
+	}
+	return out
+}
+
+type fallbackLimiter struct {
+	maxQPS int
+	mu     sync.Mutex
+	window time.Time
+	count  int
+}
+
+func newFallbackLimiter(maxQPS int) *fallbackLimiter {
+	if maxQPS <= 0 {
+		return nil
+	}
+	return &fallbackLimiter{
+		maxQPS: maxQPS,
+		window: time.Now(),
+	}
+}
+
+func (l *fallbackLimiter) Allow() bool {
+	if l == nil || l.maxQPS <= 0 {
+		return true
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	if now.Sub(l.window) >= time.Second {
+		l.window = now
+		l.count = 0
+	}
+	if l.count >= l.maxQPS {
+		return false
+	}
+	l.count++
+	return true
+}

@@ -54,6 +54,7 @@ type AccountHandler struct {
 	accountUsageService     *service.AccountUsageService
 	accountTestService      *service.AccountTestService
 	concurrencyService      *service.ConcurrencyService
+	accountRuntimeService   *service.AccountRuntimeService
 	crsSyncService          *service.CRSSyncService
 	sessionLimitCache       service.SessionLimitCache
 	rpmCache                service.RPMCache
@@ -86,6 +87,7 @@ func NewAccountHandler(
 		accountUsageService:     accountUsageService,
 		accountTestService:      accountTestService,
 		concurrencyService:      concurrencyService,
+		accountRuntimeService:   service.NewAccountRuntimeService(accountUsageService, concurrencyService, sessionLimitCache, rpmCache),
 		crsSyncService:          crsSyncService,
 		sessionLimitCache:       sessionLimitCache,
 		rpmCache:                rpmCache,
@@ -176,39 +178,7 @@ func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, ac
 	if account == nil {
 		return item
 	}
-
-	if h.concurrencyService != nil {
-		if counts, err := h.concurrencyService.GetAccountConcurrencyBatch(ctx, []int64{account.ID}); err == nil {
-			item.CurrentConcurrency = counts[account.ID]
-		}
-	}
-
-	if account.IsAnthropicOAuthOrSetupToken() {
-		if h.accountUsageService != nil && account.GetWindowCostLimit() > 0 {
-			startTime := account.GetCurrentWindowStartTime()
-			if stats, err := h.accountUsageService.GetAccountWindowStats(ctx, account.ID, startTime); err == nil && stats != nil {
-				cost := stats.StandardCost
-				item.CurrentWindowCost = &cost
-			}
-		}
-
-		if h.sessionLimitCache != nil && account.GetMaxSessions() > 0 {
-			idleTimeout := time.Duration(account.GetSessionIdleTimeoutMinutes()) * time.Minute
-			idleTimeouts := map[int64]time.Duration{account.ID: idleTimeout}
-			if sessions, err := h.sessionLimitCache.GetActiveSessionCountBatch(ctx, []int64{account.ID}, idleTimeouts); err == nil {
-				if count, ok := sessions[account.ID]; ok {
-					item.ActiveSessions = &count
-				}
-			}
-		}
-
-		if h.rpmCache != nil && account.GetBaseRPM() > 0 {
-			if rpm, err := h.rpmCache.GetRPM(ctx, account.ID); err == nil {
-				item.CurrentRPM = &rpm
-			}
-		}
-	}
-
+	h.applyRuntimeMetrics(&item, h.collectAccountRuntimeMetrics(ctx, []service.Account{*account}))
 	return item
 }
 
@@ -252,119 +222,16 @@ func (h *AccountHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Get current concurrency counts for all accounts
-	accountIDs := make([]int64, len(accounts))
-	for i, acc := range accounts {
-		accountIDs[i] = acc.ID
-	}
-
-	concurrencyCounts := make(map[int64]int)
-	var windowCosts map[int64]float64
-	var activeSessions map[int64]int
-	var rpmCounts map[int64]int
-
-	// 始终获取并发数（Redis ZCARD，极低开销）
-	if h.concurrencyService != nil {
-		if cc, ccErr := h.concurrencyService.GetAccountConcurrencyBatch(c.Request.Context(), accountIDs); ccErr == nil && cc != nil {
-			concurrencyCounts = cc
-		}
-	}
-
-	// 识别需要查询窗口费用、会话数和 RPM 的账号（Anthropic OAuth/SetupToken 且启用了相应功能）
-	windowCostAccountIDs := make([]int64, 0)
-	sessionLimitAccountIDs := make([]int64, 0)
-	rpmAccountIDs := make([]int64, 0)
-	sessionIdleTimeouts := make(map[int64]time.Duration) // 各账号的会话空闲超时配置
-	for i := range accounts {
-		acc := &accounts[i]
-		if acc.IsAnthropicOAuthOrSetupToken() {
-			if acc.GetWindowCostLimit() > 0 {
-				windowCostAccountIDs = append(windowCostAccountIDs, acc.ID)
-			}
-			if acc.GetMaxSessions() > 0 {
-				sessionLimitAccountIDs = append(sessionLimitAccountIDs, acc.ID)
-				sessionIdleTimeouts[acc.ID] = time.Duration(acc.GetSessionIdleTimeoutMinutes()) * time.Minute
-			}
-			if acc.GetBaseRPM() > 0 {
-				rpmAccountIDs = append(rpmAccountIDs, acc.ID)
-			}
-		}
-	}
-
-	// 始终获取 RPM 计数（Redis GET，极低开销）
-	if len(rpmAccountIDs) > 0 && h.rpmCache != nil {
-		rpmCounts, _ = h.rpmCache.GetRPMBatch(c.Request.Context(), rpmAccountIDs)
-		if rpmCounts == nil {
-			rpmCounts = make(map[int64]int)
-		}
-	}
-
-	// 始终获取活跃会话数（Redis ZCARD，低开销）
-	if len(sessionLimitAccountIDs) > 0 && h.sessionLimitCache != nil {
-		activeSessions, _ = h.sessionLimitCache.GetActiveSessionCountBatch(c.Request.Context(), sessionLimitAccountIDs, sessionIdleTimeouts)
-		if activeSessions == nil {
-			activeSessions = make(map[int64]int)
-		}
-	}
-
-	// 始终获取窗口费用（PostgreSQL 聚合查询）
-	if len(windowCostAccountIDs) > 0 {
-		windowCosts = make(map[int64]float64)
-		var mu sync.Mutex
-		g, gctx := errgroup.WithContext(c.Request.Context())
-		g.SetLimit(10) // 限制并发数
-
-		for i := range accounts {
-			acc := &accounts[i]
-			if !acc.IsAnthropicOAuthOrSetupToken() || acc.GetWindowCostLimit() <= 0 {
-				continue
-			}
-			accCopy := acc // 闭包捕获
-			g.Go(func() error {
-				// 使用统一的窗口开始时间计算逻辑（考虑窗口过期情况）
-				startTime := accCopy.GetCurrentWindowStartTime()
-				stats, err := h.accountUsageService.GetAccountWindowStats(gctx, accCopy.ID, startTime)
-				if err == nil && stats != nil {
-					mu.Lock()
-					windowCosts[accCopy.ID] = stats.StandardCost // 使用标准费用
-					mu.Unlock()
-				}
-				return nil // 不返回错误，允许部分失败
-			})
-		}
-		_ = g.Wait()
-	}
+	runtimeMetrics := h.collectAccountRuntimeMetrics(c.Request.Context(), accounts)
 
 	// Build response with concurrency info
 	result := make([]AccountWithConcurrency, len(accounts))
 	for i := range accounts {
-		acc := &accounts[i]
 		item := AccountWithConcurrency{
-			Account:            dto.AccountFromService(acc),
-			CurrentConcurrency: concurrencyCounts[acc.ID],
+			Account:            dto.AccountFromService(&accounts[i]),
+			CurrentConcurrency: 0,
 		}
-
-		// 添加窗口费用（仅当启用时）
-		if windowCosts != nil {
-			if cost, ok := windowCosts[acc.ID]; ok {
-				item.CurrentWindowCost = &cost
-			}
-		}
-
-		// 添加活跃会话数（仅当启用时）
-		if activeSessions != nil {
-			if count, ok := activeSessions[acc.ID]; ok {
-				item.ActiveSessions = &count
-			}
-		}
-
-		// 添加 RPM 计数（仅当启用时）
-		if rpmCounts != nil {
-			if rpm, ok := rpmCounts[acc.ID]; ok {
-				item.CurrentRPM = &rpm
-			}
-		}
-
+		h.applyRuntimeMetrics(&item, runtimeMetrics)
 		result[i] = item
 	}
 
@@ -379,6 +246,37 @@ func (h *AccountHandler) List(c *gin.Context) {
 	}
 
 	response.Paginated(c, result, total, page, pageSize)
+}
+
+func (h *AccountHandler) collectAccountRuntimeMetrics(ctx context.Context, accounts []service.Account) service.AccountRuntimeMetrics {
+	if h.accountRuntimeService == nil {
+		return service.AccountRuntimeMetrics{
+			ConcurrencyCounts: make(map[int64]int),
+			WindowCosts:       make(map[int64]float64),
+			ActiveSessions:    make(map[int64]int),
+			RPMCounts:         make(map[int64]int),
+		}
+	}
+	return h.accountRuntimeService.CollectAccountMetrics(ctx, accounts)
+}
+
+func (h *AccountHandler) applyRuntimeMetrics(item *AccountWithConcurrency, metrics service.AccountRuntimeMetrics) {
+	if item == nil || item.Account == nil {
+		return
+	}
+	accountID := item.Account.ID
+	if count, ok := metrics.ConcurrencyCounts[accountID]; ok {
+		item.CurrentConcurrency = count
+	}
+	if cost, ok := metrics.WindowCosts[accountID]; ok {
+		item.CurrentWindowCost = &cost
+	}
+	if count, ok := metrics.ActiveSessions[accountID]; ok {
+		item.ActiveSessions = &count
+	}
+	if rpm, ok := metrics.RPMCounts[accountID]; ok {
+		item.CurrentRPM = &rpm
+	}
 }
 
 func buildAccountsListETag(

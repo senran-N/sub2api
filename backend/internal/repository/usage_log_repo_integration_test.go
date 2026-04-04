@@ -46,6 +46,14 @@ func truncateToDayUTC(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
+func intPtr(v int) *int {
+	return &v
+}
+
+func strPtr(v string) *string {
+	return &v
+}
+
 func (s *UsageLogRepoSuite) createUsageLog(user *service.User, apiKey *service.APIKey, account *service.Account, inputTokens, outputTokens int, cost float64, createdAt time.Time) *service.UsageLog {
 	log := &service.UsageLog{
 		UserID:       user.ID,
@@ -181,6 +189,50 @@ func TestUsageLogRepositoryCreate_BatchPathDuplicateRequestID(t *testing.T) {
 	var count int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&count))
 	require.Equal(t, 1, count)
+}
+
+func TestUsageLogRepositoryListWithFilters_LoadsAssociationsWithSQLDB(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := newUsageLogRepositoryWithSQL(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("usage-list-assoc-%d@example.com", time.Now().UnixNano())})
+	group := mustCreateGroup(t, client, &service.Group{Name: "grp-usage-list-assoc-" + uuid.NewString()})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-usage-list-assoc-" + uuid.NewString(), Name: "k", GroupID: &group.ID})
+	account := mustCreateAccount(t, client, &service.Account{Name: "acc-usage-list-assoc-" + uuid.NewString()})
+	subscription := mustCreateSubscription(t, client, &service.UserSubscription{
+		UserID:  user.ID,
+		GroupID: group.ID,
+		Notes:   "usage list association test",
+	})
+
+	logRecord := &service.UsageLog{
+		UserID:         user.ID,
+		APIKeyID:       apiKey.ID,
+		AccountID:      account.ID,
+		RequestID:      uuid.NewString(),
+		Model:          "claude-3",
+		GroupID:        &group.ID,
+		SubscriptionID: &subscription.ID,
+		CreatedAt:      time.Now().UTC(),
+	}
+	_, err := repo.Create(ctx, logRecord)
+	require.NoError(t, err)
+
+	logs, page, err := repo.ListWithFilters(ctx, pagination.PaginationParams{Page: 1, PageSize: 10}, usagestats.UsageLogFilters{UserID: user.ID})
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	require.Equal(t, int64(1), page.Total)
+	require.NotNil(t, logs[0].User)
+	require.NotNil(t, logs[0].APIKey)
+	require.NotNil(t, logs[0].Account)
+	require.NotNil(t, logs[0].Group)
+	require.NotNil(t, logs[0].Subscription)
+	require.Equal(t, user.ID, logs[0].User.ID)
+	require.Equal(t, apiKey.ID, logs[0].APIKey.ID)
+	require.Equal(t, account.ID, logs[0].Account.ID)
+	require.Equal(t, group.ID, logs[0].Group.ID)
+	require.Equal(t, subscription.ID, logs[0].Subscription.ID)
 }
 
 func TestUsageLogRepositoryFlushCreateBatch_DeduplicatesSameKeyInMemory(t *testing.T) {
@@ -851,6 +903,166 @@ func (s *UsageLogRepoSuite) TestGetUserDashboardStats() {
 	s.Require().Equal(int64(1), stats.TotalRequests)
 }
 
+func (s *UsageLogRepoSuite) TestGetUserDashboardStats_AggregatesTodayAndAPIKeyCounts() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "userdash-agg@test.com"})
+	activeKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-userdash-agg-active", Name: "active"})
+	disabledKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-userdash-agg-disabled",
+		Name:   "disabled",
+		Status: service.StatusDisabled,
+	})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-userdash-agg"})
+
+	yesterday := timezone.Today().Add(-1 * time.Hour)
+	recent := time.Now().In(timezone.Location()).Add(-2 * time.Minute)
+	if recent.Before(timezone.Today()) {
+		recent = time.Now().In(timezone.Location())
+	}
+
+	_, err := s.repo.Create(s.ctx, &service.UsageLog{
+		UserID:              user.ID,
+		APIKeyID:            activeKey.ID,
+		AccountID:           account.ID,
+		RequestID:           uuid.New().String(),
+		Model:               "claude-3",
+		InputTokens:         10,
+		OutputTokens:        20,
+		CacheCreationTokens: 3,
+		CacheReadTokens:     4,
+		TotalCost:           1.5,
+		ActualCost:          2.5,
+		DurationMs:          180,
+		CreatedAt:           yesterday,
+	})
+	s.Require().NoError(err)
+
+	_, err = s.repo.Create(s.ctx, &service.UsageLog{
+		UserID:              user.ID,
+		APIKeyID:            disabledKey.ID,
+		AccountID:           account.ID,
+		RequestID:           uuid.New().String(),
+		Model:               "claude-3",
+		InputTokens:         7,
+		OutputTokens:        8,
+		CacheCreationTokens: 1,
+		CacheReadTokens:     2,
+		TotalCost:           0.75,
+		ActualCost:          1.25,
+		DurationMs:          120,
+		CreatedAt:           recent,
+	})
+	s.Require().NoError(err)
+
+	stats, err := s.repo.GetUserDashboardStats(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(2), stats.TotalAPIKeys)
+	s.Require().Equal(int64(1), stats.ActiveAPIKeys)
+	s.Require().Equal(int64(2), stats.TotalRequests)
+	s.Require().Equal(int64(17), stats.TotalInputTokens)
+	s.Require().Equal(int64(28), stats.TotalOutputTokens)
+	s.Require().Equal(int64(4), stats.TotalCacheCreationTokens)
+	s.Require().Equal(int64(6), stats.TotalCacheReadTokens)
+	s.Require().Equal(int64(55), stats.TotalTokens)
+	s.Require().InEpsilon(2.25, stats.TotalCost, 0.0001)
+	s.Require().InEpsilon(3.75, stats.TotalActualCost, 0.0001)
+	s.Require().Equal(int64(1), stats.TodayRequests)
+	s.Require().Equal(int64(7), stats.TodayInputTokens)
+	s.Require().Equal(int64(8), stats.TodayOutputTokens)
+	s.Require().Equal(int64(1), stats.TodayCacheCreationTokens)
+	s.Require().Equal(int64(2), stats.TodayCacheReadTokens)
+	s.Require().Equal(int64(18), stats.TodayTokens)
+	s.Require().InEpsilon(0.75, stats.TodayCost, 0.0001)
+	s.Require().InEpsilon(1.25, stats.TodayActualCost, 0.0001)
+	s.Require().InEpsilon(150.0, stats.AverageDurationMs, 0.0001)
+}
+
+func (s *UsageLogRepoSuite) TestGetAPIKeyDashboardStats_ScopesToRequestedKey() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "apikeydash@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-apikeydash-1", Name: "k1"})
+	otherKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-apikeydash-2", Name: "k2"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-apikeydash"})
+
+	yesterday := timezone.Today().Add(-1 * time.Hour)
+	recent := time.Now().In(timezone.Location()).Add(-2 * time.Minute)
+	if recent.Before(timezone.Today()) {
+		recent = time.Now().In(timezone.Location())
+	}
+
+	_, err := s.repo.Create(s.ctx, &service.UsageLog{
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           uuid.New().String(),
+		Model:               "claude-3",
+		InputTokens:         10,
+		OutputTokens:        20,
+		CacheCreationTokens: 3,
+		CacheReadTokens:     4,
+		TotalCost:           1.5,
+		ActualCost:          2.5,
+		DurationMs:          180,
+		CreatedAt:           yesterday,
+	})
+	s.Require().NoError(err)
+
+	_, err = s.repo.Create(s.ctx, &service.UsageLog{
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           uuid.New().String(),
+		Model:               "claude-3",
+		InputTokens:         7,
+		OutputTokens:        8,
+		CacheCreationTokens: 1,
+		CacheReadTokens:     2,
+		TotalCost:           0.75,
+		ActualCost:          1.25,
+		DurationMs:          120,
+		CreatedAt:           recent,
+	})
+	s.Require().NoError(err)
+
+	_, err = s.repo.Create(s.ctx, &service.UsageLog{
+		UserID:              user.ID,
+		APIKeyID:            otherKey.ID,
+		AccountID:           account.ID,
+		RequestID:           uuid.New().String(),
+		Model:               "claude-3",
+		InputTokens:         100,
+		OutputTokens:        200,
+		CacheCreationTokens: 10,
+		CacheReadTokens:     20,
+		TotalCost:           9.9,
+		ActualCost:          9.9,
+		DurationMs:          30,
+		CreatedAt:           recent,
+	})
+	s.Require().NoError(err)
+
+	stats, err := s.repo.GetAPIKeyDashboardStats(s.ctx, apiKey.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(1), stats.TotalAPIKeys)
+	s.Require().Equal(int64(1), stats.ActiveAPIKeys)
+	s.Require().Equal(int64(2), stats.TotalRequests)
+	s.Require().Equal(int64(17), stats.TotalInputTokens)
+	s.Require().Equal(int64(28), stats.TotalOutputTokens)
+	s.Require().Equal(int64(4), stats.TotalCacheCreationTokens)
+	s.Require().Equal(int64(6), stats.TotalCacheReadTokens)
+	s.Require().Equal(int64(55), stats.TotalTokens)
+	s.Require().InEpsilon(2.25, stats.TotalCost, 0.0001)
+	s.Require().InEpsilon(3.75, stats.TotalActualCost, 0.0001)
+	s.Require().Equal(int64(1), stats.TodayRequests)
+	s.Require().Equal(int64(7), stats.TodayInputTokens)
+	s.Require().Equal(int64(8), stats.TodayOutputTokens)
+	s.Require().Equal(int64(1), stats.TodayCacheCreationTokens)
+	s.Require().Equal(int64(2), stats.TodayCacheReadTokens)
+	s.Require().Equal(int64(18), stats.TodayTokens)
+	s.Require().InEpsilon(0.75, stats.TodayCost, 0.0001)
+	s.Require().InEpsilon(1.25, stats.TodayActualCost, 0.0001)
+	s.Require().InEpsilon(150.0, stats.AverageDurationMs, 0.0001)
+}
+
 // --- GetAccountTodayStats ---
 
 func (s *UsageLogRepoSuite) TestGetAccountTodayStats() {
@@ -1073,6 +1285,8 @@ func (s *UsageLogRepoSuite) TestGetBatchUserUsageStats() {
 	s.Require().Len(stats, 2)
 	s.Require().NotNil(stats[user1.ID])
 	s.Require().NotNil(stats[user2.ID])
+	s.Require().InEpsilon(0.5, stats[user1.ID].TotalActualCost, 0.0001)
+	s.Require().InEpsilon(0.6, stats[user2.ID].TotalActualCost, 0.0001)
 }
 
 func (s *UsageLogRepoSuite) TestGetBatchUserUsageStats_Empty() {
@@ -1095,6 +1309,8 @@ func (s *UsageLogRepoSuite) TestGetBatchApiKeyUsageStats() {
 	stats, err := s.repo.GetBatchAPIKeyUsageStats(s.ctx, []int64{apiKey1.ID, apiKey2.ID}, time.Time{}, time.Time{})
 	s.Require().NoError(err, "GetBatchAPIKeyUsageStats")
 	s.Require().Len(stats, 2)
+	s.Require().InEpsilon(0.5, stats[apiKey1.ID].TotalActualCost, 0.0001)
+	s.Require().InEpsilon(0.6, stats[apiKey2.ID].TotalActualCost, 0.0001)
 }
 
 func (s *UsageLogRepoSuite) TestGetBatchApiKeyUsageStats_Empty() {
@@ -1452,6 +1668,138 @@ func (s *UsageLogRepoSuite) TestGetModelStatsWithFilters() {
 	s.Require().Len(stats, 2)
 }
 
+func (s *UsageLogRepoSuite) TestGetGroupStatsWithFilters() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "groupfilters@test.com"})
+	groupOne := mustCreateGroup(s.T(), s.client, &service.Group{Name: "group-filters-1"})
+	groupTwo := mustCreateGroup(s.T(), s.client, &service.Group{Name: "group-filters-2"})
+	apiKeyOne := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-groupfilters-1", Name: "k1", GroupID: &groupOne.ID})
+	apiKeyTwo := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-groupfilters-2", Name: "k2", GroupID: &groupTwo.ID})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-groupfilters"})
+
+	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	logs := []*service.UsageLog{
+		{
+			UserID:       user.ID,
+			APIKeyID:     apiKeyOne.ID,
+			AccountID:    account.ID,
+			RequestID:    uuid.NewString(),
+			Model:        "claude-3",
+			GroupID:      &groupOne.ID,
+			InputTokens:  100,
+			OutputTokens: 200,
+			TotalCost:    0.5,
+			ActualCost:   0.5,
+			CreatedAt:    base,
+		},
+		{
+			UserID:       user.ID,
+			APIKeyID:     apiKeyTwo.ID,
+			AccountID:    account.ID,
+			RequestID:    uuid.NewString(),
+			Model:        "claude-3",
+			GroupID:      &groupTwo.ID,
+			InputTokens:  50,
+			OutputTokens: 100,
+			TotalCost:    0.2,
+			ActualCost:   0.2,
+			CreatedAt:    base.Add(1 * time.Hour),
+		},
+	}
+	for _, log := range logs {
+		_, err := s.repo.Create(s.ctx, log)
+		s.Require().NoError(err)
+	}
+
+	startTime := base.Add(-1 * time.Hour)
+	endTime := base.Add(2 * time.Hour)
+
+	stats, err := s.repo.GetGroupStatsWithFilters(s.ctx, startTime, endTime, user.ID, 0, 0, 0, nil, nil, nil)
+	s.Require().NoError(err)
+	s.Require().Len(stats, 2)
+	s.Require().Equal(groupOne.ID, stats[0].GroupID)
+	s.Require().Equal("group-filters-1", stats[0].GroupName)
+	s.Require().Equal(int64(300), stats[0].TotalTokens)
+	s.Require().Equal(groupTwo.ID, stats[1].GroupID)
+
+	filtered, err := s.repo.GetGroupStatsWithFilters(s.ctx, startTime, endTime, 0, 0, 0, groupTwo.ID, nil, nil, nil)
+	s.Require().NoError(err)
+	s.Require().Len(filtered, 1)
+	s.Require().Equal(groupTwo.ID, filtered[0].GroupID)
+	s.Require().Equal("group-filters-2", filtered[0].GroupName)
+}
+
+func (s *UsageLogRepoSuite) TestGetUserBreakdownStats() {
+	userOne := mustCreateUser(s.T(), s.client, &service.User{Email: "breakdown-1@test.com"})
+	userTwo := mustCreateUser(s.T(), s.client, &service.User{Email: "breakdown-2@test.com"})
+	groupOne := mustCreateGroup(s.T(), s.client, &service.Group{Name: "breakdown-group-1"})
+	groupTwo := mustCreateGroup(s.T(), s.client, &service.Group{Name: "breakdown-group-2"})
+	apiKeyOne := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: userOne.ID, Key: "sk-breakdown-1", Name: "k1", GroupID: &groupOne.ID})
+	apiKeyTwo := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: userTwo.ID, Key: "sk-breakdown-2", Name: "k2", GroupID: &groupTwo.ID})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-breakdown"})
+
+	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	logs := []*service.UsageLog{
+		{
+			UserID:           userOne.ID,
+			APIKeyID:         apiKeyOne.ID,
+			AccountID:        account.ID,
+			RequestID:        uuid.NewString(),
+			Model:            "claude-3",
+			GroupID:          &groupOne.ID,
+			InputTokens:      100,
+			OutputTokens:     200,
+			TotalCost:        0.5,
+			ActualCost:       0.5,
+			InboundEndpoint:  strPtr("/v1/chat/completions"),
+			UpstreamEndpoint: strPtr("anthropic"),
+			CreatedAt:        base,
+		},
+		{
+			UserID:           userTwo.ID,
+			APIKeyID:         apiKeyTwo.ID,
+			AccountID:        account.ID,
+			RequestID:        uuid.NewString(),
+			Model:            "gpt-4.1",
+			GroupID:          &groupTwo.ID,
+			InputTokens:      50,
+			OutputTokens:     100,
+			TotalCost:        0.2,
+			ActualCost:       0.2,
+			InboundEndpoint:  strPtr("/v1/responses"),
+			UpstreamEndpoint: strPtr("openai"),
+			CreatedAt:        base.Add(1 * time.Hour),
+		},
+	}
+	for _, log := range logs {
+		_, err := s.repo.Create(s.ctx, log)
+		s.Require().NoError(err)
+	}
+
+	startTime := base.Add(-1 * time.Hour)
+	endTime := base.Add(2 * time.Hour)
+
+	groupStats, err := s.repo.GetUserBreakdownStats(s.ctx, startTime, endTime, usagestats.UserBreakdownDimension{GroupID: groupOne.ID}, 10)
+	s.Require().NoError(err)
+	s.Require().Len(groupStats, 1)
+	s.Require().Equal(userOne.ID, groupStats[0].UserID)
+
+	modelStats, err := s.repo.GetUserBreakdownStats(s.ctx, startTime, endTime, usagestats.UserBreakdownDimension{
+		Model:     "gpt-4.1",
+		ModelType: usagestats.ModelSourceRequested,
+	}, 10)
+	s.Require().NoError(err)
+	s.Require().Len(modelStats, 1)
+	s.Require().Equal(userTwo.ID, modelStats[0].UserID)
+
+	endpointStats, err := s.repo.GetUserBreakdownStats(s.ctx, startTime, endTime, usagestats.UserBreakdownDimension{
+		Endpoint:     "anthropic",
+		EndpointType: "upstream",
+	}, 10)
+	s.Require().NoError(err)
+	s.Require().Len(endpointStats, 1)
+	s.Require().Equal(userOne.ID, endpointStats[0].UserID)
+}
+
 // --- GetAccountUsageStats ---
 
 func (s *UsageLogRepoSuite) TestGetAccountUsageStats() {
@@ -1471,6 +1819,7 @@ func (s *UsageLogRepoSuite) TestGetAccountUsageStats() {
 		OutputTokens: 200,
 		TotalCost:    0.5,
 		ActualCost:   0.4,
+		DurationMs:   intPtr(150),
 		CreatedAt:    base.Add(12 * time.Hour),
 	}
 	_, err := s.repo.Create(s.ctx, log1)
@@ -1485,6 +1834,7 @@ func (s *UsageLogRepoSuite) TestGetAccountUsageStats() {
 		OutputTokens: 100,
 		TotalCost:    0.2,
 		ActualCost:   0.15,
+		DurationMs:   intPtr(450),
 		CreatedAt:    base.Add(36 * time.Hour), // next day
 	}
 	_, err = s.repo.Create(s.ctx, log2)
@@ -1499,6 +1849,7 @@ func (s *UsageLogRepoSuite) TestGetAccountUsageStats() {
 	s.Require().Len(resp.History, 2, "expected 2 days of history")
 	s.Require().Equal(int64(2), resp.Summary.TotalRequests)
 	s.Require().Equal(int64(450), resp.Summary.TotalTokens)
+	s.Require().Equal(300.0, resp.Summary.AvgDurationMs)
 	s.Require().Len(resp.Models, 2)
 }
 
@@ -1514,6 +1865,180 @@ func (s *UsageLogRepoSuite) TestGetAccountUsageStats_EmptyRange() {
 
 	s.Require().Len(resp.History, 0)
 	s.Require().Equal(int64(0), resp.Summary.TotalRequests)
+}
+
+func (s *UsageLogRepoSuite) TestGetStatsWithFilters_CollectsEndpointBreakdowns() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "endpointstats@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-endpointstats", Name: "k"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-endpointstats"})
+
+	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	logs := []*service.UsageLog{
+		{
+			UserID:           user.ID,
+			APIKeyID:         apiKey.ID,
+			AccountID:        account.ID,
+			RequestID:        uuid.NewString(),
+			Model:            "claude-3",
+			InputTokens:      10,
+			OutputTokens:     20,
+			TotalCost:        0.5,
+			ActualCost:       0.5,
+			InboundEndpoint:  strPtr("/v1/chat/completions"),
+			UpstreamEndpoint: strPtr("anthropic"),
+			CreatedAt:        base,
+		},
+		{
+			UserID:           user.ID,
+			APIKeyID:         apiKey.ID,
+			AccountID:        account.ID,
+			RequestID:        uuid.NewString(),
+			Model:            "claude-3",
+			InputTokens:      5,
+			OutputTokens:     10,
+			TotalCost:        0.3,
+			ActualCost:       0.3,
+			InboundEndpoint:  strPtr("/v1/chat/completions"),
+			UpstreamEndpoint: strPtr("openai"),
+			CreatedAt:        base.Add(1 * time.Minute),
+		},
+		{
+			UserID:           user.ID,
+			APIKeyID:         apiKey.ID,
+			AccountID:        account.ID,
+			RequestID:        uuid.NewString(),
+			Model:            "claude-3",
+			InputTokens:      2,
+			OutputTokens:     3,
+			TotalCost:        0.1,
+			ActualCost:       0.1,
+			InboundEndpoint:  strPtr("/v1/messages"),
+			UpstreamEndpoint: strPtr("anthropic"),
+			CreatedAt:        base.Add(2 * time.Minute),
+		},
+	}
+	for _, log := range logs {
+		_, err := s.repo.Create(s.ctx, log)
+		s.Require().NoError(err)
+	}
+
+	startTime := base.Add(-1 * time.Hour)
+	endTime := base.Add(1 * time.Hour)
+	stats, err := s.repo.GetStatsWithFilters(s.ctx, usagestats.UsageLogFilters{
+		UserID:    user.ID,
+		StartTime: &startTime,
+		EndTime:   &endTime,
+	})
+	s.Require().NoError(err)
+	s.Require().Len(stats.Endpoints, 2)
+	s.Require().Len(stats.UpstreamEndpoints, 2)
+	s.Require().Len(stats.EndpointPaths, 3)
+
+	inbound := make(map[string]EndpointStat)
+	for _, stat := range stats.Endpoints {
+		inbound[stat.Endpoint] = stat
+	}
+	s.Require().Equal(int64(2), inbound["/v1/chat/completions"].Requests)
+	s.Require().Equal(int64(45), inbound["/v1/chat/completions"].TotalTokens)
+	s.Require().InEpsilon(0.8, inbound["/v1/chat/completions"].Cost, 0.0001)
+	s.Require().InEpsilon(0.8, inbound["/v1/chat/completions"].ActualCost, 0.0001)
+	s.Require().Equal(int64(1), inbound["/v1/messages"].Requests)
+	s.Require().Equal(int64(5), inbound["/v1/messages"].TotalTokens)
+
+	upstream := make(map[string]EndpointStat)
+	for _, stat := range stats.UpstreamEndpoints {
+		upstream[stat.Endpoint] = stat
+	}
+	s.Require().Equal(int64(2), upstream["anthropic"].Requests)
+	s.Require().Equal(int64(35), upstream["anthropic"].TotalTokens)
+	s.Require().InEpsilon(0.6, upstream["anthropic"].Cost, 0.0001)
+	s.Require().Equal(int64(1), upstream["openai"].Requests)
+	s.Require().Equal(int64(15), upstream["openai"].TotalTokens)
+
+	paths := make(map[string]EndpointStat)
+	for _, stat := range stats.EndpointPaths {
+		paths[stat.Endpoint] = stat
+	}
+	s.Require().Equal(int64(1), paths["/v1/chat/completions -> anthropic"].Requests)
+	s.Require().Equal(int64(30), paths["/v1/chat/completions -> anthropic"].TotalTokens)
+	s.Require().Equal(int64(1), paths["/v1/chat/completions -> openai"].Requests)
+	s.Require().Equal(int64(15), paths["/v1/chat/completions -> openai"].TotalTokens)
+	s.Require().Equal(int64(1), paths["/v1/messages -> anthropic"].Requests)
+	s.Require().Equal(int64(5), paths["/v1/messages -> anthropic"].TotalTokens)
+}
+
+func (s *UsageLogRepoSuite) TestGetAllGroupUsageSummary() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "groupsummary@test.com"})
+	groupOne := mustCreateGroup(s.T(), s.client, &service.Group{Name: "group-summary-1"})
+	groupTwo := mustCreateGroup(s.T(), s.client, &service.Group{Name: "group-summary-2"})
+	apiKeyOne := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-groupsummary-1", Name: "k1", GroupID: &groupOne.ID})
+	apiKeyTwo := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-groupsummary-2", Name: "k2", GroupID: &groupTwo.ID})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-groupsummary"})
+
+	yesterday := timezone.Today().Add(-1 * time.Hour)
+	recent := time.Now().In(timezone.Location()).Add(-2 * time.Minute)
+	if recent.Before(timezone.Today()) {
+		recent = time.Now().In(timezone.Location())
+	}
+
+	logs := []*service.UsageLog{
+		{
+			UserID:       user.ID,
+			APIKeyID:     apiKeyOne.ID,
+			AccountID:    account.ID,
+			RequestID:    uuid.NewString(),
+			Model:        "claude-3",
+			GroupID:      &groupOne.ID,
+			InputTokens:  10,
+			OutputTokens: 20,
+			TotalCost:    0.5,
+			ActualCost:   1.2,
+			CreatedAt:    yesterday,
+		},
+		{
+			UserID:       user.ID,
+			APIKeyID:     apiKeyOne.ID,
+			AccountID:    account.ID,
+			RequestID:    uuid.NewString(),
+			Model:        "claude-3",
+			GroupID:      &groupOne.ID,
+			InputTokens:  5,
+			OutputTokens: 10,
+			TotalCost:    0.2,
+			ActualCost:   0.8,
+			CreatedAt:    recent,
+		},
+		{
+			UserID:       user.ID,
+			APIKeyID:     apiKeyTwo.ID,
+			AccountID:    account.ID,
+			RequestID:    uuid.NewString(),
+			Model:        "claude-3",
+			GroupID:      &groupTwo.ID,
+			InputTokens:  3,
+			OutputTokens: 4,
+			TotalCost:    0.1,
+			ActualCost:   0.4,
+			CreatedAt:    recent,
+		},
+	}
+	for _, log := range logs {
+		_, err := s.repo.Create(s.ctx, log)
+		s.Require().NoError(err)
+	}
+
+	results, err := s.repo.GetAllGroupUsageSummary(s.ctx, timezone.Today())
+	s.Require().NoError(err)
+
+	summaryByGroupID := make(map[int64]usagestats.GroupUsageSummary)
+	for _, summary := range results {
+		summaryByGroupID[summary.GroupID] = summary
+	}
+
+	s.Require().InEpsilon(2.0, summaryByGroupID[groupOne.ID].TotalCost, 0.0001)
+	s.Require().InEpsilon(0.8, summaryByGroupID[groupOne.ID].TodayCost, 0.0001)
+	s.Require().InEpsilon(0.4, summaryByGroupID[groupTwo.ID].TotalCost, 0.0001)
+	s.Require().InEpsilon(0.4, summaryByGroupID[groupTwo.ID].TodayCost, 0.0001)
 }
 
 // --- GetUserUsageTrend ---
@@ -1538,6 +2063,29 @@ func (s *UsageLogRepoSuite) TestGetUserUsageTrend() {
 	s.Require().GreaterOrEqual(len(trend), 2)
 }
 
+func (s *UsageLogRepoSuite) TestGetUserUsageTrend_Limit() {
+	user1 := mustCreateUser(s.T(), s.client, &service.User{Email: "usertrend-limit-1@test.com"})
+	user2 := mustCreateUser(s.T(), s.client, &service.User{Email: "usertrend-limit-2@test.com"})
+	apiKey1 := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user1.ID, Key: "sk-usertrend-limit-1", Name: "k1"})
+	apiKey2 := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user2.ID, Key: "sk-usertrend-limit-2", Name: "k2"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-usertrend-limit"})
+
+	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	s.createUsageLog(user1, apiKey1, account, 100, 200, 1.0, base)
+	s.createUsageLog(user1, apiKey1, account, 100, 200, 1.0, base.Add(24*time.Hour))
+	s.createUsageLog(user2, apiKey2, account, 10, 20, 0.1, base)
+
+	startTime := base.Add(-1 * time.Hour)
+	endTime := base.Add(48 * time.Hour)
+
+	trend, err := s.repo.GetUserUsageTrend(s.ctx, startTime, endTime, "day", 1)
+	s.Require().NoError(err)
+	s.Require().Len(trend, 2)
+	for _, point := range trend {
+		s.Require().Equal(user1.ID, point.UserID)
+	}
+}
+
 // --- GetAPIKeyUsageTrend ---
 
 func (s *UsageLogRepoSuite) TestGetAPIKeyUsageTrend() {
@@ -1557,6 +2105,28 @@ func (s *UsageLogRepoSuite) TestGetAPIKeyUsageTrend() {
 	trend, err := s.repo.GetAPIKeyUsageTrend(s.ctx, startTime, endTime, "day", 10)
 	s.Require().NoError(err, "GetAPIKeyUsageTrend")
 	s.Require().GreaterOrEqual(len(trend), 2)
+}
+
+func (s *UsageLogRepoSuite) TestGetAPIKeyUsageTrend_Limit() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "keytrend-limit@test.com"})
+	apiKey1 := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-keytrend-limit-1", Name: "k1"})
+	apiKey2 := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-keytrend-limit-2", Name: "k2"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-keytrend-limit"})
+
+	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	s.createUsageLog(user, apiKey1, account, 100, 200, 1.0, base)
+	s.createUsageLog(user, apiKey1, account, 100, 200, 1.0, base.Add(24*time.Hour))
+	s.createUsageLog(user, apiKey2, account, 10, 20, 0.1, base)
+
+	startTime := base.Add(-1 * time.Hour)
+	endTime := base.Add(48 * time.Hour)
+
+	trend, err := s.repo.GetAPIKeyUsageTrend(s.ctx, startTime, endTime, "day", 1)
+	s.Require().NoError(err)
+	s.Require().Len(trend, 2)
+	for _, point := range trend {
+		s.Require().Equal(apiKey1.ID, point.APIKeyID)
+	}
 }
 
 func (s *UsageLogRepoSuite) TestGetAPIKeyUsageTrend_HourlyGranularity() {
@@ -1632,4 +2202,78 @@ func (s *UsageLogRepoSuite) TestListWithFilters_CombinedFilters() {
 	s.Require().NoError(err, "ListWithFilters combined")
 	s.Require().Len(logs, 2)
 	s.Require().Equal(int64(2), page.Total)
+}
+
+func (s *UsageLogRepoSuite) TestListWithFilters_PaginationOrder() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "filterspage@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-filterspage", Name: "k"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-filterspage"})
+
+	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	first := s.createUsageLog(user, apiKey, account, 10, 20, 0.5, base)
+	second := s.createUsageLog(user, apiKey, account, 11, 21, 0.6, base.Add(1*time.Minute))
+	third := s.createUsageLog(user, apiKey, account, 12, 22, 0.7, base.Add(2*time.Minute))
+
+	filters := usagestats.UsageLogFilters{UserID: user.ID}
+
+	pageOneLogs, pageOne, err := s.repo.ListWithFilters(s.ctx, pagination.PaginationParams{Page: 1, PageSize: 2}, filters)
+	s.Require().NoError(err, "ListWithFilters page 1")
+	s.Require().Len(pageOneLogs, 2)
+	s.Require().Equal(int64(3), pageOne.Total)
+	s.Require().Equal([]int64{third.ID, second.ID}, []int64{pageOneLogs[0].ID, pageOneLogs[1].ID})
+
+	pageTwoLogs, pageTwo, err := s.repo.ListWithFilters(s.ctx, pagination.PaginationParams{Page: 2, PageSize: 2}, filters)
+	s.Require().NoError(err, "ListWithFilters page 2")
+	s.Require().Len(pageTwoLogs, 1)
+	s.Require().Equal(int64(3), pageTwo.Total)
+	s.Require().Equal(first.ID, pageTwoLogs[0].ID)
+}
+
+func (s *UsageLogRepoSuite) TestListWithFilters_FastPaginationOrder() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "filtersfast@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-filtersfast", Name: "k"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-filtersfast"})
+	group := mustCreateGroup(s.T(), s.client, &service.Group{Name: "grp-filtersfast"})
+
+	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	log1 := &service.UsageLog{
+		UserID:    user.ID,
+		APIKeyID:  apiKey.ID,
+		AccountID: account.ID,
+		RequestID: uuid.NewString(),
+		Model:     "claude-3",
+		GroupID:   &group.ID,
+		CreatedAt: base,
+	}
+	log2 := &service.UsageLog{
+		UserID:    user.ID,
+		APIKeyID:  apiKey.ID,
+		AccountID: account.ID,
+		RequestID: uuid.NewString(),
+		Model:     "claude-3",
+		GroupID:   &group.ID,
+		CreatedAt: base.Add(1 * time.Minute),
+	}
+	log3 := &service.UsageLog{
+		UserID:    user.ID,
+		APIKeyID:  apiKey.ID,
+		AccountID: account.ID,
+		RequestID: uuid.NewString(),
+		Model:     "claude-3",
+		GroupID:   &group.ID,
+		CreatedAt: base.Add(2 * time.Minute),
+	}
+	_, err := s.repo.Create(s.ctx, log1)
+	s.Require().NoError(err)
+	_, err = s.repo.Create(s.ctx, log2)
+	s.Require().NoError(err)
+	_, err = s.repo.Create(s.ctx, log3)
+	s.Require().NoError(err)
+
+	filters := usagestats.UsageLogFilters{GroupID: group.ID}
+	logs, page, err := s.repo.ListWithFilters(s.ctx, pagination.PaginationParams{Page: 1, PageSize: 2}, filters)
+	s.Require().NoError(err, "ListWithFilters fast path")
+	s.Require().Len(logs, 2)
+	s.Require().Equal([]int64{log3.ID, log2.ID}, []int64{logs[0].ID, logs[1].ID})
+	s.Require().Equal(int64(3), page.Total)
 }
