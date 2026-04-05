@@ -6,6 +6,15 @@
 import { apiClient } from '../client'
 import type { AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey } from '@/types'
 
+export interface UserListFilters {
+  status?: 'active' | 'disabled'
+  role?: 'admin' | 'user'
+  search?: string
+  group_name?: string
+  attributes?: Record<number, string>
+  include_subscriptions?: boolean
+}
+
 /**
  * List all users with pagination
  * @param page - Page number (default: 1)
@@ -17,14 +26,7 @@ import type { AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey } from '@/
 export async function list(
   page: number = 1,
   pageSize: number = 20,
-  filters?: {
-    status?: 'active' | 'disabled'
-    role?: 'admin' | 'user'
-    search?: string
-    group_name?: string         // fuzzy filter by allowed group name
-    attributes?: Record<number, string>  // attributeId -> value
-    include_subscriptions?: boolean
-  },
+  filters?: UserListFilters,
   options?: {
     signal?: AbortSignal
   }

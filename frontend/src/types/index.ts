@@ -509,9 +509,13 @@ export interface CreateGroupRequest {
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
+  model_routing?: Record<string, number[]> | null
+  model_routing_enabled?: boolean
   mcp_xml_inject?: boolean
   simulate_claude_max_enabled?: boolean
   supported_model_scopes?: string[]
+  allow_messages_dispatch?: boolean
+  default_mapped_model?: string
   require_oauth_only?: boolean
   require_privacy_set?: boolean
   // 从指定分组复制账号
@@ -540,9 +544,13 @@ export interface UpdateGroupRequest {
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
+  model_routing?: Record<string, number[]> | null
+  model_routing_enabled?: boolean
   mcp_xml_inject?: boolean
   simulate_claude_max_enabled?: boolean
   supported_model_scopes?: string[]
+  allow_messages_dispatch?: boolean
+  default_mapped_model?: string
   require_oauth_only?: boolean
   require_privacy_set?: boolean
   copy_accounts_from_group_ids?: number[]

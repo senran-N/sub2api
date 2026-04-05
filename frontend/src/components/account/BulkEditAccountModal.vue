@@ -917,12 +917,16 @@ import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import Icon from '@/components/icons/Icon.vue'
 import {
+  buildAccountOpenAIWSModeOptions,
+  buildAccountUmqModeOptions,
+  needsMixedChannelCheck
+} from '@/components/account/accountModalShared'
+import {
   buildModelMappingObject as buildModelMappingPayload,
   getPresetMappingsByPlatform
 } from '@/composables/useModelWhitelist'
 import {
   OPENAI_WS_MODE_OFF,
-  OPENAI_WS_MODE_PASSTHROUGH,
   isOpenAIWSModeEnabled,
   resolveOpenAIWSModeConcurrencyHintKey
 } from '@/utils/openaiWsMode'
@@ -1039,11 +1043,7 @@ const bulkBaseRpm = ref<number | null>(null)
 const bulkRpmStrategy = ref<'tiered' | 'sticky_exempt'>('tiered')
 const bulkRpmStickyBuffer = ref<number | null>(null)
 const userMsgQueueMode = ref<string | null>(null)
-const umqModeOptions = computed(() => [
-  { value: '', label: t('admin.accounts.quotaControl.rpmLimit.umqModeOff') },
-  { value: 'throttle', label: t('admin.accounts.quotaControl.rpmLimit.umqModeThrottle') },
-  { value: 'serialize', label: t('admin.accounts.quotaControl.rpmLimit.umqModeSerialize') },
-])
+const umqModeOptions = computed(() => buildAccountUmqModeOptions(t))
 
 // Common HTTP error codes
 const commonErrorCodes = [
@@ -1067,45 +1067,121 @@ const isOpenAIModelRestrictionDisabled = computed(
     openaiPassthroughEnabled.value
 )
 
-const openAIWSModeOptions = computed(() => [
-  { value: OPENAI_WS_MODE_OFF, label: t('admin.accounts.openai.wsModeOff') },
-  { value: OPENAI_WS_MODE_PASSTHROUGH, label: t('admin.accounts.openai.wsModePassthrough') }
-])
+const openAIWSModeOptions = computed(() => buildAccountOpenAIWSModeOptions(t))
 const openAIWSModeConcurrencyHintKey = computed(() =>
   resolveOpenAIWSModeConcurrencyHintKey(openaiOAuthResponsesWebSocketV2Mode.value)
 )
 
-// Model mapping helpers
-const addModelMapping = () => {
-  modelMappings.value.push({ from: '', to: '' })
+const appendEmptyModelMapping = (target: ModelMapping[]) => {
+  target.push({ from: '', to: '' })
 }
 
-const removeModelMapping = (index: number) => {
-  modelMappings.value.splice(index, 1)
+const removeModelMappingAt = (target: ModelMapping[], index: number) => {
+  target.splice(index, 1)
 }
 
-const addPresetMapping = (from: string, to: string) => {
-  const exists = modelMappings.value.some((m) => m.from === from)
-  if (exists) {
+const appendPresetModelMapping = (target: ModelMapping[], from: string, to: string) => {
+  if (target.some((mapping) => mapping.from === from)) {
     appStore.showInfo(t('admin.accounts.mappingExists', { model: from }))
     return
   }
-  modelMappings.value.push({ from, to })
+  target.push({ from, to })
+}
+
+const confirmCustomErrorCodeSelection = (code: number) => {
+  if (code === 429) {
+    return confirm(t('admin.accounts.customErrorCodes429Warning'))
+  }
+  if (code === 529) {
+    return confirm(t('admin.accounts.customErrorCodes529Warning'))
+  }
+  return true
+}
+
+const clearMixedChannelState = () => {
+  showMixedChannelWarning.value = false
+  mixedChannelWarningMessage.value = ''
+  pendingUpdatesForConfirm.value = null
+  mixedChannelConfirmed.value = false
+}
+
+const resetBulkEditFormState = () => {
+  enableBaseUrl.value = false
+  enableModelRestriction.value = false
+  enableCustomErrorCodes.value = false
+  enableInterceptWarmup.value = false
+  enableProxy.value = false
+  enableConcurrency.value = false
+  enableLoadFactor.value = false
+  enablePriority.value = false
+  enableRateMultiplier.value = false
+  enableStatus.value = false
+  enableGroups.value = false
+  enableOpenAIPassthrough.value = false
+  enableOpenAIWSMode.value = false
+  enableRpmLimit.value = false
+
+  baseUrl.value = ''
+  openaiPassthroughEnabled.value = false
+  modelRestrictionMode.value = 'whitelist'
+  allowedModels.value = []
+  modelMappings.value = []
+  selectedErrorCodes.value = []
+  customErrorCodeInput.value = null
+  interceptWarmupRequests.value = false
+  proxyId.value = null
+  concurrency.value = 1
+  loadFactor.value = null
+  priority.value = 1
+  rateMultiplier.value = 1
+  status.value = 'active'
+  groupIds.value = []
+  openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
+  rpmLimitEnabled.value = false
+  bulkBaseRpm.value = null
+  bulkRpmStrategy.value = 'tiered'
+  bulkRpmStickyBuffer.value = null
+  userMsgQueueMode.value = null
+
+  clearMixedChannelState()
+}
+
+const hasAnyBulkEditFieldEnabled = () =>
+  enableBaseUrl.value ||
+  enableOpenAIPassthrough.value ||
+  enableModelRestriction.value ||
+  enableCustomErrorCodes.value ||
+  enableInterceptWarmup.value ||
+  enableProxy.value ||
+  enableConcurrency.value ||
+  enableLoadFactor.value ||
+  enablePriority.value ||
+  enableRateMultiplier.value ||
+  enableStatus.value ||
+  enableGroups.value ||
+  enableOpenAIWSMode.value ||
+  enableRpmLimit.value ||
+  userMsgQueueMode.value !== null
+
+// Model mapping helpers
+const addModelMapping = () => {
+  appendEmptyModelMapping(modelMappings.value)
+}
+
+const removeModelMapping = (index: number) => {
+  removeModelMappingAt(modelMappings.value, index)
+}
+
+const addPresetMapping = (from: string, to: string) => {
+  appendPresetModelMapping(modelMappings.value, from, to)
 }
 
 // Error code helpers
 const toggleErrorCode = (code: number) => {
   const index = selectedErrorCodes.value.indexOf(code)
   if (index === -1) {
-    // Adding code - check for 429/529 warning
-    if (code === 429) {
-      if (!confirm(t('admin.accounts.customErrorCodes429Warning'))) {
-        return
-      }
-    } else if (code === 529) {
-      if (!confirm(t('admin.accounts.customErrorCodes529Warning'))) {
-        return
-      }
+    if (!confirmCustomErrorCodeSelection(code)) {
+      return
     }
     selectedErrorCodes.value.push(code)
   } else {
@@ -1123,15 +1199,8 @@ const addCustomErrorCode = () => {
     appStore.showInfo(t('admin.accounts.errorCodeExists'))
     return
   }
-  // Check for 429/529 warning
-  if (code === 429) {
-    if (!confirm(t('admin.accounts.customErrorCodes429Warning'))) {
-      return
-    }
-  } else if (code === 529) {
-    if (!confirm(t('admin.accounts.customErrorCodes529Warning'))) {
-      return
-    }
+  if (!confirmCustomErrorCodeSelection(code)) {
+    return
   }
   selectedErrorCodes.value.push(code)
   customErrorCodeInput.value = null
@@ -1150,6 +1219,37 @@ const buildModelMappingObject = (): Record<string, string> | null => {
     allowedModels.value,
     modelMappings.value
   )
+}
+
+const applyBulkModelRestriction = (credentials: Record<string, unknown>) => {
+  if (modelRestrictionMode.value === 'whitelist') {
+    const whitelistMapping: Record<string, string> = {}
+    for (const model of allowedModels.value) {
+      whitelistMapping[model] = model
+    }
+    credentials.model_mapping = whitelistMapping
+    return
+  }
+
+  credentials.model_mapping = buildModelMappingObject() ?? {}
+}
+
+const applyBulkOpenAIExtra = (extra: Record<string, unknown>) => {
+  if (enableOpenAIPassthrough.value) {
+    extra.openai_passthrough = openaiPassthroughEnabled.value
+    if (!openaiPassthroughEnabled.value) {
+      extra.openai_oauth_passthrough = false
+    }
+  }
+
+  if (enableOpenAIWSMode.value) {
+    extra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
+    extra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
+      openaiOAuthResponsesWebSocketV2Mode.value
+    )
+    extra.responses_websockets_v2_enabled = false
+    extra.openai_ws_enabled = false
+  }
 }
 
 const buildUpdatePayload = (): Record<string, unknown> | null => {
@@ -1202,31 +1302,9 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     }
   }
 
-  if (enableOpenAIPassthrough.value) {
-    const extra = ensureExtra()
-    extra.openai_passthrough = openaiPassthroughEnabled.value
-    if (!openaiPassthroughEnabled.value) {
-      extra.openai_oauth_passthrough = false
-    }
-  }
-
   if (enableModelRestriction.value && !isOpenAIModelRestrictionDisabled.value) {
-    // 统一使用 model_mapping 字段
-    if (modelRestrictionMode.value === 'whitelist') {
-      // 白名单模式：将模型转换为 model_mapping 格式（key=value）
-      // 空白名单表示“支持所有模型”，需显式发送空对象以覆盖已有限制。
-      const mapping: Record<string, string> = {}
-      for (const m of allowedModels.value) {
-        mapping[m] = m
-      }
-      credentials.model_mapping = mapping
-      credentialsChanged = true
-    } else {
-      // 映射模式下空配置同样表示“支持所有模型”。
-      const modelMapping = buildModelMappingObject()
-      credentials.model_mapping = modelMapping ?? {}
-      credentialsChanged = true
-    }
+    applyBulkModelRestriction(credentials)
+    credentialsChanged = true
   }
 
   if (enableCustomErrorCodes.value) {
@@ -1244,12 +1322,9 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     updates.credentials = credentials
   }
 
-  if (enableOpenAIWSMode.value) {
+  if (enableOpenAIPassthrough.value || enableOpenAIWSMode.value) {
     const extra = ensureExtra()
-    extra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
-    extra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
-      openaiOAuthResponsesWebSocketV2Mode.value
-    )
+    applyBulkOpenAIExtra(extra)
   }
 
   // RPM limit settings (写入 extra 字段)
@@ -1290,13 +1365,10 @@ const canPreCheck = () =>
   enableGroups.value &&
   groupIds.value.length > 0 &&
   props.selectedPlatforms.length === 1 &&
-  (props.selectedPlatforms[0] === 'antigravity' || props.selectedPlatforms[0] === 'anthropic')
+  needsMixedChannelCheck(props.selectedPlatforms[0])
 
 const handleClose = () => {
-  showMixedChannelWarning.value = false
-  mixedChannelWarningMessage.value = ''
-  pendingUpdatesForConfirm.value = null
-  mixedChannelConfirmed.value = false
+  clearMixedChannelState()
   emit('close')
 }
 
@@ -1328,24 +1400,7 @@ const handleSubmit = async () => {
     return
   }
 
-  const hasAnyFieldEnabled =
-    enableBaseUrl.value ||
-    enableOpenAIPassthrough.value ||
-    enableModelRestriction.value ||
-    enableCustomErrorCodes.value ||
-    enableInterceptWarmup.value ||
-    enableProxy.value ||
-    enableConcurrency.value ||
-    enableLoadFactor.value ||
-    enablePriority.value ||
-    enableRateMultiplier.value ||
-    enableStatus.value ||
-    enableGroups.value ||
-    enableOpenAIWSMode.value ||
-    enableRpmLimit.value ||
-    userMsgQueueMode.value !== null
-
-  if (!hasAnyFieldEnabled) {
+  if (!hasAnyBulkEditFieldEnabled()) {
     appStore.showError(t('admin.accounts.bulkEdit.noFieldsSelected'))
     return
   }
@@ -1421,50 +1476,7 @@ watch(
   () => props.show,
   (newShow) => {
     if (!newShow) {
-      // Reset all enable flags
-      enableBaseUrl.value = false
-      enableModelRestriction.value = false
-      enableCustomErrorCodes.value = false
-      enableInterceptWarmup.value = false
-      enableProxy.value = false
-      enableConcurrency.value = false
-      enableLoadFactor.value = false
-      enablePriority.value = false
-      enableRateMultiplier.value = false
-      enableStatus.value = false
-      enableGroups.value = false
-      enableOpenAIPassthrough.value = false
-      enableOpenAIWSMode.value = false
-      enableRpmLimit.value = false
-
-      // Reset all values
-      baseUrl.value = ''
-      openaiPassthroughEnabled.value = false
-      modelRestrictionMode.value = 'whitelist'
-      allowedModels.value = []
-      modelMappings.value = []
-      selectedErrorCodes.value = []
-      customErrorCodeInput.value = null
-      interceptWarmupRequests.value = false
-      proxyId.value = null
-      concurrency.value = 1
-      loadFactor.value = null
-      priority.value = 1
-      rateMultiplier.value = 1
-      status.value = 'active'
-      groupIds.value = []
-      openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
-      rpmLimitEnabled.value = false
-      bulkBaseRpm.value = null
-      bulkRpmStrategy.value = 'tiered'
-      bulkRpmStickyBuffer.value = null
-      userMsgQueueMode.value = null
-
-      // Reset mixed channel warning state
-      showMixedChannelWarning.value = false
-      mixedChannelWarningMessage.value = ''
-      pendingUpdatesForConfirm.value = null
-      mixedChannelConfirmed.value = false
+      resetBulkEditFormState()
     }
   }
 )

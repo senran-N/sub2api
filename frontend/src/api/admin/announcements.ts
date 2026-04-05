@@ -17,10 +17,14 @@ export async function list(
   filters?: {
     status?: string
     search?: string
+  },
+  options?: {
+    signal?: AbortSignal
   }
 ): Promise<BasePaginationResponse<Announcement>> {
   const { data } = await apiClient.get<BasePaginationResponse<Announcement>>('/admin/announcements', {
-    params: { page, page_size: pageSize, ...filters }
+    params: { page, page_size: pageSize, ...filters },
+    signal: options?.signal
   })
   return data
 }
@@ -68,4 +72,3 @@ const announcementsAPI = {
 }
 
 export default announcementsAPI
-

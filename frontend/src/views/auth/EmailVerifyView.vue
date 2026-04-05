@@ -1,20 +1,18 @@
 <template>
   <AuthLayout>
     <div class="space-y-6">
-      <!-- Title -->
       <div class="text-center">
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.verifyYourEmail') }}
         </h2>
         <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
           {{ t('auth.sendCodeDesc') }}
-          <span class="font-medium text-gray-700 dark:text-gray-300">{{ email }}</span>
+          <span class="font-medium text-gray-700 dark:text-gray-300">{{ session.email }}</span>
         </p>
       </div>
 
-      <!-- No Data Warning -->
       <div
-        v-if="!hasRegisterData"
+        v-if="!session.hasRegisterData"
         class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
       >
         <div class="flex items-start gap-3">
@@ -28,9 +26,7 @@
         </div>
       </div>
 
-      <!-- Verification Form -->
-      <form v-else @submit.prevent="handleVerify" class="space-y-5">
-        <!-- Verification Code Input -->
+      <form v-else class="space-y-5" @submit.prevent="handleVerify">
         <div>
           <label for="code" class="input-label text-center">
             {{ t('auth.verificationCode') }}
@@ -54,7 +50,6 @@
           <p v-else class="input-hint text-center">{{ t('auth.verificationCodeHint') }}</p>
         </div>
 
-        <!-- Code Status -->
         <div
           v-if="codeSent"
           class="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20"
@@ -69,11 +64,12 @@
           </div>
         </div>
 
-        <!-- Turnstile Widget for Resend -->
-        <div v-if="turnstileEnabled && turnstileSiteKey && showResendTurnstile">
+        <div
+          v-if="settings.turnstileEnabled && settings.turnstileSiteKey && showResendTurnstile"
+        >
           <TurnstileWidget
             ref="turnstileRef"
-            :site-key="turnstileSiteKey"
+            :site-key="settings.turnstileSiteKey"
             @verify="onTurnstileVerify"
             @expire="onTurnstileExpire"
             @error="onTurnstileError"
@@ -83,7 +79,6 @@
           </p>
         </div>
 
-        <!-- Error Message -->
         <transition name="fade">
           <div
             v-if="errorMessage"
@@ -100,7 +95,6 @@
           </div>
         </transition>
 
-        <!-- Submit Button -->
         <button type="submit" :disabled="isLoading || !verifyCode" class="btn btn-primary w-full">
           <svg
             v-if="isLoading"
@@ -126,7 +120,6 @@
           {{ isLoading ? t('auth.verifying') : t('auth.verifyAndCreate') }}
         </button>
 
-        <!-- Resend Code -->
         <div class="text-center">
           <button
             v-if="countdown > 0"
@@ -139,14 +132,12 @@
           <button
             v-else
             type="button"
-            @click="handleResendCode"
-            :disabled="
-              isSendingCode || (turnstileEnabled && showResendTurnstile && !resendTurnstileToken)
-            "
+            :disabled="isResendDisabled"
             class="text-sm text-primary-600 transition-colors hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:text-primary-300"
+            @click="handleResendCode"
           >
             <span v-if="isSendingCode">{{ t('auth.sendingCode') }}</span>
-            <span v-else-if="turnstileEnabled && !showResendTurnstile">
+            <span v-else-if="settings.turnstileEnabled && !showResendTurnstile">
               {{ t('auth.clickToResend') }}
             </span>
             <span v-else>{{ t('auth.resendCode') }}</span>
@@ -155,11 +146,10 @@
       </form>
     </div>
 
-    <!-- Footer -->
     <template #footer>
       <button
-        @click="handleBack"
         class="flex items-center gap-2 text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-gray-300"
+        @click="handleBack"
       >
         <Icon name="arrowLeft" size="sm" />
         {{ t('auth.backToRegistration') }}
@@ -169,194 +159,142 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { AuthLayout } from '@/components/layout'
-import Icon from '@/components/icons/Icon.vue'
-import TurnstileWidget from '@/components/TurnstileWidget.vue'
-import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, sendVerifyCode } from '@/api/auth'
+import TurnstileWidget from '@/components/TurnstileWidget.vue'
+import Icon from '@/components/icons/Icon.vue'
+import { AuthLayout } from '@/components/layout'
+import { useAppStore, useAuthStore } from '@/stores'
 import { buildAuthErrorMessage } from '@/utils/authError'
+import { isRegistrationEmailSuffixAllowed } from '@/utils/registrationEmailPolicy'
 import {
-  isRegistrationEmailSuffixAllowed,
-  normalizeRegistrationEmailSuffixWhitelist
-} from '@/utils/registrationEmailPolicy'
+  applyEmailVerifyPublicSettings,
+  buildEmailVerifyRegisterPayload,
+  buildEmailVerifySuffixNotAllowedMessage,
+  buildSendVerifyCodePayload,
+  createEmailVerifyErrors,
+  createEmailVerifySessionState,
+  createEmailVerifySettingsState,
+  parseRegisterSession,
+  validateEmailVerifyCode
+} from './email-verify/emailVerifyView'
 
 const { t, locale } = useI18n()
-
-// ==================== Router & Stores ====================
 
 const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
-// ==================== State ====================
-
-const isLoading = ref<boolean>(false)
-const isSendingCode = ref<boolean>(false)
-const errorMessage = ref<string>('')
-const codeSent = ref<boolean>(false)
-const verifyCode = ref<string>('')
-const countdown = ref<number>(0)
+const isLoading = ref(false)
+const isSendingCode = ref(false)
+const errorMessage = ref('')
+const codeSent = ref(false)
+const verifyCode = ref('')
+const countdown = ref(0)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
-// Registration data from sessionStorage
-const email = ref<string>('')
-const password = ref<string>('')
-const initialTurnstileToken = ref<string>('')
-const promoCode = ref<string>('')
-const invitationCode = ref<string>('')
-const hasRegisterData = ref<boolean>(false)
-
-// Public settings
-const turnstileEnabled = ref<boolean>(false)
-const turnstileSiteKey = ref<string>('')
-const siteName = ref<string>('Sub2API')
-const registrationEmailSuffixWhitelist = ref<string[]>([])
-
-// Turnstile for resend
+const session = reactive(createEmailVerifySessionState())
+const settings = reactive(createEmailVerifySettingsState())
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
-const resendTurnstileToken = ref<string>('')
-const showResendTurnstile = ref<boolean>(false)
+const resendTurnstileToken = ref('')
+const showResendTurnstile = ref(false)
+const errors = reactive(createEmailVerifyErrors())
 
-const errors = ref({
-  code: '',
-  turnstile: ''
-})
+const isResendDisabled = computed(
+  () =>
+    isSendingCode.value ||
+    (settings.turnstileEnabled && showResendTurnstile.value && !resendTurnstileToken.value)
+)
 
-// ==================== Lifecycle ====================
+const buildEmailSuffixNotAllowedMessage = () =>
+  buildEmailVerifySuffixNotAllowedMessage(
+    String(locale.value || ''),
+    settings.registrationEmailSuffixWhitelist,
+    t
+  )
 
-onMounted(async () => {
-  // Load registration data from sessionStorage
-  const registerDataStr = sessionStorage.getItem('register_data')
-  if (registerDataStr) {
-    try {
-      const registerData = JSON.parse(registerDataStr)
-      email.value = registerData.email || ''
-      password.value = registerData.password || ''
-      initialTurnstileToken.value = registerData.turnstile_token || ''
-      promoCode.value = registerData.promo_code || ''
-      invitationCode.value = registerData.invitation_code || ''
-      hasRegisterData.value = !!(email.value && password.value)
-    } catch {
-      hasRegisterData.value = false
-    }
-  }
-
-  // Load public settings
-  try {
-    const settings = await getPublicSettings()
-    turnstileEnabled.value = settings.turnstile_enabled
-    turnstileSiteKey.value = settings.turnstile_site_key || ''
-    siteName.value = settings.site_name || 'Sub2API'
-    registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
-      settings.registration_email_suffix_whitelist || []
-    )
-  } catch (error) {
-    console.error('Failed to load public settings:', error)
-  }
-
-  // Auto-send verification code if we have valid data
-  if (hasRegisterData.value) {
-    await sendCode()
-  }
-})
-
-onUnmounted(() => {
+const clearCountdownTimer = () => {
   if (countdownTimer) {
     clearInterval(countdownTimer)
     countdownTimer = null
   }
-})
-
-// ==================== Countdown ====================
+}
 
 function startCountdown(seconds: number): void {
   countdown.value = seconds
-
-  if (countdownTimer) {
-    clearInterval(countdownTimer)
-  }
+  clearCountdownTimer()
 
   countdownTimer = setInterval(() => {
     if (countdown.value > 0) {
-      countdown.value--
-    } else {
-      if (countdownTimer) {
-        clearInterval(countdownTimer)
-        countdownTimer = null
-      }
+      countdown.value -= 1
+      return
     }
+
+    clearCountdownTimer()
   }, 1000)
 }
 
-// ==================== Turnstile Handlers ====================
-
 function onTurnstileVerify(token: string): void {
   resendTurnstileToken.value = token
-  errors.value.turnstile = ''
+  errors.turnstile = ''
 }
 
 function onTurnstileExpire(): void {
   resendTurnstileToken.value = ''
-  errors.value.turnstile = t('auth.turnstileExpired')
+  errors.turnstile = t('auth.turnstileExpired')
 }
 
 function onTurnstileError(): void {
   resendTurnstileToken.value = ''
-  errors.value.turnstile = t('auth.turnstileFailed')
+  errors.turnstile = t('auth.turnstileFailed')
 }
-
-// ==================== Send Code ====================
 
 async function sendCode(): Promise<void> {
   isSendingCode.value = true
   errorMessage.value = ''
 
   try {
-    if (!isRegistrationEmailSuffixAllowed(email.value, registrationEmailSuffixWhitelist.value)) {
+    if (
+      !isRegistrationEmailSuffixAllowed(session.email, settings.registrationEmailSuffixWhitelist)
+    ) {
       errorMessage.value = buildEmailSuffixNotAllowedMessage()
       appStore.showError(errorMessage.value)
       return
     }
 
-    const response = await sendVerifyCode({
-      email: email.value,
-      // 优先使用重发时新获取的 token（因为初始 token 可能已被使用）
-      turnstile_token: resendTurnstileToken.value || initialTurnstileToken.value || undefined
-    })
+    const response = await sendVerifyCode(
+      buildSendVerifyCodePayload(
+        session.email,
+        resendTurnstileToken.value,
+        session.initialTurnstileToken
+      )
+    )
 
     codeSent.value = true
     startCountdown(response.countdown)
-
-    // Reset turnstile state（token 已使用，清除以避免重复使用）
-    initialTurnstileToken.value = ''
+    session.initialTurnstileToken = ''
     showResendTurnstile.value = false
     resendTurnstileToken.value = ''
   } catch (error: unknown) {
     errorMessage.value = buildAuthErrorMessage(error, {
       fallback: t('auth.sendCodeFailed')
     })
-
     appStore.showError(errorMessage.value)
   } finally {
     isSendingCode.value = false
   }
 }
 
-// ==================== Handlers ====================
-
 async function handleResendCode(): Promise<void> {
-  // If turnstile is enabled and we haven't shown it yet, show it
-  if (turnstileEnabled.value && !showResendTurnstile.value) {
+  if (settings.turnstileEnabled && !showResendTurnstile.value) {
     showResendTurnstile.value = true
     return
   }
 
-  // If turnstile is enabled but no token yet, wait
-  if (turnstileEnabled.value && !resendTurnstileToken.value) {
-    errors.value.turnstile = t('auth.completeVerification')
+  if (settings.turnstileEnabled && !resendTurnstileToken.value) {
+    errors.turnstile = t('auth.completeVerification')
     return
   }
 
@@ -364,19 +302,8 @@ async function handleResendCode(): Promise<void> {
 }
 
 function validateForm(): boolean {
-  errors.value.code = ''
-
-  if (!verifyCode.value.trim()) {
-    errors.value.code = t('auth.codeRequired')
-    return false
-  }
-
-  if (!/^\d{6}$/.test(verifyCode.value.trim())) {
-    errors.value.code = t('auth.invalidCode')
-    return false
-  }
-
-  return true
+  errors.code = validateEmailVerifyCode(verifyCode.value, t)
+  return !errors.code
 }
 
 async function handleVerify(): Promise<void> {
@@ -389,35 +316,22 @@ async function handleVerify(): Promise<void> {
   isLoading.value = true
 
   try {
-    if (!isRegistrationEmailSuffixAllowed(email.value, registrationEmailSuffixWhitelist.value)) {
+    if (
+      !isRegistrationEmailSuffixAllowed(session.email, settings.registrationEmailSuffixWhitelist)
+    ) {
       errorMessage.value = buildEmailSuffixNotAllowedMessage()
       appStore.showError(errorMessage.value)
       return
     }
 
-    // Register with verification code
-    await authStore.register({
-      email: email.value,
-      password: password.value,
-      verify_code: verifyCode.value.trim(),
-      turnstile_token: initialTurnstileToken.value || undefined,
-      promo_code: promoCode.value || undefined,
-      invitation_code: invitationCode.value || undefined
-    })
-
-    // Clear session data
+    await authStore.register(buildEmailVerifyRegisterPayload(session, verifyCode.value))
     sessionStorage.removeItem('register_data')
-
-    // Show success toast
-    appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
-
-    // Redirect to dashboard
+    appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: settings.siteName }))
     await router.push('/dashboard')
   } catch (error: unknown) {
     errorMessage.value = buildAuthErrorMessage(error, {
       fallback: t('auth.verifyFailed')
     })
-
     appStore.showError(errorMessage.value)
   } finally {
     isLoading.value = false
@@ -425,25 +339,27 @@ async function handleVerify(): Promise<void> {
 }
 
 function handleBack(): void {
-  // Clear session data
   sessionStorage.removeItem('register_data')
-
-  // Go back to registration
-  router.push('/register')
+  void router.push('/register')
 }
 
-function buildEmailSuffixNotAllowedMessage(): string {
-  const normalizedWhitelist = normalizeRegistrationEmailSuffixWhitelist(
-    registrationEmailSuffixWhitelist.value
-  )
-  if (normalizedWhitelist.length === 0) {
-    return t('auth.emailSuffixNotAllowed')
+onMounted(async () => {
+  Object.assign(session, parseRegisterSession(sessionStorage.getItem('register_data')))
+
+  try {
+    applyEmailVerifyPublicSettings(settings, await getPublicSettings())
+  } catch (error) {
+    console.error('Failed to load public settings:', error)
   }
-  const separator = String(locale.value || '').toLowerCase().startsWith('zh') ? '、' : ', '
-  return t('auth.emailSuffixNotAllowedWithAllowed', {
-    suffixes: normalizedWhitelist.join(separator)
-  })
-}
+
+  if (session.hasRegisterData) {
+    await sendCode()
+  }
+})
+
+onUnmounted(() => {
+  clearCountdownTimer()
+})
 </script>
 
 <style scoped>

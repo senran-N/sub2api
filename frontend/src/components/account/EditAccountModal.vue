@@ -1751,7 +1751,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
-import type { Account, Proxy, AdminGroup, CheckMixedChannelResponse } from '@/types'
+import type { Account, AccountType, Proxy, AdminGroup, CheckMixedChannelResponse } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
@@ -1760,13 +1760,36 @@ import ProxySelector from '@/components/common/ProxySelector.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
-import { applyInterceptWarmup } from '@/components/account/credentialsBuilder'
+import {
+  buildAccountOpenAIWSModeOptions,
+  buildAccountQuotaExtra,
+  buildAccountTempUnschedPresets,
+  buildAccountUmqModeOptions,
+  buildMixedChannelDetails,
+  needsMixedChannelCheck,
+  resolveAccountBaseUrlHint,
+  resolveMixedChannelWarningMessage
+} from '@/components/account/accountModalShared'
+import {
+  applyInterceptWarmup,
+  applyTempUnschedConfig,
+  createTempUnschedRule,
+  DEFAULT_POOL_MODE_RETRY_COUNT,
+  getDefaultBaseURL,
+  loadTempUnschedRuleState,
+  MAX_POOL_MODE_RETRY_COUNT,
+  moveItemInPlace,
+  normalizePoolModeRetryCount,
+  replaceAntigravityModelMapping,
+  replaceBuiltModelMapping,
+  type ModelMapping,
+  type TempUnschedRuleForm
+} from '@/components/account/credentialsBuilder'
 import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import {
   // OPENAI_WS_MODE_CTX_POOL,
   OPENAI_WS_MODE_OFF,
-  OPENAI_WS_MODE_PASSTHROUGH,
   isOpenAIWSModeEnabled,
   resolveOpenAIWSModeConcurrencyHintKey,
   type OpenAIWSMode,
@@ -1775,7 +1798,6 @@ import {
 import {
   getPresetMappingsByPlatform,
   commonErrorCodes,
-  buildModelMappingObject,
   isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
 
@@ -1798,31 +1820,15 @@ const authStore = useAuthStore()
 
 // Platform-specific hint for Base URL
 const baseUrlHint = computed(() => {
-  if (!props.account) return t('admin.accounts.baseUrlHint')
-  if (props.account.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
-  if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
-  return t('admin.accounts.baseUrlHint')
+  return resolveAccountBaseUrlHint(props.account?.platform, t)
 })
 
 const antigravityPresetMappings = computed(() => getPresetMappingsByPlatform('antigravity'))
 const bedrockPresets = computed(() => getPresetMappingsByPlatform('bedrock'))
 
-// Model mapping type
-interface ModelMapping {
-  from: string
-  to: string
-}
-
-interface TempUnschedRuleForm {
-  error_code: number | null
-  keywords: string
-  duration_minutes: number | null
-  description: string
-}
-
 // State
 const submitting = ref(false)
-const editBaseUrl = ref('https://api.anthropic.com')
+const editBaseUrl = ref(getDefaultBaseURL('anthropic'))
 const editApiKey = ref('')
 // Bedrock credentials
 const editBedrockAccessKeyId = ref('')
@@ -1838,8 +1844,6 @@ const isBedrockAPIKeyMode = computed(() =>
 const modelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
-const DEFAULT_POOL_MODE_RETRY_COUNT = 3
-const MAX_POOL_MODE_RETRY_COUNT = 10
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const customErrorCodesEnabled = ref(false)
@@ -1878,11 +1882,7 @@ const baseRpm = ref<number | null>(null)
 const rpmStrategy = ref<'tiered' | 'sticky_exempt'>('tiered')
 const rpmStickyBuffer = ref<number | null>(null)
 const userMsgQueueMode = ref('')
-const umqModeOptions = computed(() => [
-  { value: '', label: t('admin.accounts.quotaControl.rpmLimit.umqModeOff') },
-  { value: 'throttle', label: t('admin.accounts.quotaControl.rpmLimit.umqModeThrottle') },
-  { value: 'serialize', label: t('admin.accounts.quotaControl.rpmLimit.umqModeSerialize') },
-])
+const umqModeOptions = computed(() => buildAccountUmqModeOptions(t))
 const tlsFingerprintEnabled = ref(false)
 const tlsFingerprintProfileId = ref<number | null>(null)
 const tlsFingerprintProfiles = ref<{ id: number; name: string }[]>([])
@@ -1907,12 +1907,7 @@ const editWeeklyResetMode = ref<'rolling' | 'fixed' | null>(null)
 const editWeeklyResetDay = ref<number | null>(null)
 const editWeeklyResetHour = ref<number | null>(null)
 const editResetTimezone = ref<string | null>(null)
-const openAIWSModeOptions = computed(() => [
-  { value: OPENAI_WS_MODE_OFF, label: t('admin.accounts.openai.wsModeOff') },
-  // TODO: ctx_pool 选项暂时隐藏，待测试完成后恢复
-  // { value: OPENAI_WS_MODE_CTX_POOL, label: t('admin.accounts.openai.wsModeCtxPool') },
-  { value: OPENAI_WS_MODE_PASSTHROUGH, label: t('admin.accounts.openai.wsModePassthrough') }
-])
+const openAIWSModeOptions = computed(() => buildAccountOpenAIWSModeOptions(t))
 const openaiResponsesWebSocketV2Mode = computed({
   get: () => {
     if (props.account?.type === 'apikey') {
@@ -1937,49 +1932,302 @@ const isOpenAIModelRestrictionDisabled = computed(() =>
 
 // Computed: current preset mappings based on platform
 const presetMappings = computed(() => getPresetMappingsByPlatform(props.account?.platform || 'anthropic'))
-const tempUnschedPresets = computed(() => [
-  {
-    label: t('admin.accounts.tempUnschedulable.presets.overloadLabel'),
-    rule: {
-      error_code: 529,
-      keywords: 'overloaded, too many',
-      duration_minutes: 60,
-      description: t('admin.accounts.tempUnschedulable.presets.overloadDesc')
-    }
-  },
-  {
-    label: t('admin.accounts.tempUnschedulable.presets.rateLimitLabel'),
-    rule: {
-      error_code: 429,
-      keywords: 'rate limit, too many requests',
-      duration_minutes: 10,
-      description: t('admin.accounts.tempUnschedulable.presets.rateLimitDesc')
-    }
-  },
-  {
-    label: t('admin.accounts.tempUnschedulable.presets.unavailableLabel'),
-    rule: {
-      error_code: 503,
-      keywords: 'unavailable, maintenance',
-      duration_minutes: 30,
-      description: t('admin.accounts.tempUnschedulable.presets.unavailableDesc')
-    }
-  }
-])
+const tempUnschedPresets = computed(() => buildAccountTempUnschedPresets(t))
 
 // Computed: default base URL based on platform
 const defaultBaseUrl = computed(() => {
-  if (props.account?.platform === 'openai' || props.account?.platform === 'sora') return 'https://api.openai.com'
-  if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
-  return 'https://api.anthropic.com'
+  return getDefaultBaseURL(props.account?.platform || 'anthropic')
 })
 
 const mixedChannelWarningMessageText = computed(() => {
-  if (mixedChannelWarningDetails.value) {
-    return t('admin.accounts.mixedChannelWarning', mixedChannelWarningDetails.value)
-  }
-  return mixedChannelWarningRawMessage.value
+  return resolveMixedChannelWarningMessage({
+    details: mixedChannelWarningDetails.value,
+    rawMessage: mixedChannelWarningRawMessage.value,
+    t
+  })
 })
+
+const resetModelRestrictionState = () => {
+  modelRestrictionMode.value = 'whitelist'
+  allowedModels.value = []
+  modelMappings.value = []
+}
+
+const syncModelRestrictionStateFromMapping = (rawMapping: unknown) => {
+  if (!rawMapping || typeof rawMapping !== 'object') {
+    resetModelRestrictionState()
+    return
+  }
+
+  const entries = Object.entries(rawMapping as Record<string, string>)
+  if (entries.length === 0) {
+    resetModelRestrictionState()
+    return
+  }
+
+  const isWhitelistMode = entries.every(([from, to]) => from === to)
+  if (isWhitelistMode) {
+    modelRestrictionMode.value = 'whitelist'
+    allowedModels.value = entries.map(([from]) => from)
+    modelMappings.value = []
+    return
+  }
+
+  modelRestrictionMode.value = 'mapping'
+  modelMappings.value = entries.map(([from, to]) => ({ from, to }))
+  allowedModels.value = []
+}
+
+const syncAntigravityModelRestrictionState = (
+  credentials: Record<string, unknown> | undefined
+) => {
+  antigravityModelRestrictionMode.value = 'mapping'
+  antigravityWhitelistModels.value = []
+
+  const rawMapping = credentials?.model_mapping
+  if (rawMapping && typeof rawMapping === 'object') {
+    antigravityModelMappings.value = Object.entries(rawMapping as Record<string, string>).map(
+      ([from, to]) => ({ from, to })
+    )
+    return
+  }
+
+  const rawWhitelist = credentials?.model_whitelist
+  if (Array.isArray(rawWhitelist) && rawWhitelist.length > 0) {
+    antigravityModelMappings.value = rawWhitelist
+      .map((value) => String(value).trim())
+      .filter((value) => value.length > 0)
+      .map((model) => ({ from: model, to: model }))
+    return
+  }
+
+  antigravityModelMappings.value = []
+}
+
+const appendEmptyModelMapping = (target: ModelMapping[]) => {
+  target.push({ from: '', to: '' })
+}
+
+const removeModelMappingAt = (target: ModelMapping[], index: number) => {
+  target.splice(index, 1)
+}
+
+const appendPresetModelMapping = (target: ModelMapping[], from: string, to: string) => {
+  if (target.some((mapping) => mapping.from === from)) {
+    appStore.showInfo(t('admin.accounts.mappingExists', { model: from }))
+    return
+  }
+  target.push({ from, to })
+}
+
+const confirmCustomErrorCodeSelection = (code: number) => {
+  if (code === 429) {
+    return confirm(t('admin.accounts.customErrorCodes429Warning'))
+  }
+  if (code === 529) {
+    return confirm(t('admin.accounts.customErrorCodes529Warning'))
+  }
+  return true
+}
+
+const resetMixedChannelDialogState = () => {
+  showMixedChannelWarning.value = false
+  mixedChannelWarningDetails.value = null
+  mixedChannelWarningRawMessage.value = ''
+  mixedChannelWarningAction.value = null
+}
+
+const applySharedEditCredentialsState = (credentials: Record<string, unknown>) => {
+  applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'edit')
+  if (!applyTempUnschedConfig(credentials, tempUnschedEnabled.value, tempUnschedRules.value)) {
+    appStore.showError(t('admin.accounts.tempUnschedulable.rulesInvalid'))
+    return false
+  }
+  return true
+}
+
+const syncOpenAIExtraState = (
+  accountType: AccountType,
+  extra: Record<string, unknown> | undefined
+) => {
+  openaiPassthroughEnabled.value =
+    extra?.openai_passthrough === true || extra?.openai_oauth_passthrough === true
+  openaiOAuthResponsesWebSocketV2Mode.value = resolveOpenAIWSModeFromExtra(extra, {
+    modeKey: 'openai_oauth_responses_websockets_v2_mode',
+    enabledKey: 'openai_oauth_responses_websockets_v2_enabled',
+    fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
+    defaultMode: OPENAI_WS_MODE_OFF
+  })
+  openaiAPIKeyResponsesWebSocketV2Mode.value = resolveOpenAIWSModeFromExtra(extra, {
+    modeKey: 'openai_apikey_responses_websockets_v2_mode',
+    enabledKey: 'openai_apikey_responses_websockets_v2_enabled',
+    fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
+    defaultMode: OPENAI_WS_MODE_OFF
+  })
+  codexCLIOnlyEnabled.value = accountType === 'oauth' && extra?.codex_cli_only === true
+}
+
+const buildUpdatedOpenAIExtra = (
+  accountType: AccountType,
+  currentExtra: Record<string, unknown>
+) => {
+  const nextExtra: Record<string, unknown> = { ...currentExtra }
+  const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
+
+  if (accountType === 'oauth') {
+    nextExtra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
+    nextExtra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
+      openaiOAuthResponsesWebSocketV2Mode.value
+    )
+  } else if (accountType === 'apikey') {
+    nextExtra.openai_apikey_responses_websockets_v2_mode = openaiAPIKeyResponsesWebSocketV2Mode.value
+    nextExtra.openai_apikey_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
+      openaiAPIKeyResponsesWebSocketV2Mode.value
+    )
+  }
+
+  delete nextExtra.responses_websockets_v2_enabled
+  delete nextExtra.openai_ws_enabled
+
+  if (openaiPassthroughEnabled.value) {
+    nextExtra.openai_passthrough = true
+  } else {
+    delete nextExtra.openai_passthrough
+    delete nextExtra.openai_oauth_passthrough
+  }
+
+  if (accountType === 'oauth') {
+    if (codexCLIOnlyEnabled.value) {
+      nextExtra.codex_cli_only = true
+    } else if (hadCodexCLIOnlyEnabled) {
+      // 关闭时显式写 false，避免 extra 为空被后端忽略导致旧值无法清除
+      nextExtra.codex_cli_only = false
+    } else {
+      delete nextExtra.codex_cli_only
+    }
+  }
+
+  return nextExtra
+}
+
+const buildUpdatedAntigravityExtra = (currentExtra: Record<string, unknown>) => {
+  const nextExtra: Record<string, unknown> = { ...currentExtra }
+
+  if (mixedScheduling.value) {
+    nextExtra.mixed_scheduling = true
+  } else {
+    delete nextExtra.mixed_scheduling
+  }
+
+  if (allowOverages.value) {
+    nextExtra.allow_overages = true
+  } else {
+    delete nextExtra.allow_overages
+  }
+
+  return nextExtra
+}
+
+const buildUpdatedAnthropicQuotaControlExtra = (currentExtra: Record<string, unknown>) => {
+  const nextExtra: Record<string, unknown> = { ...currentExtra }
+
+  if (windowCostEnabled.value && windowCostLimit.value != null && windowCostLimit.value > 0) {
+    nextExtra.window_cost_limit = windowCostLimit.value
+    nextExtra.window_cost_sticky_reserve = windowCostStickyReserve.value ?? 10
+  } else {
+    delete nextExtra.window_cost_limit
+    delete nextExtra.window_cost_sticky_reserve
+  }
+
+  if (sessionLimitEnabled.value && maxSessions.value != null && maxSessions.value > 0) {
+    nextExtra.max_sessions = maxSessions.value
+    nextExtra.session_idle_timeout_minutes = sessionIdleTimeout.value ?? 5
+  } else {
+    delete nextExtra.max_sessions
+    delete nextExtra.session_idle_timeout_minutes
+  }
+
+  if (rpmLimitEnabled.value) {
+    const DEFAULT_BASE_RPM = 15
+    nextExtra.base_rpm =
+      baseRpm.value != null && baseRpm.value > 0 ? baseRpm.value : DEFAULT_BASE_RPM
+    nextExtra.rpm_strategy = rpmStrategy.value
+    if (rpmStickyBuffer.value != null && rpmStickyBuffer.value > 0) {
+      nextExtra.rpm_sticky_buffer = rpmStickyBuffer.value
+    } else {
+      delete nextExtra.rpm_sticky_buffer
+    }
+  } else {
+    delete nextExtra.base_rpm
+    delete nextExtra.rpm_strategy
+    delete nextExtra.rpm_sticky_buffer
+  }
+
+  if (userMsgQueueMode.value) {
+    nextExtra.user_msg_queue_mode = userMsgQueueMode.value
+  } else {
+    delete nextExtra.user_msg_queue_mode
+  }
+  delete nextExtra.user_msg_queue_enabled
+
+  if (tlsFingerprintEnabled.value) {
+    nextExtra.enable_tls_fingerprint = true
+    if (tlsFingerprintProfileId.value) {
+      nextExtra.tls_fingerprint_profile_id = tlsFingerprintProfileId.value
+    } else {
+      delete nextExtra.tls_fingerprint_profile_id
+    }
+  } else {
+    delete nextExtra.enable_tls_fingerprint
+    delete nextExtra.tls_fingerprint_profile_id
+  }
+
+  if (sessionIdMaskingEnabled.value) {
+    nextExtra.session_id_masking_enabled = true
+  } else {
+    delete nextExtra.session_id_masking_enabled
+  }
+
+  if (cacheTTLOverrideEnabled.value) {
+    nextExtra.cache_ttl_override_enabled = true
+    nextExtra.cache_ttl_override_target = cacheTTLOverrideTarget.value
+  } else {
+    delete nextExtra.cache_ttl_override_enabled
+    delete nextExtra.cache_ttl_override_target
+  }
+
+  if (customBaseUrlEnabled.value && customBaseUrl.value.trim()) {
+    nextExtra.custom_base_url_enabled = true
+    nextExtra.custom_base_url = customBaseUrl.value.trim()
+  } else {
+    delete nextExtra.custom_base_url_enabled
+    delete nextExtra.custom_base_url
+  }
+
+  return nextExtra
+}
+
+const buildUpdatedAnthropicApiKeyExtra = (currentExtra: Record<string, unknown>) => {
+  const nextExtra: Record<string, unknown> = { ...currentExtra }
+
+  if (anthropicPassthroughEnabled.value) {
+    nextExtra.anthropic_passthrough = true
+  } else {
+    delete nextExtra.anthropic_passthrough
+  }
+
+  return nextExtra
+}
+
+const getAccountCredentials = () => (props.account?.credentials as Record<string, unknown>) || {}
+
+const getAccountExtra = () => (props.account?.extra as Record<string, unknown>) || {}
+
+const getPendingCredentials = (updatePayload: Record<string, unknown>) =>
+  (updatePayload.credentials as Record<string, unknown>) || getAccountCredentials()
+
+const getPendingExtra = (updatePayload: Record<string, unknown>) =>
+  (updatePayload.extra as Record<string, unknown>) || getAccountExtra()
 
 const form = reactive({
   name: '',
@@ -2013,29 +2261,12 @@ const expiresAtInput = computed({
 })
 
 // Watchers
-const normalizePoolModeRetryCount = (value: number) => {
-  if (!Number.isFinite(value)) {
-    return DEFAULT_POOL_MODE_RETRY_COUNT
-  }
-  const normalized = Math.trunc(value)
-  if (normalized < 0) {
-    return 0
-  }
-  if (normalized > MAX_POOL_MODE_RETRY_COUNT) {
-    return MAX_POOL_MODE_RETRY_COUNT
-  }
-  return normalized
-}
-
 const syncFormFromAccount = (newAccount: Account | null) => {
   if (!newAccount) {
     return
   }
   antigravityMixedChannelConfirmed.value = false
-  showMixedChannelWarning.value = false
-  mixedChannelWarningDetails.value = null
-  mixedChannelWarningRawMessage.value = ''
-  mixedChannelWarningAction.value = null
+  resetMixedChannelDialogState()
   form.name = newAccount.name
   form.notes = newAccount.notes || ''
   form.proxy_id = newAccount.proxy_id
@@ -2068,22 +2299,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   codexCLIOnlyEnabled.value = false
   anthropicPassthroughEnabled.value = false
   if (newAccount.platform === 'openai' && (newAccount.type === 'oauth' || newAccount.type === 'apikey')) {
-    openaiPassthroughEnabled.value = extra?.openai_passthrough === true || extra?.openai_oauth_passthrough === true
-    openaiOAuthResponsesWebSocketV2Mode.value = resolveOpenAIWSModeFromExtra(extra, {
-      modeKey: 'openai_oauth_responses_websockets_v2_mode',
-      enabledKey: 'openai_oauth_responses_websockets_v2_enabled',
-      fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
-      defaultMode: OPENAI_WS_MODE_OFF
-    })
-    openaiAPIKeyResponsesWebSocketV2Mode.value = resolveOpenAIWSModeFromExtra(extra, {
-      modeKey: 'openai_apikey_responses_websockets_v2_mode',
-      enabledKey: 'openai_apikey_responses_websockets_v2_enabled',
-      fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
-      defaultMode: OPENAI_WS_MODE_OFF
-    })
-    if (newAccount.type === 'oauth') {
-      codexCLIOnlyEnabled.value = extra?.codex_cli_only === true
-    }
+    syncOpenAIExtraState(newAccount.type, extra)
   }
   if (newAccount.platform === 'anthropic' && newAccount.type === 'apikey') {
     anthropicPassthroughEnabled.value = extra?.anthropic_passthrough === true
@@ -2118,30 +2334,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   // Load antigravity model mapping (Antigravity 只支持映射模式)
   if (newAccount.platform === 'antigravity') {
-    const credentials = newAccount.credentials as Record<string, unknown> | undefined
-
-    // Antigravity 始终使用映射模式
-    antigravityModelRestrictionMode.value = 'mapping'
-    antigravityWhitelistModels.value = []
-
-    // 从 model_mapping 读取映射配置
-    const rawAgMapping = credentials?.model_mapping as Record<string, string> | undefined
-    if (rawAgMapping && typeof rawAgMapping === 'object') {
-      const entries = Object.entries(rawAgMapping)
-      // 无论是白名单样式(key===value)还是真正的映射，都统一转换为映射列表
-      antigravityModelMappings.value = entries.map(([from, to]) => ({ from, to }))
-    } else {
-      // 兼容旧数据：从 model_whitelist 读取，转换为映射格式
-      const rawWhitelist = credentials?.model_whitelist
-      if (Array.isArray(rawWhitelist) && rawWhitelist.length > 0) {
-        antigravityModelMappings.value = rawWhitelist
-          .map((v) => String(v).trim())
-          .filter((v) => v.length > 0)
-          .map((m) => ({ from: m, to: m }))
-      } else {
-        antigravityModelMappings.value = []
-      }
-    }
+    syncAntigravityModelRestrictionState(newAccount.credentials as Record<string, unknown> | undefined)
   } else {
     antigravityModelRestrictionMode.value = 'mapping'
     antigravityWhitelistModels.value = []
@@ -2151,44 +2344,17 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   // Load quota control settings (Anthropic OAuth/SetupToken only)
   loadQuotaControlSettings(newAccount)
 
-  loadTempUnschedRules(credentials)
+  const tempUnschedState = loadTempUnschedRuleState(credentials)
+  tempUnschedEnabled.value = tempUnschedState.enabled
+  tempUnschedRules.value = tempUnschedState.rules
 
   // Initialize API Key fields for apikey type
   if (newAccount.type === 'apikey' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
-    const platformDefaultUrl =
-      newAccount.platform === 'openai' || newAccount.platform === 'sora'
-        ? 'https://api.openai.com'
-        : newAccount.platform === 'gemini'
-          ? 'https://generativelanguage.googleapis.com'
-          : 'https://api.anthropic.com'
+    const platformDefaultUrl = getDefaultBaseURL(newAccount.platform)
     editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
 
-    // Load model mappings and detect mode
-    const existingMappings = credentials.model_mapping as Record<string, string> | undefined
-    if (existingMappings && typeof existingMappings === 'object') {
-      const entries = Object.entries(existingMappings)
-
-      // Detect if this is whitelist mode (all from === to) or mapping mode
-      const isWhitelistMode = entries.length > 0 && entries.every(([from, to]) => from === to)
-
-      if (isWhitelistMode) {
-        // Whitelist mode: populate allowedModels
-        modelRestrictionMode.value = 'whitelist'
-        allowedModels.value = entries.map(([from]) => from)
-        modelMappings.value = []
-      } else {
-        // Mapping mode: populate modelMappings
-        modelRestrictionMode.value = 'mapping'
-        modelMappings.value = entries.map(([from, to]) => ({ from, to }))
-        allowedModels.value = []
-      }
-    } else {
-      // No mappings: default to whitelist mode with empty selection (allow all)
-      modelRestrictionMode.value = 'whitelist'
-      modelMappings.value = []
-      allowedModels.value = []
-    }
+    syncModelRestrictionStateFromMapping(credentials.model_mapping)
 
     // Load pool mode
     poolModeEnabled.value = credentials.pool_mode === true
@@ -2229,62 +2395,20 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     editQuotaDailyLimit.value = typeof bedrockExtra.quota_daily_limit === 'number' ? bedrockExtra.quota_daily_limit : null
     editQuotaWeeklyLimit.value = typeof bedrockExtra.quota_weekly_limit === 'number' ? bedrockExtra.quota_weekly_limit : null
 
-    // Load model mappings for bedrock
-    const existingMappings = bedrockCreds.model_mapping as Record<string, string> | undefined
-    if (existingMappings && typeof existingMappings === 'object') {
-      const entries = Object.entries(existingMappings)
-      const isWhitelistMode = entries.length > 0 && entries.every(([from, to]) => from === to)
-      if (isWhitelistMode) {
-        modelRestrictionMode.value = 'whitelist'
-        allowedModels.value = entries.map(([from]) => from)
-        modelMappings.value = []
-      } else {
-        modelRestrictionMode.value = 'mapping'
-        modelMappings.value = entries.map(([from, to]) => ({ from, to }))
-        allowedModels.value = []
-      }
-    } else {
-      modelRestrictionMode.value = 'whitelist'
-      modelMappings.value = []
-      allowedModels.value = []
-    }
+    syncModelRestrictionStateFromMapping(bedrockCreds.model_mapping)
   } else if (newAccount.type === 'upstream' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
     editBaseUrl.value = (credentials.base_url as string) || ''
   } else {
-    const platformDefaultUrl =
-      newAccount.platform === 'openai' || newAccount.platform === 'sora'
-        ? 'https://api.openai.com'
-        : newAccount.platform === 'gemini'
-          ? 'https://generativelanguage.googleapis.com'
-          : 'https://api.anthropic.com'
+    const platformDefaultUrl = getDefaultBaseURL(newAccount.platform)
     editBaseUrl.value = platformDefaultUrl
 
     // Load model mappings for OpenAI OAuth accounts
     if (newAccount.platform === 'openai' && newAccount.credentials) {
       const oauthCredentials = newAccount.credentials as Record<string, unknown>
-      const existingMappings = oauthCredentials.model_mapping as Record<string, string> | undefined
-      if (existingMappings && typeof existingMappings === 'object') {
-        const entries = Object.entries(existingMappings)
-        const isWhitelistMode = entries.length > 0 && entries.every(([from, to]) => from === to)
-        if (isWhitelistMode) {
-          modelRestrictionMode.value = 'whitelist'
-          allowedModels.value = entries.map(([from]) => from)
-          modelMappings.value = []
-        } else {
-          modelRestrictionMode.value = 'mapping'
-          modelMappings.value = entries.map(([from, to]) => ({ from, to }))
-          allowedModels.value = []
-        }
-      } else {
-        modelRestrictionMode.value = 'whitelist'
-        modelMappings.value = []
-        allowedModels.value = []
-      }
+      syncModelRestrictionStateFromMapping(oauthCredentials.model_mapping)
     } else {
-      modelRestrictionMode.value = 'whitelist'
-      modelMappings.value = []
-      allowedModels.value = []
+      resetModelRestrictionState()
     }
     poolModeEnabled.value = false
     poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT
@@ -2308,7 +2432,7 @@ watch(
   { immediate: true }
 )
 
-const loadTLSProfiles = async () => {
+async function loadTLSProfiles() {
   try {
     const profiles = await adminAPI.tlsFingerprintProfiles.list()
     tlsFingerprintProfiles.value = profiles.map(p => ({ id: p.id, name: p.name }))
@@ -2319,52 +2443,35 @@ const loadTLSProfiles = async () => {
 
 // Model mapping helpers
 const addModelMapping = () => {
-  modelMappings.value.push({ from: '', to: '' })
+  appendEmptyModelMapping(modelMappings.value)
 }
 
 const removeModelMapping = (index: number) => {
-  modelMappings.value.splice(index, 1)
+  removeModelMappingAt(modelMappings.value, index)
 }
 
 const addPresetMapping = (from: string, to: string) => {
-  const exists = modelMappings.value.some((m) => m.from === from)
-  if (exists) {
-    appStore.showInfo(t('admin.accounts.mappingExists', { model: from }))
-    return
-  }
-  modelMappings.value.push({ from, to })
+  appendPresetModelMapping(modelMappings.value, from, to)
 }
 
 const addAntigravityModelMapping = () => {
-  antigravityModelMappings.value.push({ from: '', to: '' })
+  appendEmptyModelMapping(antigravityModelMappings.value)
 }
 
 const removeAntigravityModelMapping = (index: number) => {
-  antigravityModelMappings.value.splice(index, 1)
+  removeModelMappingAt(antigravityModelMappings.value, index)
 }
 
 const addAntigravityPresetMapping = (from: string, to: string) => {
-  const exists = antigravityModelMappings.value.some((m) => m.from === from)
-  if (exists) {
-    appStore.showInfo(t('admin.accounts.mappingExists', { model: from }))
-    return
-  }
-  antigravityModelMappings.value.push({ from, to })
+  appendPresetModelMapping(antigravityModelMappings.value, from, to)
 }
 
 // Error code toggle helper
 const toggleErrorCode = (code: number) => {
   const index = selectedErrorCodes.value.indexOf(code)
   if (index === -1) {
-    // Adding code - check for 429/529 warning
-    if (code === 429) {
-      if (!confirm(t('admin.accounts.customErrorCodes429Warning'))) {
-        return
-      }
-    } else if (code === 529) {
-      if (!confirm(t('admin.accounts.customErrorCodes529Warning'))) {
-        return
-      }
+    if (!confirmCustomErrorCodeSelection(code)) {
+      return
     }
     selectedErrorCodes.value.push(code)
   } else {
@@ -2383,15 +2490,8 @@ const addCustomErrorCode = () => {
     appStore.showInfo(t('admin.accounts.errorCodeExists'))
     return
   }
-  // Check for 429/529 warning
-  if (code === 429) {
-    if (!confirm(t('admin.accounts.customErrorCodes429Warning'))) {
-      return
-    }
-  } else if (code === 529) {
-    if (!confirm(t('admin.accounts.customErrorCodes529Warning'))) {
-      return
-    }
+  if (!confirmCustomErrorCodeSelection(code)) {
+    return
   }
   selectedErrorCodes.value.push(code)
   customErrorCodeInput.value = null
@@ -2406,16 +2506,7 @@ const removeErrorCode = (code: number) => {
 }
 
 const addTempUnschedRule = (preset?: TempUnschedRuleForm) => {
-  if (preset) {
-    tempUnschedRules.value.push({ ...preset })
-    return
-  }
-  tempUnschedRules.value.push({
-    error_code: null,
-    keywords: '',
-    duration_minutes: 30,
-    description: ''
-  })
+  tempUnschedRules.value.push(createTempUnschedRule(preset))
 }
 
 const removeTempUnschedRule = (index: number) => {
@@ -2423,81 +2514,7 @@ const removeTempUnschedRule = (index: number) => {
 }
 
 const moveTempUnschedRule = (index: number, direction: number) => {
-  const target = index + direction
-  if (target < 0 || target >= tempUnschedRules.value.length) return
-  const rules = tempUnschedRules.value
-  const current = rules[index]
-  rules[index] = rules[target]
-  rules[target] = current
-}
-
-const buildTempUnschedRules = (rules: TempUnschedRuleForm[]) => {
-  const out: Array<{
-    error_code: number
-    keywords: string[]
-    duration_minutes: number
-    description: string
-  }> = []
-
-  for (const rule of rules) {
-    const errorCode = Number(rule.error_code)
-    const duration = Number(rule.duration_minutes)
-    const keywords = splitTempUnschedKeywords(rule.keywords)
-    if (!Number.isFinite(errorCode) || errorCode < 100 || errorCode > 599) {
-      continue
-    }
-    if (!Number.isFinite(duration) || duration <= 0) {
-      continue
-    }
-    if (keywords.length === 0) {
-      continue
-    }
-    out.push({
-      error_code: Math.trunc(errorCode),
-      keywords,
-      duration_minutes: Math.trunc(duration),
-      description: rule.description.trim()
-    })
-  }
-
-  return out
-}
-
-const applyTempUnschedConfig = (credentials: Record<string, unknown>) => {
-  if (!tempUnschedEnabled.value) {
-    delete credentials.temp_unschedulable_enabled
-    delete credentials.temp_unschedulable_rules
-    return true
-  }
-
-  const rules = buildTempUnschedRules(tempUnschedRules.value)
-  if (rules.length === 0) {
-    appStore.showError(t('admin.accounts.tempUnschedulable.rulesInvalid'))
-    return false
-  }
-
-  credentials.temp_unschedulable_enabled = true
-  credentials.temp_unschedulable_rules = rules
-  return true
-}
-
-function loadTempUnschedRules(credentials?: Record<string, unknown>) {
-  tempUnschedEnabled.value = credentials?.temp_unschedulable_enabled === true
-  const rawRules = credentials?.temp_unschedulable_rules
-  if (!Array.isArray(rawRules)) {
-    tempUnschedRules.value = []
-    return
-  }
-
-  tempUnschedRules.value = rawRules.map((rule) => {
-    const entry = rule as Record<string, unknown>
-    return {
-      error_code: toPositiveNumber(entry.error_code),
-      keywords: formatTempUnschedKeywords(entry.keywords),
-      duration_minutes: toPositiveNumber(entry.duration_minutes),
-      description: typeof entry.description === 'string' ? entry.description : ''
-    }
-  })
+  moveItemInPlace(tempUnschedRules.value, index, direction)
 }
 
 // Load quota control settings from account (Anthropic OAuth/SetupToken only)
@@ -2575,54 +2592,8 @@ function loadQuotaControlSettings(account: Account) {
   }
 }
 
-function formatTempUnschedKeywords(value: unknown) {
-  if (Array.isArray(value)) {
-    return value
-      .filter((item): item is string => typeof item === 'string')
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0)
-      .join(', ')
-  }
-  if (typeof value === 'string') {
-    return value
-  }
-  return ''
-}
-
-const splitTempUnschedKeywords = (value: string) => {
-  return value
-    .split(/[,;]/)
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-}
-
-function toPositiveNumber(value: unknown) {
-  const num = Number(value)
-  if (!Number.isFinite(num) || num <= 0) {
-    return null
-  }
-  return Math.trunc(num)
-}
-
-const needsMixedChannelCheck = () => props.account?.platform === 'antigravity' || props.account?.platform === 'anthropic'
-
-const buildMixedChannelDetails = (resp?: CheckMixedChannelResponse) => {
-  const details = resp?.details
-  if (!details) {
-    return null
-  }
-  return {
-    groupName: details.group_name || 'Unknown',
-    currentPlatform: details.current_platform || 'Unknown',
-    otherPlatform: details.other_platform || 'Unknown'
-  }
-}
-
 const clearMixedChannelDialog = () => {
-  showMixedChannelWarning.value = false
-  mixedChannelWarningDetails.value = null
-  mixedChannelWarningRawMessage.value = ''
-  mixedChannelWarningAction.value = null
+  resetMixedChannelDialogState()
 }
 
 const openMixedChannelDialog = (opts: {
@@ -2638,7 +2609,11 @@ const openMixedChannelDialog = (opts: {
 }
 
 const withAntigravityConfirmFlag = (payload: Record<string, unknown>) => {
-  if (needsMixedChannelCheck() && antigravityMixedChannelConfirmed.value) {
+  if (
+    props.account?.platform &&
+    needsMixedChannelCheck(props.account.platform) &&
+    antigravityMixedChannelConfirmed.value
+  ) {
     return {
       ...payload,
       confirm_mixed_channel_risk: true
@@ -2650,7 +2625,7 @@ const withAntigravityConfirmFlag = (payload: Record<string, unknown>) => {
 }
 
 const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<void>): Promise<boolean> => {
-  if (!needsMixedChannelCheck()) {
+  if (!props.account?.platform || !needsMixedChannelCheck(props.account.platform)) {
     return true
   }
   if (antigravityMixedChannelConfirmed.value) {
@@ -2701,7 +2676,12 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
     emit('updated', updatedAccount)
     handleClose()
   } catch (error: any) {
-    if (error.status === 409 && error.error === 'mixed_channel_warning' && needsMixedChannelCheck()) {
+    if (
+      error.status === 409 &&
+      error.error === 'mixed_channel_warning' &&
+      props.account?.platform &&
+      needsMixedChannelCheck(props.account.platform)
+    ) {
       openMixedChannelDialog({
         message: error.message,
         onConfirm: async () => {
@@ -2744,7 +2724,7 @@ const handleSubmit = async () => {
 
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
-      const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      const currentCredentials = getAccountCredentials()
       const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
       const shouldApplyModelMapping = !(props.account.platform === 'openai' && openaiPassthroughEnabled.value)
 
@@ -2768,12 +2748,7 @@ const handleSubmit = async () => {
 
       // Add model mapping if configured（OpenAI 开启自动透传时保留现有映射，不再编辑）
       if (shouldApplyModelMapping) {
-        const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
-        if (modelMapping) {
-          newCredentials.model_mapping = modelMapping
-        } else {
-          delete newCredentials.model_mapping
-        }
+        replaceBuiltModelMapping(newCredentials, modelRestrictionMode.value, allowedModels.value, modelMappings.value)
       } else if (currentCredentials.model_mapping) {
         newCredentials.model_mapping = currentCredentials.model_mapping
       }
@@ -2797,14 +2772,13 @@ const handleSubmit = async () => {
       }
 
       // Add intercept warmup requests setting
-      applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applySharedEditCredentialsState(newCredentials)) {
         return
       }
 
       updatePayload.credentials = newCredentials
     } else if (props.account.type === 'upstream') {
-      const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      const currentCredentials = getAccountCredentials()
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
 
       newCredentials.base_url = editBaseUrl.value.trim()
@@ -2814,15 +2788,13 @@ const handleSubmit = async () => {
       }
 
       // Add intercept warmup requests setting
-      applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
-
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applySharedEditCredentialsState(newCredentials)) {
         return
       }
 
       updatePayload.credentials = newCredentials
     } else if (props.account.type === 'bedrock') {
-      const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      const currentCredentials = getAccountCredentials()
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
 
       newCredentials.aws_region = editBedrockRegion.value.trim()
@@ -2858,26 +2830,19 @@ const handleSubmit = async () => {
       }
 
       // Model mapping
-      const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
-      if (modelMapping) {
-        newCredentials.model_mapping = modelMapping
-      } else {
-        delete newCredentials.model_mapping
-      }
+      replaceBuiltModelMapping(newCredentials, modelRestrictionMode.value, allowedModels.value, modelMappings.value)
 
-      applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applySharedEditCredentialsState(newCredentials)) {
         return
       }
 
       updatePayload.credentials = newCredentials
     } else {
       // For oauth/setup-token types, only update intercept_warmup_requests if changed
-      const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      const currentCredentials = getAccountCredentials()
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
 
-      applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applySharedEditCredentialsState(newCredentials)) {
         return
       }
 
@@ -2886,18 +2851,12 @@ const handleSubmit = async () => {
 
     // OpenAI OAuth: persist model mapping to credentials
     if (props.account.platform === 'openai' && props.account.type === 'oauth') {
-      const currentCredentials = (updatePayload.credentials as Record<string, unknown>) ||
-        ((props.account.credentials as Record<string, unknown>) || {})
+      const currentCredentials = getPendingCredentials(updatePayload)
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
       const shouldApplyModelMapping = !openaiPassthroughEnabled.value
 
       if (shouldApplyModelMapping) {
-        const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
-        if (modelMapping) {
-          newCredentials.model_mapping = modelMapping
-        } else {
-          delete newCredentials.model_mapping
-        }
+        replaceBuiltModelMapping(newCredentials, modelRestrictionMode.value, allowedModels.value, modelMappings.value)
       } else if (currentCredentials.model_mapping) {
         // 透传模式保留现有映射
         newCredentials.model_mapping = currentCredentials.model_mapping
@@ -2909,224 +2868,52 @@ const handleSubmit = async () => {
     // Antigravity: persist model mapping to credentials (applies to all antigravity types)
     // Antigravity 只支持映射模式
     if (props.account.platform === 'antigravity') {
-      const currentCredentials = (updatePayload.credentials as Record<string, unknown>) ||
-        ((props.account.credentials as Record<string, unknown>) || {})
+      const currentCredentials = getPendingCredentials(updatePayload)
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
 
-      // 移除旧字段
-      delete newCredentials.model_whitelist
-      delete newCredentials.model_mapping
-
-      // 只使用映射模式
-      const antigravityModelMapping = buildModelMappingObject(
-        'mapping',
-        [],
-        antigravityModelMappings.value
-      )
-      if (antigravityModelMapping) {
-        newCredentials.model_mapping = antigravityModelMapping
-      }
+      replaceAntigravityModelMapping(newCredentials, antigravityModelMappings.value)
 
       updatePayload.credentials = newCredentials
     }
 
     // For antigravity accounts, handle mixed_scheduling and allow_overages in extra
     if (props.account.platform === 'antigravity') {
-      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
-      const newExtra: Record<string, unknown> = { ...currentExtra }
-      if (mixedScheduling.value) {
-        newExtra.mixed_scheduling = true
-      } else {
-        delete newExtra.mixed_scheduling
-      }
-      if (allowOverages.value) {
-        newExtra.allow_overages = true
-      } else {
-        delete newExtra.allow_overages
-      }
-      updatePayload.extra = newExtra
+      const currentExtra = getAccountExtra()
+      updatePayload.extra = buildUpdatedAntigravityExtra(currentExtra)
     }
 
     // For Anthropic OAuth/SetupToken accounts, handle quota control settings in extra
     if (props.account.platform === 'anthropic' && (props.account.type === 'oauth' || props.account.type === 'setup-token')) {
-      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
-      const newExtra: Record<string, unknown> = { ...currentExtra }
-
-      // Window cost limit settings
-      if (windowCostEnabled.value && windowCostLimit.value != null && windowCostLimit.value > 0) {
-        newExtra.window_cost_limit = windowCostLimit.value
-        newExtra.window_cost_sticky_reserve = windowCostStickyReserve.value ?? 10
-      } else {
-        delete newExtra.window_cost_limit
-        delete newExtra.window_cost_sticky_reserve
-      }
-
-      // Session limit settings
-      if (sessionLimitEnabled.value && maxSessions.value != null && maxSessions.value > 0) {
-        newExtra.max_sessions = maxSessions.value
-        newExtra.session_idle_timeout_minutes = sessionIdleTimeout.value ?? 5
-      } else {
-        delete newExtra.max_sessions
-        delete newExtra.session_idle_timeout_minutes
-      }
-
-      // RPM limit settings
-      if (rpmLimitEnabled.value) {
-        const DEFAULT_BASE_RPM = 15
-        newExtra.base_rpm = (baseRpm.value != null && baseRpm.value > 0)
-          ? baseRpm.value
-          : DEFAULT_BASE_RPM
-        newExtra.rpm_strategy = rpmStrategy.value
-        if (rpmStickyBuffer.value != null && rpmStickyBuffer.value > 0) {
-          newExtra.rpm_sticky_buffer = rpmStickyBuffer.value
-        } else {
-          delete newExtra.rpm_sticky_buffer
-        }
-      } else {
-        delete newExtra.base_rpm
-        delete newExtra.rpm_strategy
-        delete newExtra.rpm_sticky_buffer
-      }
-
-      // UMQ mode（独立于 RPM 保存）
-      if (userMsgQueueMode.value) {
-        newExtra.user_msg_queue_mode = userMsgQueueMode.value
-      } else {
-        delete newExtra.user_msg_queue_mode
-      }
-      delete newExtra.user_msg_queue_enabled  // 清理旧字段
-
-      // TLS fingerprint setting
-      if (tlsFingerprintEnabled.value) {
-        newExtra.enable_tls_fingerprint = true
-        if (tlsFingerprintProfileId.value) {
-          newExtra.tls_fingerprint_profile_id = tlsFingerprintProfileId.value
-        } else {
-          delete newExtra.tls_fingerprint_profile_id
-        }
-      } else {
-        delete newExtra.enable_tls_fingerprint
-        delete newExtra.tls_fingerprint_profile_id
-      }
-
-      // Session ID masking setting
-      if (sessionIdMaskingEnabled.value) {
-        newExtra.session_id_masking_enabled = true
-      } else {
-        delete newExtra.session_id_masking_enabled
-      }
-
-      // Cache TTL override setting
-      if (cacheTTLOverrideEnabled.value) {
-        newExtra.cache_ttl_override_enabled = true
-        newExtra.cache_ttl_override_target = cacheTTLOverrideTarget.value
-      } else {
-        delete newExtra.cache_ttl_override_enabled
-        delete newExtra.cache_ttl_override_target
-      }
-
-      // Custom base URL relay setting
-      if (customBaseUrlEnabled.value && customBaseUrl.value.trim()) {
-        newExtra.custom_base_url_enabled = true
-        newExtra.custom_base_url = customBaseUrl.value.trim()
-      } else {
-        delete newExtra.custom_base_url_enabled
-        delete newExtra.custom_base_url
-      }
-
-      updatePayload.extra = newExtra
+      const currentExtra = getAccountExtra()
+      updatePayload.extra = buildUpdatedAnthropicQuotaControlExtra(currentExtra)
     }
 
     // For Anthropic API Key accounts, handle passthrough mode in extra
     if (props.account.platform === 'anthropic' && props.account.type === 'apikey') {
-      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
-      const newExtra: Record<string, unknown> = { ...currentExtra }
-      if (anthropicPassthroughEnabled.value) {
-        newExtra.anthropic_passthrough = true
-      } else {
-        delete newExtra.anthropic_passthrough
-      }
-      updatePayload.extra = newExtra
+      const currentExtra = getAccountExtra()
+      updatePayload.extra = buildUpdatedAnthropicApiKeyExtra(currentExtra)
     }
 
     // For OpenAI OAuth/API Key accounts, handle passthrough mode in extra
     if (props.account.platform === 'openai' && (props.account.type === 'oauth' || props.account.type === 'apikey')) {
-      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
-      const newExtra: Record<string, unknown> = { ...currentExtra }
-      const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
-      if (props.account.type === 'oauth') {
-        newExtra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
-        newExtra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(openaiOAuthResponsesWebSocketV2Mode.value)
-      } else if (props.account.type === 'apikey') {
-        newExtra.openai_apikey_responses_websockets_v2_mode = openaiAPIKeyResponsesWebSocketV2Mode.value
-        newExtra.openai_apikey_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(openaiAPIKeyResponsesWebSocketV2Mode.value)
-      }
-      delete newExtra.responses_websockets_v2_enabled
-      delete newExtra.openai_ws_enabled
-      if (openaiPassthroughEnabled.value) {
-        newExtra.openai_passthrough = true
-      } else {
-        delete newExtra.openai_passthrough
-        delete newExtra.openai_oauth_passthrough
-      }
-
-      if (props.account.type === 'oauth') {
-        if (codexCLIOnlyEnabled.value) {
-          newExtra.codex_cli_only = true
-        } else if (hadCodexCLIOnlyEnabled) {
-          // 关闭时显式写 false，避免 extra 为空被后端忽略导致旧值无法清除
-          newExtra.codex_cli_only = false
-        } else {
-          delete newExtra.codex_cli_only
-        }
-      }
-
-      updatePayload.extra = newExtra
+      const currentExtra = getAccountExtra()
+      updatePayload.extra = buildUpdatedOpenAIExtra(props.account.type, currentExtra)
     }
 
     // For apikey/bedrock accounts, handle quota_limit in extra
     if (props.account.type === 'apikey' || props.account.type === 'bedrock') {
-      const currentExtra = (updatePayload.extra as Record<string, unknown>) ||
-        (props.account.extra as Record<string, unknown>) || {}
-      const newExtra: Record<string, unknown> = { ...currentExtra }
-      if (editQuotaLimit.value != null && editQuotaLimit.value > 0) {
-        newExtra.quota_limit = editQuotaLimit.value
-      } else {
-        delete newExtra.quota_limit
-      }
-      if (editQuotaDailyLimit.value != null && editQuotaDailyLimit.value > 0) {
-        newExtra.quota_daily_limit = editQuotaDailyLimit.value
-      } else {
-        delete newExtra.quota_daily_limit
-      }
-      if (editQuotaWeeklyLimit.value != null && editQuotaWeeklyLimit.value > 0) {
-        newExtra.quota_weekly_limit = editQuotaWeeklyLimit.value
-      } else {
-        delete newExtra.quota_weekly_limit
-      }
-      // Quota reset mode config
-      if (editDailyResetMode.value === 'fixed') {
-        newExtra.quota_daily_reset_mode = 'fixed'
-        newExtra.quota_daily_reset_hour = editDailyResetHour.value ?? 0
-      } else {
-        delete newExtra.quota_daily_reset_mode
-        delete newExtra.quota_daily_reset_hour
-      }
-      if (editWeeklyResetMode.value === 'fixed') {
-        newExtra.quota_weekly_reset_mode = 'fixed'
-        newExtra.quota_weekly_reset_day = editWeeklyResetDay.value ?? 1
-        newExtra.quota_weekly_reset_hour = editWeeklyResetHour.value ?? 0
-      } else {
-        delete newExtra.quota_weekly_reset_mode
-        delete newExtra.quota_weekly_reset_day
-        delete newExtra.quota_weekly_reset_hour
-      }
-      if (editDailyResetMode.value === 'fixed' || editWeeklyResetMode.value === 'fixed') {
-        newExtra.quota_reset_timezone = editResetTimezone.value || 'UTC'
-      } else {
-        delete newExtra.quota_reset_timezone
-      }
-      updatePayload.extra = newExtra
+      const currentExtra = getPendingExtra(updatePayload)
+      updatePayload.extra = buildAccountQuotaExtra(currentExtra, {
+        dailyResetHour: editDailyResetHour.value,
+        dailyResetMode: editDailyResetMode.value,
+        quotaDailyLimit: editQuotaDailyLimit.value,
+        quotaLimit: editQuotaLimit.value,
+        quotaWeeklyLimit: editQuotaWeeklyLimit.value,
+        resetTimezone: editResetTimezone.value,
+        weeklyResetDay: editWeeklyResetDay.value,
+        weeklyResetHour: editWeeklyResetHour.value,
+        weeklyResetMode: editWeeklyResetMode.value
+      })
     }
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {

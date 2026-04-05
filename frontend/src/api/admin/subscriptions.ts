@@ -13,6 +13,15 @@ import type {
   PaginatedResponse
 } from '@/types'
 
+export interface SubscriptionListFilters {
+  status?: 'active' | 'expired' | 'revoked'
+  user_id?: number
+  group_id?: number
+  platform?: string
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
+}
+
 /**
  * List all subscriptions with pagination
  * @param page - Page number (default: 1)
@@ -23,14 +32,7 @@ import type {
 export async function list(
   page: number = 1,
   pageSize: number = 20,
-  filters?: {
-    status?: 'active' | 'expired' | 'revoked'
-    user_id?: number
-    group_id?: number
-    platform?: string
-    sort_by?: string
-    sort_order?: 'asc' | 'desc'
-  },
+  filters?: SubscriptionListFilters,
   options?: {
     signal?: AbortSignal
   }

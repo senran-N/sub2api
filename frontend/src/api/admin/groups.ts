@@ -12,6 +12,34 @@ import type {
   PaginatedResponse
 } from '@/types'
 
+export interface GroupListFilters {
+  platform?: GroupPlatform
+  status?: 'active' | 'inactive'
+  is_exclusive?: boolean
+  search?: string
+}
+
+export interface GroupSortOrderUpdate {
+  id: number
+  sort_order: number
+}
+
+export interface GroupUsageSummary {
+  group_id: number
+  today_cost: number
+  total_cost: number
+}
+
+export interface GroupCapacitySummary {
+  group_id: number
+  concurrency_used: number
+  concurrency_max: number
+  sessions_used: number
+  sessions_max: number
+  rpm_used: number
+  rpm_max: number
+}
+
 /**
  * List all groups with pagination
  * @param page - Page number (default: 1)
@@ -22,12 +50,7 @@ import type {
 export async function list(
   page: number = 1,
   pageSize: number = 20,
-  filters?: {
-    platform?: GroupPlatform
-    status?: 'active' | 'inactive'
-    is_exclusive?: boolean
-    search?: string
-  },
+  filters?: GroupListFilters,
   options?: {
     signal?: AbortSignal
   }
@@ -183,7 +206,7 @@ export async function getGroupRateMultipliers(id: number): Promise<GroupRateMult
  * @returns Success confirmation
  */
 export async function updateSortOrder(
-  updates: Array<{ id: number; sort_order: number }>
+  updates: GroupSortOrderUpdate[]
 ): Promise<{ message: string }> {
   const { data } = await apiClient.put<{ message: string }>('/admin/groups/sort-order', {
     updates
@@ -225,10 +248,8 @@ export async function batchSetGroupRateMultipliers(
  */
 export async function getUsageSummary(
   timezone?: string
-): Promise<{ group_id: number; today_cost: number; total_cost: number }[]> {
-  const { data } = await apiClient.get<
-    { group_id: number; today_cost: number; total_cost: number }[]
-  >('/admin/groups/usage-summary', {
+): Promise<GroupUsageSummary[]> {
+  const { data } = await apiClient.get<GroupUsageSummary[]>('/admin/groups/usage-summary', {
     params: timezone ? { timezone } : undefined
   })
   return data
@@ -237,12 +258,8 @@ export async function getUsageSummary(
 /**
  * Get capacity summary (concurrency/sessions/RPM) for all active groups
  */
-export async function getCapacitySummary(): Promise<
-  { group_id: number; concurrency_used: number; concurrency_max: number; sessions_used: number; sessions_max: number; rpm_used: number; rpm_max: number }[]
-> {
-  const { data } = await apiClient.get<
-    { group_id: number; concurrency_used: number; concurrency_max: number; sessions_used: number; sessions_max: number; rpm_used: number; rpm_max: number }[]
-  >('/admin/groups/capacity-summary')
+export async function getCapacitySummary(): Promise<GroupCapacitySummary[]> {
+  const { data } = await apiClient.get<GroupCapacitySummary[]>('/admin/groups/capacity-summary')
   return data
 }
 

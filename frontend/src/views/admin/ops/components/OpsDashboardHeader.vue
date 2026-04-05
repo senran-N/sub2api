@@ -8,6 +8,20 @@ import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api'
 import { opsAPI, type OpsDashboardOverview, type OpsMetricThresholds, type OpsRealtimeTrafficSummary } from '@/api/admin/ops'
 import type { OpsRequestDetailsPreset } from './OpsRequestDetailsModal.vue'
+import {
+  buildDiagnosisReport,
+  buildGoroutineStatusDisplay,
+  buildJobsStatusDisplay,
+  buildPoolUsageDisplay,
+  type DiagnosisItem,
+  formatTimeShort,
+  formatCustomTimeRangeLabel,
+  getRequestErrorRateThresholdLevel,
+  getSLAThresholdLevel,
+  getThresholdColorClass,
+  getTTFTThresholdLevel,
+  getUpstreamErrorRateThresholdLevel
+} from './opsDashboardHeaderHelpers'
 import { useAdminSettingsStore } from '@/stores'
 import { formatNumber } from '@/utils/format'
 
@@ -91,19 +105,6 @@ const showCustomTimeRangeDialog = ref(false)
 const customStartTimeInput = ref('')
 const customEndTimeInput = ref('')
 
-function formatCustomTimeRangeLabel(startTime: string, endTime: string): string {
-  const start = new Date(startTime)
-  const end = new Date(endTime)
-  const formatDate = (d: Date) => {
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const hour = String(d.getHours()).padStart(2, '0')
-    const minute = String(d.getMinutes()).padStart(2, '0')
-    return `${month}-${day} ${hour}:${minute}`
-  }
-  return `${formatDate(start)} ~ ${formatDate(end)}`
-}
-
 const groups = ref<Array<{ id: number; name: string; platform: string }>>([])
 
 const platformOptions = computed(() => [
@@ -138,6 +139,18 @@ const groupOptions = computed(() => {
   const filtered = props.platform ? groups.value.filter((g) => g.platform === props.platform) : groups.value
   return [{ value: null, label: t('common.all') }, ...filtered.map((g) => ({ value: g.id, label: g.name }))]
 })
+
+const getCurrentSLAThresholdLevel = (slaPercent: number | null) =>
+  getSLAThresholdLevel(slaPercent, props.thresholds)
+
+const getCurrentTTFTThresholdLevel = (ttftMs: number | null) =>
+  getTTFTThresholdLevel(ttftMs, props.thresholds)
+
+const getCurrentRequestErrorRateThresholdLevel = (errorRatePercent: number | null) =>
+  getRequestErrorRateThresholdLevel(errorRatePercent, props.thresholds)
+
+const getCurrentUpstreamErrorRateThresholdLevel = (upstreamErrorRatePercent: number | null) =>
+  getUpstreamErrorRateThresholdLevel(upstreamErrorRatePercent, props.thresholds)
 
 watch(
   () => props.platform,
@@ -214,62 +227,6 @@ function openDetails(preset?: OpsRequestDetailsPreset) {
 
 function openErrorDetails(kind: 'request' | 'upstream') {
   emit('openErrorDetails', kind)
-}
-
-// --- Threshold checking helpers ---
-type ThresholdLevel = 'normal' | 'warning' | 'critical'
-
-function getSLAThresholdLevel(slaPercent: number | null): ThresholdLevel {
-  if (slaPercent == null) return 'normal'
-  const threshold = props.thresholds?.sla_percent_min
-  if (threshold == null) return 'normal'
-
-  // SLA is "higher is better":
-  // - below threshold => critical
-  // - within +0.1% buffer => warning
-  const warningBuffer = 0.1
-
-  if (slaPercent < threshold) return 'critical'
-  if (slaPercent < threshold + warningBuffer) return 'warning'
-  return 'normal'
-}
-
-function getTTFTThresholdLevel(ttftMs: number | null): ThresholdLevel {
-  if (ttftMs == null) return 'normal'
-  const threshold = props.thresholds?.ttft_p99_ms_max
-  if (threshold == null) return 'normal'
-  if (ttftMs >= threshold) return 'critical'
-  if (ttftMs >= threshold * 0.8) return 'warning'
-  return 'normal'
-}
-
-function getRequestErrorRateThresholdLevel(errorRatePercent: number | null): ThresholdLevel {
-  if (errorRatePercent == null) return 'normal'
-  const threshold = props.thresholds?.request_error_rate_percent_max
-  if (threshold == null) return 'normal'
-  if (errorRatePercent >= threshold) return 'critical'
-  if (errorRatePercent >= threshold * 0.8) return 'warning'
-  return 'normal'
-}
-
-function getUpstreamErrorRateThresholdLevel(upstreamErrorRatePercent: number | null): ThresholdLevel {
-  if (upstreamErrorRatePercent == null) return 'normal'
-  const threshold = props.thresholds?.upstream_error_rate_percent_max
-  if (threshold == null) return 'normal'
-  if (upstreamErrorRatePercent >= threshold) return 'critical'
-  if (upstreamErrorRatePercent >= threshold * 0.8) return 'warning'
-  return 'normal'
-}
-
-function getThresholdColorClass(level: ThresholdLevel): string {
-  switch (level) {
-    case 'critical':
-      return 'text-red-600 dark:text-red-400'
-    case 'warning':
-      return 'text-yellow-600 dark:text-yellow-400'
-    default:
-      return 'text-green-600 dark:text-green-400'
-  }
 }
 
 // --- Realtime / Overview labels ---
@@ -350,76 +307,73 @@ watch(
 
 // no-op: parent controls refresh cadence
 
-const displayRealTimeQps = computed(() => {
-  const v = realtimeTrafficSummary.value?.qps?.current
-  return typeof v === 'number' && Number.isFinite(v) ? v : 0
+function formatFixedLabel(value: number | null | undefined, digits = 1) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '-'
+}
+
+function toPercent(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value * 100 : null
+}
+
+function getThresholdIndicatorClass(level: 'normal' | 'warning' | 'critical') {
+  if (level === 'critical') return 'bg-red-500'
+  if (level === 'warning') return 'bg-yellow-500'
+  return 'bg-green-500'
+}
+
+const realtimeTrafficDisplay = computed(() => {
+  const qpsCurrent = realtimeTrafficSummary.value?.qps?.current
+  const tpsCurrent = realtimeTrafficSummary.value?.tps?.current
+  return {
+    qpsCurrent: typeof qpsCurrent === 'number' && Number.isFinite(qpsCurrent) ? qpsCurrent : 0,
+    tpsCurrent: typeof tpsCurrent === 'number' && Number.isFinite(tpsCurrent) ? tpsCurrent : 0,
+    qpsPeakLabel: formatFixedLabel(realtimeTrafficSummary.value?.qps?.peak),
+    tpsPeakLabel: formatFixedLabel(realtimeTrafficSummary.value?.tps?.peak),
+    qpsAvgLabel: formatFixedLabel(realtimeTrafficSummary.value?.qps?.avg),
+    tpsAvgLabel: formatFixedLabel(realtimeTrafficSummary.value?.tps?.avg)
+  }
 })
 
-const displayRealTimeTps = computed(() => {
-  const v = realtimeTrafficSummary.value?.tps?.current
-  return typeof v === 'number' && Number.isFinite(v) ? v : 0
+const overviewMetricDisplay = computed(() => ({
+  qpsAvgLabel: formatFixedLabel(overview.value?.qps?.avg),
+  tpsAvgLabel: formatFixedLabel(overview.value?.tps?.avg),
+  slaPercent: toPercent(overview.value?.sla),
+  errorRatePercent: toPercent(overview.value?.error_rate),
+  upstreamErrorRatePercent: toPercent(overview.value?.upstream_error_rate)
+}))
+
+const durationMetrics = computed(() => overview.value?.duration ?? {})
+const ttftMetrics = computed(() => overview.value?.ttft ?? {})
+
+const slaDisplay = computed(() => {
+  const percent = overviewMetricDisplay.value.slaPercent
+  const level = getCurrentSLAThresholdLevel(percent)
+  return {
+    percent,
+    level,
+    colorClass: getThresholdColorClass(level),
+    indicatorClass: getThresholdIndicatorClass(level),
+    progressWidth: `${Math.max((percent ?? 0) - 90, 0) * 10}%`
+  }
 })
 
-const realtimeQpsPeakLabel = computed(() => {
-  const v = realtimeTrafficSummary.value?.qps?.peak
-  return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) : '-'
-})
-const realtimeTpsPeakLabel = computed(() => {
-  const v = realtimeTrafficSummary.value?.tps?.peak
-  return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) : '-'
-})
-const realtimeQpsAvgLabel = computed(() => {
-  const v = realtimeTrafficSummary.value?.qps?.avg
-  return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) : '-'
-})
-const realtimeTpsAvgLabel = computed(() => {
-  const v = realtimeTrafficSummary.value?.tps?.avg
-  return typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) : '-'
+const requestErrorDisplay = computed(() => {
+  const percent = overviewMetricDisplay.value.errorRatePercent
+  const level = getCurrentRequestErrorRateThresholdLevel(percent)
+  return {
+    percent,
+    colorClass: getThresholdColorClass(level)
+  }
 })
 
-const qpsAvgLabel = computed(() => {
-  const v = overview.value?.qps?.avg
-  if (typeof v !== 'number') return '-'
-  return v.toFixed(1)
+const upstreamErrorDisplay = computed(() => {
+  const percent = overviewMetricDisplay.value.upstreamErrorRatePercent
+  const level = getCurrentUpstreamErrorRateThresholdLevel(percent)
+  return {
+    percent,
+    colorClass: getThresholdColorClass(level)
+  }
 })
-
-const tpsAvgLabel = computed(() => {
-  const v = overview.value?.tps?.avg
-  if (typeof v !== 'number') return '-'
-  return v.toFixed(1)
-})
-
-const slaPercent = computed(() => {
-  const v = overview.value?.sla
-  if (typeof v !== 'number') return null
-  return v * 100
-})
-
-const errorRatePercent = computed(() => {
-  const v = overview.value?.error_rate
-  if (typeof v !== 'number') return null
-  return v * 100
-})
-
-const upstreamErrorRatePercent = computed(() => {
-  const v = overview.value?.upstream_error_rate
-  if (typeof v !== 'number') return null
-  return v * 100
-})
-
-const durationP99Ms = computed(() => overview.value?.duration?.p99_ms ?? null)
-const durationP95Ms = computed(() => overview.value?.duration?.p95_ms ?? null)
-const durationP90Ms = computed(() => overview.value?.duration?.p90_ms ?? null)
-const durationP50Ms = computed(() => overview.value?.duration?.p50_ms ?? null)
-const durationAvgMs = computed(() => overview.value?.duration?.avg_ms ?? null)
-const durationMaxMs = computed(() => overview.value?.duration?.max_ms ?? null)
-
-const ttftP99Ms = computed(() => overview.value?.ttft?.p99_ms ?? null)
-const ttftP95Ms = computed(() => overview.value?.ttft?.p95_ms ?? null)
-const ttftP90Ms = computed(() => overview.value?.ttft?.p90_ms ?? null)
-const ttftP50Ms = computed(() => overview.value?.ttft?.p50_ms ?? null)
-const ttftAvgMs = computed(() => overview.value?.ttft?.avg_ms ?? null)
-const ttftMaxMs = computed(() => overview.value?.ttft?.max_ms ?? null)
 
 // --- Health Score & Diagnosis (primary) ---
 
@@ -436,213 +390,45 @@ const healthScoreValue = computed<number | null>(() => {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 })
 
-const healthScoreColor = computed(() => {
-  if (isSystemIdle.value) return '#9ca3af' // gray-400
+const healthScoreDisplay = computed(() => {
+  const circleSize = props.fullscreen ? 140 : 100
+  const strokeWidth = props.fullscreen ? 10 : 8
+  const radius = (circleSize - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
   const score = healthScoreValue.value
-  if (score == null) return '#9ca3af'
-  if (score >= 90) return '#10b981' // green
-  if (score >= 60) return '#f59e0b' // yellow
-  return '#ef4444' // red
-})
+  const tone =
+    isSystemIdle.value || score == null
+      ? { color: '#9ca3af', className: 'text-gray-400' }
+      : score >= 90
+        ? { color: '#10b981', className: 'text-green-500' }
+        : score >= 60
+          ? { color: '#f59e0b', className: 'text-yellow-500' }
+          : { color: '#ef4444', className: 'text-red-500' }
 
-const healthScoreClass = computed(() => {
-  if (isSystemIdle.value) return 'text-gray-400'
-  const score = healthScoreValue.value
-  if (score == null) return 'text-gray-400'
-  if (score >= 90) return 'text-green-500'
-  if (score >= 60) return 'text-yellow-500'
-  return 'text-red-500'
+  const clampedScore = score == null ? 0 : Math.max(0, Math.min(100, score))
+  return {
+    color: tone.color,
+    className: tone.className,
+    circleSize,
+    strokeWidth,
+    radius,
+    circumference,
+    dashOffset: isSystemIdle.value || score == null
+      ? 0
+      : circumference - (clampedScore / 100) * circumference
+  }
 })
-
-const circleSize = computed(() => props.fullscreen ? 140 : 100)
-const strokeWidth = computed(() => props.fullscreen ? 10 : 8)
-const radius = computed(() => (circleSize.value - strokeWidth.value) / 2)
-const circumference = computed(() => 2 * Math.PI * radius.value)
-const dashOffset = computed(() => {
-  if (isSystemIdle.value) return 0
-  if (healthScoreValue.value == null) return 0
-  const score = Math.max(0, Math.min(100, healthScoreValue.value))
-  return circumference.value - (score / 100) * circumference.value
-})
-
-interface DiagnosisItem {
-  type: 'critical' | 'warning' | 'info'
-  message: string
-  impact: string
-  action?: string
-}
 
 const diagnosisReport = computed<DiagnosisItem[]>(() => {
-  const ov = overview.value
-  if (!ov) return []
-
-  const report: DiagnosisItem[] = []
-
-  if (isSystemIdle.value) {
-    report.push({
-      type: 'info',
-      message: t('admin.ops.diagnosis.idle'),
-      impact: t('admin.ops.diagnosis.idleImpact')
-    })
-    return report
-  }
-
-  // Resource diagnostics (highest priority)
-  const sm = ov.system_metrics
-  if (sm) {
-    if (sm.db_ok === false) {
-      report.push({
-        type: 'critical',
-        message: t('admin.ops.diagnosis.dbDown'),
-        impact: t('admin.ops.diagnosis.dbDownImpact'),
-        action: t('admin.ops.diagnosis.dbDownAction')
-      })
-    }
-    if (sm.redis_ok === false) {
-      report.push({
-        type: 'warning',
-        message: t('admin.ops.diagnosis.redisDown'),
-        impact: t('admin.ops.diagnosis.redisDownImpact'),
-        action: t('admin.ops.diagnosis.redisDownAction')
-      })
-    }
-
-    const cpuPct = sm.cpu_usage_percent ?? 0
-    if (cpuPct > 90) {
-      report.push({
-        type: 'critical',
-        message: t('admin.ops.diagnosis.cpuCritical', { usage: cpuPct.toFixed(1) }),
-        impact: t('admin.ops.diagnosis.cpuCriticalImpact'),
-        action: t('admin.ops.diagnosis.cpuCriticalAction')
-      })
-    } else if (cpuPct > 80) {
-      report.push({
-        type: 'warning',
-        message: t('admin.ops.diagnosis.cpuHigh', { usage: cpuPct.toFixed(1) }),
-        impact: t('admin.ops.diagnosis.cpuHighImpact'),
-        action: t('admin.ops.diagnosis.cpuHighAction')
-      })
-    }
-
-    const memPct = sm.memory_usage_percent ?? 0
-    if (memPct > 90) {
-      report.push({
-        type: 'critical',
-        message: t('admin.ops.diagnosis.memoryCritical', { usage: memPct.toFixed(1) }),
-        impact: t('admin.ops.diagnosis.memoryCriticalImpact'),
-        action: t('admin.ops.diagnosis.memoryCriticalAction')
-      })
-    } else if (memPct > 85) {
-      report.push({
-        type: 'warning',
-        message: t('admin.ops.diagnosis.memoryHigh', { usage: memPct.toFixed(1) }),
-        impact: t('admin.ops.diagnosis.memoryHighImpact'),
-        action: t('admin.ops.diagnosis.memoryHighAction')
-      })
-    }
-  }
-
-  const ttftP99 = ov.ttft?.p99_ms ?? 0
-  if (ttftP99 > 500) {
-    report.push({
-      type: 'warning',
-      message: t('admin.ops.diagnosis.ttftHigh', { ttft: ttftP99.toFixed(0) }),
-      impact: t('admin.ops.diagnosis.ttftHighImpact'),
-      action: t('admin.ops.diagnosis.ttftHighAction')
-    })
-  }
-
-  // Error rate diagnostics (adjusted thresholds)
-  const upstreamRatePct = (ov.upstream_error_rate ?? 0) * 100
-  if (upstreamRatePct > 5) {
-    report.push({
-      type: 'critical',
-      message: t('admin.ops.diagnosis.upstreamCritical', { rate: upstreamRatePct.toFixed(2) }),
-      impact: t('admin.ops.diagnosis.upstreamCriticalImpact'),
-      action: t('admin.ops.diagnosis.upstreamCriticalAction')
-    })
-  } else if (upstreamRatePct > 2) {
-    report.push({
-      type: 'warning',
-      message: t('admin.ops.diagnosis.upstreamHigh', { rate: upstreamRatePct.toFixed(2) }),
-      impact: t('admin.ops.diagnosis.upstreamHighImpact'),
-      action: t('admin.ops.diagnosis.upstreamHighAction')
-    })
-  }
-
-  const errorPct = (ov.error_rate ?? 0) * 100
-  if (errorPct > 3) {
-    report.push({
-      type: 'critical',
-      message: t('admin.ops.diagnosis.errorHigh', { rate: errorPct.toFixed(2) }),
-      impact: t('admin.ops.diagnosis.errorHighImpact'),
-      action: t('admin.ops.diagnosis.errorHighAction')
-    })
-  } else if (errorPct > 0.5) {
-    report.push({
-      type: 'warning',
-      message: t('admin.ops.diagnosis.errorElevated', { rate: errorPct.toFixed(2) }),
-      impact: t('admin.ops.diagnosis.errorElevatedImpact'),
-      action: t('admin.ops.diagnosis.errorElevatedAction')
-    })
-  }
-
-  // SLA diagnostics
-  const slaPct = (ov.sla ?? 0) * 100
-  if (slaPct < 90) {
-    report.push({
-      type: 'critical',
-      message: t('admin.ops.diagnosis.slaCritical', { sla: slaPct.toFixed(2) }),
-      impact: t('admin.ops.diagnosis.slaCriticalImpact'),
-      action: t('admin.ops.diagnosis.slaCriticalAction')
-    })
-  } else if (slaPct < 98) {
-    report.push({
-      type: 'warning',
-      message: t('admin.ops.diagnosis.slaLow', { sla: slaPct.toFixed(2) }),
-      impact: t('admin.ops.diagnosis.slaLowImpact'),
-      action: t('admin.ops.diagnosis.slaLowAction')
-    })
-  }
-
-  // Health score diagnostics (lowest priority)
-  if (healthScoreValue.value != null) {
-    if (healthScoreValue.value < 60) {
-      report.push({
-        type: 'critical',
-        message: t('admin.ops.diagnosis.healthCritical', { score: healthScoreValue.value }),
-        impact: t('admin.ops.diagnosis.healthCriticalImpact'),
-        action: t('admin.ops.diagnosis.healthCriticalAction')
-      })
-    } else if (healthScoreValue.value < 90) {
-      report.push({
-        type: 'warning',
-        message: t('admin.ops.diagnosis.healthLow', { score: healthScoreValue.value }),
-        impact: t('admin.ops.diagnosis.healthLowImpact'),
-        action: t('admin.ops.diagnosis.healthLowAction')
-      })
-    }
-  }
-
-  if (report.length === 0) {
-    report.push({
-      type: 'info',
-      message: t('admin.ops.diagnosis.healthy'),
-      impact: t('admin.ops.diagnosis.healthyImpact')
-    })
-  }
-
-  return report
+  return buildDiagnosisReport({
+    overview: overview.value,
+    isSystemIdle: isSystemIdle.value,
+    healthScore: healthScoreValue.value,
+    t
+  })
 })
 
 // --- System health (secondary) ---
-
-function formatTimeShort(ts?: string | null): string {
-  if (!ts) return '-'
-  const d = new Date(ts)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleTimeString()
-}
 
 const cpuPercentValue = computed<number | null>(() => {
   const v = systemMetrics.value?.cpu_usage_percent
@@ -700,22 +486,8 @@ const dbUsagePercent = computed<number | null>(() => {
   return Math.min(100, Math.max(0, (dbConnOpenValue.value / dbMaxOpenConnsValue.value) * 100))
 })
 
-const dbMiddleLabel = computed(() => {
-  if (systemMetrics.value?.db_ok === false) return 'FAIL'
-  if (dbUsagePercent.value != null) return `${dbUsagePercent.value.toFixed(0)}%`
-  if (systemMetrics.value?.db_ok === true) return t('admin.ops.ok')
-  return t('admin.ops.noData')
-})
-
-const dbMiddleClass = computed(() => {
-  if (systemMetrics.value?.db_ok === false) return 'text-rose-600 dark:text-rose-400'
-  if (dbUsagePercent.value != null) {
-    if (dbUsagePercent.value >= 90) return 'text-rose-600 dark:text-rose-400'
-    if (dbUsagePercent.value >= 70) return 'text-yellow-600 dark:text-yellow-400'
-    return 'text-emerald-600 dark:text-emerald-400'
-  }
-  if (systemMetrics.value?.db_ok === true) return 'text-emerald-600 dark:text-emerald-400'
-  return 'text-gray-900 dark:text-white'
+const dbMiddleDisplay = computed(() => {
+  return buildPoolUsageDisplay(systemMetrics.value?.db_ok, dbUsagePercent.value, t)
 })
 
 const redisConnTotalValue = computed<number | null>(() => {
@@ -743,22 +515,8 @@ const redisUsagePercent = computed<number | null>(() => {
   return Math.min(100, Math.max(0, (redisConnTotalValue.value / redisPoolSizeValue.value) * 100))
 })
 
-const redisMiddleLabel = computed(() => {
-  if (systemMetrics.value?.redis_ok === false) return 'FAIL'
-  if (redisUsagePercent.value != null) return `${redisUsagePercent.value.toFixed(0)}%`
-  if (systemMetrics.value?.redis_ok === true) return t('admin.ops.ok')
-  return t('admin.ops.noData')
-})
-
-const redisMiddleClass = computed(() => {
-  if (systemMetrics.value?.redis_ok === false) return 'text-rose-600 dark:text-rose-400'
-  if (redisUsagePercent.value != null) {
-    if (redisUsagePercent.value >= 90) return 'text-rose-600 dark:text-rose-400'
-    if (redisUsagePercent.value >= 70) return 'text-yellow-600 dark:text-yellow-400'
-    return 'text-emerald-600 dark:text-emerald-400'
-  }
-  if (systemMetrics.value?.redis_ok === true) return 'text-emerald-600 dark:text-emerald-400'
-  return 'text-gray-900 dark:text-white'
+const redisMiddleDisplay = computed(() => {
+  return buildPoolUsageDisplay(systemMetrics.value?.redis_ok, redisUsagePercent.value, t)
 })
 
 const goroutineCountValue = computed<number | null>(() => {
@@ -769,81 +527,19 @@ const goroutineCountValue = computed<number | null>(() => {
 const goroutinesWarnThreshold = 8_000
 const goroutinesCriticalThreshold = 15_000
 
-const goroutineStatus = computed<'ok' | 'warning' | 'critical' | 'unknown'>(() => {
-  const n = goroutineCountValue.value
-  if (n == null) return 'unknown'
-  if (n >= goroutinesCriticalThreshold) return 'critical'
-  if (n >= goroutinesWarnThreshold) return 'warning'
-  return 'ok'
-})
-
-const goroutineStatusLabel = computed(() => {
-  switch (goroutineStatus.value) {
-    case 'ok':
-      return t('admin.ops.ok')
-    case 'warning':
-      return t('common.warning')
-    case 'critical':
-      return t('common.critical')
-    default:
-      return t('admin.ops.noData')
-  }
-})
-
-const goroutineStatusClass = computed(() => {
-  switch (goroutineStatus.value) {
-    case 'ok':
-      return 'text-emerald-600 dark:text-emerald-400'
-    case 'warning':
-      return 'text-yellow-600 dark:text-yellow-400'
-    case 'critical':
-      return 'text-rose-600 dark:text-rose-400'
-    default:
-      return 'text-gray-900 dark:text-white'
-  }
+const goroutineDisplay = computed(() => {
+  return buildGoroutineStatusDisplay(
+    goroutineCountValue.value,
+    t,
+    goroutinesWarnThreshold,
+    goroutinesCriticalThreshold
+  )
 })
 
 const jobHeartbeats = computed(() => overview.value?.job_heartbeats ?? [])
 
-const jobsStatus = computed<'ok' | 'warn' | 'unknown'>(() => {
-  const list = jobHeartbeats.value
-  if (!list.length) return 'unknown'
-  for (const hb of list) {
-    if (!hb) continue
-    if (hb.last_error_at && (!hb.last_success_at || hb.last_error_at > hb.last_success_at)) return 'warn'
-  }
-  return 'ok'
-})
-
-const jobsWarnCount = computed(() => {
-  let warn = 0
-  for (const hb of jobHeartbeats.value) {
-    if (!hb) continue
-    if (hb.last_error_at && (!hb.last_success_at || hb.last_error_at > hb.last_success_at)) warn++
-  }
-  return warn
-})
-
-const jobsStatusLabel = computed(() => {
-  switch (jobsStatus.value) {
-    case 'ok':
-      return t('admin.ops.ok')
-    case 'warn':
-      return t('common.warning')
-    default:
-      return t('admin.ops.noData')
-  }
-})
-
-const jobsStatusClass = computed(() => {
-  switch (jobsStatus.value) {
-    case 'ok':
-      return 'text-emerald-600 dark:text-emerald-400'
-    case 'warn':
-      return 'text-yellow-600 dark:text-yellow-400'
-    default:
-      return 'text-gray-900 dark:text-white'
-  }
+const jobsDisplay = computed(() => {
+  return buildJobsStatusDisplay(jobHeartbeats.value, t)
 })
 
 const showJobsDetails = ref(false)
@@ -1052,32 +748,32 @@ function handleToolbarRefresh() {
             </div>
 
             <div class="relative flex items-center justify-center">
-              <svg :width="circleSize" :height="circleSize" class="-rotate-90 transform">
+              <svg :width="healthScoreDisplay.circleSize" :height="healthScoreDisplay.circleSize" class="-rotate-90 transform">
                 <circle
-                  :cx="circleSize / 2"
-                  :cy="circleSize / 2"
-                  :r="radius"
-                  :stroke-width="strokeWidth"
+                  :cx="healthScoreDisplay.circleSize / 2"
+                  :cy="healthScoreDisplay.circleSize / 2"
+                  :r="healthScoreDisplay.radius"
+                  :stroke-width="healthScoreDisplay.strokeWidth"
                   fill="transparent"
                   class="text-gray-200 dark:text-dark-700"
                   stroke="currentColor"
                 />
                 <circle
-                  :cx="circleSize / 2"
-                  :cy="circleSize / 2"
-                  :r="radius"
-                  :stroke-width="strokeWidth"
+                  :cx="healthScoreDisplay.circleSize / 2"
+                  :cy="healthScoreDisplay.circleSize / 2"
+                  :r="healthScoreDisplay.radius"
+                  :stroke-width="healthScoreDisplay.strokeWidth"
                   fill="transparent"
-                  :stroke="healthScoreColor"
+                  :stroke="healthScoreDisplay.color"
                   stroke-linecap="round"
-                  :stroke-dasharray="circumference"
-                  :stroke-dashoffset="dashOffset"
+                  :stroke-dasharray="healthScoreDisplay.circumference"
+                  :stroke-dashoffset="healthScoreDisplay.dashOffset"
                   class="transition-all duration-1000 ease-out"
                 />
               </svg>
 
               <div class="absolute flex flex-col items-center">
-                <span :class="[props.fullscreen ? 'text-5xl' : 'text-3xl', 'font-black', healthScoreClass]">
+                <span :class="[props.fullscreen ? 'text-5xl' : 'text-3xl', 'font-black', healthScoreDisplay.className]">
                   {{ isSystemIdle ? t('admin.ops.idleStatus') : (overview.health_score ?? '--') }}
                 </span>
                 <span :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'font-bold uppercase tracking-wider text-gray-400']">{{ t('admin.ops.health') }}</span>
@@ -1089,7 +785,7 @@ function handleToolbarRefresh() {
                 {{ t('admin.ops.healthCondition') }}
                 <HelpTooltip :content="t('admin.ops.healthHelp')" />
               </div>
-              <div class="mt-1 text-xs font-bold" :class="healthScoreClass">
+              <div class="mt-1 text-xs font-bold" :class="healthScoreDisplay.className">
                 {{
                   isSystemIdle
                     ? t('admin.ops.idleStatus')
@@ -1136,11 +832,11 @@ function handleToolbarRefresh() {
                 <div :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'font-bold uppercase text-gray-400']">{{ t('admin.ops.current') }}</div>
                 <div class="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-2">
                   <div class="flex items-baseline gap-1.5">
-                    <span :class="[props.fullscreen ? 'text-4xl' : 'text-xl sm:text-2xl', 'font-black text-gray-900 dark:text-white']">{{ displayRealTimeQps.toFixed(1) }}</span>
+                    <span :class="[props.fullscreen ? 'text-4xl' : 'text-xl sm:text-2xl', 'font-black text-gray-900 dark:text-white']">{{ realtimeTrafficDisplay.qpsCurrent.toFixed(1) }}</span>
                     <span :class="[props.fullscreen ? 'text-sm' : 'text-xs', 'font-bold text-gray-500']">QPS</span>
                   </div>
                   <div class="flex items-baseline gap-1.5">
-                    <span :class="[props.fullscreen ? 'text-4xl' : 'text-xl sm:text-2xl', 'font-black text-gray-900 dark:text-white']">{{ displayRealTimeTps.toFixed(1) }}</span>
+                    <span :class="[props.fullscreen ? 'text-4xl' : 'text-xl sm:text-2xl', 'font-black text-gray-900 dark:text-white']">{{ realtimeTrafficDisplay.tpsCurrent.toFixed(1) }}</span>
                     <span :class="[props.fullscreen ? 'text-sm' : 'text-xs', 'font-bold text-gray-500']">{{ t('admin.ops.tps') }}</span>
                   </div>
                 </div>
@@ -1153,11 +849,11 @@ function handleToolbarRefresh() {
                   <div :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'font-bold uppercase text-gray-400']">{{ t('admin.ops.peak') }}</div>
                   <div :class="[props.fullscreen ? 'text-base' : 'text-sm', 'mt-1 space-y-0.5 font-medium text-gray-600 dark:text-gray-400']">
                     <div class="flex items-baseline gap-1.5">
-                      <span class="font-black text-gray-900 dark:text-white">{{ realtimeQpsPeakLabel }}</span>
+                      <span class="font-black text-gray-900 dark:text-white">{{ realtimeTrafficDisplay.qpsPeakLabel }}</span>
                       <span class="text-xs">QPS</span>
                     </div>
                     <div class="flex items-baseline gap-1.5">
-                      <span class="font-black text-gray-900 dark:text-white">{{ realtimeTpsPeakLabel }}</span>
+                      <span class="font-black text-gray-900 dark:text-white">{{ realtimeTrafficDisplay.tpsPeakLabel }}</span>
                       <span class="text-xs">{{ t('admin.ops.tps') }}</span>
                     </div>
                   </div>
@@ -1168,11 +864,11 @@ function handleToolbarRefresh() {
                   <div :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'font-bold uppercase text-gray-400']">{{ t('admin.ops.average') }}</div>
                   <div :class="[props.fullscreen ? 'text-base' : 'text-sm', 'mt-1 space-y-0.5 font-medium text-gray-600 dark:text-gray-400']">
                     <div class="flex items-baseline gap-1.5">
-                      <span class="font-black text-gray-900 dark:text-white">{{ realtimeQpsAvgLabel }}</span>
+                      <span class="font-black text-gray-900 dark:text-white">{{ realtimeTrafficDisplay.qpsAvgLabel }}</span>
                       <span class="text-xs">QPS</span>
                     </div>
                     <div class="flex items-baseline gap-1.5">
-                      <span class="font-black text-gray-900 dark:text-white">{{ realtimeTpsAvgLabel }}</span>
+                      <span class="font-black text-gray-900 dark:text-white">{{ realtimeTrafficDisplay.tpsAvgLabel }}</span>
                       <span class="text-xs">{{ t('admin.ops.tps') }}</span>
                     </div>
                   </div>
@@ -1235,11 +931,11 @@ function handleToolbarRefresh() {
             </div>
             <div class="flex justify-between">
               <span class="text-gray-500">{{ t('admin.ops.avgQps') }}:</span>
-              <span class="font-bold text-gray-900 dark:text-white">{{ qpsAvgLabel }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ overviewMetricDisplay.qpsAvgLabel }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-gray-500">{{ t('admin.ops.avgTps') }}:</span>
-              <span class="font-bold text-gray-900 dark:text-white">{{ tpsAvgLabel }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ overviewMetricDisplay.tpsAvgLabel }}</span>
             </div>
           </div>
         </div>
@@ -1250,7 +946,7 @@ function handleToolbarRefresh() {
             <div class="flex items-center gap-2">
               <span class="text-[10px] font-bold uppercase text-gray-400">{{ t('admin.ops.sla') }}</span>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.sla')" />
-              <span class="h-1.5 w-1.5 rounded-full" :class="getSLAThresholdLevel(slaPercent) === 'critical' ? 'bg-red-500' : getSLAThresholdLevel(slaPercent) === 'warning' ? 'bg-yellow-500' : 'bg-green-500'"></span>
+              <span class="h-1.5 w-1.5 rounded-full" :class="slaDisplay.indicatorClass"></span>
             </div>
             <button
               v-if="!props.fullscreen"
@@ -1261,11 +957,11 @@ function handleToolbarRefresh() {
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 text-3xl font-black" :class="getThresholdColorClass(getSLAThresholdLevel(slaPercent))">
-            {{ slaPercent == null ? '-' : `${slaPercent.toFixed(3)}%` }}
+          <div class="mt-2 text-3xl font-black" :class="slaDisplay.colorClass">
+            {{ slaDisplay.percent == null ? '-' : `${slaDisplay.percent.toFixed(3)}%` }}
           </div>
           <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700">
-            <div class="h-full transition-all" :class="getSLAThresholdLevel(slaPercent) === 'critical' ? 'bg-red-500' : getSLAThresholdLevel(slaPercent) === 'warning' ? 'bg-yellow-500' : 'bg-green-500'" :style="{ width: `${Math.max((slaPercent ?? 0) - 90, 0) * 10}%` }"></div>
+            <div class="h-full transition-all" :class="slaDisplay.indicatorClass" :style="{ width: slaDisplay.progressWidth }"></div>
           </div>
           <div class="mt-3 text-xs">
             <div class="flex justify-between">
@@ -1293,34 +989,34 @@ function handleToolbarRefresh() {
           </div>
           <div class="mt-2 flex items-baseline gap-2">
             <div class="text-3xl font-black text-gray-900 dark:text-white">
-              {{ durationP99Ms ?? '-' }}
+              {{ durationMetrics.p99_ms ?? '-' }}
             </div>
             <span class="text-xs font-bold text-gray-400">ms (P99)</span>
           </div>
           <div class="mt-3 grid grid-cols-1 gap-x-3 gap-y-1 text-xs 2xl:grid-cols-2">
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">P95:</span>
-              <span class="font-bold text-gray-900 dark:text-white">{{ durationP95Ms ?? '-' }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ durationMetrics.p95_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">P90:</span>
-              <span class="font-bold text-gray-900 dark:text-white">{{ durationP90Ms ?? '-' }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ durationMetrics.p90_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">P50:</span>
-              <span class="font-bold text-gray-900 dark:text-white">{{ durationP50Ms ?? '-' }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ durationMetrics.p50_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">Avg:</span>
-              <span class="font-bold text-gray-900 dark:text-white">{{ durationAvgMs ?? '-' }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ durationMetrics.avg_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">Max:</span>
-              <span class="font-bold text-gray-900 dark:text-white">{{ durationMaxMs ?? '-' }}</span>
+              <span class="font-bold text-gray-900 dark:text-white">{{ durationMetrics.max_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
           </div>
@@ -1343,35 +1039,35 @@ function handleToolbarRefresh() {
             </button>
           </div>
           <div class="mt-2 flex items-baseline gap-2">
-            <div class="text-3xl font-black" :class="getThresholdColorClass(getTTFTThresholdLevel(ttftP99Ms))">
-              {{ ttftP99Ms ?? '-' }}
+            <div class="text-3xl font-black" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p99_ms ?? null))">
+              {{ ttftMetrics.p99_ms ?? '-' }}
             </div>
             <span class="text-xs font-bold text-gray-400">ms (P99)</span>
           </div>
           <div class="mt-3 grid grid-cols-1 gap-x-3 gap-y-1 text-xs 2xl:grid-cols-2">
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">P95:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getTTFTThresholdLevel(ttftP95Ms))">{{ ttftP95Ms ?? '-' }}</span>
+              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p95_ms ?? null))">{{ ttftMetrics.p95_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">P90:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getTTFTThresholdLevel(ttftP90Ms))">{{ ttftP90Ms ?? '-' }}</span>
+              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p90_ms ?? null))">{{ ttftMetrics.p90_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">P50:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getTTFTThresholdLevel(ttftP50Ms))">{{ ttftP50Ms ?? '-' }}</span>
+              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p50_ms ?? null))">{{ ttftMetrics.p50_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">Avg:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getTTFTThresholdLevel(ttftAvgMs))">{{ ttftAvgMs ?? '-' }}</span>
+              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.avg_ms ?? null))">{{ ttftMetrics.avg_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
             <div class="flex items-baseline gap-1 whitespace-nowrap">
               <span class="text-gray-500">Max:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getTTFTThresholdLevel(ttftMaxMs))">{{ ttftMaxMs ?? '-' }}</span>
+              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.max_ms ?? null))">{{ ttftMetrics.max_ms ?? '-' }}</span>
               <span class="text-gray-400">ms</span>
             </div>
           </div>
@@ -1388,8 +1084,8 @@ function handleToolbarRefresh() {
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 text-3xl font-black" :class="getThresholdColorClass(getRequestErrorRateThresholdLevel(errorRatePercent))">
-            {{ errorRatePercent == null ? '-' : `${errorRatePercent.toFixed(2)}%` }}
+          <div class="mt-2 text-3xl font-black" :class="requestErrorDisplay.colorClass">
+            {{ requestErrorDisplay.percent == null ? '-' : `${requestErrorDisplay.percent.toFixed(2)}%` }}
           </div>
           <div class="mt-3 space-y-1 text-xs">
             <div class="flex justify-between">
@@ -1414,8 +1110,8 @@ function handleToolbarRefresh() {
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 text-3xl font-black" :class="getThresholdColorClass(getUpstreamErrorRateThresholdLevel(upstreamErrorRatePercent))">
-            {{ upstreamErrorRatePercent == null ? '-' : `${upstreamErrorRatePercent.toFixed(2)}%` }}
+          <div class="mt-2 text-3xl font-black" :class="upstreamErrorDisplay.colorClass">
+            {{ upstreamErrorDisplay.percent == null ? '-' : `${upstreamErrorDisplay.percent.toFixed(2)}%` }}
           </div>
           <div class="mt-3 space-y-1 text-xs">
             <div class="flex justify-between">
@@ -1472,8 +1168,8 @@ function handleToolbarRefresh() {
             <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.db') }}</div>
             <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.db')" />
           </div>
-          <div class="mt-1 text-lg font-black" :class="dbMiddleClass">
-            {{ dbMiddleLabel }}
+          <div class="mt-1 text-lg font-black" :class="dbMiddleDisplay.className">
+            {{ dbMiddleDisplay.label }}
           </div>
           <div v-if="!props.fullscreen" class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
             {{ t('admin.ops.conns') }} {{ dbConnOpenValue ?? '-' }} / {{ dbMaxOpenConnsValue ?? '-' }}
@@ -1489,8 +1185,8 @@ function handleToolbarRefresh() {
             <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Redis</div>
             <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.redis')" />
           </div>
-          <div class="mt-1 text-lg font-black" :class="redisMiddleClass">
-            {{ redisMiddleLabel }}
+          <div class="mt-1 text-lg font-black" :class="redisMiddleDisplay.className">
+            {{ redisMiddleDisplay.label }}
           </div>
           <div v-if="!props.fullscreen" class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
             {{ t('admin.ops.conns') }} {{ redisConnTotalValue ?? '-' }} / {{ redisPoolSizeValue ?? '-' }}
@@ -1505,8 +1201,8 @@ function handleToolbarRefresh() {
             <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.goroutines') }}</div>
             <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.goroutines')" />
           </div>
-          <div class="mt-1 text-lg font-black" :class="goroutineStatusClass">
-            {{ goroutineStatusLabel }}
+          <div class="mt-1 text-lg font-black" :class="goroutineDisplay.className">
+            {{ goroutineDisplay.label }}
           </div>
           <div v-if="!props.fullscreen" class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
             {{ t('admin.ops.current') }} <span class="font-mono">{{ goroutineCountValue ?? '-' }}</span>
@@ -1530,13 +1226,13 @@ function handleToolbarRefresh() {
             </button>
           </div>
 
-          <div class="mt-1 text-lg font-black" :class="jobsStatusClass">
-            {{ jobsStatusLabel }}
+          <div class="mt-1 text-lg font-black" :class="jobsDisplay.className">
+            {{ jobsDisplay.label }}
           </div>
 
           <div v-if="!props.fullscreen" class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
             {{ t('common.total') }} <span class="font-mono">{{ jobHeartbeats.length }}</span>
-            · {{ t('common.warning') }} <span class="font-mono">{{ jobsWarnCount }}</span>
+            · {{ t('common.warning') }} <span class="font-mono">{{ jobsDisplay.warnCount }}</span>
           </div>
         </div>
       </div>

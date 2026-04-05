@@ -1,7 +1,6 @@
 <template>
   <AuthLayout>
     <div class="space-y-6">
-      <!-- Title -->
       <div class="text-center">
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.forgotPasswordTitle') }}
@@ -11,7 +10,6 @@
         </p>
       </div>
 
-      <!-- Success State -->
       <div v-if="isSubmitted" class="space-y-6">
         <div class="rounded-xl border border-green-200 bg-green-50 p-6 dark:border-green-800/50 dark:bg-green-900/20">
           <div class="flex flex-col items-center gap-4 text-center">
@@ -40,9 +38,7 @@
         </div>
       </div>
 
-      <!-- Form State -->
-      <form v-else @submit.prevent="handleSubmit" class="space-y-5">
-        <!-- Email Input -->
+      <form v-else class="space-y-5" @submit.prevent="handleSubmit">
         <div>
           <label for="email" class="input-label">
             {{ t('auth.emailLabel') }}
@@ -69,11 +65,10 @@
           </p>
         </div>
 
-        <!-- Turnstile Widget -->
-        <div v-if="turnstileEnabled && turnstileSiteKey">
+        <div v-if="settings.turnstileEnabled && settings.turnstileSiteKey">
           <TurnstileWidget
             ref="turnstileRef"
-            :site-key="turnstileSiteKey"
+            :site-key="settings.turnstileSiteKey"
             @verify="onTurnstileVerify"
             @expire="onTurnstileExpire"
             @error="onTurnstileError"
@@ -83,7 +78,6 @@
           </p>
         </div>
 
-        <!-- Error Message -->
         <transition name="fade">
           <div
             v-if="errorMessage"
@@ -100,10 +94,9 @@
           </div>
         </transition>
 
-        <!-- Submit Button -->
         <button
           type="submit"
-          :disabled="isLoading || (turnstileEnabled && !turnstileToken)"
+          :disabled="isSubmitDisabled"
           class="btn btn-primary w-full"
         >
           <svg
@@ -127,12 +120,11 @@
             ></path>
           </svg>
           <Icon v-else name="mail" size="md" class="mr-2" />
-          {{ isLoading ? t('auth.sendingResetLink') : t('auth.sendResetLink') }}
+          {{ submitLabel }}
         </button>
       </form>
     </div>
 
-    <!-- Footer -->
     <template #footer>
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.rememberedPassword') }}
@@ -148,56 +140,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { AuthLayout } from '@/components/layout'
-import Icon from '@/components/icons/Icon.vue'
+import { forgotPassword, getPublicSettings } from '@/api/auth'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
+import Icon from '@/components/icons/Icon.vue'
+import { AuthLayout } from '@/components/layout'
 import { useAppStore } from '@/stores'
-import { getPublicSettings, forgotPassword } from '@/api/auth'
+import {
+  applyForgotPasswordPublicSettings,
+  buildForgotPasswordSubmitPayload,
+  createForgotPasswordFormData,
+  createForgotPasswordFormErrors,
+  createForgotPasswordSettingsState,
+  hasForgotPasswordFormErrors,
+  resolveForgotPasswordErrorMessage,
+  validateForgotPasswordForm
+} from './forgot-password/forgotPasswordView'
 
 const { t } = useI18n()
-
-// ==================== Stores ====================
-
 const appStore = useAppStore()
 
-// ==================== State ====================
-
-const isLoading = ref<boolean>(false)
-const isSubmitted = ref<boolean>(false)
-const errorMessage = ref<string>('')
-
-// Public settings
-const turnstileEnabled = ref<boolean>(false)
-const turnstileSiteKey = ref<string>('')
-
-// Turnstile
+const isLoading = ref(false)
+const isSubmitted = ref(false)
+const errorMessage = ref('')
+const settings = reactive(createForgotPasswordSettingsState())
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
-const turnstileToken = ref<string>('')
+const turnstileToken = ref('')
 
-const formData = reactive({
-  email: ''
-})
+const formData = reactive(createForgotPasswordFormData())
+const errors = reactive(createForgotPasswordFormErrors())
 
-const errors = reactive({
-  email: '',
-  turnstile: ''
-})
+const isSubmitDisabled = computed(
+  () => isLoading.value || (settings.turnstileEnabled && !turnstileToken.value)
+)
 
-// ==================== Lifecycle ====================
-
-onMounted(async () => {
-  try {
-    const settings = await getPublicSettings()
-    turnstileEnabled.value = settings.turnstile_enabled
-    turnstileSiteKey.value = settings.turnstile_site_key || ''
-  } catch (error) {
-    console.error('Failed to load public settings:', error)
-  }
-})
-
-// ==================== Turnstile Handlers ====================
+const submitLabel = computed(() =>
+  isLoading.value ? t('auth.sendingResetLink') : t('auth.sendResetLink')
+)
 
 function onTurnstileVerify(token: string): void {
   turnstileToken.value = token
@@ -214,33 +194,19 @@ function onTurnstileError(): void {
   errors.turnstile = t('auth.turnstileFailed')
 }
 
-// ==================== Validation ====================
-
 function validateForm(): boolean {
-  errors.email = ''
-  errors.turnstile = ''
+  Object.assign(
+    errors,
+    validateForgotPasswordForm({
+      formData,
+      t,
+      turnstileEnabled: settings.turnstileEnabled,
+      turnstileToken: turnstileToken.value
+    })
+  )
 
-  let isValid = true
-
-  // Email validation
-  if (!formData.email.trim()) {
-    errors.email = t('auth.emailRequired')
-    isValid = false
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-    errors.email = t('auth.invalidEmail')
-    isValid = false
-  }
-
-  // Turnstile validation
-  if (turnstileEnabled.value && !turnstileToken.value) {
-    errors.turnstile = t('auth.completeVerification')
-    isValid = false
-  }
-
-  return isValid
+  return !hasForgotPasswordFormErrors(errors)
 }
-
-// ==================== Form Handlers ====================
 
 async function handleSubmit(): Promise<void> {
   errorMessage.value = ''
@@ -252,35 +218,32 @@ async function handleSubmit(): Promise<void> {
   isLoading.value = true
 
   try {
-    await forgotPassword({
-      email: formData.email,
-      turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined
-    })
+    await forgotPassword(
+      buildForgotPasswordSubmitPayload(formData, settings.turnstileEnabled, turnstileToken.value)
+    )
 
     isSubmitted.value = true
     appStore.showSuccess(t('auth.resetEmailSent'))
   } catch (error: unknown) {
-    // Reset Turnstile on error
     if (turnstileRef.value) {
       turnstileRef.value.reset()
       turnstileToken.value = ''
     }
 
-    const err = error as { message?: string; response?: { data?: { detail?: string } } }
-
-    if (err.response?.data?.detail) {
-      errorMessage.value = err.response.data.detail
-    } else if (err.message) {
-      errorMessage.value = err.message
-    } else {
-      errorMessage.value = t('auth.sendResetLinkFailed')
-    }
-
+    errorMessage.value = resolveForgotPasswordErrorMessage(error, t)
     appStore.showError(errorMessage.value)
   } finally {
     isLoading.value = false
   }
 }
+
+onMounted(async () => {
+  try {
+    applyForgotPasswordPublicSettings(settings, await getPublicSettings())
+  } catch (error) {
+    console.error('Failed to load public settings:', error)
+  }
+})
 </script>
 
 <style scoped>

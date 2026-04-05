@@ -7,7 +7,7 @@
         <Icon name="link" size="md" class="text-white" />
       </div>
       <div class="flex-1">
-        <h4 class="mb-3 font-semibold text-blue-900 dark:text-blue-200">{{ oauthTitle }}</h4>
+        <h4 class="mb-3 font-semibold text-blue-900 dark:text-blue-200">{{ oauthText.title }}</h4>
 
         <!-- Auth Method Selection -->
         <div v-if="showMethodSelection" class="mb-4">
@@ -184,10 +184,10 @@
                 <Icon name="key" size="sm" class="text-blue-500" />
                 {{ t(getOAuthKey('sessionTokenRawLabel')) }}
                 <span
-                  v-if="parsedSessionTokenCount > 1"
+                  v-if="parsedSoraTokenState.sessionTokenCount > 1"
                   class="rounded-full bg-blue-500 px-2 py-0.5 text-xs text-white"
                 >
-                  {{ t('admin.accounts.oauth.keysCount', { count: parsedSessionTokenCount }) }}
+                  {{ t('admin.accounts.oauth.keysCount', { count: parsedSoraTokenState.sessionTokenCount }) }}
                 </span>
               </label>
               <textarea
@@ -222,10 +222,10 @@
                 {{ t(getOAuthKey('sessionUrlHint')) }}
               </p>
               <p
-                v-if="parsedSessionTokenCount > 1"
+                v-if="parsedSoraTokenState.sessionTokenCount > 1"
                 class="mt-1 text-xs text-blue-600 dark:text-blue-400"
               >
-                {{ t('admin.accounts.oauth.batchCreateAccounts', { count: parsedSessionTokenCount }) }}
+                {{ t('admin.accounts.oauth.batchCreateAccounts', { count: parsedSoraTokenState.sessionTokenCount }) }}
               </p>
             </div>
 
@@ -236,20 +236,20 @@
                 >
                   {{ t(getOAuthKey('parsedSessionTokensLabel')) }}
                   <span
-                    v-if="parsedSessionTokenCount > 0"
+                    v-if="parsedSoraTokenState.sessionTokenCount > 0"
                     class="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] text-white"
                   >
-                    {{ parsedSessionTokenCount }}
+                    {{ parsedSoraTokenState.sessionTokenCount }}
                   </span>
                 </label>
                 <textarea
-                  :value="parsedSessionTokensText"
+                  :value="parsedSoraTokenState.sessionTokensText"
                   rows="2"
                   readonly
                   class="input w-full resize-y bg-gray-50 font-mono text-xs dark:bg-gray-700"
                 ></textarea>
                 <p
-                  v-if="parsedSessionTokenCount === 0"
+                  v-if="parsedSoraTokenState.sessionTokenCount === 0"
                   class="mt-1 text-xs text-amber-600 dark:text-amber-400"
                 >
                   {{ t(getOAuthKey('parsedSessionTokensEmpty')) }}
@@ -262,14 +262,14 @@
                 >
                   {{ t(getOAuthKey('parsedAccessTokensLabel')) }}
                   <span
-                    v-if="parsedAccessTokenFromSessionInputCount > 0"
+                    v-if="parsedSoraTokenState.accessTokenCount > 0"
                     class="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] text-white"
                   >
-                    {{ parsedAccessTokenFromSessionInputCount }}
+                    {{ parsedSoraTokenState.accessTokenCount }}
                   </span>
                 </label>
                 <textarea
-                  :value="parsedAccessTokensText"
+                  :value="parsedSoraTokenState.accessTokensText"
                   rows="2"
                   readonly
                   class="input w-full resize-y bg-gray-50 font-mono text-xs dark:bg-gray-700"
@@ -289,7 +289,7 @@
             <button
               type="button"
               class="btn btn-primary w-full"
-              :disabled="loading || parsedSessionTokenCount === 0"
+              :disabled="loading || parsedSoraTokenState.sessionTokenCount === 0"
               @click="handleValidateSessionToken"
             >
               <svg
@@ -514,7 +514,7 @@
         <!-- Manual Authorization Flow -->
         <div v-if="inputMethod === 'manual'" class="space-y-4">
           <p class="mb-4 text-sm text-blue-800 dark:text-blue-300">
-            {{ oauthFollowSteps }}
+            {{ oauthText.followSteps }}
           </p>
 
           <!-- Step 1: Generate Auth URL -->
@@ -529,7 +529,7 @@
               </div>
               <div class="flex-1">
                 <p class="mb-2 font-medium text-blue-900 dark:text-blue-200">
-                  {{ oauthStep1GenerateUrl }}
+                  {{ oauthText.step1GenerateUrl }}
                 </p>
                 <div v-if="showProjectId && platform === 'gemini'" class="mb-3">
                   <label class="input-label flex items-center gap-2">
@@ -584,7 +584,7 @@
                     ></path>
                   </svg>
                   <Icon v-else name="link" size="sm" class="mr-2" />
-                  {{ loading ? t('admin.accounts.oauth.generating') : oauthGenerateAuthUrl }}
+                  {{ loading ? t('admin.accounts.oauth.generating') : oauthText.generateAuthUrl }}
                 </button>
                 <div v-else class="space-y-3">
                   <div class="flex items-center gap-2">
@@ -648,10 +648,10 @@
               </div>
               <div class="flex-1">
                 <p class="mb-2 font-medium text-blue-900 dark:text-blue-200">
-                  {{ oauthStep2OpenUrl }}
+                  {{ oauthText.step2OpenUrl }}
                 </p>
                 <p class="text-sm text-blue-700 dark:text-blue-300">
-                  {{ oauthOpenUrlDesc }}
+                  {{ oauthText.openUrlDesc }}
                 </p>
                 <!-- OpenAI Important Notice -->
                 <div
@@ -660,7 +660,7 @@
                 >
                   <p
                     class="text-xs text-amber-800 dark:text-amber-300"
-                    v-text="oauthImportantNotice"
+                    v-text="oauthText.importantNotice"
                   ></p>
                 </div>
                 <!-- Proxy Warning (for non-OpenAI) -->
@@ -689,26 +689,26 @@
               </div>
               <div class="flex-1">
                 <p class="mb-2 font-medium text-blue-900 dark:text-blue-200">
-                  {{ oauthStep3EnterCode }}
+                  {{ oauthText.step3EnterCode }}
                 </p>
                 <p
                   class="mb-3 text-sm text-blue-700 dark:text-blue-300"
-                  v-text="oauthAuthCodeDesc"
+                  v-text="oauthText.authCodeDesc"
                 ></p>
                 <div>
                   <label class="input-label">
                     <Icon name="key" size="sm" class="mr-1 inline text-blue-500" />
-                    {{ oauthAuthCode }}
+                    {{ oauthText.authCode }}
                   </label>
                   <textarea
                     v-model="authCodeInput"
                     rows="3"
                     class="input w-full resize-none font-mono text-sm"
-                    :placeholder="oauthAuthCodePlaceholder"
+                    :placeholder="oauthText.authCodePlaceholder"
                   ></textarea>
                   <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     <Icon name="infoCircle" size="xs" class="mr-1 inline" />
-                    {{ oauthAuthCodeHint }}
+                    {{ oauthText.authCodeHint }}
                   </p>
 
                   <!-- Gemini-specific state parameter warning -->
@@ -753,6 +753,12 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useClipboard } from '@/composables/useClipboard'
+import {
+  countMultilineEntries,
+  extractNormalizedOAuthCallback,
+  resolveOAuthImportantNoticeKey,
+  resolveOAuthKey
+} from '@/components/account/oauthAuthorizationFlowHelpers'
 import { parseSoraRawTokens } from '@/utils/soraTokenParser'
 import Icon from '@/components/icons/Icon.vue'
 import type { AddMethod, AuthInputMethod } from '@/composables/useAccountOAuth'
@@ -810,34 +816,29 @@ const { t } = useI18n()
 
 const isOpenAI = computed(() => props.platform === 'openai' || props.platform === 'sora')
 
-// Get translation key based on platform
-const getOAuthKey = (key: string) => {
-  if (props.platform === 'openai' || props.platform === 'sora') return `admin.accounts.oauth.openai.${key}`
-  if (props.platform === 'gemini') return `admin.accounts.oauth.gemini.${key}`
-  if (props.platform === 'antigravity') return `admin.accounts.oauth.antigravity.${key}`
-  return `admin.accounts.oauth.${key}`
-}
+const getOAuthKey = (key: string) => resolveOAuthKey(props.platform, key)
 
-// Computed translations for current platform
-const oauthTitle = computed(() => t(getOAuthKey('title')))
-const oauthFollowSteps = computed(() => t(getOAuthKey('followSteps')))
-const oauthStep1GenerateUrl = computed(() => t(getOAuthKey('step1GenerateUrl')))
-const oauthGenerateAuthUrl = computed(() => t(getOAuthKey('generateAuthUrl')))
-const oauthStep2OpenUrl = computed(() => t(getOAuthKey('step2OpenUrl')))
-const oauthOpenUrlDesc = computed(() => t(getOAuthKey('openUrlDesc')))
-const oauthStep3EnterCode = computed(() => t(getOAuthKey('step3EnterCode')))
-const oauthAuthCodeDesc = computed(() => t(getOAuthKey('authCodeDesc')))
-const oauthAuthCode = computed(() => t(getOAuthKey('authCode')))
-const oauthAuthCodePlaceholder = computed(() => t(getOAuthKey('authCodePlaceholder')))
-const oauthAuthCodeHint = computed(() => t(getOAuthKey('authCodeHint')))
-const oauthImportantNotice = computed(() => {
-  if (props.platform === 'openai' || props.platform === 'sora') return t('admin.accounts.oauth.openai.importantNotice')
-  if (props.platform === 'antigravity') return t('admin.accounts.oauth.antigravity.importantNotice')
-  return ''
+const oauthText = computed(() => {
+  const translateCurrentPlatformKey = (key: string) => t(getOAuthKey(key))
+  const importantNoticeKey = resolveOAuthImportantNoticeKey(props.platform)
+  return {
+    title: translateCurrentPlatformKey('title'),
+    followSteps: translateCurrentPlatformKey('followSteps'),
+    step1GenerateUrl: translateCurrentPlatformKey('step1GenerateUrl'),
+    generateAuthUrl: translateCurrentPlatformKey('generateAuthUrl'),
+    step2OpenUrl: translateCurrentPlatformKey('step2OpenUrl'),
+    openUrlDesc: translateCurrentPlatformKey('openUrlDesc'),
+    step3EnterCode: translateCurrentPlatformKey('step3EnterCode'),
+    authCodeDesc: translateCurrentPlatformKey('authCodeDesc'),
+    authCode: translateCurrentPlatformKey('authCode'),
+    authCodePlaceholder: translateCurrentPlatformKey('authCodePlaceholder'),
+    authCodeHint: translateCurrentPlatformKey('authCodeHint'),
+    importantNotice: importantNoticeKey ? t(importantNoticeKey) : ''
+  }
 })
 
 // Local state
-const inputMethod = ref<AuthInputMethod>(props.showCookieOption ? 'manual' : 'manual')
+const inputMethod = ref<AuthInputMethod>('manual')
 const authCodeInput = ref('')
 const sessionKeyInput = ref('')
 const refreshTokenInput = ref('')
@@ -854,47 +855,24 @@ const showMethodSelection = computed(() => props.showCookieOption || props.showR
 const { copied, copyToClipboard } = useClipboard()
 
 // Computed
-const parsedKeyCount = computed(() => {
-  return sessionKeyInput.value
-    .split('\n')
-    .map((k) => k.trim())
-    .filter((k) => k).length
-})
+const parsedKeyCount = computed(() => countMultilineEntries(sessionKeyInput.value))
 
 // Computed: count of refresh tokens entered
-const parsedRefreshTokenCount = computed(() => {
-  return refreshTokenInput.value
-    .split('\n')
-    .map((rt) => rt.trim())
-    .filter((rt) => rt).length
-})
+const parsedRefreshTokenCount = computed(() => countMultilineEntries(refreshTokenInput.value))
 
-const parsedSoraRawTokens = computed(() => parseSoraRawTokens(sessionTokenInput.value))
-
-const parsedSessionTokenCount = computed(() => {
-  return parsedSoraRawTokens.value.sessionTokens.length
-})
-
-const parsedSessionTokensText = computed(() => {
-  return parsedSoraRawTokens.value.sessionTokens.join('\n')
-})
-
-const parsedAccessTokenFromSessionInputCount = computed(() => {
-  return parsedSoraRawTokens.value.accessTokens.length
-})
-
-const parsedAccessTokensText = computed(() => {
-  return parsedSoraRawTokens.value.accessTokens.join('\n')
+const parsedSoraTokenState = computed(() => {
+  const parsed = parseSoraRawTokens(sessionTokenInput.value)
+  return {
+    sessionTokenCount: parsed.sessionTokens.length,
+    sessionTokensText: parsed.sessionTokens.join('\n'),
+    accessTokenCount: parsed.accessTokens.length,
+    accessTokensText: parsed.accessTokens.join('\n')
+  }
 })
 
 const soraSessionUrl = 'https://sora.chatgpt.com/api/auth/session'
 
-const parsedAccessTokenCount = computed(() => {
-  return accessTokenInput.value
-    .split('\n')
-    .map((at) => at.trim())
-    .filter((at) => at).length
-})
+const parsedAccessTokenCount = computed(() => countMultilineEntries(accessTokenInput.value))
 
 // Watchers
 watch(inputMethod, (newVal) => {
@@ -904,34 +882,12 @@ watch(inputMethod, (newVal) => {
 // Auto-extract code from callback URL (OpenAI/Gemini/Antigravity)
 // e.g., http://localhost:8085/callback?code=xxx...&state=...
 watch(authCodeInput, (newVal) => {
-  if (props.platform !== 'openai' && props.platform !== 'gemini' && props.platform !== 'antigravity' && props.platform !== 'sora') return
-
-  const trimmed = newVal.trim()
-  // Check if it looks like a URL with code parameter
-  if (trimmed.includes('?') && trimmed.includes('code=')) {
-    try {
-      // Try to parse as URL
-      const url = new URL(trimmed)
-      const code = url.searchParams.get('code')
-      const stateParam = url.searchParams.get('state')
-      if ((props.platform === 'openai' || props.platform === 'sora' || props.platform === 'gemini' || props.platform === 'antigravity') && stateParam) {
-        oauthState.value = stateParam
-      }
-      if (code && code !== trimmed) {
-        // Replace the input with just the code
-        authCodeInput.value = code
-      }
-    } catch {
-      // If URL parsing fails, try regex extraction
-      const match = trimmed.match(/[?&]code=([^&]+)/)
-      const stateMatch = trimmed.match(/[?&]state=([^&]+)/)
-      if ((props.platform === 'openai' || props.platform === 'sora' || props.platform === 'gemini' || props.platform === 'antigravity') && stateMatch && stateMatch[1]) {
-        oauthState.value = stateMatch[1]
-      }
-      if (match && match[1] && match[1] !== trimmed) {
-        authCodeInput.value = match[1]
-      }
-    }
+  const normalized = extractNormalizedOAuthCallback(props.platform, newVal)
+  if (normalized.oauthState) {
+    oauthState.value = normalized.oauthState
+  }
+  if (normalized.nextInputValue) {
+    authCodeInput.value = normalized.nextInputValue
   }
 })
 
@@ -968,8 +924,8 @@ const handleValidateRefreshToken = () => {
 }
 
 const handleValidateSessionToken = () => {
-  if (parsedSessionTokenCount.value > 0) {
-    emit('validate-session-token', parsedSessionTokensText.value)
+  if (parsedSoraTokenState.value.sessionTokenCount > 0) {
+    emit('validate-session-token', parsedSoraTokenState.value.sessionTokensText)
   }
 }
 
@@ -987,6 +943,18 @@ const handleImportAccessToken = () => {
   }
 }
 
+function resetFlowState() {
+  authCodeInput.value = ''
+  oauthState.value = ''
+  projectId.value = ''
+  sessionKeyInput.value = ''
+  refreshTokenInput.value = ''
+  sessionTokenInput.value = ''
+  accessTokenInput.value = ''
+  inputMethod.value = 'manual'
+  showHelpDialog.value = false
+}
+
 // Expose methods and state
 defineExpose({
   authCode: authCodeInput,
@@ -996,15 +964,6 @@ defineExpose({
   refreshToken: refreshTokenInput,
   sessionToken: sessionTokenInput,
   inputMethod,
-  reset: () => {
-    authCodeInput.value = ''
-    oauthState.value = ''
-    projectId.value = ''
-    sessionKeyInput.value = ''
-    refreshTokenInput.value = ''
-    sessionTokenInput.value = ''
-    inputMethod.value = 'manual'
-    showHelpDialog.value = false
-  }
+  reset: resetFlowState
 })
 </script>

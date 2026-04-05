@@ -164,7 +164,34 @@ describe('BulkEditAccountModal', () => {
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
       extra: {
         openai_oauth_responses_websockets_v2_mode: 'passthrough',
-        openai_oauth_responses_websockets_v2_enabled: true
+        openai_oauth_responses_websockets_v2_enabled: true,
+        responses_websockets_v2_enabled: false,
+        openai_ws_enabled: false
+      }
+    })
+  })
+
+  it('OpenAI OAuth 批量编辑可同时合并透传与 WS mode 更新', async () => {
+    const wrapper = mountModal({
+      selectedPlatforms: ['openai'],
+      selectedTypes: ['oauth']
+    })
+
+    await wrapper.get('#bulk-edit-openai-passthrough-enabled').setValue(true)
+    await wrapper.get('#bulk-edit-openai-passthrough-toggle').trigger('click')
+    await wrapper.get('#bulk-edit-openai-ws-mode-enabled').setValue(true)
+    await wrapper.get('[data-testid="bulk-edit-openai-ws-mode-select"]').setValue('passthrough')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledTimes(1)
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      extra: {
+        openai_passthrough: true,
+        openai_oauth_responses_websockets_v2_mode: 'passthrough',
+        openai_oauth_responses_websockets_v2_enabled: true,
+        responses_websockets_v2_enabled: false,
+        openai_ws_enabled: false
       }
     })
   })

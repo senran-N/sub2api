@@ -1,7 +1,6 @@
 <template>
   <AuthLayout>
     <div class="space-y-6">
-      <!-- Title -->
       <div class="text-center">
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.resetPasswordTitle') }}
@@ -11,7 +10,6 @@
         </p>
       </div>
 
-      <!-- Invalid Link State -->
       <div v-if="isInvalidLink" class="space-y-6">
         <div class="rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
           <div class="flex flex-col items-center gap-4 text-center">
@@ -39,7 +37,6 @@
         </div>
       </div>
 
-      <!-- Success State -->
       <div v-else-if="isSuccess" class="space-y-6">
         <div class="rounded-xl border border-green-200 bg-green-50 p-6 dark:border-green-800/50 dark:bg-green-900/20">
           <div class="flex flex-col items-center gap-4 text-center">
@@ -58,19 +55,14 @@
         </div>
 
         <div class="text-center">
-          <router-link
-            to="/login"
-            class="btn btn-primary inline-flex items-center gap-2"
-          >
+          <router-link to="/login" class="btn btn-primary inline-flex items-center gap-2">
             <Icon name="login" size="md" />
             {{ t('auth.signIn') }}
           </router-link>
         </div>
       </div>
 
-      <!-- Form State -->
-      <form v-else @submit.prevent="handleSubmit" class="space-y-5">
-        <!-- Email (readonly) -->
+      <form v-else class="space-y-5" @submit.prevent="handleSubmit">
         <div>
           <label for="email" class="input-label">
             {{ t('auth.emailLabel') }}
@@ -81,7 +73,7 @@
             </div>
             <input
               id="email"
-              :value="email"
+              :value="routeState.email"
               type="email"
               readonly
               disabled
@@ -90,75 +82,24 @@
           </div>
         </div>
 
-        <!-- New Password Input -->
-        <div>
-          <label for="password" class="input-label">
-            {{ t('auth.newPassword') }}
-          </label>
-          <div class="relative">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
-            </div>
-            <input
-              id="password"
-              v-model="formData.password"
-              :type="showPassword ? 'text' : 'password'"
-              required
-              autocomplete="new-password"
-              :disabled="isLoading"
-              class="input pl-11 pr-11"
-              :class="{ 'input-error': errors.password }"
-              :placeholder="t('auth.newPasswordPlaceholder')"
-            />
-            <button
-              type="button"
-              @click="showPassword = !showPassword"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
-            >
-              <Icon v-if="showPassword" name="eyeOff" size="md" />
-              <Icon v-else name="eye" size="md" />
-            </button>
-          </div>
-          <p v-if="errors.password" class="input-error-text">
-            {{ errors.password }}
-          </p>
-        </div>
+        <ResetPasswordField
+          id="password"
+          v-model="formData.password"
+          :disabled="isLoading"
+          :error="errors.password"
+          :label="t('auth.newPassword')"
+          :placeholder="t('auth.newPasswordPlaceholder')"
+        />
 
-        <!-- Confirm Password Input -->
-        <div>
-          <label for="confirmPassword" class="input-label">
-            {{ t('auth.confirmPassword') }}
-          </label>
-          <div class="relative">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
-            </div>
-            <input
-              id="confirmPassword"
-              v-model="formData.confirmPassword"
-              :type="showConfirmPassword ? 'text' : 'password'"
-              required
-              autocomplete="new-password"
-              :disabled="isLoading"
-              class="input pl-11 pr-11"
-              :class="{ 'input-error': errors.confirmPassword }"
-              :placeholder="t('auth.confirmPasswordPlaceholder')"
-            />
-            <button
-              type="button"
-              @click="showConfirmPassword = !showConfirmPassword"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
-            >
-              <Icon v-if="showConfirmPassword" name="eyeOff" size="md" />
-              <Icon v-else name="eye" size="md" />
-            </button>
-          </div>
-          <p v-if="errors.confirmPassword" class="input-error-text">
-            {{ errors.confirmPassword }}
-          </p>
-        </div>
+        <ResetPasswordField
+          id="confirmPassword"
+          v-model="formData.confirmPassword"
+          :disabled="isLoading"
+          :error="errors.confirmPassword"
+          :label="t('auth.confirmPassword')"
+          :placeholder="t('auth.confirmPasswordPlaceholder')"
+        />
 
-        <!-- Error Message -->
         <transition name="fade">
           <div
             v-if="errorMessage"
@@ -175,12 +116,7 @@
           </div>
         </transition>
 
-        <!-- Submit Button -->
-        <button
-          type="submit"
-          :disabled="isLoading"
-          class="btn btn-primary w-full"
-        >
+        <button type="submit" :disabled="isLoading" class="btn btn-primary w-full">
           <svg
             v-if="isLoading"
             class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
@@ -207,7 +143,6 @@
       </form>
     </div>
 
-    <!-- Footer -->
     <template #footer>
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.rememberedPassword') }}
@@ -223,84 +158,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { AuthLayout } from '@/components/layout'
-import Icon from '@/components/icons/Icon.vue'
-import { useAppStore } from '@/stores'
 import { resetPassword } from '@/api/auth'
+import Icon from '@/components/icons/Icon.vue'
+import { AuthLayout } from '@/components/layout'
+import { useAppStore } from '@/stores'
+import ResetPasswordField from './reset-password/ResetPasswordField.vue'
+import {
+  buildResetPasswordSubmitPayload,
+  createResetPasswordFormData,
+  createResetPasswordFormErrors,
+  hasResetPasswordFormErrors,
+  isResetPasswordLinkInvalid,
+  resolveResetPasswordErrorMessage,
+  resolveResetPasswordRouteState,
+  validateResetPasswordForm
+} from './reset-password/resetPasswordView'
 
 const { t } = useI18n()
-
-// ==================== Router & Stores ====================
 
 const route = useRoute()
 const appStore = useAppStore()
 
-// ==================== State ====================
+const isLoading = ref(false)
+const isSuccess = ref(false)
+const errorMessage = ref('')
 
-const isLoading = ref<boolean>(false)
-const isSuccess = ref<boolean>(false)
-const errorMessage = ref<string>('')
-const showPassword = ref<boolean>(false)
-const showConfirmPassword = ref<boolean>(false)
+const routeState = reactive(resolveResetPasswordRouteState({}))
+const formData = reactive(createResetPasswordFormData())
+const errors = reactive(createResetPasswordFormErrors())
 
-// URL parameters
-const email = ref<string>('')
-const token = ref<string>('')
-
-const formData = reactive({
-  password: '',
-  confirmPassword: ''
-})
-
-const errors = reactive({
-  password: '',
-  confirmPassword: ''
-})
-
-// Check if the reset link is valid (has email and token)
-const isInvalidLink = computed(() => !email.value || !token.value)
-
-// ==================== Lifecycle ====================
-
-onMounted(() => {
-  // Get email and token from URL query parameters
-  email.value = (route.query.email as string) || ''
-  token.value = (route.query.token as string) || ''
-})
-
-// ==================== Validation ====================
+const isInvalidLink = computed(() => isResetPasswordLinkInvalid(routeState))
 
 function validateForm(): boolean {
-  errors.password = ''
-  errors.confirmPassword = ''
-
-  let isValid = true
-
-  // Password validation
-  if (!formData.password) {
-    errors.password = t('auth.passwordRequired')
-    isValid = false
-  } else if (formData.password.length < 6) {
-    errors.password = t('auth.passwordMinLength')
-    isValid = false
-  }
-
-  // Confirm password validation
-  if (!formData.confirmPassword) {
-    errors.confirmPassword = t('auth.confirmPasswordRequired')
-    isValid = false
-  } else if (formData.password !== formData.confirmPassword) {
-    errors.confirmPassword = t('auth.passwordsDoNotMatch')
-    isValid = false
-  }
-
-  return isValid
+  Object.assign(errors, validateResetPasswordForm(formData, t))
+  return !hasResetPasswordFormErrors(errors)
 }
-
-// ==================== Form Handlers ====================
 
 async function handleSubmit(): Promise<void> {
   errorMessage.value = ''
@@ -312,33 +207,20 @@ async function handleSubmit(): Promise<void> {
   isLoading.value = true
 
   try {
-    await resetPassword({
-      email: email.value,
-      token: token.value,
-      new_password: formData.password
-    })
-
+    await resetPassword(buildResetPasswordSubmitPayload(routeState, formData))
     isSuccess.value = true
     appStore.showSuccess(t('auth.passwordResetSuccess'))
   } catch (error: unknown) {
-    const err = error as { message?: string; response?: { data?: { detail?: string; code?: string } } }
-
-    // Check for invalid/expired token error
-    if (err.response?.data?.code === 'INVALID_RESET_TOKEN') {
-      errorMessage.value = t('auth.invalidOrExpiredToken')
-    } else if (err.response?.data?.detail) {
-      errorMessage.value = err.response.data.detail
-    } else if (err.message) {
-      errorMessage.value = err.message
-    } else {
-      errorMessage.value = t('auth.resetPasswordFailed')
-    }
-
+    errorMessage.value = resolveResetPasswordErrorMessage(error, t)
     appStore.showError(errorMessage.value)
   } finally {
     isLoading.value = false
   }
 }
+
+onMounted(() => {
+  Object.assign(routeState, resolveResetPasswordRouteState(route.query))
+})
 </script>
 
 <style scoped>

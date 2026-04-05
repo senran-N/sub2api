@@ -367,6 +367,38 @@
     @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
   }
 
+  /* ============ 主题语义控件 ============ */
+  .segmented-control {
+    @apply inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5;
+    @apply dark:border-gray-700 dark:bg-dark-800;
+  }
+
+  .segmented-option {
+    @apply rounded-md px-2.5 py-1 text-xs font-medium transition-colors;
+    @apply text-gray-500 hover:text-gray-700;
+    @apply dark:text-gray-400 dark:hover:text-gray-200;
+  }
+
+  .segmented-option-active {
+    @apply bg-white text-gray-900 shadow-sm;
+    @apply dark:bg-dark-700 dark:text-white;
+  }
+
+  .menu-panel {
+    @apply absolute z-50 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-lg;
+    @apply dark:border-dark-600 dark:bg-dark-800;
+  }
+
+  .menu-item {
+    @apply flex w-full items-center justify-between px-4 py-2 text-left text-sm;
+    @apply text-gray-700 hover:bg-gray-100;
+    @apply dark:text-gray-300 dark:hover:bg-dark-700;
+  }
+
+  .toolbar-label {
+    @apply text-sm font-medium text-gray-700 dark:text-gray-300;
+  }
+
   /* ============ 下拉菜单 ============ */
   .dropdown {
     @apply absolute z-50;
