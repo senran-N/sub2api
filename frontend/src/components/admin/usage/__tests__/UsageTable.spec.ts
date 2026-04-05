@@ -17,6 +17,7 @@ const messages: Record<string, string> = {
   'usage.serviceTierPriority': 'Fast',
   'usage.serviceTierFlex': 'Flex',
   'usage.serviceTierStandard': 'Standard',
+  'usage.channel': 'Channel',
   'usage.rate': 'Rate',
   'usage.accountMultiplier': 'Account rate',
   'usage.original': 'Original',
@@ -146,5 +147,46 @@ describe('admin UsageTable tooltip', () => {
     const text = wrapper.text()
     expect(text).toContain('claude-sonnet-4')
     expect(text).toContain('claude-sonnet-4-20250514')
+  })
+
+  it('shows channel mapping chain and channel badge when present', () => {
+    const row = {
+      request_id: 'req-admin-model-chain-1',
+      model: 'gpt-5',
+      upstream_model: 'gpt-5.4-20260101',
+      model_mapping_chain: 'gpt-5→gpt-5.4→gpt-5.4-20260101',
+      channel_id: 77,
+      actual_cost: 0,
+      total_cost: 0,
+      account_rate_multiplier: 1,
+      rate_multiplier: 1,
+      input_cost: 0,
+      output_cost: 0,
+      cache_creation_cost: 0,
+      cache_read_cost: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+    }
+
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [row],
+        loading: false,
+        columns: [],
+      },
+      global: {
+        stubs: {
+          DataTable: DataTableStub,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('gpt-5→gpt-5.4→gpt-5.4-20260101')
+    expect(text).toContain('Channel')
+    expect(text).toContain('#77')
   })
 })

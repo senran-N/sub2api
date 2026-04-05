@@ -1,10 +1,10 @@
 import type { SubscriptionListFilters } from '@/api/admin/subscriptions'
-import type { SelectOption } from '@/components/common/Select.vue'
 import type {
   AssignSubscriptionRequest,
   ExtendSubscriptionRequest,
   Group,
   GroupPlatform,
+  SelectOption,
   SubscriptionType,
   UserSubscription
 } from '@/types'

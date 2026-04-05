@@ -105,6 +105,16 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 	sessionHash := h.gatewayService.GenerateSessionHash(c, body)
 	promptCacheKey := h.gatewayService.ExtractSessionID(c, body)
+	channelMapping, restricted := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	if restricted {
+		h.handleStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", "Requested model is not allowed for this channel", streamStarted)
+		return
+	}
+	channelUsage := channelMapping.ToUsageFields(reqModel, "")
+	schedulingModel := reqModel
+	if channelMapping.MappedModel != "" {
+		schedulingModel = channelMapping.MappedModel
+	}
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
@@ -120,7 +130,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			apiKey.GroupID,
 			"",
 			sessionHash,
-			reqModel,
+			schedulingModel,
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportAny,
 		)
@@ -134,7 +144,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				if apiKey.Group != nil {
 					defaultModel = apiKey.Group.DefaultMappedModel
 				}
-				if defaultModel != "" && defaultModel != reqModel {
+				if defaultModel != "" && defaultModel != schedulingModel {
 					reqLog.Info("openai_chat_completions.fallback_to_default_model",
 						zap.String("default_mapped_model", defaultModel),
 					)
@@ -182,7 +192,11 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
 
-		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, c.GetString("openai_chat_completions_fallback_model"))
+		fallbackModel := c.GetString("openai_chat_completions_fallback_model")
+		if fallbackModel == "" && channelUsage.ChannelMappedModel != "" {
+			fallbackModel = channelUsage.ChannelMappedModel
+		}
+		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
 		result, err := h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, body, promptCacheKey, defaultMappedModel)
 
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
@@ -267,6 +281,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				UserAgent:        userAgent,
 				IPAddress:        clientIP,
 				APIKeyService:    h.apiKeyService,
+				ChannelUsageFields: channelUsage,
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.chat_completions"),

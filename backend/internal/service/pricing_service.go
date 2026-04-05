@@ -59,6 +59,7 @@ type LiteLLMModelPricing struct {
 	Mode                                string  `json:"mode"`
 	SupportsPromptCaching               bool    `json:"supports_prompt_caching"`
 	OutputCostPerImage                  float64 `json:"output_cost_per_image"`
+	OutputCostPerImageToken             float64 `json:"output_cost_per_image_token"`
 }
 
 // PricingRemoteClient 远程价格数据获取接口
@@ -82,6 +83,7 @@ type LiteLLMRawEntry struct {
 	Mode                                string   `json:"mode"`
 	SupportsPromptCaching               bool     `json:"supports_prompt_caching"`
 	OutputCostPerImage                  *float64 `json:"output_cost_per_image"`
+	OutputCostPerImageToken             *float64 `json:"output_cost_per_image_token"`
 }
 
 // PricingService 动态价格服务

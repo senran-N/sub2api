@@ -12,7 +12,9 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 
 	cacheTTLOverridden := prepareGatewayUsageForBilling(result, account, input.ForceCacheBilling)
 	multiplier := s.resolveGatewayUsageRateMultiplier(ctx, apiKey, user)
-	cost := s.calculateGatewayUsageCost(result, apiKey, multiplier)
+	channelUsage := enrichChannelUsageFields(ctx, s.channelService, apiKey.GroupID, result.Model, result.UpstreamModel, input.ChannelUsageFields)
+	billingModel := resolveChannelBillingModel(channelUsage, forwardResultBillingModel(result.Model, result.UpstreamModel))
+	cost := s.calculateGatewayUsageCost(ctx, result, apiKey, billingModel, multiplier)
 
 	logBuild := buildGatewayUsageLog(ctx, usageLogBuildInput{
 		Result:             result,
@@ -28,6 +30,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		UserAgent:          input.UserAgent,
 		IPAddress:          input.IPAddress,
 		IncludeMediaType:   true,
+		ChannelUsageFields: channelUsage,
 	})
 	requestID := logBuild.RequestID
 	isSubscriptionBilling := logBuild.IsSubscriptionBilling
@@ -58,7 +61,9 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 
 	cacheTTLOverridden := prepareGatewayUsageForBilling(result, account, input.ForceCacheBilling)
 	multiplier := s.resolveGatewayUsageRateMultiplier(ctx, apiKey, user)
-	cost := s.calculateGatewayLongContextUsageCost(result, apiKey, multiplier, input.LongContextThreshold, input.LongContextMultiplier)
+	channelUsage := enrichChannelUsageFields(ctx, s.channelService, apiKey.GroupID, result.Model, result.UpstreamModel, input.ChannelUsageFields)
+	billingModel := resolveChannelBillingModel(channelUsage, forwardResultBillingModel(result.Model, result.UpstreamModel))
+	cost := s.calculateGatewayLongContextUsageCost(ctx, result, apiKey, billingModel, multiplier, input.LongContextThreshold, input.LongContextMultiplier)
 
 	logBuild := buildGatewayUsageLog(ctx, usageLogBuildInput{
 		Result:             result,
@@ -74,6 +79,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		UserAgent:          input.UserAgent,
 		IPAddress:          input.IPAddress,
 		IncludeMediaType:   false,
+		ChannelUsageFields: channelUsage,
 	})
 	requestID := logBuild.RequestID
 	isSubscriptionBilling := logBuild.IsSubscriptionBilling

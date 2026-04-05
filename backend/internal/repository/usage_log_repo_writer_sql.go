@@ -26,6 +26,8 @@ var usageLogInsertColumnNames = []string{
 	"cache_read_tokens",
 	"cache_creation_5m_tokens",
 	"cache_creation_1h_tokens",
+	"image_output_tokens",
+	"image_output_cost",
 	"input_cost",
 	"output_cost",
 	"cache_creation_cost",
@@ -50,6 +52,10 @@ var usageLogInsertColumnNames = []string{
 	"inbound_endpoint",
 	"upstream_endpoint",
 	"cache_ttl_overridden",
+	"channel_id",
+	"model_mapping_chain",
+	"billing_tier",
+	"billing_mode",
 	"created_at",
 }
 
@@ -271,6 +277,10 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 	reasoningEffort := nullString(log.ReasoningEffort)
 	inboundEndpoint := nullString(log.InboundEndpoint)
 	upstreamEndpoint := nullString(log.UpstreamEndpoint)
+	channelID := nullInt64(log.ChannelID)
+	modelMappingChain := nullString(log.ModelMappingChain)
+	billingTier := nullString(log.BillingTier)
+	billingMode := nullString(log.BillingMode)
 	requestedModel := strings.TrimSpace(log.RequestedModel)
 	if requestedModel == "" {
 		requestedModel = strings.TrimSpace(log.Model)
@@ -303,6 +313,8 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			log.CacheReadTokens,
 			log.CacheCreation5mTokens,
 			log.CacheCreation1hTokens,
+			log.ImageOutputTokens,
+			log.ImageOutputCost,
 			log.InputCost,
 			log.OutputCost,
 			log.CacheCreationCost,
@@ -327,6 +339,10 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			inboundEndpoint,
 			upstreamEndpoint,
 			log.CacheTTLOverridden,
+			channelID,
+			modelMappingChain,
+			billingTier,
+			billingMode,
 			createdAt,
 		},
 	}

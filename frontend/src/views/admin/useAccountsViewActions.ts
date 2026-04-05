@@ -1,7 +1,6 @@
 import type { Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
-import type { Account, ClaudeModel } from '@/types'
-import type { SelectOption } from '@/components/common/Select.vue'
+import type { Account, ClaudeModel, SelectOption } from '@/types'
 import { normalizeBulkSchedulableResult } from './accountsList'
 
 interface AccountsViewActionsOptions {

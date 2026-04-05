@@ -1,5 +1,4 @@
-import type { SelectOption } from '@/components/common/Select.vue'
-import type { Group, GroupPlatform, RedeemCode, RedeemCodeType, SubscriptionType } from '@/types'
+import type { Group, GroupPlatform, RedeemCode, RedeemCodeType, SelectOption, SubscriptionType } from '@/types'
 
 export type RedeemStatusFilter = '' | 'unused' | 'used' | 'expired'
 export type AppliedRedeemStatusFilter = Exclude<RedeemStatusFilter, ''>

@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	pkghttputil "github.com/senran-N/sub2api/internal/pkg/httputil"
 	"github.com/senran-N/sub2api/internal/pkg/ip"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
@@ -79,6 +79,8 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
+
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
 
 	// Claude Code only restriction
 	if apiKey.Group != nil && apiKey.Group.ClaudeCodeOnly {
@@ -203,7 +205,11 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 		// 5. Forward request
 		writerSizeBeforeForward := c.Writer.Size()
-		result, err := h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, body, parsedReq)
+		forwardBody := body
+		if channelMapping.Mapped {
+			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
+		}
+		result, err := h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody, parsedReq)
 
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
@@ -255,6 +261,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
 				APIKeyService:      h.apiKeyService,
+				ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
 			}); err != nil {
 				reqLog.Error("gateway.cc.record_usage_failed",
 					zap.Int64("account_id", account.ID),

@@ -26,12 +26,19 @@
         </template>
 
         <template #cell-model="{ row }">
-          <div v-if="row.upstream_model && row.upstream_model !== row.model" class="space-y-0.5 text-xs">
+          <div v-if="row.model_mapping_chain || (row.upstream_model && row.upstream_model !== row.model) || row.channel_id != null" class="space-y-1 text-xs">
             <div class="break-all font-medium text-gray-900 dark:text-white">
               {{ row.model }}
             </div>
-            <div class="break-all text-gray-500 dark:text-gray-400">
+            <div v-if="row.model_mapping_chain" class="break-all text-gray-500 dark:text-gray-400">
+              {{ row.model_mapping_chain }}
+            </div>
+            <div v-else-if="row.upstream_model && row.upstream_model !== row.model" class="break-all text-gray-500 dark:text-gray-400">
               <span class="mr-0.5">↳</span>{{ row.upstream_model }}
+            </div>
+            <div v-if="row.channel_id != null" class="inline-flex w-fit items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20">
+              <span>{{ t('usage.channel') }}</span>
+              <span>#{{ row.channel_id }}</span>
             </div>
           </div>
           <span v-else class="font-medium text-gray-900 dark:text-white">{{ row.model }}</span>

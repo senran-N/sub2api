@@ -23,6 +23,7 @@ type usageLogBuildInput struct {
 	UserAgent          string
 	IPAddress          string
 	IncludeMediaType   bool
+	ChannelUsageFields
 }
 
 type usageLogBuildResult struct {
@@ -92,6 +93,19 @@ func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID,
 	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
 }
 
+func applyUsageLogCosts(log *UsageLog, cost *CostBreakdown) {
+	if log == nil || cost == nil {
+		return
+	}
+	log.InputCost = cost.InputCost
+	log.ImageOutputCost = cost.ImageOutputCost
+	log.OutputCost = cost.OutputCost
+	log.CacheCreationCost = cost.CacheCreationCost
+	log.CacheReadCost = cost.CacheReadCost
+	log.TotalCost = cost.TotalCost
+	log.ActualCost = cost.ActualCost
+}
+
 func buildGatewayUsageLog(ctx context.Context, input usageLogBuildInput) usageLogBuildResult {
 	isSubscriptionBilling := input.Subscription != nil && input.APIKey.Group != nil && input.APIKey.Group.IsSubscriptionType()
 	billingType := BillingTypeBalance
@@ -117,7 +131,7 @@ func buildGatewayUsageLog(ctx context.Context, input usageLogBuildInput) usageLo
 		AccountID:             input.Account.ID,
 		RequestID:             requestID,
 		Model:                 input.Result.Model,
-		RequestedModel:        input.Result.Model,
+		RequestedModel:        input.ChannelUsageFields.OriginalModel,
 		UpstreamModel:         optionalNonEqualStringPtr(input.Result.UpstreamModel, input.Result.Model),
 		ReasoningEffort:       input.Result.ReasoningEffort,
 		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),
@@ -128,15 +142,11 @@ func buildGatewayUsageLog(ctx context.Context, input usageLogBuildInput) usageLo
 		CacheReadTokens:       input.Result.Usage.CacheReadInputTokens,
 		CacheCreation5mTokens: input.Result.Usage.CacheCreation5mTokens,
 		CacheCreation1hTokens: input.Result.Usage.CacheCreation1hTokens,
-		InputCost:             input.Cost.InputCost,
-		OutputCost:            input.Cost.OutputCost,
-		CacheCreationCost:     input.Cost.CacheCreationCost,
-		CacheReadCost:         input.Cost.CacheReadCost,
-		TotalCost:             input.Cost.TotalCost,
-		ActualCost:            input.Cost.ActualCost,
+		ImageOutputTokens:     input.Result.Usage.ImageOutputTokens,
 		RateMultiplier:        input.Multiplier,
 		AccountRateMultiplier: &accountRateMultiplier,
 		BillingType:           billingType,
+		BillingMode:           resolveGatewayBillingMode(input.Result, input.Cost),
 		Stream:                input.Result.Stream,
 		DurationMs:            &durationMs,
 		FirstTokenMs:          input.Result.FirstTokenMs,
@@ -144,7 +154,12 @@ func buildGatewayUsageLog(ctx context.Context, input usageLogBuildInput) usageLo
 		ImageSize:             imageSize,
 		MediaType:             mediaType,
 		CacheTTLOverridden:    input.CacheTTLOverridden,
+		ChannelID:             optionalInt64Ptr(input.ChannelID),
+		ModelMappingChain:     optionalTrimmedStringPtr(input.ModelMappingChain),
 		CreatedAt:             time.Now(),
+	}
+	if usageLog.RequestedModel == "" {
+		usageLog.RequestedModel = input.Result.Model
 	}
 
 	if input.UserAgent != "" {
@@ -159,6 +174,7 @@ func buildGatewayUsageLog(ctx context.Context, input usageLogBuildInput) usageLo
 	if input.Subscription != nil {
 		usageLog.SubscriptionID = &input.Subscription.ID
 	}
+	applyUsageLogCosts(usageLog, input.Cost)
 
 	return usageLogBuildResult{
 		RequestID:             requestID,
@@ -193,4 +209,21 @@ func (s *GatewayService) finalizeGatewayUsageRecord(ctx context.Context, input g
 
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, input.UsageLog, "service.gateway")
 	return nil
+}
+
+func resolveGatewayBillingMode(result *ForwardResult, cost *CostBreakdown) *string {
+	if result == nil {
+		return nil
+	}
+	if result.MediaType == "image" || result.MediaType == "video" || result.MediaType == "prompt" {
+		return nil
+	}
+
+	mode := string(BillingModeToken)
+	if cost != nil && cost.BillingMode != "" {
+		mode = cost.BillingMode
+	} else if result.ImageCount > 0 {
+		mode = string(BillingModeImage)
+	}
+	return &mode
 }

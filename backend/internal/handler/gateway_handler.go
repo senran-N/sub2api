@@ -158,6 +158,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	reqStream := parsedReq.Stream
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+
 	// 设置 max_tokens=1 + haiku 探测请求标识到 context 中
 	// 必须在 SetClaudeCodeClientContext 之前设置，因为 ClaudeCodeValidator 需要读取此标识进行绕过判断
 	if isMaxTokensOneHaikuRequest(reqModel, parsedReq.MaxTokens, reqStream) {
@@ -478,6 +480,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					RequestPayloadHash: requestPayloadHash,
 					ForceCacheBilling:  fs.ForceCacheBilling,
 					APIKeyService:      h.apiKeyService,
+					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
 				}); err != nil {
 					logger.L().With(
 						zap.String("component", "handler.gateway.messages"),
@@ -660,6 +663,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			parsedReq.OnUpstreamAccepted = queueRelease
 			// ===== 用户消息串行队列 END =====
 
+			if channelMapping.Mapped {
+				parsedReq.Model = channelMapping.MappedModel
+				parsedReq.Body = h.gatewayService.ReplaceModelInBody(parsedReq.Body, channelMapping.MappedModel)
+				body = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
+			}
+
 			// 转发请求 - 根据账号平台分流
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
@@ -810,6 +819,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					RequestPayloadHash: requestPayloadHash,
 					ForceCacheBilling:  fs.ForceCacheBilling,
 					APIKeyService:      h.apiKeyService,
+					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
 				}); err != nil {
 					logger.L().With(
 						zap.String("component", "handler.gateway.messages"),

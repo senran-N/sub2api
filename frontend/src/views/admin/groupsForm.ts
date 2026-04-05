@@ -2,10 +2,10 @@ import type {
   AdminGroup,
   CreateGroupRequest,
   GroupPlatform,
+  SelectOption,
   SubscriptionType,
   UpdateGroupRequest
 } from '@/types'
-import type { SelectOption } from '@/components/common/Select.vue'
 
 const SORA_QUOTA_BYTES_PER_GB = 1024 * 1024 * 1024
 

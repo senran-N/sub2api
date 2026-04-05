@@ -132,6 +132,9 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		if entry.OutputCostPerImage != nil {
 			pricing.OutputCostPerImage = *entry.OutputCostPerImage
 		}
+		if entry.OutputCostPerImageToken != nil {
+			pricing.OutputCostPerImageToken = *entry.OutputCostPerImageToken
+		}
 		result[modelName] = pricing
 	}
 

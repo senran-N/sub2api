@@ -25,6 +25,9 @@ func (s *GatewayService) filterLoadAwareCandidates(
 		if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, account, requestedModel) {
 			continue
 		}
+		if s.isChannelModelRestrictedForSelection(ctx, account, requestedModel) {
+			continue
+		}
 		if !s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) {
 			continue
 		}

@@ -63,6 +63,7 @@ func (s *GatewayService) trySelectRoutedStickyAccount(
 	gatePass := s.isAccountSchedulableForSelection(stickyAccount) &&
 		s.isAccountAllowedForPlatform(stickyAccount, platform, useMixed) &&
 		(requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, stickyAccount, requestedModel)) &&
+		!s.isChannelModelRestrictedForSelectionWithGroup(ctx, groupID, stickyAccount, requestedModel) &&
 		s.isAccountSchedulableForModelSelection(ctx, stickyAccount, requestedModel) &&
 		s.isAccountSchedulableForQuota(stickyAccount) &&
 		s.isAccountSchedulableForWindowCost(ctx, stickyAccount, true)

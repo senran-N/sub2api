@@ -85,23 +85,23 @@ func TestResolveOpenAIForwardModel_PreventsClaudeModelFromFallingBackToGpt51(t *
 	}
 }
 
-func TestResolveOpenAIUpstreamModel(t *testing.T) {
+func TestNormalizeCodexModel_UpstreamAlignment(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
 		want  string
 	}{
-		{name: "preserves bare codex spark", input: "gpt-5.3-codex-spark", want: "gpt-5.3-codex-spark"},
-		{name: "preserves trimmed bare codex spark", input: "  gpt-5.3-codex-spark  ", want: "gpt-5.3-codex-spark"},
-		{name: "preserves spaced bare codex spark", input: "gpt 5.3 codex spark", want: "gpt-5.3-codex-spark"},
+		{name: "normalizes bare codex spark to codex", input: "gpt-5.3-codex-spark", want: "gpt-5.3-codex"},
+		{name: "normalizes trimmed bare codex spark to codex", input: "  gpt-5.3-codex-spark  ", want: "gpt-5.3-codex"},
+		{name: "normalizes spaced bare codex spark to codex", input: "gpt 5.3 codex spark", want: "gpt-5.3-codex"},
 		{name: "normalizes spark high to codex", input: "gpt-5.3-codex-spark-high", want: "gpt-5.3-codex"},
 		{name: "normalizes gpt 5.4 alias", input: "gpt 5.4", want: "gpt-5.4"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := resolveOpenAIUpstreamModel(tt.input); got != tt.want {
-				t.Fatalf("resolveOpenAIUpstreamModel(%q) = %q, want %q", tt.input, got, tt.want)
+			if got := normalizeCodexModel(tt.input); got != tt.want {
+				t.Fatalf("normalizeCodexModel(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

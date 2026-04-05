@@ -92,13 +92,18 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	s.handleOpenAIOAuthProbeState(ctx, account, resp, isOAuth)
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
 		if isOAuth && s.accountRepo != nil {
 			if resetAt := (&RateLimitService{}).calculateOpenAI429ResetTime(resp.Header); resetAt != nil {
 				_ = s.accountRepo.SetRateLimited(ctx, account.ID, *resetAt)
 				account.RateLimitResetAt = resetAt
 			}
 		}
-		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
+		if s.accountRepo != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
+			authErrMsg := fmt.Sprintf("Authentication failed (%d): %s", resp.StatusCode, string(body))
+			_ = s.accountRepo.SetError(ctx, account.ID, authErrMsg)
+		}
+		return s.sendErrorAndEnd(c, errMsg)
 	}
 	return s.processOpenAIStream(c, resp.Body)
 }

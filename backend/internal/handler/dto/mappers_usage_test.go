@@ -148,6 +148,35 @@ func TestUsageLogFromService_FallsBackToLegacyModelWhenRequestedModelMissing(t *
 	require.Equal(t, "claude-3", adminDTO.Model)
 }
 
+func TestUsageLogFromService_AdminIncludesChannelFieldsOnly(t *testing.T) {
+	t.Parallel()
+
+	upstreamModel := "gpt-5.4-20260101"
+	channelID := int64(42)
+	mappingChain := "gpt-5→gpt-5.4→gpt-5.4-20260101"
+	log := &service.UsageLog{
+		RequestID:         "req_channel_admin",
+		Model:             "gpt-5.4",
+		RequestedModel:    "gpt-5",
+		UpstreamModel:     &upstreamModel,
+		ChannelID:         &channelID,
+		ModelMappingChain: &mappingChain,
+	}
+
+	userDTO := UsageLogFromService(log)
+	adminDTO := UsageLogFromServiceAdmin(log)
+
+	userJSON, err := json.Marshal(userDTO)
+	require.NoError(t, err)
+	require.NotContains(t, string(userJSON), "channel_id")
+	require.NotContains(t, string(userJSON), "model_mapping_chain")
+
+	adminJSON, err := json.Marshal(adminDTO)
+	require.NoError(t, err)
+	require.Contains(t, string(adminJSON), `"channel_id":42`)
+	require.Contains(t, string(adminJSON), `"model_mapping_chain":"gpt-5→gpt-5.4→gpt-5.4-20260101"`)
+}
+
 func f64Ptr(value float64) *float64 {
 	return &value
 }

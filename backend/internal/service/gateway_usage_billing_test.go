@@ -101,3 +101,42 @@ func (u *testAPIKeyQuotaUpdater) UpdateQuotaUsed(context.Context, int64, float64
 func (u *testAPIKeyQuotaUpdater) UpdateRateLimitUsage(context.Context, int64, float64) error {
 	return nil
 }
+
+func TestPostUsageBilling_AllowsNilCost(t *testing.T) {
+	deferred := &DeferredService{}
+
+	postUsageBilling(context.Background(), &postUsageBillingParams{
+		Cost:    nil,
+		Account: &Account{ID: 303},
+	}, &billingDeps{
+		deferredService:     deferred,
+		billingCacheService: &BillingCacheService{},
+	})
+
+	_, ok := deferred.lastUsedUpdates.Load(int64(303))
+	require.True(t, ok, "nil cost should still schedule last_used update")
+}
+
+func TestFinalizePostUsageBilling_WithNilCostStillSchedulesLastUsedUpdate(t *testing.T) {
+	deferred := &DeferredService{}
+
+	finalizePostUsageBilling(&postUsageBillingParams{
+		Cost:    nil,
+		Account: &Account{ID: 303},
+	}, &billingDeps{
+		deferredService:     deferred,
+		billingCacheService: &BillingCacheService{},
+	})
+
+	_, ok := deferred.lastUsedUpdates.Load(int64(303))
+	require.True(t, ok, "nil cost should still schedule last_used update")
+}
+
+func TestFinalizePostUsageBilling_AllowsNilServices(t *testing.T) {
+	finalizePostUsageBilling(&postUsageBillingParams{
+		Cost:    &CostBreakdown{ActualCost: 1, TotalCost: 2},
+		User:    &User{ID: 1},
+		APIKey:  &APIKey{ID: 2},
+		Account: &Account{ID: 3},
+	}, &billingDeps{})
+}

@@ -133,6 +133,12 @@ func (s *GatewayService) diagnoseSelectionFailure(
 			Detail:   fmt.Sprintf("model=%s", requestedModel),
 		}
 	}
+	if s.isChannelModelRestrictedForSelection(ctx, acc, requestedModel) {
+		return selectionFailureDiagnosis{
+			Category: "model_unsupported",
+			Detail:   "channel_restricted",
+		}
+	}
 	if !s.isAccountSchedulableForModelSelection(ctx, acc, requestedModel) {
 		remaining := acc.GetRateLimitRemainingTimeWithContext(ctx, requestedModel).Truncate(time.Second)
 		return selectionFailureDiagnosis{

@@ -118,7 +118,7 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 	}
 
 	if model, ok := reqBody["model"].(string); ok {
-		normalizedModel := resolveOpenAIUpstreamModel(model)
+		normalizedModel := normalizeCodexModel(model)
 		if normalizedModel != "" && normalizedModel != model {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex model normalization: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
 				model, normalizedModel, account.Name, account.Type, isCodexCLI)

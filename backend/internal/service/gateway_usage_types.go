@@ -16,6 +16,7 @@ type RecordUsageInput struct {
 	RequestPayloadHash string
 	ForceCacheBilling  bool
 	APIKeyService      APIKeyQuotaUpdater
+	ChannelUsageFields
 }
 
 // APIKeyQuotaUpdater defines the interface for updating API Key quota and rate limit usage.
@@ -61,4 +62,5 @@ type RecordUsageLongContextInput struct {
 	LongContextMultiplier float64
 	ForceCacheBilling     bool
 	APIKeyService         APIKeyQuotaUpdater
+	ChannelUsageFields
 }

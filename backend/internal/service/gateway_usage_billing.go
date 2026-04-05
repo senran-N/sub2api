@@ -14,10 +14,18 @@ import (
 //   - API Key 限速用量更新
 //   - 账号配额用量更新（账号口径：TotalCost × 账号计费倍率）
 func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
+	if p == nil || deps == nil {
+		return
+	}
+
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 
 	cost := p.Cost
+	if cost == nil {
+		finalizePostUsageBilling(p, deps)
+		return
+	}
 
 	if p.IsSubscriptionBill {
 		if cost.TotalCost > 0 {
@@ -178,23 +186,31 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 }
 
 func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps) {
-	if p == nil || p.Cost == nil || deps == nil {
+	if p == nil || deps == nil {
+		return
+	}
+	if p.Cost == nil {
+		if p.Account != nil && deps.deferredService != nil {
+			deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+		}
 		return
 	}
 
 	if p.IsSubscriptionBill {
-		if p.Cost.TotalCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
+		if p.Cost.TotalCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil && deps.billingCacheService != nil {
 			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.TotalCost)
 		}
-	} else if p.Cost.ActualCost > 0 && p.User != nil {
+	} else if p.Cost.ActualCost > 0 && p.User != nil && deps.billingCacheService != nil {
 		deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
 	}
 
-	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
+	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() && deps.billingCacheService != nil {
 		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
 	}
 
-	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+	if p.Account != nil && deps.deferredService != nil {
+		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+	}
 }
 
 func detachedBillingContext(ctx context.Context) (context.Context, context.CancelFunc) {

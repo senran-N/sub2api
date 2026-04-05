@@ -304,6 +304,8 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		cacheReadTokens       int
 		cacheCreation5m       int
 		cacheCreation1h       int
+		imageOutputTokens     int
+		imageOutputCost       float64
 		inputCost             float64
 		outputCost            float64
 		cacheCreationCost     float64
@@ -328,6 +330,10 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		inboundEndpoint       sql.NullString
 		upstreamEndpoint      sql.NullString
 		cacheTTLOverridden    bool
+		channelID             sql.NullInt64
+		modelMappingChain     sql.NullString
+		billingTier           sql.NullString
+		billingMode           sql.NullString
 		createdAt             time.Time
 	)
 
@@ -348,6 +354,8 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		&cacheReadTokens,
 		&cacheCreation5m,
 		&cacheCreation1h,
+		&imageOutputTokens,
+		&imageOutputCost,
 		&inputCost,
 		&outputCost,
 		&cacheCreationCost,
@@ -372,6 +380,10 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		&inboundEndpoint,
 		&upstreamEndpoint,
 		&cacheTTLOverridden,
+		&channelID,
+		&modelMappingChain,
+		&billingTier,
+		&billingMode,
 		&createdAt,
 	); err != nil {
 		return nil, err
@@ -390,6 +402,8 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		CacheReadTokens:       cacheReadTokens,
 		CacheCreation5mTokens: cacheCreation5m,
 		CacheCreation1hTokens: cacheCreation1h,
+		ImageOutputTokens:     imageOutputTokens,
+		ImageOutputCost:       imageOutputCost,
 		InputCost:             inputCost,
 		OutputCost:            outputCost,
 		CacheCreationCost:     cacheCreationCost,
@@ -420,6 +434,10 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 	if subscriptionID.Valid {
 		value := subscriptionID.Int64
 		log.SubscriptionID = &value
+	}
+	if channelID.Valid {
+		value := channelID.Int64
+		log.ChannelID = &value
 	}
 	if durationMs.Valid {
 		value := int(durationMs.Int64)
@@ -452,6 +470,15 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 	}
 	if upstreamEndpoint.Valid {
 		log.UpstreamEndpoint = &upstreamEndpoint.String
+	}
+	if modelMappingChain.Valid {
+		log.ModelMappingChain = &modelMappingChain.String
+	}
+	if billingTier.Valid {
+		log.BillingTier = &billingTier.String
+	}
+	if billingMode.Valid {
+		log.BillingMode = &billingMode.String
 	}
 	if upstreamModel.Valid {
 		log.UpstreamModel = &upstreamModel.String

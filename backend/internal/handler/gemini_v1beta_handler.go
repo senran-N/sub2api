@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/senran-N/sub2api/internal/pkg/antigravity"
 	"github.com/senran-N/sub2api/internal/pkg/gemini"
@@ -20,7 +21,6 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/google/uuid"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -183,6 +183,12 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	setOpsRequestContext(c, modelName, stream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(stream, false)))
+
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, modelName)
+	reqModel := modelName
+	if channelMapping.Mapped {
+		modelName = channelMapping.MappedModel
+	}
 
 	// Get subscription (may be nil)
 	subscription, _ := middleware.GetSubscriptionFromContext(c)
@@ -523,13 +529,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				LongContextMultiplier: 2.0,    // 超出部分双倍计费
 				ForceCacheBilling:     fs.ForceCacheBilling,
 				APIKeyService:         h.apiKeyService,
+				ChannelUsageFields:    channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.gemini_v1beta.models"),
 					zap.Int64("user_id", authSubject.UserID),
 					zap.Int64("api_key_id", apiKey.ID),
 					zap.Any("group_id", apiKey.GroupID),
-					zap.String("model", modelName),
+					zap.String("model", reqModel),
 					zap.Int64("account_id", account.ID),
 				).Error("gemini.record_usage_failed", zap.Error(err))
 			}

@@ -7,6 +7,16 @@ import (
 	"testing"
 )
 
+func TestApplyUsageLogCosts_IgnoresNilCost(t *testing.T) {
+	log := &UsageLog{InputCost: 1, OutputCost: 2, TotalCost: 3, ActualCost: 4}
+
+	applyUsageLogCosts(log, nil)
+
+	if log.InputCost != 1 || log.OutputCost != 2 || log.TotalCost != 3 || log.ActualCost != 4 {
+		t.Fatalf("usage log costs should remain unchanged when cost is nil: %+v", log)
+	}
+}
+
 func TestPrepareGatewayUsageForBilling(t *testing.T) {
 	result := &ForwardResult{
 		Usage: ClaudeUsage{
@@ -90,5 +100,33 @@ func TestBuildGatewayUsageLog(t *testing.T) {
 	}
 	if result.UsageLog.UpstreamModel == nil || *result.UsageLog.UpstreamModel != "claude-sonnet-4-20250514" {
 		t.Fatalf("upstreamModel=%v", result.UsageLog.UpstreamModel)
+	}
+}
+
+func TestBuildGatewayUsageLog_AllowsNilCost(t *testing.T) {
+	groupID := int64(9)
+
+	result := buildGatewayUsageLog(context.Background(), usageLogBuildInput{
+		Result: &ForwardResult{
+			RequestID: "req-nil-cost",
+			Model:     "claude-sonnet-4",
+		},
+		APIKey: &APIKey{
+			ID:      2,
+			GroupID: &groupID,
+			Group:   &Group{},
+		},
+		User:             &User{ID: 3},
+		Account:          &Account{ID: 4},
+		Cost:             nil,
+		Multiplier:       1.5,
+		IncludeMediaType: true,
+	})
+
+	if result.UsageLog == nil {
+		t.Fatalf("usage log should not be nil")
+	}
+	if result.UsageLog.TotalCost != 0 || result.UsageLog.ActualCost != 0 {
+		t.Fatalf("nil cost should keep zero-value cost fields: %+v", result.UsageLog)
 	}
 }

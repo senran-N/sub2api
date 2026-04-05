@@ -543,6 +543,15 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	reqModel := modelResult.String()
 	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
+	channelMapping, restricted := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	if restricted {
+		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Requested model is not allowed for this channel")
+		return
+	}
+	channelUsage := channelMapping.ToUsageFields(reqModel, "")
+	if channelMapping.MappedModel != "" {
+		routingModel = service.NormalizeOpenAICompatRequestedModel(channelMapping.MappedModel)
+	}
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
@@ -672,7 +681,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 		// Forward 层需要始终拿到 group 默认映射模型，这样未命中账号级映射的
 		// Claude 兼容模型才不会在后续 Codex 规范化中意外退化到 gpt-5.1。
-		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, c.GetString("openai_messages_fallback_model"))
+		fallbackModel := c.GetString("openai_messages_fallback_model")
+		if fallbackModel == "" && channelUsage.ChannelMappedModel != "" {
+			fallbackModel = channelUsage.ChannelMappedModel
+		}
+		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
 		result, err := h.gatewayService.ForwardAsAnthropic(c.Request.Context(), c, account, body, promptCacheKey, defaultMappedModel)
 
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
@@ -759,6 +772,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
 				APIKeyService:      h.apiKeyService,
+				ChannelUsageFields: channelUsage,
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.messages"),

@@ -14,7 +14,7 @@ import (
 	"github.com/senran-N/sub2api/internal/service"
 )
 
-const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, media_type, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, created_at"
+const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, media_type, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, channel_id, model_mapping_chain, billing_tier, billing_mode, created_at"
 
 // usageLogInsertArgTypes must stay in the same order as:
 //  1. prepareUsageLogInsert().args
@@ -39,6 +39,8 @@ var usageLogInsertArgTypes = [...]string{
 	"integer",     // cache_read_tokens
 	"integer",     // cache_creation_5m_tokens
 	"integer",     // cache_creation_1h_tokens
+	"integer",     // image_output_tokens
+	"numeric",     // image_output_cost
 	"numeric",     // input_cost
 	"numeric",     // output_cost
 	"numeric",     // cache_creation_cost
@@ -63,6 +65,10 @@ var usageLogInsertArgTypes = [...]string{
 	"text",        // inbound_endpoint
 	"text",        // upstream_endpoint
 	"boolean",     // cache_ttl_overridden
+	"bigint",      // channel_id
+	"text",        // model_mapping_chain
+	"text",        // billing_tier
+	"text",        // billing_mode
 	"timestamptz", // created_at
 }
 

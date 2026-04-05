@@ -1,7 +1,6 @@
 import type { UserListFilters } from '@/api/admin/users'
-import type { SelectOption } from '@/components/common/Select.vue'
 import type { Column } from '@/components/common/types'
-import type { AdminGroup, AdminUser, UserAttributeDefinition } from '@/types'
+import type { AdminGroup, AdminUser, SelectOption, UserAttributeDefinition } from '@/types'
 
 export type UserRoleFilter = '' | 'admin' | 'user'
 export type UserStatusFilter = '' | 'active' | 'disabled'

@@ -336,15 +336,15 @@ func TestApplyCodexOAuthTransform_WhitespaceStringInputBecomesEmptyArray(t *test
 	require.Len(t, input, 0)
 }
 
-func TestApplyCodexOAuthTransform_PreservesBareCodexSparkUpstreamModel(t *testing.T) {
+func TestApplyCodexOAuthTransform_NormalizesBareCodexSparkUpstreamModel(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "gpt-5.3-codex-spark",
 	}
 
 	result := applyCodexOAuthTransform(reqBody, false, false)
 
-	require.Equal(t, "gpt-5.3-codex-spark", reqBody["model"])
-	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
+	require.Equal(t, "gpt-5.3-codex", reqBody["model"])
+	require.Equal(t, "gpt-5.3-codex", result.NormalizedModel)
 }
 
 func TestApplyCodexOAuthTransform_StringInputWithToolsField(t *testing.T) {

@@ -88,6 +88,7 @@ type OpenAIUsage struct {
 	OutputTokens             int `json:"output_tokens"`
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	ImageOutputTokens        int `json:"image_output_tokens,omitempty"`
 }
 
 // OpenAIForwardResult represents the result of forwarding
@@ -206,6 +207,8 @@ type OpenAIGatewayService struct {
 	openAITokenProvider   *OpenAITokenProvider
 	toolCorrector         *CodexToolCorrector
 	openaiWSResolver      OpenAIWSProtocolResolver
+	resolver              *ModelPricingResolver
+	channelService        *ChannelService
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
@@ -241,6 +244,8 @@ func NewOpenAIGatewayService(
 	httpUpstream HTTPUpstream,
 	deferredService *DeferredService,
 	openAITokenProvider *OpenAITokenProvider,
+	resolver *ModelPricingResolver,
+	channelService *ChannelService,
 ) *OpenAIGatewayService {
 	svc := &OpenAIGatewayService{
 		accountRepo:         accountRepo,
@@ -268,6 +273,8 @@ func NewOpenAIGatewayService(
 		openAITokenProvider:   openAITokenProvider,
 		toolCorrector:         NewCodexToolCorrector(),
 		openaiWSResolver:      NewOpenAIWSProtocolResolver(cfg),
+		resolver:              resolver,
+		channelService:        channelService,
 		responseHeaderFilter:  compileResponseHeaderFilter(cfg),
 		codexSnapshotThrottle: newAccountWriteThrottle(openAICodexSnapshotPersistMinInterval),
 	}
@@ -280,6 +287,13 @@ func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle 
 		return s.codexSnapshotThrottle
 	}
 	return defaultOpenAICodexSnapshotPersistThrottle
+}
+
+func (s *OpenAIGatewayService) ResolveChannelMappingAndRestrict(ctx context.Context, groupID *int64, model string) (ChannelMappingResult, bool) {
+	if s == nil || s.channelService == nil {
+		return ChannelMappingResult{MappedModel: model}, false
+	}
+	return s.channelService.ResolveChannelMappingAndRestrict(ctx, groupID, model)
 }
 
 func (s *OpenAIGatewayService) billingDeps() *billingDeps {

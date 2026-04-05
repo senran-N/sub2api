@@ -406,6 +406,9 @@ func (s *GatewayService) isStickyAccountFullySchedulable(
 	if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, account, requestedModel) {
 		return false
 	}
+	if s.isChannelModelRestrictedForSelectionWithGroup(ctx, groupID, account, requestedModel) {
+		return false
+	}
 	if !s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) {
 		return false
 	}
@@ -457,6 +460,9 @@ func (s *GatewayService) filterCandidates(accounts []Account, params *candidateF
 			continue
 		}
 		if params.requestedModel != "" && !s.isModelSupportedByAccountWithContext(params.ctx, account, params.requestedModel) {
+			continue
+		}
+		if s.isChannelModelRestrictedForSelection(params.ctx, account, params.requestedModel) {
 			continue
 		}
 		if !s.isAccountSchedulableForModelSelection(params.ctx, account, params.requestedModel) {

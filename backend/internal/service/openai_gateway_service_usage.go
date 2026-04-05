@@ -22,6 +22,7 @@ type OpenAIRecordUsageInput struct {
 	IPAddress          string
 	RequestPayloadHash string
 	APIKeyService      APIKeyQuotaUpdater
+	ChannelUsageFields
 }
 
 // RecordUsage records usage and deducts balance
@@ -47,6 +48,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		OutputTokens:        result.Usage.OutputTokens,
 		CacheCreationTokens: result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:     result.Usage.CacheReadInputTokens,
+		ImageOutputTokens:   result.Usage.ImageOutputTokens,
 	}
 
 	multiplier := s.cfg.Default.RateMultiplier
@@ -58,12 +60,34 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		multiplier = resolver.Resolve(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
 	}
 
+	channelUsage := enrichChannelUsageFields(ctx, s.channelService, apiKey.GroupID, result.Model, result.UpstreamModel, input.ChannelUsageFields)
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 	serviceTier := ""
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
 	}
-	cost, err := s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
+	if result.BillingModel != "" {
+		billingModel = strings.TrimSpace(result.BillingModel)
+	}
+	billingModel = resolveChannelBillingModel(channelUsage, billingModel)
+	var cost *CostBreakdown
+	var err error
+	if resolved := resolveChannelPricing(ctx, s.resolver, apiKey, billingModel); resolved != nil {
+		groupID := apiKey.Group.ID
+		cost, err = s.billingService.CalculateCostUnified(CostInput{
+			Ctx:            ctx,
+			Model:          billingModel,
+			GroupID:        &groupID,
+			Tokens:         tokens,
+			RequestCount:   1,
+			RateMultiplier: multiplier,
+			ServiceTier:    serviceTier,
+			Resolver:       s.resolver,
+			Resolved:       resolved,
+		})
+	} else {
+		cost, err = s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
+	}
 	if err != nil {
 		cost = &CostBreakdown{ActualCost: 0}
 	}
@@ -83,8 +107,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		AccountID:             account.ID,
 		RequestID:             requestID,
 		Model:                 result.Model,
-		RequestedModel:        result.Model,
+		RequestedModel:        channelUsage.OriginalModel,
 		UpstreamModel:         optionalNonEqualStringPtr(result.UpstreamModel, result.Model),
+		ChannelID:             optionalInt64Ptr(channelUsage.ChannelID),
+		ModelMappingChain:     optionalTrimmedStringPtr(channelUsage.ModelMappingChain),
 		ServiceTier:           result.ServiceTier,
 		ReasoningEffort:       result.ReasoningEffort,
 		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),
@@ -93,7 +119,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		OutputTokens:          result.Usage.OutputTokens,
 		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:       result.Usage.CacheReadInputTokens,
+		ImageOutputTokens:     result.Usage.ImageOutputTokens,
 		InputCost:             cost.InputCost,
+		ImageOutputCost:       cost.ImageOutputCost,
 		OutputCost:            cost.OutputCost,
 		CacheCreationCost:     cost.CacheCreationCost,
 		CacheReadCost:         cost.CacheReadCost,
@@ -102,11 +130,15 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		RateMultiplier:        multiplier,
 		AccountRateMultiplier: &accountRateMultiplier,
 		BillingType:           billingType,
+		BillingMode:           resolveOpenAIBillingMode(result, cost),
 		Stream:                result.Stream,
 		OpenAIWSMode:          result.OpenAIWSMode,
 		DurationMs:            &durationMs,
 		FirstTokenMs:          result.FirstTokenMs,
 		CreatedAt:             time.Now(),
+	}
+	if usageLog.RequestedModel == "" {
+		usageLog.RequestedModel = result.Model
 	}
 	if input.UserAgent != "" {
 		usageLog.UserAgent = &input.UserAgent
@@ -145,4 +177,15 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 	return nil
+}
+
+func resolveOpenAIBillingMode(result *OpenAIForwardResult, cost *CostBreakdown) *string {
+	if result == nil {
+		return nil
+	}
+	mode := string(BillingModeToken)
+	if cost != nil && cost.BillingMode != "" {
+		mode = cost.BillingMode
+	}
+	return &mode
 }

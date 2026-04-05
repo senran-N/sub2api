@@ -310,6 +310,21 @@ const FolderIcon = {
     )
 }
 
+const ChannelIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M8.25 7.5H6a2.25 2.25 0 00-2.25 2.25v7.5A2.25 2.25 0 006 19.5h12a2.25 2.25 0 002.25-2.25v-7.5A2.25 2.25 0 0018 7.5h-2.25M8.25 7.5V5.25A2.25 2.25 0 0110.5 3h3a2.25 2.25 0 012.25 2.25V7.5M8.25 7.5h7.5M9.75 12h4.5m-4.5 3h4.5'
+        })
+      ]
+    )
+}
+
 const CreditCardIcon = {
   render: () =>
     h(
@@ -591,6 +606,7 @@ const adminNavItems = computed((): NavItem[] => {
       : []),
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
+    { path: '/admin/channels', label: t('nav.channels'), icon: ChannelIcon, hideInSimpleMode: true },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },

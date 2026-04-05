@@ -1,6 +1,10 @@
 package service
 
-import "github.com/senran-N/sub2api/internal/pkg/logger"
+import (
+	"context"
+
+	"github.com/senran-N/sub2api/internal/pkg/logger"
+)
 
 func usageTokensFromClaudeUsage(usage ClaudeUsage) UsageTokens {
 	return UsageTokens{
@@ -36,8 +40,10 @@ func imagePriceConfigFromGroup(group *Group) *ImagePriceConfig {
 	}
 }
 
-func (s *GatewayService) calculateGatewayUsageCost(result *ForwardResult, apiKey *APIKey, multiplier float64) *CostBreakdown {
-	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
+func (s *GatewayService) calculateGatewayUsageCost(ctx context.Context, result *ForwardResult, apiKey *APIKey, billingModel string, multiplier float64) *CostBreakdown {
+	if billingModel == "" {
+		billingModel = forwardResultBillingModel(result.Model, result.UpstreamModel)
+	}
 
 	switch {
 	case result.MediaType == "image":
@@ -49,6 +55,23 @@ func (s *GatewayService) calculateGatewayUsageCost(result *ForwardResult, apiKey
 	case result.ImageCount > 0:
 		return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, imagePriceConfigFromGroup(apiKey.Group), multiplier)
 	default:
+		if resolved := resolveChannelPricing(ctx, s.resolver, apiKey, billingModel); resolved != nil {
+			groupID := apiKey.Group.ID
+			cost, err := s.billingService.CalculateCostUnified(CostInput{
+				Ctx:            ctx,
+				Model:          billingModel,
+				GroupID:        &groupID,
+				Tokens:         usageTokensFromClaudeUsage(result.Usage),
+				RequestCount:   1,
+				RateMultiplier: multiplier,
+				Resolver:       s.resolver,
+				Resolved:       resolved,
+			})
+			if err == nil {
+				return cost
+			}
+			logger.LegacyPrintf("service.gateway", "Calculate unified cost failed: %v", err)
+		}
 		cost, err := s.billingService.CalculateCost(billingModel, usageTokensFromClaudeUsage(result.Usage), multiplier)
 		if err != nil {
 			logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
@@ -58,11 +81,31 @@ func (s *GatewayService) calculateGatewayUsageCost(result *ForwardResult, apiKey
 	}
 }
 
-func (s *GatewayService) calculateGatewayLongContextUsageCost(result *ForwardResult, apiKey *APIKey, multiplier float64, threshold int, longContextMultiplier float64) *CostBreakdown {
-	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
+func (s *GatewayService) calculateGatewayLongContextUsageCost(ctx context.Context, result *ForwardResult, apiKey *APIKey, billingModel string, multiplier float64, threshold int, longContextMultiplier float64) *CostBreakdown {
+	if billingModel == "" {
+		billingModel = forwardResultBillingModel(result.Model, result.UpstreamModel)
+	}
 
 	if result.ImageCount > 0 {
 		return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, imagePriceConfigFromGroup(apiKey.Group), multiplier)
+	}
+
+	if resolved := resolveChannelPricing(ctx, s.resolver, apiKey, billingModel); resolved != nil {
+		groupID := apiKey.Group.ID
+		cost, err := s.billingService.CalculateCostUnified(CostInput{
+			Ctx:            ctx,
+			Model:          billingModel,
+			GroupID:        &groupID,
+			Tokens:         usageTokensFromClaudeUsage(result.Usage),
+			RequestCount:   1,
+			RateMultiplier: multiplier,
+			Resolver:       s.resolver,
+			Resolved:       resolved,
+		})
+		if err == nil {
+			return cost
+		}
+		logger.LegacyPrintf("service.gateway", "Calculate unified long-context cost failed: %v", err)
 	}
 
 	cost, err := s.billingService.CalculateCostWithLongContext(

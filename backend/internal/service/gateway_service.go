@@ -103,6 +103,7 @@ type ClaudeUsage struct {
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 	CacheCreation5mTokens    int // 5分钟缓存创建token（来自嵌套 cache_creation 对象）
 	CacheCreation1hTokens    int // 1小时缓存创建token（来自嵌套 cache_creation 对象）
+	ImageOutputTokens        int `json:"image_output_tokens,omitempty"`
 }
 
 // ForwardResult 转发结果
@@ -175,6 +176,8 @@ type GatewayService struct {
 	responseHeaderFilter  *responseheaders.CompiledHeaderFilter
 	debugModelRouting     atomic.Bool
 	debugClaudeMimic      atomic.Bool
+	channelService        *ChannelService
+	resolver              *ModelPricingResolver
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
 }
@@ -204,6 +207,8 @@ func NewGatewayService(
 	digestStore *DigestSessionStore,
 	settingService *SettingService,
 	tlsFPProfileService *TLSFingerprintProfileService,
+	channelService *ChannelService,
+	resolver *ModelPricingResolver,
 ) *GatewayService {
 	userGroupRateTTL := resolveUserGroupRateCacheTTL(cfg)
 	modelsListTTL := resolveModelsListCacheTTL(cfg)
@@ -236,6 +241,8 @@ func NewGatewayService(
 		modelsListCacheTTL:   modelsListTTL,
 		responseHeaderFilter: compileResponseHeaderFilter(cfg),
 		tlsFPProfileService:  tlsFPProfileService,
+		channelService:       channelService,
+		resolver:             resolver,
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,
