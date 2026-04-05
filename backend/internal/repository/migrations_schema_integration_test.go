@@ -44,6 +44,12 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "usage_logs", "billing_type", "smallint", 0, false)
 	requireColumn(t, tx, "usage_logs", "request_type", "smallint", 0, false)
 	requireColumn(t, tx, "usage_logs", "openai_ws_mode", "boolean", 0, false)
+	requireColumn(t, tx, "usage_logs", "channel_id", "bigint", 0, true)
+	requireColumn(t, tx, "usage_logs", "model_mapping_chain", "character varying", 500, true)
+	requireColumn(t, tx, "usage_logs", "billing_tier", "character varying", 50, true)
+	requireColumn(t, tx, "usage_logs", "billing_mode", "character varying", 20, true)
+	requireColumn(t, tx, "usage_logs", "image_output_tokens", "integer", 0, false)
+	requireColumn(t, tx, "usage_logs", "image_output_cost", "numeric", 0, false)
 
 	// usage_billing_dedup: billing idempotency narrow table
 	var usageBillingDedupRegclass sql.NullString
@@ -87,6 +93,45 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 
 	// user_allowed_groups: created_at should be timestamptz
 	requireColumn(t, tx, "user_allowed_groups", "created_at", "timestamp with time zone", 0, false)
+
+	// channels schema should exist for channel pricing/admin routes
+	var channelsRegclass sql.NullString
+	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.channels')").Scan(&channelsRegclass))
+	require.True(t, channelsRegclass.Valid, "expected channels table to exist")
+	requireColumn(t, tx, "channels", "name", "character varying", 100, false)
+	requireColumn(t, tx, "channels", "status", "character varying", 20, false)
+	requireColumn(t, tx, "channels", "model_mapping", "jsonb", 0, true)
+	requireColumn(t, tx, "channels", "billing_model_source", "character varying", 20, true)
+	requireColumn(t, tx, "channels", "restrict_models", "boolean", 0, true)
+	requireIndex(t, tx, "channels", "idx_channels_name")
+	requireIndex(t, tx, "channels", "idx_channels_status")
+
+	var channelGroupsRegclass sql.NullString
+	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.channel_groups')").Scan(&channelGroupsRegclass))
+	require.True(t, channelGroupsRegclass.Valid, "expected channel_groups table to exist")
+	requireColumn(t, tx, "channel_groups", "channel_id", "bigint", 0, false)
+	requireColumn(t, tx, "channel_groups", "group_id", "bigint", 0, false)
+	requireIndex(t, tx, "channel_groups", "idx_channel_groups_group_id")
+	requireIndex(t, tx, "channel_groups", "idx_channel_groups_channel_id")
+
+	var channelPricingRegclass sql.NullString
+	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.channel_model_pricing')").Scan(&channelPricingRegclass))
+	require.True(t, channelPricingRegclass.Valid, "expected channel_model_pricing table to exist")
+	requireColumn(t, tx, "channel_model_pricing", "channel_id", "bigint", 0, false)
+	requireColumn(t, tx, "channel_model_pricing", "models", "jsonb", 0, false)
+	requireColumn(t, tx, "channel_model_pricing", "billing_mode", "character varying", 20, false)
+	requireColumn(t, tx, "channel_model_pricing", "per_request_price", "numeric", 0, true)
+	requireColumn(t, tx, "channel_model_pricing", "platform", "character varying", 50, false)
+	requireIndex(t, tx, "channel_model_pricing", "idx_channel_model_pricing_channel_id")
+	requireIndex(t, tx, "channel_model_pricing", "idx_channel_model_pricing_platform")
+
+	var channelIntervalsRegclass sql.NullString
+	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.channel_pricing_intervals')").Scan(&channelIntervalsRegclass))
+	require.True(t, channelIntervalsRegclass.Valid, "expected channel_pricing_intervals table to exist")
+	requireColumn(t, tx, "channel_pricing_intervals", "pricing_id", "bigint", 0, false)
+	requireColumn(t, tx, "channel_pricing_intervals", "tier_label", "character varying", 50, true)
+	requireColumn(t, tx, "channel_pricing_intervals", "per_request_price", "numeric", 0, true)
+	requireIndex(t, tx, "channel_pricing_intervals", "idx_channel_pricing_intervals_pricing_id")
 }
 
 func requireIndex(t *testing.T, tx *sql.Tx, table, index string) {
