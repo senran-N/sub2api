@@ -5,8 +5,8 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
-import { authAPI, isTotp2FARequired, type LoginResponse } from '@/api'
-import type { User, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
+import type { LoginResponse } from '@/api/auth'
+import type { User, LoginRequest, RegisterRequest, AuthResponse, TotpLoginResponse } from '@/types'
 import { setAuthTokenRefreshHandler, type AuthTokenRefreshedDetail } from './authSync'
 
 const AUTH_TOKEN_KEY = 'auth_token'
@@ -15,6 +15,22 @@ const REFRESH_TOKEN_KEY = 'refresh_token'
 const TOKEN_EXPIRES_AT_KEY = 'token_expires_at' // 存储过期时间戳而非有效期
 const AUTO_REFRESH_INTERVAL = 60 * 1000 // 60 seconds for user data refresh
 const TOKEN_REFRESH_BUFFER = 120 * 1000 // 120 seconds before expiry to refresh token
+
+type AuthApiModule = typeof import('@/api/auth')
+
+let authApiModulePromise: Promise<AuthApiModule> | null = null
+
+function loadAuthApiModule(): Promise<AuthApiModule> {
+  if (!authApiModulePromise) {
+    authApiModulePromise = import('@/api/auth')
+  }
+
+  return authApiModulePromise
+}
+
+function requiresTotpLogin(response: LoginResponse): response is TotpLoginResponse {
+  return 'requires_2fa' in response && response.requires_2fa === true
+}
 
 export const useAuthStore = defineStore('auth', () => {
   // ==================== State ====================
@@ -171,7 +187,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      const response = await authAPI.refreshToken()
+      const { refreshToken } = await loadAuthApiModule()
+      const response = await refreshToken()
 
       // Update state
       token.value = response.access_token
@@ -203,10 +220,11 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
-      const response = await authAPI.login(credentials)
+      const { login } = await loadAuthApiModule()
+      const response = await login(credentials)
 
       // If 2FA is required, return the response without setting auth state
-      if (isTotp2FARequired(response)) {
+      if (requiresTotpLogin(response)) {
         return response
       }
 
@@ -230,7 +248,8 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function login2FA(tempToken: string, totpCode: string): Promise<User> {
     try {
-      const response = await authAPI.login2FA({ temp_token: tempToken, totp_code: totpCode })
+      const { login2FA } = await loadAuthApiModule()
+      const response = await login2FA({ temp_token: tempToken, totp_code: totpCode })
       setAuthFromResponse(response)
       return user.value!
     } catch (error) {
@@ -282,7 +301,8 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function register(userData: RegisterRequest): Promise<User> {
     try {
-      const response = await authAPI.register(userData)
+      const { register } = await loadAuthApiModule()
+      const response = await register(userData)
 
       // Use the common helper to set auth state
       setAuthFromResponse(response)
@@ -345,7 +365,8 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function logout(): Promise<void> {
     // Call API logout (revokes refresh token on server)
-    await authAPI.logout()
+    const { logout } = await loadAuthApiModule()
+    await logout()
 
     // Clear state
     clearAuth()
@@ -363,7 +384,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      const response = await authAPI.getCurrentUser()
+      const { getCurrentUser } = await loadAuthApiModule()
+      const response = await getCurrentUser()
       if (response.data.run_mode) {
         runMode.value = response.data.run_mode
       }

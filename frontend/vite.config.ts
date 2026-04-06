@@ -72,6 +72,14 @@ export default defineConfig(({ mode }) => {
          */
         manualChunks(id: string) {
           if (id.includes('node_modules')) {
+            if (id.includes('/xlsx/')) {
+              return 'vendor-xlsx'
+            }
+
+            if (id.includes('/driver.js/')) {
+              return 'vendor-onboarding'
+            }
+
             // Vue 核心库
             if (
               id.includes('/vue/') ||
@@ -83,7 +91,7 @@ export default defineConfig(({ mode }) => {
             }
 
             // UI 工具库（较大，单独分离）
-            if (id.includes('/@vueuse/') || id.includes('/xlsx/')) {
+            if (id.includes('/@vueuse/')) {
               return 'vendor-ui'
             }
 

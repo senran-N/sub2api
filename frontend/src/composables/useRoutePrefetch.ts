@@ -15,6 +15,11 @@ import type { RouteLocationNormalized, Router } from 'vue-router'
  */
 type ComponentImportFn = () => Promise<unknown>
 
+interface NavigatorConnectionLike {
+  saveData?: boolean
+  effectiveType?: string
+}
+
 /**
  * 预加载邻接表：定义每个路由应该预加载哪些相邻路由
  * 只存储路由路径，不存储 import 函数，避免打包问题
@@ -60,6 +65,40 @@ const cancelScheduledCallback = (handle: IdleCallbackHandle): void => {
   } else {
     clearTimeout(handle)
   }
+}
+
+function getNavigatorConnection(): NavigatorConnectionLike | null {
+  if (typeof navigator === 'undefined') {
+    return null
+  }
+
+  const connection = (navigator as Navigator & {
+    connection?: NavigatorConnectionLike
+    mozConnection?: NavigatorConnectionLike
+    webkitConnection?: NavigatorConnectionLike
+  }).connection
+    ?? (navigator as Navigator & { mozConnection?: NavigatorConnectionLike }).mozConnection
+    ?? (navigator as Navigator & { webkitConnection?: NavigatorConnectionLike }).webkitConnection
+
+  return connection ?? null
+}
+
+function shouldEnableSpeculativePrefetch(): boolean {
+  const connection = getNavigatorConnection()
+  if (!connection) {
+    return true
+  }
+
+  if (connection.saveData) {
+    return false
+  }
+
+  const effectiveType = connection.effectiveType?.toLowerCase() ?? ''
+  if (effectiveType.includes('slow-2g') || effectiveType.includes('2g') || effectiveType.includes('3g')) {
+    return false
+  }
+
+  return true
 }
 
 /**
@@ -129,6 +168,10 @@ export function useRoutePrefetch(router?: Router) {
    */
   const triggerPrefetch = (route: RouteLocationNormalized): void => {
     cancelPendingPrefetch()
+
+    if (!shouldEnableSpeculativePrefetch()) {
+      return
+    }
 
     const prefetchPaths = getPrefetchPaths(route)
     if (prefetchPaths.length === 0) return

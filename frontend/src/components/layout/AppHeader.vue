@@ -23,7 +23,9 @@
       </div>
 
       <div class="app-header__right">
-        <AnnouncementBell v-if="user" />
+        <div v-if="user" class="app-header__announcement-slot">
+          <AnnouncementBell />
+        </div>
 
         <a
           v-if="docUrl"
@@ -206,14 +208,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, defineAsyncComponent, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
+import type { CustomMenuItem } from '@/types'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
-import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const router = useRouter()
@@ -223,6 +225,7 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
 const onboardingStore = useOnboardingStore()
+const AnnouncementBell = defineAsyncComponent(() => import('@/components/common/AnnouncementBell.vue'))
 
 const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
@@ -259,8 +262,10 @@ const pageTitle = computed(() => {
   if (route.name === 'CustomPage') {
     const id = route.params.id as string
     const publicItems = appStore.cachedPublicSettings?.custom_menu_items ?? []
-    const menuItem = publicItems.find((item) => item.id === id)
-      ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
+    const menuItem = publicItems.find((item: CustomMenuItem) => item.id === id)
+      ?? (authStore.isAdmin
+        ? adminSettingsStore.customMenuItems.find((item: CustomMenuItem) => item.id === id)
+        : undefined)
     if (menuItem?.label) return menuItem.label
   }
   const titleKey = route.meta.titleKey as string
@@ -335,6 +340,11 @@ onBeforeUnmount(() => {
 
 .app-header__chevron {
   color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.app-header__announcement-slot {
+  width: 2.25rem;
+  height: 2.25rem;
 }
 
 .app-header__dropdown {

@@ -68,6 +68,7 @@
   </AppLayout>
   <UsageExportProgress :show="exportProgress.show" :progress="exportProgress.progress" :current="exportProgress.current" :total="exportProgress.total" :estimated-time="exportProgress.estimatedTime" @cancel="cancelExport" />
   <UsageCleanupDialog
+    v-if="cleanupDialogVisible"
     :show="cleanupDialogVisible"
     :filters="filters"
     :start-date="startDate"
@@ -76,6 +77,7 @@
   />
   <!-- Balance history modal triggered from usage table user click -->
   <UserBalanceHistoryModal
+    v-if="showBalanceHistoryModal"
     :show="showBalanceHistoryModal"
     :user="balanceHistoryUser"
     :hide-actions="true"
@@ -84,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -96,8 +98,6 @@ import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'
 import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
 import UsageExportProgress from '@/components/admin/usage/UsageExportProgress.vue'
-import UsageCleanupDialog from '@/components/admin/usage/UsageCleanupDialog.vue'
-import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import GroupDistributionChart from '@/components/charts/GroupDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
@@ -121,6 +121,10 @@ import UsageColumnSettingsControl from './usage/UsageColumnSettingsControl.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const UsageCleanupDialog = defineAsyncComponent(() => import('@/components/admin/usage/UsageCleanupDialog.vue'))
+const UserBalanceHistoryModal = defineAsyncComponent(
+  () => import('@/components/admin/user/UserBalanceHistoryModal.vue')
+)
 type DistributionMetric = 'tokens' | 'actual_cost'
 type EndpointSource = 'inbound' | 'upstream' | 'path'
 const route = useRoute()

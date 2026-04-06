@@ -97,14 +97,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { defineAsyncComponent, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { totpAPI } from '@/api'
 import type { TotpStatus } from '@/types'
-import TotpSetupModal from './TotpSetupModal.vue'
-import TotpDisableDialog from './TotpDisableDialog.vue'
 
 const { t } = useI18n()
+
+const TotpSetupModal = defineAsyncComponent(() => import('./TotpSetupModal.vue'))
+const TotpDisableDialog = defineAsyncComponent(() => import('./TotpDisableDialog.vue'))
 
 const loading = ref(true)
 const status = ref<TotpStatus | null>(null)

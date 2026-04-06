@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { resolveDocumentTitle } from '@/router/title'
+import type { CustomMenuItem } from '@/types'
+import { resolveDocumentTitle, resolveRouteDocumentTitle } from '@/router/title'
+
+function createCustomMenuItem(overrides: Partial<CustomMenuItem> = {}): CustomMenuItem {
+  return {
+    id: 'docs',
+    label: 'Docs',
+    icon_svg: '',
+    url: 'https://example.com',
+    visibility: 'user',
+    sort_order: 0,
+    ...overrides
+  }
+}
 
 describe('resolveDocumentTitle', () => {
   it('路由存在标题时，使用“路由标题 - 站点名”格式', () => {
@@ -21,5 +34,24 @@ describe('resolveDocumentTitle', () => {
 
     expect(before).toBe('Admin Dashboard - Alpha')
     expect(after).toBe('Admin Dashboard - Beta')
+  })
+})
+
+describe('resolveRouteDocumentTitle', () => {
+  it('自定义页面优先使用菜单标题', () => {
+    const route = {
+      name: 'CustomPage',
+      meta: { title: 'Custom Page' },
+      params: { id: 'docs' }
+    } as Parameters<typeof resolveRouteDocumentTitle>[0]
+
+    expect(
+      resolveRouteDocumentTitle(route, {
+        siteName: 'My Site',
+        publicCustomMenuItems: [createCustomMenuItem()],
+        adminCustomMenuItems: [],
+        isAdmin: false
+      })
+    ).toBe('Docs - My Site')
   })
 })

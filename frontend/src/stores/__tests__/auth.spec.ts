@@ -11,16 +11,13 @@ const mockGetCurrentUser = vi.fn()
 const mockRegister = vi.fn()
 const mockRefreshToken = vi.fn()
 
-vi.mock('@/api', () => ({
-  authAPI: {
-    login: (...args: any[]) => mockLogin(...args),
-    login2FA: (...args: any[]) => mockLogin2FA(...args),
-    logout: (...args: any[]) => mockLogout(...args),
-    getCurrentUser: (...args: any[]) => mockGetCurrentUser(...args),
-    register: (...args: any[]) => mockRegister(...args),
-    refreshToken: (...args: any[]) => mockRefreshToken(...args),
-  },
-  isTotp2FARequired: (response: any) => response?.requires_2fa === true,
+vi.mock('@/api/auth', () => ({
+  login: (...args: any[]) => mockLogin(...args),
+  login2FA: (...args: any[]) => mockLogin2FA(...args),
+  logout: (...args: any[]) => mockLogout(...args),
+  getCurrentUser: (...args: any[]) => mockGetCurrentUser(...args),
+  register: (...args: any[]) => mockRegister(...args),
+  refreshToken: (...args: any[]) => mockRefreshToken(...args),
 }))
 
 const fakeUser = {

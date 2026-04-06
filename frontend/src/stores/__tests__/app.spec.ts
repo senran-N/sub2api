@@ -7,8 +7,8 @@ vi.mock('@/api/admin/system', () => ({
   checkUpdates: vi.fn(),
 }))
 
-vi.mock('@/api/auth', () => ({
-  getPublicSettings: vi.fn(),
+vi.mock('@/api/bootstrap', () => ({
+  fetchPublicSettings: vi.fn(),
 }))
 
 describe('useAppStore', () => {

@@ -10,7 +10,7 @@
           @update:active-tab="setActiveTab"
         />
 
-        <div v-show="activeTab === 'security'" class="space-y-6">
+        <div v-if="activeTab === 'security'" class="space-y-6">
           <SettingsAdminApiKeyCard
             :loading="adminApiKeyLoading"
             :exists="adminApiKeyExists"
@@ -24,7 +24,7 @@
           />
         </div>
 
-        <div v-show="activeTab === 'gateway'" class="space-y-6">
+        <div v-if="activeTab === 'gateway'" class="space-y-6">
           <SettingsOverloadCooldownCard
             :loading="overloadCooldownLoading"
             :saving="overloadCooldownSaving"
@@ -57,7 +57,7 @@
           />
         </div>
 
-        <div v-show="activeTab === 'security'" class="space-y-6">
+        <div v-if="activeTab === 'security'" class="space-y-6">
           <SettingsRegistrationCard
             :form="form"
             :tags="registrationEmailSuffixWhitelistTags"
@@ -78,7 +78,7 @@
           />
         </div>
 
-        <div v-show="activeTab === 'users'" class="space-y-6">
+        <div v-if="activeTab === 'users'" class="space-y-6">
           <SettingsDefaultsCard
             :form="form"
             :default-subscription-group-options="defaultSubscriptionGroupOptions"
@@ -88,7 +88,7 @@
           />
         </div>
 
-        <div v-show="activeTab === 'gateway'" class="space-y-6">
+        <div v-if="activeTab === 'gateway'" class="space-y-6">
           <SettingsClaudeCodeCard :form="form" />
 
           <SettingsSchedulingCard :form="form" />
@@ -96,7 +96,7 @@
           <SettingsGatewayForwardingCard :form="form" />
         </div>
 
-        <div v-show="activeTab === 'general'" class="space-y-6">
+        <div v-if="activeTab === 'general'" class="space-y-6">
           <SettingsSiteCard
             :form="form"
             @add-endpoint="addEndpoint"
@@ -114,7 +114,7 @@
           />
         </div>
 
-        <div v-show="activeTab === 'email'" class="space-y-6">
+        <div v-if="activeTab === 'email'" class="space-y-6">
           <SettingsEmailDisabledCard v-if="!form.email_verify_enabled" />
 
           <SettingsSmtpCard
@@ -135,16 +135,16 @@
           />
         </div>
 
-        <div v-show="activeTab === 'backup'">
+        <div v-if="activeTab === 'backup'">
           <BackupSettings />
         </div>
 
-        <div v-show="activeTab === 'data'">
+        <div v-if="activeTab === 'data'">
           <DataManagementSettings />
         </div>
 
         <SettingsSaveBar
-          v-show="activeTab !== 'backup' && activeTab !== 'data'"
+          v-if="activeTab !== 'backup' && activeTab !== 'data'"
           :saving="saving"
           :disabled="loadFailed"
         />
@@ -154,11 +154,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { defineAsyncComponent, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import BackupSettings from '@/views/admin/BackupView.vue'
-import DataManagementSettings from '@/views/admin/DataManagementView.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
@@ -187,6 +185,9 @@ import SettingsTabsNav from './settings/SettingsTabsNav.vue'
 import SettingsTurnstileCard from './settings/SettingsTurnstileCard.vue'
 import { useSettingsViewForm } from './useSettingsViewForm'
 import { useSettingsViewPolicies } from './useSettingsViewPolicies'
+
+const BackupSettings = defineAsyncComponent(() => import('@/views/admin/BackupView.vue'))
+const DataManagementSettings = defineAsyncComponent(() => import('@/views/admin/DataManagementView.vue'))
 
 const { t } = useI18n()
 const appStore = useAppStore()

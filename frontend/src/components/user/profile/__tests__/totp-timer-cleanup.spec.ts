@@ -38,6 +38,12 @@ const flushPromises = async () => {
   await Promise.resolve()
 }
 
+const findButtonByText = (container: ParentNode, text: string) => {
+  return Array.from(container.querySelectorAll('button')).find((button) =>
+    button.textContent?.includes(text)
+  )
+}
+
 describe('TOTP 弹窗定时器清理', () => {
   let intervalSeed = 1000
   let setIntervalSpy: ReturnType<typeof vi.spyOn>
@@ -64,6 +70,7 @@ describe('TOTP 弹窗定时器清理', () => {
   afterEach(() => {
     setIntervalSpy.mockRestore()
     clearIntervalSpy.mockRestore()
+    document.body.innerHTML = ''
   })
 
   it('TotpSetupModal 卸载时清理倒计时定时器', async () => {
@@ -90,12 +97,10 @@ describe('TOTP 弹窗定时器清理', () => {
     const wrapper = mount(TotpDisableDialog)
     await flushPromises()
 
-    const sendButton = wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('profile.totp.sendCode'))
+    const sendButton = findButtonByText(document.body, 'profile.totp.sendCode') as HTMLButtonElement | undefined
 
     expect(sendButton).toBeTruthy()
-    await sendButton!.trigger('click')
+    sendButton?.click()
     await flushPromises()
 
     expect(setIntervalSpy).toHaveBeenCalledTimes(1)

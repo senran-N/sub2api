@@ -1,4 +1,3 @@
-import { saveAs } from 'file-saver'
 import { reactive, ref, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import { adminUsageAPI, type AdminUsageQueryParams, type AdminUsageStatsResponse } from '@/api/admin/usage'
@@ -19,6 +18,8 @@ import {
   type UsagePaginationState
 } from './usageViewState'
 import { getUsageRequestTypeLabel, type UsageLabelTranslator } from '@/utils/usagePresentation'
+
+type SaveAsFunction = typeof import('file-saver').saveAs
 
 export type ModelDistributionSource = 'requested' | 'upstream' | 'mapping'
 
@@ -51,6 +52,16 @@ type UsageScopeParams = Pick<
 > & {
   start_date: string
   end_date: string
+}
+
+let saveAsPromise: Promise<SaveAsFunction> | null = null
+
+function getSaveAs(): Promise<SaveAsFunction> {
+  if (!saveAsPromise) {
+    saveAsPromise = import('file-saver').then(({ saveAs }) => saveAs)
+  }
+
+  return saveAsPromise
 }
 
 function buildUsageExportHeaders(t: UsageLabelTranslator): string[] {
@@ -390,7 +401,7 @@ export function useUsageViewData(options: UsageViewDataOptions) {
 
     try {
       const usageFilters = buildUsageFilters()
-      const XLSX = await import('xlsx')
+      const [XLSX, saveAs] = await Promise.all([import('xlsx'), getSaveAs()])
       const worksheet = XLSX.utils.aoa_to_sheet([buildUsageExportHeaders(options.t)])
       let page = 1
       let total = options.pagination.total

@@ -6,6 +6,7 @@ import { useSubscriptionStore } from '@/stores/subscriptions'
 const mockGetActiveSubscriptions = vi.fn()
 
 vi.mock('@/api/subscriptions', () => ({
+  getActiveSubscriptions: (...args: any[]) => mockGetActiveSubscriptions(...args),
   default: {
     getActiveSubscriptions: (...args: any[]) => mockGetActiveSubscriptions(...args),
   },
@@ -125,6 +126,7 @@ describe('useSubscriptionStore', () => {
       // 并发发起两个请求
       const p1 = store.fetchActiveSubscriptions()
       const p2 = store.fetchActiveSubscriptions()
+      await Promise.resolve()
 
       // 只调用了一次 API
       expect(mockGetActiveSubscriptions).toHaveBeenCalledTimes(1)
@@ -211,7 +213,7 @@ describe('useSubscriptionStore', () => {
   // --- polling ---
 
   describe('startPolling / stopPolling', () => {
-    it('startPolling 不会创建重复 interval', () => {
+    it('startPolling 不会创建重复 interval', async () => {
       const store = useSubscriptionStore()
       mockGetActiveSubscriptions.mockResolvedValue([])
 
@@ -220,12 +222,13 @@ describe('useSubscriptionStore', () => {
 
       // 推进5分钟只触发一次
       vi.advanceTimersByTime(5 * 60 * 1000)
+      await Promise.resolve()
       expect(mockGetActiveSubscriptions).toHaveBeenCalledTimes(1)
 
       store.stopPolling()
     })
 
-    it('stopPolling 停止定期刷新', () => {
+    it('stopPolling 停止定期刷新', async () => {
       const store = useSubscriptionStore()
       mockGetActiveSubscriptions.mockResolvedValue([])
 
@@ -233,6 +236,7 @@ describe('useSubscriptionStore', () => {
       store.stopPolling()
 
       vi.advanceTimersByTime(10 * 60 * 1000)
+      await Promise.resolve()
       expect(mockGetActiveSubscriptions).not.toHaveBeenCalled()
     })
   })

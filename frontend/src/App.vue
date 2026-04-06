@@ -1,19 +1,28 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
-import { onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onBeforeUnmount, watch, watchEffect } from 'vue'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
-import { resolveDocumentTitle } from '@/router/title'
-import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
-import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore } from '@/stores'
-import { getSetupStatus } from '@/api/setup'
+import i18n from '@/i18n'
+import { resolveRouteDocumentTitle } from '@/router/title'
+import {
+  useAdminSettingsStore,
+  useAppStore,
+  useAuthStore,
+  useSubscriptionStore,
+  useAnnouncementStore
+} from '@/stores'
+import { fetchSetupStatus } from '@/api/bootstrap'
 
 const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
+const adminSettingsStore = useAdminSettingsStore()
 const authStore = useAuthStore()
 const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
+const AnnouncementPopup = defineAsyncComponent(() => import('@/components/common/AnnouncementPopup.vue'))
+const shouldRenderAnnouncementPopup = computed(() => authStore.isAuthenticated)
 
 /**
  * Update favicon dynamically
@@ -41,6 +50,17 @@ watch(
   },
   { immediate: true }
 )
+
+watchEffect(() => {
+  void i18n.global.locale.value
+
+  document.title = resolveRouteDocumentTitle(route, {
+    siteName: appStore.siteName,
+    publicCustomMenuItems: appStore.cachedPublicSettings?.custom_menu_items ?? [],
+    adminCustomMenuItems: adminSettingsStore.customMenuItems,
+    isAdmin: authStore.isAdmin
+  })
+})
 
 // Watch for authentication state and manage subscription data + announcements
 function onVisibilityChange() {
@@ -94,7 +114,7 @@ onBeforeUnmount(() => {
 onMounted(async () => {
   // Check if setup is needed
   try {
-    const status = await getSetupStatus()
+    const status = await fetchSetupStatus()
     if (status.needs_setup && route.path !== '/setup') {
       router.replace('/setup')
       return
@@ -105,9 +125,6 @@ onMounted(async () => {
 
   // Load public settings into appStore (will be cached for other components)
   await appStore.fetchPublicSettings()
-
-  // Re-resolve document title now that siteName is available
-  document.title = resolveDocumentTitle(route.meta.title, appStore.siteName, route.meta.titleKey as string)
 })
 </script>
 
@@ -115,5 +132,5 @@ onMounted(async () => {
   <NavigationProgress />
   <RouterView />
   <Toast />
-  <AnnouncementPopup />
+  <AnnouncementPopup v-if="shouldRenderAnnouncementPopup" />
 </template>

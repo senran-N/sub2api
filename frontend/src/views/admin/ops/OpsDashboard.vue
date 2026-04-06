@@ -110,13 +110,14 @@
 
       <!-- Settings Dialog (hidden in fullscreen mode) -->
       <template v-if="!isFullscreen">
-        <OpsSettingsDialog :show="showSettingsDialog" @close="showSettingsDialog = false" @saved="onSettingsSaved" />
+        <OpsSettingsDialog v-if="showSettingsDialog" :show="showSettingsDialog" @close="showSettingsDialog = false" @saved="onSettingsSaved" />
 
-        <BaseDialog :show="showAlertRulesCard" :title="t('admin.ops.alertRules.title')" width="extra-wide" @close="showAlertRulesCard = false">
+        <BaseDialog v-if="showAlertRulesCard" :show="showAlertRulesCard" :title="t('admin.ops.alertRules.title')" width="extra-wide" @close="showAlertRulesCard = false">
           <OpsAlertRulesCard />
         </BaseDialog>
 
         <OpsErrorDetailsModal
+          v-if="showErrorDetails"
           :show="showErrorDetails"
           :time-range="timeRange"
           :platform="platform"
@@ -126,9 +127,10 @@
           @openErrorDetail="openError"
         />
 
-        <OpsErrorDetailModal v-model:show="showErrorModal" :error-id="selectedErrorId" :error-type="errorDetailsType" />
+        <OpsErrorDetailModal v-if="showErrorModal" v-model:show="showErrorModal" :error-id="selectedErrorId" :error-type="errorDetailsType" />
 
         <OpsRequestDetailsModal
+          v-if="showRequestDetails"
           v-model="showRequestDetails"
           :time-range="timeRange"
           :preset="requestDetailsPreset"
@@ -142,7 +144,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDebounceFn, useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -161,9 +163,7 @@ import { useAdminSettingsStore, useAppStore } from '@/stores'
 import OpsDashboardHeader from './components/OpsDashboardHeader.vue'
 import OpsDashboardSkeleton from './components/OpsDashboardSkeleton.vue'
 import OpsConcurrencyCard from './components/OpsConcurrencyCard.vue'
-import OpsErrorDetailModal from './components/OpsErrorDetailModal.vue'
 import OpsErrorDistributionChart from './components/OpsErrorDistributionChart.vue'
-import OpsErrorDetailsModal from './components/OpsErrorDetailsModal.vue'
 import OpsErrorTrendChart from './components/OpsErrorTrendChart.vue'
 import OpsLatencyChart from './components/OpsLatencyChart.vue'
 import OpsThroughputTrendChart from './components/OpsThroughputTrendChart.vue'
@@ -171,9 +171,13 @@ import OpsSwitchRateTrendChart from './components/OpsSwitchRateTrendChart.vue'
 import OpsAlertEventsCard from './components/OpsAlertEventsCard.vue'
 import OpsOpenAITokenStatsCard from './components/OpsOpenAITokenStatsCard.vue'
 import OpsSystemLogTable from './components/OpsSystemLogTable.vue'
-import OpsRequestDetailsModal, { type OpsRequestDetailsPreset } from './components/OpsRequestDetailsModal.vue'
-import OpsSettingsDialog from './components/OpsSettingsDialog.vue'
-import OpsAlertRulesCard from './components/OpsAlertRulesCard.vue'
+import type { OpsRequestDetailsPreset } from './components/OpsRequestDetailsModal.vue'
+
+const OpsErrorDetailModal = defineAsyncComponent(() => import('./components/OpsErrorDetailModal.vue'))
+const OpsErrorDetailsModal = defineAsyncComponent(() => import('./components/OpsErrorDetailsModal.vue'))
+const OpsRequestDetailsModal = defineAsyncComponent(() => import('./components/OpsRequestDetailsModal.vue'))
+const OpsSettingsDialog = defineAsyncComponent(() => import('./components/OpsSettingsDialog.vue'))
+const OpsAlertRulesCard = defineAsyncComponent(() => import('./components/OpsAlertRulesCard.vue'))
 
 const route = useRoute()
 const router = useRouter()

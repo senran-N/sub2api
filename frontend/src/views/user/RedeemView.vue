@@ -166,7 +166,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { authAPI, redeemAPI, type RedeemHistoryItem } from '@/api'
+import { redeemAPI, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -249,9 +249,15 @@ const handleRedeem = async () => {
 onMounted(async () => {
   void fetchHistory()
 
+  const cachedContactInfo = appStore.cachedPublicSettings?.contact_info
+  if (cachedContactInfo) {
+    contactInfo.value = cachedContactInfo
+    return
+  }
+
   try {
-    const settings = await authAPI.getPublicSettings()
-    contactInfo.value = settings.contact_info || ''
+    const settings = await appStore.fetchPublicSettings()
+    contactInfo.value = settings?.contact_info || ''
   } catch (error) {
     console.error('Failed to load contact info:', error)
   }

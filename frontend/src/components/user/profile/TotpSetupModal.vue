@@ -87,7 +87,13 @@
           <template v-if="setupData">
             <div class="flex justify-center">
               <div class="totp-setup-modal__qr-shell">
-                <img :src="qrCodeDataUrl" alt="QR Code" class="h-48 w-48" />
+                <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="QR Code" class="h-48 w-48" />
+                <div
+                  v-else
+                  class="totp-setup-modal__qr-loading flex h-48 w-48 items-center justify-center"
+                >
+                  <div class="totp-setup-modal__spinner h-8 w-8 animate-spin rounded-full border-b-2"></div>
+                </div>
               </div>
             </div>
 
@@ -182,7 +188,6 @@ import { totpAPI } from '@/api'
 import type { TotpSetupResponse } from '@/types'
 import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import { readThemeCssVariable } from '@/utils/themeStyles'
-import QRCode from 'qrcode'
 
 const emit = defineEmits<{
   close: []
@@ -211,12 +216,24 @@ const code = ref<string[]>(['', '', '', '', '', ''])
 const inputRefs = ref<(HTMLInputElement | null)[]>([])
 const qrCodeDataUrl = ref('')
 
+type QrCodeModule = typeof import('qrcode')
+
 type ErrorMessageLike = {
   response?: {
     data?: {
       message?: string
     }
   }
+}
+
+let qrCodeModulePromise: Promise<QrCodeModule> | null = null
+
+const getQrCodeModule = (): Promise<QrCodeModule> => {
+  if (!qrCodeModulePromise) {
+    qrCodeModulePromise = import('qrcode')
+  }
+
+  return qrCodeModulePromise
 }
 
 const stepDescription = computed(() => {
@@ -244,22 +261,41 @@ const canProceedFromVerify = computed(() => {
 // Generate QR code as base64 when setupData changes
 watch(
   [() => setupData.value?.qr_code_url, themeVersion],
-  async ([url]) => {
-    if (url) {
-      try {
-        const qrDarkColor = readThemeCssVariable('--theme-page-text')
-        const qrLightColor = readThemeCssVariable('--theme-surface')
-        qrCodeDataUrl.value = await QRCode.toDataURL(url, {
-          width: 200,
-          margin: 2,
-          color: {
-            ['dark']: qrDarkColor,
-            ['light']: qrLightColor
-          }
-        })
-      } catch (err) {
-        console.error('Failed to generate QR code:', err)
+  async ([url], _previousUrl, onCleanup) => {
+    if (!url) {
+      qrCodeDataUrl.value = ''
+      return
+    }
+
+    let isActive = true
+    onCleanup(() => {
+      isActive = false
+    })
+
+    try {
+      qrCodeDataUrl.value = ''
+      const QRCode = await getQrCodeModule()
+      if (!isActive) {
+        return
       }
+
+      const qrDarkColor = readThemeCssVariable('--theme-page-text')
+      const qrLightColor = readThemeCssVariable('--theme-surface')
+      const nextQrCodeDataUrl = await QRCode.toDataURL(url, {
+        width: 200,
+        margin: 2,
+        color: {
+          ['dark']: qrDarkColor,
+          ['light']: qrLightColor
+        }
+      })
+      if (!isActive) {
+        return
+      }
+
+      qrCodeDataUrl.value = nextQrCodeDataUrl
+    } catch (err) {
+      console.error('Failed to generate QR code:', err)
     }
   },
   { immediate: true }
@@ -464,6 +500,10 @@ onUnmounted(() => {
 
 .totp-setup-modal__loading {
   padding-block: var(--theme-totp-modal-loading-padding-y);
+}
+
+.totp-setup-modal__qr-loading {
+  min-height: 12rem;
 }
 
 .totp-setup-modal__error {

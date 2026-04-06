@@ -51,7 +51,7 @@
             <span
               v-if="item.iconSvg"
               class="h-5 w-5 flex-shrink-0 sidebar-svg-icon"
-              v-html="sanitizeSvg(item.iconSvg)"
+              v-html="getSanitizedCustomIcon(item.path)"
             ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <transition name="fade">
@@ -79,7 +79,7 @@
             <span
               v-if="item.iconSvg"
               class="h-5 w-5 flex-shrink-0 sidebar-svg-icon"
-              v-html="sanitizeSvg(item.iconSvg)"
+              v-html="getSanitizedCustomIcon(item.path)"
             ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <transition name="fade">
@@ -104,7 +104,7 @@
             <span
               v-if="item.iconSvg"
               class="h-5 w-5 flex-shrink-0 sidebar-svg-icon"
-              v-html="sanitizeSvg(item.iconSvg)"
+              v-html="getSanitizedCustomIcon(item.path)"
             ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <transition name="fade">
@@ -160,9 +160,9 @@ import { useSwipe } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
+import type { CustomMenuItem } from '@/types'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import { getFrontendThemeDefinition } from '@/themes'
-import { sanitizeSvg } from '@/utils/sanitize'
 
 interface NavItem {
   path: string
@@ -211,6 +211,7 @@ const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 const activeTheme = computed(() => getFrontendThemeDefinition(appStore.frontendTheme))
+const sanitizedCustomIconMarkup = ref<Record<string, string>>({})
 
 // SVG Icon Components
 const DashboardIcon = {
@@ -595,14 +596,14 @@ const personalNavItems = computed((): NavItem[] => {
 const customMenuItemsForUser = computed(() => {
   const items = appStore.cachedPublicSettings?.custom_menu_items ?? []
   return items
-    .filter((item) => item.visibility === 'user')
-    .sort((a, b) => a.sort_order - b.sort_order)
+    .filter((item: CustomMenuItem) => item.visibility === 'user')
+    .sort((a: CustomMenuItem, b: CustomMenuItem) => a.sort_order - b.sort_order)
 })
 
 const customMenuItemsForAdmin = computed(() => {
   return adminSettingsStore.customMenuItems
-    .filter((item) => item.visibility === 'admin')
-    .sort((a, b) => a.sort_order - b.sort_order)
+    .filter((item: CustomMenuItem) => item.visibility === 'admin')
+    .sort((a: CustomMenuItem, b: CustomMenuItem) => a.sort_order - b.sort_order)
 })
 
 // Admin navigation items
@@ -643,6 +644,44 @@ const adminNavItems = computed((): NavItem[] => {
   }
   return baseItems
 })
+
+const customSvgIconEntries = computed(() => {
+  const dedupedEntries = new Map<string, string>()
+
+  for (const item of [...userNavItems.value, ...personalNavItems.value, ...adminNavItems.value]) {
+    if (item.iconSvg) {
+      dedupedEntries.set(item.path, item.iconSvg)
+    }
+  }
+
+  return Array.from(dedupedEntries, ([path, svg]) => ({ path, svg }))
+})
+
+watch(
+  () => customSvgIconEntries.value.map(({ path, svg }) => `${path}:${svg}`).join('||'),
+  async () => {
+    const entries = customSvgIconEntries.value
+    if (entries.length === 0) {
+      sanitizedCustomIconMarkup.value = {}
+      return
+    }
+
+    // Keep DOMPurify out of the app shell until user-provided SVG icons actually exist.
+    const { sanitizeSvg } = await import('@/utils/sanitize')
+    const nextMarkup: Record<string, string> = {}
+
+    for (const { path, svg } of entries) {
+      nextMarkup[path] = sanitizeSvg(svg)
+    }
+
+    sanitizedCustomIconMarkup.value = nextMarkup
+  },
+  { immediate: true }
+)
+
+function getSanitizedCustomIcon(path: string): string {
+  return sanitizedCustomIconMarkup.value[path] ?? ''
+}
 
 function toggleSidebar() {
   appStore.toggleSidebar()

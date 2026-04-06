@@ -2,6 +2,7 @@
  * Setup API endpoints
  */
 import axios from 'axios'
+import { fetchSetupStatus, type SetupStatus } from './bootstrap'
 
 // Create a separate client for setup endpoints (not under /api/v1)
 const setupClient = axios.create({
@@ -11,11 +12,6 @@ const setupClient = axios.create({
     'Content-Type': 'application/json'
   }
 })
-
-export interface SetupStatus {
-  needs_setup: boolean
-  step: string
-}
 
 export interface DatabaseConfig {
   host: string
@@ -61,8 +57,7 @@ export interface InstallResponse {
  * Get setup status
  */
 export async function getSetupStatus(): Promise<SetupStatus> {
-  const response = await setupClient.get('/setup/status')
-  return response.data.data
+  return fetchSetupStatus()
 }
 
 /**

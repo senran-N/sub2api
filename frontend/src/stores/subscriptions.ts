@@ -5,7 +5,6 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
 
 // Cache TTL: 60 seconds
@@ -13,6 +12,18 @@ const CACHE_TTL_MS = 60_000
 
 // Request generation counter to invalidate stale in-flight responses
 let requestGeneration = 0
+
+type SubscriptionsApiModule = typeof import('@/api/subscriptions')
+
+let subscriptionsApiModulePromise: Promise<SubscriptionsApiModule> | null = null
+
+function loadSubscriptionsApiModule(): Promise<SubscriptionsApiModule> {
+  if (!subscriptionsApiModulePromise) {
+    subscriptionsApiModulePromise = import('@/api/subscriptions')
+  }
+
+  return subscriptionsApiModulePromise
+}
 
 export const useSubscriptionStore = defineStore('subscriptions', () => {
   // State
@@ -56,8 +67,8 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
 
     // Start new request
     loading.value = true
-    const requestPromise = subscriptionsAPI
-      .getActiveSubscriptions()
+    const requestPromise = loadSubscriptionsApiModule()
+      .then(({ getActiveSubscriptions }) => getActiveSubscriptions())
       .then((data) => {
         if (currentGeneration === requestGeneration) {
           activeSubscriptions.value = data

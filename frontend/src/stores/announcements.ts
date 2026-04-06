@@ -1,9 +1,20 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { announcementsAPI } from '@/api'
 import type { UserAnnouncement } from '@/types'
 
 const THROTTLE_MS = 20 * 60 * 1000 // 20 minutes
+
+type AnnouncementsApiModule = typeof import('@/api/announcements')
+
+let announcementsApiModulePromise: Promise<AnnouncementsApiModule> | null = null
+
+function loadAnnouncementsApiModule(): Promise<AnnouncementsApiModule> {
+  if (!announcementsApiModulePromise) {
+    announcementsApiModulePromise = import('@/api/announcements')
+  }
+
+  return announcementsApiModulePromise
+}
 
 export const useAnnouncementStore = defineStore('announcements', () => {
   // State
@@ -33,7 +44,8 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
     try {
       loading.value = true
-      const all = await announcementsAPI.list(false)
+      const { list } = await loadAnnouncementsApiModule()
+      const all = await list(false)
       announcements.value = all.slice(0, 20)
       enqueueNewPopups()
     } catch (err: any) {
@@ -87,7 +99,8 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
   async function markAsRead(id: number) {
     try {
-      await announcementsAPI.markRead(id)
+      const { markRead } = await loadAnnouncementsApiModule()
+      await markRead(id)
       const ann = announcements.value.find((a) => a.id === id)
       if (ann) {
         ann.read_at = new Date().toISOString()
@@ -103,7 +116,8 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
     try {
       loading.value = true
-      await Promise.all(unread.map((a) => announcementsAPI.markRead(a.id)))
+      const { markRead } = await loadAnnouncementsApiModule()
+      await Promise.all(unread.map((a) => markRead(a.id)))
       announcements.value.forEach((a) => {
         if (!a.read_at) {
           a.read_at = new Date().toISOString()

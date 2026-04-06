@@ -31,19 +31,20 @@
     />
   </div>
 
-  <BackupR2GuideModal :show="showR2Guide" @close="showR2Guide = false" />
+  <BackupR2GuideModal v-if="showR2Guide" :show="showR2Guide" @close="showR2Guide = false" />
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import BackupOperationsCard from './backup/BackupOperationsCard.vue'
-import BackupR2GuideModal from './backup/BackupR2GuideModal.vue'
 import BackupS3ConfigCard from './backup/BackupS3ConfigCard.vue'
 import BackupScheduleCard from './backup/BackupScheduleCard.vue'
 import { useBackupViewConfig } from './useBackupViewConfig'
 import { useBackupViewOperations } from './useBackupViewOperations'
+
+const BackupR2GuideModal = defineAsyncComponent(() => import('./backup/BackupR2GuideModal.vue'))
 
 const { t } = useI18n()
 const appStore = useAppStore()

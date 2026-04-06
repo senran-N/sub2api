@@ -100,6 +100,7 @@
     </TablePageLayout>
 
     <GroupCreateDialog
+      v-if="showCreateModal"
       :show="showCreateModal"
       :submitting="submitting"
       :form="createForm"
@@ -128,6 +129,7 @@
     />
 
     <GroupEditDialog
+      v-if="showEditModal"
       :show="showEditModal"
       :submitting="submitting"
       :editing-group="editingGroup"
@@ -170,6 +172,7 @@
     />
 
     <GroupSortOrderDialog
+      v-if="showSortModal"
       :show="showSortModal"
       :groups="sortableGroups"
       :submitting="sortSubmitting"
@@ -180,6 +183,7 @@
 
     <!-- Group Rate Multipliers Modal -->
     <GroupRateMultipliersModal
+      v-if="showRateMultipliersModal"
       :show="showRateMultipliersModal"
       :group="rateMultipliersGroup"
       @close="showRateMultipliersModal = false"
@@ -189,7 +193,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useOnboardingStore } from '@/stores/onboarding'
@@ -200,7 +204,6 @@ import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import GroupRateMultipliersModal from '@/components/admin/group/GroupRateMultipliersModal.vue'
 import {
   addCopyAccountsGroupSelection,
   buildCopyAccountsGroupOptions,
@@ -213,13 +216,10 @@ import GroupActionsCell from './groups/GroupActionsCell.vue'
 import GroupActionToolbar from './groups/GroupActionToolbar.vue'
 import GroupBillingTypeCell from './groups/GroupBillingTypeCell.vue'
 import GroupCapacityCell from './groups/GroupCapacityCell.vue'
-import GroupCreateDialog from './groups/GroupCreateDialog.vue'
-import GroupEditDialog from './groups/GroupEditDialog.vue'
 import GroupExclusivityBadge from './groups/GroupExclusivityBadge.vue'
 import GroupFilterFields from './groups/GroupFilterFields.vue'
 import GroupPlatformBadge from './groups/GroupPlatformBadge.vue'
 import GroupRateMultiplierCell from './groups/GroupRateMultiplierCell.vue'
-import GroupSortOrderDialog from './groups/GroupSortOrderDialog.vue'
 import GroupStatusBadge from './groups/GroupStatusBadge.vue'
 import GroupUsageCell from './groups/GroupUsageCell.vue'
 import { useGroupsViewData } from './useGroupsViewData'
@@ -228,6 +228,13 @@ import { useGroupsViewManagement } from './useGroupsViewManagement'
 const { t } = useI18n()
 const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
+
+const GroupCreateDialog = defineAsyncComponent(() => import('./groups/GroupCreateDialog.vue'))
+const GroupEditDialog = defineAsyncComponent(() => import('./groups/GroupEditDialog.vue'))
+const GroupSortOrderDialog = defineAsyncComponent(() => import('./groups/GroupSortOrderDialog.vue'))
+const GroupRateMultipliersModal = defineAsyncComponent(
+  () => import('@/components/admin/group/GroupRateMultipliersModal.vue')
+)
 
 const columns = computed<Column[]>(() => [
   { key: 'name', label: t('admin.groups.columns.name'), sortable: true },

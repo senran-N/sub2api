@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './client'
+import { fetchPublicSettings as requestPublicSettings } from './bootstrap'
 import type {
   LoginRequest,
   RegisterRequest,
@@ -230,8 +231,7 @@ export function isAuthenticated(): boolean {
  * @returns Public settings including registration and Turnstile config
  */
 export async function getPublicSettings(): Promise<PublicSettings> {
-  const { data } = await apiClient.get<PublicSettings>('/settings/public')
-  return data
+  return requestPublicSettings()
 }
 
 /**

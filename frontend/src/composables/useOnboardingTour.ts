@@ -1,14 +1,46 @@
 import { onMounted, onUnmounted, nextTick } from 'vue'
-import { driver, type Driver, type DriveStep } from 'driver.js'
-import 'driver.js/dist/driver.css'
+import type { Driver, DriveStep } from 'driver.js'
 import { useAuthStore as useUserStore } from '@/stores/auth'
 import { useOnboardingStore } from '@/stores/onboarding'
 import { useI18n } from 'vue-i18n'
-import { getAdminSteps, getUserSteps } from '@/components/Guide/steps'
+import { getLocale } from '@/i18n'
 
 export interface OnboardingOptions {
   storageKey?: string
   autoStart?: boolean
+}
+
+type DriverFactory = typeof import('driver.js').driver
+
+type GuideStepsModule = typeof import('@/components/Guide/steps')
+type GuideContentLoader = typeof import('@/components/Guide/content')
+
+interface OnboardingRuntimeBase {
+  driverFactory: DriverFactory
+  getAdminSteps: GuideStepsModule['getAdminSteps']
+  getUserSteps: GuideStepsModule['getUserSteps']
+  loadOnboardingGuideContent: GuideContentLoader['loadOnboardingGuideContent']
+}
+
+let onboardingRuntimePromise: Promise<OnboardingRuntimeBase> | null = null
+
+async function loadOnboardingRuntime(): Promise<OnboardingRuntimeBase> {
+  if (!onboardingRuntimePromise) {
+    onboardingRuntimePromise = Promise.all([
+      import('driver.js'),
+      import('driver.js/dist/driver.css'),
+      import('@/styles/onboarding.css'),
+      import('@/components/Guide/steps'),
+      import('@/components/Guide/content')
+    ]).then(([driverModule, , , stepsModule, guideContentModule]) => ({
+      driverFactory: driverModule.driver,
+      getAdminSteps: stepsModule.getAdminSteps,
+      getUserSteps: stepsModule.getUserSteps,
+      loadOnboardingGuideContent: guideContentModule.loadOnboardingGuideContent
+    }))
+  }
+
+  return onboardingRuntimePromise
 }
 
 export function useOnboardingTour(options: OnboardingOptions) {
@@ -92,10 +124,16 @@ export function useOnboardingTour(options: OnboardingOptions) {
   }
 
   const startTour = async (startIndex = 0) => {
+    const { driverFactory, getAdminSteps, getUserSteps, loadOnboardingGuideContent } =
+      await loadOnboardingRuntime()
+    const onboardingGuideContent = await loadOnboardingGuideContent(getLocale())
+
     // 动态获取当前用户角色和步骤
     const isAdmin = userStore.user?.role === 'admin'
     const isSimpleMode = userStore.isSimpleMode
-    const steps = isAdmin ? getAdminSteps(t, isSimpleMode) : getUserSteps(t)
+    const steps = isAdmin
+      ? getAdminSteps(onboardingGuideContent.admin, isSimpleMode)
+      : getUserSteps(onboardingGuideContent.user)
 
     // 确保 DOM 就绪
     await nextTick()
@@ -111,7 +149,7 @@ export function useOnboardingTour(options: OnboardingOptions) {
     }
 
     // 创建新的 driver 实例并存储到 store
-    driverInstance = driver({
+    driverInstance = driverFactory({
       showProgress: true,
       steps,
       animate: true,

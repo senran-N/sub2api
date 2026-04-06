@@ -1,7 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { adminAPI } from '@/api'
 import type { CustomMenuItem } from '@/types'
+
+type AdminSettingsApiModule = typeof import('@/api/admin/settings')
+
+let adminSettingsApiModulePromise: Promise<AdminSettingsApiModule> | null = null
+
+function loadAdminSettingsApiModule(): Promise<AdminSettingsApiModule> {
+  if (!adminSettingsApiModulePromise) {
+    adminSettingsApiModulePromise = import('@/api/admin/settings')
+  }
+
+  return adminSettingsApiModulePromise
+}
 
 export const useAdminSettingsStore = defineStore('adminSettings', () => {
   const loaded = ref(false)
@@ -56,7 +67,8 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
 
     loading.value = true
     try {
-      const settings = await adminAPI.settings.getSettings()
+      const { getSettings } = await loadAdminSettingsApiModule()
+      const settings = await getSettings()
       opsMonitoringEnabled.value = settings.ops_monitoring_enabled ?? true
       writeCachedBool('ops_monitoring_enabled_cached', opsMonitoringEnabled.value)
 

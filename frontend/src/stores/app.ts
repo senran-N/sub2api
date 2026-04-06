@@ -6,13 +6,21 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Toast, ToastType, PublicSettings } from '@/types'
+import type { VersionInfo, ReleaseInfo } from '@/api/admin/system'
 import { applyFrontendTheme, FRONTEND_THEME_DEFAULT } from '@/themes'
-import {
-  checkUpdates as checkUpdatesAPI,
-  type VersionInfo,
-  type ReleaseInfo
-} from '@/api/admin/system'
-import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
+import { fetchPublicSettings as fetchPublicSettingsAPI } from '@/api/bootstrap'
+
+type AdminSystemApiModule = typeof import('@/api/admin/system')
+
+let adminSystemApiModulePromise: Promise<AdminSystemApiModule> | null = null
+
+function loadAdminSystemApiModule(): Promise<AdminSystemApiModule> {
+  if (!adminSystemApiModulePromise) {
+    adminSystemApiModulePromise = import('@/api/admin/system')
+  }
+
+  return adminSystemApiModulePromise
+}
 
 export const useAppStore = defineStore('app', () => {
   // ==================== State ====================
@@ -257,7 +265,8 @@ export const useAppStore = defineStore('app', () => {
 
     versionLoading.value = true
     try {
-      const data = await checkUpdatesAPI(force)
+      const { checkUpdates } = await loadAdminSystemApiModule()
+      const data = await checkUpdates(force)
       currentVersion.value = data.current_version
       latestVersion.value = data.latest_version
       hasUpdate.value = data.has_update

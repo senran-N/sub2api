@@ -151,19 +151,19 @@
     />
 
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.users.deleteUser')" :message="t('admin.users.deleteConfirm', { email: deletingUser?.email })" :danger="true" @confirm="confirmDelete" @cancel="closeDeleteDialog" />
-    <UserCreateModal :show="showCreateModal" @close="closeCreateModal" @success="loadUsers" />
-    <UserEditModal :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
-    <UserApiKeysModal :show="showApiKeysModal" :user="viewingUser" @close="closeApiKeysModal" />
-    <UserAllowedGroupsModal :show="showAllowedGroupsModal" :user="allowedGroupsUser" @close="closeAllowedGroupsModal" @success="loadUsers" />
-    <UserBalanceModal :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" @close="closeBalanceModal" @success="loadUsers" />
-    <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
-    <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
-    <UserAttributesConfigModal :show="showAttributesModal" @close="handleAttributesModalClose" />
+    <UserCreateModal v-if="showCreateModal" :show="showCreateModal" @close="closeCreateModal" @success="loadUsers" />
+    <UserEditModal v-if="showEditModal" :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
+    <UserApiKeysModal v-if="showApiKeysModal" :show="showApiKeysModal" :user="viewingUser" @close="closeApiKeysModal" />
+    <UserAllowedGroupsModal v-if="showAllowedGroupsModal" :show="showAllowedGroupsModal" :user="allowedGroupsUser" @close="closeAllowedGroupsModal" @success="loadUsers" />
+    <UserBalanceModal v-if="showBalanceModal" :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" @close="closeBalanceModal" @success="loadUsers" />
+    <UserBalanceHistoryModal v-if="showBalanceHistoryModal" :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
+    <GroupReplaceModal v-if="showGroupReplaceModal" :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
+    <UserAttributesConfigModal v-if="showAttributesModal" :show="showAttributesModal" @close="handleAttributesModalClose" />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -177,15 +177,7 @@ import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import UserAttributesConfigModal from '@/components/user/UserAttributesConfigModal.vue'
 import UserConcurrencyCell from '@/components/user/UserConcurrencyCell.vue'
-import UserCreateModal from '@/components/admin/user/UserCreateModal.vue'
-import UserEditModal from '@/components/admin/user/UserEditModal.vue'
-import UserApiKeysModal from '@/components/admin/user/UserApiKeysModal.vue'
-import UserAllowedGroupsModal from '@/components/admin/user/UserAllowedGroupsModal.vue'
-import UserBalanceModal from '@/components/admin/user/UserBalanceModal.vue'
-import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
-import GroupReplaceModal from '@/components/admin/user/GroupReplaceModal.vue'
 import { useUsersViewAdminActions } from './useUsersViewAdminActions'
 import { useUsersViewData } from './useUsersViewData'
 import { useUsersViewDialogs } from './useUsersViewDialogs'
@@ -215,6 +207,15 @@ import {
   getAttributeDefinitionName as getUserAttributeDefinitionName,
   getUserGroupsSummary
 } from './usersTable'
+
+const UserAttributesConfigModal = defineAsyncComponent(() => import('@/components/user/UserAttributesConfigModal.vue'))
+const UserCreateModal = defineAsyncComponent(() => import('@/components/admin/user/UserCreateModal.vue'))
+const UserEditModal = defineAsyncComponent(() => import('@/components/admin/user/UserEditModal.vue'))
+const UserApiKeysModal = defineAsyncComponent(() => import('@/components/admin/user/UserApiKeysModal.vue'))
+const UserAllowedGroupsModal = defineAsyncComponent(() => import('@/components/admin/user/UserAllowedGroupsModal.vue'))
+const UserBalanceModal = defineAsyncComponent(() => import('@/components/admin/user/UserBalanceModal.vue'))
+const UserBalanceHistoryModal = defineAsyncComponent(() => import('@/components/admin/user/UserBalanceHistoryModal.vue'))
+const GroupReplaceModal = defineAsyncComponent(() => import('@/components/admin/user/GroupReplaceModal.vue'))
 
 const appStore = useAppStore()
 const usersViewDialogs = useUsersViewDialogs()
