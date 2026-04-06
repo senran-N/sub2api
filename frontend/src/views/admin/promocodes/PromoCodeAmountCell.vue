@@ -1,5 +1,5 @@
 <template>
-  <span class="text-sm font-medium text-gray-900 dark:text-white">
+  <span class="theme-text-strong text-sm font-medium">
     ${{ amount.toFixed(2) }}
   </span>
 </template>

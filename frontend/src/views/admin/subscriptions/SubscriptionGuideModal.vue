@@ -3,14 +3,14 @@
     <transition name="modal">
       <div
         v-if="show"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="subscription-guide-modal fixed inset-0 z-50 flex items-center justify-center"
         @mousedown.self="emit('close')"
       >
-        <div class="fixed inset-0 bg-black/50" @click="emit('close')"></div>
-        <div class="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-2xl dark:bg-dark-800">
+        <div class="subscription-guide-modal__overlay fixed inset-0" @click="emit('close')"></div>
+        <div class="subscription-guide-modal__panel relative w-full overflow-y-auto">
           <button
             type="button"
-            class="absolute right-4 top-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            class="subscription-guide-modal__close absolute"
             @click="emit('close')"
           >
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -18,15 +18,15 @@
             </svg>
           </button>
 
-          <h2 class="mb-4 text-lg font-bold text-gray-900 dark:text-white">{{ t('admin.subscriptions.guide.title') }}</h2>
-          <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.subscriptions.guide.subtitle') }}</p>
+          <h2 class="subscription-guide-modal__title mb-4 text-lg font-bold">{{ t('admin.subscriptions.guide.title') }}</h2>
+          <p class="subscription-guide-modal__description mb-5 text-sm">{{ t('admin.subscriptions.guide.subtitle') }}</p>
 
-          <div class="mb-5">
-            <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">1</span>
+          <div class="subscription-guide-modal__section mb-5">
+            <h3 class="subscription-guide-modal__section-title mb-2 flex items-center gap-2 text-sm font-semibold">
+              <span class="subscription-guide-modal__step-index text-xs font-bold">1</span>
               {{ t('admin.subscriptions.guide.step1.title') }}
             </h3>
-            <ol class="ml-8 list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-300">
+            <ol class="subscription-guide-modal__list ml-8 list-decimal space-y-1 text-sm">
               <li>{{ t('admin.subscriptions.guide.step1.line1') }}</li>
               <li>{{ t('admin.subscriptions.guide.step1.line2') }}</li>
               <li>{{ t('admin.subscriptions.guide.step1.line3') }}</li>
@@ -34,7 +34,7 @@
             <div class="ml-8 mt-2">
               <router-link
                 to="/admin/groups"
-                class="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                class="subscription-guide-modal__link inline-flex items-center gap-1 text-sm font-medium"
                 @click="emit('close')"
               >
                 {{ t('admin.subscriptions.guide.step1.link') }}
@@ -43,40 +43,40 @@
             </div>
           </div>
 
-          <div class="mb-5">
-            <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">2</span>
+          <div class="subscription-guide-modal__section mb-5">
+            <h3 class="subscription-guide-modal__section-title mb-2 flex items-center gap-2 text-sm font-semibold">
+              <span class="subscription-guide-modal__step-index text-xs font-bold">2</span>
               {{ t('admin.subscriptions.guide.step2.title') }}
             </h3>
-            <ol class="ml-8 list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-300">
+            <ol class="subscription-guide-modal__list ml-8 list-decimal space-y-1 text-sm">
               <li>{{ t('admin.subscriptions.guide.step2.line1') }}</li>
               <li>{{ t('admin.subscriptions.guide.step2.line2') }}</li>
               <li>{{ t('admin.subscriptions.guide.step2.line3') }}</li>
             </ol>
           </div>
 
-          <div class="mb-5">
-            <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">3</span>
+          <div class="subscription-guide-modal__section mb-5">
+            <h3 class="subscription-guide-modal__section-title mb-2 flex items-center gap-2 text-sm font-semibold">
+              <span class="subscription-guide-modal__step-index text-xs font-bold">3</span>
               {{ t('admin.subscriptions.guide.step3.title') }}
             </h3>
-            <div class="ml-8 overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
+            <div class="subscription-guide-modal__table-wrap ml-8 overflow-hidden">
               <table class="w-full text-sm">
                 <tbody>
                   <tr
                     v-for="(row, index) in guideActionRows"
                     :key="index"
-                    class="border-b border-gray-100 dark:border-dark-700 last:border-0"
+                    class="subscription-guide-modal__table-row last:border-0"
                   >
-                    <td class="whitespace-nowrap bg-gray-50 px-3 py-2 font-medium text-gray-700 dark:bg-dark-700 dark:text-gray-300">{{ row.action }}</td>
-                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ row.desc }}</td>
+                    <td class="subscription-guide-modal__table-key whitespace-nowrap font-medium">{{ row.action }}</td>
+                    <td class="subscription-guide-modal__table-value">{{ row.desc }}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
 
-          <div class="rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+          <div class="subscription-guide-modal__tip text-xs">
             {{ t('admin.subscriptions.guide.tip') }}
           </div>
 
@@ -112,3 +112,92 @@ const guideActionRows = computed(() => [
   { action: t('admin.subscriptions.guide.actions.revoke'), desc: t('admin.subscriptions.guide.actions.revokeDesc') }
 ])
 </script>
+
+<style scoped>
+.subscription-guide-modal__overlay {
+  background: var(--theme-overlay-strong);
+}
+
+.subscription-guide-modal {
+  padding: var(--theme-markdown-block-padding);
+}
+
+.subscription-guide-modal__panel {
+  max-width: min(100%, var(--theme-dialog-width-wide-sm));
+  max-height: 85vh;
+  padding: var(--theme-auth-callback-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 78%, transparent);
+  border-radius: var(--theme-subscription-panel-radius);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow-hover);
+}
+
+.subscription-guide-modal__close {
+  inset-block-start: calc(var(--theme-auth-callback-card-padding) * 0.67);
+  inset-inline-end: calc(var(--theme-auth-callback-card-padding) * 0.67);
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, var(--theme-surface));
+  transition: color 0.2s ease;
+}
+
+.subscription-guide-modal__close:hover {
+  color: var(--theme-page-text);
+}
+
+.subscription-guide-modal__title,
+.subscription-guide-modal__section-title,
+.subscription-guide-modal__table-key {
+  color: var(--theme-page-text);
+}
+
+.subscription-guide-modal__description,
+.subscription-guide-modal__list,
+.subscription-guide-modal__table-value {
+  color: var(--theme-page-muted);
+}
+
+.subscription-guide-modal__step-index {
+  background: color-mix(in srgb, var(--theme-accent-soft) 90%, var(--theme-surface));
+  color: var(--theme-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  width: 2rem;
+  border-radius: 999px;
+}
+
+.subscription-guide-modal__table-key,
+.subscription-guide-modal__table-value {
+  padding:
+    var(--theme-settings-card-panel-padding)
+    var(--theme-settings-card-header-padding-x);
+}
+
+.subscription-guide-modal__link {
+  color: var(--theme-accent);
+}
+
+.subscription-guide-modal__link:hover {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+}
+
+.subscription-guide-modal__table-wrap {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  border-radius: var(--theme-subscription-panel-radius);
+}
+
+.subscription-guide-modal__table-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.subscription-guide-modal__table-key {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.subscription-guide-modal__tip {
+  padding: calc(var(--theme-markdown-block-padding) * 0.75);
+  border-radius: var(--theme-button-radius);
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+</style>

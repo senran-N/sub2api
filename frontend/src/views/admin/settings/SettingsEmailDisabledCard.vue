@@ -1,13 +1,13 @@
 <template>
   <div class="card">
-    <div class="p-6">
+    <div class="settings-email-disabled-card__body">
       <div class="flex items-start gap-3">
-        <Icon name="mail" size="md" class="mt-0.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+        <Icon name="mail" size="md" class="settings-email-disabled-card__icon mt-0.5 flex-shrink-0" />
         <div>
-          <h3 class="font-medium text-gray-900 dark:text-white">
+          <h3 class="theme-text-strong font-medium">
             {{ t('admin.settings.emailTabDisabledTitle') }}
           </h3>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <p class="theme-text-muted mt-1 text-sm">
             {{ t('admin.settings.emailTabDisabledHint') }}
           </p>
         </div>
@@ -22,3 +22,16 @@ import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-email-disabled-card__icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.settings-email-disabled-card__body {
+  padding: var(--theme-settings-card-panel-padding);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--theme-settings-card-body-padding);
+}
+</style>

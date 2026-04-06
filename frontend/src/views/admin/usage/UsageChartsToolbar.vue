@@ -1,5 +1,5 @@
 <template>
-  <div class="card p-4">
+  <div class="usage-charts-toolbar card">
     <div class="flex flex-wrap items-center gap-4">
       <div class="flex items-center gap-2">
         <span class="toolbar-label">{{ t('admin.dashboard.timeRange') }}:</span>
@@ -54,3 +54,9 @@ const handleGranularityUpdate = (value: string | number | boolean | null) => {
   }
 }
 </script>
+
+<style scoped>
+.usage-charts-toolbar {
+  padding: var(--theme-user-dashboard-charts-card-padding);
+}
+</style>

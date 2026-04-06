@@ -7,30 +7,33 @@
   >
     <div
       v-if="loading"
-      class="flex items-center justify-center py-8 text-sm text-gray-500"
+      class="proxy-accounts-dialog__status proxy-accounts-dialog__status--loading flex items-center justify-center text-sm"
     >
       <Icon name="refresh" size="md" class="mr-2 animate-spin" />
       {{ t('common.loading') }}
     </div>
-    <div v-else-if="accounts.length === 0" class="py-6 text-center text-sm text-gray-500">
+    <div
+      v-else-if="accounts.length === 0"
+      class="proxy-accounts-dialog__status proxy-accounts-dialog__status--empty text-center text-sm"
+    >
       {{ t('admin.proxies.accountsEmpty') }}
     </div>
-    <div v-else class="max-h-80 overflow-auto">
-      <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
-        <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-dark-800 dark:text-dark-400">
+    <div v-else class="proxy-accounts-dialog__table-shell table-container table-wrapper overflow-auto">
+      <table class="table min-w-full text-sm">
+        <thead>
           <tr>
-            <th class="px-4 py-2 text-left">{{ t('admin.proxies.accountName') }}</th>
-            <th class="px-4 py-2 text-left">{{ t('admin.accounts.columns.platformType') }}</th>
-            <th class="px-4 py-2 text-left">{{ t('admin.proxies.accountNotes') }}</th>
+            <th class="proxy-accounts-dialog__head-cell">{{ t('admin.proxies.accountName') }}</th>
+            <th class="proxy-accounts-dialog__head-cell">{{ t('admin.accounts.columns.platformType') }}</th>
+            <th class="proxy-accounts-dialog__head-cell">{{ t('admin.proxies.accountNotes') }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+        <tbody>
           <tr v-for="account in accounts" :key="account.id">
-            <td class="px-4 py-2 font-medium text-gray-900 dark:text-white">{{ account.name }}</td>
-            <td class="px-4 py-2">
+            <td class="proxy-accounts-dialog__name">{{ account.name }}</td>
+            <td>
               <PlatformTypeBadge :platform="account.platform" :type="account.type" />
             </td>
-            <td class="px-4 py-2 text-gray-600 dark:text-gray-300">
+            <td class="proxy-accounts-dialog__notes">
               {{ account.notes || '-' }}
             </td>
           </tr>
@@ -68,3 +71,39 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.proxy-accounts-dialog__status {
+  color: var(--theme-page-muted);
+}
+
+.proxy-accounts-dialog__status--loading,
+.proxy-accounts-dialog__status--empty {
+  padding: var(--theme-auth-callback-card-padding);
+}
+
+.proxy-accounts-dialog__table-shell table th,
+.proxy-accounts-dialog__table-shell table td {
+  padding:
+    var(--theme-settings-card-panel-padding)
+    var(--theme-settings-card-header-padding-x);
+}
+
+.proxy-accounts-dialog__table-shell {
+  max-height: var(--theme-proxy-accounts-table-max-height);
+}
+
+.proxy-accounts-dialog__head-cell {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.proxy-accounts-dialog__name {
+  font-weight: 600;
+  color: var(--theme-page-text);
+}
+
+.proxy-accounts-dialog__notes {
+  color: color-mix(in srgb, var(--theme-page-text) 78%, transparent);
+}
+</style>

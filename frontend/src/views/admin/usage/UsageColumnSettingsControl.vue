@@ -1,7 +1,7 @@
 <template>
   <div class="relative" ref="dropdownRef">
     <button
-      class="btn btn-secondary px-2 md:px-3"
+      class="usage-column-settings-control__trigger btn btn-secondary"
       :title="t('admin.users.columnSettings')"
       @click="toggleDropdown"
     >
@@ -10,7 +10,7 @@
     </button>
     <div
       v-if="showDropdown"
-      class="menu-panel right-0 top-full max-h-80 w-48 overflow-y-auto"
+      class="usage-column-settings-control__dropdown menu-panel right-0 top-full overflow-y-auto"
     >
       <button
         v-for="column in toggleableColumns"
@@ -23,7 +23,7 @@
           v-if="isColumnVisible(column.key)"
           name="check"
           size="sm"
-          class="text-primary-500"
+          class="usage-column-settings-control__check"
           :stroke-width="2"
         />
       </button>
@@ -74,3 +74,24 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
 </script>
+
+<style scoped>
+.usage-column-settings-control__dropdown {
+  width: var(--theme-settings-menu-width-sm);
+  max-height: var(--theme-settings-menu-max-height);
+}
+
+.usage-column-settings-control__trigger {
+  padding-inline: var(--theme-settings-code-padding-x);
+}
+
+.usage-column-settings-control__check {
+  color: var(--theme-accent);
+}
+
+@media (min-width: 768px) {
+  .usage-column-settings-control__trigger {
+    padding-inline: var(--theme-settings-action-padding-x);
+  }
+}
+</style>

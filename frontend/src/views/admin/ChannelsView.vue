@@ -8,7 +8,7 @@
               <Icon
                 name="search"
                 size="md"
-                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                class="channel-view__search-icon absolute left-3 top-1/2 -translate-y-1/2"
               />
               <input
                 v-model="searchQuery"
@@ -48,11 +48,11 @@
       <template #table>
         <DataTable :columns="columns" :data="channels" :loading="loading">
           <template #cell-name="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+            <span class="channel-view__text-strong font-medium">{{ value }}</span>
           </template>
 
           <template #cell-description="{ value }">
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{ value || '-' }}</span>
+            <span class="channel-view__text-muted text-sm">{{ value || '-' }}</span>
           </template>
 
           <template #cell-status="{ row }">
@@ -60,21 +60,21 @@
           </template>
 
           <template #cell-group_count="{ row }">
-            <span class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300">
+            <span class="theme-chip theme-chip--regular theme-chip--neutral inline-flex items-center">
               {{ (row.group_ids || []).length }}
               {{ t('admin.channels.groupsUnit') }}
             </span>
           </template>
 
           <template #cell-pricing_count="{ row }">
-            <span class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300">
+            <span class="theme-chip theme-chip--regular theme-chip--neutral inline-flex items-center">
               {{ (row.model_pricing || []).length }}
               {{ t('admin.channels.pricingUnit') }}
             </span>
           </template>
 
           <template #cell-created_at="{ value }">
-            <span class="text-sm text-gray-600 dark:text-gray-400">
+            <span class="channel-view__text-muted text-sm">
               {{ formatDate(value) }}
             </span>
           </template>
@@ -82,14 +82,14 @@
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
               <button
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                :class="getActionButtonClasses('info')"
                 @click="openEditDialog(row)"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
               <button
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                :class="getActionButtonClasses('danger')"
                 @click="handleDelete(row)"
               >
                 <Icon name="trash" size="sm" />
@@ -128,7 +128,7 @@
       @close="closeDialog"
     >
       <div class="channel-dialog-body">
-        <div class="flex flex-shrink-0 items-center border-b border-gray-200 px-4 dark:border-dark-700 sm:px-6">
+        <div class="channel-view__tabs flex flex-shrink-0 items-center">
           <button
             type="button"
             class="channel-tab"
@@ -145,15 +145,15 @@
             :class="activeTab === section.platform ? 'channel-tab-active' : 'channel-tab-inactive'"
             @click="activeTab = section.platform"
           >
-            <PlatformIcon :platform="section.platform" size="xs" :class="getPlatformTextColor(section.platform)" />
-            <span :class="getPlatformTextColor(section.platform)">{{ t(`admin.groups.platforms.${section.platform}`, section.platform) }}</span>
+            <PlatformIcon :platform="section.platform" size="xs" :class="getPlatformTextClass(section.platform)" />
+            <span :class="getPlatformTextClass(section.platform)">{{ t(`admin.groups.platforms.${section.platform}`, section.platform) }}</span>
           </button>
         </div>
 
         <form id="channel-form" class="flex-1 overflow-y-auto pt-4" @submit.prevent="handleSubmit">
           <div v-show="activeTab === 'basic'" class="space-y-5">
             <div>
-              <label class="input-label">{{ t('admin.channels.form.name') }} <span class="text-red-500">*</span></label>
+              <label class="input-label">{{ t('admin.channels.form.name') }} <span class="channel-view__required">*</span></label>
               <input
                 v-model="form.name"
                 type="text"
@@ -179,15 +179,15 @@
             </div>
 
             <div>
-              <label class="flex cursor-pointer items-center gap-2">
+              <label class="channel-view__checkbox-row flex cursor-pointer items-center gap-2">
                 <input
                   v-model="form.restrict_models"
                   type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="channel-view__checkbox h-4 w-4 rounded"
                 />
                 <span class="input-label mb-0">{{ t('admin.channels.form.restrictModels') }}</span>
               </label>
-              <p class="mt-1 ml-6 text-xs text-gray-400">
+              <p class="channel-view__text-soft mt-1 ml-6 text-xs">
                 {{ t('admin.channels.form.restrictModelsHint') }}
               </p>
             </div>
@@ -195,7 +195,7 @@
             <div>
               <label class="input-label">{{ t('admin.channels.form.billingModelSource') }}</label>
               <Select v-model="form.billing_model_source" :options="billingModelSourceOptions" />
-              <p class="mt-1 text-xs text-gray-400">
+              <p class="channel-view__text-soft mt-1 text-xs">
                 {{ t('admin.channels.form.billingModelSourceHint') }}
               </p>
             </div>
@@ -206,19 +206,16 @@
                 <label
                   v-for="platform in platformOrder"
                   :key="platform"
-                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors"
-                  :class="activePlatforms.includes(platform)
-                    ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20'
-                    : 'border-gray-200 hover:bg-gray-50 dark:border-dark-600 dark:hover:bg-dark-700'"
+                  :class="getPlatformToggleClasses(platform, activePlatforms.includes(platform))"
                 >
                   <input
                     type="checkbox"
                     :checked="activePlatforms.includes(platform)"
-                    class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    class="channel-view__checkbox h-3.5 w-3.5 rounded"
                     @change="togglePlatform(platform)"
                   />
-                  <PlatformIcon :platform="platform" size="xs" :class="getPlatformTextColor(platform)" />
-                  <span :class="getPlatformTextColor(platform)">{{ t(`admin.groups.platforms.${platform}`, platform) }}</span>
+                  <PlatformIcon :platform="platform" size="xs" :class="getPlatformTextClass(platform)" />
+                  <span :class="getPlatformTextClass(platform)">{{ t(`admin.groups.platforms.${platform}`, platform) }}</span>
                 </label>
               </div>
             </div>
@@ -232,39 +229,35 @@
           >
             <div>
               <label class="input-label text-xs">
-                {{ t('admin.channels.form.groups') }} <span class="text-red-500">*</span>
-                <span v-if="section.group_ids.length > 0" class="ml-1 font-normal text-gray-400">
+                {{ t('admin.channels.form.groups') }} <span class="channel-view__required">*</span>
+                <span v-if="section.group_ids.length > 0" class="channel-view__text-soft ml-1 font-normal">
                   ({{ t('admin.channels.form.selectedCount', { count: section.group_ids.length }) }})
                 </span>
               </label>
-              <div class="max-h-40 overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-dark-600 dark:bg-dark-900">
-                <div v-if="groupsLoading" class="py-2 text-center text-xs text-gray-500">
+              <div class="channel-view__group-list">
+                <div v-if="groupsLoading" class="channel-view__group-state channel-view__text-muted text-center text-xs">
                   {{ t('common.loading') }}
                 </div>
-                <div v-else-if="getGroupsForPlatform(section.platform).length === 0" class="py-2 text-center text-xs text-gray-500">
+                <div v-else-if="getGroupsForPlatform(section.platform).length === 0" class="channel-view__group-state channel-view__text-muted text-center text-xs">
                   {{ t('admin.channels.form.noGroupsAvailable') }}
                 </div>
                 <div v-else class="flex flex-wrap gap-1">
                   <label
                     v-for="group in getGroupsForPlatform(section.platform)"
                     :key="group.id"
-                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-2 py-1 text-xs transition-colors hover:bg-gray-50 dark:border-dark-600 dark:hover:bg-dark-700"
-                    :class="[
-                      section.group_ids.includes(group.id) ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20' : '',
-                      isGroupInOtherChannel(group.id, section.platform) ? 'opacity-40' : ''
-                    ]"
+                    :class="getGroupChipClasses(section.platform, section.group_ids.includes(group.id), isGroupInOtherChannel(group.id, section.platform))"
                   >
                     <input
                       type="checkbox"
                       :checked="section.group_ids.includes(group.id)"
                       :disabled="isGroupInOtherChannel(group.id, section.platform)"
-                      class="h-3 w-3 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      class="channel-view__checkbox h-3 w-3 rounded"
                       @change="toggleGroupInSection(sIdx, group.id)"
                     />
-                    <span :class="['font-medium', getPlatformTextColor(group.platform)]">{{ group.name }}</span>
-                    <span :class="['rounded-full px-1 py-0 text-[10px]', getRateBadgeClass(group.platform)]">{{ group.rate_multiplier }}x</span>
-                    <span class="text-[10px] text-gray-400">{{ group.account_count || 0 }}</span>
-                    <span v-if="isGroupInOtherChannel(group.id, section.platform)" class="text-[10px] text-gray-400">
+                    <span :class="['font-medium', getPlatformTextClass(group.platform)]">{{ group.name }}</span>
+                    <span :class="['channel-view__rate-badge text-[10px]', getRateBadgeClass(group.platform)]">{{ group.rate_multiplier }}x</span>
+                    <span class="channel-view__text-soft text-[10px]">{{ group.account_count || 0 }}</span>
+                    <span v-if="isGroupInOtherChannel(group.id, section.platform)" class="channel-view__text-soft text-[10px]">
                       {{ getGroupInOtherChannelLabel(group.id) }}
                     </span>
                   </label>
@@ -275,13 +268,13 @@
             <div>
               <div class="mb-1 flex items-center justify-between">
                 <label class="input-label mb-0 text-xs">{{ t('admin.channels.form.modelMapping') }}</label>
-                <button type="button" class="text-xs text-primary-600 hover:text-primary-700" @click="addMappingEntry(sIdx)">
+                <button type="button" class="channel-view__text-button text-xs" @click="addMappingEntry(sIdx)">
                   + {{ t('common.add') }}
                 </button>
               </div>
               <div
                 v-if="Object.keys(section.model_mapping).length === 0"
-                class="rounded border border-dashed border-gray-300 p-2 text-center text-xs text-gray-400 dark:border-dark-500"
+                class="channel-view__empty-box text-center text-xs"
               >
                 {{ t('admin.channels.form.noMappingRules') }}
               </div>
@@ -291,20 +284,20 @@
                     :value="srcModel"
                     type="text"
                     class="input flex-1 text-xs"
-                    :class="getPlatformTextColor(section.platform)"
+                    :class="getPlatformTextClass(section.platform)"
                     :placeholder="t('admin.channels.form.mappingSource')"
                     @change="renameMappingKey(sIdx, srcModel, ($event.target as HTMLInputElement).value)"
                   />
-                  <span class="text-xs text-gray-400">→</span>
+                  <span class="channel-view__text-soft text-xs">→</span>
                   <input
                     :value="section.model_mapping[srcModel]"
                     type="text"
                     class="input flex-1 text-xs"
-                    :class="getPlatformTextColor(section.platform)"
+                    :class="getPlatformTextClass(section.platform)"
                     :placeholder="t('admin.channels.form.mappingTarget')"
                     @input="section.model_mapping[srcModel] = ($event.target as HTMLInputElement).value"
                   />
-                  <button type="button" class="rounded p-0.5 text-gray-400 hover:text-red-500" @click="removeMappingEntry(sIdx, srcModel)">
+                  <button type="button" class="channel-view__icon-button channel-view__icon-button--danger" @click="removeMappingEntry(sIdx, srcModel)">
                     <Icon name="trash" size="sm" />
                   </button>
                 </div>
@@ -314,13 +307,13 @@
             <div>
               <div class="mb-1 flex items-center justify-between">
                 <label class="input-label mb-0 text-xs">{{ t('admin.channels.form.modelPricing') }}</label>
-                <button type="button" class="text-xs text-primary-600 hover:text-primary-700" @click="addPricingEntry(sIdx)">
+                <button type="button" class="channel-view__text-button text-xs" @click="addPricingEntry(sIdx)">
                   + {{ t('common.add') }}
                 </button>
               </div>
               <div
                 v-if="section.model_pricing.length === 0"
-                class="rounded border border-dashed border-gray-300 p-2 text-center text-xs text-gray-400 dark:border-dark-500"
+                class="channel-view__empty-box text-center text-xs"
               >
                 {{ t('admin.channels.form.noPricingRules') }}
               </div>
@@ -473,26 +466,54 @@ let searchTimeout: ReturnType<typeof setTimeout>
 
 const platformOrder: GroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity']
 
-function getPlatformTextColor(platform: string): string {
+function joinClassNames(...classNames: Array<string | false | null | undefined>): string {
+  return classNames.filter(Boolean).join(' ')
+}
+
+function getPlatformTextClass(platform: string): string {
   switch (platform) {
-    case 'anthropic': return 'text-orange-600 dark:text-orange-400'
-    case 'openai': return 'text-emerald-600 dark:text-emerald-400'
-    case 'gemini': return 'text-blue-600 dark:text-blue-400'
-    case 'antigravity': return 'text-purple-600 dark:text-purple-400'
-    case 'sora': return 'text-rose-600 dark:text-rose-400'
-    default: return 'text-gray-600 dark:text-gray-400'
+    case 'anthropic': return 'channel-view__tone-text channel-view__tone-text--brand-orange'
+    case 'openai': return 'channel-view__tone-text channel-view__tone-text--success'
+    case 'gemini': return 'channel-view__tone-text channel-view__tone-text--info'
+    case 'antigravity': return 'channel-view__tone-text channel-view__tone-text--brand-purple'
+    case 'sora': return 'channel-view__tone-text channel-view__tone-text--brand-rose'
+    default: return 'channel-view__text-muted'
   }
 }
 
 function getRateBadgeClass(platform: string): string {
   switch (platform) {
-    case 'anthropic': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-    case 'openai': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-    case 'gemini': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-    case 'antigravity': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-    case 'sora': return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
-    default: return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+    case 'anthropic': return 'theme-chip theme-chip--compact theme-chip--brand-orange'
+    case 'openai': return 'theme-chip theme-chip--compact theme-chip--success'
+    case 'gemini': return 'theme-chip theme-chip--compact theme-chip--info'
+    case 'antigravity': return 'theme-chip theme-chip--compact theme-chip--brand-purple'
+    case 'sora': return 'theme-chip theme-chip--compact theme-chip--brand-rose'
+    default: return 'theme-chip theme-chip--compact theme-chip--neutral'
   }
+}
+
+function getPlatformToggleClasses(platform: GroupPlatform, active: boolean): string {
+  return joinClassNames(
+    'channel-view__platform-toggle inline-flex cursor-pointer items-center gap-1.5 border text-sm transition-colors',
+    active && 'channel-view__platform-toggle--active',
+    getPlatformTextClass(platform)
+  )
+}
+
+function getGroupChipClasses(platform: GroupPlatform, selected: boolean, disabled: boolean): string {
+  return joinClassNames(
+    'channel-view__group-chip inline-flex cursor-pointer items-center gap-1.5 border text-xs transition-colors',
+    selected && 'channel-view__group-chip--selected',
+    disabled && 'opacity-40',
+    getPlatformTextClass(platform)
+  )
+}
+
+function getActionButtonClasses(tone: 'info' | 'danger'): string {
+  return joinClassNames(
+    'channel-view__action-button flex flex-col items-center gap-0.5 transition-colors',
+    tone === 'info' ? 'channel-view__action-button--info' : 'channel-view__action-button--danger'
+  )
 }
 
 function formatDate(value: string): string {
@@ -987,15 +1008,181 @@ onUnmounted(() => {
   min-height: 400px;
 }
 
+.channel-view__search-icon,
+.channel-view__text-soft,
+.channel-view__text-muted {
+  color: var(--theme-page-muted);
+}
+
+.channel-view__required {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.channel-view__text-strong {
+  color: var(--theme-page-text);
+}
+
+.channel-view__tabs {
+  padding-left: var(--theme-table-cell-padding-x);
+  padding-right: var(--theme-table-cell-padding-x);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.channel-view__checkbox-row {
+  color: var(--theme-page-text);
+}
+
+.channel-view__checkbox {
+  accent-color: var(--theme-accent);
+}
+
+.channel-view__platform-toggle,
+.channel-view__group-chip,
+.channel-view__group-list,
+.channel-view__empty-box {
+  border-color: color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+}
+
+.channel-view__platform-toggle,
+.channel-view__group-chip {
+  border-radius: calc(var(--theme-button-radius) + 2px);
+}
+
+.channel-view__platform-toggle {
+  padding: calc(var(--theme-button-padding-y) * 0.6) calc(var(--theme-button-padding-x) * 0.75);
+}
+
+.channel-view__group-chip {
+  padding: calc(var(--theme-button-padding-y) * 0.4) calc(var(--theme-button-padding-x) * 0.5);
+}
+
+.channel-view__platform-toggle,
+.channel-view__group-chip {
+  background: color-mix(in srgb, var(--theme-surface-soft) 78%, var(--theme-surface));
+}
+
+.channel-view__platform-toggle:hover,
+.channel-view__group-chip:hover {
+  background: color-mix(in srgb, var(--theme-table-row-hover) 100%, var(--theme-surface));
+}
+
+.channel-view__platform-toggle--active,
+.channel-view__group-chip--selected {
+  border-color: color-mix(in srgb, var(--theme-accent) 34%, var(--theme-card-border));
+  background: color-mix(in srgb, var(--theme-accent-soft) 72%, var(--theme-surface));
+}
+
+.channel-view__group-list {
+  max-height: calc(var(--theme-search-dropdown-max-height) * 0.67);
+  overflow: auto;
+  border-radius: var(--theme-select-panel-radius);
+  padding: calc(var(--theme-user-api-keys-dropdown-padding) + 0.125rem);
+  background: color-mix(in srgb, var(--theme-surface-soft) 70%, var(--theme-surface));
+}
+
+.channel-view__group-state {
+  padding: calc(var(--theme-button-padding-y) * 0.45) 0;
+}
+
+.channel-view__rate-badge {
+  border-radius: 999px;
+  padding: 0.125rem 0.25rem;
+}
+
+.channel-view__empty-box {
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  padding: calc(var(--theme-button-padding-y) * 0.45) calc(var(--theme-button-padding-x) * 0.4);
+  border-style: dashed;
+  color: color-mix(in srgb, var(--theme-page-muted) 78%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 52%, var(--theme-surface));
+}
+
+.channel-view__text-button {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+  transition: color 0.2s ease;
+}
+
+.channel-view__text-button:hover {
+  color: color-mix(in srgb, var(--theme-accent-strong) 22%, var(--theme-accent) 78%);
+}
+
+.channel-view__icon-button,
+.channel-view__action-button {
+  color: color-mix(in srgb, var(--theme-page-muted) 78%, transparent);
+}
+
+.channel-view__icon-button {
+  border-radius: calc(var(--theme-button-radius) - 1px);
+  padding: calc(var(--theme-button-padding-y) * 0.25);
+}
+
+.channel-view__action-button {
+  border-radius: var(--theme-button-radius);
+  padding: calc(var(--theme-button-padding-y) * 0.5);
+}
+
+.channel-view__icon-button--danger:hover,
+.channel-view__action-button--danger:hover {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+}
+
+.channel-view__action-button--info:hover {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 10%, var(--theme-surface));
+}
+
+.channel-view__tone-text--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.channel-view__tone-text--info {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.channel-view__tone-text--brand-orange {
+  color: color-mix(in srgb, rgb(var(--theme-brand-orange-rgb)) 84%, var(--theme-page-text));
+}
+
+.channel-view__tone-text--brand-purple {
+  color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 84%, var(--theme-page-text));
+}
+
+.channel-view__tone-text--brand-rose {
+  color: color-mix(in srgb, rgb(var(--theme-brand-rose-rgb)) 84%, var(--theme-page-text));
+}
+
 .channel-tab {
-  @apply flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  padding: calc(var(--theme-button-padding-y) * 0.75) calc(var(--theme-button-padding-x) * 0.75);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.2s ease, border-color 0.2s ease;
 }
 
 .channel-tab-active {
-  @apply border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400;
+  border-color: color-mix(in srgb, var(--theme-accent) 84%, transparent);
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
 }
 
 .channel-tab-inactive {
-  @apply border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300;
+  border-color: transparent;
+  color: var(--theme-page-muted);
+}
+
+.channel-tab-inactive:hover {
+  border-color: color-mix(in srgb, var(--theme-card-border) 82%, transparent);
+  color: color-mix(in srgb, var(--theme-page-text) 88%, var(--theme-page-muted));
+}
+
+@media (min-width: 640px) {
+  .channel-view__tabs {
+    padding-left: calc(var(--theme-table-cell-padding-x) * 1.2);
+    padding-right: calc(var(--theme-table-cell-padding-x) * 1.2);
+  }
 }
 </style>

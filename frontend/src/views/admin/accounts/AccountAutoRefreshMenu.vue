@@ -1,7 +1,7 @@
 <template>
-  <div class="p-2">
+  <div class="account-auto-refresh-menu">
     <button
-      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+      class="account-auto-refresh-menu__button flex w-full items-center justify-between text-sm"
       @click="emit('toggle-enabled')"
     >
       <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
@@ -9,14 +9,14 @@
         v-if="enabled"
         name="check"
         size="sm"
-        class="text-primary-500"
+        class="account-auto-refresh-menu__check"
       />
     </button>
-    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
+    <div class="account-auto-refresh-menu__divider my-1 border-t"></div>
     <button
       v-for="seconds in intervals"
       :key="seconds"
-      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+      class="account-auto-refresh-menu__button flex w-full items-center justify-between text-sm"
       @click="emit('set-interval', seconds)"
     >
       <span>{{ labelForInterval(seconds) }}</span>
@@ -24,7 +24,7 @@
         v-if="selectedIntervalSeconds === seconds"
         name="check"
         size="sm"
-        class="text-primary-500"
+        class="account-auto-refresh-menu__check"
       />
     </button>
   </div>
@@ -51,3 +51,29 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.account-auto-refresh-menu {
+  padding: var(--theme-account-auto-refresh-menu-padding);
+}
+
+.account-auto-refresh-menu__button {
+  border-radius: var(--theme-account-auto-refresh-menu-button-radius);
+  padding: var(--theme-account-auto-refresh-menu-button-padding-y)
+    var(--theme-account-auto-refresh-menu-button-padding-x);
+  color: var(--theme-page-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.account-auto-refresh-menu__button:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.account-auto-refresh-menu__check {
+  color: var(--theme-accent);
+}
+
+.account-auto-refresh-menu__divider {
+  border-color: color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+}
+</style>

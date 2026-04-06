@@ -76,7 +76,7 @@ describe('accountsView helpers', () => {
     expect(getAccountAntigravityTierLabel(account as any, (key: string) => key)).toBe(
       'admin.accounts.tier.pro'
     )
-    expect(getAccountAntigravityTierClass(account as any)).toContain('bg-blue-100')
+    expect(getAccountAntigravityTierClass(account as any)).toBe('theme-chip--info')
 
     expect(getAccountAntigravityTier({ platform: 'openai', extra: {} } as any)).toBeNull()
     expect(formatAccountExpiresAt(null)).toBe('-')

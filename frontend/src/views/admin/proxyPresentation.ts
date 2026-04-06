@@ -33,7 +33,7 @@ export function getQualityStatusClass(status: ProxyQualityCheckItem['status']) {
     return 'badge-danger'
   }
   if (status === 'skip') {
-    return 'badge-secondary'
+    return 'badge-gray'
   }
   return 'badge-danger'
 }
@@ -116,7 +116,7 @@ export function getIpTypeBadgeClass(ipType: string) {
     case 'tor':
       return 'badge-danger'
     default:
-      return 'badge-secondary'
+      return 'badge-gray'
   }
 }
 
@@ -139,12 +139,12 @@ export function getIpTypeLabel(ipType: string, t: Translate) {
 
 export function getDnsLeakBadgeClass(risk: string) {
   if (risk === 'possible') {
-    return 'badge-yellow'
+    return 'badge-warning'
   }
   if (risk === 'detected') {
-    return 'badge-red'
+    return 'badge-danger'
   }
-  return 'badge-secondary'
+  return 'badge-gray'
 }
 
 export function getDnsLeakLabel(risk: string, t: Translate) {
@@ -162,15 +162,15 @@ export function getDnsLeakLabel(risk: string, t: Translate) {
 
 export function getProxyScoreBarColor(score: number) {
   if (score >= 80) {
-    return 'bg-green-500'
+    return 'theme-progress-fill--success'
   }
   if (score >= 60) {
-    return 'bg-yellow-500'
+    return 'theme-progress-fill--warning'
   }
   if (score >= 40) {
-    return 'bg-orange-500'
+    return 'theme-progress-fill--brand-orange'
   }
-  return 'bg-red-500'
+  return 'theme-progress-fill--danger'
 }
 
 export function buildProxyQualityCategoryEntries(

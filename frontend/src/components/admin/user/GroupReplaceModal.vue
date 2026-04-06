@@ -1,33 +1,30 @@
 <template>
   <BaseDialog :show="show" :title="t('admin.users.replaceGroupTitle')" width="narrow" @close="$emit('close')">
     <div v-if="oldGroup" class="space-y-4">
-      <!-- 提示信息 -->
-      <p class="text-sm text-gray-600 dark:text-gray-400">
+      <p class="group-replace-modal__description text-sm">
         {{ t('admin.users.replaceGroupHint', { old: oldGroup.name }) }}
       </p>
 
-      <!-- 当前分组 -->
-      <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-800">
+      <div class="group-replace-modal__current-group">
         <div class="flex items-center gap-2">
-          <Icon name="shield" size="sm" class="text-purple-500" />
-          <span class="font-medium text-gray-900 dark:text-white">{{ oldGroup.name }}</span>
-          <Icon name="arrowRight" size="sm" class="ml-auto text-gray-400" />
-          <span v-if="selectedGroupId" class="font-medium text-primary-600 dark:text-primary-400">
+          <Icon name="shield" size="sm" class="group-replace-modal__old-group-icon" />
+          <span class="group-replace-modal__group-name font-medium">{{ oldGroup.name }}</span>
+          <Icon name="arrowRight" size="sm" class="group-replace-modal__arrow ml-auto" />
+          <span v-if="selectedGroupId" class="group-replace-modal__selected-group font-medium">
             {{ availableGroups.find(g => g.id === selectedGroupId)?.name }}
           </span>
-          <span v-else class="text-sm text-gray-400">?</span>
+          <span v-else class="group-replace-modal__placeholder text-sm">?</span>
         </div>
       </div>
 
-      <!-- 可选分组列表 -->
-      <div v-if="availableGroups.length > 0" class="max-h-64 space-y-2 overflow-y-auto">
+      <div v-if="availableGroups.length > 0" class="group-replace-modal__list space-y-2 overflow-y-auto">
         <label
           v-for="group in availableGroups"
           :key="group.id"
-          class="flex cursor-pointer items-center gap-3 rounded-lg border-2 p-3 transition-all"
+          class="group-replace-modal__group-option flex cursor-pointer items-center gap-3 border-2 transition-all"
           :class="selectedGroupId === group.id
-            ? 'border-primary-400 bg-primary-50/50 dark:border-primary-500 dark:bg-primary-900/20'
-            : 'border-gray-200 hover:border-gray-300 dark:border-dark-600 dark:hover:border-dark-500'"
+            ? 'group-replace-modal__group-option--selected'
+            : 'group-replace-modal__group-option--idle'"
         >
           <input
             type="radio"
@@ -36,33 +33,32 @@
             class="sr-only"
           />
           <div
-            class="flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all"
+            class="group-replace-modal__radio flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all"
             :class="selectedGroupId === group.id
-              ? 'border-primary-500 bg-primary-500'
-              : 'border-gray-300 dark:border-dark-500'"
+              ? 'group-replace-modal__radio--selected'
+              : 'group-replace-modal__radio--idle'"
           >
-            <div v-if="selectedGroupId === group.id" class="h-2 w-2 rounded-full bg-white"></div>
+            <div v-if="selectedGroupId === group.id" class="group-replace-modal__radio-dot h-2 w-2 rounded-full"></div>
           </div>
           <div class="flex-1">
-            <span class="font-medium text-gray-900 dark:text-white">{{ group.name }}</span>
-            <span class="ml-2 text-xs text-gray-400">{{ group.platform }}</span>
+            <span class="group-replace-modal__group-name font-medium">{{ group.name }}</span>
+            <span class="group-replace-modal__platform ml-2 text-xs">{{ group.platform }}</span>
           </div>
         </label>
       </div>
 
-      <!-- 无可选分组 -->
-      <div v-else class="py-6 text-center text-sm text-gray-400">
+      <div v-else class="group-replace-modal__empty text-center text-sm">
         {{ t('admin.users.noOtherGroups') }}
       </div>
     </div>
 
     <template #footer>
       <div class="flex justify-end gap-3">
-        <button @click="$emit('close')" class="btn btn-secondary px-5">{{ t('common.cancel') }}</button>
+        <button @click="$emit('close')" class="btn btn-secondary">{{ t('common.cancel') }}</button>
         <button
           @click="handleReplace"
           :disabled="!selectedGroupId || submitting"
-          class="btn btn-primary px-6"
+          class="btn btn-primary"
         >
           <svg v-if="submitting" class="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -99,7 +95,19 @@ const appStore = useAppStore()
 const selectedGroupId = ref<number | null>(null)
 const submitting = ref(false)
 
-// 可选的专属标准分组（排除当前 oldGroup）
+const getErrorMessage = (error: unknown, fallbackMessage: string) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { detail?: string } } }).response
+    if (typeof response?.data?.detail === 'string' && response.data.detail.trim()) {
+      return response.data.detail
+    }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message
+  }
+  return fallbackMessage
+}
+
 const availableGroups = computed(() => {
   if (!props.oldGroup) return []
   return props.allGroups.filter(
@@ -123,9 +131,77 @@ const handleReplace = async () => {
     emit('success')
     emit('close')
   } catch (error) {
-    console.error('Failed to replace group:', error)
+    appStore.showError(getErrorMessage(error, t('admin.users.replaceGroupFailed')))
   } finally {
     submitting.value = false
   }
 }
 </script>
+
+<style scoped>
+.group-replace-modal__description,
+.group-replace-modal__platform,
+.group-replace-modal__placeholder,
+.group-replace-modal__empty,
+.group-replace-modal__arrow {
+  color: var(--theme-page-muted);
+}
+
+.group-replace-modal__current-group {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  padding: var(--theme-group-replace-card-padding);
+}
+
+.group-replace-modal__old-group-icon {
+  color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 84%, var(--theme-page-text));
+}
+
+.group-replace-modal__group-name {
+  color: var(--theme-page-text);
+}
+
+.group-replace-modal__selected-group {
+  color: var(--theme-accent);
+}
+
+.group-replace-modal__group-option--selected {
+  border-color: color-mix(in srgb, var(--theme-accent) 46%, var(--theme-card-border));
+  background: color-mix(in srgb, var(--theme-accent-soft) 86%, var(--theme-surface));
+}
+
+.group-replace-modal__list {
+  max-height: var(--theme-group-replace-list-max-height);
+}
+
+.group-replace-modal__group-option {
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  padding: var(--theme-group-replace-card-padding);
+}
+
+.group-replace-modal__empty {
+  padding-block: var(--theme-user-attributes-state-padding-y);
+}
+
+.group-replace-modal__group-option--idle {
+  border-color: color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+}
+
+.group-replace-modal__group-option--idle:hover {
+  border-color: color-mix(in srgb, var(--theme-card-border) 92%, transparent);
+}
+
+.group-replace-modal__radio--selected {
+  border-color: var(--theme-accent);
+  background: var(--theme-accent);
+}
+
+.group-replace-modal__radio--idle {
+  border-color: var(--theme-input-border);
+}
+
+.group-replace-modal__radio-dot {
+  background: var(--theme-filled-text);
+}
+</style>

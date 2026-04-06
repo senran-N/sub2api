@@ -1,15 +1,15 @@
 <template>
-  <div class="fixed inset-0 z-50 overflow-y-auto" @click.self="$emit('close')">
-    <div class="flex min-h-full items-center justify-center p-4">
-      <div class="fixed inset-0 bg-black/50 transition-opacity" @click="$emit('close')"></div>
+  <div class="totp-setup-modal fixed inset-0 z-50 overflow-y-auto" @click.self="$emit('close')">
+    <div class="totp-setup-modal__viewport flex min-h-full items-center justify-center">
+      <div class="totp-setup-modal__backdrop fixed inset-0 transition-opacity" @click="$emit('close')"></div>
 
-      <div class="relative w-full max-w-md transform rounded-xl bg-white p-6 shadow-xl transition-all dark:bg-dark-800">
+      <div class="totp-setup-modal__panel relative w-full transform transition-all">
         <!-- Header -->
         <div class="mb-6 text-center">
-          <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+          <h3 class="totp-setup-modal__title text-xl font-semibold">
             {{ t('profile.totp.setupTitle') }}
           </h3>
-          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p class="totp-setup-modal__description mt-2 text-sm">
             {{ stepDescription }}
           </p>
         </div>
@@ -17,8 +17,8 @@
         <!-- Step 0: Identity Verification -->
         <div v-if="step === 0" class="space-y-6">
           <!-- Loading verification method -->
-          <div v-if="methodLoading" class="flex items-center justify-center py-8">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+          <div v-if="methodLoading" class="totp-setup-modal__loading flex items-center justify-center">
+            <div class="totp-setup-modal__spinner h-8 w-8 animate-spin rounded-full border-b-2"></div>
           </div>
 
           <template v-else>
@@ -61,7 +61,7 @@
               </div>
             </div>
 
-            <div v-if="verifyError" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+            <div v-if="verifyError" class="totp-setup-modal__error text-sm">
               {{ verifyError }}
             </div>
 
@@ -86,22 +86,22 @@
           <!-- QR Code and Secret -->
           <template v-if="setupData">
             <div class="flex justify-center">
-              <div class="rounded-lg border border-gray-200 p-4 bg-white dark:border-dark-600 dark:bg-white">
+              <div class="totp-setup-modal__qr-shell">
                 <img :src="qrCodeDataUrl" alt="QR Code" class="h-48 w-48" />
               </div>
             </div>
 
             <div class="text-center">
-              <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+              <p class="totp-setup-modal__description mb-2 text-sm">
                 {{ t('profile.totp.manualEntry') }}
               </p>
               <div class="flex items-center justify-center gap-2">
-                <code class="rounded bg-gray-100 px-3 py-2 font-mono text-sm dark:bg-dark-700">
+                <code class="totp-setup-modal__secret font-mono text-sm">
                   {{ setupData.secret }}
                 </code>
                 <button
                   type="button"
-                  class="rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-dark-700"
+                  class="totp-setup-modal__copy-button"
                   @click="copySecret"
                 >
                   <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -143,7 +143,7 @@
                   maxlength="1"
                   inputmode="numeric"
                   pattern="[0-9]"
-                  class="h-12 w-10 rounded-lg border border-gray-300 text-center text-lg font-semibold focus:border-primary-500 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700"
+                  class="totp-setup-modal__digit h-12 w-10 text-center text-lg font-semibold"
                   @input="handleCodeInput($event, index)"
                   @keydown="handleKeydown($event, index)"
                   @paste="handlePaste"
@@ -151,7 +151,7 @@
               </div>
             </div>
 
-            <div v-if="error" class="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+            <div v-if="error" class="totp-setup-modal__error mb-4 text-sm">
               {{ error }}
             </div>
 
@@ -180,6 +180,8 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { totpAPI } from '@/api'
 import type { TotpSetupResponse } from '@/types'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
+import { readThemeCssVariable } from '@/utils/themeStyles'
 import QRCode from 'qrcode'
 
 const emit = defineEmits<{
@@ -189,6 +191,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const themeVersion = useDocumentThemeVersion()
 
 // Step: 0 = verify identity, 1 = QR code, 2 = verify TOTP code
 const step = ref(0)
@@ -207,6 +210,14 @@ const error = ref('')
 const code = ref<string[]>(['', '', '', '', '', ''])
 const inputRefs = ref<(HTMLInputElement | null)[]>([])
 const qrCodeDataUrl = ref('')
+
+type ErrorMessageLike = {
+  response?: {
+    data?: {
+      message?: string
+    }
+  }
+}
 
 const stepDescription = computed(() => {
   switch (step.value) {
@@ -232,16 +243,18 @@ const canProceedFromVerify = computed(() => {
 
 // Generate QR code as base64 when setupData changes
 watch(
-  () => setupData.value?.qr_code_url,
-  async (url) => {
+  [() => setupData.value?.qr_code_url, themeVersion],
+  async ([url]) => {
     if (url) {
       try {
+        const qrDarkColor = readThemeCssVariable('--theme-page-text')
+        const qrLightColor = readThemeCssVariable('--theme-surface')
         qrCodeDataUrl.value = await QRCode.toDataURL(url, {
           width: 200,
           margin: 2,
           color: {
-            dark: '#000000',
-            light: '#ffffff'
+            ['dark']: qrDarkColor,
+            ['light']: qrLightColor
           }
         })
       } catch (err) {
@@ -319,13 +332,18 @@ const copySecret = async () => {
   }
 }
 
+const getErrorMessage = (errorLike: unknown, fallbackMessage: string) => {
+  const normalizedError = errorLike as ErrorMessageLike | null
+  return normalizedError?.response?.data?.message || fallbackMessage
+}
+
 const loadVerificationMethod = async () => {
   methodLoading.value = true
   try {
     const method = await totpAPI.getVerificationMethod()
     verificationMethod.value = method.method
-  } catch (err: any) {
-    appStore.showError(err.response?.data?.message || t('common.error'))
+  } catch (errorLike) {
+    appStore.showError(getErrorMessage(errorLike, t('common.error')))
     emit('close')
   } finally {
     methodLoading.value = false
@@ -352,8 +370,8 @@ const handleSendCode = async () => {
         }
       }
     }, 1000)
-  } catch (err: any) {
-    appStore.showError(err.response?.data?.message || t('profile.totp.sendCodeFailed'))
+  } catch (errorLike) {
+    appStore.showError(getErrorMessage(errorLike, t('profile.totp.sendCodeFailed')))
   } finally {
     sendingCode.value = false
   }
@@ -370,8 +388,8 @@ const handleVerifyAndSetup = async () => {
 
     setupData.value = await totpAPI.initiateSetup(request)
     step.value = 1
-  } catch (err: any) {
-    verifyError.value = err.response?.data?.message || t('profile.totp.setupFailed')
+  } catch (errorLike) {
+    verifyError.value = getErrorMessage(errorLike, t('profile.totp.setupFailed'))
   } finally {
     setupLoading.value = false
   }
@@ -391,8 +409,8 @@ const handleVerify = async () => {
     })
     appStore.showSuccess(t('profile.totp.enableSuccess'))
     emit('success')
-  } catch (err: any) {
-    error.value = err.response?.data?.message || t('profile.totp.verifyFailed')
+  } catch (errorLike) {
+    error.value = getErrorMessage(errorLike, t('profile.totp.verifyFailed'))
     code.value = ['', '', '', '', '', '']
     nextTick(() => {
       inputRefs.value[0]?.focus()
@@ -413,3 +431,85 @@ onUnmounted(() => {
   }
 })
 </script>
+
+<style scoped>
+.totp-setup-modal__backdrop {
+  background: var(--theme-overlay-strong);
+}
+
+.totp-setup-modal__panel {
+  max-width: var(--theme-totp-modal-max-width);
+  border-radius: var(--theme-totp-modal-radius);
+  padding: var(--theme-totp-modal-padding);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow-hover);
+}
+
+.totp-setup-modal__viewport {
+  padding: var(--theme-totp-modal-viewport-padding);
+}
+
+.totp-setup-modal__title {
+  color: var(--theme-page-text);
+}
+
+.totp-setup-modal__description {
+  color: var(--theme-page-muted);
+}
+
+.totp-setup-modal__spinner {
+  border-color: color-mix(in srgb, var(--theme-card-border) 64%, transparent);
+  border-bottom-color: var(--theme-accent);
+}
+
+.totp-setup-modal__loading {
+  padding-block: var(--theme-totp-modal-loading-padding-y);
+}
+
+.totp-setup-modal__error {
+  border-radius: var(--theme-totp-modal-error-radius);
+  padding: var(--theme-totp-modal-error-padding);
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.totp-setup-modal__qr-shell {
+  border-radius: var(--theme-totp-modal-qr-radius);
+  padding: var(--theme-totp-modal-qr-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+  background: var(--theme-surface);
+}
+
+.totp-setup-modal__secret {
+  border-radius: var(--theme-totp-modal-secret-radius);
+  padding: var(--theme-totp-modal-secret-padding-y) var(--theme-totp-modal-secret-padding-x);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.totp-setup-modal__copy-button {
+  border-radius: var(--theme-totp-modal-copy-radius);
+  padding: var(--theme-totp-modal-copy-padding);
+  color: var(--theme-page-muted);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.totp-setup-modal__copy-button:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.totp-setup-modal__digit {
+  border-radius: var(--theme-totp-modal-digit-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+  background: var(--theme-input-bg);
+  color: var(--theme-input-text);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.totp-setup-modal__digit:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent-soft) 88%, transparent);
+}
+</style>

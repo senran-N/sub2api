@@ -105,13 +105,6 @@ export interface KeyUsageDateRangeOption {
 
 export const KEY_USAGE_RING_CIRCUMFERENCE = 2 * Math.PI * 68
 
-export const KEY_USAGE_RING_GRADIENTS = [
-  { from: '#14b8a6', to: '#5eead4' },
-  { from: '#6366F1', to: '#A5B4FC' },
-  { from: '#10B981', to: '#6EE7B7' },
-  { from: '#F59E0B', to: '#FCD34D' }
-] as const
-
 const DETAIL_ICON_SHIELD =
   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
 const DETAIL_ICON_CALENDAR =
@@ -255,21 +248,21 @@ export function buildKeyUsageStatusInfo(
   if (data.mode === 'quota_limited') {
     const isValid = data.isValid !== false
     const statusMap: Record<string, string> = {
-      active: 'Active',
-      quota_exhausted: 'Quota Exhausted',
-      expired: 'Expired'
+      active: t('keyUsage.statusActive'),
+      quota_exhausted: t('keyUsage.statusQuotaExhausted'),
+      expired: t('keyUsage.statusExpired')
     }
 
     return {
       label: t('keyUsage.quotaMode'),
-      statusText: statusMap[data.status ?? ''] || data.status || 'Unknown',
+      statusText: statusMap[data.status ?? ''] || data.status || t('keyUsage.statusUnknown'),
       isActive: isValid && data.status === 'active'
     }
   }
 
   return {
     label: data.planName || t('keyUsage.walletBalance'),
-    statusText: 'Active',
+    statusText: t('keyUsage.statusActive'),
     isActive: true
   }
 }
@@ -388,13 +381,13 @@ export function buildKeyUsageRingGridClass(length: number): string {
 
 function getKeyUsageColor(pct: number): string {
   if (pct > 90) {
-    return 'text-rose-500'
+    return 'theme-text-danger'
   }
   if (pct > 70) {
-    return 'text-amber-500'
+    return 'theme-text-warning'
   }
 
-  return 'text-emerald-500'
+  return 'theme-text-success'
 }
 
 export function buildKeyUsageDetailRows(
@@ -417,13 +410,13 @@ export function buildKeyUsageDetailRows(
     if (data.quota) {
       const remainColor =
         data.quota.remaining <= 0
-          ? 'text-rose-500'
+          ? 'theme-text-danger'
           : data.quota.remaining < data.quota.limit * 0.1
-            ? 'text-amber-500'
-            : 'text-emerald-500'
+            ? 'theme-text-warning'
+            : 'theme-text-success'
       rows.push({
-        iconBg: 'bg-emerald-500/10',
-        iconColor: 'text-emerald-500',
+        iconBg: 'key-usage-detail-card__icon-shell--success',
+        iconColor: 'key-usage-detail-card__icon--success',
         iconSvg: DETAIL_ICON_SHIELD,
         label: options.t('keyUsage.remainingQuota'),
         value: options.usd(data.quota.remaining),
@@ -445,8 +438,8 @@ export function buildKeyUsageDetailRows(
       }
 
       rows.push({
-        iconBg: 'bg-amber-500/10',
-        iconColor: 'text-amber-500',
+        iconBg: 'key-usage-detail-card__icon-shell--warning',
+        iconColor: 'key-usage-detail-card__icon--warning',
         iconSvg: DETAIL_ICON_CALENDAR,
         label: options.t('keyUsage.expiresAt'),
         value: expiryText,
@@ -472,8 +465,8 @@ export function buildKeyUsageDetailRows(
         }
 
         rows.push({
-          iconBg: 'bg-primary-500/10',
-          iconColor: 'text-primary-500',
+          iconBg: 'key-usage-detail-card__icon-shell--accent',
+          iconColor: 'key-usage-detail-card__icon--accent',
           iconSvg: DETAIL_ICON_DOLLAR,
           label: `${options.t('keyUsage.usedQuota')} (${windowMap[rateLimit.window] || rateLimit.window})`,
           value,
@@ -486,8 +479,8 @@ export function buildKeyUsageDetailRows(
   }
 
   rows.push({
-    iconBg: 'bg-emerald-500/10',
-    iconColor: 'text-emerald-500',
+    iconBg: 'key-usage-detail-card__icon-shell--success',
+    iconColor: 'key-usage-detail-card__icon--success',
     iconSvg: DETAIL_ICON_CHECK,
     label: options.t('keyUsage.subscriptionType'),
     value: data.planName || options.t('keyUsage.walletBalance'),
@@ -500,22 +493,22 @@ export function buildKeyUsageDetailRows(
         suffix: options.locale === 'zh' ? '日' : 'D',
         usage: data.subscription.daily_usage_usd,
         limit: data.subscription.daily_limit_usd,
-        iconBg: 'bg-primary-500/10',
-        iconColor: 'text-primary-500'
+        iconBg: 'key-usage-detail-card__icon-shell--accent',
+        iconColor: 'key-usage-detail-card__icon--accent'
       },
       {
         suffix: options.locale === 'zh' ? '周' : 'W',
         usage: data.subscription.weekly_usage_usd,
         limit: data.subscription.weekly_limit_usd,
-        iconBg: 'bg-indigo-500/10',
-        iconColor: 'text-indigo-500'
+        iconBg: 'key-usage-detail-card__icon-shell--info',
+        iconColor: 'key-usage-detail-card__icon--info'
       },
       {
         suffix: options.locale === 'zh' ? '月' : 'M',
         usage: data.subscription.monthly_usage_usd,
         limit: data.subscription.monthly_limit_usd,
-        iconBg: 'bg-emerald-500/10',
-        iconColor: 'text-emerald-500'
+        iconBg: 'key-usage-detail-card__icon-shell--success',
+        iconColor: 'key-usage-detail-card__icon--success'
       }
     ]
 
@@ -535,8 +528,8 @@ export function buildKeyUsageDetailRows(
 
     if (data.subscription.expires_at) {
       rows.push({
-        iconBg: 'bg-amber-500/10',
-        iconColor: 'text-amber-500',
+        iconBg: 'key-usage-detail-card__icon-shell--warning',
+        iconColor: 'key-usage-detail-card__icon--warning',
         iconSvg: DETAIL_ICON_CALENDAR,
         label: options.t('keyUsage.subscriptionExpires'),
         value: options.formatDate(data.subscription.expires_at),
@@ -548,15 +541,15 @@ export function buildKeyUsageDetailRows(
   const remainColor =
     data.remaining != null
       ? data.remaining <= 0
-        ? 'text-rose-500'
+        ? 'theme-text-danger'
         : data.remaining < 10
-          ? 'text-amber-500'
-          : 'text-emerald-500'
+          ? 'theme-text-warning'
+          : 'theme-text-success'
       : ''
 
   rows.push({
-    iconBg: 'bg-emerald-500/10',
-    iconColor: 'text-emerald-500',
+    iconBg: 'key-usage-detail-card__icon-shell--success',
+    iconColor: 'key-usage-detail-card__icon--success',
     iconSvg: DETAIL_ICON_SHIELD,
     label: options.t('keyUsage.remainingQuota'),
     value: data.remaining != null ? options.usd(data.remaining) : '-',

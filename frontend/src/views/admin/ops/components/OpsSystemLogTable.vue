@@ -88,12 +88,27 @@ const filterLevelOptions = [
   { value: 'error', label: 'error' }
 ]
 
+const joinClassNames = (...classNames: Array<string | false | null | undefined>) => {
+  return classNames.filter(Boolean).join(' ')
+}
+
 const levelBadgeClass = (level: string) => {
   const v = String(level || '').toLowerCase()
-  if (v === 'error' || v === 'fatal') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-  if (v === 'warn' || v === 'warning') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-  if (v === 'debug') return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-  return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+  if (v === 'error' || v === 'fatal') return 'theme-chip theme-chip--compact theme-chip--danger'
+  if (v === 'warn' || v === 'warning') return 'theme-chip theme-chip--compact theme-chip--warning'
+  if (v === 'debug') return 'theme-chip theme-chip--compact theme-chip--neutral'
+  return 'theme-chip theme-chip--compact theme-chip--info'
+}
+
+const getHealthChipClasses = (tone: 'neutral' | 'warning' | 'danger' = 'neutral') => {
+  return joinClassNames(
+    'ops-system-log-table__health-chip theme-chip theme-chip--regular inline-flex',
+    tone === 'warning'
+      ? 'theme-chip--warning'
+      : tone === 'danger'
+        ? 'theme-chip--danger'
+        : 'theme-chip--neutral'
+  )
 }
 
 const formatTime = (value: string) => {
@@ -357,54 +372,54 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900/60">
+  <section class="ops-system-log-table">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 class="text-sm font-bold text-gray-900 dark:text-white">系统日志</h3>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">默认按最新时间倒序，支持筛选搜索与按条件清理。</p>
+        <h3 class="ops-system-log-table__title text-sm font-bold">系统日志</h3>
+        <p class="ops-system-log-table__description mt-1 text-xs">默认按最新时间倒序，支持筛选搜索与按条件清理。</p>
       </div>
       <div class="flex flex-wrap items-center gap-2 text-xs">
-        <span class="rounded-md bg-gray-100 px-2 py-1 text-gray-700 dark:bg-dark-700 dark:text-gray-200">队列 {{ health.queue_depth }}/{{ health.queue_capacity }}</span>
-        <span class="rounded-md bg-gray-100 px-2 py-1 text-gray-700 dark:bg-dark-700 dark:text-gray-200">写入 {{ health.written_count }}</span>
-        <span class="rounded-md bg-amber-100 px-2 py-1 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">丢弃 {{ health.dropped_count }}</span>
-        <span class="rounded-md bg-red-100 px-2 py-1 text-red-700 dark:bg-red-900/30 dark:text-red-300">失败 {{ health.write_failed_count }}</span>
+        <span :class="getHealthChipClasses()">队列 {{ health.queue_depth }}/{{ health.queue_capacity }}</span>
+        <span :class="getHealthChipClasses()">写入 {{ health.written_count }}</span>
+        <span :class="getHealthChipClasses('warning')">丢弃 {{ health.dropped_count }}</span>
+        <span :class="getHealthChipClasses('danger')">失败 {{ health.write_failed_count }}</span>
       </div>
     </div>
 
-    <div class="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+    <div class="ops-system-log-table__runtime-panel mb-4">
       <div class="mb-2 flex items-center justify-between">
-        <div class="text-xs font-semibold text-gray-700 dark:text-gray-200">运行时日志配置（实时生效）</div>
-        <span v-if="runtimeLoading" class="text-xs text-gray-500">加载中...</span>
+        <div class="ops-system-log-table__panel-title text-xs font-semibold">运行时日志配置（实时生效）</div>
+        <span v-if="runtimeLoading" class="ops-system-log-table__description text-xs">加载中...</span>
       </div>
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <label class="text-xs text-gray-600 dark:text-gray-300">
+        <label class="ops-system-log-table__field text-xs">
           级别
           <Select v-model="runtimeConfig.level" class="mt-1" :options="runtimeLevelOptions" />
         </label>
-        <label class="text-xs text-gray-600 dark:text-gray-300">
+        <label class="ops-system-log-table__field text-xs">
           堆栈阈值
           <Select v-model="runtimeConfig.stacktrace_level" class="mt-1" :options="stacktraceLevelOptions" />
         </label>
-        <label class="text-xs text-gray-600 dark:text-gray-300">
+        <label class="ops-system-log-table__field text-xs">
           采样初始
           <input v-model.number="runtimeConfig.sampling_initial" type="number" min="1" class="input mt-1" />
         </label>
-        <label class="text-xs text-gray-600 dark:text-gray-300">
+        <label class="ops-system-log-table__field text-xs">
           采样后续
           <input v-model.number="runtimeConfig.sampling_thereafter" type="number" min="1" class="input mt-1" />
         </label>
-        <label class="text-xs text-gray-600 dark:text-gray-300">
+        <label class="ops-system-log-table__field text-xs">
           保留天数
           <input v-model.number="runtimeConfig.retention_days" type="number" min="1" max="3650" class="input mt-1" />
         </label>
         <div class="md:col-span-2 xl:col-span-6">
           <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <label class="ops-system-log-table__checkbox-row inline-flex items-center gap-2 text-xs">
                 <input v-model="runtimeConfig.caller" type="checkbox" />
                 caller
               </label>
-              <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <label class="ops-system-log-table__checkbox-row inline-flex items-center gap-2 text-xs">
                 <input v-model="runtimeConfig.enable_sampling" type="checkbox" />
                 sampling
               </label>
@@ -420,55 +435,55 @@ onMounted(async () => {
           </div>
         </div>
       </div>
-      <p v-if="health.last_error" class="mt-2 text-xs text-red-600 dark:text-red-400">最近写入错误：{{ health.last_error }}</p>
+      <p v-if="health.last_error" class="ops-system-log-table__error mt-2 text-xs">最近写入错误：{{ health.last_error }}</p>
     </div>
 
     <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-5">
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         时间范围
         <Select v-model="filters.time_range" class="mt-1" :options="timeRangeOptions" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         开始时间（可选）
         <input v-model="filters.start_time" type="datetime-local" class="input mt-1" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         结束时间（可选）
         <input v-model="filters.end_time" type="datetime-local" class="input mt-1" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         级别
         <Select v-model="filters.level" class="mt-1" :options="filterLevelOptions" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         组件
         <input v-model="filters.component" type="text" class="input mt-1" placeholder="如 http.access" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         request_id
         <input v-model="filters.request_id" type="text" class="input mt-1" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         client_request_id
         <input v-model="filters.client_request_id" type="text" class="input mt-1" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         user_id
         <input v-model="filters.user_id" type="text" class="input mt-1" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         account_id
         <input v-model="filters.account_id" type="text" class="input mt-1" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         平台
         <input v-model="filters.platform" type="text" class="input mt-1" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         模型
         <input v-model="filters.model" type="text" class="input mt-1" />
       </label>
-      <label class="text-xs text-gray-600 dark:text-gray-300">
+      <label class="ops-system-log-table__field text-xs">
         关键词
         <input v-model="filters.q" type="text" class="input mt-1" placeholder="消息/request_id" />
       </label>
@@ -481,27 +496,27 @@ onMounted(async () => {
       <button type="button" class="btn btn-secondary btn-sm" @click="fetchHealth">刷新健康指标</button>
     </div>
 
-    <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-dark-700">
-      <div v-if="loading" class="px-4 py-8 text-center text-sm text-gray-500">加载中...</div>
-      <div v-else-if="!hasData" class="px-4 py-8 text-center text-sm text-gray-500">暂无系统日志</div>
+    <div class="ops-system-log-table__table-shell overflow-hidden">
+      <div v-if="loading" class="ops-system-log-table__description ops-system-log-table__table-state text-center text-sm">加载中...</div>
+      <div v-else-if="!hasData" class="ops-system-log-table__description ops-system-log-table__table-state text-center text-sm">暂无系统日志</div>
       <div v-else class="overflow-auto">
-        <table class="w-full divide-y divide-gray-200 dark:divide-dark-700">
-          <thead class="bg-gray-50 dark:bg-dark-900">
+        <table class="ops-system-log-table__table w-full">
+          <thead class="ops-system-log-table__table-head">
             <tr>
-              <th class="whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold text-gray-500">时间</th>
-              <th class="whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold text-gray-500">级别</th>
-              <th class="w-full px-3 py-2 text-left text-[11px] font-semibold text-gray-500">日志详细信息</th>
+              <th class="ops-system-log-table__table-header whitespace-nowrap text-left">时间</th>
+              <th class="ops-system-log-table__table-header whitespace-nowrap text-left">级别</th>
+              <th class="ops-system-log-table__table-header w-full text-left">日志详细信息</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100 dark:divide-dark-800">
-            <tr v-for="row in logs" :key="row.id" class="align-top">
-              <td class="whitespace-nowrap px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{{ formatTime(row.created_at) }}</td>
-              <td class="whitespace-nowrap px-3 py-2 text-xs">
-                <span class="inline-flex rounded-full px-2 py-0.5 font-semibold" :class="levelBadgeClass(row.level)">
+          <tbody class="ops-system-log-table__table-body">
+            <tr v-for="row in logs" :key="row.id" class="ops-system-log-table__table-row align-top">
+              <td class="ops-system-log-table__table-cell ops-system-log-table__text-body whitespace-nowrap text-xs">{{ formatTime(row.created_at) }}</td>
+              <td class="ops-system-log-table__table-cell whitespace-nowrap text-xs">
+                <span :class="levelBadgeClass(row.level)">
                   {{ row.level }}
                 </span>
               </td>
-              <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-normal break-words">
+              <td class="ops-system-log-table__table-cell ops-system-log-table__text-body whitespace-normal break-words text-xs">
                 {{ formatSystemLogDetail(row) }}
               </td>
             </tr>
@@ -519,3 +534,93 @@ onMounted(async () => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.ops-system-log-table {
+  padding: var(--theme-ops-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  border-radius: var(--theme-surface-radius);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.ops-system-log-table__title,
+.ops-system-log-table__panel-title {
+  color: var(--theme-page-text);
+}
+
+.ops-system-log-table__description,
+.ops-system-log-table__field,
+.ops-system-log-table__checkbox-row {
+  color: var(--theme-page-muted);
+}
+
+.ops-system-log-table__runtime-panel {
+  padding: var(--theme-ops-panel-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  border-radius: var(--theme-select-panel-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 74%, var(--theme-surface));
+}
+
+.ops-system-log-table__checkbox-row input {
+  accent-color: var(--theme-accent);
+}
+
+.ops-system-log-table__error {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-system-log-table__table-shell {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  border-radius: var(--theme-select-panel-radius);
+  background: var(--theme-surface);
+}
+
+.ops-system-log-table__table-state {
+  padding:
+    calc(var(--theme-ops-panel-padding) * 0.75)
+    var(--theme-ops-panel-padding);
+}
+
+.ops-system-log-table__table {
+  min-width: var(--theme-ops-table-min-width);
+}
+
+.ops-system-log-table__table-head {
+  background: var(--theme-table-head-bg);
+}
+
+.ops-system-log-table__table-header {
+  padding:
+    calc(var(--theme-ops-table-cell-padding-y) * 0.8)
+    var(--theme-ops-table-cell-padding-compact-x);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+  font-size: var(--theme-table-head-font-size);
+  font-weight: 700;
+  letter-spacing: var(--theme-table-head-letter-spacing);
+  text-transform: var(--theme-table-head-text-transform);
+  color: var(--theme-table-head-text);
+}
+
+.ops-system-log-table__table-cell {
+  padding:
+    calc(var(--theme-ops-table-cell-padding-y) * 0.8)
+    var(--theme-ops-table-cell-padding-compact-x);
+}
+
+.ops-system-log-table__table-row td {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 62%, transparent);
+}
+
+.ops-system-log-table__table-body tr:first-child td {
+  border-top: none;
+}
+
+.ops-system-log-table__text-body {
+  color: color-mix(in srgb, var(--theme-page-text) 80%, var(--theme-page-muted));
+}
+
+.ops-system-log-table__health-chip {
+  border-radius: calc(var(--theme-button-radius) * 0.8);
+}
+</style>

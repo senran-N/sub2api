@@ -62,8 +62,10 @@
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import { useAppStore } from '@/stores/app'
 import type { UserSpendingRankingItem } from '@/types'
+import { readThemeCssVariable } from '@/utils/themeStyles'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
@@ -92,6 +94,7 @@ import {
 } from 'chart.js'
 
 const { t } = useI18n()
+const themeVersion = useDocumentThemeVersion()
 
 // Register Chart.js components
 ChartJS.register(
@@ -132,16 +135,15 @@ const {
   showError: appStore.showError
 })
 
-// Dark mode detection
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
-
 // Chart colors
-const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb'
-}))
+const chartColors = computed(() => {
+  void themeVersion.value
+
+  return {
+    text: readThemeCssVariable('--theme-page-text'),
+    grid: readThemeCssVariable('--theme-page-border')
+  }
+})
 
 // Line chart options (for user trend chart)
 const lineOptions = computed(() => ({

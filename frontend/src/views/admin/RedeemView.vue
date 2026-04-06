@@ -42,13 +42,13 @@
           </template>
 
           <template #cell-used_by="{ value, row }">
-            <span class="text-sm text-gray-500 dark:text-dark-400">
+            <span class="theme-text-muted text-sm">
               {{ row.user?.email || (value ? t('admin.redeem.userPrefix', { id: value }) : '-') }}
             </span>
           </template>
 
           <template #cell-used_at="{ value }">
-            <span class="text-sm text-gray-500 dark:text-dark-400">{{
+            <span class="theme-text-muted text-sm">{{
               value ? formatDateTime(value) : '-'
             }}</span>
           </template>

@@ -1,14 +1,20 @@
 import { reactive, ref } from 'vue'
 import type { Account } from '@/types'
+import {
+  calculateContextMenuPosition,
+  clampFloatingPanelPosition,
+  readThemePixelValue
+} from '@/utils/floatingPanel'
 
 interface MenuPosition {
   top: number
   left: number
 }
 
-const ACCOUNT_ACTION_MENU_WIDTH = 200
-const ACCOUNT_ACTION_MENU_HEIGHT = 240
-const ACCOUNT_ACTION_MENU_PADDING = 8
+const ACCOUNT_ACTION_MENU_WIDTH_FALLBACK = 208
+const ACCOUNT_ACTION_MENU_HEIGHT_FALLBACK = 240
+const FLOATING_PANEL_PADDING_FALLBACK = 8
+const FLOATING_PANEL_GAP_FALLBACK = 4
 
 export function useAccountsViewDialogs() {
   const showCreate = ref(false)
@@ -41,55 +47,39 @@ export function useAccountsViewDialogs() {
 
   const openMenu = (account: Account, event: MouseEvent) => {
     menu.acc = account
+    const menuWidth = readThemePixelValue('--theme-account-action-menu-width', ACCOUNT_ACTION_MENU_WIDTH_FALLBACK)
+    const menuHeight = readThemePixelValue('--theme-account-action-menu-estimated-height', ACCOUNT_ACTION_MENU_HEIGHT_FALLBACK)
+    const padding = readThemePixelValue('--theme-floating-panel-viewport-padding', FLOATING_PANEL_PADDING_FALLBACK)
+    const gap = readThemePixelValue('--theme-floating-panel-gap', FLOATING_PANEL_GAP_FALLBACK)
 
     const target = event.currentTarget as HTMLElement | null
     if (!target) {
-      menu.pos = {
-        top: event.clientY,
-        left: event.clientX - ACCOUNT_ACTION_MENU_WIDTH
-      }
+      menu.pos = clampFloatingPanelPosition(
+        {
+          top: event.clientY,
+          left: event.clientX - menuWidth
+        },
+        {
+          panelWidth: menuWidth,
+          panelHeight: menuHeight,
+          padding
+        }
+      )
       menu.show = true
       return
     }
 
-    const rect = target.getBoundingClientRect()
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-
-    let left: number
-    let top: number
-
-    if (viewportWidth < 768) {
-      left = Math.max(
-        ACCOUNT_ACTION_MENU_PADDING,
-        Math.min(
-          rect.left + rect.width / 2 - ACCOUNT_ACTION_MENU_WIDTH / 2,
-          viewportWidth - ACCOUNT_ACTION_MENU_WIDTH - ACCOUNT_ACTION_MENU_PADDING
-        )
-      )
-
-      top = rect.bottom + 4
-      if (top + ACCOUNT_ACTION_MENU_HEIGHT > viewportHeight - ACCOUNT_ACTION_MENU_PADDING) {
-        top = rect.top - ACCOUNT_ACTION_MENU_HEIGHT - 4
-        if (top < ACCOUNT_ACTION_MENU_PADDING) {
-          top = ACCOUNT_ACTION_MENU_PADDING
-        }
-      }
-    } else {
-      left = Math.max(
-        ACCOUNT_ACTION_MENU_PADDING,
-        Math.min(
-          event.clientX - ACCOUNT_ACTION_MENU_WIDTH,
-          viewportWidth - ACCOUNT_ACTION_MENU_WIDTH - ACCOUNT_ACTION_MENU_PADDING
-        )
-      )
-      top = event.clientY
-      if (top + ACCOUNT_ACTION_MENU_HEIGHT > viewportHeight - ACCOUNT_ACTION_MENU_PADDING) {
-        top = viewportHeight - ACCOUNT_ACTION_MENU_HEIGHT - ACCOUNT_ACTION_MENU_PADDING
-      }
-    }
-
-    menu.pos = { top, left }
+    menu.pos = calculateContextMenuPosition({
+      rect: target.getBoundingClientRect(),
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      panelWidth: menuWidth,
+      panelHeight: menuHeight,
+      padding,
+      gap
+    })
     menu.show = true
   }
 

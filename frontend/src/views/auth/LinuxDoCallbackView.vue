@@ -2,17 +2,17 @@
   <AuthLayout>
     <div class="space-y-6">
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="linuxdo-callback-view__title">
           {{ t('auth.linuxdo.callbackTitle') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="linuxdo-callback-view__description mt-2 text-sm">
           {{ isProcessing ? t('auth.linuxdo.callbackProcessing') : t('auth.linuxdo.callbackHint') }}
         </p>
       </div>
 
       <transition name="fade">
         <div v-if="needsInvitation" class="space-y-4">
-          <p class="text-sm text-gray-700 dark:text-gray-300">
+          <p class="linuxdo-callback-view__body text-sm">
             {{ t('auth.linuxdo.invitationRequired') }}
           </p>
           <div>
@@ -26,7 +26,7 @@
             />
           </div>
           <transition name="fade">
-            <p v-if="invitationError" class="text-sm text-red-600 dark:text-red-400">
+            <p v-if="invitationError" class="linuxdo-callback-view__error-text text-sm">
               {{ invitationError }}
             </p>
           </transition>
@@ -43,14 +43,14 @@
       <transition name="fade">
         <div
           v-if="errorMessage"
-          class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20"
+          class="linuxdo-callback-view__error-card"
         >
           <div class="flex items-start gap-3">
             <div class="flex-shrink-0">
-              <Icon name="exclamationCircle" size="md" class="text-red-500" />
+              <Icon name="exclamationCircle" size="md" class="linuxdo-callback-view__error-icon" />
             </div>
             <div class="space-y-2">
-              <p class="text-sm text-red-700 dark:text-red-400">
+              <p class="linuxdo-callback-view__error-text text-sm">
                 {{ errorMessage }}
               </p>
               <router-link to="/login" class="btn btn-primary">
@@ -72,6 +72,7 @@ import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { completeLinuxDoOAuthRegistration } from '@/api/auth'
+import { resolveErrorMessage } from '@/utils/errorMessage'
 
 const route = useRoute()
 const router = useRouter()
@@ -126,9 +127,7 @@ async function handleSubmitInvitation() {
     appStore.showSuccess(t('auth.loginSuccess'))
     await router.replace(redirectTo.value)
   } catch (e: unknown) {
-    const err = e as { message?: string; response?: { data?: { message?: string } } }
-    invitationError.value =
-      err.response?.data?.message || err.message || t('auth.linuxdo.completeRegistrationFailed')
+    invitationError.value = resolveErrorMessage(e, t('auth.linuxdo.completeRegistrationFailed'))
   } finally {
     isSubmitting.value = false
   }
@@ -189,8 +188,7 @@ onMounted(async () => {
     appStore.showSuccess(t('auth.loginSuccess'))
     await router.replace(redirect)
   } catch (e: unknown) {
-    const err = e as { message?: string; response?: { data?: { detail?: string } } }
-    errorMessage.value = err.response?.data?.detail || err.message || t('auth.loginFailed')
+    errorMessage.value = resolveErrorMessage(e, t('auth.loginFailed'))
     appStore.showError(errorMessage.value)
     isProcessing.value = false
   }
@@ -208,5 +206,32 @@ onMounted(async () => {
   opacity: 0;
   transform: translateY(-8px);
 }
-</style>
 
+.linuxdo-callback-view__title {
+  font-family: var(--theme-auth-section-title-font);
+  font-size: var(--theme-auth-section-title-size);
+  font-weight: 700;
+  letter-spacing: var(--theme-auth-section-title-letter-spacing);
+  color: var(--theme-page-text);
+}
+
+.linuxdo-callback-view__description {
+  color: var(--theme-page-muted);
+}
+
+.linuxdo-callback-view__body {
+  color: color-mix(in srgb, var(--theme-page-text) 82%, transparent);
+}
+
+.linuxdo-callback-view__error-card {
+  padding: var(--theme-auth-callback-feedback-padding);
+  border-radius: var(--theme-auth-feedback-radius);
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-danger-rgb)) 28%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+}
+
+.linuxdo-callback-view__error-icon,
+.linuxdo-callback-view__error-text {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+</style>

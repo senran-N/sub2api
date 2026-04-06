@@ -1,13 +1,13 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="redeem-history-list__header">
+      <h2 class="redeem-history-list__heading">
         {{ title }}
       </h2>
     </div>
-    <div class="p-6">
-      <div v-if="loading" class="flex items-center justify-center py-8">
-        <svg class="h-6 w-6 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+    <div class="redeem-history-list__content">
+      <div v-if="loading" class="redeem-history-list__status-state">
+        <svg class="theme-loading-spinner h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
             cx="12"
@@ -28,47 +28,47 @@
         <div
           v-for="item in history"
           :key="item.id"
-          class="flex items-center justify-between rounded-xl bg-gray-50 p-4 dark:bg-dark-800"
+          class="redeem-history-list__item"
         >
-          <div class="flex items-center gap-4">
+          <div class="redeem-history-list__item-main">
             <div
-              class="flex h-10 w-10 items-center justify-center rounded-xl"
-              :class="buildRedeemHistoryPresentation(item).iconBgClass"
+              class="redeem-history-list__icon-shell"
+              :class="getIconShellClasses(buildRedeemHistoryPresentation(item).tone)"
             >
               <Icon
                 :name="buildRedeemHistoryPresentation(item).iconName"
                 size="md"
-                :class="buildRedeemHistoryPresentation(item).iconColorClass"
+                :class="getToneClasses(buildRedeemHistoryPresentation(item).tone)"
               />
             </div>
             <div>
-              <p class="text-sm font-medium text-gray-900 dark:text-white">
+              <p class="redeem-history-list__title text-sm font-medium">
                 {{ resolveRedeemHistoryTitle(item, t) }}
               </p>
-              <p class="text-xs text-gray-500 dark:text-dark-400">
+              <p class="redeem-history-list__meta text-xs">
                 {{ formatDateTime(item.used_at) }}
               </p>
             </div>
           </div>
-          <div class="text-right">
+          <div class="redeem-history-list__item-side">
             <p
-              class="text-sm font-semibold"
-              :class="buildRedeemHistoryPresentation(item).valueColorClass"
+              class="redeem-history-list__value"
+              :class="getToneClasses(buildRedeemHistoryPresentation(item).tone)"
             >
               {{ formatRedeemHistoryValue(item, t) }}
             </p>
             <p
               v-if="!isAdminAdjustmentRedeemType(item.type)"
-              class="font-mono text-xs text-gray-400 dark:text-dark-500"
+              class="redeem-history-list__code font-mono text-xs"
             >
               {{ item.code.slice(0, 8) }}...
             </p>
-            <p v-else class="text-xs text-gray-400 dark:text-dark-500">
+            <p v-else class="redeem-history-list__code text-xs">
               {{ adminAdjustmentLabel }}
             </p>
             <p
               v-if="item.notes"
-              class="mt-1 max-w-[200px] truncate text-xs italic text-gray-500 dark:text-dark-400"
+              class="redeem-history-list__note"
               :title="item.notes"
             >
               {{ item.notes }}
@@ -77,13 +77,11 @@
         </div>
       </div>
 
-      <div v-else class="empty-state py-8">
-        <div
-          class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 dark:bg-dark-800"
-        >
-          <Icon name="clock" size="xl" class="text-gray-400 dark:text-dark-500" />
+      <div v-else class="empty-state redeem-history-list__status-state">
+        <div class="redeem-history-list__empty-icon">
+          <Icon name="clock" size="xl" class="redeem-history-list__code" />
         </div>
-        <p class="text-sm text-gray-500 dark:text-dark-400">
+        <p class="redeem-history-list__meta redeem-history-list__empty-text">
           {{ emptyLabel }}
         </p>
       </div>
@@ -112,4 +110,157 @@ defineProps<{
 }>()
 
 const { t } = useI18n()
+
+function getToneClasses(tone: 'success' | 'danger' | 'brand' | 'info' | 'warning') {
+  return [
+    'redeem-history-list__tone',
+    `redeem-history-list__tone--${tone}`
+  ]
+}
+
+function getIconShellClasses(tone: 'success' | 'danger' | 'brand' | 'info' | 'warning') {
+  return [
+    'redeem-history-list__icon-shell-surface',
+    `redeem-history-list__icon-shell-surface--${tone}`
+  ]
+}
 </script>
+
+<style scoped>
+.redeem-history-list__header {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  padding: calc(var(--theme-table-mobile-card-padding) * 1.1) calc(var(--theme-table-mobile-card-padding) * 1.5);
+}
+
+.redeem-history-list__heading {
+  color: var(--theme-page-text);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.redeem-history-list__content {
+  padding: calc(var(--theme-table-mobile-card-padding) * 1.5);
+}
+
+.redeem-history-list__status-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--theme-table-mobile-empty-padding) * 0.5) 0;
+}
+
+.redeem-history-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--theme-table-mobile-card-padding) * 0.75);
+  border-radius: calc(var(--theme-surface-radius) + 4px);
+  padding: var(--theme-table-mobile-card-padding);
+  background: color-mix(in srgb, var(--theme-surface-soft) 84%, var(--theme-surface));
+}
+
+.redeem-history-list__item-main {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-table-mobile-card-padding);
+}
+
+.redeem-history-list__item-side {
+  text-align: right;
+}
+
+.redeem-history-list__value {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.redeem-history-list__icon-shell {
+  display: flex;
+  height: calc(var(--theme-header-avatar-size) + 8px);
+  width: calc(var(--theme-header-avatar-size) + 8px);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(var(--theme-surface-radius) + 4px);
+}
+
+.redeem-history-list__title {
+  color: var(--theme-page-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.redeem-history-list__meta,
+.redeem-history-list__note {
+  color: var(--theme-page-muted);
+}
+
+.redeem-history-list__empty-text {
+  font-size: 0.875rem;
+}
+
+.redeem-history-list__code {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.redeem-history-list__note {
+  margin-top: 0.25rem;
+  max-width: min(100%, 12.5rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.redeem-history-list__empty-icon {
+  margin-bottom: calc(var(--theme-table-mobile-card-padding) * 0.75);
+  display: flex;
+  height: var(--theme-auth-logo-size);
+  width: var(--theme-auth-logo-size);
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--theme-auth-logo-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.redeem-history-list__icon-shell-surface--success {
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 12%, var(--theme-surface));
+}
+
+.redeem-history-list__icon-shell-surface--danger {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 12%, var(--theme-surface));
+}
+
+.redeem-history-list__icon-shell-surface--brand {
+  background: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 12%, var(--theme-surface));
+}
+
+.redeem-history-list__icon-shell-surface--info {
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 12%, var(--theme-surface));
+}
+
+.redeem-history-list__icon-shell-surface--warning {
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 12%, var(--theme-surface));
+}
+
+.redeem-history-list__tone--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.redeem-history-list__tone--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.redeem-history-list__tone--brand {
+  color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 84%, var(--theme-page-text));
+}
+
+.redeem-history-list__tone--info {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.redeem-history-list__tone--warning {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+</style>

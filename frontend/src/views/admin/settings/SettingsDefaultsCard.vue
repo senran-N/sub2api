@@ -1,17 +1,17 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="settings-defaults-card__header">
+      <h2 class="settings-defaults-card__title text-lg font-semibold">
         {{ t('admin.settings.defaults.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-defaults-card__description mt-1 text-sm">
         {{ t('admin.settings.defaults.description') }}
       </p>
     </div>
-    <div class="space-y-6 p-6">
+    <div class="settings-defaults-card__content space-y-6">
       <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-defaults-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.defaults.defaultBalance') }}
           </label>
           <input
@@ -22,12 +22,12 @@
             class="input"
             placeholder="0.00"
           />
-          <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <p class="settings-defaults-card__description mt-1.5 text-xs">
             {{ t('admin.settings.defaults.defaultBalanceHint') }}
           </p>
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-defaults-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.defaults.defaultConcurrency') }}
           </label>
           <input
@@ -37,19 +37,19 @@
             class="input"
             placeholder="1"
           />
-          <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <p class="settings-defaults-card__description mt-1.5 text-xs">
             {{ t('admin.settings.defaults.defaultConcurrencyHint') }}
           </p>
         </div>
       </div>
 
-      <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+      <div class="settings-defaults-card__section pt-4">
         <div class="mb-3 flex items-center justify-between">
           <div>
-            <label class="font-medium text-gray-900 dark:text-white">
+            <label class="settings-defaults-card__label font-medium">
               {{ t('admin.settings.defaults.defaultSubscriptions') }}
             </label>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="settings-defaults-card__description text-sm">
               {{ t('admin.settings.defaults.defaultSubscriptionsHint') }}
             </p>
           </div>
@@ -65,7 +65,7 @@
 
         <div
           v-if="form.default_subscriptions.length === 0"
-          class="rounded border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+          class="settings-defaults-card__empty text-sm"
         >
           {{ t('admin.settings.defaults.defaultSubscriptionsEmpty') }}
         </div>
@@ -74,10 +74,10 @@
           <div
             v-for="(item, index) in form.default_subscriptions"
             :key="`default-sub-${index}`"
-            class="grid grid-cols-1 gap-3 rounded border border-gray-200 p-3 md:grid-cols-[1fr_160px_auto] dark:border-dark-600"
+            class="settings-defaults-card__subscription-item grid grid-cols-1 gap-3 md:grid-cols-[1fr_var(--theme-settings-defaults-validity-column-width)_auto]"
           >
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              <label class="settings-defaults-card__mini-label mb-1 block text-xs font-medium">
                 {{ t('admin.settings.defaults.subscriptionGroup') }}
               </label>
               <Select
@@ -94,7 +94,7 @@
                     :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
                     :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate"
                   />
-                  <span v-else class="text-gray-400">
+                  <span v-else class="settings-defaults-card__placeholder">
                     {{ t('admin.settings.defaults.subscriptionGroup') }}
                   </span>
                 </template>
@@ -111,7 +111,7 @@
               </Select>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              <label class="settings-defaults-card__mini-label mb-1 block text-xs font-medium">
                 {{ t('admin.settings.defaults.subscriptionValidityDays') }}
               </label>
               <input
@@ -119,13 +119,13 @@
                 type="number"
                 min="1"
                 max="36500"
-                class="input h-[42px]"
+                class="input settings-defaults-card__validity-input"
               />
             </div>
             <div class="flex items-end">
               <button
                 type="button"
-                class="btn btn-secondary default-sub-delete-btn w-full text-red-600 hover:text-red-700 dark:text-red-400"
+                class="btn btn-secondary settings-defaults-card__delete-button w-full"
                 @click="$emit('remove-default-subscription', index)"
               >
                 {{ t('common.delete') }}
@@ -167,3 +167,61 @@ defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-defaults-card__header,
+.settings-defaults-card__section {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-defaults-card__header {
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-defaults-card__title,
+.settings-defaults-card__label,
+.settings-defaults-card__field-label,
+.settings-defaults-card__mini-label {
+  color: var(--theme-page-text);
+}
+
+.settings-defaults-card__header {
+  padding: var(--theme-settings-card-header-padding-y) var(--theme-settings-card-header-padding-x);
+}
+
+.settings-defaults-card__content {
+  padding: var(--theme-settings-card-body-padding);
+}
+
+.settings-defaults-card__description,
+.settings-defaults-card__empty,
+.settings-defaults-card__placeholder {
+  color: var(--theme-page-muted);
+}
+
+.settings-defaults-card__empty {
+  border-radius: var(--theme-settings-defaults-empty-radius);
+  padding: var(--theme-settings-defaults-empty-padding-y)
+    var(--theme-settings-defaults-empty-padding-x);
+  border: 1px dashed color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+}
+
+.settings-defaults-card__subscription-item {
+  border-radius: var(--theme-settings-defaults-subscription-item-radius);
+  padding: var(--theme-settings-defaults-subscription-item-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+}
+
+.settings-defaults-card__validity-input {
+  height: var(--theme-settings-defaults-validity-input-height);
+}
+
+.settings-defaults-card__delete-button {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 78%, var(--theme-page-text));
+}
+
+.settings-defaults-card__delete-button:hover {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 92%, var(--theme-page-text));
+}
+</style>

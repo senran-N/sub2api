@@ -9,7 +9,7 @@
     <span
       v-if="tierLabel"
       :class="[
-        'inline-block rounded px-1.5 py-0.5 text-[10px] font-medium',
+        'theme-chip theme-chip--compact inline-block',
         tierClass
       ]"
     >

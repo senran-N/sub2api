@@ -1,10 +1,10 @@
 <template>
   <div
-    class="mt-2 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200"
+    class="account-pending-sync-banner mt-2 flex items-center justify-between border text-sm"
   >
     <span>{{ t('admin.accounts.listPendingSyncHint') }}</span>
     <button
-      class="btn btn-secondary px-2 py-1 text-xs"
+      class="account-pending-sync-banner__action btn btn-secondary text-xs"
       @click="emit('sync')"
     >
       {{ t('admin.accounts.listPendingSyncAction') }}
@@ -21,3 +21,21 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.account-pending-sync-banner {
+  padding:
+    calc(var(--theme-scheduled-tests-result-card-padding) - 0.25rem)
+    var(--theme-scheduled-tests-result-card-padding);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  border-color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 28%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.account-pending-sync-banner__action {
+  padding:
+    var(--theme-account-usage-action-padding-y)
+    var(--theme-settings-code-padding-x);
+}
+</style>

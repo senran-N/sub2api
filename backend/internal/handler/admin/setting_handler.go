@@ -101,6 +101,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SiteName:                             settings.SiteName,
 		SiteLogo:                             settings.SiteLogo,
 		SiteSubtitle:                         settings.SiteSubtitle,
+		FrontendTheme:                        settings.FrontendTheme,
 		APIBaseURL:                           settings.APIBaseURL,
 		ContactInfo:                          settings.ContactInfo,
 		DocURL:                               settings.DocURL,
@@ -170,6 +171,7 @@ type UpdateSettingsRequest struct {
 	SiteName                    string                `json:"site_name"`
 	SiteLogo                    string                `json:"site_logo"`
 	SiteSubtitle                string                `json:"site_subtitle"`
+	FrontendTheme               string                `json:"frontend_theme"`
 	APIBaseURL                  string                `json:"api_base_url"`
 	ContactInfo                 string                `json:"contact_info"`
 	DocURL                      string                `json:"doc_url"`
@@ -356,6 +358,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 
 	// Frontend URL 验证
 	req.FrontendURL = strings.TrimSpace(req.FrontendURL)
+	req.FrontendTheme = strings.TrimSpace(req.FrontendTheme)
+	if req.FrontendTheme == "" {
+		req.FrontendTheme = previousSettings.FrontendTheme
+		if req.FrontendTheme == "" {
+			req.FrontendTheme = "factory"
+		}
+	}
 	if req.FrontendURL != "" {
 		if err := config.ValidateAbsoluteHTTPURL(req.FrontendURL); err != nil {
 			response.BadRequest(c, "Frontend URL must be an absolute http(s) URL")
@@ -559,6 +568,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SiteName:                         req.SiteName,
 		SiteLogo:                         req.SiteLogo,
 		SiteSubtitle:                     req.SiteSubtitle,
+		FrontendTheme:                    req.FrontendTheme,
 		APIBaseURL:                       req.APIBaseURL,
 		ContactInfo:                      req.ContactInfo,
 		DocURL:                           req.DocURL,
@@ -669,6 +679,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SiteName:                             updatedSettings.SiteName,
 		SiteLogo:                             updatedSettings.SiteLogo,
 		SiteSubtitle:                         updatedSettings.SiteSubtitle,
+		FrontendTheme:                        updatedSettings.FrontendTheme,
 		APIBaseURL:                           updatedSettings.APIBaseURL,
 		ContactInfo:                          updatedSettings.ContactInfo,
 		DocURL:                               updatedSettings.DocURL,
@@ -792,6 +803,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.SiteSubtitle != after.SiteSubtitle {
 		changed = append(changed, "site_subtitle")
+	}
+	if before.FrontendTheme != after.FrontendTheme {
+		changed = append(changed, "frontend_theme")
 	}
 	if before.APIBaseURL != after.APIBaseURL {
 		changed = append(changed, "api_base_url")

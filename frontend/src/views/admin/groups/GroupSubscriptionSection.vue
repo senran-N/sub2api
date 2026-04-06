@@ -12,7 +12,7 @@
 
     <div
       v-if="form.subscription_type === 'subscription'"
-      class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
+      class="group-subscription-section__limits space-y-4 border-l-2 pl-4"
     >
       <div>
         <label class="input-label">{{ t('admin.groups.subscription.dailyLimit') }}</label>
@@ -66,3 +66,9 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.group-subscription-section__limits {
+  border-left-color: color-mix(in srgb, var(--theme-accent) 28%, var(--theme-card-border));
+}
+</style>

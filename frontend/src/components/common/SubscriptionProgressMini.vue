@@ -1,23 +1,23 @@
 <template>
-  <div v-if="hasActiveSubscriptions" class="relative" ref="containerRef">
+  <div v-if="hasActiveSubscriptions" class="subscription-progress-mini relative" ref="containerRef">
     <!-- Mini Progress Display -->
     <button
       @click="toggleTooltip"
-      class="flex cursor-pointer items-center gap-2 rounded-xl bg-purple-50 px-3 py-1.5 transition-colors hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30"
+      class="subscription-progress-mini__trigger subscription-progress-mini__trigger-spacing flex cursor-pointer items-center gap-2 transition-colors"
       :title="t('subscriptionProgress.viewDetails')"
     >
-      <Icon name="creditCard" size="sm" class="text-purple-600 dark:text-purple-400" />
+      <Icon name="creditCard" size="sm" class="subscription-progress-mini__icon" />
       <div class="flex items-center gap-1.5">
         <!-- Combined progress indicator -->
         <div class="flex items-center gap-0.5">
           <div
             v-for="(sub, index) in displaySubscriptions.slice(0, 3)"
             :key="index"
-            class="h-2 w-2 rounded-full"
+            class="subscription-progress-mini__state-dot"
             :class="getProgressDotClass(sub)"
           ></div>
         </div>
-        <span class="text-xs font-medium text-purple-700 dark:text-purple-300">
+        <span class="subscription-progress-mini__count text-xs font-medium">
           {{ activeSubscriptions.length }}
         </span>
       </div>
@@ -27,30 +27,30 @@
     <transition name="dropdown">
       <div
         v-if="tooltipOpen"
-        class="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-[340px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800 sm:w-[340px]"
+        class="subscription-progress-mini__panel absolute right-0 z-50 overflow-hidden"
       >
-        <div class="border-b border-gray-100 p-3 dark:border-dark-700">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+        <div class="subscription-progress-mini__header subscription-progress-mini__header-spacing">
+          <h3 class="subscription-progress-mini__title text-sm font-semibold">
             {{ t('subscriptionProgress.title') }}
           </h3>
-          <p class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
+          <p class="subscription-progress-mini__meta mt-0.5 text-xs">
             {{ t('subscriptionProgress.activeCount', { count: activeSubscriptions.length }) }}
           </p>
         </div>
 
-        <div class="max-h-64 overflow-y-auto">
+        <div class="subscription-progress-mini__list overflow-y-auto">
           <div
             v-for="subscription in displaySubscriptions"
             :key="subscription.id"
-            class="border-b border-gray-50 p-3 last:border-b-0 dark:border-dark-700/50"
+            class="subscription-progress-mini__item subscription-progress-mini__item-spacing last:border-b-0"
           >
             <div class="mb-2 flex items-center justify-between">
-              <span class="text-sm font-medium text-gray-900 dark:text-white">
+              <span class="subscription-progress-mini__group text-sm font-medium">
                 {{ subscription.group?.name || `Group #${subscription.group_id}` }}
               </span>
               <span
                 v-if="subscription.expires_at"
-                class="text-xs"
+                class="subscription-progress-mini__expiry text-xs"
                 :class="getDaysRemainingClass(subscription.expires_at)"
               >
                 {{ formatDaysRemaining(subscription.expires_at) }}
@@ -62,10 +62,10 @@
               <!-- Unlimited subscription badge -->
               <div
                 v-if="isUnlimited(subscription)"
-                class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-2.5 py-1.5 dark:from-emerald-900/20 dark:to-teal-900/20"
+                class="subscription-progress-mini__unlimited subscription-progress-mini__unlimited-spacing flex items-center gap-2"
               >
-                <span class="text-lg text-emerald-600 dark:text-emerald-400">∞</span>
-                <span class="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                <span class="subscription-progress-mini__unlimited-symbol text-lg">∞</span>
+                <span class="subscription-progress-mini__unlimited-label text-xs font-medium">
                   {{ t('subscriptionProgress.unlimited') }}
                 </span>
               </div>
@@ -73,12 +73,12 @@
               <!-- Progress bars for limited subscriptions -->
               <template v-else>
                 <div v-if="subscription.group?.daily_limit_usd" class="flex items-center gap-2">
-                  <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
+                  <span class="subscription-progress-mini__metric-label">{{
                     t('subscriptionProgress.daily')
                   }}</span>
-                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div class="subscription-progress-mini__progress-track">
                     <div
-                      class="h-1.5 rounded-full transition-all"
+                      class="subscription-progress-mini__progress-fill transition-all"
                       :class="
                         getProgressBarClass(
                           subscription.daily_usage_usd,
@@ -93,7 +93,7 @@
                       }"
                     ></div>
                   </div>
-                  <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
+                  <span class="subscription-progress-mini__metric-value">
                     {{
                       formatUsage(subscription.daily_usage_usd, subscription.group?.daily_limit_usd)
                     }}
@@ -101,12 +101,12 @@
                 </div>
 
                 <div v-if="subscription.group?.weekly_limit_usd" class="flex items-center gap-2">
-                  <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
+                  <span class="subscription-progress-mini__metric-label">{{
                     t('subscriptionProgress.weekly')
                   }}</span>
-                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div class="subscription-progress-mini__progress-track">
                     <div
-                      class="h-1.5 rounded-full transition-all"
+                      class="subscription-progress-mini__progress-fill transition-all"
                       :class="
                         getProgressBarClass(
                           subscription.weekly_usage_usd,
@@ -121,7 +121,7 @@
                       }"
                     ></div>
                   </div>
-                  <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
+                  <span class="subscription-progress-mini__metric-value">
                     {{
                       formatUsage(subscription.weekly_usage_usd, subscription.group?.weekly_limit_usd)
                     }}
@@ -129,12 +129,12 @@
                 </div>
 
                 <div v-if="subscription.group?.monthly_limit_usd" class="flex items-center gap-2">
-                  <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
+                  <span class="subscription-progress-mini__metric-label">{{
                     t('subscriptionProgress.monthly')
                   }}</span>
-                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div class="subscription-progress-mini__progress-track">
                     <div
-                      class="h-1.5 rounded-full transition-all"
+                      class="subscription-progress-mini__progress-fill transition-all"
                       :class="
                         getProgressBarClass(
                           subscription.monthly_usage_usd,
@@ -149,7 +149,7 @@
                       }"
                     ></div>
                   </div>
-                  <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
+                  <span class="subscription-progress-mini__metric-value">
                     {{
                       formatUsage(
                         subscription.monthly_usage_usd,
@@ -163,11 +163,11 @@
           </div>
         </div>
 
-        <div class="border-t border-gray-100 p-2 dark:border-dark-700">
+        <div class="subscription-progress-mini__footer subscription-progress-mini__footer-spacing">
           <router-link
             to="/subscriptions"
             @click="closeTooltip"
-            class="block w-full py-1 text-center text-xs text-primary-600 hover:underline dark:text-primary-400"
+            class="subscription-progress-mini__footer-link subscription-progress-mini__footer-link-spacing block w-full text-center text-xs"
           >
             {{ t('subscriptionProgress.viewAll') }}
           </router-link>
@@ -229,20 +229,20 @@ function isUnlimited(sub: UserSubscription): boolean {
 function getProgressDotClass(sub: UserSubscription): string {
   // Unlimited subscriptions get a special color
   if (isUnlimited(sub)) {
-    return 'bg-emerald-500'
+    return 'subscription-progress-mini__state-dot--unlimited'
   }
   const maxPercentage = getMaxUsagePercentage(sub)
-  if (maxPercentage >= 90) return 'bg-red-500'
-  if (maxPercentage >= 70) return 'bg-orange-500'
-  return 'bg-green-500'
+  if (maxPercentage >= 90) return 'subscription-progress-mini__state-dot--critical'
+  if (maxPercentage >= 70) return 'subscription-progress-mini__state-dot--warning'
+  return 'subscription-progress-mini__state-dot--healthy'
 }
 
 function getProgressBarClass(used: number | undefined, limit: number | null | undefined): string {
-  if (!limit || limit === 0) return 'bg-gray-400'
+  if (!limit || limit === 0) return 'subscription-progress-mini__progress-fill--muted'
   const percentage = ((used || 0) / limit) * 100
-  if (percentage >= 90) return 'bg-red-500'
-  if (percentage >= 70) return 'bg-orange-500'
-  return 'bg-green-500'
+  if (percentage >= 90) return 'subscription-progress-mini__progress-fill--critical'
+  if (percentage >= 70) return 'subscription-progress-mini__progress-fill--warning'
+  return 'subscription-progress-mini__progress-fill--healthy'
 }
 
 function getProgressWidth(used: number | undefined, limit: number | null | undefined): string {
@@ -273,9 +273,9 @@ function getDaysRemainingClass(expiresAt: string): string {
   const expires = new Date(expiresAt)
   const diff = expires.getTime() - now.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  if (days <= 3) return 'text-red-600 dark:text-red-400'
-  if (days <= 7) return 'text-orange-600 dark:text-orange-400'
-  return 'text-gray-500 dark:text-dark-400'
+  if (days <= 3) return 'subscription-progress-mini__expiry--critical'
+  if (days <= 7) return 'subscription-progress-mini__expiry--warning'
+  return 'subscription-progress-mini__expiry--normal'
 }
 
 function toggleTooltip() {
@@ -316,5 +316,176 @@ onBeforeUnmount(() => {
 .dropdown-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(-4px);
+}
+
+.subscription-progress-mini {
+  --subscription-progress-mini-danger-rgb: var(--theme-danger-rgb);
+  --subscription-progress-mini-warning-rgb: var(--theme-warning-rgb);
+  --subscription-progress-mini-success-rgb: var(--theme-success-rgb);
+}
+
+.subscription-progress-mini__trigger,
+.subscription-progress-mini__panel,
+.subscription-progress-mini__unlimited,
+.subscription-progress-mini__footer-link {
+  border-radius: var(--theme-subscription-panel-radius);
+}
+
+.subscription-progress-mini__trigger {
+  background: color-mix(in srgb, var(--theme-accent-soft) 74%, var(--theme-surface));
+}
+
+.subscription-progress-mini__trigger-spacing {
+  padding: var(--theme-subscription-mini-trigger-padding-y)
+    var(--theme-subscription-mini-trigger-padding-x);
+}
+
+.subscription-progress-mini__trigger:hover {
+  background: color-mix(in srgb, var(--theme-accent-soft) 92%, var(--theme-surface));
+}
+
+.subscription-progress-mini__icon,
+.subscription-progress-mini__count {
+  color: var(--theme-accent);
+}
+
+.subscription-progress-mini__panel {
+  margin-top: var(--theme-subscription-mini-panel-offset);
+  width: min(calc(100vw - 2rem), var(--theme-subscription-panel-width));
+  border: 1px solid var(--theme-dropdown-border);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.subscription-progress-mini__header,
+.subscription-progress-mini__footer {
+  border-color: var(--theme-page-border);
+}
+
+.subscription-progress-mini__header {
+  border-bottom: 1px solid var(--theme-page-border);
+}
+
+.subscription-progress-mini__header-spacing {
+  padding: var(--theme-subscription-mini-header-padding);
+}
+
+.subscription-progress-mini__footer {
+  border-top: 1px solid var(--theme-page-border);
+}
+
+.subscription-progress-mini__title,
+.subscription-progress-mini__group {
+  color: var(--theme-page-text);
+}
+
+.subscription-progress-mini__meta,
+.subscription-progress-mini__metric-label,
+.subscription-progress-mini__metric-value,
+.subscription-progress-mini__expiry--normal {
+  color: var(--theme-page-muted);
+}
+
+.subscription-progress-mini__item {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-page-border) 66%, transparent);
+}
+
+.subscription-progress-mini__item-spacing {
+  padding: var(--theme-subscription-mini-item-padding);
+}
+
+.subscription-progress-mini__unlimited {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, rgb(var(--subscription-progress-mini-success-rgb)) 12%, var(--theme-surface)),
+      color-mix(in srgb, rgb(var(--subscription-progress-mini-success-rgb)) 7%, var(--theme-surface-soft))
+    );
+}
+
+.subscription-progress-mini__unlimited-spacing {
+  padding: var(--theme-subscription-mini-unlimited-padding-y)
+    var(--theme-subscription-mini-unlimited-padding-x);
+}
+
+.subscription-progress-mini__unlimited-symbol,
+.subscription-progress-mini__unlimited-label {
+  color: rgb(var(--subscription-progress-mini-success-rgb));
+}
+
+.subscription-progress-mini__progress-track {
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--theme-subscription-mini-progress-height);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-page-border) 84%, transparent);
+}
+
+.subscription-progress-mini__progress-fill {
+  height: var(--theme-subscription-mini-progress-height);
+  border-radius: 999px;
+}
+
+.subscription-progress-mini__state-dot {
+  width: var(--theme-subscription-mini-dot-size);
+  height: var(--theme-subscription-mini-dot-size);
+  border-radius: 999px;
+}
+
+.subscription-progress-mini__list {
+  max-height: var(--theme-subscription-mini-list-max-height);
+}
+
+.subscription-progress-mini__metric-label {
+  width: var(--theme-subscription-mini-label-width);
+  flex-shrink: 0;
+  font-size: var(--theme-subscription-mini-metric-font-size);
+}
+
+.subscription-progress-mini__metric-value {
+  width: var(--theme-subscription-mini-value-width);
+  flex-shrink: 0;
+  text-align: right;
+  font-size: var(--theme-subscription-mini-metric-font-size);
+}
+
+.subscription-progress-mini__progress-fill--muted {
+  background: color-mix(in srgb, var(--theme-page-muted) 60%, transparent);
+}
+
+.subscription-progress-mini__state-dot--critical,
+.subscription-progress-mini__progress-fill--critical,
+.subscription-progress-mini__expiry--critical {
+  color: rgb(var(--subscription-progress-mini-danger-rgb));
+  background: rgb(var(--subscription-progress-mini-danger-rgb));
+}
+
+.subscription-progress-mini__state-dot--warning,
+.subscription-progress-mini__progress-fill--warning,
+.subscription-progress-mini__expiry--warning {
+  color: rgb(var(--subscription-progress-mini-warning-rgb));
+  background: rgb(var(--subscription-progress-mini-warning-rgb));
+}
+
+.subscription-progress-mini__state-dot--healthy,
+.subscription-progress-mini__progress-fill--healthy,
+.subscription-progress-mini__state-dot--unlimited {
+  background: rgb(var(--subscription-progress-mini-success-rgb));
+}
+
+.subscription-progress-mini__footer-link {
+  color: var(--theme-accent);
+}
+
+.subscription-progress-mini__footer-spacing {
+  padding: var(--theme-subscription-mini-footer-padding);
+}
+
+.subscription-progress-mini__footer-link-spacing {
+  padding-block: var(--theme-subscription-mini-footer-link-padding-y);
+}
+
+.subscription-progress-mini__footer-link:hover {
+  background: var(--theme-dropdown-item-hover-bg);
 }
 </style>

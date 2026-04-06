@@ -1,18 +1,15 @@
 <template>
   <div class="flex items-center gap-2">
-    <!-- Rate Limit Display (429) - Two-line layout -->
     <div v-if="isRateLimited" class="flex flex-col items-center gap-1">
       <span class="badge text-xs badge-warning">{{ t('admin.accounts.status.rateLimited') }}</span>
-      <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ rateLimitResumeText }}</span>
+      <span class="account-status-indicator__countdown text-[11px]">{{ rateLimitResumeText }}</span>
     </div>
 
-    <!-- Overload Display (529) - Two-line layout -->
     <div v-else-if="isOverloaded" class="flex flex-col items-center gap-1">
       <span class="badge text-xs badge-danger">{{ t('admin.accounts.status.overloaded') }}</span>
-      <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ overloadCountdown }}</span>
+      <span class="account-status-indicator__countdown text-[11px]">{{ overloadCountdown }}</span>
     </div>
 
-    <!-- Main Status Badge (shown when not rate limited/overloaded) -->
     <template v-else>
       <button
         v-if="isTempUnschedulable"
@@ -28,10 +25,9 @@
       </span>
     </template>
 
-    <!-- Error Info Indicator -->
     <div v-if="hasError && account.error_message" class="group/error relative">
       <svg
-        class="h-4 w-4 cursor-help text-red-500 transition-colors hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+        class="account-status-indicator__error-icon h-4 w-4 cursor-help transition-colors"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -43,40 +39,33 @@
           d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"
         />
       </svg>
-      <!-- Tooltip - 向下显示 -->
       <div
-        class="invisible absolute left-0 top-full z-[100] mt-1.5 min-w-[200px] max-w-[300px] rounded-lg bg-gray-800 px-3 py-2 text-xs text-white opacity-0 shadow-xl transition-all duration-200 group-hover/error:visible group-hover/error:opacity-100 dark:bg-gray-900"
+        class="account-status-indicator__tooltip invisible absolute left-0 top-full z-[100] text-xs opacity-0 shadow-xl transition-all duration-200 group-hover/error:visible group-hover/error:opacity-100"
       >
-        <div class="whitespace-pre-wrap break-words leading-relaxed text-gray-300">
+        <div class="account-status-indicator__tooltip-body whitespace-pre-wrap break-words leading-relaxed">
           {{ account.error_message }}
         </div>
-        <!-- 上方小三角 -->
         <div
-          class="absolute bottom-full left-3 border-[6px] border-transparent border-b-gray-800 dark:border-b-gray-900"
+          class="account-status-indicator__tooltip-arrow absolute bottom-full left-3 border-[6px] border-transparent"
         ></div>
       </div>
     </div>
 
-    <!-- Rate Limit Indicator (429) -->
     <div v-if="isRateLimited" class="group relative">
-      <span
-        class="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-      >
+      <span :class="getSmallIndicatorClass('warning')">
         <Icon name="exclamationTriangle" size="xs" :stroke-width="2" />
         429
       </span>
-      <!-- Tooltip -->
       <div
-        class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 whitespace-normal rounded bg-gray-900 px-3 py-2 text-center text-xs leading-relaxed text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+        class="account-status-indicator__floating-tooltip pointer-events-none absolute bottom-full left-1/2 z-50 -translate-x-1/2 whitespace-normal text-center text-xs leading-relaxed opacity-0 transition-opacity group-hover:opacity-100"
       >
         {{ t('admin.accounts.status.rateLimitedUntil', { time: formatDateTime(account.rate_limit_reset_at) }) }}
         <div
-          class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"
+          class="account-status-indicator__floating-tooltip-arrow absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent"
         ></div>
       </div>
     </div>
 
-    <!-- Model Status Indicators (普通限流 / 超量请求中) -->
     <div
       v-if="activeModelStatuses.length > 0"
       :class="[
@@ -88,36 +77,32 @@
       ]"
     >
       <div v-for="item in activeModelStatuses" :key="`${item.kind}-${item.model}`" class="group relative mb-1 break-inside-avoid">
-        <!-- 积分已用尽 -->
         <span
           v-if="item.kind === 'credits_exhausted'"
-          class="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
+          :class="getSmallIndicatorClass('danger')"
         >
           <Icon name="exclamationTriangle" size="xs" :stroke-width="2" />
           {{ t('admin.accounts.status.creditsExhausted') }}
-          <span class="text-[10px] opacity-70">{{ formatModelResetTime(item.reset_at) }}</span>
+          <span class="account-status-indicator__indicator-meta">{{ formatModelResetTime(item.reset_at) }}</span>
         </span>
-        <!-- 正在走积分（模型限流但积分可用）-->
         <span
           v-else-if="item.kind === 'credits_active'"
-          class="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+          :class="getSmallIndicatorClass('warning')"
         >
           <span>⚡</span>
           {{ formatScopeName(item.model) }}
-          <span class="text-[10px] opacity-70">{{ formatModelResetTime(item.reset_at) }}</span>
+          <span class="account-status-indicator__indicator-meta">{{ formatModelResetTime(item.reset_at) }}</span>
         </span>
-        <!-- 普通模型限流 -->
         <span
           v-else
-          class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+          :class="getSmallIndicatorClass('brand')"
         >
           <Icon name="exclamationTriangle" size="xs" :stroke-width="2" />
           {{ formatScopeName(item.model) }}
-          <span class="text-[10px] opacity-70">{{ formatModelResetTime(item.reset_at) }}</span>
+          <span class="account-status-indicator__indicator-meta">{{ formatModelResetTime(item.reset_at) }}</span>
         </span>
-        <!-- Tooltip -->
         <div
-          class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 whitespace-normal rounded bg-gray-900 px-3 py-2 text-center text-xs leading-relaxed text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+          class="account-status-indicator__floating-tooltip pointer-events-none absolute bottom-full left-1/2 z-50 -translate-x-1/2 whitespace-normal text-center text-xs leading-relaxed opacity-0 transition-opacity group-hover:opacity-100"
         >
           {{
             item.kind === 'credits_exhausted'
@@ -127,27 +112,23 @@
                 : t('admin.accounts.status.modelRateLimitedUntil', { model: formatScopeName(item.model), time: formatTime(item.reset_at) })
           }}
           <div
-            class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"
+            class="account-status-indicator__floating-tooltip-arrow absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent"
           ></div>
         </div>
       </div>
     </div>
 
-    <!-- Overload Indicator (529) -->
     <div v-if="isOverloaded" class="group relative">
-      <span
-        class="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
-      >
+      <span :class="getSmallIndicatorClass('danger')">
         <Icon name="exclamationTriangle" size="xs" :stroke-width="2" />
         529
       </span>
-      <!-- Tooltip -->
       <div
-        class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 whitespace-normal rounded bg-gray-900 px-3 py-2 text-center text-xs leading-relaxed text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+        class="account-status-indicator__floating-tooltip pointer-events-none absolute bottom-full left-1/2 z-50 -translate-x-1/2 whitespace-normal text-center text-xs leading-relaxed opacity-0 transition-opacity group-hover:opacity-100"
       >
         {{ t('admin.accounts.status.overloadedUntil', { time: formatTime(account.overload_until) }) }}
         <div
-          class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"
+          class="account-status-indicator__floating-tooltip-arrow absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent"
         ></div>
       </div>
     </div>
@@ -170,6 +151,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'show-temp-unsched', account: Account): void
 }>()
+
+type IndicatorTone = 'warning' | 'danger' | 'brand'
 
 // Computed: is rate limited (429)
 const isRateLimited = computed(() => {
@@ -340,4 +323,80 @@ const handleTempUnschedClick = () => {
   if (!isTempUnschedulable.value) return
   emit('show-temp-unsched', props.account)
 }
+
+const getSmallIndicatorClass = (tone: IndicatorTone) => [
+  'theme-chip',
+  'theme-chip--compact',
+  'account-status-indicator__small-indicator',
+  `account-status-indicator__small-indicator--${tone}`
+]
 </script>
+
+<style scoped>
+.account-status-indicator__countdown,
+.account-status-indicator__indicator-meta {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, var(--theme-surface));
+}
+
+.account-status-indicator__indicator-meta {
+  font-size: var(--theme-account-status-meta-font-size);
+}
+
+.account-status-indicator__error-icon {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 78%, var(--theme-page-text));
+}
+
+.account-status-indicator__error-icon:hover {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 92%, var(--theme-page-text));
+}
+
+.account-status-indicator__tooltip,
+.account-status-indicator__floating-tooltip {
+  border-radius: var(--theme-account-status-tooltip-radius);
+  padding: var(--theme-account-status-tooltip-padding-y)
+    var(--theme-account-status-tooltip-padding-x);
+  background: color-mix(in srgb, var(--theme-surface-contrast) 94%, var(--theme-surface));
+  color: var(--theme-surface-contrast-text);
+}
+
+.account-status-indicator__tooltip {
+  margin-top: var(--theme-account-status-tooltip-margin-top);
+  min-width: var(--theme-account-status-tooltip-min-width);
+  max-width: var(--theme-account-status-tooltip-max-width);
+}
+
+.account-status-indicator__floating-tooltip {
+  margin-bottom: var(--theme-account-status-tooltip-offset);
+  width: var(--theme-account-status-tooltip-width);
+}
+
+.account-status-indicator__tooltip-body {
+  color: color-mix(in srgb, var(--theme-surface-contrast-text) 70%, transparent);
+}
+
+.account-status-indicator__tooltip-arrow {
+  border-bottom-color: color-mix(in srgb, var(--theme-surface-contrast) 94%, var(--theme-surface));
+}
+
+.account-status-indicator__floating-tooltip-arrow {
+  border-top-color: color-mix(in srgb, var(--theme-surface-contrast) 94%, var(--theme-surface));
+}
+
+.account-status-indicator__small-indicator--warning {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 18%, var(--theme-card-border));
+}
+
+.account-status-indicator__small-indicator--danger {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 18%, var(--theme-card-border));
+}
+
+.account-status-indicator__small-indicator--brand {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 18%, var(--theme-card-border));
+}
+</style>

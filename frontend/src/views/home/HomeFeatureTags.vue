@@ -3,10 +3,10 @@
     <div
       v-for="tag in tags"
       :key="tag.key"
-      class="inline-flex items-center gap-2.5 rounded-full border border-gray-200/50 bg-white/80 px-5 py-2.5 shadow-sm backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/80"
+      class="home-feature-tags__tag inline-flex items-center gap-2.5 rounded-full shadow-sm backdrop-blur-sm"
     >
-      <Icon :name="tag.icon" size="sm" class="text-primary-500" />
-      <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ tag.label }}</span>
+      <Icon :name="tag.icon" size="sm" class="home-feature-tags__icon" />
+      <span class="home-feature-tags__label text-sm font-medium">{{ tag.label }}</span>
     </div>
   </div>
 </template>
@@ -19,3 +19,21 @@ defineProps<{
   tags: HomeFeatureTag[]
 }>()
 </script>
+
+<style scoped>
+.home-feature-tags__tag {
+  padding:
+    calc(var(--theme-markdown-block-padding) - 0.375rem)
+    calc(var(--theme-markdown-block-padding) + 0.25rem);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 48%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 82%, transparent);
+}
+
+.home-feature-tags__icon {
+  color: var(--theme-accent);
+}
+
+.home-feature-tags__label {
+  color: color-mix(in srgb, var(--theme-page-text) 82%, transparent);
+}
+</style>

@@ -11,7 +11,7 @@
 
     <div class="relative" ref="columnDropdownRef">
       <button
-        class="btn btn-secondary px-2 md:px-3"
+        class="subscription-toolbar-actions__trigger btn btn-secondary"
         :title="t('admin.users.columnSettings')"
         @click="toggleColumnDropdown"
       >
@@ -93,3 +93,15 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
 </script>
+
+<style scoped>
+.subscription-toolbar-actions__trigger {
+  padding-inline: var(--theme-settings-code-padding-x);
+}
+
+@media (min-width: 768px) {
+  .subscription-toolbar-actions__trigger {
+    padding-inline: var(--theme-settings-action-padding-x);
+  }
+}
+</style>

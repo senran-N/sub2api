@@ -1,16 +1,16 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="card-header">
+      <h2 class="settings-claude-code-card__title text-lg font-semibold">
         {{ t('admin.settings.claudeCode.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-claude-code-card__description mt-1 text-sm">
         {{ t('admin.settings.claudeCode.description') }}
       </p>
     </div>
-    <div class="p-6">
+    <div class="settings-claude-code-card__body">
       <div>
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-claude-code-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.claudeCode.minVersion') }}
         </label>
         <input
@@ -19,12 +19,12 @@
           class="input max-w-xs font-mono text-sm"
           :placeholder="t('admin.settings.claudeCode.minVersionPlaceholder')"
         />
-        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p class="settings-claude-code-card__description mt-1.5 text-xs">
           {{ t('admin.settings.claudeCode.minVersionHint') }}
         </p>
       </div>
       <div class="mt-4">
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-claude-code-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.claudeCode.maxVersion') }}
         </label>
         <input
@@ -33,7 +33,7 @@
           class="input max-w-xs font-mono text-sm"
           :placeholder="t('admin.settings.claudeCode.maxVersionPlaceholder')"
         />
-        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p class="settings-claude-code-card__description mt-1.5 text-xs">
           {{ t('admin.settings.claudeCode.maxVersionHint') }}
         </p>
       </div>
@@ -51,3 +51,21 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-claude-code-card__title,
+.settings-claude-code-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-claude-code-card__description {
+  color: var(--theme-page-muted);
+}
+
+.settings-claude-code-card__body {
+  padding: var(--theme-settings-card-panel-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-settings-card-body-padding);
+}
+</style>

@@ -1,8 +1,7 @@
 <template>
-  <header class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50 safe-top">
-    <div class="flex h-16 items-center justify-between px-4 md:px-6">
-      <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex items-center gap-4">
+  <header class="app-header safe-top">
+    <div class="app-header__inner">
+      <div class="app-header__left">
         <button
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden"
@@ -11,52 +10,41 @@
           <Icon name="menu" size="md" />
         </button>
 
-        <div class="hidden lg:block">
-          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
-            {{ pageTitle }}
-          </h1>
-          <p v-if="pageDescription" class="text-xs text-gray-500 dark:text-dark-400">
+        <div class="app-header__titles hidden lg:block">
+          <h1 class="app-header__title">{{ pageTitle }}</h1>
+          <p v-if="pageDescription" class="app-header__description">
             {{ pageDescription }}
           </p>
         </div>
-        <!-- Mobile page title: truncated single line -->
-        <h1 class="max-w-[150px] truncate text-sm font-semibold text-gray-900 dark:text-white sm:max-w-[250px] lg:hidden">
+
+        <h1 class="app-header__title-mobile lg:hidden">
           {{ pageTitle }}
         </h1>
       </div>
 
-      <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
-      <div class="flex items-center gap-1 sm:gap-1.5 md:gap-3">
-        <!-- Announcement Bell -->
+      <div class="app-header__right">
         <AnnouncementBell v-if="user" />
 
-        <!-- Docs Link -->
         <a
           v-if="docUrl"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="hidden md:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+          class="app-header__docs-link hidden md:flex"
         >
           <Icon name="book" size="sm" />
           <span class="hidden lg:inline">{{ t('nav.docs') }}</span>
         </a>
 
-        <!-- Language Switcher -->
         <LocaleSwitcher />
 
-        <!-- Subscription Progress (for users with active subscriptions) -->
         <div class="hidden md:block">
           <SubscriptionProgressMini v-if="user" />
         </div>
 
-        <!-- Balance Display -->
-        <div
-          v-if="user"
-          class="hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
-        >
+        <div v-if="user" class="app-header__balance hidden sm:flex">
           <svg
-            class="h-4 w-4 text-primary-600 dark:text-primary-400"
+            class="app-header__balance-icon"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -68,62 +56,48 @@
               d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"
             />
           </svg>
-          <span class="text-sm font-semibold text-primary-700 dark:text-primary-300">
+          <span class="app-header__balance-text">
             ${{ user.balance?.toFixed(2) || '0.00' }}
           </span>
         </div>
 
-        <!-- User Dropdown -->
         <div v-if="user" class="relative" ref="dropdownRef">
           <button
             @click="toggleDropdown"
-            class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
+            class="app-header__profile-button"
             aria-label="User Menu"
           >
-            <div
-              class="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm"
-            >
+            <div class="app-header__avatar">
               {{ userInitials }}
             </div>
             <div class="hidden text-left lg:block">
-              <div class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ displayName }}
-              </div>
-              <div class="text-xs capitalize text-gray-500 dark:text-dark-400">
-                {{ user.role }}
-              </div>
+              <div class="app-header__profile-name">{{ displayName }}</div>
+              <div class="app-header__profile-role">{{ user.role }}</div>
             </div>
-            <Icon name="chevronDown" size="sm" class="hidden text-gray-400 lg:block" />
+            <Icon name="chevronDown" size="sm" class="app-header__chevron hidden lg:block" />
           </button>
 
-          <!-- Dropdown Menu -->
           <transition name="dropdown">
-            <div v-if="dropdownOpen" class="dropdown right-0 mt-2 w-56">
-              <!-- User Info -->
-              <div class="border-b border-gray-100 px-4 py-3 dark:border-dark-700">
-                <div class="text-sm font-medium text-gray-900 dark:text-white">
-                  {{ displayName }}
-                </div>
-                <div class="text-xs text-gray-500 dark:text-dark-400">{{ user.email }}</div>
+            <div v-if="dropdownOpen" class="app-header__dropdown dropdown right-0 mt-2">
+              <div class="app-header__dropdown-section app-header__dropdown-section--header">
+                <div class="app-header__dropdown-name">{{ displayName }}</div>
+                <div class="app-header__dropdown-email">{{ user.email }}</div>
               </div>
 
-              <!-- Balance (mobile only) -->
-              <div class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
-                <div class="text-xs text-gray-500 dark:text-dark-400">
+              <div class="app-header__dropdown-section app-header__dropdown-section--compact sm:hidden">
+                <div class="app-header__dropdown-label">
                   {{ t('common.balance') }}
                 </div>
-                <div class="text-sm font-semibold text-primary-600 dark:text-primary-400">
+                <div class="app-header__dropdown-balance">
                   ${{ user.balance?.toFixed(2) || '0.00' }}
                 </div>
               </div>
 
-              <!-- Subscription Progress (mobile/tablet only — hidden in header at md+) -->
-              <div class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 md:hidden">
+              <div class="app-header__dropdown-section app-header__dropdown-section--compact md:hidden">
                 <SubscriptionProgressMini v-if="user" />
               </div>
 
-              <div class="py-1">
-                <!-- Docs Link (mobile/tablet only — hidden in header at md+) -->
+              <div class="app-header__dropdown-list">
                 <a
                   v-if="docUrl"
                   :href="docUrl"
@@ -163,15 +137,13 @@
                   </svg>
                   {{ t('nav.github') }}
                 </a>
-
               </div>
 
-              <!-- Contact Support (only show if configured) -->
               <div
                 v-if="contactInfo"
-                class="border-t border-gray-100 px-4 py-2.5 dark:border-dark-700"
+                class="app-header__dropdown-section app-header__dropdown-section--top app-header__dropdown-section--regular"
               >
-                <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <div class="app-header__contact">
                   <svg
                     class="h-3.5 w-3.5 flex-shrink-0"
                     fill="none"
@@ -186,13 +158,14 @@
                     />
                   </svg>
                   <span>{{ t('common.contactSupport') }}:</span>
-                  <span class="font-medium text-gray-700 dark:text-gray-300">{{
-                    contactInfo
-                  }}</span>
+                  <span class="app-header__contact-value">{{ contactInfo }}</span>
                 </div>
               </div>
 
-              <div v-if="showOnboardingButton" class="border-t border-gray-100 py-1 dark:border-dark-700">
+              <div
+                v-if="showOnboardingButton"
+                class="app-header__dropdown-section app-header__dropdown-section--top app-header__dropdown-section--stack"
+              >
                 <button @click="handleReplayGuide" class="dropdown-item w-full">
                   <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                     <path
@@ -203,10 +176,10 @@
                 </button>
               </div>
 
-              <div class="border-t border-gray-100 py-1 dark:border-dark-700">
+              <div class="app-header__dropdown-section app-header__dropdown-section--top app-header__dropdown-section--stack">
                 <button
                   @click="handleLogout"
-                  class="dropdown-item w-full text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                  class="app-header__logout-item dropdown-item w-full"
                 >
                   <svg
                     class="h-4 w-4"
@@ -358,5 +331,61 @@ onBeforeUnmount(() => {
 .dropdown-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(-4px);
+}
+
+.app-header__chevron {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.app-header__dropdown {
+  width: var(--theme-header-dropdown-width);
+}
+
+.app-header__dropdown-list {
+  padding: var(--theme-header-dropdown-list-padding);
+}
+
+.app-header__dropdown-section {
+  padding-left: var(--theme-header-dropdown-section-padding-x);
+  padding-right: var(--theme-header-dropdown-section-padding-x);
+  border-bottom: 1px solid var(--theme-page-border);
+}
+
+.app-header__dropdown-section--header {
+  padding-top: var(--theme-header-dropdown-section-padding-y-md);
+  padding-bottom: var(--theme-header-dropdown-section-padding-y-md);
+}
+
+.app-header__dropdown-section--compact {
+  padding-top: var(--theme-header-dropdown-section-padding-y-sm);
+  padding-bottom: var(--theme-header-dropdown-section-padding-y-sm);
+}
+
+.app-header__dropdown-section--regular {
+  padding-top: var(--theme-header-dropdown-section-padding-y-lg);
+  padding-bottom: var(--theme-header-dropdown-section-padding-y-lg);
+}
+
+.app-header__dropdown-section--stack {
+  padding-top: var(--theme-header-dropdown-section-padding-y-xs);
+  padding-bottom: var(--theme-header-dropdown-section-padding-y-xs);
+}
+
+.app-header__dropdown-section--top {
+  border-top: 1px solid var(--theme-page-border);
+  border-bottom: 0;
+}
+
+.app-header__dropdown-section--header:last-child {
+  border-bottom: 0;
+}
+
+.app-header__logout-item {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.app-header__logout-item:hover {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-dropdown-item-hover-bg));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 92%, var(--theme-page-text));
 }
 </style>

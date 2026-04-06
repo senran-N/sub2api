@@ -2,7 +2,7 @@
   <div class="flex flex-wrap items-center justify-end gap-2">
     <div class="flex items-center gap-2 md:contents">
       <button
-        class="btn btn-secondary px-2 md:px-3"
+        class="btn btn-secondary user-toolbar-actions__button-padding"
         :disabled="loading"
         :title="t('common.refresh')"
         @click="emit('refresh')"
@@ -12,7 +12,7 @@
 
       <div class="relative" ref="filterDropdownRef">
         <button
-          class="btn btn-secondary px-2 md:px-3"
+          class="btn btn-secondary user-toolbar-actions__button-padding"
           :title="t('admin.users.filterSettings')"
           @click="toggleFilterDropdown"
         >
@@ -31,7 +31,7 @@
 
       <div class="relative" ref="columnDropdownRef">
         <button
-          class="btn btn-secondary px-2 md:px-3"
+          class="btn btn-secondary user-toolbar-actions__button-padding"
           :title="t('admin.users.columnSettings')"
           @click="toggleColumnDropdown"
         >
@@ -47,7 +47,7 @@
       </div>
 
       <button
-        class="btn btn-secondary px-2 md:px-3"
+        class="btn btn-secondary user-toolbar-actions__button-padding"
         :title="t('admin.users.attributes.configButton')"
         @click="emit('open-attributes')"
       >
@@ -126,3 +126,15 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
 </script>
+
+<style scoped>
+.user-toolbar-actions__button-padding {
+  padding-inline: var(--theme-user-toolbar-action-padding-x-compact);
+}
+
+@media (min-width: 768px) {
+  .user-toolbar-actions__button-padding {
+    padding-inline: var(--theme-user-toolbar-action-padding-x);
+  }
+}
+</style>

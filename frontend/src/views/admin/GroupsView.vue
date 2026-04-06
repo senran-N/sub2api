@@ -29,7 +29,7 @@
       <template #table>
         <DataTable :columns="columns" :data="groups" :loading="loading">
           <template #cell-name="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+            <span class="theme-text-strong font-medium">{{ value }}</span>
           </template>
 
           <template #cell-platform="{ value }">

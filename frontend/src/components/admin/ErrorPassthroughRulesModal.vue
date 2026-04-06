@@ -5,10 +5,10 @@
     width="extra-wide"
     @close="$emit('close')"
   >
-    <div class="space-y-4">
+    <div class="error-passthrough-rules-modal__content">
       <!-- Header -->
       <div class="flex items-center justify-between">
-        <p class="text-sm text-gray-500 dark:text-gray-400">
+        <p class="error-passthrough-rules-modal__subtitle text-sm">
           {{ t('admin.errorPassthrough.description') }}
         </p>
         <button @click="showCreateModal = true" class="btn btn-primary btn-sm">
@@ -18,121 +18,121 @@
       </div>
 
       <!-- Rules Table -->
-      <div v-if="loading" class="flex items-center justify-center py-8">
-        <Icon name="refresh" size="lg" class="animate-spin text-gray-400" />
+      <div v-if="loading" class="error-passthrough-rules-modal__status-state">
+        <Icon name="refresh" size="lg" class="error-passthrough-rules-modal__status-icon animate-spin" />
       </div>
 
-      <div v-else-if="rules.length === 0" class="py-8 text-center">
-        <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700">
-          <Icon name="shield" size="lg" class="text-gray-400" />
+      <div v-else-if="rules.length === 0" class="error-passthrough-rules-modal__empty-state">
+        <div class="error-passthrough-rules-modal__empty-icon-wrap">
+          <Icon name="shield" size="lg" class="error-passthrough-rules-modal__empty-icon" />
         </div>
-        <h4 class="mb-1 text-sm font-medium text-gray-900 dark:text-white">
+        <h4 class="error-passthrough-rules-modal__empty-title">
           {{ t('admin.errorPassthrough.noRules') }}
         </h4>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
+        <p class="error-passthrough-rules-modal__subtitle text-sm">
           {{ t('admin.errorPassthrough.createFirstRule') }}
         </p>
       </div>
 
-      <div v-else class="max-h-96 overflow-auto rounded-lg border border-gray-200 dark:border-dark-600">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
-          <thead class="sticky top-0 bg-gray-50 dark:bg-dark-700">
+      <div v-else class="error-passthrough-rules-modal__table-shell">
+        <table class="error-passthrough-rules-modal__table min-w-full">
+          <thead class="error-passthrough-rules-modal__table-head sticky top-0">
             <tr>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+              <th class="error-passthrough-rules-modal__table-header">
                 {{ t('admin.errorPassthrough.columns.priority') }}
               </th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+              <th class="error-passthrough-rules-modal__table-header">
                 {{ t('admin.errorPassthrough.columns.name') }}
               </th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+              <th class="error-passthrough-rules-modal__table-header">
                 {{ t('admin.errorPassthrough.columns.conditions') }}
               </th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+              <th class="error-passthrough-rules-modal__table-header">
                 {{ t('admin.errorPassthrough.columns.platforms') }}
               </th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+              <th class="error-passthrough-rules-modal__table-header">
                 {{ t('admin.errorPassthrough.columns.behavior') }}
               </th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+              <th class="error-passthrough-rules-modal__table-header">
                 {{ t('admin.errorPassthrough.columns.status') }}
               </th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+              <th class="error-passthrough-rules-modal__table-header">
                 {{ t('admin.errorPassthrough.columns.actions') }}
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-800">
-            <tr v-for="rule in rules" :key="rule.id" class="hover:bg-gray-50 dark:hover:bg-dark-700">
-              <td class="whitespace-nowrap px-3 py-2">
-                <span class="inline-flex h-5 w-5 items-center justify-center rounded bg-gray-100 text-xs font-medium text-gray-700 dark:bg-dark-600 dark:text-gray-300">
+          <tbody class="error-passthrough-rules-modal__table-body">
+            <tr v-for="rule in rules" :key="rule.id" class="error-passthrough-rules-modal__table-row">
+              <td class="error-passthrough-rules-modal__table-cell error-passthrough-rules-modal__table-cell--nowrap">
+                <span class="theme-chip theme-chip--compact theme-chip--neutral inline-flex h-5 w-5 items-center justify-center">
                   {{ rule.priority }}
                 </span>
               </td>
-              <td class="px-3 py-2">
-                <div class="font-medium text-gray-900 dark:text-white text-sm">{{ rule.name }}</div>
-                <div v-if="rule.description" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 max-w-xs truncate">
+              <td class="error-passthrough-rules-modal__table-cell">
+                <div class="error-passthrough-rules-modal__rule-name text-sm font-medium">{{ rule.name }}</div>
+                <div v-if="rule.description" class="error-passthrough-rules-modal__rule-description mt-0.5 max-w-xs truncate text-xs">
                   {{ rule.description }}
                 </div>
               </td>
-              <td class="px-3 py-2">
-                <div class="flex flex-wrap gap-1 max-w-48">
+              <td class="error-passthrough-rules-modal__table-cell">
+                <div class="flex max-w-48 flex-wrap gap-1">
                   <span
                     v-for="code in rule.error_codes.slice(0, 3)"
                     :key="code"
-                    class="badge badge-danger text-xs"
+                    class="theme-chip theme-chip--compact theme-chip--danger"
                   >
                     {{ code }}
                   </span>
                   <span
                     v-if="rule.error_codes.length > 3"
-                    class="text-xs text-gray-500"
+                    class="error-passthrough-rules-modal__count text-xs"
                   >
                     +{{ rule.error_codes.length - 3 }}
                   </span>
                   <span
                     v-for="keyword in rule.keywords.slice(0, 1)"
                     :key="keyword"
-                    class="badge badge-gray text-xs"
+                    class="theme-chip theme-chip--compact theme-chip--neutral"
                   >
                     "{{ keyword.length > 10 ? keyword.substring(0, 10) + '...' : keyword }}"
                   </span>
                   <span
                     v-if="rule.keywords.length > 1"
-                    class="text-xs text-gray-500"
+                    class="error-passthrough-rules-modal__count text-xs"
                   >
                     +{{ rule.keywords.length - 1 }}
                   </span>
                 </div>
-                <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                <div class="error-passthrough-rules-modal__rule-description mt-0.5 text-xs">
                   {{ t('admin.errorPassthrough.matchMode.' + rule.match_mode) }}
                 </div>
               </td>
-              <td class="px-3 py-2">
-                <div v-if="rule.platforms.length === 0" class="text-xs text-gray-500 dark:text-gray-400">
+              <td class="error-passthrough-rules-modal__table-cell">
+                <div v-if="rule.platforms.length === 0" class="error-passthrough-rules-modal__rule-description text-xs">
                   {{ t('admin.errorPassthrough.allPlatforms') }}
                 </div>
                 <div v-else class="flex flex-wrap gap-1">
                   <span
                     v-for="platform in rule.platforms.slice(0, 2)"
                     :key="platform"
-                    class="badge badge-primary text-xs"
+                    class="theme-chip theme-chip--compact theme-chip--accent"
                   >
                     {{ platform }}
                   </span>
-                  <span v-if="rule.platforms.length > 2" class="text-xs text-gray-500">
+                  <span v-if="rule.platforms.length > 2" class="error-passthrough-rules-modal__count text-xs">
                     +{{ rule.platforms.length - 2 }}
                   </span>
                 </div>
               </td>
-              <td class="px-3 py-2">
-                <div class="text-xs space-y-0.5">
+              <td class="error-passthrough-rules-modal__table-cell">
+                <div class="space-y-0.5 text-xs">
                   <div class="flex items-center gap-1">
                     <Icon
                       :name="rule.passthrough_code ? 'checkCircle' : 'xCircle'"
                       size="xs"
-                      :class="rule.passthrough_code ? 'text-green-500' : 'text-gray-400'"
+                      :class="getBehaviorIconClasses(rule.passthrough_code, 'success')"
                     />
-                    <span class="text-gray-600 dark:text-gray-400">
+                    <span class="error-passthrough-rules-modal__behavior-text">
                       {{ t('admin.errorPassthrough.code') }}:
                       {{ rule.passthrough_code ? t('admin.errorPassthrough.passthrough') : (rule.response_code || '-') }}
                     </span>
@@ -141,9 +141,9 @@
                     <Icon
                       :name="rule.passthrough_body ? 'checkCircle' : 'xCircle'"
                       size="xs"
-                      :class="rule.passthrough_body ? 'text-green-500' : 'text-gray-400'"
+                      :class="getBehaviorIconClasses(rule.passthrough_body, 'success')"
                     />
-                    <span class="text-gray-600 dark:text-gray-400">
+                    <span class="error-passthrough-rules-modal__behavior-text">
                       {{ t('admin.errorPassthrough.body') }}:
                       {{ rule.passthrough_body ? t('admin.errorPassthrough.passthrough') : t('admin.errorPassthrough.custom') }}
                     </span>
@@ -152,42 +152,39 @@
                     <Icon
                       name="checkCircle"
                       size="xs"
-                      class="text-yellow-500"
+                      :class="getBehaviorIconClasses(true, 'warning')"
                     />
-                    <span class="text-gray-600 dark:text-gray-400">
+                    <span class="error-passthrough-rules-modal__behavior-text">
                       {{ t('admin.errorPassthrough.skipMonitoring') }}
                     </span>
                   </div>
                 </div>
               </td>
-              <td class="px-3 py-2">
+              <td class="error-passthrough-rules-modal__table-cell">
                 <button
                   @click="toggleEnabled(rule)"
-                  :class="[
-                    'relative inline-flex h-4 w-7 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                    rule.enabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-                  ]"
+                  :class="getRuleToggleTrackClasses(rule.enabled)"
                 >
                   <span
                     :class="[
-                      'pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                      'error-passthrough-rules-modal__toggle-thumb pointer-events-none inline-block h-3 w-3 transform rounded-full ring-0 transition duration-200 ease-in-out',
                       rule.enabled ? 'translate-x-3' : 'translate-x-0'
                     ]"
                   />
                 </button>
               </td>
-              <td class="px-3 py-2">
+              <td class="error-passthrough-rules-modal__table-cell">
                 <div class="flex items-center gap-1">
                   <button
                     @click="handleEdit(rule)"
-                    class="p-1 text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
+                    :class="getActionButtonClasses('info')"
                     :title="t('common.edit')"
                   >
                     <Icon name="edit" size="sm" />
                   </button>
                   <button
                     @click="handleDelete(rule)"
-                    class="p-1 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                    :class="getActionButtonClasses('danger')"
                     :title="t('common.delete')"
                   >
                     <Icon name="trash" size="sm" />
@@ -251,8 +248,8 @@
         </div>
 
         <!-- Match Conditions -->
-        <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-          <h4 class="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+        <div class="error-passthrough-rules-modal__form-section">
+          <h4 class="error-passthrough-rules-modal__form-section-title mb-2 text-sm font-medium">
             {{ t('admin.errorPassthrough.form.matchConditions') }}
           </h4>
 
@@ -285,17 +282,17 @@
               <label
                 v-for="option in matchModeOptions"
                 :key="option.value"
-                class="flex items-start gap-2 cursor-pointer"
+                class="error-passthrough-rules-modal__option-row flex cursor-pointer items-start gap-2"
               >
                 <input
                   type="radio"
                   :value="option.value"
                   v-model="form.match_mode"
-                  class="mt-0.5 h-3.5 w-3.5 border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="error-passthrough-rules-modal__radio-input mt-0.5 h-3.5 w-3.5"
                 />
                 <div class="flex-1">
-                  <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ option.label }}</span>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ option.description }}</p>
+                  <span class="error-passthrough-rules-modal__option-label text-xs font-medium">{{ option.label }}</span>
+                  <p class="error-passthrough-rules-modal__option-description text-xs">{{ option.description }}</p>
                 </div>
               </label>
             </div>
@@ -307,36 +304,36 @@
               <label
                 v-for="platform in platformOptions"
                 :key="platform.value"
-                class="inline-flex items-center gap-1.5"
+                class="error-passthrough-rules-modal__checkbox-row inline-flex items-center gap-1.5"
               >
                 <input
                   type="checkbox"
                   :value="platform.value"
                   v-model="form.platforms"
-                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="error-passthrough-rules-modal__checkbox-input h-3.5 w-3.5 rounded"
                 />
-                <span class="text-xs text-gray-700 dark:text-gray-300">{{ platform.label }}</span>
+                <span class="error-passthrough-rules-modal__checkbox-label text-xs">{{ platform.label }}</span>
               </label>
             </div>
-            <p class="input-hint text-xs mt-1">{{ t('admin.errorPassthrough.form.platformsHint') }}</p>
+            <p class="input-hint mt-1 text-xs">{{ t('admin.errorPassthrough.form.platformsHint') }}</p>
           </div>
         </div>
 
         <!-- Response Behavior -->
-        <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-          <h4 class="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+        <div class="error-passthrough-rules-modal__form-section">
+          <h4 class="error-passthrough-rules-modal__form-section-title mb-2 text-sm font-medium">
             {{ t('admin.errorPassthrough.form.responseBehavior') }}
           </h4>
 
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label class="flex items-center gap-1.5">
+              <label class="error-passthrough-rules-modal__checkbox-row flex items-center gap-1.5">
                 <input
                   type="checkbox"
                   v-model="form.passthrough_code"
-                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="error-passthrough-rules-modal__checkbox-input h-3.5 w-3.5 rounded"
                 />
-                <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                <span class="error-passthrough-rules-modal__checkbox-label text-xs font-medium">
                   {{ t('admin.errorPassthrough.form.passthroughCode') }}
                 </span>
               </label>
@@ -353,13 +350,13 @@
               </div>
             </div>
             <div>
-              <label class="flex items-center gap-1.5">
+              <label class="error-passthrough-rules-modal__checkbox-row flex items-center gap-1.5">
                 <input
                   type="checkbox"
                   v-model="form.passthrough_body"
-                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="error-passthrough-rules-modal__checkbox-input h-3.5 w-3.5 rounded"
                 />
-                <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                <span class="error-passthrough-rules-modal__checkbox-label text-xs font-medium">
                   {{ t('admin.errorPassthrough.form.passthroughBody') }}
                 </span>
               </label>
@@ -377,26 +374,26 @@
         </div>
 
         <!-- Skip Monitoring -->
-        <div class="flex items-center gap-1.5">
+        <div class="error-passthrough-rules-modal__checkbox-row flex items-center gap-1.5">
           <input
             type="checkbox"
             v-model="form.skip_monitoring"
-            class="h-3.5 w-3.5 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
+            class="error-passthrough-rules-modal__checkbox-input error-passthrough-rules-modal__checkbox-input--warning h-3.5 w-3.5 rounded"
           />
-          <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
+          <span class="error-passthrough-rules-modal__checkbox-label text-xs font-medium">
             {{ t('admin.errorPassthrough.form.skipMonitoring') }}
           </span>
         </div>
         <p class="input-hint text-xs -mt-3">{{ t('admin.errorPassthrough.form.skipMonitoringHint') }}</p>
 
         <!-- Enabled -->
-        <div class="flex items-center gap-1.5">
+        <div class="error-passthrough-rules-modal__checkbox-row flex items-center gap-1.5">
           <input
             type="checkbox"
             v-model="form.enabled"
-            class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="error-passthrough-rules-modal__checkbox-input h-3.5 w-3.5 rounded"
           />
-          <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
+          <span class="error-passthrough-rules-modal__checkbox-label text-xs font-medium">
             {{ t('admin.errorPassthrough.form.enabled') }}
           </span>
         </div>
@@ -491,6 +488,41 @@ const platformOptions = [
   { value: 'gemini', label: 'Gemini' },
   { value: 'antigravity', label: 'Antigravity' }
 ]
+
+const joinClassNames = (...classNames: Array<string | false | null | undefined>) => {
+  return classNames.filter(Boolean).join(' ')
+}
+
+const getBehaviorIconClasses = (enabled: boolean, tone: 'success' | 'warning' = 'success') => {
+  if (!enabled) {
+    return 'error-passthrough-rules-modal__behavior-icon error-passthrough-rules-modal__behavior-icon--inactive'
+  }
+
+  return joinClassNames(
+    'error-passthrough-rules-modal__behavior-icon',
+    tone === 'warning'
+      ? 'error-passthrough-rules-modal__behavior-icon--warning'
+      : 'error-passthrough-rules-modal__behavior-icon--success'
+  )
+}
+
+const getRuleToggleTrackClasses = (enabled: boolean) => {
+  return joinClassNames(
+    'error-passthrough-rules-modal__toggle-track',
+    enabled
+      ? 'error-passthrough-rules-modal__toggle-track--enabled'
+      : 'error-passthrough-rules-modal__toggle-track--disabled'
+  )
+}
+
+const getActionButtonClasses = (tone: 'info' | 'danger') => {
+  return joinClassNames(
+    'error-passthrough-rules-modal__action-button',
+    tone === 'info'
+      ? 'error-passthrough-rules-modal__action-button--info'
+      : 'error-passthrough-rules-modal__action-button--danger'
+  )
+}
 
 // Load rules when dialog opens
 watch(() => props.show, (newVal) => {
@@ -648,3 +680,189 @@ const confirmDelete = async () => {
   }
 }
 </script>
+
+<style scoped>
+.error-passthrough-rules-modal__subtitle,
+.error-passthrough-rules-modal__rule-description,
+.error-passthrough-rules-modal__count,
+.error-passthrough-rules-modal__behavior-text,
+.error-passthrough-rules-modal__option-description {
+  color: var(--theme-page-muted);
+}
+
+.error-passthrough-rules-modal__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-table-layout-gap);
+}
+
+.error-passthrough-rules-modal__status-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--theme-table-mobile-empty-padding) * 0.5) 0;
+  color: var(--theme-page-muted);
+}
+
+.error-passthrough-rules-modal__status-icon,
+.error-passthrough-rules-modal__empty-icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 78%, transparent);
+}
+
+.error-passthrough-rules-modal__empty-state {
+  padding: calc(var(--theme-table-mobile-empty-padding) * 0.5) var(--theme-table-mobile-card-padding);
+  text-align: center;
+  border: 1px dashed color-mix(in srgb, var(--theme-card-border) 80%, transparent);
+  border-radius: calc(var(--theme-button-radius) + 4px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 76%, var(--theme-surface));
+}
+
+.error-passthrough-rules-modal__empty-icon-wrap {
+  margin: 0 auto calc(var(--theme-table-mobile-card-padding) * 0.75);
+  display: flex;
+  height: var(--theme-empty-icon-size);
+  width: var(--theme-empty-icon-size);
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-surface-soft) 92%, var(--theme-surface));
+}
+
+.error-passthrough-rules-modal__empty-title,
+.error-passthrough-rules-modal__rule-name,
+.error-passthrough-rules-modal__form-section-title,
+.error-passthrough-rules-modal__option-label,
+.error-passthrough-rules-modal__checkbox-label {
+  color: var(--theme-page-text);
+}
+
+.error-passthrough-rules-modal__table-shell {
+  max-height: var(--theme-proxy-quality-table-max-height);
+  overflow: auto;
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.error-passthrough-rules-modal__table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.error-passthrough-rules-modal__table-head {
+  background: var(--theme-table-head-bg);
+}
+
+.error-passthrough-rules-modal__table-header {
+  padding: calc(var(--theme-button-padding-y) * 0.8) calc(var(--theme-button-padding-x) * 0.6);
+  text-align: left;
+  font-size: var(--theme-table-head-font-size);
+  font-weight: 500;
+  letter-spacing: var(--theme-table-head-letter-spacing);
+  text-transform: var(--theme-table-head-text-transform);
+  color: var(--theme-table-head-text);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+}
+
+.error-passthrough-rules-modal__table-body {
+  background: var(--theme-surface);
+}
+
+.error-passthrough-rules-modal__table-cell {
+  padding: calc(var(--theme-button-padding-y) * 0.8) calc(var(--theme-button-padding-x) * 0.6);
+}
+
+.error-passthrough-rules-modal__table-cell--nowrap {
+  white-space: nowrap;
+}
+
+.error-passthrough-rules-modal__table-row td {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+}
+
+.error-passthrough-rules-modal__table-body tr:first-child td {
+  border-top: none;
+}
+
+.error-passthrough-rules-modal__table-row:hover {
+  background: var(--theme-table-row-hover);
+}
+
+.error-passthrough-rules-modal__behavior-icon--inactive {
+  color: color-mix(in srgb, var(--theme-page-muted) 74%, transparent);
+}
+
+.error-passthrough-rules-modal__behavior-icon--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.error-passthrough-rules-modal__behavior-icon--warning {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.error-passthrough-rules-modal__toggle-track {
+  position: relative;
+  display: inline-flex;
+  height: 1rem;
+  width: 1.75rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  transition: background-color 0.2s ease;
+  outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+}
+
+.error-passthrough-rules-modal__toggle-track--enabled {
+  background: color-mix(in srgb, var(--theme-accent) 82%, var(--theme-accent-strong));
+}
+
+.error-passthrough-rules-modal__toggle-track--disabled {
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+}
+
+.error-passthrough-rules-modal__toggle-thumb {
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.error-passthrough-rules-modal__action-button {
+  border-radius: calc(var(--theme-button-radius) - 4px);
+  padding: 0.25rem;
+  color: color-mix(in srgb, var(--theme-page-muted) 76%, transparent);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.error-passthrough-rules-modal__action-button--info:hover {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 10%, var(--theme-surface));
+}
+
+.error-passthrough-rules-modal__action-button--danger:hover {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+}
+
+.error-passthrough-rules-modal__form-section {
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  padding: var(--theme-table-mobile-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 72%, var(--theme-surface));
+}
+
+.error-passthrough-rules-modal__option-row,
+.error-passthrough-rules-modal__checkbox-row {
+  color: var(--theme-page-text);
+}
+
+.error-passthrough-rules-modal__radio-input,
+.error-passthrough-rules-modal__checkbox-input {
+  accent-color: var(--theme-accent);
+}
+
+.error-passthrough-rules-modal__checkbox-input--warning {
+  accent-color: rgb(var(--theme-warning-rgb));
+}
+</style>

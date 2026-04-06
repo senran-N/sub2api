@@ -2,13 +2,13 @@
   <div class="empty-state">
     <!-- Icon -->
     <div
-      class="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-100 dark:bg-dark-800"
+      class="empty-state__icon-surface mb-5 flex items-center justify-center"
     >
       <slot name="icon">
-        <component v-if="icon" :is="icon" class="empty-state-icon h-10 w-10" aria-hidden="true" />
+        <component v-if="icon" :is="icon" class="empty-state-icon" aria-hidden="true" />
         <svg
           v-else
-          class="empty-state-icon h-10 w-10"
+          class="empty-state-icon"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -78,3 +78,20 @@ const displayTitle = computed(() => props.title || t('common.noData'))
 
 defineEmits(['action'])
 </script>
+
+<style scoped>
+.empty-state__icon-surface {
+  height: var(--theme-empty-icon-surface-size);
+  width: var(--theme-empty-icon-surface-size);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface)),
+      color-mix(in srgb, var(--theme-page-border) 56%, transparent)
+    );
+  border: var(--theme-card-border-width) solid
+    color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+  box-shadow: var(--theme-card-shadow);
+  border-radius: var(--theme-empty-surface-radius);
+}
+</style>

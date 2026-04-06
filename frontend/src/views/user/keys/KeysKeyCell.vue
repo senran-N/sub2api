@@ -3,11 +3,11 @@
     <code class="code text-xs">{{ maskUserApiKey(value) }}</code>
     <button
       type="button"
-      class="rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
+      class="keys-key-cell__copy-button theme-icon-button"
       :class="
         copiedKeyId === rowId
-          ? 'text-green-500'
-          : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+          ? 'theme-icon-button--success'
+          : 'theme-icon-button--neutral'
       "
       :title="copiedKeyId === rowId ? t('keys.copied') : t('keys.copyToClipboard')"
       @click="emit('copy', value, rowId)"
@@ -35,3 +35,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.keys-key-cell__copy-button {
+  border-radius: var(--theme-key-row-action-radius);
+  padding: var(--theme-key-row-action-padding);
+}
+</style>

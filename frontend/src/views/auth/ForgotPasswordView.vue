@@ -2,25 +2,25 @@
   <AuthLayout>
     <div class="space-y-6">
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="forgot-password-view__title">
           {{ t('auth.forgotPasswordTitle') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="forgot-password-view__subtitle">
           {{ t('auth.forgotPasswordHint') }}
         </p>
       </div>
 
       <div v-if="isSubmitted" class="space-y-6">
-        <div class="rounded-xl border border-green-200 bg-green-50 p-6 dark:border-green-800/50 dark:bg-green-900/20">
+        <div class="forgot-password-view__notice forgot-password-view__notice--success">
           <div class="flex flex-col items-center gap-4 text-center">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-800/50">
-              <Icon name="checkCircle" size="lg" class="text-green-600 dark:text-green-400" />
+            <div class="forgot-password-view__notice-icon-shell flex h-12 w-12 items-center justify-center rounded-full">
+              <Icon name="checkCircle" size="lg" class="forgot-password-view__notice-icon forgot-password-view__notice-icon--success" />
             </div>
             <div>
-              <h3 class="text-lg font-semibold text-green-800 dark:text-green-200">
+              <h3 class="forgot-password-view__notice-title forgot-password-view__notice-title--success text-lg font-semibold">
                 {{ t('auth.resetEmailSent') }}
               </h3>
-              <p class="mt-2 text-sm text-green-700 dark:text-green-300">
+              <p class="forgot-password-view__notice-text forgot-password-view__notice-text--success mt-2 text-sm">
                 {{ t('auth.resetEmailSentHint') }}
               </p>
             </div>
@@ -30,7 +30,7 @@
         <div class="text-center">
           <router-link
             to="/login"
-            class="inline-flex items-center gap-2 font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+            class="forgot-password-view__inline-link inline-flex items-center gap-2 font-medium"
           >
             <Icon name="arrowLeft" size="sm" />
             {{ t('auth.backToLogin') }}
@@ -44,8 +44,8 @@
             {{ t('auth.emailLabel') }}
           </label>
           <div class="relative">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+            <div class="forgot-password-view__email-icon pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+              <Icon name="mail" size="md" class="forgot-password-view__email-icon-symbol" />
             </div>
             <input
               id="email"
@@ -81,13 +81,13 @@
         <transition name="fade">
           <div
             v-if="errorMessage"
-            class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20"
+            class="forgot-password-view__notice forgot-password-view__notice--danger"
           >
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0">
-                <Icon name="exclamationCircle" size="md" class="text-red-500" />
+              <div class="forgot-password-view__notice-icon-shell flex-shrink-0">
+                <Icon name="exclamationCircle" size="md" class="forgot-password-view__notice-icon forgot-password-view__notice-icon--danger" />
               </div>
-              <p class="text-sm text-red-700 dark:text-red-400">
+              <p class="forgot-password-view__notice-text forgot-password-view__notice-text--danger text-sm">
                 {{ errorMessage }}
               </p>
             </div>
@@ -101,7 +101,7 @@
         >
           <svg
             v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
+            class="theme-filled-spinner -ml-1 mr-2 h-4 w-4 animate-spin"
             fill="none"
             viewBox="0 0 24 24"
           >
@@ -126,11 +126,11 @@
     </div>
 
     <template #footer>
-      <p class="text-gray-500 dark:text-dark-400">
+      <p class="forgot-password-view__footer-text">
         {{ t('auth.rememberedPassword') }}
         <router-link
           to="/login"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="forgot-password-view__inline-link font-medium"
         >
           {{ t('auth.signIn') }}
         </router-link>
@@ -256,5 +256,68 @@ onMounted(async () => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+.forgot-password-view__title,
+.forgot-password-view__notice-title {
+  color: var(--theme-page-text);
+}
+
+.forgot-password-view__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.forgot-password-view__subtitle,
+.forgot-password-view__footer-text {
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+}
+
+.forgot-password-view__email-icon-symbol {
+  color: var(--theme-page-muted);
+}
+
+.forgot-password-view__notice {
+  border: 1px solid var(--theme-card-border);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+}
+
+.forgot-password-view__notice--success {
+  padding: var(--theme-auth-callback-card-padding);
+}
+
+.forgot-password-view__notice-icon-shell {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.forgot-password-view__notice--success {
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+  border-color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 24%, var(--theme-card-border));
+}
+
+.forgot-password-view__notice-icon--success,
+.forgot-password-view__notice-text--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.forgot-password-view__notice--danger {
+  padding: var(--theme-markdown-block-padding);
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  border-color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 24%, var(--theme-card-border));
+}
+
+.forgot-password-view__notice-icon--danger,
+.forgot-password-view__notice-text--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.forgot-password-view__inline-link {
+  color: var(--theme-accent);
+  transition: color 0.2s ease;
+}
+
+.forgot-password-view__inline-link:hover {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
 }
 </style>

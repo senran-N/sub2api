@@ -1,11 +1,11 @@
 <template>
   <div
-    class="absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
+    class="user-column-settings-menu absolute right-0 top-full z-50 overflow-y-auto"
   >
     <button
       v-for="column in toggleableColumns"
       :key="column.key"
-      class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+      class="user-column-settings-menu__button flex w-full items-center justify-between text-left text-sm"
       @click="emit('toggle-column', column.key)"
     >
       <span>{{ column.label }}</span>
@@ -13,7 +13,7 @@
         v-if="isColumnVisible(column.key)"
         name="check"
         size="sm"
-        class="text-primary-500"
+        class="user-column-settings-menu__check"
         :stroke-width="2"
       />
     </button>
@@ -33,3 +33,30 @@ const emit = defineEmits<{
   'toggle-column': [key: string]
 }>()
 </script>
+
+<style scoped>
+.user-column-settings-menu {
+  width: var(--theme-settings-menu-width-sm);
+  max-height: var(--theme-settings-menu-max-height);
+  margin-top: var(--theme-floating-panel-gap);
+  padding-block: calc(var(--theme-floating-panel-gap) * 0.5 + 0.125rem);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.user-column-settings-menu__button {
+  padding: calc(var(--theme-button-padding-y) * 0.8) var(--theme-button-padding-x);
+  color: var(--theme-page-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.user-column-settings-menu__button:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.user-column-settings-menu__check {
+  color: var(--theme-accent);
+}
+</style>

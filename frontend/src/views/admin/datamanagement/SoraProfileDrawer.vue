@@ -3,7 +3,7 @@
     <Transition name="dm-drawer-mask">
       <div
         v-if="open"
-        class="fixed inset-0 z-[54] bg-black/40 backdrop-blur-sm"
+        class="sora-profile-drawer__backdrop fixed inset-0 z-[54] backdrop-blur-sm"
         @click="emit('close')"
       ></div>
     </Transition>
@@ -11,22 +11,22 @@
     <Transition name="dm-drawer-panel">
       <div
         v-if="open"
-        class="fixed inset-y-0 right-0 z-[55] flex h-full w-full max-w-2xl flex-col border-l border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-900"
+        class="sora-profile-drawer__panel fixed inset-y-0 right-0 z-[55] flex h-full w-full flex-col border-l shadow-2xl"
       >
-        <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-dark-700">
-          <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+        <div class="sora-profile-drawer__header flex items-center justify-between border-b">
+          <h4 class="sora-profile-drawer__title text-sm font-semibold">
             {{ creating ? t('admin.settings.soraS3.createTitle') : t('admin.settings.soraS3.editTitle') }}
           </h4>
           <button
             type="button"
-            class="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-dark-800 dark:hover:text-gray-200"
+            class="sora-profile-drawer__close"
             @click="emit('close')"
           >
             ✕
           </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-4">
+        <div class="flex-1 overflow-y-auto sora-profile-drawer__content">
           <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
             <input
               v-model="form.profile_id"
@@ -39,7 +39,7 @@
               class="input w-full"
               :placeholder="t('admin.settings.soraS3.profileName')"
             />
-            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 md:col-span-2">
+            <label class="sora-profile-drawer__checkbox inline-flex items-center gap-2 text-sm md:col-span-2">
               <input v-model="form.enabled" type="checkbox" />
               <span>{{ t('admin.settings.soraS3.enabled') }}</span>
             </label>
@@ -64,17 +64,17 @@
                 class="input w-full"
                 :placeholder="t('admin.settings.soraS3.defaultQuota')"
               />
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="sora-profile-drawer__hint mt-1 text-xs">
                 {{ t('admin.settings.soraS3.defaultQuotaHint') }}
               </p>
             </div>
-            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <label class="sora-profile-drawer__checkbox inline-flex items-center gap-2 text-sm">
               <input v-model="form.force_path_style" type="checkbox" />
               <span>{{ t('admin.settings.soraS3.forcePathStyle') }}</span>
             </label>
             <label
               v-if="creating"
-              class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 md:col-span-2"
+              class="sora-profile-drawer__checkbox inline-flex items-center gap-2 text-sm md:col-span-2"
             >
               <input v-model="form.set_active" type="checkbox" />
               <span>{{ t('admin.settings.soraS3.setActive') }}</span>
@@ -82,7 +82,7 @@
           </div>
         </div>
 
-        <div class="flex flex-wrap justify-end gap-2 border-t border-gray-200 p-4 dark:border-dark-700">
+        <div class="sora-profile-drawer__footer flex flex-wrap justify-end gap-2 border-t">
           <button type="button" class="btn btn-secondary btn-sm" @click="emit('close')">
             {{ t('common.cancel') }}
           </button>
@@ -146,6 +146,57 @@ const { t } = useI18n()
 .dm-drawer-panel-leave-to {
   opacity: 0.96;
   transform: translateX(100%);
+}
+
+.sora-profile-drawer__backdrop {
+  background: var(--theme-overlay-soft);
+}
+
+.sora-profile-drawer__panel {
+  border-color: color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+  background: var(--theme-surface);
+  max-width: var(--theme-drawer-panel-max-width);
+}
+
+.sora-profile-drawer__header,
+.sora-profile-drawer__footer {
+  border-color: color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+}
+
+.sora-profile-drawer__header {
+  padding:
+    var(--theme-drawer-header-padding-y)
+    var(--theme-drawer-header-padding-x);
+}
+
+.sora-profile-drawer__content {
+  padding: var(--theme-drawer-content-padding);
+}
+
+.sora-profile-drawer__footer {
+  padding: var(--theme-drawer-footer-padding);
+}
+
+.sora-profile-drawer__title,
+.sora-profile-drawer__checkbox {
+  color: var(--theme-page-text);
+}
+
+.sora-profile-drawer__close,
+.sora-profile-drawer__hint {
+  color: var(--theme-page-muted);
+  padding: var(--theme-drawer-close-padding);
+  border-radius: var(--theme-drawer-close-radius);
+  height: var(--theme-drawer-close-size);
+  width: var(--theme-drawer-close-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sora-profile-drawer__close:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -8,7 +8,7 @@
     :rpm-used="capacity.rpmUsed"
     :rpm-max="capacity.rpmMax"
   />
-  <span v-else class="text-xs text-gray-400">—</span>
+  <span v-else class="theme-text-subtle text-xs">—</span>
 </template>
 
 <script setup lang="ts">

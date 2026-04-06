@@ -1,11 +1,10 @@
 <template>
   <div
-    class="flex items-start gap-2 rounded border p-2"
-    :class="isEmpty ? 'border-red-400 bg-red-50 dark:border-red-500 dark:bg-red-950/20' : 'border-gray-200 bg-white dark:border-dark-500 dark:bg-dark-700'"
+    :class="getRowClasses()"
   >
     <template v-if="mode === 'token'">
       <div class="w-20">
-        <label class="text-xs text-gray-400">Min</label>
+        <label class="interval-row__label">Min</label>
         <input
           :value="interval.min_tokens"
           type="number"
@@ -15,7 +14,7 @@
         />
       </div>
       <div class="w-20">
-        <label class="text-xs text-gray-400">Max <span class="text-gray-300">(含)</span></label>
+        <label class="interval-row__label">Max <span class="interval-row__unit">(含)</span></label>
         <input
           :value="interval.max_tokens ?? ''"
           type="number"
@@ -26,7 +25,11 @@
         />
       </div>
       <div class="flex-1">
-        <label class="text-xs text-gray-400">{{ t('admin.channels.form.inputPrice') }} <span v-if="isEmpty" class="text-red-500">*</span> <span class="text-gray-300">$/M</span></label>
+        <label class="interval-row__label">
+          {{ t('admin.channels.form.inputPrice') }}
+          <span v-if="isEmpty" class="interval-row__required">*</span>
+          <span class="interval-row__unit">$/M</span>
+        </label>
         <input
           :value="interval.input_price"
           type="number"
@@ -37,7 +40,11 @@
         />
       </div>
       <div class="flex-1">
-        <label class="text-xs text-gray-400">{{ t('admin.channels.form.outputPrice') }} <span v-if="isEmpty" class="text-red-500">*</span> <span class="text-gray-300">$/M</span></label>
+        <label class="interval-row__label">
+          {{ t('admin.channels.form.outputPrice') }}
+          <span v-if="isEmpty" class="interval-row__required">*</span>
+          <span class="interval-row__unit">$/M</span>
+        </label>
         <input
           :value="interval.output_price"
           type="number"
@@ -48,7 +55,10 @@
         />
       </div>
       <div class="flex-1">
-        <label class="text-xs text-gray-400">{{ t('admin.channels.form.cacheWritePrice') }} <span class="text-gray-300">$/M</span></label>
+        <label class="interval-row__label">
+          {{ t('admin.channels.form.cacheWritePrice') }}
+          <span class="interval-row__unit">$/M</span>
+        </label>
         <input
           :value="interval.cache_write_price"
           type="number"
@@ -59,7 +69,10 @@
         />
       </div>
       <div class="flex-1">
-        <label class="text-xs text-gray-400">{{ t('admin.channels.form.cacheReadPrice') }} <span class="text-gray-300">$/M</span></label>
+        <label class="interval-row__label">
+          {{ t('admin.channels.form.cacheReadPrice') }}
+          <span class="interval-row__unit">$/M</span>
+        </label>
         <input
           :value="interval.cache_read_price"
           type="number"
@@ -73,7 +86,7 @@
 
     <template v-else>
       <div class="w-24">
-        <label class="text-xs text-gray-400">
+        <label class="interval-row__label">
           {{ mode === 'image' ? t('admin.channels.form.resolution') : t('admin.channels.form.tierLabel') }}
         </label>
         <input
@@ -85,7 +98,7 @@
         />
       </div>
       <div class="w-20">
-        <label class="text-xs text-gray-400">Min</label>
+        <label class="interval-row__label">Min</label>
         <input
           :value="interval.min_tokens"
           type="number"
@@ -95,7 +108,7 @@
         />
       </div>
       <div class="w-20">
-        <label class="text-xs text-gray-400">Max <span class="text-gray-300">(含)</span></label>
+        <label class="interval-row__label">Max <span class="interval-row__unit">(含)</span></label>
         <input
           :value="interval.max_tokens ?? ''"
           type="number"
@@ -106,7 +119,11 @@
         />
       </div>
       <div class="flex-1">
-        <label class="text-xs text-gray-400">{{ t('admin.channels.form.perRequestPrice') }} <span v-if="isEmpty" class="text-red-500">*</span> <span class="text-gray-300">$</span></label>
+        <label class="interval-row__label">
+          {{ t('admin.channels.form.perRequestPrice') }}
+          <span v-if="isEmpty" class="interval-row__required">*</span>
+          <span class="interval-row__unit">$</span>
+        </label>
         <input
           :value="interval.per_request_price"
           type="number"
@@ -118,7 +135,7 @@
       </div>
     </template>
 
-    <button type="button" class="mt-4 rounded p-0.5 text-gray-400 hover:text-red-500" @click="emit('remove')">
+    <button type="button" :class="getRemoveButtonClasses()" @click="emit('remove')">
       <Icon name="x" size="sm" />
     </button>
   </div>
@@ -143,6 +160,10 @@ const emit = defineEmits<{
   remove: []
 }>()
 
+const joinClassNames = (...classNames: Array<string | false | null | undefined>) => {
+  return classNames.filter(Boolean).join(' ')
+}
+
 const isEmpty = computed(() => {
   const iv = props.interval
   return (iv.input_price == null || iv.input_price === '') &&
@@ -151,6 +172,20 @@ const isEmpty = computed(() => {
     (iv.cache_read_price == null || iv.cache_read_price === '') &&
     (iv.per_request_price == null || iv.per_request_price === '')
 })
+
+const getRowClasses = () => {
+  return joinClassNames(
+    'interval-row',
+    isEmpty.value ? 'interval-row--empty' : 'interval-row--filled'
+  )
+}
+
+const getRemoveButtonClasses = () => {
+  return joinClassNames(
+    'interval-row__remove-button',
+    isEmpty.value && 'interval-row__remove-button--danger'
+  )
+}
 
 function emitField(field: keyof IntervalFormEntry, value: string | number | null) {
   emit('update', { ...props.interval, [field]: value === '' ? null : value })
@@ -167,3 +202,55 @@ function toIntOrNull(val: string): number | null {
   return isNaN(n) ? null : n
 }
 </script>
+
+<style scoped>
+.interval-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border: 1px solid var(--theme-card-border);
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  padding: 0.5rem;
+}
+
+.interval-row--filled {
+  background: var(--theme-surface);
+}
+
+.interval-row--empty {
+  border-color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 44%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 8%, var(--theme-surface));
+}
+
+.interval-row__label {
+  color: var(--theme-page-muted);
+  font-size: 0.75rem;
+}
+
+.interval-row__unit {
+  color: color-mix(in srgb, var(--theme-page-muted) 70%, transparent);
+}
+
+.interval-row__required {
+  color: rgb(var(--theme-danger-rgb));
+}
+
+.interval-row__remove-button {
+  margin-top: 1rem;
+  border-radius: calc(var(--theme-button-radius) - 4px);
+  color: var(--theme-page-muted);
+  padding: 0.125rem;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.interval-row__remove-button:hover,
+.interval-row__remove-button:focus-visible {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, transparent);
+  color: rgb(var(--theme-danger-rgb));
+  outline: none;
+}
+
+.interval-row__remove-button--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 72%, var(--theme-page-muted));
+}
+</style>

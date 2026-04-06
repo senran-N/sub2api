@@ -7,11 +7,11 @@
     @close="handleClose"
   >
     <form id="import-proxy-data-form" class="space-y-4" @submit.prevent="handleImport">
-      <div class="text-sm text-gray-600 dark:text-dark-300">
+      <div class="import-data-modal__description text-sm">
         {{ t('admin.proxies.dataImportHint') }}
       </div>
       <div
-        class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-600 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
+        class="import-data-modal__warning import-data-modal__warning-surface text-xs"
       >
         {{ t('admin.proxies.dataImportWarning') }}
       </div>
@@ -19,13 +19,13 @@
       <div>
         <label class="input-label">{{ t('admin.proxies.dataImportFile') }}</label>
         <div
-          class="flex items-center justify-between gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 dark:border-dark-600 dark:bg-dark-800"
+          class="import-data-modal__file-picker import-data-modal__file-picker-surface flex items-center justify-between gap-3"
         >
           <div class="min-w-0">
-            <div class="truncate text-sm text-gray-700 dark:text-dark-200">
+            <div class="import-data-modal__file-name truncate text-sm">
               {{ fileName || t('admin.proxies.dataImportSelectFile') }}
             </div>
-            <div class="text-xs text-gray-500 dark:text-dark-400">JSON (.json)</div>
+            <div class="import-data-modal__description text-xs">JSON (.json)</div>
           </div>
           <button type="button" class="btn btn-secondary shrink-0" @click="openFilePicker">
             {{ t('common.chooseFile') }}
@@ -42,24 +42,24 @@
 
       <div
         v-if="result"
-        class="space-y-2 rounded-xl border border-gray-200 p-4 dark:border-dark-700"
+        class="import-data-modal__result import-data-modal__result-surface space-y-2"
       >
-        <div class="text-sm font-medium text-gray-900 dark:text-white">
+        <div class="import-data-modal__result-title text-sm font-medium">
           {{ t('admin.proxies.dataImportResult') }}
         </div>
-        <div class="text-sm text-gray-700 dark:text-dark-300">
+        <div class="import-data-modal__result-summary text-sm">
           {{ t('admin.proxies.dataImportResultSummary', result) }}
         </div>
 
         <div v-if="errorItems.length" class="mt-2">
-          <div class="text-sm font-medium text-red-600 dark:text-red-400">
+          <div class="import-data-modal__errors-title text-sm font-medium">
             {{ t('admin.proxies.dataImportErrors') }}
           </div>
           <div
-            class="mt-2 max-h-48 overflow-auto rounded-lg bg-gray-50 p-3 font-mono text-xs dark:bg-dark-800"
+            class="import-data-modal__errors-list import-data-modal__errors-list-surface mt-2 overflow-auto font-mono text-xs"
           >
             <div v-for="(item, idx) in errorItems" :key="idx" class="whitespace-pre-wrap">
-              {{ item.kind }} {{ item.name || item.proxy_key || '-' }} — {{ item.message }}
+              {{ item.kind }} {{ item.name || item.proxy_key || '-' }} - {{ item.message }}
             </div>
           </div>
         </div>
@@ -91,6 +91,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import type { AdminDataImportResult } from '@/types'
+import { resolveErrorMessage } from '@/utils/errorMessage'
 
 interface Props {
   show: boolean
@@ -188,14 +189,75 @@ const handleImport = async () => {
       appStore.showSuccess(t('admin.proxies.dataImportSuccess', msgParams))
       emit('imported')
     }
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof SyntaxError) {
       appStore.showError(t('admin.proxies.dataImportParseFailed'))
     } else {
-      appStore.showError(error?.message || t('admin.proxies.dataImportFailed'))
+      appStore.showError(resolveErrorMessage(error, t('admin.proxies.dataImportFailed')))
     }
   } finally {
     importing.value = false
   }
 }
 </script>
+
+<style scoped>
+.import-data-modal__description {
+  color: var(--theme-page-muted);
+}
+
+.import-data-modal__warning {
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-warning-rgb)) 26%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.import-data-modal__warning-surface {
+  border-radius: var(--theme-import-data-modal-warning-radius);
+  padding: var(--theme-import-data-modal-warning-padding);
+}
+
+.import-data-modal__file-picker {
+  border: 1px dashed color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+}
+
+.import-data-modal__file-picker-surface {
+  border-radius: var(--theme-import-data-modal-file-picker-radius);
+  padding:
+    var(--theme-import-data-modal-file-picker-padding-y)
+    var(--theme-import-data-modal-file-picker-padding-x);
+}
+
+.import-data-modal__file-name,
+.import-data-modal__result-title {
+  color: var(--theme-page-text);
+}
+
+.import-data-modal__result {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+}
+
+.import-data-modal__result-surface {
+  border-radius: var(--theme-import-data-modal-result-radius);
+  padding: var(--theme-import-data-modal-result-padding);
+}
+
+.import-data-modal__result-summary {
+  color: color-mix(in srgb, var(--theme-page-text) 84%, transparent);
+}
+
+.import-data-modal__errors-title {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.import-data-modal__errors-list {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.import-data-modal__errors-list-surface {
+  max-height: var(--theme-import-data-modal-errors-max-height);
+  border-radius: var(--theme-import-data-modal-errors-radius);
+  padding: var(--theme-import-data-modal-errors-padding);
+}
+</style>

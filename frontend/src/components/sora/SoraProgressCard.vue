@@ -284,26 +284,26 @@ onUnmounted(() => {
 
 <style scoped>
 .sora-task-card {
-  background: var(--sora-bg-secondary, #1A1A1A);
-  border: 1px solid var(--sora-border-color, #2A2A2A);
-  border-radius: var(--sora-radius-lg, 16px);
+  background: var(--sora-bg-secondary);
+  border: 1px solid var(--sora-border-color);
+  border-radius: var(--sora-radius-lg);
   padding: 24px;
   transition: all 250ms ease;
   animation: sora-fade-in 0.4s ease;
 }
 
 .sora-task-card:hover {
-  border-color: var(--sora-bg-hover, #333);
+  border-color: var(--sora-bg-hover);
 }
 
 .sora-task-card.cancelled {
   opacity: 0.6;
-  border-color: var(--sora-border-subtle, #1F1F1F);
+  border-color: var(--sora-border-subtle);
 }
 
 .sora-task-card.countdown-warning {
-  border-color: var(--sora-error, #EF4444) !important;
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.15);
+  border-color: var(--sora-error) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sora-error) 15%, transparent);
 }
 
 @keyframes sora-fade-in {
@@ -340,14 +340,14 @@ onUnmounted(() => {
   border-radius: 50%;
 }
 
-.sora-status-dot.queued { background: var(--sora-text-tertiary, #666); }
+.sora-status-dot.queued { background: var(--sora-text-tertiary); }
 .sora-status-dot.generating {
-  background: var(--sora-warning, #F59E0B);
+  background: var(--sora-warning);
   animation: sora-pulse-dot 1.5s ease-in-out infinite;
 }
-.sora-status-dot.completed { background: var(--sora-success, #10B981); }
-.sora-status-dot.failed { background: var(--sora-error, #EF4444); }
-.sora-status-dot.cancelled { background: var(--sora-text-tertiary, #666); }
+.sora-status-dot.completed { background: var(--sora-success); }
+.sora-status-dot.failed { background: var(--sora-error); }
+.sora-status-dot.cancelled { background: var(--sora-text-tertiary); }
 
 @keyframes sora-pulse-dot {
   0%, 100% { opacity: 1; }
@@ -355,19 +355,19 @@ onUnmounted(() => {
 }
 
 /* 状态标签 */
-.sora-status-label.queued { color: var(--sora-text-secondary, #A0A0A0); }
-.sora-status-label.generating { color: var(--sora-warning, #F59E0B); }
-.sora-status-label.completed { color: var(--sora-success, #10B981); }
-.sora-status-label.failed { color: var(--sora-error, #EF4444); }
-.sora-status-label.cancelled { color: var(--sora-text-tertiary, #666); }
+.sora-status-label.queued { color: var(--sora-text-secondary); }
+.sora-status-label.generating { color: var(--sora-warning); }
+.sora-status-label.completed { color: var(--sora-success); }
+.sora-status-label.failed { color: var(--sora-error); }
+.sora-status-label.cancelled { color: var(--sora-text-tertiary); }
 
 /* 模型标签 */
 .sora-model-tag {
   font-size: 11px;
   padding: 3px 10px;
-  background: var(--sora-bg-tertiary, #242424);
-  border-radius: var(--sora-radius-full, 9999px);
-  color: var(--sora-text-secondary, #A0A0A0);
+  background: var(--sora-bg-tertiary);
+  border-radius: var(--sora-radius-full);
+  color: var(--sora-text-secondary);
   font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
 }
 
@@ -377,24 +377,24 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  border-radius: var(--sora-radius-full, 9999px);
+  border-radius: var(--sora-radius-full);
   font-size: 12px;
-  color: var(--sora-text-secondary, #A0A0A0);
-  background: var(--sora-bg-tertiary, #242424);
+  color: var(--sora-text-secondary);
+  background: var(--sora-bg-tertiary);
   border: none;
   cursor: pointer;
   transition: all 150ms ease;
 }
 
 .sora-cancel-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--sora-error, #EF4444);
+  background: color-mix(in srgb, var(--sora-error) 15%, transparent);
+  color: var(--sora-error);
 }
 
 /* 提示词 */
 .sora-task-prompt {
   font-size: 14px;
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
   margin-bottom: 16px;
   line-height: 1.6;
   display: -webkit-box;
@@ -405,7 +405,7 @@ onUnmounted(() => {
 
 .sora-task-prompt.line-through {
   text-decoration: line-through;
-  color: var(--sora-text-tertiary, #666);
+  color: var(--sora-text-tertiary);
 }
 
 /* 错误分类 */
@@ -414,16 +414,16 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: rgba(239, 68, 68, 0.1);
-  border-radius: var(--sora-radius-sm, 8px);
+  background: color-mix(in srgb, var(--sora-error) 10%, transparent);
+  border-radius: var(--sora-radius-sm);
   font-size: 12px;
-  color: var(--sora-error, #EF4444);
+  color: var(--sora-error);
   margin-bottom: 8px;
 }
 
 .sora-task-error-message {
   font-size: 13px;
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
   line-height: 1.5;
   margin-bottom: 12px;
 }
@@ -436,7 +436,7 @@ onUnmounted(() => {
 .sora-task-progress-bar {
   width: 100%;
   height: 4px;
-  background: var(--sora-bg-hover, #333);
+  background: var(--sora-bg-hover);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -448,16 +448,16 @@ onUnmounted(() => {
 }
 
 .sora-task-progress-fill.generating {
-  background: var(--sora-accent-gradient, linear-gradient(135deg, #14b8a6, #0d9488));
+  background: var(--sora-accent-gradient);
   animation: sora-progress-shimmer 2s ease-in-out infinite;
 }
 
 .sora-task-progress-fill.completed {
-  background: var(--sora-success, #10B981);
+  background: var(--sora-success);
 }
 
 .sora-task-progress-fill.failed {
-  background: var(--sora-error, #EF4444);
+  background: var(--sora-error);
 }
 
 @keyframes sora-progress-shimmer {
@@ -471,15 +471,15 @@ onUnmounted(() => {
   justify-content: space-between;
   margin-top: 8px;
   font-size: 12px;
-  color: var(--sora-text-tertiary, #666);
+  color: var(--sora-text-tertiary);
 }
 
 /* 预览 */
 .sora-task-preview {
   margin-top: 16px;
-  border-radius: var(--sora-radius-md, 12px);
+  border-radius: var(--sora-radius-md);
   overflow: hidden;
-  background: var(--sora-bg-tertiary, #242424);
+  background: var(--sora-bg-tertiary);
 }
 
 .sora-task-preview-media {
@@ -495,7 +495,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--sora-placeholder-gradient, linear-gradient(135deg, #e0e7ff 0%, #dbeafe 50%, #cffafe 100%));
+  background: var(--sora-placeholder-gradient);
   font-size: 48px;
 }
 
@@ -510,7 +510,7 @@ onUnmounted(() => {
 
 .sora-action-btn {
   padding: 8px 20px;
-  border-radius: var(--sora-radius-full, 9999px);
+  border-radius: var(--sora-radius-full);
   font-size: 13px;
   font-weight: 500;
   border: none;
@@ -523,32 +523,36 @@ onUnmounted(() => {
 }
 
 .sora-action-btn.primary {
-  background: var(--sora-accent-gradient, linear-gradient(135deg, #14b8a6, #0d9488));
-  color: white;
+  background: var(--sora-accent-gradient);
+  color: var(--theme-accent-text);
 }
 
 .sora-action-btn.primary:hover {
-  background: var(--sora-accent-gradient-hover, linear-gradient(135deg, #2dd4bf, #14b8a6));
-  box-shadow: var(--sora-shadow-glow, 0 0 20px rgba(20,184,166,0.3));
+  background: var(--sora-accent-gradient-hover);
+  box-shadow: var(--sora-shadow-glow);
 }
 
 .sora-action-btn.secondary {
-  background: var(--sora-bg-tertiary, #242424);
-  color: var(--sora-text-secondary, #A0A0A0);
+  background: var(--sora-bg-tertiary);
+  color: var(--sora-text-secondary);
 }
 
 .sora-action-btn.secondary:hover {
-  background: var(--sora-bg-hover, #333);
-  color: var(--sora-text-primary, #FFF);
+  background: var(--sora-bg-hover);
+  color: var(--sora-text-primary);
 }
 
 .sora-action-btn.save-storage {
-  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-  color: white;
+  background: linear-gradient(
+    135deg,
+    var(--sora-success) 0%,
+    color-mix(in srgb, var(--sora-success) 82%, var(--theme-accent-strong)) 100%
+  );
+  color: var(--theme-filled-text);
 }
 
 .sora-action-btn.save-storage:hover {
-  box-shadow: 0 0 16px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--sora-success) 30%, transparent);
 }
 
 /* 已保存标签 */
@@ -557,12 +561,12 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: var(--sora-radius-full, 9999px);
+  background: color-mix(in srgb, var(--sora-success) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sora-success) 25%, transparent);
+  border-radius: var(--sora-radius-full);
   font-size: 13px;
   font-weight: 500;
-  color: var(--sora-success, #10B981);
+  color: var(--sora-success);
 }
 
 /* 倒计时文本 */
@@ -572,11 +576,11 @@ onUnmounted(() => {
   gap: 4px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--sora-warning, #F59E0B);
+  color: var(--sora-warning);
 }
 
 .sora-countdown-text.expired {
-  color: var(--sora-error, #EF4444);
+  color: var(--sora-error);
 }
 
 /* 倒计时进度条 */
@@ -587,23 +591,23 @@ onUnmounted(() => {
 .sora-countdown-bar {
   width: 100%;
   height: 3px;
-  background: var(--sora-bg-hover, #333);
+  background: var(--sora-bg-hover);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .sora-countdown-bar-fill {
   height: 100%;
-  background: var(--sora-warning, #F59E0B);
+  background: var(--sora-warning);
   border-radius: 2px;
   transition: width 1s linear;
 }
 
 .countdown-warning .sora-countdown-bar-fill {
-  background: var(--sora-error, #EF4444);
+  background: var(--sora-error);
 }
 
 .countdown-warning .sora-countdown-text {
-  color: var(--sora-error, #EF4444);
+  color: var(--sora-error);
 }
 </style>

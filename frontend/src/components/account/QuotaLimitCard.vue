@@ -131,11 +131,11 @@ const onWeeklyModeChange = (e: Event) => {
 </script>
 
 <template>
-  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+  <div class="quota-limit-card quota-limit-card__panel">
       <div class="mb-3 flex items-center justify-between">
         <div>
           <label class="input-label mb-0">{{ t('admin.accounts.quotaLimitToggle') }}</label>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p class="quota-limit-card__hint mt-1 text-xs">
             {{ t('admin.accounts.quotaLimitToggleHint') }}
           </p>
         </div>
@@ -143,13 +143,13 @@ const onWeeklyModeChange = (e: Event) => {
           type="button"
           @click="localEnabled = !localEnabled"
           :class="[
-            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-            localEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            'quota-limit-card__toggle relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+            localEnabled ? 'quota-limit-card__toggle--active' : 'quota-limit-card__toggle--inactive'
           ]"
         >
           <span
             :class="[
-              'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+              'quota-limit-card__toggle-thumb pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-200 ease-in-out',
               localEnabled ? 'translate-x-5' : 'translate-x-0'
             ]"
           />
@@ -161,7 +161,7 @@ const onWeeklyModeChange = (e: Event) => {
         <div>
           <label class="input-label">{{ t('admin.accounts.quotaDailyLimit') }}</label>
           <div class="relative">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+            <span class="quota-limit-card__prefix absolute left-3 top-1/2 -translate-y-1/2">$</span>
             <input
               :value="dailyLimit"
               @input="onDailyInput"
@@ -174,11 +174,11 @@ const onWeeklyModeChange = (e: Event) => {
           </div>
           <!-- 日配额重置模式 -->
           <div class="mt-2 flex items-center gap-2">
-            <label class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('admin.accounts.quotaResetMode') }}</label>
+            <label class="quota-limit-card__hint whitespace-nowrap text-xs">{{ t('admin.accounts.quotaResetMode') }}</label>
             <select
               :value="dailyResetMode || 'rolling'"
               @change="onDailyModeChange"
-              class="input py-1 text-xs"
+              class="input quota-limit-card__compact-select text-xs"
             >
               <option value="rolling">{{ t('admin.accounts.quotaResetModeRolling') }}</option>
               <option value="fixed">{{ t('admin.accounts.quotaResetModeFixed') }}</option>
@@ -186,11 +186,11 @@ const onWeeklyModeChange = (e: Event) => {
           </div>
           <!-- 固定模式：小时选择 -->
           <div v-if="dailyResetMode === 'fixed'" class="mt-2 flex items-center gap-2">
-            <label class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('admin.accounts.quotaResetHour') }}</label>
+            <label class="quota-limit-card__hint whitespace-nowrap text-xs">{{ t('admin.accounts.quotaResetHour') }}</label>
             <select
               :value="dailyResetHour ?? 0"
               @change="emit('update:dailyResetHour', Number(($event.target as HTMLSelectElement).value))"
-              class="input py-1 text-xs w-24"
+              class="input quota-limit-card__compact-select quota-limit-card__hour-select text-xs"
             >
               <option v-for="h in hourOptions" :key="h" :value="h">{{ String(h).padStart(2, '0') }}:00</option>
             </select>
@@ -209,7 +209,7 @@ const onWeeklyModeChange = (e: Event) => {
         <div>
           <label class="input-label">{{ t('admin.accounts.quotaWeeklyLimit') }}</label>
           <div class="relative">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+            <span class="quota-limit-card__prefix absolute left-3 top-1/2 -translate-y-1/2">$</span>
             <input
               :value="weeklyLimit"
               @input="onWeeklyInput"
@@ -222,11 +222,11 @@ const onWeeklyModeChange = (e: Event) => {
           </div>
           <!-- 周配额重置模式 -->
           <div class="mt-2 flex items-center gap-2">
-            <label class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('admin.accounts.quotaResetMode') }}</label>
+            <label class="quota-limit-card__hint whitespace-nowrap text-xs">{{ t('admin.accounts.quotaResetMode') }}</label>
             <select
               :value="weeklyResetMode || 'rolling'"
               @change="onWeeklyModeChange"
-              class="input py-1 text-xs"
+              class="input quota-limit-card__compact-select text-xs"
             >
               <option value="rolling">{{ t('admin.accounts.quotaResetModeRolling') }}</option>
               <option value="fixed">{{ t('admin.accounts.quotaResetModeFixed') }}</option>
@@ -234,19 +234,19 @@ const onWeeklyModeChange = (e: Event) => {
           </div>
           <!-- 固定模式：星期几 + 小时 -->
           <div v-if="weeklyResetMode === 'fixed'" class="mt-2 flex items-center gap-2 flex-wrap">
-            <label class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('admin.accounts.quotaWeeklyResetDay') }}</label>
+            <label class="quota-limit-card__hint whitespace-nowrap text-xs">{{ t('admin.accounts.quotaWeeklyResetDay') }}</label>
             <select
               :value="weeklyResetDay ?? 1"
               @change="emit('update:weeklyResetDay', Number(($event.target as HTMLSelectElement).value))"
-              class="input py-1 text-xs w-28"
+              class="input quota-limit-card__compact-select quota-limit-card__day-select text-xs"
             >
               <option v-for="d in dayOptions" :key="d.value" :value="d.value">{{ t('admin.accounts.dayOfWeek.' + d.key) }}</option>
             </select>
-            <label class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('admin.accounts.quotaResetHour') }}</label>
+            <label class="quota-limit-card__hint whitespace-nowrap text-xs">{{ t('admin.accounts.quotaResetHour') }}</label>
             <select
               :value="weeklyResetHour ?? 0"
               @change="emit('update:weeklyResetHour', Number(($event.target as HTMLSelectElement).value))"
-              class="input py-1 text-xs w-24"
+              class="input quota-limit-card__compact-select quota-limit-card__hour-select text-xs"
             >
               <option v-for="h in hourOptions" :key="h" :value="h">{{ String(h).padStart(2, '0') }}:00</option>
             </select>
@@ -277,7 +277,7 @@ const onWeeklyModeChange = (e: Event) => {
         <div>
           <label class="input-label">{{ t('admin.accounts.quotaTotalLimit') }}</label>
           <div class="relative">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+            <span class="quota-limit-card__prefix absolute left-3 top-1/2 -translate-y-1/2">$</span>
             <input
               :value="totalLimit"
               @input="onTotalInput"
@@ -293,3 +293,54 @@ const onWeeklyModeChange = (e: Event) => {
       </div>
   </div>
 </template>
+
+<style scoped>
+.quota-limit-card {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+}
+
+.quota-limit-card__panel {
+  border-radius: var(--theme-quota-limit-card-radius);
+  padding: var(--theme-quota-limit-card-padding);
+}
+
+.quota-limit-card__compact-select {
+  padding-block: var(--theme-quota-limit-compact-select-padding-y);
+}
+
+.quota-limit-card__hour-select {
+  width: var(--theme-quota-limit-hour-select-width);
+}
+
+.quota-limit-card__day-select {
+  width: var(--theme-quota-limit-day-select-width);
+}
+
+.quota-limit-card__hint,
+.quota-limit-card__prefix {
+  color: var(--theme-page-muted);
+}
+
+.quota-limit-card__toggle {
+  box-shadow: 0 0 0 0 transparent;
+}
+
+.quota-limit-card__toggle:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent-soft) 88%, transparent);
+}
+
+.quota-limit-card__toggle--active {
+  background: var(--theme-accent);
+}
+
+.quota-limit-card__toggle--inactive {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.quota-limit-card__toggle-thumb {
+  background: var(--theme-surface-contrast-text);
+  box-shadow:
+    0 1px 3px color-mix(in srgb, var(--theme-page-text) 12%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+</style>

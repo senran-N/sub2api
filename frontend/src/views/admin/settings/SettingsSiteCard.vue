@@ -1,22 +1,22 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="settings-site-card__header settings-site-card__header-spacing">
+      <h2 class="settings-site-card__title text-lg font-semibold">
         {{ t('admin.settings.site.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-site-card__description mt-1 text-sm">
         {{ t('admin.settings.site.description') }}
       </p>
     </div>
-    <div class="space-y-6 p-6">
+    <div class="settings-site-card__body space-y-6">
       <div
-        class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
+        class="settings-site-card__mode-banner settings-site-card__panel flex items-center justify-between"
       >
         <div>
-          <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+          <h3 class="settings-site-card__title text-sm font-medium">
             {{ t('admin.settings.site.backendMode') }}
           </h3>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p class="settings-site-card__description mt-1 text-xs">
             {{ t('admin.settings.site.backendModeDescription') }}
           </p>
         </div>
@@ -25,7 +25,7 @@
 
       <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.site.siteName') }}
           </label>
           <input
@@ -34,12 +34,12 @@
             class="input"
             :placeholder="t('admin.settings.site.siteNamePlaceholder')"
           />
-          <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <p class="settings-site-card__description mt-1.5 text-xs">
             {{ t('admin.settings.site.siteNameHint') }}
           </p>
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.site.siteSubtitle') }}
           </label>
           <input
@@ -48,14 +48,28 @@
             class="input"
             :placeholder="t('admin.settings.site.siteSubtitlePlaceholder')"
           />
-          <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <p class="settings-site-card__description mt-1.5 text-xs">
             {{ t('admin.settings.site.siteSubtitleHint') }}
           </p>
         </div>
       </div>
 
       <div>
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
+          Frontend Theme
+        </label>
+        <Select
+          v-model="form.frontend_theme"
+          :options="themeOptions"
+          placeholder="Select a frontend theme"
+        />
+        <p class="settings-site-card__description mt-1.5 text-xs">
+          Applied globally after save. New themes can be added through the theme registry without rewriting business pages.
+        </p>
+      </div>
+
+      <div>
+        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.site.apiBaseUrl') }}
         </label>
         <input
@@ -64,16 +78,16 @@
           class="input font-mono text-sm"
           :placeholder="t('admin.settings.site.apiBaseUrlPlaceholder')"
         />
-        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p class="settings-site-card__description mt-1.5 text-xs">
           {{ t('admin.settings.site.apiBaseUrlHint') }}
         </p>
       </div>
 
       <div>
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.site.customEndpoints.title') }}
         </label>
-        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        <p class="settings-site-card__description mb-3 text-xs">
           {{ t('admin.settings.site.customEndpoints.description') }}
         </p>
 
@@ -81,15 +95,15 @@
           <div
             v-for="(endpoint, index) in form.custom_endpoints"
             :key="index"
-            class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+            class="settings-site-card__endpoint-card settings-site-card__panel"
           >
             <div class="mb-3 flex items-center justify-between">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span class="settings-site-card__field-label text-sm font-medium">
                 {{ t('admin.settings.site.customEndpoints.itemLabel', { n: index + 1 }) }}
               </span>
               <button
                 type="button"
-                class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                class="settings-site-card__remove-button settings-site-card__remove-button-layout"
                 @click="$emit('remove-endpoint', index)"
               >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -99,7 +113,7 @@
             </div>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                <label class="settings-site-card__mini-label mb-1 block text-xs font-medium">
                   {{ t('admin.settings.site.customEndpoints.name') }}
                 </label>
                 <input
@@ -110,7 +124,7 @@
                 />
               </div>
               <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                <label class="settings-site-card__mini-label mb-1 block text-xs font-medium">
                   {{ t('admin.settings.site.customEndpoints.endpointUrl') }}
                 </label>
                 <input
@@ -121,7 +135,7 @@
                 />
               </div>
               <div class="sm:col-span-2">
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                <label class="settings-site-card__mini-label mb-1 block text-xs font-medium">
                   {{ t('admin.settings.site.customEndpoints.descriptionLabel') }}
                 </label>
                 <input
@@ -137,7 +151,7 @@
 
         <button
           type="button"
-          class="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 px-4 py-2.5 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-dark-600 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:text-primary-400"
+          class="settings-site-card__add-button settings-site-card__add-button-layout mt-3 flex w-full items-center justify-center gap-2 text-sm transition-colors"
           @click="$emit('add-endpoint')"
         >
           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -148,7 +162,7 @@
       </div>
 
       <div>
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.site.contactInfo') }}
         </label>
         <input
@@ -157,13 +171,13 @@
           class="input"
           :placeholder="t('admin.settings.site.contactInfoPlaceholder')"
         />
-        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p class="settings-site-card__description mt-1.5 text-xs">
           {{ t('admin.settings.site.contactInfoHint') }}
         </p>
       </div>
 
       <div>
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.site.docUrl') }}
         </label>
         <input
@@ -172,13 +186,13 @@
           class="input font-mono text-sm"
           :placeholder="t('admin.settings.site.docUrlPlaceholder')"
         />
-        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p class="settings-site-card__description mt-1.5 text-xs">
           {{ t('admin.settings.site.docUrlHint') }}
         </p>
       </div>
 
       <div>
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.site.siteLogo') }}
         </label>
         <ImageUpload
@@ -192,7 +206,7 @@
       </div>
 
       <div>
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.site.homeContent') }}
         </label>
         <textarea
@@ -201,22 +215,22 @@
           class="input font-mono text-sm"
           :placeholder="t('admin.settings.site.homeContentPlaceholder')"
         ></textarea>
-        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p class="settings-site-card__description mt-1.5 text-xs">
           {{ t('admin.settings.site.homeContentHint') }}
         </p>
-        <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+        <p class="settings-site-card__warning mt-2 text-xs">
           {{ t('admin.settings.site.homeContentIframeWarning') }}
         </p>
       </div>
 
       <div
-        class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
+        class="settings-site-card__section flex items-center justify-between pt-4"
       >
         <div>
-          <label class="font-medium text-gray-900 dark:text-white">
+          <label class="settings-site-card__label font-medium">
             {{ t('admin.settings.site.hideCcsImportButton') }}
           </label>
-          <p class="text-sm text-gray-500 dark:text-gray-400">
+          <p class="settings-site-card__description text-sm">
             {{ t('admin.settings.site.hideCcsImportButtonHint') }}
           </p>
         </div>
@@ -230,7 +244,9 @@
 import { useI18n } from 'vue-i18n'
 import Toggle from '@/components/common/Toggle.vue'
 import ImageUpload from '@/components/common/ImageUpload.vue'
+import Select from '@/components/common/Select.vue'
 import type { SettingsForm } from '../settingsForm'
+import { FRONTEND_THEMES } from '@/themes'
 
 defineProps<{
   form: SettingsForm
@@ -242,4 +258,90 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const themeOptions = FRONTEND_THEMES.map((theme) => ({
+  value: theme.id,
+  label: `${theme.label} · ${theme.description}`
+}))
 </script>
+
+<style scoped>
+.settings-site-card__header,
+.settings-site-card__section {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-site-card__header {
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-site-card__title,
+.settings-site-card__label,
+.settings-site-card__field-label,
+.settings-site-card__mini-label {
+  color: var(--theme-page-text);
+}
+
+.settings-site-card__description {
+  color: var(--theme-page-muted);
+}
+
+.settings-site-card__mode-banner {
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-warning-rgb)) 20%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 8%, var(--theme-surface));
+}
+
+.settings-site-card__header-spacing {
+  padding: var(--theme-settings-card-header-padding-y) var(--theme-settings-card-header-padding-x);
+}
+
+.settings-site-card__body {
+  padding: var(--theme-settings-card-body-padding);
+}
+
+.settings-site-card__panel {
+  border-radius: var(--theme-settings-card-panel-radius);
+  padding: var(--theme-settings-card-panel-padding);
+}
+
+.settings-site-card__endpoint-card {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 62%, var(--theme-surface));
+}
+
+.settings-site-card__remove-button {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 60%, var(--theme-page-muted));
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.settings-site-card__remove-button-layout {
+  border-radius: var(--theme-settings-inline-button-radius);
+  padding: var(--theme-settings-inline-button-padding);
+}
+
+.settings-site-card__remove-button:hover {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.settings-site-card__add-button {
+  border: 2px dashed color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  color: var(--theme-page-muted);
+}
+
+.settings-site-card__add-button-layout {
+  border-radius: var(--theme-settings-card-panel-radius);
+  padding: var(--theme-settings-action-padding-y) var(--theme-settings-action-padding-x);
+}
+
+.settings-site-card__add-button:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 44%, var(--theme-card-border));
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+  background: color-mix(in srgb, var(--theme-accent-soft) 46%, transparent);
+}
+
+.settings-site-card__warning {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+</style>

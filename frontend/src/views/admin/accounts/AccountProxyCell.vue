@@ -1,11 +1,11 @@
 <template>
   <div v-if="proxy" class="flex items-center gap-2">
-    <span class="text-sm text-gray-700 dark:text-gray-300">{{ proxy.name }}</span>
-    <span v-if="proxy.country_code" class="text-xs text-gray-500 dark:text-gray-400">
+    <span class="theme-text-default text-sm">{{ proxy.name }}</span>
+    <span v-if="proxy.country_code" class="theme-text-muted text-xs">
       ({{ proxy.country_code }})
     </span>
   </div>
-  <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+  <span v-else class="theme-text-subtle text-sm">-</span>
 </template>
 
 <script setup lang="ts">

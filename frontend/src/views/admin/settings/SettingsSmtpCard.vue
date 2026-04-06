@@ -1,13 +1,11 @@
 <template>
   <div class="card">
-    <div
-      class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
-    >
+    <div class="settings-smtp-card__header flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+        <h2 class="settings-smtp-card__title text-lg font-semibold">
           {{ t('admin.settings.smtp.title') }}
         </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <p class="settings-smtp-card__description mt-1 text-sm">
           {{ t('admin.settings.smtp.description') }}
         </p>
       </div>
@@ -17,7 +15,7 @@
         :disabled="testing || disabled"
         @click="$emit('test-connection')"
       >
-        <svg v-if="testing" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        <svg v-if="testing" class="settings-smtp-card__spinner h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
             cx="12"
@@ -35,10 +33,10 @@
         {{ testing ? t('admin.settings.smtp.testing') : t('admin.settings.smtp.testConnection') }}
       </button>
     </div>
-    <div class="space-y-6 p-6">
+    <div class="settings-smtp-card__body space-y-6">
       <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-smtp-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.smtp.host') }}
           </label>
           <input
@@ -49,7 +47,7 @@
           />
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-smtp-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.smtp.port') }}
           </label>
           <input
@@ -62,7 +60,7 @@
           />
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-smtp-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.smtp.username') }}
           </label>
           <input
@@ -73,7 +71,7 @@
           />
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-smtp-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.smtp.password') }}
           </label>
           <input
@@ -91,7 +89,7 @@
             @keydown="$emit('password-interaction')"
             @paste="$emit('password-interaction')"
           />
-          <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <p class="settings-smtp-card__description mt-1.5 text-xs">
             {{
               form.smtp_password_configured
                 ? t('admin.settings.smtp.passwordConfiguredHint')
@@ -100,7 +98,7 @@
           </p>
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-smtp-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.smtp.fromEmail') }}
           </label>
           <input
@@ -111,7 +109,7 @@
           />
         </div>
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-smtp-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.smtp.fromName') }}
           </label>
           <input
@@ -124,13 +122,13 @@
       </div>
 
       <div
-        class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
+        class="settings-smtp-card__section flex items-center justify-between pt-4"
       >
         <div>
-          <label class="font-medium text-gray-900 dark:text-white">
+          <label class="settings-smtp-card__label font-medium">
             {{ t('admin.settings.smtp.useTls') }}
           </label>
-          <p class="text-sm text-gray-500 dark:text-gray-400">
+          <p class="settings-smtp-card__description text-sm">
             {{ t('admin.settings.smtp.useTlsHint') }}
           </p>
         </div>
@@ -158,3 +156,37 @@ defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-smtp-card__header,
+.settings-smtp-card__body,
+.settings-smtp-card__section {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-smtp-card__header {
+  padding:
+    var(--theme-settings-card-header-padding-y)
+    var(--theme-settings-card-header-padding-x);
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-smtp-card__body {
+  padding: var(--theme-settings-card-body-padding);
+}
+
+.settings-smtp-card__title,
+.settings-smtp-card__label,
+.settings-smtp-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-smtp-card__description {
+  color: var(--theme-page-muted);
+}
+
+.settings-smtp-card__spinner {
+  color: var(--theme-accent);
+}
+</style>

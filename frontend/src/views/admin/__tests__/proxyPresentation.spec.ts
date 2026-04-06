@@ -59,10 +59,10 @@ describe('proxyPresentation', () => {
     expect(getQualityTargetLabel('openai', t)).toBe('OpenAI')
     expect(getIpTypeBadgeClass('mobile')).toBe('badge-info')
     expect(getIpTypeLabel('vpn', t)).toBe('admin.proxies.qualityIPTypeVPN')
-    expect(getDnsLeakBadgeClass('possible')).toBe('badge-yellow')
+    expect(getDnsLeakBadgeClass('possible')).toBe('badge-warning')
     expect(getDnsLeakLabel('detected', t)).toBe('admin.proxies.qualityDNSLeakDetected')
-    expect(getProxyScoreBarColor(85)).toBe('bg-green-500')
-    expect(getProxyScoreBarColor(45)).toBe('bg-orange-500')
+    expect(getProxyScoreBarColor(85)).toBe('theme-progress-fill--success')
+    expect(getProxyScoreBarColor(45)).toBe('theme-progress-fill--brand-orange')
   })
 
   it('builds localized category score entries in display order', () => {

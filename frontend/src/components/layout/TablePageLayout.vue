@@ -46,20 +46,21 @@ onUnmounted(() => {
 <style scoped>
 /* 桌面端：Flexbox 布局 */
 .table-page-layout {
-  @apply flex flex-col gap-4 lg:gap-6;
-  /* 减去 header (64px) + main padding (随断点变化) */
-  height: calc(100vh - 64px - 2rem); /* p-4 对应 1rem*2 */
+  @apply flex flex-col;
+  gap: var(--theme-table-layout-gap);
+  height: calc(100vh - var(--theme-shell-header-height) - var(--theme-table-layout-height-offset-mobile));
 }
 
 @media (min-width: 768px) {
   .table-page-layout {
-    height: calc(100vh - 64px - 3rem); /* md:p-6 对应 1.5rem*2 */
+    height: calc(100vh - var(--theme-shell-header-height) - var(--theme-table-layout-height-offset-tablet));
   }
 }
 
 @media (min-width: 1024px) {
   .table-page-layout {
-    height: calc(100vh - 64px - 4rem); /* lg:p-8 对应 2rem*2 */
+    gap: var(--theme-table-layout-gap-lg);
+    height: calc(100vh - var(--theme-shell-header-height) - var(--theme-table-layout-height-offset-desktop));
   }
 }
 
@@ -73,7 +74,11 @@ onUnmounted(() => {
 
 /* 表格滚动容器 - 增强版表体滚动方案 */
 .table-scroll-container {
-  @apply flex flex-col overflow-hidden h-full bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-dark-700 shadow-sm;
+  @apply flex flex-col overflow-hidden h-full;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-card-border);
+  border-radius: var(--theme-surface-radius);
+  box-shadow: var(--theme-card-shadow);
 }
 
 .table-scroll-container :deep(.table-wrapper) {
@@ -89,7 +94,8 @@ onUnmounted(() => {
 }
 
 .table-scroll-container :deep(thead) {
-  @apply bg-gray-50/80 dark:bg-dark-800/80 backdrop-blur-sm;
+  backdrop-filter: blur(var(--theme-table-head-blur));
+  background: color-mix(in srgb, var(--theme-table-head-bg) 92%, transparent);
 }
 
 .table-scroll-container :deep(tbody) {
@@ -97,16 +103,26 @@ onUnmounted(() => {
 }
 
 .table-scroll-container :deep(th) {
-  @apply px-5 py-4 text-left text-sm font-medium text-gray-600 dark:text-dark-300 border-b border-gray-200 dark:border-dark-700;
+  @apply text-left font-medium;
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  font-size: var(--theme-table-head-font-size);
+  letter-spacing: var(--theme-table-head-letter-spacing);
+  text-transform: var(--theme-table-head-text-transform);
+  color: var(--theme-table-head-text);
+  border-bottom: 1px solid var(--theme-page-border);
 }
 
 .table-scroll-container :deep(td) {
-  @apply px-5 py-4 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-dark-800;
+  @apply text-sm;
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  color: var(--theme-page-text);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-page-border) 72%, transparent);
 }
 
 /* 移动端：恢复正常滚动 */
 .table-page-layout.mobile-mode .table-scroll-container {
-  @apply h-auto overflow-visible border-none shadow-none bg-transparent;
+  @apply h-auto overflow-visible border-none shadow-none;
+  background: transparent;
 }
 
 .table-page-layout.mobile-mode .layout-section-scrollable {

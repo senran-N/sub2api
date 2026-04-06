@@ -1,35 +1,35 @@
 <template>
   <div
-    class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+    class="subscription-column-settings-menu absolute right-0 z-50 origin-top-right"
   >
-    <div class="p-2">
-      <div class="mb-2 border-b border-gray-200 pb-2 dark:border-gray-700">
-        <div class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+    <div class="subscription-column-settings-menu__body">
+      <div class="subscription-column-settings-menu__section border-b">
+        <div class="subscription-column-settings-menu__label text-xs font-medium">
           {{ t('admin.subscriptions.columns.user') }}
         </div>
         <button
-          class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+          class="subscription-column-settings-menu__button flex w-full items-center justify-between text-sm"
           @click="emit('set-user-mode', 'email')"
         >
           <span>{{ t('admin.users.columns.email') }}</span>
-          <Icon v-if="userColumnMode === 'email'" name="check" size="sm" class="text-primary-500" />
+          <Icon v-if="userColumnMode === 'email'" name="check" size="sm" class="subscription-column-settings-menu__check" />
         </button>
         <button
-          class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+          class="subscription-column-settings-menu__button flex w-full items-center justify-between text-sm"
           @click="emit('set-user-mode', 'username')"
         >
           <span>{{ t('admin.users.columns.username') }}</span>
-          <Icon v-if="userColumnMode === 'username'" name="check" size="sm" class="text-primary-500" />
+          <Icon v-if="userColumnMode === 'username'" name="check" size="sm" class="subscription-column-settings-menu__check" />
         </button>
       </div>
       <button
         v-for="column in toggleableColumns"
         :key="column.key"
-        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+        class="subscription-column-settings-menu__button flex w-full items-center justify-between text-sm"
         @click="emit('toggle-column', column.key)"
       >
         <span>{{ column.label }}</span>
-        <Icon v-if="isColumnVisible(column.key)" name="check" size="sm" class="text-primary-500" />
+        <Icon v-if="isColumnVisible(column.key)" name="check" size="sm" class="subscription-column-settings-menu__check" />
       </button>
     </div>
   </div>
@@ -53,3 +53,46 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.subscription-column-settings-menu {
+  width: var(--theme-settings-menu-width-sm);
+  max-height: var(--theme-settings-menu-max-height);
+  overflow-y: auto;
+  margin-top: calc(var(--theme-floating-panel-gap) * 0.5 + 0.375rem);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.subscription-column-settings-menu__body {
+  padding: calc(var(--theme-floating-panel-gap) * 0.5 + 0.25rem);
+}
+
+.subscription-column-settings-menu__section {
+  margin-bottom: calc(var(--theme-floating-panel-gap) * 0.5 + 0.375rem);
+  padding-bottom: calc(var(--theme-floating-panel-gap) * 0.5 + 0.25rem);
+  border-color: color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+}
+
+.subscription-column-settings-menu__label {
+  padding: calc(var(--theme-floating-panel-gap) * 0.5 + 0.125rem) calc(var(--theme-button-padding-x) * 0.65);
+  color: var(--theme-page-muted);
+}
+
+.subscription-column-settings-menu__button {
+  padding: calc(var(--theme-button-padding-y) * 0.8) calc(var(--theme-button-padding-x) * 0.65);
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  color: var(--theme-page-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.subscription-column-settings-menu__button:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.subscription-column-settings-menu__check {
+  color: var(--theme-accent);
+}
+</style>

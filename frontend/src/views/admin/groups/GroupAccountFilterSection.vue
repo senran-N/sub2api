@@ -1,17 +1,23 @@
 <template>
   <div
     v-if="supportedPlatforms.includes(form.platform)"
-    class="mt-4 space-y-4 border-t border-gray-200 pt-4 dark:border-dark-400"
+    class="group-account-filter-section mt-4 space-y-4 pt-4"
   >
-    <h4 class="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
-      账号过滤控制
+    <h4 class="group-account-filter-section__title mb-3 text-sm font-medium">
+      {{ t('admin.groups.accountFilter.title') }}
     </h4>
 
     <div class="flex items-center justify-between">
       <div>
-        <label class="text-sm text-gray-600 dark:text-gray-400">仅允许 OAuth 账号</label>
-        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          {{ form.require_oauth_only ? '已启用 — 排除 API Key 类型账号' : '未启用' }}
+        <label class="group-account-filter-section__label text-sm">
+          {{ t('admin.groups.accountFilter.oauthOnly') }}
+        </label>
+        <p class="group-account-filter-section__hint mt-0.5 text-xs">
+          {{
+            form.require_oauth_only
+              ? t('admin.groups.accountFilter.oauthOnlyEnabled')
+              : t('admin.groups.accountFilter.disabled')
+          }}
         </p>
       </div>
       <Toggle v-model="form.require_oauth_only" />
@@ -19,11 +25,15 @@
 
     <div class="flex items-center justify-between">
       <div>
-        <label class="text-sm text-gray-600 dark:text-gray-400">
-          仅允许隐私保护已设置的账号
+        <label class="group-account-filter-section__label text-sm">
+          {{ t('admin.groups.accountFilter.privacySetOnly') }}
         </label>
-        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          {{ form.require_privacy_set ? '已启用 — Privacy 未设置的账号将被排除' : '未启用' }}
+        <p class="group-account-filter-section__hint mt-0.5 text-xs">
+          {{
+            form.require_privacy_set
+              ? t('admin.groups.accountFilter.privacySetOnlyEnabled')
+              : t('admin.groups.accountFilter.disabled')
+          }}
         </p>
       </div>
       <Toggle v-model="form.require_privacy_set" />
@@ -32,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import Toggle from '@/components/common/Toggle.vue'
 import type { CreateGroupForm, EditGroupForm } from '../groupsForm'
 
@@ -39,5 +50,22 @@ defineProps<{
   form: CreateGroupForm | EditGroupForm
 }>()
 
+const { t } = useI18n()
+
 const supportedPlatforms = ['openai', 'antigravity', 'anthropic', 'gemini']
 </script>
+
+<style scoped>
+.group-account-filter-section {
+  border-top: 1px solid var(--theme-page-border);
+}
+
+.group-account-filter-section__title,
+.group-account-filter-section__label {
+  color: var(--theme-page-text);
+}
+
+.group-account-filter-section__hint {
+  color: var(--theme-page-muted);
+}
+</style>

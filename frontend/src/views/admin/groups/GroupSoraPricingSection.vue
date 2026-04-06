@@ -1,9 +1,9 @@
 <template>
-  <div v-if="form.platform === 'sora'" class="border-t pt-4">
-    <label class="mb-2 block font-medium text-gray-700 dark:text-gray-300">
+  <div v-if="form.platform === 'sora'" class="group-sora-pricing-section border-t pt-4">
+    <label class="group-sora-pricing-section__title mb-2 block font-medium">
       {{ t('admin.groups.soraPricing.title') }}
     </label>
-    <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+    <p class="group-sora-pricing-section__description mb-3 text-xs">
       {{ t('admin.groups.soraPricing.description') }}
     </p>
     <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -65,9 +65,9 @@
           class="input"
           placeholder="10"
         />
-        <span class="shrink-0 text-sm text-gray-500">GB</span>
+        <span class="group-sora-pricing-section__unit shrink-0 text-sm">GB</span>
       </div>
-      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+      <p class="group-sora-pricing-section__hint mt-1 text-xs">
         {{ t('admin.groups.soraPricing.storageQuotaHint') }}
       </p>
     </div>
@@ -84,3 +84,19 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.group-sora-pricing-section {
+  border-color: var(--theme-page-border);
+}
+
+.group-sora-pricing-section__title {
+  color: var(--theme-page-text);
+}
+
+.group-sora-pricing-section__description,
+.group-sora-pricing-section__unit,
+.group-sora-pricing-section__hint {
+  color: var(--theme-page-muted);
+}
+</style>

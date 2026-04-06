@@ -1,13 +1,13 @@
 <template>
   <div class="flex items-center gap-2">
     <div
-      class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30"
+      class="theme-avatar-badge flex h-8 w-8 items-center justify-center rounded-full"
     >
-      <span class="text-sm font-medium text-primary-700 dark:text-primary-300">
+      <span class="text-sm font-medium">
         {{ userInitial }}
       </span>
     </div>
-    <span class="font-medium text-gray-900 dark:text-white">
+    <span class="theme-text-strong font-medium">
       {{ userLabel }}
     </span>
   </div>

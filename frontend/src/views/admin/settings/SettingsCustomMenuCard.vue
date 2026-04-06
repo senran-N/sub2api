@@ -1,28 +1,28 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="settings-custom-menu-card__header">
+      <h2 class="settings-custom-menu-card__title text-lg font-semibold">
         {{ t('admin.settings.customMenu.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-custom-menu-card__description mt-1 text-sm">
         {{ t('admin.settings.customMenu.description') }}
       </p>
     </div>
-    <div class="space-y-4 p-6">
+    <div class="settings-custom-menu-card__content space-y-4">
       <div
         v-for="(item, index) in form.custom_menu_items"
         :key="item.id || index"
-        class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+        class="settings-custom-menu-card__item"
       >
         <div class="mb-3 flex items-center justify-between">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span class="settings-custom-menu-card__item-label text-sm font-medium">
             {{ t('admin.settings.customMenu.itemLabel', { n: index + 1 }) }}
           </span>
           <div class="flex items-center gap-2">
             <button
               v-if="index > 0"
               type="button"
-              class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+              class="settings-custom-menu-card__icon-button"
               :title="t('admin.settings.customMenu.moveUp')"
               @click="$emit('move-item', index, -1)"
             >
@@ -33,7 +33,7 @@
             <button
               v-if="index < form.custom_menu_items.length - 1"
               type="button"
-              class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+              class="settings-custom-menu-card__icon-button"
               :title="t('admin.settings.customMenu.moveDown')"
               @click="$emit('move-item', index, 1)"
             >
@@ -43,7 +43,7 @@
             </button>
             <button
               type="button"
-              class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+              class="settings-custom-menu-card__icon-button settings-custom-menu-card__icon-button--danger"
               :title="t('admin.settings.customMenu.remove')"
               @click="$emit('remove-item', index)"
             >
@@ -60,7 +60,7 @@
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+            <label class="settings-custom-menu-card__field-label mb-1 block text-xs font-medium">
               {{ t('admin.settings.customMenu.name') }}
             </label>
             <input
@@ -72,7 +72,7 @@
           </div>
 
           <div>
-            <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+            <label class="settings-custom-menu-card__field-label mb-1 block text-xs font-medium">
               {{ t('admin.settings.customMenu.visibility') }}
             </label>
             <select v-model="item.visibility" class="input text-sm">
@@ -82,7 +82,7 @@
           </div>
 
           <div class="sm:col-span-2">
-            <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+            <label class="settings-custom-menu-card__field-label mb-1 block text-xs font-medium">
               {{ t('admin.settings.customMenu.url') }}
             </label>
             <input
@@ -94,7 +94,7 @@
           </div>
 
           <div class="sm:col-span-2">
-            <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+            <label class="settings-custom-menu-card__field-label mb-1 block text-xs font-medium">
               {{ t('admin.settings.customMenu.iconSvg') }}
             </label>
             <ImageUpload
@@ -111,7 +111,7 @@
 
       <button
         type="button"
-        class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-dark-600 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:text-primary-400"
+        class="settings-custom-menu-card__add-button flex w-full items-center justify-center gap-2 text-sm transition-colors"
         @click="$emit('add-item')"
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -140,3 +140,62 @@ defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-custom-menu-card__header {
+  padding: var(--theme-settings-custom-menu-header-padding-y)
+    var(--theme-settings-custom-menu-header-padding-x);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-custom-menu-card__content {
+  padding: var(--theme-settings-custom-menu-content-padding);
+}
+
+.settings-custom-menu-card__title,
+.settings-custom-menu-card__item-label,
+.settings-custom-menu-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-custom-menu-card__description {
+  color: var(--theme-page-muted);
+}
+
+.settings-custom-menu-card__item {
+  border-radius: var(--theme-settings-custom-menu-item-radius);
+  padding: var(--theme-settings-custom-menu-item-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+}
+
+.settings-custom-menu-card__icon-button {
+  border-radius: var(--theme-settings-custom-menu-icon-button-radius);
+  padding: var(--theme-settings-custom-menu-icon-button-padding);
+  color: var(--theme-page-muted);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.settings-custom-menu-card__icon-button:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.settings-custom-menu-card__icon-button--danger:hover {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 9%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.settings-custom-menu-card__add-button {
+  border-radius: var(--theme-settings-custom-menu-add-button-radius);
+  padding-block: var(--theme-settings-custom-menu-add-button-padding-y);
+  border: 2px dashed color-mix(in srgb, var(--theme-card-border) 78%, transparent);
+  color: var(--theme-page-muted);
+}
+
+.settings-custom-menu-card__add-button:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 46%, var(--theme-card-border));
+  color: var(--theme-accent);
+}
+</style>

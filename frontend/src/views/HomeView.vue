@@ -11,14 +11,14 @@
 
   <div
     v-else
-    class="relative flex min-h-screen flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
+    class="home-view relative flex min-h-screen flex-col overflow-hidden"
   >
     <HomeBackgroundDecor />
 
-    <header class="relative z-20 px-6 py-4">
-      <nav class="mx-auto flex max-w-6xl items-center justify-between">
+    <header class="home-view__header">
+      <nav class="home-view__nav">
         <div class="flex items-center">
-          <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
+          <div class="home-view__brand-mark">
             <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
           </div>
         </div>
@@ -33,16 +33,14 @@
           <router-link
             v-if="isAuthenticated"
             :to="dashboardPath"
-            class="inline-flex items-center gap-1.5 rounded-full bg-gray-900 py-1 pl-1 pr-2.5 transition-colors hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
+            class="home-view__dashboard-link"
           >
-            <span
-              class="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-[10px] font-semibold text-white"
-            >
+            <span class="home-view__dashboard-avatar">
               {{ userInitial }}
             </span>
-            <span class="text-xs font-medium text-white">{{ t('home.dashboard') }}</span>
+            <span class="home-view__dashboard-label">{{ t('home.dashboard') }}</span>
             <svg
-              class="h-3 w-3 text-gray-400"
+              class="home-view__dashboard-arrow h-3 w-3"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -58,7 +56,7 @@
           <router-link
             v-else
             to="/login"
-            class="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
+            class="home-view__login-link"
           >
             {{ t('home.login') }}
           </router-link>
@@ -66,8 +64,8 @@
       </nav>
     </header>
 
-    <main class="relative z-10 flex-1 px-6 py-16">
-      <div class="mx-auto max-w-6xl">
+    <main class="home-view__main">
+      <div class="home-view__main-inner">
         <HomeHeroSection
           :cta-label="isAuthenticated ? t('home.goToDashboard') : t('home.getStarted')"
           :cta-path="isAuthenticated ? dashboardPath : '/login'"
@@ -149,3 +147,118 @@ onMounted(() => {
   ensurePublicSettingsLoaded()
 })
 </script>
+
+<style scoped>
+.home-view {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--theme-page-bg) 88%, var(--theme-accent-soft)) 0%, color-mix(in srgb, var(--theme-page-bg) 94%, var(--theme-surface-soft)) 45%, var(--theme-page-bg) 100%);
+}
+
+.home-view__header {
+  position: relative;
+  z-index: 20;
+  padding: var(--theme-public-header-padding-y) 1.5rem;
+}
+
+.home-view__nav,
+.home-view__main-inner {
+  width: 100%;
+  max-width: var(--theme-public-shell-max-width);
+  margin: 0 auto;
+}
+
+.home-view__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.home-view__brand-mark {
+  display: flex;
+  height: var(--theme-public-logo-size);
+  width: var(--theme-public-logo-size);
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--theme-public-logo-radius);
+  border: var(--theme-public-logo-border);
+  box-shadow: var(--theme-public-logo-shadow);
+  background: var(--theme-surface);
+}
+
+.home-view__main {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  padding: var(--theme-public-main-padding-y) 1.5rem;
+}
+
+.home-view__dashboard-link,
+.home-view__login-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--theme-public-action-radius);
+  background: var(--theme-surface-contrast);
+  border: var(--theme-button-border-width) solid var(--theme-button-primary-border-color);
+  box-shadow: var(--theme-button-primary-shadow);
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.home-view__dashboard-link {
+  padding: var(--theme-public-action-padding);
+}
+
+.home-view__login-link {
+  padding: calc(var(--theme-button-padding-y) * 0.6) calc(var(--theme-button-padding-x) * 0.75);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.home-view__dashboard-link:hover,
+.home-view__login-link:hover {
+  background: color-mix(in srgb, var(--theme-surface-contrast) 88%, var(--theme-page-text));
+  box-shadow: var(--theme-button-primary-hover-shadow);
+  transform: var(--theme-button-primary-hover-transform);
+}
+
+.home-view__dashboard-avatar {
+  display: flex;
+  height: calc(var(--theme-header-avatar-size) - 12px);
+  width: calc(var(--theme-header-avatar-size) - 12px);
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--theme-header-avatar-radius);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--theme-accent) 84%, var(--theme-surface)),
+    var(--theme-accent)
+  );
+  color: var(--theme-filled-text);
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.home-view__dashboard-label,
+.home-view__login-link {
+  color: var(--theme-surface-contrast-text);
+}
+
+.home-view__dashboard-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.home-view__dashboard-arrow {
+  color: color-mix(in srgb, var(--theme-surface-contrast-text) 56%, transparent);
+}
+
+@media (max-width: 767px) {
+  .home-view__header,
+  .home-view__main {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+</style>

@@ -72,14 +72,14 @@
           </template>
 
           <template #cell-last_used_at="{ value }">
-            <span v-if="value" class="text-sm text-gray-500 dark:text-dark-400">
+            <span v-if="value" class="theme-text-muted text-sm">
               {{ formatDateTime(value) }}
             </span>
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <span v-else class="theme-text-subtle text-sm">-</span>
           </template>
 
           <template #cell-created_at="{ value }">
-            <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatDateTime(value) }}</span>
+            <span class="theme-text-muted text-sm">{{ formatDateTime(value) }}</span>
           </template>
 
           <template #cell-actions="{ row }">

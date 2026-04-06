@@ -181,15 +181,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700">
+  <div class="ops-email-notification-card">
     <div class="mb-4 flex items-start justify-between gap-4">
       <div>
-        <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ t('admin.ops.email.title') }}</h3>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.ops.email.description') }}</p>
+        <h3 class="ops-email-notification-card__title text-sm font-bold">{{ t('admin.ops.email.title') }}</h3>
+        <p class="ops-email-notification-card__subtitle mt-1 text-xs">{{ t('admin.ops.email.description') }}</p>
       </div>
       <div class="flex items-center gap-2">
         <button
-          class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600"
+          class="ops-email-notification-card__refresh flex items-center gap-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="loading"
           @click="loadConfig"
         >
@@ -202,50 +202,50 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="!config" class="text-sm text-gray-500 dark:text-gray-400">
+    <div v-if="!config" class="ops-email-notification-card__subtitle text-sm">
       <span v-if="loading">{{ t('admin.ops.email.loading') }}</span>
       <span v-else>{{ t('admin.ops.email.noData') }}</span>
     </div>
 
     <div v-else class="space-y-6">
-      <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
-        <h4 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.ops.email.alertTitle') }}</h4>
+      <div class="ops-email-notification-card__panel">
+        <h4 class="ops-email-notification-card__title mb-2 text-sm font-semibold">{{ t('admin.ops.email.alertTitle') }}</h4>
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div class="text-xs text-gray-600 dark:text-gray-300">
+          <div class="ops-email-notification-card__meta text-xs">
             {{ t('common.enabled') }}:
-            <span class="ml-1 font-medium text-gray-900 dark:text-white">
+            <span class="ops-email-notification-card__meta-value ml-1 font-medium">
               {{ config.alert.enabled ? t('common.enabled') : t('common.disabled') }}
             </span>
           </div>
-          <div class="text-xs text-gray-600 dark:text-gray-300">
+          <div class="ops-email-notification-card__meta text-xs">
             {{ t('admin.ops.email.recipients') }}:
-            <span class="ml-1 font-medium text-gray-900 dark:text-white">{{ config.alert.recipients.length }}</span>
+            <span class="ops-email-notification-card__meta-value ml-1 font-medium">{{ config.alert.recipients.length }}</span>
           </div>
-          <div class="text-xs text-gray-600 dark:text-gray-300">
+          <div class="ops-email-notification-card__meta text-xs">
             {{ t('admin.ops.email.minSeverity') }}:
-            <span class="ml-1 font-medium text-gray-900 dark:text-white">{{
+            <span class="ops-email-notification-card__meta-value ml-1 font-medium">{{
               config.alert.min_severity || t('admin.ops.email.minSeverityAll')
             }}</span>
           </div>
-          <div class="text-xs text-gray-600 dark:text-gray-300">
+          <div class="ops-email-notification-card__meta text-xs">
             {{ t('admin.ops.email.rateLimitPerHour') }}:
-            <span class="ml-1 font-medium text-gray-900 dark:text-white">{{ config.alert.rate_limit_per_hour }}</span>
+            <span class="ops-email-notification-card__meta-value ml-1 font-medium">{{ config.alert.rate_limit_per_hour }}</span>
           </div>
         </div>
       </div>
 
-      <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
-        <h4 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.ops.email.reportTitle') }}</h4>
+      <div class="ops-email-notification-card__panel">
+        <h4 class="ops-email-notification-card__title mb-2 text-sm font-semibold">{{ t('admin.ops.email.reportTitle') }}</h4>
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div class="text-xs text-gray-600 dark:text-gray-300">
+          <div class="ops-email-notification-card__meta text-xs">
             {{ t('common.enabled') }}:
-            <span class="ml-1 font-medium text-gray-900 dark:text-white">
+            <span class="ops-email-notification-card__meta-value ml-1 font-medium">
               {{ config.report.enabled ? t('common.enabled') : t('common.disabled') }}
             </span>
           </div>
-          <div class="text-xs text-gray-600 dark:text-gray-300">
+          <div class="ops-email-notification-card__meta text-xs">
             {{ t('admin.ops.email.recipients') }}:
-            <span class="ml-1 font-medium text-gray-900 dark:text-white">{{ config.report.recipients.length }}</span>
+            <span class="ops-email-notification-card__meta-value ml-1 font-medium">{{ config.report.recipients.length }}</span>
           </div>
         </div>
       </div>
@@ -256,31 +256,31 @@ onMounted(() => {
     <div v-if="draft" class="space-y-6">
       <div
         v-if="!editorValidation.valid"
-        class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200"
+        class="ops-email-notification-card__notice ops-email-notification-card__notice--warning border text-xs"
       >
         <div class="font-bold">{{ t('admin.ops.email.validation.title') }}</div>
         <ul class="mt-1 list-disc space-y-1 pl-4">
           <li v-for="msg in editorValidation.errors" :key="msg">{{ msg }}</li>
         </ul>
       </div>
-      <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
-        <h4 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.ops.email.alertTitle') }}</h4>
+      <div class="ops-email-notification-card__panel">
+        <h4 class="ops-email-notification-card__title mb-3 text-sm font-semibold">{{ t('admin.ops.email.alertTitle') }}</h4>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('common.enabled') }}</div>
-            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input v-model="draft.alert.enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+            <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('common.enabled') }}</div>
+            <label class="ops-email-notification-card__toggle-label inline-flex items-center gap-2 text-sm">
+              <input v-model="draft.alert.enabled" type="checkbox" class="ops-email-notification-card__checkbox h-4 w-4 rounded" />
               <span>{{ draft.alert.enabled ? t('common.enabled') : t('common.disabled') }}</span>
             </label>
           </div>
 
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.minSeverity') }}</div>
+            <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.minSeverity') }}</div>
             <Select v-model="draft.alert.min_severity" :options="severityOptions" />
           </div>
 
           <div class="md:col-span-2">
-            <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.recipients') }}</div>
+            <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.recipients') }}</div>
             <div class="flex gap-2">
               <input
                 v-model="alertRecipientInput"
@@ -293,59 +293,59 @@ onMounted(() => {
                 {{ t('common.add') }}
               </button>
             </div>
-            <p v-if="alertRecipientError" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ alertRecipientError }}</p>
+            <p v-if="alertRecipientError" class="ops-email-notification-card__error mt-1 text-xs">{{ alertRecipientError }}</p>
             <div class="mt-2 flex flex-wrap gap-2">
               <span
                 v-for="email in draft.alert.recipients"
                 :key="email"
-                class="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                class="ops-email-notification-card__recipient-chip theme-chip theme-chip--info theme-chip--regular inline-flex items-center gap-2 text-xs font-medium"
               >
                 {{ email }}
                 <button
                   type="button"
-                  class="text-blue-700/80 hover:text-blue-900 dark:text-blue-300"
+                  class="ops-email-notification-card__chip-remove"
                   @click="removeRecipient('alert', email)"
                 >
                   ×
                 </button>
               </span>
             </div>
-            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.ops.email.recipientsHint') }}</div>
+            <div class="ops-email-notification-card__subtitle mt-1 text-xs">{{ t('admin.ops.email.recipientsHint') }}</div>
           </div>
 
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.rateLimitPerHour') }}</div>
+            <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.rateLimitPerHour') }}</div>
             <input v-model.number="draft.alert.rate_limit_per_hour" type="number" min="0" max="100000" class="input" />
           </div>
 
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.batchWindowSeconds') }}</div>
+            <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.batchWindowSeconds') }}</div>
             <input v-model.number="draft.alert.batching_window_seconds" type="number" min="0" max="86400" class="input" />
           </div>
 
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.includeResolved') }}</div>
-            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input v-model="draft.alert.include_resolved_alerts" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+            <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.includeResolved') }}</div>
+            <label class="ops-email-notification-card__toggle-label inline-flex items-center gap-2 text-sm">
+              <input v-model="draft.alert.include_resolved_alerts" type="checkbox" class="ops-email-notification-card__checkbox h-4 w-4 rounded" />
               <span>{{ draft.alert.include_resolved_alerts ? t('common.enabled') : t('common.disabled') }}</span>
             </label>
           </div>
         </div>
       </div>
 
-      <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
-        <h4 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.ops.email.reportTitle') }}</h4>
+      <div class="ops-email-notification-card__panel">
+        <h4 class="ops-email-notification-card__title mb-3 text-sm font-semibold">{{ t('admin.ops.email.reportTitle') }}</h4>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('common.enabled') }}</div>
-            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input v-model="draft.report.enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+            <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('common.enabled') }}</div>
+            <label class="ops-email-notification-card__toggle-label inline-flex items-center gap-2 text-sm">
+              <input v-model="draft.report.enabled" type="checkbox" class="ops-email-notification-card__checkbox h-4 w-4 rounded" />
               <span>{{ draft.report.enabled ? t('common.enabled') : t('common.disabled') }}</span>
             </label>
           </div>
 
           <div class="md:col-span-2">
-            <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.recipients') }}</div>
+            <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.recipients') }}</div>
             <div class="flex gap-2">
               <input
                 v-model="reportRecipientInput"
@@ -358,17 +358,17 @@ onMounted(() => {
                 {{ t('common.add') }}
               </button>
             </div>
-            <p v-if="reportRecipientError" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ reportRecipientError }}</p>
+            <p v-if="reportRecipientError" class="ops-email-notification-card__error mt-1 text-xs">{{ reportRecipientError }}</p>
             <div class="mt-2 flex flex-wrap gap-2">
               <span
                 v-for="email in draft.report.recipients"
                 :key="email"
-                class="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                class="ops-email-notification-card__recipient-chip theme-chip theme-chip--info theme-chip--regular inline-flex items-center gap-2 text-xs font-medium"
               >
                 {{ email }}
                 <button
                   type="button"
-                  class="text-blue-700/80 hover:text-blue-900 dark:text-blue-300"
+                  class="ops-email-notification-card__chip-remove"
                   @click="removeRecipient('report', email)"
                 >
                   ×
@@ -380,51 +380,51 @@ onMounted(() => {
           <div class="md:col-span-2">
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.dailySummary') }}</div>
+                <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.dailySummary') }}</div>
                 <div class="flex items-center gap-2">
-                  <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input v-model="draft.report.daily_summary_enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+                  <label class="ops-email-notification-card__toggle-label inline-flex items-center gap-2 text-sm">
+                    <input v-model="draft.report.daily_summary_enabled" type="checkbox" class="ops-email-notification-card__checkbox h-4 w-4 rounded" />
                   </label>
                   <input v-model="draft.report.daily_summary_schedule" type="text" class="input" :placeholder="t('admin.ops.email.cronPlaceholder')" />
                 </div>
               </div>
               <div>
-                <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.weeklySummary') }}</div>
+                <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.weeklySummary') }}</div>
                 <div class="flex items-center gap-2">
-                  <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input v-model="draft.report.weekly_summary_enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+                  <label class="ops-email-notification-card__toggle-label inline-flex items-center gap-2 text-sm">
+                    <input v-model="draft.report.weekly_summary_enabled" type="checkbox" class="ops-email-notification-card__checkbox h-4 w-4 rounded" />
                   </label>
                   <input v-model="draft.report.weekly_summary_schedule" type="text" class="input" :placeholder="t('admin.ops.email.cronPlaceholder')" />
                 </div>
               </div>
               <div>
-                <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.errorDigest') }}</div>
+                <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.errorDigest') }}</div>
                 <div class="flex items-center gap-2">
-                  <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input v-model="draft.report.error_digest_enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+                  <label class="ops-email-notification-card__toggle-label inline-flex items-center gap-2 text-sm">
+                    <input v-model="draft.report.error_digest_enabled" type="checkbox" class="ops-email-notification-card__checkbox h-4 w-4 rounded" />
                   </label>
                   <input v-model="draft.report.error_digest_schedule" type="text" class="input" :placeholder="t('admin.ops.email.cronPlaceholder')" />
                 </div>
               </div>
               <div>
-                <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.errorDigestMinCount') }}</div>
+                <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.errorDigestMinCount') }}</div>
                 <input v-model.number="draft.report.error_digest_min_count" type="number" min="0" max="1000000" class="input" />
               </div>
               <div>
-                <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.accountHealth') }}</div>
+                <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.accountHealth') }}</div>
                 <div class="flex items-center gap-2">
-                  <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input v-model="draft.report.account_health_enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+                  <label class="ops-email-notification-card__toggle-label inline-flex items-center gap-2 text-sm">
+                    <input v-model="draft.report.account_health_enabled" type="checkbox" class="ops-email-notification-card__checkbox h-4 w-4 rounded" />
                   </label>
                   <input v-model="draft.report.account_health_schedule" type="text" class="input" :placeholder="t('admin.ops.email.cronPlaceholder')" />
                 </div>
               </div>
               <div>
-                <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.email.accountHealthThreshold') }}</div>
+                <div class="ops-email-notification-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.email.accountHealthThreshold') }}</div>
                 <input v-model.number="draft.report.account_health_error_rate_threshold" type="number" min="0" max="100" step="0.1" class="input" />
               </div>
             </div>
-            <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.ops.email.reportHint') }}</div>
+            <div class="ops-email-notification-card__subtitle mt-2 text-xs">{{ t('admin.ops.email.reportHint') }}</div>
           </div>
         </div>
       </div>
@@ -439,3 +439,80 @@ onMounted(() => {
     </template>
   </BaseDialog>
 </template>
+
+<style scoped>
+.ops-email-notification-card {
+  padding: var(--theme-ops-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  border-radius: var(--theme-surface-radius);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.ops-email-notification-card__title,
+.ops-email-notification-card__meta-value {
+  color: var(--theme-page-text);
+}
+
+.ops-email-notification-card__subtitle,
+.ops-email-notification-card__meta,
+.ops-email-notification-card__field-label,
+.ops-email-notification-card__toggle-label {
+  color: var(--theme-page-muted);
+}
+
+.ops-email-notification-card__refresh {
+  padding: calc(var(--theme-button-padding-y) * 0.6) calc(var(--theme-button-padding-x) * 0.75);
+  border-radius: var(--theme-button-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.ops-email-notification-card__refresh:hover {
+  background: color-mix(in srgb, var(--theme-page-border) 68%, var(--theme-surface));
+}
+
+.ops-email-notification-card__panel {
+  padding: var(--theme-ops-panel-padding);
+  border-radius: var(--theme-select-panel-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.ops-email-notification-card__notice {
+  padding: calc(var(--theme-ops-panel-padding) * 0.75);
+  border-radius: var(--theme-button-radius);
+  border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.ops-email-notification-card__notice--warning {
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-email-notification-card__checkbox {
+  border-color: color-mix(in srgb, var(--theme-input-border) 82%, transparent);
+  color: var(--theme-accent);
+}
+
+.ops-email-notification-card__checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-accent) 18%, transparent);
+}
+
+.ops-email-notification-card__error {
+  color: rgb(var(--theme-danger-rgb));
+}
+
+.ops-email-notification-card__recipient-chip {
+  padding: calc(var(--theme-button-padding-y) * 0.35) calc(var(--theme-button-padding-x) * 0.75);
+}
+
+.ops-email-notification-card__chip-remove {
+  color: inherit;
+  opacity: 0.72;
+}
+
+.ops-email-notification-card__chip-remove:hover {
+  opacity: 1;
+}
+</style>

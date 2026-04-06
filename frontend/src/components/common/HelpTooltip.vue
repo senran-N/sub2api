@@ -39,7 +39,7 @@ function updatePosition() {
     <!-- Trigger Icon -->
     <slot name="trigger">
       <svg
-        class="h-4 w-4 cursor-help text-gray-400 transition-colors hover:text-primary-600 dark:text-gray-500 dark:hover:text-primary-400"
+        class="help-tooltip__icon h-4 w-4 cursor-help transition-colors"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -57,12 +57,44 @@ function updatePosition() {
     <Teleport to="body">
       <div
         v-show="show"
-        class="fixed z-[99999] w-64 -translate-x-1/2 -translate-y-full rounded-lg bg-gray-900 p-3 text-xs leading-relaxed text-white shadow-xl ring-1 ring-white/10 dark:bg-gray-800"
-        :style="{ top: `calc(${tooltipStyle.top} - 8px)`, left: tooltipStyle.left }"
+        class="help-tooltip__content fixed z-[99999] text-xs leading-relaxed"
+        :style="{ top: tooltipStyle.top, left: tooltipStyle.left }"
       >
         <slot>{{ content }}</slot>
-        <div class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900 dark:bg-gray-800"></div>
+        <div class="help-tooltip__arrow absolute left-1/2"></div>
       </div>
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.help-tooltip__icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.help-tooltip__icon:hover {
+  color: var(--theme-accent);
+}
+
+.help-tooltip__content,
+.help-tooltip__arrow {
+  background: var(--theme-surface-emphasis);
+  color: var(--theme-page-bg);
+}
+
+.help-tooltip__content {
+  width: var(--theme-tooltip-width);
+  padding: var(--theme-tooltip-padding);
+  border-radius: var(--theme-tooltip-radius);
+  box-shadow: var(--theme-dropdown-shadow);
+  border: 1px solid color-mix(in srgb, var(--theme-surface-emphasis) 88%, transparent);
+  transform: translate(-50%, calc(-100% - var(--theme-tooltip-arrow-size)));
+}
+
+.help-tooltip__arrow {
+  bottom: calc(var(--theme-tooltip-arrow-size) * -0.5);
+  width: var(--theme-tooltip-arrow-size);
+  height: var(--theme-tooltip-arrow-size);
+  transform: translateX(-50%) rotate(45deg);
+}
+</style>

@@ -95,11 +95,11 @@ export function getUpstreamErrorRateThresholdLevel(
 export function getThresholdColorClass(level: ThresholdLevel): string {
   switch (level) {
     case 'critical':
-      return 'text-red-600 dark:text-red-400'
+      return 'ops-dashboard-header__tone ops-dashboard-header__tone--critical'
     case 'warning':
-      return 'text-yellow-600 dark:text-yellow-400'
+      return 'ops-dashboard-header__tone ops-dashboard-header__tone--warning'
     default:
-      return 'text-green-600 dark:text-green-400'
+      return 'ops-dashboard-header__tone ops-dashboard-header__tone--healthy'
   }
 }
 
@@ -279,13 +279,13 @@ export function formatTimeShort(value?: string | null): string {
 function getOpsStatusClass(status: OpsStatusTone): string {
   switch (status) {
     case 'ok':
-      return 'text-emerald-600 dark:text-emerald-400'
+      return 'theme-text-success'
     case 'warning':
-      return 'text-yellow-600 dark:text-yellow-400'
+      return 'theme-text-warning'
     case 'critical':
-      return 'text-rose-600 dark:text-rose-400'
+      return 'theme-text-danger'
     default:
-      return 'text-gray-900 dark:text-white'
+      return 'theme-text-strong'
   }
 }
 

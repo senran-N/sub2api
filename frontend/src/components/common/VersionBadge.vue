@@ -1,28 +1,26 @@
 <template>
-  <div class="relative">
+  <div class="version-badge relative">
     <!-- Admin: Full version badge with dropdown -->
     <template v-if="isAdmin">
       <button
         @click="toggleDropdown"
-        class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"
+        class="version-badge__trigger"
         :class="[
-          hasUpdate
-            ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-800 dark:text-dark-400 dark:hover:bg-dark-700'
+          hasUpdate ? 'version-badge__trigger--update' : 'version-badge__trigger--idle'
         ]"
         :title="hasUpdate ? t('version.updateAvailable') : t('version.upToDate')"
       >
         <span v-if="currentVersion" class="font-medium">v{{ currentVersion }}</span>
         <span
           v-else
-          class="h-3 w-12 animate-pulse rounded bg-gray-200 font-medium dark:bg-dark-600"
+          class="version-badge__trigger-skeleton h-3 w-12 animate-pulse font-medium"
         ></span>
         <!-- Update indicator -->
-        <span v-if="hasUpdate" class="relative flex h-2 w-2">
+        <span v-if="hasUpdate" class="version-badge__indicator">
           <span
-            class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"
+            class="version-badge__indicator-ping"
           ></span>
-          <span class="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+          <span class="version-badge__indicator-dot"></span>
         </span>
       </button>
 
@@ -31,18 +29,18 @@
         <div
           v-if="dropdownOpen"
           ref="dropdownRef"
-          class="absolute left-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-dark-700 dark:bg-dark-800"
+          class="version-badge__panel absolute left-0 z-50 mt-2 overflow-hidden"
         >
           <!-- Header with refresh button -->
           <div
-            class="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-dark-700"
+            class="version-badge__panel-header"
           >
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-300">{{
+            <span class="version-badge__panel-label text-sm font-medium">{{
               t('version.currentVersion')
             }}</span>
             <button
               @click="refreshVersion(true)"
-              class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-dark-200"
+              class="version-badge__refresh"
               :disabled="loading"
               :title="t('version.refresh')"
             >
@@ -55,10 +53,10 @@
             </button>
           </div>
 
-          <div class="p-4">
+          <div class="version-badge__panel-body">
             <!-- Loading state -->
-            <div v-if="loading" class="flex items-center justify-center py-6">
-              <svg class="h-6 w-6 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+            <div v-if="loading" class="version-badge__loading-state">
+              <svg class="version-badge__loading-spinner h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle
                   class="opacity-25"
                   cx="12"
@@ -82,17 +80,17 @@
                 <div class="inline-flex items-center gap-2">
                   <span
                     v-if="currentVersion"
-                    class="text-2xl font-bold text-gray-900 dark:text-white"
+                    class="version-badge__version-value font-bold"
                     >v{{ currentVersion }}</span
                   >
-                  <span v-else class="text-2xl font-bold text-gray-400 dark:text-dark-500">--</span>
+                  <span v-else class="version-badge__version-placeholder font-bold">--</span>
                   <!-- Show check mark when up to date -->
                   <span
                     v-if="!hasUpdate"
-                    class="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30"
+                    class="version-badge__check-badge flex h-5 w-5 items-center justify-center"
                   >
                     <svg
-                      class="h-3 w-3 text-green-600 dark:text-green-400"
+                      class="version-badge__check-icon h-3 w-3"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
@@ -104,7 +102,7 @@
                     </svg>
                   </span>
                 </div>
-                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                <p class="version-badge__version-meta mt-1 text-xs">
                   {{
                     hasUpdate
                       ? t('version.latestVersion') + ': v' + latestVersion
@@ -116,23 +114,23 @@
               <!-- Priority 1: Update error (must check before hasUpdate) -->
               <div v-if="updateError" class="space-y-2">
                 <div
-                  class="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800/50 dark:bg-red-900/20"
+                  class="version-badge__status-card version-badge__status-card--danger"
                 >
                   <div
-                    class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/50"
+                    class="version-badge__status-icon"
                   >
                     <Icon
                       name="x"
                       size="sm"
                       :stroke-width="2"
-                      class="text-red-600 dark:text-red-400"
+                      class="version-badge__status-symbol"
                     />
                   </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-red-700 dark:text-red-300">
+                  <div class="version-badge__status-content">
+                    <p class="version-badge__status-title text-sm font-medium">
                       {{ t('version.updateFailed') }}
                     </p>
-                    <p class="truncate text-xs text-red-600/70 dark:text-red-400/70">
+                    <p class="version-badge__status-text truncate text-xs">
                       {{ updateError }}
                     </p>
                   </div>
@@ -142,7 +140,7 @@
                 <button
                   @click="handleUpdate"
                   :disabled="updating"
-                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="version-badge__action version-badge__action--danger"
                 >
                   {{ t('version.retry') }}
                 </button>
@@ -151,13 +149,13 @@
               <!-- Priority 2: Update success - need restart -->
               <div v-else-if="updateSuccess && needRestart" class="space-y-2">
                 <div
-                  class="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800/50 dark:bg-green-900/20"
+                  class="version-badge__status-card version-badge__status-card--success"
                 >
                   <div
-                    class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/50"
+                    class="version-badge__status-icon"
                   >
                     <svg
-                      class="h-4 w-4 text-green-600 dark:text-green-400"
+                      class="version-badge__status-symbol h-4 w-4"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -166,11 +164,11 @@
                       <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-green-700 dark:text-green-300">
+                  <div class="version-badge__status-content">
+                    <p class="version-badge__status-title text-sm font-medium">
                       {{ t('version.updateComplete') }}
                     </p>
-                    <p class="text-xs text-green-600/70 dark:text-green-400/70">
+                    <p class="version-badge__status-text text-xs">
                       {{ t('version.restartRequired') }}
                     </p>
                   </div>
@@ -180,7 +178,7 @@
                 <button
                   @click="handleRestart"
                   :disabled="restarting"
-                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="version-badge__action version-badge__action--success"
                 >
                   <svg
                     v-if="restarting"
@@ -233,28 +231,28 @@
                   :href="releaseInfo.html_url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="group flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 transition-colors hover:bg-amber-100 dark:border-amber-800/50 dark:bg-amber-900/20 dark:hover:bg-amber-900/30"
+                  class="version-badge__status-card version-badge__status-card--warning version-badge__status-card--interactive group"
                 >
                   <div
-                    class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50"
+                    class="version-badge__status-icon"
                   >
                     <Icon
                       name="download"
                       size="sm"
                       :stroke-width="2"
-                      class="text-amber-600 dark:text-amber-400"
+                      class="version-badge__status-symbol"
                     />
                   </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  <div class="version-badge__status-content">
+                    <p class="version-badge__status-title text-sm font-medium">
                       {{ t('version.updateAvailable') }}
                     </p>
-                    <p class="text-xs text-amber-600/70 dark:text-amber-400/70">
+                    <p class="version-badge__status-text text-xs">
                       v{{ latestVersion }}
                     </p>
                   </div>
                   <svg
-                    class="h-4 w-4 text-amber-500 transition-transform group-hover:translate-x-0.5 dark:text-amber-400"
+                    class="version-badge__arrow h-4 w-4 transition-transform group-hover:translate-x-0.5"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -265,10 +263,10 @@
                 </a>
                 <!-- Source build hint -->
                 <div
-                  class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2 dark:border-blue-800/50 dark:bg-blue-900/20"
+                  class="version-badge__status-card version-badge__status-card--info version-badge__status-card--compact"
                 >
                   <svg
-                    class="h-3.5 w-3.5 flex-shrink-0 text-blue-500 dark:text-blue-400"
+                    class="version-badge__status-symbol h-3.5 w-3.5 flex-shrink-0"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -280,7 +278,7 @@
                       d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  <p class="text-xs text-blue-600 dark:text-blue-400">
+                  <p class="version-badge__status-text text-xs">
                     {{ t('version.sourceModeHint') }}
                   </p>
                 </div>
@@ -290,23 +288,23 @@
               <div v-else-if="hasUpdate && isReleaseBuild" class="space-y-2">
                 <!-- Update info card -->
                 <div
-                  class="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/50 dark:bg-amber-900/20"
+                  class="version-badge__status-card version-badge__status-card--warning"
                 >
-                <div
-                  class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50"
-                >
-                  <Icon
-                    name="download"
-                    size="sm"
-                    :stroke-width="2"
-                    class="text-amber-600 dark:text-amber-400"
-                  />
-                </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  <div
+                    class="version-badge__status-icon"
+                  >
+                    <Icon
+                      name="download"
+                      size="sm"
+                      :stroke-width="2"
+                      class="version-badge__status-symbol"
+                    />
+                  </div>
+                  <div class="version-badge__status-content">
+                    <p class="version-badge__status-title text-sm font-medium">
                       {{ t('version.updateAvailable') }}
                     </p>
-                    <p class="text-xs text-amber-600/70 dark:text-amber-400/70">
+                    <p class="version-badge__status-text text-xs">
                       v{{ latestVersion }}
                     </p>
                   </div>
@@ -316,7 +314,7 @@
                 <button
                   @click="handleUpdate"
                   :disabled="updating"
-                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="version-badge__action version-badge__action--primary"
                 >
                   <svg v-if="updating" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle
@@ -343,7 +341,7 @@
                   :href="releaseInfo.html_url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="flex items-center justify-center gap-1 text-xs text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-dark-200"
+                  class="version-badge__link version-badge__link--inline"
                 >
                   {{ t('version.viewChangelog') }}
                   <Icon name="externalLink" size="xs" :stroke-width="2" />
@@ -356,7 +354,7 @@
                 :href="releaseInfo.html_url"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="flex items-center justify-center gap-2 py-2 text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-dark-200"
+                class="version-badge__link version-badge__link--compact"
               >
                 <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                   <path
@@ -374,7 +372,7 @@
     </template>
 
     <!-- Non-admin: Simple static version text -->
-    <span v-else-if="version" class="text-xs text-gray-500 dark:text-dark-400">
+    <span v-else-if="version" class="version-badge__text text-xs">
       v{{ version }}
     </span>
   </div>
@@ -544,6 +542,293 @@ onBeforeUnmount(() => {
 .dropdown-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(-4px);
+}
+
+.version-badge {
+  --version-badge-danger-rgb: var(--theme-danger-rgb);
+  --version-badge-success-rgb: var(--theme-success-rgb);
+  --version-badge-warning-rgb: var(--theme-warning-rgb);
+  --version-badge-info-rgb: var(--theme-info-rgb);
+}
+
+.version-badge__trigger,
+.version-badge__panel,
+.version-badge__status-card,
+.version-badge__action,
+.version-badge__refresh {
+  border-radius: var(--theme-version-panel-radius);
+}
+
+.version-badge__trigger {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--theme-table-layout-gap) * 0.375);
+  padding: calc(var(--theme-button-padding-y) * 0.4) calc(var(--theme-button-padding-x) * 0.4);
+  font-size: 0.75rem;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+}
+
+.version-badge__trigger--idle {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, transparent);
+  color: var(--theme-page-muted);
+}
+
+.version-badge__trigger--idle:hover {
+  background: color-mix(in srgb, var(--theme-button-secondary-hover-bg) 92%, transparent);
+  color: var(--theme-page-text);
+}
+
+.version-badge__trigger--update {
+  background: color-mix(in srgb, rgb(var(--version-badge-warning-rgb)) 14%, var(--theme-surface));
+  color: rgb(var(--version-badge-warning-rgb));
+}
+
+.version-badge__trigger--update:hover {
+  background: color-mix(in srgb, rgb(var(--version-badge-warning-rgb)) 20%, var(--theme-surface));
+}
+
+.version-badge__trigger-skeleton {
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--theme-page-border) 78%, transparent);
+}
+
+.version-badge__indicator-ping {
+  position: absolute;
+  display: inline-flex;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  opacity: 0.75;
+  background: color-mix(in srgb, rgb(var(--version-badge-warning-rgb)) 72%, transparent);
+}
+
+.version-badge__indicator {
+  position: relative;
+  display: flex;
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+.version-badge__indicator-dot {
+  position: relative;
+  display: inline-flex;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgb(var(--version-badge-warning-rgb));
+}
+
+.version-badge__panel {
+  width: min(calc(100vw - 2rem), var(--theme-version-panel-width));
+  border: 1px solid var(--theme-dropdown-border);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.version-badge__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  border-bottom: 1px solid var(--theme-page-border);
+}
+
+.version-badge__panel-body {
+  padding: var(--theme-table-mobile-card-padding);
+}
+
+.version-badge__panel-label,
+.version-badge__text,
+.version-badge__version-meta,
+.version-badge__link {
+  color: var(--theme-page-muted);
+}
+
+.version-badge__refresh {
+  padding: 0.375rem;
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.version-badge__refresh:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+  color: var(--theme-page-text);
+}
+
+.version-badge__loading-spinner {
+  color: var(--theme-accent);
+}
+
+.version-badge__loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--theme-table-mobile-empty-padding) * 0.5) 0;
+}
+
+.version-badge__version-value {
+  font-family: var(--theme-version-value-font);
+  font-size: var(--theme-version-value-size);
+  color: var(--theme-page-text);
+}
+
+.version-badge__version-placeholder {
+  font-family: var(--theme-version-value-font);
+  font-size: var(--theme-version-value-size);
+  color: color-mix(in srgb, var(--theme-page-muted) 60%, transparent);
+}
+
+.version-badge__check-badge {
+  border-radius: var(--theme-version-icon-radius);
+  background: color-mix(in srgb, rgb(var(--version-badge-success-rgb)) 14%, var(--theme-surface));
+}
+
+.version-badge__check-icon {
+  color: rgb(var(--version-badge-success-rgb));
+}
+
+.version-badge__status-card {
+  --version-badge-tone-rgb: var(--version-badge-info-rgb);
+  display: flex;
+  align-items: center;
+  gap: var(--theme-table-layout-gap);
+  padding: var(--theme-table-mobile-card-padding);
+  border: 1px solid color-mix(in srgb, rgb(var(--version-badge-tone-rgb)) 26%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--version-badge-tone-rgb)) 10%, var(--theme-surface));
+}
+
+.version-badge__status-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.version-badge__status-card--compact {
+  gap: calc(var(--theme-table-layout-gap) * 0.5);
+  padding: calc(var(--theme-table-mobile-card-padding) * 0.67);
+}
+
+.version-badge__status-card--danger {
+  --version-badge-tone-rgb: var(--version-badge-danger-rgb);
+}
+
+.version-badge__status-card--success {
+  --version-badge-tone-rgb: var(--version-badge-success-rgb);
+}
+
+.version-badge__status-card--warning {
+  --version-badge-tone-rgb: var(--version-badge-warning-rgb);
+}
+
+.version-badge__status-card--info {
+  --version-badge-tone-rgb: var(--version-badge-info-rgb);
+}
+
+.version-badge__status-card--interactive:hover {
+  background: color-mix(in srgb, rgb(var(--version-badge-warning-rgb)) 14%, var(--theme-surface));
+}
+
+.version-badge__status-icon {
+  display: flex;
+  width: var(--theme-stat-icon-size);
+  height: var(--theme-stat-icon-size);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--theme-version-icon-radius);
+  background: color-mix(in srgb, rgb(var(--version-badge-tone-rgb)) 16%, var(--theme-surface));
+}
+
+.version-badge__status-symbol,
+.version-badge__arrow {
+  color: rgb(var(--version-badge-tone-rgb));
+}
+
+.version-badge__status-title {
+  color: color-mix(in srgb, rgb(var(--version-badge-tone-rgb)) 84%, var(--theme-page-text));
+}
+
+.version-badge__status-text {
+  color: color-mix(in srgb, rgb(var(--version-badge-tone-rgb)) 76%, var(--theme-page-muted));
+}
+
+.version-badge__action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: calc(var(--theme-button-padding-y) * 0.8) var(--theme-button-padding-x);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--theme-filled-text);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.version-badge__action:hover {
+  transform: translateY(-1px);
+}
+
+.version-badge__action--danger {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--version-badge-danger-rgb)),
+    color-mix(in srgb, rgb(var(--version-badge-danger-rgb)) 72%, var(--theme-accent-strong))
+  );
+  box-shadow: 0 12px 28px color-mix(in srgb, rgb(var(--version-badge-danger-rgb)) 26%, transparent);
+}
+
+.version-badge__action--success {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--version-badge-success-rgb)),
+    color-mix(in srgb, rgb(var(--version-badge-success-rgb)) 72%, var(--theme-accent-strong))
+  );
+  box-shadow: 0 12px 28px color-mix(in srgb, rgb(var(--version-badge-success-rgb)) 26%, transparent);
+}
+
+.version-badge__action--primary {
+  background: linear-gradient(
+    135deg,
+    var(--theme-accent),
+    color-mix(in srgb, var(--theme-accent-strong) 24%, var(--theme-accent) 76%)
+  );
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--theme-accent) 28%, transparent);
+}
+
+.version-badge__link:hover {
+  color: var(--theme-page-text);
+}
+
+.version-badge__link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.version-badge__link--inline {
+  font-size: 0.75rem;
+}
+
+.version-badge__link--compact {
+  padding: calc(var(--theme-button-padding-y) * 0.65) 0;
+  font-size: 0.875rem;
+}
+
+.version-badge__trigger,
+.version-badge__refresh,
+.version-badge__action,
+.version-badge__link {
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .line-clamp-3 {

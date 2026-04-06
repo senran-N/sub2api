@@ -1,26 +1,26 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="card-header">
+      <h2 class="settings-overload-cooldown-card__title text-lg font-semibold">
         {{ t('admin.settings.overloadCooldown.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-overload-cooldown-card__description mt-1 text-sm">
         {{ t('admin.settings.overloadCooldown.description') }}
       </p>
     </div>
-    <div class="space-y-5 p-6">
-      <div v-if="loading" class="flex items-center gap-2 text-gray-500">
-        <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"></div>
+    <div class="settings-overload-cooldown-card__body">
+      <div v-if="loading" class="settings-overload-cooldown-card__description flex items-center gap-2">
+        <div class="settings-overload-cooldown-card__spinner h-4 w-4 animate-spin rounded-full border-b-2"></div>
         {{ t('common.loading') }}
       </div>
 
       <template v-else>
         <div class="flex items-center justify-between">
           <div>
-            <label class="font-medium text-gray-900 dark:text-white">
+            <label class="settings-overload-cooldown-card__title font-medium">
               {{ t('admin.settings.overloadCooldown.enabled') }}
             </label>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="settings-overload-cooldown-card__description text-sm">
               {{ t('admin.settings.overloadCooldown.enabledHint') }}
             </p>
           </div>
@@ -29,10 +29,10 @@
 
         <div
           v-if="form.enabled"
-          class="space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
+          class="settings-overload-cooldown-card__section space-y-4 border-t pt-4"
         >
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label class="settings-overload-cooldown-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.overloadCooldown.cooldownMinutes') }}
             </label>
             <input
@@ -42,13 +42,13 @@
               max="120"
               class="input w-32"
             />
-            <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p class="settings-overload-cooldown-card__description mt-1.5 text-xs">
               {{ t('admin.settings.overloadCooldown.cooldownMinutesHint') }}
             </p>
           </div>
         </div>
 
-        <div class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700">
+        <div class="settings-overload-cooldown-card__section flex justify-end border-t pt-4">
           <button
             type="button"
             :disabled="saving"
@@ -100,3 +100,30 @@ defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-overload-cooldown-card__title,
+.settings-overload-cooldown-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-overload-cooldown-card__description {
+  color: var(--theme-page-muted);
+}
+
+.settings-overload-cooldown-card__spinner {
+  border-color: color-mix(in srgb, var(--theme-card-border) 64%, transparent);
+  border-bottom-color: var(--theme-accent);
+}
+
+.settings-overload-cooldown-card__section {
+  border-color: color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+}
+
+.settings-overload-cooldown-card__body {
+  padding: var(--theme-settings-card-panel-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-settings-card-body-padding);
+}
+</style>

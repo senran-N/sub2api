@@ -26,17 +26,17 @@
       <template #table>
         <DataTable :columns="columns" :data="usageLogs" :loading="loading">
           <template #cell-api_key="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">{{
+            <span class="theme-text-strong text-sm">{{
               row.api_key?.name || '-'
             }}</span>
           </template>
 
           <template #cell-model="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+            <span class="theme-text-strong font-medium">{{ value }}</span>
           </template>
 
           <template #cell-reasoning_effort="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">
+            <span class="theme-text-strong text-sm">
               {{ formatReasoningEffort(row.reasoning_effort) }}
             </span>
           </template>

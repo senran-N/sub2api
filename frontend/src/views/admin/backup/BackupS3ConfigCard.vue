@@ -1,15 +1,15 @@
 <template>
-  <div class="card p-6">
+  <div class="backup-s3-config-card card">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+        <h3 class="backup-s3-config-card__title text-base font-semibold">
           {{ t('admin.backup.s3.title') }}
         </h3>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <p class="backup-s3-config-card__description mt-1 text-sm">
           {{ t('admin.backup.s3.descriptionPrefix') }}
           <button
             type="button"
-            class="text-primary-600 underline hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+            class="backup-s3-config-card__link underline"
             @click="emit('open-guide')"
           >
             Cloudflare R2
@@ -21,7 +21,7 @@
 
     <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
       <div>
-        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+        <label class="backup-s3-config-card__field-label mb-1 block text-xs font-medium">
           {{ t('admin.backup.s3.endpoint') }}
         </label>
         <input
@@ -31,31 +31,31 @@
         />
       </div>
       <div>
-        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+        <label class="backup-s3-config-card__field-label mb-1 block text-xs font-medium">
           {{ t('admin.backup.s3.region') }}
         </label>
         <input v-model="form.region" class="input w-full" placeholder="auto" />
       </div>
       <div>
-        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+        <label class="backup-s3-config-card__field-label mb-1 block text-xs font-medium">
           {{ t('admin.backup.s3.bucket') }}
         </label>
         <input v-model="form.bucket" class="input w-full" />
       </div>
       <div>
-        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+        <label class="backup-s3-config-card__field-label mb-1 block text-xs font-medium">
           {{ t('admin.backup.s3.prefix') }}
         </label>
         <input v-model="form.prefix" class="input w-full" placeholder="backups/" />
       </div>
       <div>
-        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+        <label class="backup-s3-config-card__field-label mb-1 block text-xs font-medium">
           {{ t('admin.backup.s3.accessKeyId') }}
         </label>
         <input v-model="form.access_key_id" class="input w-full" />
       </div>
       <div>
-        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+        <label class="backup-s3-config-card__field-label mb-1 block text-xs font-medium">
           {{ t('admin.backup.s3.secretAccessKey') }}
         </label>
         <input
@@ -65,7 +65,7 @@
           :placeholder="secretConfigured ? t('admin.backup.s3.secretConfigured') : ''"
         />
       </div>
-      <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 md:col-span-2">
+      <label class="backup-s3-config-card__checkbox inline-flex items-center gap-2 text-sm md:col-span-2">
         <input v-model="form.force_path_style" type="checkbox" />
         <span>{{ t('admin.backup.s3.forcePathStyle') }}</span>
       </label>
@@ -101,3 +101,27 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.backup-s3-config-card__title,
+.backup-s3-config-card__field-label,
+.backup-s3-config-card__checkbox {
+  color: var(--theme-page-text);
+}
+
+.backup-s3-config-card__description {
+  color: var(--theme-page-muted);
+}
+
+.backup-s3-config-card__link {
+  color: var(--theme-accent);
+}
+
+.backup-s3-config-card__link:hover {
+  color: color-mix(in srgb, var(--theme-accent) 82%, var(--theme-page-text));
+}
+
+.backup-s3-config-card {
+  padding: var(--theme-settings-card-panel-padding);
+}
+</style>

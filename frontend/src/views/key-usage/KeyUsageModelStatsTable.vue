@@ -1,43 +1,43 @@
 <template>
   <div
     v-if="items.length > 0"
-    class="fade-up fade-up-delay-4 overflow-hidden rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-sm dark:border-dark-700 dark:bg-dark-900/90"
+    class="key-usage-model-stats-table fade-up fade-up-delay-4"
   >
-    <div class="border-b border-gray-200 px-8 py-5 dark:border-dark-700">
-      <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">
+    <div class="key-usage-model-stats-table__header">
+      <h3 class="key-usage-model-stats-table__title">
         {{ title }}
       </h3>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full">
         <thead>
-          <tr class="border-b border-gray-200 bg-gray-50 dark:border-dark-700 dark:bg-dark-950">
-            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ labels.model }}</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ labels.requests }}</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ labels.inputTokens }}</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ labels.outputTokens }}</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ labels.cacheCreationTokens }}</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ labels.cacheReadTokens }}</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ labels.totalTokens }}</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ labels.cost }}</th>
+          <tr class="key-usage-model-stats-table__head-row">
+            <th class="key-usage-model-stats-table__head-cell key-usage-model-stats-table__head-cell--left">{{ labels.model }}</th>
+            <th class="key-usage-model-stats-table__head-cell">{{ labels.requests }}</th>
+            <th class="key-usage-model-stats-table__head-cell">{{ labels.inputTokens }}</th>
+            <th class="key-usage-model-stats-table__head-cell">{{ labels.outputTokens }}</th>
+            <th class="key-usage-model-stats-table__head-cell">{{ labels.cacheCreationTokens }}</th>
+            <th class="key-usage-model-stats-table__head-cell">{{ labels.cacheReadTokens }}</th>
+            <th class="key-usage-model-stats-table__head-cell">{{ labels.totalTokens }}</th>
+            <th class="key-usage-model-stats-table__head-cell">{{ labels.cost }}</th>
           </tr>
         </thead>
         <tbody>
           <tr
             v-for="(item, index) in items"
             :key="index"
-            class="border-b border-gray-100 last:border-b-0 dark:border-dark-800"
+            class="key-usage-model-stats-table__row"
           >
-            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+            <td class="key-usage-model-stats-table__cell key-usage-model-stats-table__cell--primary">
               {{ item.model || '-' }}
             </td>
-            <td class="px-4 py-3 text-right text-sm tabular-nums text-gray-700 dark:text-dark-200">{{ fmtNum(item.requests) }}</td>
-            <td class="px-4 py-3 text-right text-sm tabular-nums text-gray-700 dark:text-dark-200">{{ fmtNum(item.input_tokens) }}</td>
-            <td class="px-4 py-3 text-right text-sm tabular-nums text-gray-700 dark:text-dark-200">{{ fmtNum(item.output_tokens) }}</td>
-            <td class="px-4 py-3 text-right text-sm tabular-nums text-gray-700 dark:text-dark-200">{{ fmtNum(item.cache_creation_tokens) }}</td>
-            <td class="px-4 py-3 text-right text-sm tabular-nums text-gray-700 dark:text-dark-200">{{ fmtNum(item.cache_read_tokens) }}</td>
-            <td class="px-4 py-3 text-right text-sm tabular-nums text-gray-700 dark:text-dark-200">{{ fmtNum(item.total_tokens) }}</td>
-            <td class="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900 dark:text-white">
+            <td class="key-usage-model-stats-table__cell">{{ fmtNum(item.requests) }}</td>
+            <td class="key-usage-model-stats-table__cell">{{ fmtNum(item.input_tokens) }}</td>
+            <td class="key-usage-model-stats-table__cell">{{ fmtNum(item.output_tokens) }}</td>
+            <td class="key-usage-model-stats-table__cell">{{ fmtNum(item.cache_creation_tokens) }}</td>
+            <td class="key-usage-model-stats-table__cell">{{ fmtNum(item.cache_read_tokens) }}</td>
+            <td class="key-usage-model-stats-table__cell">{{ fmtNum(item.total_tokens) }}</td>
+            <td class="key-usage-model-stats-table__cell key-usage-model-stats-table__cell--emphasis">
               {{ usd(item.actual_cost != null ? item.actual_cost : item.cost) }}
             </td>
           </tr>
@@ -67,3 +67,71 @@ defineProps<{
   usd: (value: number | null | undefined) => string
 }>()
 </script>
+
+<style scoped>
+.key-usage-model-stats-table {
+  overflow: hidden;
+  border: 1px solid var(--theme-card-border);
+  border-radius: calc(var(--theme-surface-radius) + 4px);
+  background: color-mix(in srgb, var(--theme-surface) 90%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.key-usage-model-stats-table__header {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  padding: 1.25rem 2rem;
+}
+
+.key-usage-model-stats-table__title {
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.key-usage-model-stats-table__head-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.key-usage-model-stats-table__head-cell {
+  padding: 0.75rem 1rem;
+  color: var(--theme-page-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.key-usage-model-stats-table__head-cell--left {
+  text-align: left;
+}
+
+.key-usage-model-stats-table__row {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.key-usage-model-stats-table__row:last-child {
+  border-bottom: 0;
+}
+
+.key-usage-model-stats-table__cell {
+  padding: 0.75rem 1rem;
+  color: var(--theme-page-text);
+  font-size: 0.875rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.key-usage-model-stats-table__cell--primary,
+.key-usage-model-stats-table__cell--emphasis {
+  font-weight: 600;
+}
+
+.key-usage-model-stats-table__cell--primary {
+  text-align: left;
+  white-space: nowrap;
+}
+</style>

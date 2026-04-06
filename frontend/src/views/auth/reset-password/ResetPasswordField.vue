@@ -4,8 +4,8 @@
       {{ label }}
     </label>
     <div class="relative">
-      <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-        <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
+      <div class="reset-password-field__affix pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+        <Icon name="lock" size="md" />
       </div>
       <input
         :id="id"
@@ -20,7 +20,7 @@
       />
       <button
         type="button"
-        class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+        class="reset-password-field__toggle absolute inset-y-0 right-0 flex items-center pr-3.5"
         @click="visible = !visible"
       >
         <Icon v-if="visible" name="eyeOff" size="md" />
@@ -57,3 +57,18 @@ const model = computed({
   set: (value: string) => emit('update:modelValue', value)
 })
 </script>
+
+<style scoped>
+.reset-password-field__affix,
+.reset-password-field__toggle {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.reset-password-field__toggle {
+  transition: color 0.2s ease;
+}
+
+.reset-password-field__toggle:hover {
+  color: var(--theme-page-text);
+}
+</style>

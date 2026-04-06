@@ -2,59 +2,60 @@
   <Teleport to="body">
     <div
       v-if="user && position"
-      class="action-menu-content fixed z-[9999] w-48 overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 dark:bg-dark-800 dark:ring-white/10"
-      :style="{ top: `${position.top}px`, left: `${position.left}px` }"
+      ref="menuRef"
+      class="user-action-menu fixed z-[9999] overflow-hidden"
+      :style="menuStyle"
     >
-      <div class="py-1">
+      <div class="user-action-menu__content">
         <button
-          class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+          class="user-action-menu__item flex w-full items-center gap-2 text-sm"
           @click="emitAndClose('api-keys', user)"
         >
-          <Icon name="key" size="sm" class="text-gray-400" :stroke-width="2" />
+          <Icon name="key" size="sm" class="user-action-menu__icon" :stroke-width="2" />
           {{ t('admin.users.apiKeys') }}
         </button>
 
         <button
-          class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+          class="user-action-menu__item flex w-full items-center gap-2 text-sm"
           @click="emitAndClose('groups', user)"
         >
-          <Icon name="users" size="sm" class="text-gray-400" :stroke-width="2" />
+          <Icon name="users" size="sm" class="user-action-menu__icon" :stroke-width="2" />
           {{ t('admin.users.groups') }}
         </button>
 
-        <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
+        <div class="user-action-menu__divider my-1"></div>
 
         <button
-          class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+          class="user-action-menu__item flex w-full items-center gap-2 text-sm"
           @click="emitAndClose('deposit', user)"
         >
-          <Icon name="plus" size="sm" class="text-emerald-500" :stroke-width="2" />
+          <Icon name="plus" size="sm" class="user-action-menu__icon user-action-menu__icon--success" :stroke-width="2" />
           {{ t('admin.users.deposit') }}
         </button>
 
         <button
-          class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+          class="user-action-menu__item flex w-full items-center gap-2 text-sm"
           @click="emitAndClose('withdraw', user)"
         >
-          <svg class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="user-action-menu__icon user-action-menu__icon--warning h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
           </svg>
           {{ t('admin.users.withdraw') }}
         </button>
 
         <button
-          class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+          class="user-action-menu__item flex w-full items-center gap-2 text-sm"
           @click="emitAndClose('history', user)"
         >
-          <Icon name="dollar" size="sm" class="text-gray-400" :stroke-width="2" />
+          <Icon name="dollar" size="sm" class="user-action-menu__icon" :stroke-width="2" />
           {{ t('admin.users.balanceHistory') }}
         </button>
 
-        <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
+        <div class="user-action-menu__divider my-1"></div>
 
         <button
           v-if="user.role !== 'admin'"
-          class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+          class="user-action-menu__item user-action-menu__item--danger flex w-full items-center gap-2 text-sm"
           @click="emitAndClose('delete', user)"
         >
           <Icon name="trash" size="sm" :stroke-width="2" />
@@ -66,11 +67,14 @@
 </template>
 
 <script setup lang="ts">
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import type { AdminUser } from '@/types'
+import { clampFloatingPanelPosition, readThemePixelValue } from '@/utils/floatingPanel'
 
-defineProps<{
+const props = defineProps<{
   user: AdminUser | null
   position: { top: number; left: number } | null
 }>()
@@ -86,6 +90,57 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const themeVersion = useDocumentThemeVersion()
+const menuRef = ref<HTMLElement | null>(null)
+const menuStyle = ref<Record<string, string>>({})
+
+const updateMenuPosition = () => {
+  if (!props.user || !props.position) {
+    menuStyle.value = {}
+    return
+  }
+
+  const padding = readThemePixelValue('--theme-floating-panel-viewport-padding', 8)
+  const panelWidth = menuRef.value?.offsetWidth ?? readThemePixelValue('--theme-user-action-menu-width', 200)
+  const panelHeight = menuRef.value?.offsetHeight ?? readThemePixelValue('--theme-user-action-menu-estimated-height', 240)
+  const nextPosition = clampFloatingPanelPosition(props.position, {
+    panelWidth,
+    panelHeight,
+    padding
+  })
+
+  menuStyle.value = {
+    top: `${nextPosition.top}px`,
+    left: `${nextPosition.left}px`
+  }
+}
+
+watch(
+  [() => props.user, () => props.position?.top, () => props.position?.left, themeVersion],
+  async () => {
+    if (!props.user || !props.position) {
+      menuStyle.value = {}
+      return
+    }
+
+    menuStyle.value = {
+      top: `${props.position.top}px`,
+      left: `${props.position.left}px`
+    }
+
+    await nextTick()
+    updateMenuPosition()
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  window.addEventListener('resize', updateMenuPosition)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateMenuPosition)
+})
 
 function emitAndClose(
   event: 'api-keys' | 'groups' | 'deposit' | 'withdraw' | 'history' | 'delete',
@@ -108,3 +163,56 @@ function emitAndClose(
   emit('close')
 }
 </script>
+
+<style scoped>
+.user-action-menu {
+  width: min(
+    var(--theme-user-action-menu-width),
+    calc(100vw - (var(--theme-floating-panel-viewport-padding) + var(--theme-floating-panel-viewport-padding)))
+  );
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  border-radius: calc(var(--theme-surface-radius) + 4px);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.user-action-menu__item {
+  padding: var(--theme-user-action-menu-item-padding-y) var(--theme-user-action-menu-item-padding-x);
+  color: var(--theme-page-text);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.user-action-menu__content {
+  padding-block: var(--theme-user-action-menu-content-padding-y);
+}
+
+.user-action-menu__item:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.user-action-menu__item--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-action-menu__item--danger:hover {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 9%, var(--theme-surface));
+}
+
+.user-action-menu__icon {
+  color: var(--theme-page-muted);
+}
+
+.user-action-menu__icon--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-action-menu__icon--warning {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-action-menu__divider {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+</style>

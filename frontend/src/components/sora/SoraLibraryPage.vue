@@ -268,17 +268,17 @@ onMounted(() => loadItems(1))
 .sora-gallery-filters {
   display: flex;
   gap: 4px;
-  background: var(--sora-bg-secondary, #1A1A1A);
-  border-radius: var(--sora-radius-full, 9999px);
+  background: var(--sora-bg-secondary);
+  border-radius: var(--sora-radius-full);
   padding: 3px;
 }
 
 .sora-gallery-filter {
   padding: 6px 18px;
-  border-radius: var(--sora-radius-full, 9999px);
+  border-radius: var(--sora-radius-full);
   font-size: 13px;
   font-weight: 500;
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
   background: none;
   border: none;
   cursor: pointer;
@@ -287,17 +287,17 @@ onMounted(() => loadItems(1))
 }
 
 .sora-gallery-filter:hover {
-  color: var(--sora-text-primary, #FFF);
+  color: var(--sora-text-primary);
 }
 
 .sora-gallery-filter.active {
-  background: var(--sora-bg-tertiary, #242424);
-  color: var(--sora-text-primary, #FFF);
+  background: var(--sora-bg-tertiary);
+  color: var(--sora-text-primary);
 }
 
 .sora-gallery-count {
   font-size: 13px;
-  color: var(--sora-text-tertiary, #666);
+  color: var(--sora-text-tertiary);
 }
 
 /* 网格 */
@@ -310,18 +310,18 @@ onMounted(() => loadItems(1))
 /* 卡片 */
 .sora-gallery-card {
   position: relative;
-  border-radius: var(--sora-radius-md, 12px);
+  border-radius: var(--sora-radius-md);
   overflow: hidden;
-  background: var(--sora-bg-secondary, #1A1A1A);
-  border: 1px solid var(--sora-border-color, #2A2A2A);
+  background: var(--sora-bg-secondary);
+  border: 1px solid var(--sora-border-color);
   cursor: pointer;
   transition: all 250ms ease;
 }
 
 .sora-gallery-card:hover {
-  border-color: var(--sora-bg-hover, #333);
+  border-color: var(--sora-bg-hover);
   transform: translateY(-2px);
-  box-shadow: var(--sora-shadow-lg, 0 8px 32px rgba(0,0,0,0.5));
+  box-shadow: var(--sora-shadow-lg);
 }
 
 .sora-gallery-card-thumb {
@@ -351,14 +351,62 @@ onMounted(() => loadItems(1))
 }
 
 /* 渐变背景 */
-.gradient-bg-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-.gradient-bg-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-.gradient-bg-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-.gradient-bg-4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-.gradient-bg-5 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
-.gradient-bg-6 { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); }
-.gradient-bg-7 { background: linear-gradient(135deg, #fccb90 0%, #d57eeb 100%); }
-.gradient-bg-8 { background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%); }
+.gradient-bg-1 {
+  background: linear-gradient(
+    135deg,
+    var(--sora-accent-primary) 0%,
+    rgb(var(--theme-brand-purple-rgb)) 100%
+  );
+}
+.gradient-bg-2 {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--theme-danger-rgb)) 0%,
+    rgb(var(--theme-brand-orange-rgb)) 100%
+  );
+}
+.gradient-bg-3 {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--theme-info-rgb)) 0%,
+    var(--sora-accent-primary) 100%
+  );
+}
+.gradient-bg-4 {
+  background: linear-gradient(
+    135deg,
+    var(--sora-success) 0%,
+    rgb(var(--theme-info-rgb)) 100%
+  );
+}
+.gradient-bg-5 {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--theme-brand-purple-rgb)) 0%,
+    rgb(var(--theme-brand-orange-rgb)) 100%
+  );
+}
+.gradient-bg-6 {
+  background: linear-gradient(
+    135deg,
+    var(--sora-warning) 0%,
+    var(--sora-accent-primary) 100%
+  );
+}
+.gradient-bg-7 {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--theme-info-rgb)) 0%,
+    rgb(var(--theme-danger-rgb)) 100%
+  );
+}
+.gradient-bg-8 {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sora-accent-primary) 82%, var(--theme-surface-contrast-text)) 0%,
+    color-mix(in srgb, rgb(var(--theme-info-rgb)) 82%, var(--theme-surface-contrast-text)) 100%
+  );
+}
 
 /* 类型角标 */
 .sora-gallery-card-badge {
@@ -366,7 +414,7 @@ onMounted(() => loadItems(1))
   top: 8px;
   left: 8px;
   padding: 3px 8px;
-  border-radius: var(--sora-radius-sm, 8px);
+  border-radius: var(--sora-radius-sm);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -375,20 +423,20 @@ onMounted(() => loadItems(1))
 }
 
 .sora-gallery-card-badge.video {
-  background: rgba(20, 184, 166, 0.8);
-  color: white;
+  background: color-mix(in srgb, var(--sora-accent-primary) 80%, transparent);
+  color: var(--theme-filled-text);
 }
 
 .sora-gallery-card-badge.image {
-  background: rgba(16, 185, 129, 0.8);
-  color: white;
+  background: color-mix(in srgb, var(--sora-success) 80%, transparent);
+  color: var(--theme-filled-text);
 }
 
 /* Hover 操作层 */
 .sora-gallery-card-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: color-mix(in srgb, var(--theme-overlay-strong) 74%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -405,20 +453,20 @@ onMounted(() => loadItems(1))
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  background: color-mix(in srgb, var(--theme-filled-text) 15%, transparent);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  color: white;
+  color: var(--theme-filled-text);
   border: none;
   cursor: pointer;
   transition: all 150ms ease;
 }
 
 .sora-gallery-card-action:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: color-mix(in srgb, var(--theme-filled-text) 25%, transparent);
   transform: scale(1.1);
 }
 
@@ -431,13 +479,13 @@ onMounted(() => loadItems(1))
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--theme-filled-text) 20%, transparent);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: white;
+  color: var(--theme-filled-text);
   opacity: 0;
   transition: all 150ms ease;
   pointer-events: none;
@@ -454,10 +502,10 @@ onMounted(() => loadItems(1))
   right: 8px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.7);
+  background: color-mix(in srgb, var(--theme-overlay-strong) 82%, transparent);
   font-size: 11px;
   font-family: "SF Mono", "Fira Code", monospace;
-  color: white;
+  color: var(--theme-filled-text);
 }
 
 /* 卡片信息 */
@@ -468,13 +516,13 @@ onMounted(() => loadItems(1))
 .sora-gallery-card-model {
   font-size: 11px;
   font-family: "SF Mono", "Fira Code", monospace;
-  color: var(--sora-text-tertiary, #666);
+  color: var(--sora-text-tertiary);
   margin-bottom: 4px;
 }
 
 .sora-gallery-card-time {
   font-size: 12px;
-  color: var(--sora-text-muted, #4A4A4A);
+  color: var(--sora-text-muted);
 }
 
 /* 空状态 */
@@ -497,12 +545,12 @@ onMounted(() => loadItems(1))
   font-size: 20px;
   font-weight: 600;
   margin-bottom: 8px;
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
 }
 
 .sora-gallery-empty-desc {
   font-size: 14px;
-  color: var(--sora-text-tertiary, #666);
+  color: var(--sora-text-tertiary);
   max-width: 360px;
   line-height: 1.6;
 }
@@ -510,18 +558,18 @@ onMounted(() => loadItems(1))
 .sora-gallery-empty-btn {
   margin-top: 24px;
   padding: 10px 28px;
-  background: var(--sora-accent-gradient, linear-gradient(135deg, #14b8a6, #0d9488));
-  border-radius: var(--sora-radius-full, 9999px);
+  background: var(--sora-accent-gradient);
+  border-radius: var(--sora-radius-full);
   font-size: 14px;
   font-weight: 500;
-  color: white;
+  color: var(--theme-accent-text);
   border: none;
   cursor: pointer;
   transition: all 150ms ease;
 }
 
 .sora-gallery-empty-btn:hover {
-  box-shadow: var(--sora-shadow-glow, 0 0 20px rgba(20,184,166,0.3));
+  box-shadow: var(--sora-shadow-glow);
 }
 
 /* 加载更多 */
@@ -533,18 +581,18 @@ onMounted(() => loadItems(1))
 
 .sora-gallery-load-more-btn {
   padding: 10px 28px;
-  background: var(--sora-bg-secondary, #1A1A1A);
-  border: 1px solid var(--sora-border-color, #2A2A2A);
-  border-radius: var(--sora-radius-full, 9999px);
+  background: var(--sora-bg-secondary);
+  border: 1px solid var(--sora-border-color);
+  border-radius: var(--sora-radius-full);
   font-size: 13px;
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
   cursor: pointer;
   transition: all 150ms ease;
 }
 
 .sora-gallery-load-more-btn:hover {
-  background: var(--sora-bg-tertiary, #242424);
-  color: var(--sora-text-primary, #FFF);
+  background: var(--sora-bg-tertiary);
+  color: var(--sora-text-primary);
 }
 
 .sora-gallery-load-more-btn:disabled {

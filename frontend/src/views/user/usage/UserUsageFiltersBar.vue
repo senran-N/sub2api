@@ -1,8 +1,8 @@
 <template>
-  <div class="card">
-    <div class="px-6 py-4">
-      <div class="flex flex-wrap items-end gap-4">
-        <div class="min-w-[180px]">
+  <div class="card user-usage-filters-bar">
+    <div class="user-usage-filters-bar__content">
+      <div class="user-usage-filters-bar__row">
+        <div class="user-usage-filters-bar__api-key-filter">
           <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
           <Select
             :model-value="apiKeyId ?? null"
@@ -13,7 +13,7 @@
           />
         </div>
 
-        <div>
+        <div class="user-usage-filters-bar__date-range-filter">
           <label class="input-label">{{ t('usage.timeRange') }}</label>
           <DateRangePicker
             :start-date="startDate"
@@ -24,7 +24,7 @@
           />
         </div>
 
-        <div class="ml-auto flex items-center gap-3">
+        <div class="user-usage-filters-bar__actions">
           <button type="button" :disabled="loading" class="btn btn-secondary" @click="emit('apply-filters')">
             {{ t('common.refresh') }}
           </button>
@@ -97,3 +97,40 @@ const handleApiKeyUpdate = (value: string | number | boolean | null) => {
   }
 }
 </script>
+
+<style scoped>
+.user-usage-filters-bar__content {
+  padding: calc(var(--theme-table-mobile-card-padding) * 1.5) calc(var(--theme-table-mobile-card-padding) * 1.5) var(--theme-table-mobile-card-padding);
+}
+
+.user-usage-filters-bar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--theme-table-mobile-card-padding);
+}
+
+.user-usage-filters-bar__api-key-filter {
+  min-width: min(100%, var(--theme-balance-history-filter-width));
+}
+
+.user-usage-filters-bar__date-range-filter {
+  min-width: min(100%, var(--theme-balance-history-filter-width));
+}
+
+.user-usage-filters-bar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--theme-table-mobile-card-padding) * 0.75);
+}
+
+@media (max-width: 767px) {
+  .user-usage-filters-bar__actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+</style>

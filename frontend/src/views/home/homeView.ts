@@ -10,7 +10,7 @@ export interface HomeFeatureTag {
 }
 
 export interface HomeFeatureCard {
-  accentClass: string
+  accentTone: 'info' | 'accent' | 'success'
   description: string
   icon: IconName
   key: string
@@ -18,7 +18,7 @@ export interface HomeFeatureCard {
 }
 
 export interface HomeProviderBadge {
-  accentClass: string
+  accentTone: 'brand-orange' | 'success' | 'info' | 'brand-rose' | 'neutral'
   initial: string
   key: string
   label: string
@@ -66,21 +66,21 @@ export function buildHomeFeatureTags(t: Translate): HomeFeatureTag[] {
 export function buildHomeFeatures(t: Translate): HomeFeatureCard[] {
   return [
     {
-      accentClass: 'from-blue-500 to-blue-600 shadow-blue-500/30',
+      accentTone: 'info',
       description: t('home.features.unifiedGatewayDesc'),
       icon: 'server',
       key: 'unified-gateway',
       title: t('home.features.unifiedGateway')
     },
     {
-      accentClass: 'from-primary-500 to-primary-600 shadow-primary-500/30',
+      accentTone: 'accent',
       description: t('home.features.multiAccountDesc'),
       icon: 'users',
       key: 'multi-account',
       title: t('home.features.multiAccount')
     },
     {
-      accentClass: 'from-emerald-500 to-teal-600 shadow-emerald-500/30',
+      accentTone: 'success',
       description: t('home.features.balanceQuotaDesc'),
       icon: 'creditCard',
       key: 'balance-quota',
@@ -92,7 +92,7 @@ export function buildHomeFeatures(t: Translate): HomeFeatureCard[] {
 export function buildHomeProviders(t: Translate): HomeProviderBadge[] {
   return [
     {
-      accentClass: 'from-orange-400 to-orange-500',
+      accentTone: 'brand-orange',
       initial: 'C',
       key: 'claude',
       label: t('home.providers.claude'),
@@ -100,7 +100,7 @@ export function buildHomeProviders(t: Translate): HomeProviderBadge[] {
       supported: true
     },
     {
-      accentClass: 'from-green-500 to-green-600',
+      accentTone: 'success',
       initial: 'G',
       key: 'gpt',
       label: 'GPT',
@@ -108,7 +108,7 @@ export function buildHomeProviders(t: Translate): HomeProviderBadge[] {
       supported: true
     },
     {
-      accentClass: 'from-blue-500 to-blue-600',
+      accentTone: 'info',
       initial: 'G',
       key: 'gemini',
       label: t('home.providers.gemini'),
@@ -116,7 +116,7 @@ export function buildHomeProviders(t: Translate): HomeProviderBadge[] {
       supported: true
     },
     {
-      accentClass: 'from-rose-500 to-pink-600',
+      accentTone: 'brand-rose',
       initial: 'A',
       key: 'antigravity',
       label: t('home.providers.antigravity'),
@@ -124,7 +124,7 @@ export function buildHomeProviders(t: Translate): HomeProviderBadge[] {
       supported: true
     },
     {
-      accentClass: 'from-gray-500 to-gray-600',
+      accentTone: 'neutral',
       initial: '+',
       key: 'more',
       label: t('home.providers.more'),

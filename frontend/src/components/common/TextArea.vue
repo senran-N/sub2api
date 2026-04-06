@@ -2,7 +2,7 @@
   <div class="w-full">
     <label v-if="label" :for="id" class="input-label mb-1.5 block">
       {{ label }}
-      <span v-if="required" class="text-red-500">*</span>
+      <span v-if="required" class="field-required-indicator">*</span>
     </label>
     <div class="relative">
       <textarea
@@ -15,9 +15,9 @@
         :readonly="readonly"
         :rows="rows"
         :class="[
-          'input w-full min-h-[80px] transition-all duration-200 resize-y',
-          error ? 'input-error ring-2 ring-red-500/20' : '',
-          disabled ? 'cursor-not-allowed bg-gray-100 opacity-60 dark:bg-dark-900' : ''
+          'input text-area-input w-full transition-all duration-200 resize-y',
+          error ? 'input-error input-error-surface' : '',
+          disabled ? 'text-area-disabled' : ''
         ]"
         @input="onInput"
         @change="$emit('change', ($event.target as HTMLTextAreaElement).value)"
@@ -79,3 +79,19 @@ defineExpose({
   select: () => textAreaRef.value?.select()
 })
 </script>
+
+<style scoped>
+.text-area-input {
+  min-height: max(80px, calc(var(--theme-button-padding-y) * 4));
+}
+
+.text-area-disabled {
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-input-bg));
+  opacity: 0.6;
+}
+
+.field-required-indicator {
+  color: rgb(var(--theme-danger-rgb));
+}
+</style>

@@ -260,24 +260,24 @@ export function useAccountUsageCellState(
     const level = geminiUserLevel.value
 
     if (channel === 'client' || channel === 'ai studio') {
-      return 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
+      return 'theme-chip theme-chip--compact theme-chip--info'
     }
 
     if (channel === 'google one') {
       if (level === 'ultra') {
-        return 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300'
+        return 'theme-chip theme-chip--compact theme-chip--brand-purple'
       }
       if (level === 'pro') {
-        return 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
+        return 'theme-chip theme-chip--compact theme-chip--info'
       }
-      return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+      return 'theme-chip theme-chip--compact theme-chip--neutral'
     }
 
     if (channel === 'gcp') {
       if (level === 'enterprise') {
-        return 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300'
+        return 'theme-chip theme-chip--compact theme-chip--brand-purple'
       }
-      return 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
+      return 'theme-chip theme-chip--compact theme-chip--info'
     }
 
     return ''
@@ -407,11 +407,11 @@ export function useAccountUsageCellState(
   const antigravityTierClass = computed(() => {
     switch (antigravityTier.value) {
       case 'free-tier':
-        return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+        return 'theme-chip theme-chip--compact theme-chip--neutral'
       case 'g1-pro-tier':
-        return 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
+        return 'theme-chip theme-chip--compact theme-chip--info'
       case 'g1-ultra-tier':
-        return 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300'
+        return 'theme-chip theme-chip--compact theme-chip--brand-purple'
       default:
         return ''
     }
@@ -451,9 +451,9 @@ export function useAccountUsageCellState(
 
   const forbiddenBadgeClass = computed(() => {
     if (forbiddenType.value === 'validation') {
-      return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+      return 'theme-chip theme-chip--compact theme-chip--warning'
     }
-    return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+    return 'theme-chip theme-chip--compact theme-chip--danger'
   })
 
   const copyValidationURL = async () => {

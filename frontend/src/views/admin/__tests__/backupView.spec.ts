@@ -45,10 +45,10 @@ describe('backupView helpers', () => {
   })
 
   it('formats backup status, size, date, and R2 guide rows', () => {
-    expect(getBackupStatusClass('completed')).toContain('bg-green-100')
-    expect(getBackupStatusClass('running')).toContain('bg-blue-100')
-    expect(getBackupStatusClass('failed')).toContain('bg-red-100')
-    expect(getBackupStatusClass('pending')).toContain('bg-gray-100')
+    expect(getBackupStatusClass('completed')).toBe('theme-chip--success')
+    expect(getBackupStatusClass('running')).toBe('theme-chip--info')
+    expect(getBackupStatusClass('failed')).toBe('theme-chip--danger')
+    expect(getBackupStatusClass('pending')).toBe('theme-chip--neutral')
 
     expect(formatBackupSize(0)).toBe('-')
     expect(formatBackupSize(100)).toBe('100 B')

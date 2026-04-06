@@ -1,6 +1,6 @@
 <template>
-  <div class="card p-4">
-    <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
+  <div class="card token-usage-trend">
+    <h3 class="token-usage-trend__title theme-text-strong text-sm font-semibold">
       {{ t('admin.dashboard.tokenUsageTrend') }}
     </h3>
     <div v-if="loading" class="flex h-48 items-center justify-center">
@@ -11,7 +11,7 @@
     </div>
     <div
       v-else
-      class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+      class="theme-text-muted flex h-48 items-center justify-center text-sm"
     >
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>
@@ -35,6 +35,8 @@ import {
 import { Line } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { TrendDataPoint } from '@/types'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
+import { getThemeChartTooltipColors, readThemeCssVariable, readThemeRgb, readThemeRgbAlpha } from '@/utils/themeStyles'
 
 ChartJS.register(
   CategoryScale,
@@ -54,19 +56,29 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
+const themeVersion = useDocumentThemeVersion()
 
-const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb',
-  input: '#3b82f6',
-  output: '#10b981',
-  cacheCreation: '#f59e0b',
-  cacheRead: '#06b6d4',
-  cacheHitRate: '#8b5cf6'
-}))
+const chartColors = computed(() => {
+  void themeVersion.value
+  const tooltipColors = getThemeChartTooltipColors()
+
+  return {
+    text: readThemeCssVariable('--theme-page-text'),
+    grid: readThemeCssVariable('--theme-card-border'),
+    input: readThemeRgb('--theme-accent-rgb'),
+    inputSoft: readThemeRgbAlpha('--theme-accent-rgb', 0.14),
+    output: readThemeRgb('--theme-success-rgb'),
+    outputSoft: readThemeRgbAlpha('--theme-success-rgb', 0.14),
+    cacheCreation: readThemeRgb('--theme-warning-rgb'),
+    cacheCreationSoft: readThemeRgbAlpha('--theme-warning-rgb', 0.14),
+    cacheRead: readThemeRgb('--theme-info-rgb'),
+    cacheReadSoft: readThemeRgbAlpha('--theme-info-rgb', 0.14),
+    cacheHitRate: readThemeRgb('--theme-brand-purple-rgb'),
+    cacheHitRateSoft: readThemeRgbAlpha('--theme-brand-purple-rgb', 0.14),
+    tooltipBg: tooltipColors.background,
+    tooltipText: tooltipColors.text
+  }
+})
 
 const chartData = computed(() => {
   if (!props.trendData?.length) return null
@@ -78,7 +90,7 @@ const chartData = computed(() => {
         label: 'Input',
         data: props.trendData.map((d) => d.input_tokens),
         borderColor: chartColors.value.input,
-        backgroundColor: `${chartColors.value.input}20`,
+        backgroundColor: chartColors.value.inputSoft,
         fill: true,
         tension: 0.3
       },
@@ -86,7 +98,7 @@ const chartData = computed(() => {
         label: 'Output',
         data: props.trendData.map((d) => d.output_tokens),
         borderColor: chartColors.value.output,
-        backgroundColor: `${chartColors.value.output}20`,
+        backgroundColor: chartColors.value.outputSoft,
         fill: true,
         tension: 0.3
       },
@@ -94,7 +106,7 @@ const chartData = computed(() => {
         label: 'Cache Creation',
         data: props.trendData.map((d) => d.cache_creation_tokens),
         borderColor: chartColors.value.cacheCreation,
-        backgroundColor: `${chartColors.value.cacheCreation}20`,
+        backgroundColor: chartColors.value.cacheCreationSoft,
         fill: true,
         tension: 0.3
       },
@@ -102,7 +114,7 @@ const chartData = computed(() => {
         label: 'Cache Read',
         data: props.trendData.map((d) => d.cache_read_tokens),
         borderColor: chartColors.value.cacheRead,
-        backgroundColor: `${chartColors.value.cacheRead}20`,
+        backgroundColor: chartColors.value.cacheReadSoft,
         fill: true,
         tension: 0.3
       },
@@ -113,7 +125,7 @@ const chartData = computed(() => {
           return total > 0 ? (d.cache_read_tokens / total) * 100 : 0
         }),
         borderColor: chartColors.value.cacheHitRate,
-        backgroundColor: `${chartColors.value.cacheHitRate}20`,
+        backgroundColor: chartColors.value.cacheHitRateSoft,
         borderDash: [5, 5],
         fill: false,
         tension: 0.3,
@@ -144,6 +156,12 @@ const lineOptions = computed(() => ({
       }
     },
     tooltip: {
+      backgroundColor: chartColors.value.tooltipBg,
+      titleColor: chartColors.value.tooltipText,
+      bodyColor: chartColors.value.tooltipText,
+      footerColor: chartColors.value.tooltipText,
+      borderColor: chartColors.value.grid,
+      borderWidth: 1,
       callbacks: {
         label: (context: any) => {
           if (context.dataset.yAxisID === 'yPercent') {
@@ -226,3 +244,13 @@ const formatCost = (value: number): string => {
   return value.toFixed(4)
 }
 </script>
+
+<style scoped>
+.token-usage-trend {
+  padding: var(--theme-settings-card-panel-padding);
+}
+
+.token-usage-trend__title {
+  margin-bottom: var(--theme-settings-card-panel-padding);
+}
+</style>

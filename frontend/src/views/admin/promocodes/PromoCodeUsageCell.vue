@@ -1,5 +1,5 @@
 <template>
-  <span class="text-sm text-gray-600 dark:text-gray-300">
+  <span class="theme-text-default text-sm">
     {{ usedCount }} / {{ maxUses === 0 ? '∞' : maxUses }}
   </span>
 </template>

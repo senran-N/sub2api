@@ -1,7 +1,7 @@
 <template>
   <div class="relative w-full">
-    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-      <Icon name="search" size="md" class="text-gray-400" />
+    <div class="search-input__icon-wrap">
+      <Icon name="search" size="md" class="search-input__icon" />
     </div>
     <input
       :value="modelValue"
@@ -41,3 +41,13 @@ const handleInput = (event: Event) => {
   debouncedEmitSearch(value)
 }
 </script>
+
+<style scoped>
+.search-input__icon-wrap {
+  @apply pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3;
+}
+
+.search-input__icon {
+  color: var(--theme-input-placeholder);
+}
+</style>

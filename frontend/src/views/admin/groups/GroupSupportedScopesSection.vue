@@ -1,7 +1,7 @@
 <template>
-  <div v-if="form.platform === 'antigravity'" class="border-t pt-4">
+  <div v-if="form.platform === 'antigravity'" class="group-supported-scopes-section border-t pt-4">
     <div class="mb-1.5 flex items-center gap-1">
-      <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label class="group-supported-scopes-section__title text-sm font-medium">
         {{ t('admin.groups.supportedScopes.title') }}
       </label>
       <GroupSectionInfoTooltip :text="t('admin.groups.supportedScopes.tooltip')" />
@@ -10,18 +10,18 @@
       <label
         v-for="scope in scopeOptions"
         :key="scope.value"
-        class="flex cursor-pointer items-center gap-2"
+        class="group-supported-scopes-section__option flex cursor-pointer items-center gap-2"
       >
         <input
           type="checkbox"
           :checked="form.supported_model_scopes.includes(scope.value)"
-          class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700"
+          class="group-supported-scopes-section__checkbox h-4 w-4 rounded"
           @change="$emit('toggle-scope', scope.value)"
         />
-        <span class="text-sm text-gray-700 dark:text-gray-300">{{ scope.label }}</span>
+        <span class="group-supported-scopes-section__label text-sm">{{ scope.label }}</span>
       </label>
     </div>
-    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+    <p class="group-supported-scopes-section__hint mt-2 text-xs">
       {{ t('admin.groups.supportedScopes.hint') }}
     </p>
   </div>
@@ -49,3 +49,28 @@ const scopeOptions = computed(() => [
   { value: 'gemini_image', label: t('admin.groups.supportedScopes.geminiImage') }
 ])
 </script>
+
+<style scoped>
+.group-supported-scopes-section {
+  border-color: var(--theme-page-border);
+}
+
+.group-supported-scopes-section__title,
+.group-supported-scopes-section__label {
+  color: var(--theme-page-text);
+}
+
+.group-supported-scopes-section__hint {
+  color: var(--theme-page-muted);
+}
+
+.group-supported-scopes-section__checkbox {
+  border-color: color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+  background: var(--theme-input-bg);
+  color: var(--theme-accent);
+}
+
+.group-supported-scopes-section__checkbox:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-accent) 16%, transparent);
+}
+</style>

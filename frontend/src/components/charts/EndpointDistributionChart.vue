@@ -1,7 +1,7 @@
 <template>
-  <div class="card p-4">
+  <div class="endpoint-distribution-chart__card card">
     <div class="mb-4 flex items-center justify-between gap-3">
-      <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+      <h3 class="endpoint-distribution-chart__title text-sm font-semibold">
         {{ title || t('usage.endpointDistribution') }}
       </h3>
       <div class="flex flex-wrap items-center justify-end gap-2">
@@ -68,7 +68,7 @@
       <div class="max-h-48 flex-1 overflow-y-auto">
         <table class="w-full text-xs">
           <thead>
-            <tr class="text-gray-500 dark:text-gray-400">
+            <tr class="endpoint-distribution-chart__table-head">
               <th class="pb-2 text-left">{{ t('usage.endpoint') }}</th>
               <th class="pb-2 text-right">{{ t('admin.dashboard.requests') }}</th>
               <th class="pb-2 text-right">{{ t('admin.dashboard.tokens') }}</th>
@@ -79,31 +79,31 @@
           <tbody>
             <template v-for="item in displayEndpointStats" :key="item.endpoint">
               <tr
-                class="border-t border-gray-100 cursor-pointer transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-dark-700/40"
+                class="endpoint-distribution-chart__table-row endpoint-distribution-chart__table-row--interactive transition-colors"
                 @click="toggleBreakdown(item.endpoint)"
               >
-                <td class="max-w-[180px] truncate py-1.5 font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" :title="item.endpoint">
+                <td class="endpoint-distribution-chart__name endpoint-distribution-chart__name--interactive endpoint-distribution-chart__cell endpoint-distribution-chart__cell--name truncate font-medium" :title="item.endpoint">
                   <span class="inline-flex items-center gap-1">
                     <svg v-if="expandedKey === item.endpoint" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     <svg v-else class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     {{ item.endpoint }}
                   </span>
                 </td>
-                <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+                <td class="endpoint-distribution-chart__muted endpoint-distribution-chart__cell text-right">
                   {{ formatNumber(item.requests) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+                <td class="endpoint-distribution-chart__muted endpoint-distribution-chart__cell text-right">
                   {{ formatTokens(item.total_tokens) }}
                 </td>
-                <td class="py-1.5 text-right text-green-600 dark:text-green-400">
+                <td class="endpoint-distribution-chart__actual endpoint-distribution-chart__cell text-right">
                   ${{ formatCost(item.actual_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td class="endpoint-distribution-chart__standard endpoint-distribution-chart__cell text-right">
                   ${{ formatCost(item.cost) }}
                 </td>
               </tr>
               <tr v-if="expandedKey === item.endpoint">
-                <td colspan="5" class="p-0">
+                <td colspan="5" class="endpoint-distribution-chart__breakdown-cell">
                   <UserBreakdownSubTable
                     :items="breakdownItems"
                     :loading="breakdownLoading"
@@ -115,7 +115,7 @@
         </table>
       </div>
     </div>
-    <div v-else class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+    <div v-else class="endpoint-distribution-chart__muted flex h-48 items-center justify-center text-sm">
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>
   </div>
@@ -127,13 +127,16 @@ import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import UserBreakdownSubTable from './UserBreakdownSubTable.vue'
 import type { EndpointStat, UserBreakdownItem } from '@/types'
 import { getUserBreakdown } from '@/api/admin/dashboard'
+import { getThemeChartSequence, getThemeChartTooltipColors } from '@/utils/themeStyles'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
 const { t } = useI18n()
+const themeVersion = useDocumentThemeVersion()
 
 type DistributionMetric = 'tokens' | 'actual_cost'
 type EndpointSource = 'inbound' | 'upstream' | 'path'
@@ -196,20 +199,10 @@ const toggleBreakdown = async (endpoint: string) => {
   }
 }
 
-const chartColors = [
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
-  '#f97316',
-  '#6366f1',
-  '#84cc16',
-  '#06b6d4',
-  '#a855f7'
-]
+const chartColors = computed(() => {
+  void themeVersion.value
+  return getThemeChartSequence()
+})
 
 const displayEndpointStats = computed(() => {
   const sourceStats = props.source === 'upstream'
@@ -233,35 +226,43 @@ const chartData = computed(() => {
         data: displayEndpointStats.value.map((item) =>
           props.metric === 'actual_cost' ? item.actual_cost : item.total_tokens
         ),
-        backgroundColor: chartColors.slice(0, displayEndpointStats.value.length),
+        backgroundColor: chartColors.value.slice(0, displayEndpointStats.value.length),
         borderWidth: 0
       }
     ]
   }
 })
 
-const doughnutOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: false
-    },
-    tooltip: {
-      callbacks: {
-        label: (context: any) => {
-          const value = context.raw as number
-          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
-          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
-          const formattedValue = props.metric === 'actual_cost'
-            ? `$${formatCost(value)}`
-            : formatTokens(value)
-          return `${context.label}: ${formattedValue} (${percentage}%)`
+const doughnutOptions = computed(() => {
+  void themeVersion.value
+  const tooltipColors = getThemeChartTooltipColors()
+
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        backgroundColor: tooltipColors.background,
+        titleColor: tooltipColors.text,
+        bodyColor: tooltipColors.text,
+        callbacks: {
+          label: (context: any) => {
+            const value = context.raw as number
+            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
+            const formattedValue = props.metric === 'actual_cost'
+              ? `$${formatCost(value)}`
+              : formatTokens(value)
+            return `${context.label}: ${formattedValue} (${percentage}%)`
+          }
         }
       }
     }
   }
-}))
+})
 
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000_000) {
@@ -289,3 +290,56 @@ const formatCost = (value: number): string => {
   return value.toFixed(4)
 }
 </script>
+
+<style scoped>
+.endpoint-distribution-chart__card {
+  padding: var(--theme-endpoint-distribution-card-padding);
+}
+
+.endpoint-distribution-chart__title,
+.endpoint-distribution-chart__name {
+  color: var(--theme-page-text);
+}
+
+.endpoint-distribution-chart__muted,
+.endpoint-distribution-chart__table-head,
+.endpoint-distribution-chart__standard {
+  color: var(--theme-page-muted);
+}
+
+.endpoint-distribution-chart__table-row {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+}
+
+.endpoint-distribution-chart__cell {
+  padding-block: var(--theme-endpoint-distribution-cell-padding-y);
+}
+
+.endpoint-distribution-chart__cell--name {
+  max-width: var(--theme-endpoint-distribution-name-max-width);
+}
+
+.endpoint-distribution-chart__breakdown-cell {
+  padding: var(--theme-endpoint-distribution-breakdown-cell-padding);
+}
+
+.endpoint-distribution-chart__table-row--interactive {
+  cursor: pointer;
+}
+
+.endpoint-distribution-chart__table-row--interactive:hover {
+  background: color-mix(in srgb, var(--theme-accent-soft) 64%, var(--theme-surface));
+}
+
+.endpoint-distribution-chart__name--interactive {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.endpoint-distribution-chart__name--interactive:hover {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 94%, var(--theme-page-text));
+}
+
+.endpoint-distribution-chart__actual {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+</style>

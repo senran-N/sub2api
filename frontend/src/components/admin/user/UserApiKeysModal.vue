@@ -1,29 +1,39 @@
 <template>
   <BaseDialog :show="show" :title="t('admin.users.userApiKeys')" width="wide" @close="handleClose">
     <div v-if="user" class="space-y-4">
-      <div class="flex items-center gap-3 rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
-        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
-          <span class="text-lg font-medium text-primary-700 dark:text-primary-300">{{ user.email.charAt(0).toUpperCase() }}</span>
+      <div class="user-api-keys-modal__user-card">
+        <div class="user-api-keys-modal__avatar">
+          <span class="user-api-keys-modal__avatar-text">{{ user.email.charAt(0).toUpperCase() }}</span>
         </div>
-        <div><p class="font-medium text-gray-900 dark:text-white">{{ user.email }}</p><p class="text-sm text-gray-500 dark:text-dark-400">{{ user.username }}</p></div>
+        <div>
+          <p class="user-api-keys-modal__user-email">{{ user.email }}</p>
+          <p class="user-api-keys-modal__user-name">{{ user.username }}</p>
+        </div>
       </div>
-      <div v-if="loading" class="flex justify-center py-8"><svg class="h-8 w-8 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>
-      <div v-else-if="apiKeys.length === 0" class="py-8 text-center"><p class="text-sm text-gray-500">{{ t('admin.users.noApiKeys') }}</p></div>
-      <div v-else ref="scrollContainerRef" class="max-h-96 space-y-3 overflow-y-auto" @scroll="closeGroupSelector">
-        <div v-for="key in apiKeys" :key="key.id" class="rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
+      <div v-if="loading" class="user-api-keys-modal__state">
+        <svg class="user-api-keys-modal__spinner" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+      </div>
+      <div v-else-if="apiKeys.length === 0" class="user-api-keys-modal__state">
+        <p class="user-api-keys-modal__muted">{{ t('admin.users.noApiKeys') }}</p>
+      </div>
+      <div v-else ref="scrollContainerRef" class="user-api-keys-modal__list space-y-3 overflow-y-auto" @scroll="closeGroupSelector">
+        <div v-for="key in apiKeys" :key="key.id" class="user-api-keys-modal__key-card">
           <div class="flex items-start justify-between">
             <div class="min-w-0 flex-1">
-              <div class="mb-1 flex items-center gap-2"><span class="font-medium text-gray-900 dark:text-white">{{ key.name }}</span><span :class="['badge text-xs', key.status === 'active' ? 'badge-success' : 'badge-danger']">{{ key.status }}</span></div>
-              <p class="truncate font-mono text-sm text-gray-500">{{ key.key.substring(0, 20) }}...{{ key.key.substring(key.key.length - 8) }}</p>
+              <div class="mb-1 flex items-center gap-2">
+                <span class="user-api-keys-modal__key-name">{{ key.name }}</span>
+                <span :class="getKeyStatusClasses(key.status)">{{ key.status }}</span>
+              </div>
+              <p class="user-api-keys-modal__key-value">{{ key.key.substring(0, 20) }}...{{ key.key.substring(key.key.length - 8) }}</p>
             </div>
           </div>
-          <div class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+          <div class="user-api-keys-modal__meta-row">
             <div class="flex items-center gap-1">
               <span>{{ t('admin.users.group') }}:</span>
               <button
                 :ref="(el) => setGroupButtonRef(key.id, el)"
                 @click="openGroupSelector(key)"
-                class="-mx-1 -my-0.5 flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
+                class="user-api-keys-modal__group-trigger"
                 :disabled="updatingKeyIds.has(key.id)"
               >
                 <GroupBadge
@@ -33,9 +43,9 @@
                   :subscription-type="key.group.subscription_type"
                   :rate-multiplier="key.group.rate_multiplier"
                 />
-                <span v-else class="text-gray-400 italic">{{ t('admin.users.none') }}</span>
-                <svg v-if="updatingKeyIds.has(key.id)" class="h-3 w-3 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                <svg v-else class="h-3 w-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" /></svg>
+                <span v-else class="user-api-keys-modal__muted italic">{{ t('admin.users.none') }}</span>
+                <svg v-if="updatingKeyIds.has(key.id)" class="user-api-keys-modal__mini-spinner" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <svg v-else class="user-api-keys-modal__chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" /></svg>
               </button>
             </div>
             <div class="flex items-center gap-1"><span>{{ t('admin.users.columns.created') }}: {{ formatDateTime(key.created_at) }}</span></div>
@@ -50,24 +60,19 @@
     <div
       v-if="groupSelectorKeyId !== null && dropdownPosition"
       ref="dropdownRef"
-      class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] w-64 overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10"
+      class="user-api-keys-modal__dropdown animate-in fade-in slide-in-from-top-2 fixed z-[100000020] overflow-hidden duration-200"
       :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }"
     >
-      <div class="max-h-64 overflow-y-auto p-1.5">
+      <div class="user-api-keys-modal__dropdown-panel">
         <!-- Unbind option -->
         <button
           @click="changeGroup(selectedKeyForGroup!, null)"
-          :class="[
-            'flex w-full items-center rounded-lg px-3 py-2 text-sm transition-colors',
-            !selectedKeyForGroup?.group_id
-              ? 'bg-primary-50 dark:bg-primary-900/20'
-              : 'hover:bg-gray-100 dark:hover:bg-dark-700'
-          ]"
+          :class="getDropdownOptionClasses(!selectedKeyForGroup?.group_id)"
         >
-          <span class="text-gray-500 italic">{{ t('admin.users.none') }}</span>
+          <span class="user-api-keys-modal__muted italic">{{ t('admin.users.none') }}</span>
           <svg
             v-if="!selectedKeyForGroup?.group_id"
-            class="ml-auto h-4 w-4 shrink-0 text-primary-600 dark:text-primary-400"
+            class="user-api-keys-modal__dropdown-check"
             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"
           ><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
         </button>
@@ -76,12 +81,7 @@
           v-for="group in allGroups"
           :key="group.id"
           @click="changeGroup(selectedKeyForGroup!, group.id)"
-          :class="[
-            'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
-            selectedKeyForGroup?.group_id === group.id
-              ? 'bg-primary-50 dark:bg-primary-900/20'
-              : 'hover:bg-gray-100 dark:hover:bg-dark-700'
-          ]"
+          :class="getDropdownOptionClasses(selectedKeyForGroup?.group_id === group.id)"
         >
           <GroupOptionItem
             :name="group.name"
@@ -98,11 +98,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import { formatDateTime } from '@/utils/format'
+import { clampFloatingPanelPosition, readThemePixelValue } from '@/utils/floatingPanel'
 import type { AdminUser, AdminGroup, ApiKey } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
@@ -112,6 +114,7 @@ const props = defineProps<{ show: boolean; user: AdminUser | null }>()
 const emit = defineEmits(['close'])
 const { t } = useI18n()
 const appStore = useAppStore()
+const themeVersion = useDocumentThemeVersion()
 
 const apiKeys = ref<ApiKey[]>([])
 const allGroups = ref<AdminGroup[]>([])
@@ -127,6 +130,28 @@ const selectedKeyForGroup = computed(() => {
   if (groupSelectorKeyId.value === null) return null
   return apiKeys.value.find((k) => k.id === groupSelectorKeyId.value) || null
 })
+
+const joinClassNames = (...classNames: Array<string | false | null | undefined>) => {
+  return classNames.filter(Boolean).join(' ')
+}
+
+const getKeyStatusClasses = (status: string) => {
+  return joinClassNames(
+    'theme-chip theme-chip--compact text-xs',
+    status === 'active' ? 'theme-chip--success' : 'theme-chip--danger'
+  )
+}
+
+const getDropdownOptionClasses = (isSelected: boolean) => {
+  return joinClassNames(
+    'user-api-keys-modal__dropdown-option',
+    isSelected && 'user-api-keys-modal__dropdown-option--selected'
+  )
+}
+
+const getErrorMessage = (error: unknown, fallbackMessage: string) => {
+  return error instanceof Error && error.message ? error.message : fallbackMessage
+}
 
 const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance | null) => {
   if (el instanceof HTMLElement) {
@@ -168,22 +193,51 @@ const loadGroups = async () => {
   }
 }
 
-const DROPDOWN_HEIGHT = 272 // max-h-64 = 16rem = 256px + padding
-const DROPDOWN_GAP = 4
+const getDropdownWidth = () => readThemePixelValue('--theme-user-api-keys-dropdown-width', 256)
+const getDropdownHeight = () => {
+  const maxHeight = readThemePixelValue('--theme-user-api-keys-dropdown-max-height', 256)
+  const padding = readThemePixelValue('--theme-user-api-keys-dropdown-padding', 6)
+  return maxHeight + padding * 2
+}
+
+const updateGroupSelectorPosition = () => {
+  if (groupSelectorKeyId.value === null) {
+    dropdownPosition.value = null
+    return
+  }
+
+  const buttonEl = groupButtonRefs.value.get(groupSelectorKeyId.value)
+  if (!buttonEl) {
+    closeGroupSelector()
+    return
+  }
+
+  const rect = buttonEl.getBoundingClientRect()
+  const gap = readThemePixelValue('--theme-floating-panel-gap', 4)
+  const viewportPadding = readThemePixelValue('--theme-floating-panel-viewport-padding', 8)
+  const panelWidth = dropdownRef.value?.offsetWidth ?? getDropdownWidth()
+  const panelHeight = dropdownRef.value?.offsetHeight ?? getDropdownHeight()
+  const spaceBelow = window.innerHeight - rect.bottom
+  const openUpward = spaceBelow < panelHeight && rect.top > spaceBelow
+  const desiredPosition = {
+    top: openUpward ? rect.top - panelHeight - gap : rect.bottom + gap,
+    left: rect.left
+  }
+
+  dropdownPosition.value = clampFloatingPanelPosition(desiredPosition, {
+    panelWidth,
+    panelHeight,
+    padding: viewportPadding
+  })
+}
 
 const openGroupSelector = (key: ApiKey) => {
   if (groupSelectorKeyId.value === key.id) {
     closeGroupSelector()
   } else {
-    const buttonEl = groupButtonRefs.value.get(key.id)
-    if (buttonEl) {
-      const rect = buttonEl.getBoundingClientRect()
-      const spaceBelow = window.innerHeight - rect.bottom
-      const openUpward = spaceBelow < DROPDOWN_HEIGHT && rect.top > spaceBelow
-      dropdownPosition.value = {
-        top: openUpward ? rect.top - DROPDOWN_HEIGHT - DROPDOWN_GAP : rect.bottom + DROPDOWN_GAP,
-        left: rect.left
-      }
+    if (!groupButtonRefs.value.has(key.id)) {
+      closeGroupSelector()
+      return
     }
     groupSelectorKeyId.value = key.id
   }
@@ -193,6 +247,20 @@ const closeGroupSelector = () => {
   groupSelectorKeyId.value = null
   dropdownPosition.value = null
 }
+
+watch(
+  [groupSelectorKeyId, themeVersion],
+  async ([keyId]) => {
+    if (keyId === null) {
+      dropdownPosition.value = null
+      return
+    }
+
+    await nextTick()
+    updateGroupSelectorPosition()
+  },
+  { immediate: true }
+)
 
 const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
   closeGroupSelector()
@@ -211,8 +279,8 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
     } else {
       appStore.showSuccess(t('admin.users.groupChangedSuccess'))
     }
-  } catch (error: any) {
-    appStore.showError(error?.message || t('admin.users.groupChangeFailed'))
+  } catch (error) {
+    appStore.showError(getErrorMessage(error, t('admin.users.groupChangeFailed')))
   } finally {
     updatingKeyIds.value.delete(key.id)
   }
@@ -244,10 +312,161 @@ const handleClose = () => {
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleKeyDown, true)
+  window.addEventListener('resize', updateGroupSelectorPosition)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeyDown, true)
+  window.removeEventListener('resize', updateGroupSelectorPosition)
 })
 </script>
+
+<style scoped>
+.user-api-keys-modal__list {
+  max-height: var(--theme-user-api-keys-list-max-height);
+}
+
+.user-api-keys-modal__user-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  padding: 1rem;
+}
+
+.user-api-keys-modal__avatar {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--theme-accent-soft) 90%, var(--theme-surface));
+}
+
+.user-api-keys-modal__avatar-text,
+.user-api-keys-modal__spinner,
+.user-api-keys-modal__mini-spinner,
+.user-api-keys-modal__dropdown-check {
+  color: var(--theme-accent);
+}
+
+.user-api-keys-modal__user-email,
+.user-api-keys-modal__key-name {
+  color: var(--theme-page-text);
+  font-weight: 600;
+}
+
+.user-api-keys-modal__user-name,
+.user-api-keys-modal__key-value,
+.user-api-keys-modal__meta-row,
+.user-api-keys-modal__muted,
+.user-api-keys-modal__chevron {
+  color: var(--theme-page-muted);
+}
+
+.user-api-keys-modal__state {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.user-api-keys-modal__spinner {
+  height: 2rem;
+  width: 2rem;
+  animation: spin 1s linear infinite;
+}
+
+.user-api-keys-modal__key-card {
+  border: 1px solid var(--theme-card-border);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  background: var(--theme-surface);
+  padding: 1rem;
+}
+
+.user-api-keys-modal__key-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--theme-font-mono);
+  font-size: 0.875rem;
+}
+
+.user-api-keys-modal__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+}
+
+.user-api-keys-modal__group-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: -0.125rem -0.25rem;
+  border-radius: calc(var(--theme-button-radius) - 2px);
+  padding: 0.125rem 0.25rem;
+  transition: background-color 0.18s ease;
+}
+
+.user-api-keys-modal__group-trigger:hover:not(:disabled),
+.user-api-keys-modal__group-trigger:focus-visible {
+  background: color-mix(in srgb, var(--theme-button-ghost-hover-bg) 90%, transparent);
+  outline: none;
+}
+
+.user-api-keys-modal__group-trigger:disabled {
+  cursor: not-allowed;
+}
+
+.user-api-keys-modal__mini-spinner,
+.user-api-keys-modal__chevron {
+  height: 0.75rem;
+  width: 0.75rem;
+}
+
+.user-api-keys-modal__mini-spinner {
+  animation: spin 1s linear infinite;
+}
+
+.user-api-keys-modal__dropdown {
+  width: min(
+    var(--theme-user-api-keys-dropdown-width),
+    calc(100vw - (var(--theme-floating-panel-viewport-padding) + var(--theme-floating-panel-viewport-padding)))
+  );
+  border: 1px solid var(--theme-card-border);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow-hover);
+}
+
+.user-api-keys-modal__dropdown-panel {
+  max-height: var(--theme-user-api-keys-dropdown-max-height);
+  overflow-y: auto;
+  padding: var(--theme-user-api-keys-dropdown-padding);
+}
+
+.user-api-keys-modal__dropdown-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  transition: background-color 0.18s ease;
+}
+
+.user-api-keys-modal__dropdown-option:hover,
+.user-api-keys-modal__dropdown-option:focus-visible {
+  background: color-mix(in srgb, var(--theme-button-ghost-hover-bg) 90%, transparent);
+  outline: none;
+}
+
+.user-api-keys-modal__dropdown-option--selected {
+  background: color-mix(in srgb, var(--theme-accent-soft) 78%, var(--theme-surface));
+}
+</style>

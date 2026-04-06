@@ -1,9 +1,9 @@
 <template>
-  <span class="text-sm font-medium text-gray-900 dark:text-white">
+  <span class="theme-text-strong text-sm font-medium">
     <template v-if="code.type === 'balance'">${{ code.value.toFixed(2) }}</template>
     <template v-else-if="code.type === 'subscription'">
       {{ code.validity_days || 30 }} {{ t('admin.redeem.days') }}
-      <span v-if="code.group" class="ml-1 text-xs text-gray-500 dark:text-gray-400">
+      <span v-if="code.group" class="theme-text-muted ml-1 text-xs">
         ({{ code.group.name }})
       </span>
     </template>

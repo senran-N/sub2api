@@ -1,35 +1,35 @@
 <template>
-  <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/50">
+  <div class="announcement-targeting-editor">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <div class="text-sm font-medium text-gray-900 dark:text-white">
+        <div class="announcement-targeting-editor__title text-sm font-medium">
           {{ t('admin.announcements.form.targetingMode') }}
         </div>
-        <div class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+        <div class="announcement-targeting-editor__description mt-1 text-xs">
           {{ mode === 'all' ? t('admin.announcements.form.targetingAll') : t('admin.announcements.form.targetingCustom') }}
         </div>
       </div>
 
       <div class="flex items-center gap-3">
-        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <label class="announcement-targeting-editor__radio-label flex items-center gap-2 text-sm">
           <input
             type="radio"
             name="announcement-targeting-mode"
             value="all"
             :checked="mode === 'all'"
             @change="setMode('all')"
-            class="h-4 w-4"
+            class="announcement-targeting-editor__radio h-4 w-4"
           />
           {{ t('admin.announcements.form.targetingAll') }}
         </label>
-        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <label class="announcement-targeting-editor__radio-label flex items-center gap-2 text-sm">
           <input
             type="radio"
             name="announcement-targeting-mode"
             value="custom"
             :checked="mode === 'custom'"
             @change="setMode('custom')"
-            class="h-4 w-4"
+            class="announcement-targeting-editor__radio h-4 w-4"
           />
           {{ t('admin.announcements.form.targetingCustom') }}
         </label>
@@ -38,9 +38,9 @@
 
     <div v-if="mode === 'custom'" class="mt-4 space-y-4">
       <div class="flex items-center justify-between">
-        <div class="text-sm font-medium text-gray-900 dark:text-white">
+        <div class="announcement-targeting-editor__title text-sm font-medium">
           OR
-          <span class="ml-1 text-xs font-normal text-gray-500 dark:text-dark-400">
+          <span class="announcement-targeting-editor__description ml-1 text-xs font-normal">
             ({{ anyOf.length }}/50)
           </span>
         </div>
@@ -55,22 +55,22 @@
         </button>
       </div>
 
-      <div v-if="anyOf.length === 0" class="rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-dark-600 dark:text-dark-400">
+      <div v-if="anyOf.length === 0" class="announcement-targeting-editor__empty text-sm">
         {{ t('admin.announcements.form.targetingCustom') }}: {{ t('admin.announcements.form.addOrGroup') }}
       </div>
 
       <div
         v-for="(group, groupIndex) in anyOf"
         :key="groupIndex"
-        class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800"
+        class="announcement-targeting-editor__group"
       >
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <div class="text-sm font-medium text-gray-900 dark:text-white">
+            <div class="announcement-targeting-editor__title text-sm font-medium">
               {{ t('admin.announcements.form.targetingCustom') }} #{{ groupIndex + 1 }}
-              <span class="ml-2 text-xs font-normal text-gray-500 dark:text-dark-400">AND ({{ (group.all_of?.length || 0) }}/50)</span>
+              <span class="announcement-targeting-editor__description ml-2 text-xs font-normal">AND ({{ (group.all_of?.length || 0) }}/50)</span>
             </div>
-            <div class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+            <div class="announcement-targeting-editor__description mt-1 text-xs">
               {{ t('admin.announcements.form.addAndCondition') }}
             </div>
           </div>
@@ -89,7 +89,7 @@
           <div
             v-for="(cond, condIndex) in (group.all_of || [])"
             :key="condIndex"
-            class="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900/30"
+            class="announcement-targeting-editor__condition"
           >
             <div class="flex flex-col gap-3 md:flex-row md:items-end">
               <div class="w-full md:w-52">
@@ -157,7 +157,7 @@
         </div>
       </div>
 
-      <div v-if="validationError" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-300">
+      <div v-if="validationError" class="announcement-targeting-editor__validation text-sm">
         {{ validationError }}
       </div>
     </div>
@@ -406,3 +406,56 @@ const validationError = computed(() => {
   return ''
 })
 </script>
+
+<style scoped>
+.announcement-targeting-editor {
+  border-radius: var(--theme-announcement-targeting-editor-radius);
+  padding: var(--theme-announcement-targeting-editor-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 92%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
+}
+
+.announcement-targeting-editor__title {
+  color: var(--theme-page-text);
+}
+
+.announcement-targeting-editor__description,
+.announcement-targeting-editor__radio-label,
+.announcement-targeting-editor__empty {
+  color: var(--theme-page-muted);
+}
+
+.announcement-targeting-editor__radio {
+  accent-color: var(--theme-accent);
+}
+
+.announcement-targeting-editor__empty {
+  border-radius: var(--theme-announcement-targeting-empty-radius);
+  padding: var(--theme-announcement-targeting-empty-padding);
+  border: 1px dashed color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 76%, transparent);
+}
+
+.announcement-targeting-editor__group {
+  border-radius: var(--theme-announcement-targeting-group-radius);
+  padding: var(--theme-announcement-targeting-group-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 92%, transparent);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.announcement-targeting-editor__condition {
+  border-radius: var(--theme-announcement-targeting-condition-radius);
+  padding: var(--theme-announcement-targeting-condition-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
+}
+
+.announcement-targeting-editor__validation {
+  border-radius: var(--theme-announcement-targeting-validation-radius);
+  padding: var(--theme-announcement-targeting-validation-padding);
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-danger-rgb)) 26%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+</style>

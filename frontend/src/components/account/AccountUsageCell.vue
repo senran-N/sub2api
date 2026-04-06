@@ -1,46 +1,32 @@
 <template>
   <div v-if="showUsageWindows">
-    <!-- Anthropic OAuth and Setup Token accounts: fetch real usage data -->
     <template
       v-if="
         account.platform === 'anthropic' &&
         (account.type === 'oauth' || account.type === 'setup-token')
       "
     >
-      <!-- Loading state -->
       <div v-if="loading" class="space-y-1.5">
-        <!-- OAuth: 3 rows, Setup Token: 1 row -->
-        <div class="flex items-center gap-1">
-          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+        <div v-for="index in account.type === 'oauth' ? 3 : 1" :key="index" class="account-usage-cell__skeleton-row">
+          <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
+          <div class="account-usage-cell__skeleton-bar animate-pulse"></div>
+          <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
         </div>
-        <template v-if="account.type === 'oauth'">
-          <div class="flex items-center gap-1">
-            <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-            <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
-            <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-          </div>
-          <div class="flex items-center gap-1">
-            <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-            <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
-            <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-          </div>
-        </template>
       </div>
 
-      <!-- Error state -->
-      <div v-else-if="error" class="text-xs text-red-500">
+      <div v-else-if="error" class="account-usage-cell__error text-xs">
         {{ error }}
       </div>
 
-      <!-- Usage data -->
       <div v-else-if="usageInfo" class="space-y-1">
-        <!-- API error (degraded response) -->
-        <div v-if="usageInfo.error" class="text-xs text-amber-600 dark:text-amber-400 truncate max-w-[200px]" :title="usageInfo.error">
+        <div
+          v-if="usageInfo.error"
+          class="account-usage-cell__warning account-usage-cell__warning--truncated text-xs"
+          :title="usageInfo.error"
+        >
           {{ usageInfo.error }}
         </div>
-        <!-- 5h Window -->
+
         <UsageProgressBar
           v-if="usageInfo.five_hour"
           label="5h"
@@ -50,7 +36,6 @@
           color="indigo"
         />
 
-        <!-- 7d Window (OAuth only) -->
         <UsageProgressBar
           v-if="usageInfo.seven_day"
           label="7d"
@@ -59,7 +44,6 @@
           color="emerald"
         />
 
-        <!-- 7d Sonnet Window (OAuth only) -->
         <UsageProgressBar
           v-if="usageInfo.seven_day_sonnet"
           label="7d S"
@@ -68,17 +52,13 @@
           color="purple"
         />
 
-        <!-- Passive sampling label + active query button -->
-        <div class="flex items-center gap-1.5 mt-0.5">
-          <span
-            v-if="usageInfo.source === 'passive'"
-            class="text-[9px] text-gray-400 dark:text-gray-500 italic"
-          >
+        <div class="account-usage-cell__inline-row account-usage-cell__inline-row--compact">
+          <span v-if="usageInfo.source === 'passive'" class="account-usage-cell__muted-note account-usage-cell__muted-note--compact italic">
             {{ t('admin.accounts.usageWindow.passiveSampled') }}
           </span>
           <button
             type="button"
-            class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors"
+            class="account-usage-cell__action account-usage-cell__action--compact"
             :disabled="activeQueryLoading"
             @click="loadActiveUsage"
           >
@@ -101,11 +81,9 @@
         </div>
       </div>
 
-      <!-- No data yet -->
-      <div v-else class="text-xs text-gray-400">-</div>
+      <div v-else class="account-usage-cell__empty text-xs">-</div>
     </template>
 
-    <!-- OpenAI OAuth accounts: single source from /usage API -->
     <template v-else-if="account.platform === 'openai' && account.type === 'oauth'">
       <div v-if="hasOpenAIUsageFallback" class="space-y-1">
         <UsageProgressBar
@@ -128,39 +106,23 @@
         />
       </div>
       <div v-else-if="loading" class="space-y-1.5">
-        <div class="flex items-center gap-1">
-          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-        </div>
-        <div class="flex items-center gap-1">
-          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+        <div v-for="index in 2" :key="index" class="account-usage-cell__skeleton-row">
+          <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
+          <div class="account-usage-cell__skeleton-bar animate-pulse"></div>
+          <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
         </div>
       </div>
-      <div v-else class="text-xs text-gray-400">-</div>
+      <div v-else class="account-usage-cell__empty text-xs">-</div>
     </template>
 
-    <!-- Antigravity OAuth accounts: fetch usage from API -->
     <template v-else-if="account.platform === 'antigravity' && account.type === 'oauth'">
-      <!-- 账户类型徽章 -->
-      <div v-if="antigravityTierLabel" class="mb-1 flex items-center gap-1">
-        <span
-          :class="[
-            'inline-block rounded px-1.5 py-0.5 text-[10px] font-medium',
-            antigravityTierClass
-          ]"
-        >
+      <div v-if="antigravityTierLabel" class="account-usage-cell__inline-row account-usage-cell__inline-row--with-margin">
+        <span :class="antigravityTierClass">
           {{ antigravityTierLabel }}
         </span>
-        <!-- 不合格账户警告图标 -->
-        <span
-          v-if="hasIneligibleTiers"
-          class="group relative cursor-help"
-        >
+        <span v-if="hasIneligibleTiers" class="group relative cursor-help">
           <svg
-            class="h-3.5 w-3.5 text-red-500"
+            class="account-usage-cell__danger-icon h-3.5 w-3.5"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -171,36 +133,30 @@
             />
           </svg>
           <span
-            class="pointer-events-none absolute left-0 top-full z-50 mt-1 w-80 whitespace-normal break-words rounded bg-gray-900 px-3 py-2 text-xs leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+            class="account-usage-cell__tooltip"
           >
             {{ t('admin.accounts.ineligibleWarning') }}
           </span>
         </span>
       </div>
 
-      <!-- Forbidden state (403) -->
       <div v-if="isForbidden" class="space-y-1">
-        <span
-          :class="[
-            'inline-block rounded px-1.5 py-0.5 text-[10px] font-medium',
-            forbiddenBadgeClass
-          ]"
-        >
+        <span :class="forbiddenBadgeClass">
           {{ forbiddenLabel }}
         </span>
-        <div v-if="validationURL" class="flex items-center gap-1">
+        <div v-if="validationURL" class="account-usage-cell__inline-row">
           <a
             :href="validationURL"
             target="_blank"
             rel="noopener noreferrer"
-            class="text-[10px] text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+            class="account-usage-cell__link account-usage-cell__link--compact"
             :title="t('admin.accounts.openVerification')"
           >
             {{ t('admin.accounts.openVerification') }}
           </a>
           <button
             type="button"
-            class="text-[10px] text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            class="account-usage-cell__subtle-action account-usage-cell__subtle-action--compact"
             :title="t('admin.accounts.copyLink')"
             @click="copyValidationURL"
           >
@@ -209,37 +165,31 @@
         </div>
       </div>
 
-      <!-- Needs reauth (401) -->
       <div v-else-if="needsReauth" class="space-y-1">
-        <span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+        <span class="theme-chip theme-chip--compact theme-chip--brand-orange">
           {{ t('admin.accounts.needsReauth') }}
         </span>
       </div>
 
-      <!-- Degraded error (non-403, non-401) -->
       <div v-else-if="usageInfo?.error" class="space-y-1">
-        <span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+        <span class="theme-chip theme-chip--compact theme-chip--warning">
           {{ usageErrorLabel }}
         </span>
       </div>
 
-      <!-- Loading state -->
       <div v-else-if="loading" class="space-y-1.5">
-        <div class="flex items-center gap-1">
-          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+        <div class="account-usage-cell__skeleton-row">
+          <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
+          <div class="account-usage-cell__skeleton-bar animate-pulse"></div>
+          <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
         </div>
       </div>
 
-      <!-- Error state -->
-      <div v-else-if="error" class="text-xs text-red-500">
+      <div v-else-if="error" class="account-usage-cell__error text-xs">
         {{ error }}
       </div>
 
-      <!-- Usage data from API -->
       <div v-else-if="hasAntigravityQuotaFromAPI" class="space-y-1">
-        <!-- Gemini 3 Pro -->
         <UsageProgressBar
           v-if="antigravity3ProUsageFromAPI !== null"
           :label="t('admin.accounts.usageWindow.gemini3Pro')"
@@ -248,7 +198,6 @@
           color="indigo"
         />
 
-        <!-- Gemini 3 Flash -->
         <UsageProgressBar
           v-if="antigravity3FlashUsageFromAPI !== null"
           :label="t('admin.accounts.usageWindow.gemini3Flash')"
@@ -257,7 +206,6 @@
           color="emerald"
         />
 
-        <!-- Gemini 3 Image -->
         <UsageProgressBar
           v-if="antigravity3ImageUsageFromAPI !== null"
           :label="t('admin.accounts.usageWindow.gemini3Image')"
@@ -266,7 +214,6 @@
           color="purple"
         />
 
-        <!-- Claude -->
         <UsageProgressBar
           v-if="antigravityClaudeUsageFromAPI !== null"
           :label="t('admin.accounts.usageWindow.claude')"
@@ -275,34 +222,24 @@
           color="amber"
         />
 
-        <div v-if="aiCreditsDisplay" class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+        <div v-if="aiCreditsDisplay" class="account-usage-cell__credits account-usage-cell__credits--compact">
           💳 {{ t('admin.accounts.aiCreditsBalance') }}: {{ aiCreditsDisplay }}
         </div>
       </div>
-      <div v-else-if="aiCreditsDisplay" class="text-[10px] text-gray-500 dark:text-gray-400">
+      <div v-else-if="aiCreditsDisplay" class="account-usage-cell__credits account-usage-cell__credits--compact">
         💳 {{ t('admin.accounts.aiCreditsBalance') }}: {{ aiCreditsDisplay }}
       </div>
-      <div v-else class="text-xs text-gray-400">-</div>
+      <div v-else class="account-usage-cell__empty text-xs">-</div>
     </template>
 
-    <!-- Gemini platform: show quota + local usage window -->
     <template v-else-if="account.platform === 'gemini'">
-      <!-- Auth Type + Tier Badge (first line) -->
-      <div v-if="geminiAuthTypeLabel" class="mb-1 flex items-center gap-1">
-        <span
-          :class="[
-            'inline-block rounded px-1.5 py-0.5 text-[10px] font-medium',
-            geminiTierClass
-          ]"
-        >
+      <div v-if="geminiAuthTypeLabel" class="account-usage-cell__inline-row account-usage-cell__inline-row--with-margin">
+        <span :class="geminiTierClass">
           {{ geminiAuthTypeLabel }}
         </span>
-        <!-- Help icon -->
-        <span
-          class="group relative cursor-help"
-        >
+        <span class="group relative cursor-help">
           <svg
-            class="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+            class="account-usage-cell__help-icon h-3.5 w-3.5"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -313,15 +250,24 @@
             />
           </svg>
           <span
-            class="pointer-events-none absolute left-0 top-full z-50 mt-1 w-80 whitespace-normal break-words rounded bg-gray-900 px-3 py-2 text-xs leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+            class="account-usage-cell__tooltip"
           >
-            <div class="font-semibold mb-1">{{ t('admin.accounts.gemini.quotaPolicy.title') }}</div>
-            <div class="mb-2 text-gray-300">{{ t('admin.accounts.gemini.quotaPolicy.note') }}</div>
+            <div class="account-usage-cell__tooltip-title font-semibold">
+              {{ t('admin.accounts.gemini.quotaPolicy.title') }}
+            </div>
+            <div class="account-usage-cell__tooltip-note account-usage-cell__tooltip-note--spaced">
+              {{ t('admin.accounts.gemini.quotaPolicy.note') }}
+            </div>
             <div class="space-y-1">
               <div><strong>{{ geminiQuotaPolicyChannel }}:</strong></div>
-              <div class="pl-2">• {{ geminiQuotaPolicyLimits }}</div>
-              <div class="mt-2">
-                <a :href="geminiQuotaPolicyDocsUrl" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">
+              <div class="account-usage-cell__tooltip-detail">• {{ geminiQuotaPolicyLimits }}</div>
+              <div class="account-usage-cell__tooltip-link-row">
+                <a
+                  :href="geminiQuotaPolicyDocsUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="account-usage-cell__tooltip-link underline"
+                >
                   {{ t('admin.accounts.gemini.quotaPolicy.columns.docs') }} →
                 </a>
               </div>
@@ -330,19 +276,17 @@
         </span>
       </div>
 
-      <!-- Usage data or unlimited flow -->
       <div class="space-y-1">
         <div v-if="loading" class="space-y-1">
-          <div class="flex items-center gap-1">
-            <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-            <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
-            <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+          <div class="account-usage-cell__skeleton-row">
+            <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
+            <div class="account-usage-cell__skeleton-bar animate-pulse"></div>
+            <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
           </div>
         </div>
-        <div v-else-if="error" class="text-xs text-red-500">
+        <div v-else-if="error" class="account-usage-cell__error text-xs">
           {{ error }}
         </div>
-        <!-- Gemini: show daily usage bars when available -->
         <div v-else-if="geminiUsageAvailable" class="space-y-1">
           <UsageProgressBar
             v-for="bar in geminiUsageBars"
@@ -353,64 +297,51 @@
             :window-stats="bar.windowStats"
             :color="bar.color"
           />
-          <p class="mt-1 text-[9px] leading-tight text-gray-400 dark:text-gray-500 italic">
+          <p class="account-usage-cell__muted-note account-usage-cell__muted-note--compact italic">
             * {{ t('admin.accounts.gemini.quotaPolicy.simulatedNote') || 'Simulated quota' }}
           </p>
         </div>
-        <!-- AI Studio Client OAuth: show unlimited flow (no usage tracking) -->
-        <div v-else class="text-xs text-gray-400">
+        <div v-else class="account-usage-cell__empty text-xs">
           {{ t('admin.accounts.gemini.rateLimit.unlimited') }}
         </div>
       </div>
     </template>
 
-    <!-- Other accounts: no usage window -->
     <template v-else>
-      <div class="text-xs text-gray-400">-</div>
+      <div class="account-usage-cell__empty text-xs">-</div>
     </template>
   </div>
 
-  <!-- Non-OAuth/Setup-Token accounts -->
   <div v-else>
-    <!-- Gemini API Key accounts: show quota info -->
     <AccountQuotaInfo v-if="account.platform === 'gemini'" :account="account" />
-    <!-- Key/Bedrock accounts: show today stats + optional quota bars -->
     <div v-else class="space-y-1">
-      <!-- Today stats row (requests, tokens, cost, user_cost) -->
-      <div
-        v-if="todayStats"
-        class="mb-0.5 flex items-center"
-      >
-        <div class="flex items-center gap-1.5 text-[9px] text-gray-500 dark:text-gray-400">
-          <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800">
+      <div v-if="todayStats" class="mb-0.5 flex items-center">
+        <div class="account-usage-cell__stats-row">
+          <span class="account-usage-cell__stat-pill">
             {{ formatKeyRequests }} req
           </span>
-          <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800">
+          <span class="account-usage-cell__stat-pill">
             {{ formatKeyTokens }}
           </span>
-          <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800" :title="t('usage.accountBilled')">
+          <span class="account-usage-cell__stat-pill" :title="t('usage.accountBilled')">
             A ${{ formatKeyCost }}
           </span>
           <span
             v-if="todayStats.user_cost != null"
-            class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800"
+            class="account-usage-cell__stat-pill"
             :title="t('usage.userBilled')"
           >
             U ${{ formatKeyUserCost }}
           </span>
         </div>
       </div>
-      <!-- Loading skeleton for today stats -->
-      <div
-        v-else-if="todayStatsLoading"
-        class="mb-0.5 flex items-center gap-1"
-      >
-        <div class="h-3 w-10 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-        <div class="h-3 w-8 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-        <div class="h-3 w-12 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+
+      <div v-else-if="todayStatsLoading" class="mb-0.5 flex items-center gap-1">
+        <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--wide animate-pulse"></div>
+        <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--bar animate-pulse"></div>
+        <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--cost animate-pulse"></div>
       </div>
 
-      <!-- API Key accounts with quota limits: show progress bars -->
       <UsageProgressBar
         v-if="quotaDailyBar"
         label="1d"
@@ -432,8 +363,9 @@
         color="purple"
       />
 
-      <!-- No data at all -->
-      <div v-if="!todayStats && !todayStatsLoading && !hasApiKeyQuota" class="text-xs text-gray-400">-</div>
+      <div v-if="!todayStats && !todayStatsLoading && !hasApiKeyQuota" class="account-usage-cell__empty text-xs">
+        -
+      </div>
     </div>
   </div>
 </template>
@@ -502,3 +434,195 @@ const {
   validationURL
 } = useAccountUsageCellState(props, t)
 </script>
+
+<style scoped>
+.account-usage-cell__skeleton-block,
+.account-usage-cell__skeleton-bar {
+  background: color-mix(in srgb, var(--theme-page-border) 82%, var(--theme-surface));
+}
+
+.account-usage-cell__skeleton-block {
+  height: 0.75rem;
+  border-radius: var(--theme-button-radius);
+}
+
+.account-usage-cell__skeleton-block--label {
+  width: var(--theme-account-usage-skeleton-label-width);
+}
+
+.account-usage-cell__skeleton-block--wide {
+  width: 2.5rem;
+}
+
+.account-usage-cell__skeleton-block--bar {
+  width: 2rem;
+}
+
+.account-usage-cell__skeleton-block--cost {
+  width: 3rem;
+}
+
+.account-usage-cell__skeleton-bar {
+  width: var(--theme-account-usage-skeleton-bar-width);
+  height: 0.375rem;
+  border-radius: 999px;
+}
+
+.account-usage-cell__skeleton-row,
+.account-usage-cell__inline-row,
+.account-usage-cell__stats-row {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-account-usage-inline-gap);
+}
+
+.account-usage-cell__inline-row--compact {
+  margin-top: 0.125rem;
+  gap: calc(var(--theme-account-usage-inline-gap) * 1.5);
+}
+
+.account-usage-cell__inline-row--with-margin {
+  margin-bottom: 0.25rem;
+}
+
+.account-usage-cell__empty {
+  color: color-mix(in srgb, var(--theme-page-muted) 78%, transparent);
+}
+
+.account-usage-cell__error {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.account-usage-cell__warning {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.account-usage-cell__warning--truncated {
+  max-width: var(--theme-account-usage-warning-max-width);
+}
+
+.account-usage-cell__muted-note,
+.account-usage-cell__credits,
+.account-usage-cell__stats-row {
+  color: var(--theme-page-muted);
+}
+
+.account-usage-cell__muted-note--compact,
+.account-usage-cell__credits--compact,
+.account-usage-cell__link--compact,
+.account-usage-cell__subtle-action--compact,
+.account-usage-cell__stats-row {
+  font-size: 0.625rem;
+}
+
+.account-usage-cell__credits--compact,
+.account-usage-cell__muted-note--compact {
+  margin-top: 0.25rem;
+  line-height: 1.25;
+}
+
+.account-usage-cell__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  border-radius: var(--theme-button-radius);
+  padding: var(--theme-account-usage-action-padding-y) var(--theme-account-usage-action-padding-x);
+  font-size: 0.625rem;
+  font-weight: 500;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+}
+
+.account-usage-cell__action:hover {
+  background: color-mix(in srgb, var(--theme-accent-soft) 88%, var(--theme-surface));
+}
+
+.account-usage-cell__danger-icon {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.account-usage-cell__help-icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 74%, transparent);
+}
+
+.account-usage-cell__help-icon:hover {
+  color: var(--theme-page-text);
+}
+
+.account-usage-cell__tooltip {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 50;
+  width: var(--theme-account-usage-tooltip-width);
+  margin-top: 0.25rem;
+  border-radius: var(--theme-tooltip-radius);
+  padding: var(--theme-tooltip-padding);
+  white-space: normal;
+  word-break: break-word;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  opacity: 0;
+  box-shadow: var(--theme-dropdown-shadow);
+  transition: opacity 0.2s ease;
+  border: 1px solid color-mix(in srgb, var(--theme-surface-contrast) 16%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-contrast) 94%, var(--theme-surface));
+  color: var(--theme-surface-contrast-text);
+}
+
+.group:hover .account-usage-cell__tooltip {
+  opacity: 1;
+}
+
+.account-usage-cell__tooltip-title {
+  margin-bottom: 0.25rem;
+  color: var(--theme-surface-contrast-text);
+}
+
+.account-usage-cell__tooltip-note {
+  color: color-mix(in srgb, var(--theme-surface-contrast-text) 68%, transparent);
+}
+
+.account-usage-cell__tooltip-note--spaced {
+  margin-bottom: 0.5rem;
+}
+
+.account-usage-cell__tooltip-detail {
+  padding-left: 0.5rem;
+}
+
+.account-usage-cell__tooltip-link-row {
+  margin-top: 0.5rem;
+}
+
+.account-usage-cell__tooltip-link {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 74%, var(--theme-surface-contrast-text));
+}
+
+.account-usage-cell__tooltip-link:hover {
+  color: var(--theme-surface-contrast-text);
+}
+
+.account-usage-cell__link {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+}
+
+.account-usage-cell__link:hover {
+  color: color-mix(in srgb, var(--theme-accent-strong) 22%, var(--theme-accent) 78%);
+}
+
+.account-usage-cell__subtle-action {
+  color: var(--theme-page-muted);
+}
+
+.account-usage-cell__subtle-action:hover {
+  color: var(--theme-page-text);
+}
+
+.account-usage-cell__stat-pill {
+  border-radius: var(--theme-button-radius);
+  padding: var(--theme-account-usage-pill-padding-y) var(--theme-account-usage-pill-padding-x);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+</style>

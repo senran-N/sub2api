@@ -1,11 +1,11 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+    <div class="profile-edit-form__header border-b">
+      <h2 class="theme-text-strong text-lg font-medium">
         {{ t('profile.editProfile') }}
       </h2>
     </div>
-    <div class="px-6 py-6">
+    <div class="profile-edit-form__body">
       <form @submit.prevent="handleUpdateProfile" class="space-y-4">
         <div>
           <label for="username" class="input-label">
@@ -36,6 +36,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { userAPI } from '@/api'
+import { resolveErrorMessage } from '@/utils/errorMessage'
 
 const props = defineProps<{
   initialUsername: string
@@ -65,10 +66,21 @@ const handleUpdateProfile = async () => {
     })
     authStore.user = updatedUser
     appStore.showSuccess(t('profile.updateSuccess'))
-  } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('profile.updateFailed'))
+  } catch (error) {
+    appStore.showError(resolveErrorMessage(error, t('profile.updateFailed')))
   } finally {
     loading.value = false
   }
 }
 </script>
+
+<style scoped>
+.profile-edit-form__header {
+  border-color: color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  padding: var(--theme-profile-totp-header-padding-y) var(--theme-profile-totp-header-padding-x);
+}
+
+.profile-edit-form__body {
+  padding: var(--theme-profile-totp-body-padding);
+}
+</style>

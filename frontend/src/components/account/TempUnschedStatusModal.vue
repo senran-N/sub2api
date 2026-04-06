@@ -6,8 +6,8 @@
     @close="handleClose"
   >
     <div class="space-y-4">
-      <div v-if="loading" class="flex items-center justify-center py-8">
-        <svg class="h-6 w-6 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+      <div v-if="loading" class="temp-unsched-status-modal__loading">
+        <svg class="temp-unsched-status-modal__loading-spinner" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
             cx="12"
@@ -24,80 +24,80 @@
         </svg>
       </div>
 
-      <div v-else-if="!isActive" class="rounded-lg border border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
+      <div v-else-if="!isActive" class="temp-unsched-status-modal__empty-state">
         {{ t('admin.accounts.tempUnschedulable.notActive') }}
       </div>
 
       <div v-else class="space-y-4">
-        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+        <div class="temp-unsched-status-modal__hint">
           {{ t('admin.accounts.recoverStateHint') }}
         </div>
 
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
-          <p class="text-xs text-gray-500 dark:text-gray-400">
+        <div class="temp-unsched-status-modal__detail-card temp-unsched-status-modal__detail-card--wide">
+          <p class="temp-unsched-status-modal__label">
             {{ t('admin.accounts.tempUnschedulable.accountName') }}
           </p>
-          <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+          <p class="temp-unsched-status-modal__value mt-1">
             {{ account?.name || '-' }}
           </p>
         </div>
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+          <div class="temp-unsched-status-modal__detail-card">
+            <p class="temp-unsched-status-modal__label">
               {{ t('admin.accounts.tempUnschedulable.triggeredAt') }}
             </p>
-            <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p class="temp-unsched-status-modal__value mt-1">
               {{ triggeredAtText }}
             </p>
           </div>
-          <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+          <div class="temp-unsched-status-modal__detail-card">
+            <p class="temp-unsched-status-modal__label">
               {{ t('admin.accounts.tempUnschedulable.until') }}
             </p>
-            <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p class="temp-unsched-status-modal__value mt-1">
               {{ untilText }}
             </p>
           </div>
-          <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+          <div class="temp-unsched-status-modal__detail-card">
+            <p class="temp-unsched-status-modal__label">
               {{ t('admin.accounts.tempUnschedulable.remaining') }}
             </p>
-            <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p class="temp-unsched-status-modal__value mt-1">
               {{ remainingText }}
             </p>
           </div>
-          <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+          <div class="temp-unsched-status-modal__detail-card">
+            <p class="temp-unsched-status-modal__label">
               {{ t('admin.accounts.tempUnschedulable.errorCode') }}
             </p>
-            <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p class="temp-unsched-status-modal__value mt-1">
               {{ state?.status_code || '-' }}
             </p>
           </div>
-          <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+          <div class="temp-unsched-status-modal__detail-card">
+            <p class="temp-unsched-status-modal__label">
               {{ t('admin.accounts.tempUnschedulable.matchedKeyword') }}
             </p>
-            <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p class="temp-unsched-status-modal__value mt-1">
               {{ state?.matched_keyword || '-' }}
             </p>
           </div>
-          <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+          <div class="temp-unsched-status-modal__detail-card">
+            <p class="temp-unsched-status-modal__label">
               {{ t('admin.accounts.tempUnschedulable.ruleOrder') }}
             </p>
-            <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p class="temp-unsched-status-modal__value mt-1">
               {{ ruleIndexDisplay }}
             </p>
           </div>
         </div>
 
-        <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-          <p class="text-xs text-gray-500 dark:text-gray-400">
+        <div class="temp-unsched-status-modal__detail-card">
+          <p class="temp-unsched-status-modal__label">
             {{ t('admin.accounts.tempUnschedulable.errorMessage') }}
           </p>
-          <div class="mt-2 rounded bg-gray-50 p-2 text-xs text-gray-700 dark:bg-dark-700 dark:text-gray-300">
+          <div class="temp-unsched-status-modal__message-box">
             {{ state?.error_message || '-' }}
           </div>
         </div>
@@ -170,6 +170,10 @@ const status = ref<TempUnschedulableStatus | null>(null)
 
 const state = computed(() => status.value?.state || null)
 
+const getErrorMessage = (error: unknown, fallbackMessage: string) => {
+  return error instanceof Error && error.message ? error.message : fallbackMessage
+}
+
 const isActive = computed(() => {
   if (!status.value?.active || !state.value) return false
   return state.value.until_unix * 1000 > Date.now()
@@ -213,8 +217,8 @@ const loadStatus = async () => {
   loading.value = true
   try {
     status.value = await adminAPI.accounts.getTempUnschedulableStatus(props.account.id)
-  } catch (error: any) {
-    appStore.showError(error?.message || t('admin.accounts.tempUnschedulable.failedToLoad'))
+  } catch (error) {
+    appStore.showError(getErrorMessage(error, t('admin.accounts.tempUnschedulable.failedToLoad')))
     status.value = null
   } finally {
     loading.value = false
@@ -233,8 +237,8 @@ const handleReset = async () => {
     appStore.showSuccess(t('admin.accounts.recoverStateSuccess'))
     emit('reset', updated)
     handleClose()
-  } catch (error: any) {
-    appStore.showError(error?.message || t('admin.accounts.recoverStateFailed'))
+  } catch (error) {
+    appStore.showError(getErrorMessage(error, t('admin.accounts.recoverStateFailed')))
   } finally {
     resetting.value = false
   }
@@ -251,3 +255,69 @@ watch(
   }
 )
 </script>
+
+<style scoped>
+.temp-unsched-status-modal__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.temp-unsched-status-modal__loading-spinner {
+  height: 1.5rem;
+  width: 1.5rem;
+  animation: spin 1s linear infinite;
+  color: var(--theme-page-muted);
+}
+
+.temp-unsched-status-modal__empty-state,
+.temp-unsched-status-modal__detail-card,
+.temp-unsched-status-modal__hint {
+  border: 1px solid var(--theme-card-border);
+  border-radius: calc(var(--theme-button-radius) + 2px);
+}
+
+.temp-unsched-status-modal__empty-state {
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+  padding: 1rem;
+}
+
+.temp-unsched-status-modal__hint {
+  border-color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 32%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 76%, var(--theme-page-text));
+  font-size: 0.875rem;
+  padding: 0.75rem;
+}
+
+.temp-unsched-status-modal__detail-card {
+  background: var(--theme-surface);
+  padding: 0.75rem;
+}
+
+.temp-unsched-status-modal__detail-card--wide {
+  padding: 1rem;
+}
+
+.temp-unsched-status-modal__label {
+  color: var(--theme-page-muted);
+  font-size: 0.75rem;
+}
+
+.temp-unsched-status-modal__value {
+  color: var(--theme-page-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.temp-unsched-status-modal__message-box {
+  margin-top: 0.5rem;
+  border-radius: calc(var(--theme-button-radius) - 2px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
+  font-size: 0.75rem;
+  padding: 0.5rem;
+}
+</style>

@@ -1,26 +1,26 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="settings-rectifier-card__header">
+      <h2 class="settings-rectifier-card__title text-lg font-semibold">
         {{ t('admin.settings.rectifier.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-rectifier-card__description mt-1 text-sm">
         {{ t('admin.settings.rectifier.description') }}
       </p>
     </div>
-    <div class="space-y-5 p-6">
-      <div v-if="loading" class="flex items-center gap-2 text-gray-500">
-        <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"></div>
+    <div class="settings-rectifier-card__body space-y-5">
+      <div v-if="loading" class="settings-rectifier-card__loading flex items-center gap-2">
+        <div class="settings-rectifier-card__spinner h-4 w-4 animate-spin rounded-full border-b-2"></div>
         {{ t('common.loading') }}
       </div>
 
       <template v-else>
         <div class="flex items-center justify-between">
           <div>
-            <label class="font-medium text-gray-900 dark:text-white">
+            <label class="settings-rectifier-card__label font-medium">
               {{ t('admin.settings.rectifier.enabled') }}
             </label>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="settings-rectifier-card__description text-sm">
               {{ t('admin.settings.rectifier.enabledHint') }}
             </p>
           </div>
@@ -29,14 +29,14 @@
 
         <div
           v-if="form.enabled"
-          class="space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
+          class="settings-rectifier-card__section space-y-4 pt-4"
         >
           <div class="flex items-center justify-between">
             <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label class="settings-rectifier-card__field-label text-sm font-medium">
                 {{ t('admin.settings.rectifier.thinkingSignature') }}
               </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="settings-rectifier-card__description text-xs">
                 {{ t('admin.settings.rectifier.thinkingSignatureHint') }}
               </p>
             </div>
@@ -45,10 +45,10 @@
 
           <div class="flex items-center justify-between">
             <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label class="settings-rectifier-card__field-label text-sm font-medium">
                 {{ t('admin.settings.rectifier.thinkingBudget') }}
               </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="settings-rectifier-card__description text-xs">
                 {{ t('admin.settings.rectifier.thinkingBudgetHint') }}
               </p>
             </div>
@@ -57,10 +57,10 @@
 
           <div class="flex items-center justify-between">
             <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label class="settings-rectifier-card__field-label text-sm font-medium">
                 {{ t('admin.settings.rectifier.apikeySignature') }}
               </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="settings-rectifier-card__description text-xs">
                 {{ t('admin.settings.rectifier.apikeySignatureHint') }}
               </p>
             </div>
@@ -69,13 +69,13 @@
 
           <div
             v-if="form.apikey_signature_enabled"
-            class="ml-4 space-y-3 border-l-2 border-gray-200 pl-4 dark:border-dark-600"
+            class="settings-rectifier-card__patterns ml-4 space-y-3 pl-4"
           >
             <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label class="settings-rectifier-card__field-label text-sm font-medium">
                 {{ t('admin.settings.rectifier.apikeyPatterns') }}
               </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="settings-rectifier-card__description text-xs">
                 {{ t('admin.settings.rectifier.apikeyPatternsHint') }}
               </p>
             </div>
@@ -92,7 +92,7 @@
               />
               <button
                 type="button"
-                class="btn btn-ghost btn-xs text-red-500 hover:text-red-700"
+                class="settings-rectifier-card__remove-button btn btn-ghost btn-xs"
                 @click="removePattern(index)"
               >
                 <Icon name="x" size="sm" />
@@ -100,7 +100,7 @@
             </div>
             <button
               type="button"
-              class="btn btn-ghost btn-xs text-primary-600 dark:text-primary-400"
+              class="settings-rectifier-card__add-button btn btn-ghost btn-xs"
               @click="addPattern"
             >
               + {{ t('admin.settings.rectifier.addPattern') }}
@@ -108,7 +108,7 @@
           </div>
         </div>
 
-        <div class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700">
+        <div class="settings-rectifier-card__footer flex justify-end pt-4">
           <button
             type="button"
             :disabled="saving"
@@ -169,3 +169,56 @@ const removePattern = (index: number) => {
   props.form.apikey_signature_patterns.splice(index, 1)
 }
 </script>
+
+<style scoped>
+.settings-rectifier-card__header,
+.settings-rectifier-card__body,
+.settings-rectifier-card__section,
+.settings-rectifier-card__footer {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-rectifier-card__header {
+  padding:
+    var(--theme-settings-card-header-padding-y)
+    var(--theme-settings-card-header-padding-x);
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-rectifier-card__body {
+  padding: var(--theme-settings-card-body-padding);
+}
+
+.settings-rectifier-card__title,
+.settings-rectifier-card__label,
+.settings-rectifier-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-rectifier-card__description,
+.settings-rectifier-card__loading {
+  color: var(--theme-page-muted);
+}
+
+.settings-rectifier-card__spinner {
+  border-color: color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+  border-bottom-color: var(--theme-accent);
+}
+
+.settings-rectifier-card__patterns {
+  border-left: 2px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+}
+
+.settings-rectifier-card__remove-button {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 78%, var(--theme-page-text));
+}
+
+.settings-rectifier-card__remove-button:hover {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 92%, var(--theme-page-text));
+}
+
+.settings-rectifier-card__add-button {
+  color: var(--theme-accent);
+}
+</style>

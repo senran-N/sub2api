@@ -16,7 +16,7 @@
           <input
             :value="userKeyword"
             type="text"
-            class="input pr-8"
+            class="input subscription-assign-dialog__search-input"
             :placeholder="t('admin.usage.searchUserPlaceholder')"
             @input="emit('update:userKeyword', ($event.target as HTMLInputElement).value)"
             @focus="emit('show-user-dropdown')"
@@ -25,24 +25,24 @@
           <button
             v-if="selectedUser"
             type="button"
-            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            class="subscription-assign-dialog__clear absolute top-1/2 -translate-y-1/2"
             @click="emit('clear-user')"
           >
             <Icon name="x" size="sm" :stroke-width="2" />
           </button>
           <div
             v-if="showUserDropdown && (userResults.length > 0 || userKeyword)"
-            class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+            class="subscription-assign-dialog__dropdown absolute z-50 w-full overflow-auto"
           >
             <div
               v-if="userLoading"
-              class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400"
+              class="subscription-assign-dialog__muted subscription-assign-dialog__status text-sm"
             >
               {{ t('common.loading') }}
             </div>
             <div
               v-else-if="userResults.length === 0 && userKeyword"
-              class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400"
+              class="subscription-assign-dialog__muted subscription-assign-dialog__status text-sm"
             >
               {{ t('common.noOptionsFound') }}
             </div>
@@ -50,11 +50,11 @@
               v-for="user in userResults"
               :key="user.id"
               type="button"
-              class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              class="subscription-assign-dialog__option w-full text-left text-sm"
               @click="emit('select-user', user)"
             >
-              <span class="font-medium text-gray-900 dark:text-white">{{ user.email }}</span>
-              <span class="ml-2 text-gray-500 dark:text-gray-400">#{{ user.id }}</span>
+              <span class="subscription-assign-dialog__option-email font-medium">{{ user.email }}</span>
+              <span class="subscription-assign-dialog__muted ml-2">#{{ user.id }}</span>
             </button>
           </div>
         </div>
@@ -75,7 +75,7 @@
               :subscription-type="(option as unknown as SubscriptionGroupOption).subscriptionType"
               :rate-multiplier="(option as unknown as SubscriptionGroupOption).rate"
             />
-            <span v-else class="text-gray-400">{{ t('admin.subscriptions.selectGroup') }}</span>
+            <span v-else class="subscription-assign-dialog__muted">{{ t('admin.subscriptions.selectGroup') }}</span>
           </template>
           <template #option="{ option, selected }">
             <GroupOptionItem
@@ -159,3 +159,48 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.subscription-assign-dialog__clear,
+.subscription-assign-dialog__muted {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.subscription-assign-dialog__search-input {
+  padding-right: calc(var(--theme-button-padding-x) * 0.8 + 0.25rem);
+}
+
+.subscription-assign-dialog__clear {
+  right: calc(var(--theme-floating-panel-gap) * 0.5 + 0.375rem);
+}
+
+.subscription-assign-dialog__clear:hover {
+  color: var(--theme-page-text);
+}
+
+.subscription-assign-dialog__dropdown {
+  margin-top: var(--theme-floating-panel-gap);
+  max-height: var(--theme-search-dropdown-max-height);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.subscription-assign-dialog__status {
+  padding: calc(var(--theme-button-padding-y) * 1.1) var(--theme-button-padding-x);
+}
+
+.subscription-assign-dialog__option {
+  padding: calc(var(--theme-button-padding-y) * 0.8) var(--theme-button-padding-x);
+  transition: background-color 0.2s ease;
+}
+
+.subscription-assign-dialog__option:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.subscription-assign-dialog__option-email {
+  color: var(--theme-page-text);
+}
+</style>

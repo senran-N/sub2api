@@ -4,8 +4,8 @@
       {{ t('auth.passwordLabel') }}
     </label>
     <div class="relative">
-      <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-        <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
+      <div class="login-password-field__affix pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+        <Icon name="lock" size="md" />
       </div>
       <input
         id="password"
@@ -20,7 +20,7 @@
       />
       <button
         type="button"
-        class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+        class="login-password-field__toggle absolute inset-y-0 right-0 flex items-center pr-3.5"
         @click="showPassword = !showPassword"
       >
         <Icon v-if="showPassword" name="eyeOff" size="md" />
@@ -35,7 +35,7 @@
       <router-link
         v-if="showForgotPassword"
         to="/forgot-password"
-        class="text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+        class="login-password-field__forgot text-sm font-medium"
       >
         {{ t('auth.forgotPassword') }}
       </router-link>
@@ -67,3 +67,27 @@ const model = computed({
   set: (value: string) => emit('update:modelValue', value)
 })
 </script>
+
+<style scoped>
+.login-password-field__affix,
+.login-password-field__toggle {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.login-password-field__toggle {
+  transition: color 0.2s ease;
+}
+
+.login-password-field__toggle:hover {
+  color: var(--theme-page-text);
+}
+
+.login-password-field__forgot {
+  color: var(--theme-accent);
+  transition: color 0.2s ease;
+}
+
+.login-password-field__forgot:hover {
+  color: color-mix(in srgb, var(--theme-accent) 82%, var(--theme-page-text));
+}
+</style>

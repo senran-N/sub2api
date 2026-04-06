@@ -2,7 +2,7 @@
   <div class="flex items-center gap-1">
     <button
       v-if="subscription.status === 'active' || subscription.status === 'expired'"
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+      class="theme-action-button theme-action-button--info"
       @click="emit('adjust', subscription)"
     >
       <Icon name="calendar" size="sm" />
@@ -10,7 +10,7 @@
     </button>
     <button
       v-if="subscription.status === 'active'"
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
+      class="theme-action-button theme-action-button--brand-orange"
       :disabled="resetting"
       @click="emit('reset-quota', subscription)"
     >
@@ -19,7 +19,7 @@
     </button>
     <button
       v-if="subscription.status === 'active'"
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+      class="theme-action-button theme-action-button--danger"
       @click="emit('revoke', subscription)"
     >
       <Icon name="ban" size="sm" />

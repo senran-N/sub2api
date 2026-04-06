@@ -140,6 +140,10 @@ export default {
     // Status
     quotaMode: 'Key 限额模式',
     walletBalance: '钱包余额',
+    statusActive: '正常',
+    statusQuotaExhausted: '额度耗尽',
+    statusExpired: '已过期',
+    statusUnknown: '未知',
     // Ring card titles
     totalQuota: '总额度',
     limit5h: '5 小时限额',
@@ -443,6 +447,8 @@ export default {
       completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
     },
     oauth: {
+      callbackTitle: 'OAuth 回调',
+      callbackDescription: '将 code，以及需要时的 state，复制回管理后台授权流程中。',
       code: '授权码',
       state: '状态',
       fullUrl: '完整URL'
@@ -1764,6 +1770,14 @@ export default {
         selectPlaceholder: '选择分组以复制其账号...',
         hint: '可选多个分组，账号会自动去重',
         hintEdit: '⚠️ 注意：这会替换当前分组的所有账号绑定'
+      },
+      accountFilter: {
+        title: '账号过滤控制',
+        oauthOnly: '仅允许 OAuth 账号',
+        oauthOnlyEnabled: '已启用：API Key 类型账号将被排除',
+        privacySetOnly: '仅允许隐私保护已设置的账号',
+        privacySetOnlyEnabled: '已启用：Privacy 未设置的账号将被排除',
+        disabled: '未启用'
       },
       modelRouting: {
         title: '模型路由配置',

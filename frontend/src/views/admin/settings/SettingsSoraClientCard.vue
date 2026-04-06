@@ -1,20 +1,20 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="card-header">
+      <h2 class="settings-sora-client-card__title text-lg font-semibold">
         {{ t('admin.settings.soraClient.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-sora-client-card__description mt-1 text-sm">
         {{ t('admin.settings.soraClient.description') }}
       </p>
     </div>
-    <div class="space-y-6 p-6">
+    <div class="settings-sora-client-card__body">
       <div class="flex items-center justify-between">
         <div>
-          <label class="font-medium text-gray-900 dark:text-white">
+          <label class="settings-sora-client-card__label font-medium">
             {{ t('admin.settings.soraClient.enabled') }}
           </label>
-          <p class="text-sm text-gray-500 dark:text-gray-400">
+          <p class="settings-sora-client-card__hint text-sm">
             {{ t('admin.settings.soraClient.enabledHint') }}
           </p>
         </div>
@@ -35,3 +35,22 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-sora-client-card__title,
+.settings-sora-client-card__label {
+  color: var(--theme-page-text);
+}
+
+.settings-sora-client-card__description,
+.settings-sora-client-card__hint {
+  color: var(--theme-page-muted);
+}
+
+.settings-sora-client-card__body {
+  padding: var(--theme-settings-card-panel-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-settings-card-body-padding);
+}
+</style>

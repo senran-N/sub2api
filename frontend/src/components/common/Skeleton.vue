@@ -1,8 +1,8 @@
 <template>
   <div
     :class="[
-      'animate-pulse bg-gray-200 dark:bg-dark-700',
-      variant === 'circle' ? 'rounded-full' : 'rounded-lg',
+      'skeleton-surface animate-pulse',
+      variant === 'circle' ? 'skeleton-surface--circle' : 'skeleton-surface--rect',
       customClass
     ]"
     :style="style"
@@ -44,3 +44,17 @@ const style = computed(() => {
   return s
 })
 </script>
+
+<style scoped>
+.skeleton-surface {
+  background: color-mix(in srgb, var(--theme-page-border) 78%, transparent);
+}
+
+.skeleton-surface--circle {
+  border-radius: 999px;
+}
+
+.skeleton-surface--rect {
+  border-radius: var(--theme-markdown-code-radius);
+}
+</style>

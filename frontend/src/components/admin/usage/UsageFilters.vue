@@ -1,11 +1,14 @@
 <template>
-  <div class="card p-6">
+  <div class="card usage-filters">
     <!-- Toolbar: left filters (multi-line) + right actions -->
-    <div class="flex flex-wrap items-end justify-between gap-4">
+    <div class="usage-filters__toolbar flex flex-wrap items-end justify-between">
       <!-- Left: filters (allowed to wrap to multiple rows) -->
-      <div class="flex flex-1 flex-wrap items-end gap-4">
+      <div class="usage-filters__filter-grid flex flex-1 flex-wrap items-end">
         <!-- User Search -->
-        <div ref="userSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
+        <div
+          ref="userSearchRef"
+          class="usage-filter-dropdown usage-filter-dropdown--wide relative w-full sm:w-auto"
+        >
           <label class="input-label">{{ t('admin.usage.userFilter') }}</label>
           <input
             v-model="userKeyword"
@@ -19,30 +22,33 @@
             v-if="filters.user_id"
             type="button"
             @click="clearUser"
-            class="absolute right-2 top-9 text-gray-400"
+            class="usage-filters__clear-button absolute right-2 top-9"
             aria-label="Clear user filter"
           >
             ✕
           </button>
           <div
             v-if="showUserDropdown && (userResults.length > 0 || userKeyword)"
-            class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:bg-gray-800"
+            class="usage-filters__dropdown absolute z-50 w-full overflow-auto"
           >
             <button
               v-for="u in userResults"
               :key="u.id"
               type="button"
               @click="selectUser(u)"
-              class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              class="usage-filters__dropdown-item w-full text-left"
             >
               <span>{{ u.email }}</span>
-              <span class="ml-2 text-xs text-gray-400">#{{ u.id }}</span>
+              <span class="usage-filters__dropdown-meta ml-2 text-xs">#{{ u.id }}</span>
             </button>
           </div>
         </div>
 
         <!-- API Key Search -->
-        <div ref="apiKeySearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
+        <div
+          ref="apiKeySearchRef"
+          class="usage-filter-dropdown usage-filter-dropdown--wide relative w-full sm:w-auto"
+        >
           <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
           <input
             v-model="apiKeyKeyword"
@@ -56,36 +62,39 @@
             v-if="filters.api_key_id"
             type="button"
             @click="onClearApiKey"
-            class="absolute right-2 top-9 text-gray-400"
+            class="usage-filters__clear-button absolute right-2 top-9"
             aria-label="Clear API key filter"
           >
             ✕
           </button>
           <div
             v-if="showApiKeyDropdown && apiKeyResults.length > 0"
-            class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:bg-gray-800"
+            class="usage-filters__dropdown absolute z-50 w-full overflow-auto"
           >
             <button
               v-for="k in apiKeyResults"
               :key="k.id"
               type="button"
               @click="selectApiKey(k)"
-              class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              class="usage-filters__dropdown-item w-full text-left"
             >
               <span class="truncate">{{ k.name || `#${k.id}` }}</span>
-              <span class="ml-2 text-xs text-gray-400">#{{ k.id }}</span>
+              <span class="usage-filters__dropdown-meta ml-2 text-xs">#{{ k.id }}</span>
             </button>
           </div>
         </div>
 
         <!-- Model Filter -->
-        <div class="w-full sm:w-auto sm:min-w-[220px]">
+        <div class="usage-filters__select-wrap usage-filters__select-wrap--medium w-full sm:w-auto">
           <label class="input-label">{{ t('usage.model') }}</label>
           <Select v-model="filters.model" :options="modelOptions" searchable @change="emitChange" />
         </div>
 
         <!-- Account Filter -->
-        <div ref="accountSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[220px]">
+        <div
+          ref="accountSearchRef"
+          class="usage-filter-dropdown usage-filter-dropdown--medium relative w-full sm:w-auto"
+        >
           <label class="input-label">{{ t('admin.usage.account') }}</label>
           <input
             v-model="accountKeyword"
@@ -99,42 +108,42 @@
             v-if="filters.account_id"
             type="button"
             @click="clearAccount"
-            class="absolute right-2 top-9 text-gray-400"
+            class="usage-filters__clear-button absolute right-2 top-9"
             aria-label="Clear account filter"
           >
             ✕
           </button>
           <div
             v-if="showAccountDropdown && (accountResults.length > 0 || accountKeyword)"
-            class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:bg-gray-800"
+            class="usage-filters__dropdown absolute z-50 w-full overflow-auto"
           >
             <button
               v-for="a in accountResults"
               :key="a.id"
               type="button"
               @click="selectAccount(a)"
-              class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              class="usage-filters__dropdown-item w-full text-left"
             >
               <span class="truncate">{{ a.name }}</span>
-              <span class="ml-2 text-xs text-gray-400">#{{ a.id }}</span>
+              <span class="usage-filters__dropdown-meta ml-2 text-xs">#{{ a.id }}</span>
             </button>
           </div>
         </div>
 
         <!-- Request Type Filter -->
-        <div class="w-full sm:w-auto sm:min-w-[180px]">
+        <div class="usage-filters__select-wrap usage-filters__select-wrap--narrow w-full sm:w-auto">
           <label class="input-label">{{ t('usage.type') }}</label>
           <Select v-model="filters.request_type" :options="requestTypeOptions" @change="emitChange" />
         </div>
 
         <!-- Billing Type Filter -->
-        <div class="w-full sm:w-auto sm:min-w-[200px]">
+        <div class="usage-filters__select-wrap usage-filters__select-wrap--regular w-full sm:w-auto">
           <label class="input-label">{{ t('admin.usage.billingType') }}</label>
           <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="emitChange" />
         </div>
 
         <!-- Group Filter -->
-        <div class="w-full sm:w-auto sm:min-w-[200px]">
+        <div class="usage-filters__select-wrap usage-filters__select-wrap--regular w-full sm:w-auto">
           <label class="input-label">{{ t('admin.usage.group') }}</label>
           <Select v-model="filters.group_id" :options="groupOptions" searchable @change="emitChange" />
         </div>
@@ -142,7 +151,7 @@
       </div>
 
       <!-- Right: actions -->
-      <div v-if="showActions" class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+      <div v-if="showActions" class="usage-filters__actions flex w-full flex-wrap items-center justify-end sm:w-auto">
         <button type="button" @click="$emit('refresh')" class="btn btn-secondary">
           {{ t('common.refresh') }}
         </button>
@@ -436,3 +445,56 @@ onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick)
 })
 </script>
+
+<style scoped>
+.usage-filters {
+  padding: calc(var(--theme-table-mobile-card-padding) * 1.5);
+}
+
+.usage-filters__toolbar,
+.usage-filters__filter-grid,
+.usage-filters__actions {
+  gap: var(--theme-table-mobile-card-padding);
+}
+
+.usage-filters__select-wrap--narrow {
+  min-width: calc(var(--theme-balance-history-filter-width) * 0.8);
+}
+
+.usage-filters__select-wrap--regular {
+  min-width: calc(var(--theme-balance-history-filter-width) * 0.9);
+}
+
+.usage-filters__select-wrap--medium,
+.usage-filter-dropdown--medium {
+  min-width: var(--theme-balance-history-filter-width);
+}
+
+.usage-filter-dropdown--wide {
+  min-width: var(--theme-settings-menu-width-md);
+}
+
+.usage-filters__clear-button,
+.usage-filters__dropdown-meta {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.usage-filters__dropdown {
+  margin-top: var(--theme-floating-panel-gap);
+  max-height: var(--theme-search-dropdown-max-height);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+  border-radius: var(--theme-select-panel-radius);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.usage-filters__dropdown-item {
+  padding: var(--theme-menu-item-padding-y) var(--theme-menu-item-padding-x);
+  color: var(--theme-page-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.usage-filters__dropdown-item:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+</style>

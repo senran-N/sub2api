@@ -1,16 +1,16 @@
 <template>
-  <div class="mb-8">
+  <div class="setup-stepper">
     <div class="flex items-center justify-center">
       <template v-for="(step, index) in steps" :key="step.id">
-        <div class="flex items-center">
+        <div class="setup-stepper__group">
           <div
             :class="[
-              'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition-all',
+              'setup-stepper__node',
               currentStep > index
-                ? 'bg-primary-500 text-white'
+                ? 'setup-stepper__node--done'
                 : currentStep === index
-                  ? 'bg-primary-500 text-white ring-4 ring-primary-100 dark:ring-primary-900'
-                  : 'bg-gray-200 text-gray-500 dark:bg-dark-700 dark:text-dark-400'
+                  ? 'setup-stepper__node--active'
+                  : 'setup-stepper__node--idle'
             ]"
           >
             <Icon
@@ -22,11 +22,11 @@
             <span v-else>{{ index + 1 }}</span>
           </div>
           <span
-            class="ml-2 text-sm font-medium"
+            class="setup-stepper__label"
             :class="
               currentStep >= index
-                ? 'text-gray-900 dark:text-white'
-                : 'text-gray-400 dark:text-dark-500'
+                ? 'setup-stepper__label--active'
+                : 'setup-stepper__label--idle'
             "
           >
             {{ step.title }}
@@ -34,8 +34,8 @@
         </div>
         <div
           v-if="index < steps.length - 1"
-          class="mx-3 h-0.5 w-12"
-          :class="currentStep > index ? 'bg-primary-500' : 'bg-gray-200 dark:bg-dark-700'"
+          class="setup-stepper__connector"
+          :class="currentStep > index ? 'setup-stepper__connector--active' : 'setup-stepper__connector--idle'"
         ></div>
       </template>
     </div>

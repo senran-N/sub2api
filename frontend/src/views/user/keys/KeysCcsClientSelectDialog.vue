@@ -1,30 +1,30 @@
 <template>
   <BaseDialog :show="show" :title="title" width="narrow" @close="$emit('close')">
     <div class="space-y-4">
-      <p class="text-sm text-gray-600 dark:text-gray-400">
+      <p class="keys-ccs-client-select-dialog__description text-sm">
         {{ description }}
       </p>
 
       <div class="grid grid-cols-2 gap-3">
         <button
           @click="$emit('select', 'claude')"
-          class="rounded-xl border-2 border-gray-200 p-4 transition-all hover:border-primary-500 hover:bg-primary-50 dark:border-dark-600 dark:hover:border-primary-500 dark:hover:bg-primary-900/20"
+          class="keys-ccs-client-select-dialog__option border-2 transition-all"
         >
           <div class="flex flex-col items-center gap-2">
-            <Icon name="terminal" size="xl" class="text-gray-600 dark:text-gray-400" />
-            <span class="font-medium text-gray-900 dark:text-white">{{ claudeLabel }}</span>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{{ claudeDescription }}</span>
+            <Icon name="terminal" size="xl" class="keys-ccs-client-select-dialog__icon" />
+            <span class="keys-ccs-client-select-dialog__label font-medium">{{ claudeLabel }}</span>
+            <span class="keys-ccs-client-select-dialog__description text-xs">{{ claudeDescription }}</span>
           </div>
         </button>
 
         <button
           @click="$emit('select', 'gemini')"
-          class="rounded-xl border-2 border-gray-200 p-4 transition-all hover:border-primary-500 hover:bg-primary-50 dark:border-dark-600 dark:hover:border-primary-500 dark:hover:bg-primary-900/20"
+          class="keys-ccs-client-select-dialog__option border-2 transition-all"
         >
           <div class="flex flex-col items-center gap-2">
-            <Icon name="sparkles" size="xl" class="text-gray-600 dark:text-gray-400" />
-            <span class="font-medium text-gray-900 dark:text-white">{{ geminiLabel }}</span>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{{ geminiDescription }}</span>
+            <Icon name="sparkles" size="xl" class="keys-ccs-client-select-dialog__icon" />
+            <span class="keys-ccs-client-select-dialog__label font-medium">{{ geminiLabel }}</span>
+            <span class="keys-ccs-client-select-dialog__description text-xs">{{ geminiDescription }}</span>
           </div>
         </button>
       </div>
@@ -61,3 +61,25 @@ defineEmits<{
   select: [value: CcsClientType]
 }>()
 </script>
+
+<style scoped>
+.keys-ccs-client-select-dialog__description,
+.keys-ccs-client-select-dialog__icon {
+  color: var(--theme-page-muted);
+}
+
+.keys-ccs-client-select-dialog__label {
+  color: var(--theme-page-text);
+}
+
+.keys-ccs-client-select-dialog__option {
+  border-radius: var(--theme-key-usage-card-radius);
+  padding: var(--theme-markdown-block-padding);
+  border-color: color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+}
+
+.keys-ccs-client-select-dialog__option:hover {
+  border-color: var(--theme-accent);
+  background: color-mix(in srgb, var(--theme-accent-soft) 82%, var(--theme-surface));
+}
+</style>

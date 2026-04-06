@@ -1,5 +1,5 @@
 <template>
-  <span class="text-sm text-gray-500 dark:text-dark-400">
+  <span class="theme-text-muted text-sm">
     {{ value ? formatDateTime(value) : fallbackText ?? '-' }}
   </span>
 </template>

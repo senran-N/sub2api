@@ -1,14 +1,12 @@
 <template>
-  <div
-    class="relative flex min-h-screen items-center justify-center overflow-hidden bg-gray-50 px-4 dark:bg-dark-950"
-  >
+  <div class="not-found-view relative flex min-h-screen items-center justify-center overflow-hidden">
     <!-- Background Decoration -->
     <div class="pointer-events-none absolute inset-0 overflow-hidden">
       <div
-        class="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary-400/10 blur-3xl"
+        class="not-found-view__glow absolute -right-40 -top-40 h-80 w-80 rounded-full blur-3xl"
       ></div>
       <div
-        class="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary-500/10 blur-3xl"
+        class="not-found-view__glow absolute -bottom-40 -left-40 h-80 w-80 rounded-full blur-3xl"
       ></div>
     </div>
 
@@ -16,15 +14,15 @@
       <!-- 404 Display -->
       <div class="mb-8">
         <div class="relative inline-block">
-          <span class="text-[12rem] font-bold leading-none text-gray-100 dark:text-dark-800"
+          <span class="not-found-view__code text-[12rem] font-bold leading-none"
             >404</span
           >
           <div class="absolute inset-0 flex items-center justify-center">
             <div
-              class="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30"
+              class="not-found-view__icon-shell flex items-center justify-center shadow-lg"
             >
               <svg
-                class="h-12 w-12 text-white"
+                class="not-found-view__icon h-12 w-12"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -43,10 +41,10 @@
 
       <!-- Text Content -->
       <div class="mb-8">
-        <h1 class="mb-3 text-2xl font-bold text-gray-900 dark:text-white">
+        <h1 class="not-found-view__title mb-3 text-2xl font-bold">
           {{ t('errors.pageNotFound') }}
         </h1>
-        <p class="text-gray-500 dark:text-dark-400">
+        <p class="not-found-view__description">
           The page you are looking for doesn't exist or has been moved.
         </p>
       </div>
@@ -64,11 +62,11 @@
       </div>
 
       <!-- Help Link -->
-      <p class="mt-8 text-sm text-gray-400 dark:text-dark-500">
+      <p class="not-found-view__help mt-8 text-sm">
         Need help?
         <a
           href="#"
-          class="text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="not-found-view__link transition-colors"
         >
           Contact support
         </a>
@@ -89,3 +87,51 @@ function goBack(): void {
   router.back()
 }
 </script>
+
+<style scoped>
+.not-found-view {
+  padding-inline: var(--theme-markdown-block-padding);
+  background: color-mix(in srgb, var(--theme-page-bg) 92%, var(--theme-surface));
+}
+
+.not-found-view__glow {
+  background: color-mix(in srgb, var(--theme-accent) 12%, transparent);
+}
+
+.not-found-view__code {
+  color: color-mix(in srgb, var(--theme-surface-soft) 80%, var(--theme-page-bg));
+}
+
+.not-found-view__icon-shell {
+  height: calc(var(--theme-auth-logo-size) + 2rem);
+  width: calc(var(--theme-auth-logo-size) + 2rem);
+  border-radius: var(--theme-auth-logo-radius);
+  background: linear-gradient(
+    135deg,
+    var(--theme-accent),
+    color-mix(in srgb, var(--theme-accent-strong) 22%, var(--theme-accent))
+  );
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--theme-accent) 26%, transparent);
+}
+
+.not-found-view__icon {
+  color: var(--theme-filled-text);
+}
+
+.not-found-view__title {
+  color: var(--theme-page-text);
+}
+
+.not-found-view__description,
+.not-found-view__help {
+  color: var(--theme-page-muted);
+}
+
+.not-found-view__link {
+  color: var(--theme-accent);
+}
+
+.not-found-view__link:hover {
+  color: color-mix(in srgb, var(--theme-accent) 82%, var(--theme-page-text));
+}
+</style>

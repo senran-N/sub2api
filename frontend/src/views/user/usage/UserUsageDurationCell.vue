@@ -1,8 +1,8 @@
 <template>
-  <span v-if="value != null" class="text-sm text-gray-600 dark:text-gray-400">
+  <span v-if="value != null" class="theme-text-muted text-sm">
     {{ formatUserUsageDuration(value) }}
   </span>
-  <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+  <span v-else class="theme-text-subtle text-sm">-</span>
 </template>
 
 <script setup lang="ts">

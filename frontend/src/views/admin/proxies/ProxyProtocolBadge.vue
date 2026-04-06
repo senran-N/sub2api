@@ -2,7 +2,7 @@
   <span v-if="protocol" :class="badgeClass">
     {{ protocol.toUpperCase() }}
   </span>
-  <span v-else class="text-sm text-gray-400">-</span>
+  <span v-else class="theme-text-subtle text-sm">-</span>
 </template>
 
 <script setup lang="ts">

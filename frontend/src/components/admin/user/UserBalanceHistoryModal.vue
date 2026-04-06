@@ -2,44 +2,44 @@
   <BaseDialog :show="show" :title="t('admin.users.balanceHistoryTitle')" width="wide" :close-on-click-outside="true" :z-index="40" @close="$emit('close')">
     <div v-if="user" class="space-y-4">
       <!-- User header: two-row layout with full user info -->
-      <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
+      <div class="user-balance-history-modal__hero">
         <!-- Row 1: avatar + email/username/created_at (left) + current balance (right) -->
         <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
-            <span class="text-lg font-medium text-primary-700 dark:text-primary-300">
+          <div class="user-balance-history-modal__avatar user-balance-history-modal__avatar-shape flex flex-shrink-0 items-center justify-center">
+            <span class="user-balance-history-modal__avatar-text text-lg font-medium">
               {{ user.email.charAt(0).toUpperCase() }}
             </span>
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <p class="truncate font-medium text-gray-900 dark:text-white">{{ user.email }}</p>
+              <p class="user-balance-history-modal__text-strong truncate font-medium">{{ user.email }}</p>
               <span
                 v-if="user.username"
-                class="flex-shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-600 dark:bg-primary-900/20 dark:text-primary-400"
+                class="theme-chip theme-chip--compact theme-chip--accent flex-shrink-0"
               >
                 {{ user.username }}
               </span>
             </div>
-            <p class="text-xs text-gray-400 dark:text-dark-500">
+            <p class="user-balance-history-modal__text-soft text-xs">
               {{ t('admin.users.createdAt') }}: {{ formatDateTime(user.created_at) }}
             </p>
           </div>
           <!-- Current balance: prominent display on the right -->
           <div class="flex-shrink-0 text-right">
-            <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('admin.users.currentBalance') }}</p>
-            <p class="text-xl font-bold text-gray-900 dark:text-white">
+            <p class="user-balance-history-modal__text-muted text-xs">{{ t('admin.users.currentBalance') }}</p>
+            <p class="user-balance-history-modal__text-strong text-xl font-bold">
               ${{ user.balance?.toFixed(2) || '0.00' }}
             </p>
           </div>
         </div>
         <!-- Row 2: notes + total recharged -->
-        <div class="mt-2.5 flex items-center justify-between border-t border-gray-200/60 pt-2.5 dark:border-dark-600/60">
-          <p class="min-w-0 flex-1 truncate text-xs text-gray-500 dark:text-dark-400" :title="user.notes || ''">
+        <div class="user-balance-history-modal__hero-footer user-balance-history-modal__hero-footer-layout flex items-center justify-between">
+          <p class="user-balance-history-modal__text-muted min-w-0 flex-1 truncate text-xs" :title="user.notes || ''">
             <template v-if="user.notes">{{ t('admin.users.notes') }}: {{ user.notes }}</template>
             <template v-else>&nbsp;</template>
           </p>
-          <p class="ml-4 flex-shrink-0 text-xs text-gray-500 dark:text-dark-400">
-            {{ t('admin.users.totalRecharged') }}: <span class="font-semibold text-emerald-600 dark:text-emerald-400">${{ totalRecharged.toFixed(2) }}</span>
+          <p class="user-balance-history-modal__text-muted ml-4 flex-shrink-0 text-xs">
+            {{ t('admin.users.totalRecharged') }}: <span class="user-balance-history-modal__text-success font-semibold">${{ totalRecharged.toFixed(2) }}</span>
           </p>
         </div>
       </div>
@@ -49,25 +49,25 @@
         <Select
           v-model="typeFilter"
           :options="typeOptions"
-          class="w-56"
+          class="user-balance-history-modal__filter"
           @change="loadHistory(1)"
         />
         <!-- Deposit button - matches menu style -->
         <button
           v-if="!hideActions"
           @click="emit('deposit')"
-          class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
+          class="user-balance-history-modal__action-button user-balance-history-modal__action-button-layout user-balance-history-modal__action-button--deposit flex items-center gap-2 text-sm transition-colors"
         >
-          <Icon name="plus" size="sm" class="text-emerald-500" :stroke-width="2" />
+          <Icon name="plus" size="sm" class="user-balance-history-modal__action-icon user-balance-history-modal__action-icon--deposit" :stroke-width="2" />
           {{ t('admin.users.deposit') }}
         </button>
         <!-- Withdraw button - matches menu style -->
         <button
           v-if="!hideActions"
           @click="emit('withdraw')"
-          class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
+          class="user-balance-history-modal__action-button user-balance-history-modal__action-button-layout user-balance-history-modal__action-button--withdraw flex items-center gap-2 text-sm transition-colors"
         >
-          <svg class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="user-balance-history-modal__action-icon user-balance-history-modal__action-icon--withdraw h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
           </svg>
           {{ t('admin.users.withdraw') }}
@@ -75,67 +75,61 @@
       </div>
 
       <!-- Loading -->
-      <div v-if="loading" class="flex justify-center py-8">
-        <svg class="h-8 w-8 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
+      <div v-if="loading" class="user-balance-history-modal__state-block flex justify-center">
+        <Icon name="refresh" size="lg" class="user-balance-history-modal__loading-icon animate-spin" />
       </div>
 
       <!-- Empty state -->
-      <div v-else-if="history.length === 0" class="py-8 text-center">
-        <p class="text-sm text-gray-500">{{ t('admin.users.noBalanceHistory') }}</p>
+      <div v-else-if="history.length === 0" class="user-balance-history-modal__state-block text-center">
+        <p class="user-balance-history-modal__text-muted text-sm">{{ t('admin.users.noBalanceHistory') }}</p>
       </div>
 
       <!-- History list -->
-      <div v-else class="max-h-[28rem] space-y-3 overflow-y-auto">
+      <div v-else class="user-balance-history-modal__list space-y-3 overflow-y-auto">
         <div
           v-for="item in history"
           :key="item.id"
-          class="rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800"
+          class="user-balance-history-modal__history-card"
         >
           <div class="flex items-start justify-between">
             <!-- Left: type icon + description -->
             <div class="flex items-start gap-3">
               <div
-                :class="[
-                  'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg',
-                  getIconBg(item)
-                ]"
+                :class="getIconContainerClasses(item)"
               >
-                <Icon :name="getIconName(item)" size="sm" :class="getIconColor(item)" />
+                <Icon :name="getIconName(item)" size="sm" :class="getIconClasses(item)" />
               </div>
               <div>
-                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                <p class="user-balance-history-modal__text-strong text-sm font-medium">
                   {{ getItemTitle(item) }}
                 </p>
                 <!-- Notes (admin adjustment reason) -->
                 <p
                   v-if="item.notes"
-                  class="mt-0.5 text-xs text-gray-500 dark:text-dark-400"
+                  class="user-balance-history-modal__text-muted mt-0.5 text-xs"
                   :title="item.notes"
                 >
                   {{ item.notes.length > 60 ? item.notes.substring(0, 55) + '...' : item.notes }}
                 </p>
-                <p class="mt-0.5 text-xs text-gray-400 dark:text-dark-500">
+                <p class="user-balance-history-modal__text-soft mt-0.5 text-xs">
                   {{ formatDateTime(item.used_at || item.created_at) }}
                 </p>
               </div>
             </div>
             <!-- Right: value -->
             <div class="text-right">
-              <p :class="['text-sm font-semibold', getValueColor(item)]">
+              <p :class="getValueClasses(item)">
                 {{ formatValue(item) }}
               </p>
               <p
                 v-if="isAdminType(item.type)"
-                class="text-xs text-gray-400 dark:text-dark-500"
+                class="user-balance-history-modal__text-soft text-xs"
               >
                 {{ t('redeem.adminAdjustment') }}
               </p>
               <p
                 v-else
-                class="font-mono text-xs text-gray-400 dark:text-dark-500"
+                class="user-balance-history-modal__text-soft font-mono text-xs"
               >
                 {{ item.code.slice(0, 8) }}...
               </p>
@@ -148,17 +142,17 @@
       <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-2">
         <button
           :disabled="currentPage <= 1"
-          class="btn btn-secondary px-3 py-1 text-sm"
+          class="btn btn-secondary user-balance-history-modal__pagination-button text-sm"
           @click="loadHistory(currentPage - 1)"
         >
           {{ t('pagination.previous') }}
         </button>
-        <span class="text-sm text-gray-500 dark:text-dark-400">
+        <span class="user-balance-history-modal__text-muted text-sm">
           {{ currentPage }} / {{ totalPages }}
         </span>
         <button
           :disabled="currentPage >= totalPages"
-          class="btn btn-secondary px-3 py-1 text-sm"
+          class="btn btn-secondary user-balance-history-modal__pagination-button text-sm"
           @click="loadHistory(currentPage + 1)"
         >
           {{ t('pagination.next') }}
@@ -191,6 +185,8 @@ const pageSize = 15
 const typeFilter = ref('')
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize) || 1)
+
+type HistoryTone = 'success' | 'danger' | 'brand-purple' | 'info' | 'brand-orange'
 
 // Type filter options
 const typeOptions = computed(() => [
@@ -240,6 +236,20 @@ const isBalanceType = (type: string) => type === 'balance' || type === 'admin_ba
 // Helper: check if subscription type
 const isSubscriptionType = (type: string) => type === 'subscription'
 
+const joinClassNames = (...classNames: Array<string | false | null | undefined>) => {
+  return classNames.filter(Boolean).join(' ')
+}
+
+const getItemTone = (item: BalanceHistoryItem): HistoryTone => {
+  if (isBalanceType(item.type)) {
+    return item.value >= 0 ? 'success' : 'danger'
+  }
+  if (isSubscriptionType(item.type)) {
+    return 'brand-purple'
+  }
+  return item.value >= 0 ? 'info' : 'brand-orange'
+}
+
 // Icon name based on type
 const getIconName = (item: BalanceHistoryItem) => {
   if (isBalanceType(item.type)) return 'dollar'
@@ -247,43 +257,26 @@ const getIconName = (item: BalanceHistoryItem) => {
   return 'bolt' // concurrency
 }
 
-// Icon background color
-const getIconBg = (item: BalanceHistoryItem) => {
-  if (isBalanceType(item.type)) {
-    return item.value >= 0
-      ? 'bg-emerald-100 dark:bg-emerald-900/30'
-      : 'bg-red-100 dark:bg-red-900/30'
-  }
-  if (isSubscriptionType(item.type)) return 'bg-purple-100 dark:bg-purple-900/30'
-  return item.value >= 0
-    ? 'bg-blue-100 dark:bg-blue-900/30'
-    : 'bg-orange-100 dark:bg-orange-900/30'
+const getIconContainerClasses = (item: BalanceHistoryItem) => {
+  const tone = getItemTone(item)
+  return joinClassNames(
+    'user-balance-history-modal__tone-surface user-balance-history-modal__tone-surface-shape flex flex-shrink-0 items-center justify-center',
+    `user-balance-history-modal__tone-surface--${tone}`
+  )
 }
 
-// Icon text color
-const getIconColor = (item: BalanceHistoryItem) => {
-  if (isBalanceType(item.type)) {
-    return item.value >= 0
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : 'text-red-600 dark:text-red-400'
-  }
-  if (isSubscriptionType(item.type)) return 'text-purple-600 dark:text-purple-400'
-  return item.value >= 0
-    ? 'text-blue-600 dark:text-blue-400'
-    : 'text-orange-600 dark:text-orange-400'
+const getIconClasses = (item: BalanceHistoryItem) => {
+  return joinClassNames(
+    'user-balance-history-modal__tone-text',
+    `user-balance-history-modal__tone-text--${getItemTone(item)}`
+  )
 }
 
-// Value text color
-const getValueColor = (item: BalanceHistoryItem) => {
-  if (isBalanceType(item.type)) {
-    return item.value >= 0
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : 'text-red-600 dark:text-red-400'
-  }
-  if (isSubscriptionType(item.type)) return 'text-purple-600 dark:text-purple-400'
-  return item.value >= 0
-    ? 'text-blue-600 dark:text-blue-400'
-    : 'text-orange-600 dark:text-orange-400'
+const getValueClasses = (item: BalanceHistoryItem) => {
+  return joinClassNames(
+    'user-balance-history-modal__value text-sm font-semibold',
+    `user-balance-history-modal__tone-text--${getItemTone(item)}`
+  )
 }
 
 // Item title
@@ -320,3 +313,156 @@ const formatValue = (item: BalanceHistoryItem) => {
   return `${sign}${item.value}`
 }
 </script>
+
+<style scoped>
+.user-balance-history-modal__hero,
+.user-balance-history-modal__history-card,
+.user-balance-history-modal__action-button {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  background: var(--theme-surface);
+}
+
+.user-balance-history-modal__hero {
+  border-radius: calc(var(--theme-surface-radius) + 8px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 78%, var(--theme-surface));
+  padding: var(--theme-balance-history-hero-padding);
+}
+
+.user-balance-history-modal__hero-footer {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 62%, transparent);
+}
+
+.user-balance-history-modal__hero-footer-layout {
+  margin-top: var(--theme-balance-history-hero-footer-margin-top);
+  padding-top: var(--theme-balance-history-hero-footer-padding-top);
+}
+
+.user-balance-history-modal__filter {
+  width: var(--theme-balance-history-filter-width);
+}
+
+.user-balance-history-modal__list {
+  max-height: var(--theme-balance-history-list-max-height);
+}
+
+.user-balance-history-modal__avatar {
+  background: color-mix(in srgb, var(--theme-accent-soft) 82%, var(--theme-surface));
+}
+
+.user-balance-history-modal__avatar-shape {
+  width: var(--theme-balance-history-avatar-size);
+  height: var(--theme-balance-history-avatar-size);
+  border-radius: 999px;
+}
+
+.user-balance-history-modal__avatar-text,
+.user-balance-history-modal__loading-icon {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+}
+
+.user-balance-history-modal__text-strong {
+  color: var(--theme-page-text);
+}
+
+.user-balance-history-modal__text-muted {
+  color: var(--theme-page-muted);
+}
+
+.user-balance-history-modal__text-soft {
+  color: color-mix(in srgb, var(--theme-page-muted) 74%, transparent);
+}
+
+.user-balance-history-modal__text-success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-balance-history-modal__action-button {
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  color: var(--theme-button-secondary-text);
+  box-shadow: var(--theme-card-shadow);
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-balance-history-modal__action-button-layout {
+  padding: var(--theme-balance-history-action-padding-y) var(--theme-balance-history-action-padding-x);
+}
+
+.user-balance-history-modal__action-button:hover {
+  background: var(--theme-button-secondary-hover-bg);
+  box-shadow: var(--theme-card-shadow-hover);
+}
+
+.user-balance-history-modal__action-icon--deposit {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-balance-history-modal__action-icon--withdraw {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-balance-history-modal__history-card {
+  border-radius: calc(var(--theme-surface-radius) + 8px);
+  box-shadow: var(--theme-card-shadow);
+  padding: var(--theme-balance-history-card-padding);
+}
+
+.user-balance-history-modal__tone-surface {
+  --user-balance-history-tone-rgb: var(--theme-info-rgb);
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  background: color-mix(in srgb, rgb(var(--user-balance-history-tone-rgb)) 12%, var(--theme-surface));
+}
+
+.user-balance-history-modal__tone-surface-shape {
+  width: var(--theme-balance-history-tone-surface-size);
+  height: var(--theme-balance-history-tone-surface-size);
+}
+
+.user-balance-history-modal__state-block {
+  padding-block: var(--theme-balance-history-state-padding-y);
+}
+
+.user-balance-history-modal__pagination-button {
+  padding: var(--theme-balance-history-pagination-padding-y)
+    var(--theme-balance-history-pagination-padding-x);
+}
+
+.user-balance-history-modal__tone-surface--success {
+  --user-balance-history-tone-rgb: var(--theme-success-rgb);
+}
+
+.user-balance-history-modal__tone-surface--danger {
+  --user-balance-history-tone-rgb: var(--theme-danger-rgb);
+}
+
+.user-balance-history-modal__tone-surface--brand-purple {
+  --user-balance-history-tone-rgb: var(--theme-brand-purple-rgb);
+}
+
+.user-balance-history-modal__tone-surface--info {
+  --user-balance-history-tone-rgb: var(--theme-info-rgb);
+}
+
+.user-balance-history-modal__tone-surface--brand-orange {
+  --user-balance-history-tone-rgb: var(--theme-brand-orange-rgb);
+}
+
+.user-balance-history-modal__tone-text--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-balance-history-modal__tone-text--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-balance-history-modal__tone-text--brand-purple {
+  color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-balance-history-modal__tone-text--info {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-balance-history-modal__tone-text--brand-orange {
+  color: color-mix(in srgb, rgb(var(--theme-brand-orange-rgb)) 84%, var(--theme-page-text));
+}
+</style>

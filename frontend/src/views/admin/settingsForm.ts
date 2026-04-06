@@ -178,6 +178,7 @@ export function buildSettingsUpdatePayload(
       site_name: form.site_name,
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
+      frontend_theme: form.frontend_theme,
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
       doc_url: form.doc_url,

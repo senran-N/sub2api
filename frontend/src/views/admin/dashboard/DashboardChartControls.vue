@@ -1,8 +1,8 @@
 <template>
-  <div class="card p-4">
+  <div class="dashboard-chart-controls card">
     <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
       <div class="flex items-center gap-2">
-        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+        <span class="theme-text-default text-sm font-medium">
           {{ t('admin.dashboard.timeRange') }}:
         </span>
         <DateRangePicker
@@ -17,7 +17,7 @@
         {{ t('common.refresh') }}
       </button>
       <div class="flex items-center gap-2 sm:ml-auto">
-        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+        <span class="theme-text-default text-sm font-medium">
           {{ t('admin.dashboard.granularity') }}:
         </span>
         <div class="w-28">
@@ -63,3 +63,9 @@ const handleGranularityChange = (value: string | number | boolean | null) => {
   }
 }
 </script>
+
+<style scoped>
+.dashboard-chart-controls {
+  padding: var(--theme-settings-card-panel-padding);
+}
+</style>

@@ -58,7 +58,7 @@
       />
       <button
         type="button"
-        class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+        class="proxy-form-fields-section__password-toggle absolute right-3 top-1/2 -translate-y-1/2"
         @click="emit('toggle-password-visibility')"
       >
         <Icon :name="passwordVisible ? 'eyeOff' : 'eye'" size="md" />
@@ -119,3 +119,14 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.proxy-form-fields-section__password-toggle {
+  color: var(--theme-input-placeholder);
+  transition: color 0.2s ease;
+}
+
+.proxy-form-fields-section__password-toggle:hover {
+  color: var(--theme-page-text);
+}
+</style>

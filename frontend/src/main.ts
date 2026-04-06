@@ -4,6 +4,8 @@ import App from './App.vue'
 import router from './router'
 import i18n, { initI18n } from './i18n'
 import { useAppStore } from '@/stores/app'
+import { applyFrontendTheme } from '@/themes'
+import './themes/theme.css'
 import './style.css'
 
 function initThemeClass() {
@@ -17,6 +19,7 @@ function initThemeClass() {
 async function bootstrap() {
   // Apply theme class globally before app mount to keep all routes consistent.
   initThemeClass()
+  applyFrontendTheme(undefined)
 
   const app = createApp(App)
   const pinia = createPinia()
@@ -26,6 +29,7 @@ async function bootstrap() {
   // This must happen after pinia is installed but before router and i18n
   const appStore = useAppStore()
   appStore.initFromInjectedConfig()
+  applyFrontendTheme(appStore.frontendTheme)
 
   // Set document title immediately after config is loaded
   if (appStore.siteName && appStore.siteName !== 'Sub2API') {

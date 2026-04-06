@@ -1,20 +1,20 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="card-header">
+      <h2 class="settings-purchase-card__title text-lg font-semibold">
         {{ t('admin.settings.purchase.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-purchase-card__description mt-1 text-sm">
         {{ t('admin.settings.purchase.description') }}
       </p>
     </div>
-    <div class="space-y-6 p-6">
+    <div class="settings-purchase-card__body">
       <div class="flex items-center justify-between">
         <div>
-          <label class="font-medium text-gray-900 dark:text-white">
+          <label class="settings-purchase-card__title font-medium">
             {{ t('admin.settings.purchase.enabled') }}
           </label>
-          <p class="text-sm text-gray-500 dark:text-gray-400">
+          <p class="settings-purchase-card__description text-sm">
             {{ t('admin.settings.purchase.enabledHint') }}
           </p>
         </div>
@@ -22,7 +22,7 @@
       </div>
 
       <div>
-        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label class="settings-purchase-card__field-label mb-2 block text-sm font-medium">
           {{ t('admin.settings.purchase.url') }}
         </label>
         <input
@@ -31,10 +31,10 @@
           class="input font-mono text-sm"
           :placeholder="t('admin.settings.purchase.urlPlaceholder')"
         />
-        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p class="settings-purchase-card__description mt-1.5 text-xs">
           {{ t('admin.settings.purchase.urlHint') }}
         </p>
-        <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+        <p class="settings-purchase-card__warning mt-2 text-xs">
           {{ t('admin.settings.purchase.iframeWarning') }}
         </p>
       </div>
@@ -42,7 +42,7 @@
       <div class="flex items-center gap-2 text-sm">
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          class="h-4 w-4 shrink-0 text-gray-400"
+          class="settings-purchase-card__doc-icon h-4 w-4 shrink-0"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -58,13 +58,13 @@
           href="https://raw.githubusercontent.com/senran-N/sub2api/main/docs/ADMIN_PAYMENT_INTEGRATION_API.md"
           target="_blank"
           rel="noopener noreferrer"
-          class="text-blue-600 hover:underline dark:text-blue-400"
+          class="settings-purchase-card__doc-link"
           download="ADMIN_PAYMENT_INTEGRATION_API.md"
         >
           {{ t('admin.settings.purchase.integrationDoc') }}
         </a>
-        <span class="text-gray-400 dark:text-gray-500">-</span>
-        <span class="text-xs text-gray-500 dark:text-gray-400">
+        <span class="settings-purchase-card__doc-divider">-</span>
+        <span class="settings-purchase-card__description text-xs">
           {{ t('admin.settings.purchase.integrationDocHint') }}
         </span>
       </div>
@@ -83,3 +83,36 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-purchase-card__title,
+.settings-purchase-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-purchase-card__description,
+.settings-purchase-card__doc-icon,
+.settings-purchase-card__doc-divider {
+  color: var(--theme-page-muted);
+}
+
+.settings-purchase-card__warning {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.settings-purchase-card__doc-link {
+  color: var(--theme-accent);
+  text-decoration: none;
+}
+
+.settings-purchase-card__doc-link:hover {
+  text-decoration: underline;
+}
+
+.settings-purchase-card__body {
+  padding: var(--theme-settings-card-panel-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-settings-card-body-padding);
+}
+</style>

@@ -107,15 +107,15 @@ onUnmounted(() => {
 .sora-download-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--sora-modal-backdrop, rgba(0, 0, 0, 0.4));
+  background: var(--sora-modal-backdrop);
   backdrop-filter: blur(4px);
 }
 
 .sora-download-modal {
   position: relative;
   z-index: 10;
-  background: var(--sora-bg-secondary, #FFF);
-  border: 1px solid var(--sora-border-color, #E5E7EB);
+  background: var(--sora-bg-secondary);
+  border: 1px solid var(--sora-border-color);
   border-radius: 20px;
   padding: 32px;
   max-width: 420px;
@@ -137,13 +137,13 @@ onUnmounted(() => {
 .sora-download-modal-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--sora-text-primary, #111827);
+  color: var(--sora-text-primary);
   margin-bottom: 8px;
 }
 
 .sora-download-modal-desc {
   font-size: 14px;
-  color: var(--sora-text-secondary, #6B7280);
+  color: var(--sora-text-secondary);
   margin-bottom: 20px;
   line-height: 1.6;
 }
@@ -154,16 +154,16 @@ onUnmounted(() => {
   justify-content: center;
   gap: 6px;
   font-size: 14px;
-  color: var(--sora-text-secondary, #6B7280);
+  color: var(--sora-text-secondary);
   margin-bottom: 24px;
 }
 
 .sora-download-countdown svg {
-  color: var(--sora-text-tertiary, #9CA3AF);
+  color: var(--sora-text-tertiary);
 }
 
 .sora-download-countdown .expired {
-  color: #EF4444;
+  color: var(--sora-error);
 }
 
 .sora-download-modal-actions {
@@ -188,7 +188,7 @@ onUnmounted(() => {
 
 .sora-download-btn.primary {
   background: var(--sora-accent-gradient);
-  color: white;
+  color: var(--theme-accent-text);
 }
 
 .sora-download-btn.primary:hover {
@@ -196,13 +196,13 @@ onUnmounted(() => {
 }
 
 .sora-download-btn.ghost {
-  background: var(--sora-bg-tertiary, #F3F4F6);
-  color: var(--sora-text-secondary, #6B7280);
+  background: var(--sora-bg-tertiary);
+  color: var(--sora-text-secondary);
 }
 
 .sora-download-btn.ghost:hover {
-  background: var(--sora-bg-hover, #E5E7EB);
-  color: var(--sora-text-primary, #111827);
+  background: var(--sora-bg-hover);
+  color: var(--sora-text-primary);
 }
 
 /* 过渡 */

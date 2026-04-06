@@ -1,20 +1,20 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="settings-linuxdo-card__header">
+      <h2 class="settings-linuxdo-card__title text-lg font-semibold">
         {{ t('admin.settings.linuxdo.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-linuxdo-card__description mt-1 text-sm">
         {{ t('admin.settings.linuxdo.description') }}
       </p>
     </div>
-    <div class="space-y-5 p-6">
+    <div class="settings-linuxdo-card__body space-y-5">
       <div class="flex items-center justify-between">
         <div>
-          <label class="font-medium text-gray-900 dark:text-white">
+          <label class="settings-linuxdo-card__label font-medium">
             {{ t('admin.settings.linuxdo.enable') }}
           </label>
-          <p class="text-sm text-gray-500 dark:text-gray-400">
+          <p class="settings-linuxdo-card__description text-sm">
             {{ t('admin.settings.linuxdo.enableHint') }}
           </p>
         </div>
@@ -23,11 +23,11 @@
 
       <div
         v-if="form.linuxdo_connect_enabled"
-        class="border-t border-gray-100 pt-4 dark:border-dark-700"
+        class="settings-linuxdo-card__section pt-4"
       >
         <div class="grid grid-cols-1 gap-6">
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label class="settings-linuxdo-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.linuxdo.clientId') }}
             </label>
             <input
@@ -36,13 +36,13 @@
               class="input font-mono text-sm"
               :placeholder="t('admin.settings.linuxdo.clientIdPlaceholder')"
             />
-            <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p class="settings-linuxdo-card__description mt-1.5 text-xs">
               {{ t('admin.settings.linuxdo.clientIdHint') }}
             </p>
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label class="settings-linuxdo-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.linuxdo.clientSecret') }}
             </label>
             <input
@@ -55,7 +55,7 @@
                   : t('admin.settings.linuxdo.clientSecretPlaceholder')
               "
             />
-            <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p class="settings-linuxdo-card__description mt-1.5 text-xs">
               {{
                 form.linuxdo_connect_client_secret_configured
                   ? t('admin.settings.linuxdo.clientSecretConfiguredHint')
@@ -65,7 +65,7 @@
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label class="settings-linuxdo-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.linuxdo.redirectUrl') }}
             </label>
             <input
@@ -84,12 +84,12 @@
               </button>
               <code
                 v-if="redirectUrlSuggestion"
-                class="select-all break-all rounded bg-gray-50 px-2 py-1 font-mono text-xs text-gray-600 dark:bg-dark-800 dark:text-gray-300"
+                class="settings-linuxdo-card__suggestion select-all break-all font-mono text-xs"
               >
                 {{ redirectUrlSuggestion }}
               </code>
             </div>
-            <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p class="settings-linuxdo-card__description mt-1.5 text-xs">
               {{ t('admin.settings.linuxdo.redirectUrlHint') }}
             </p>
           </div>
@@ -115,3 +115,42 @@ defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-linuxdo-card__header,
+.settings-linuxdo-card__body,
+.settings-linuxdo-card__section {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-linuxdo-card__header {
+  padding:
+    var(--theme-settings-card-header-padding-y)
+    var(--theme-settings-card-header-padding-x);
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-linuxdo-card__body {
+  padding: var(--theme-settings-card-body-padding);
+}
+
+.settings-linuxdo-card__title,
+.settings-linuxdo-card__label,
+.settings-linuxdo-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-linuxdo-card__description {
+  color: var(--theme-page-muted);
+}
+
+.settings-linuxdo-card__suggestion {
+  border-radius: var(--theme-settings-inline-button-radius);
+  padding:
+    var(--theme-settings-code-padding-y)
+    var(--theme-settings-code-padding-x);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+</style>

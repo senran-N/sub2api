@@ -11,14 +11,14 @@
       class="space-y-5"
       @submit.prevent="emit('submit')"
     >
-      <div class="rounded-lg bg-gray-50 p-4 dark:bg-dark-700">
-        <p class="text-sm text-gray-600 dark:text-gray-400">
+      <div class="subscription-extend-dialog__summary">
+        <p class="subscription-extend-dialog__description text-sm">
           {{ t('admin.subscriptions.adjustingFor') }}
-          <span class="font-medium text-gray-900 dark:text-white">{{ subscription.user?.email }}</span>
+          <span class="subscription-extend-dialog__value font-medium">{{ subscription.user?.email }}</span>
         </p>
-        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+        <p class="subscription-extend-dialog__description mt-1 text-sm">
           {{ t('admin.subscriptions.currentExpiration') }}:
-          <span class="font-medium text-gray-900 dark:text-white">
+          <span class="subscription-extend-dialog__value font-medium">
             {{
               subscription.expires_at
                 ? formatDateOnly(subscription.expires_at)
@@ -26,9 +26,9 @@
             }}
           </span>
         </p>
-        <p v-if="subscription.expires_at" class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+        <p v-if="subscription.expires_at" class="subscription-extend-dialog__description mt-1 text-sm">
           {{ t('admin.subscriptions.remainingDays') }}:
-          <span class="font-medium text-gray-900 dark:text-white">
+          <span class="subscription-extend-dialog__value font-medium">
             {{ getSubscriptionDaysRemaining(subscription.expires_at) ?? 0 }}
           </span>
         </p>
@@ -88,3 +88,19 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.subscription-extend-dialog__summary {
+  padding: var(--theme-markdown-block-padding);
+  border-radius: var(--theme-subscription-panel-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.subscription-extend-dialog__description {
+  color: var(--theme-page-muted);
+}
+
+.subscription-extend-dialog__value {
+  color: var(--theme-page-text);
+}
+</style>

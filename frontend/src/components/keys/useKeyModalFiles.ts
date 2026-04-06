@@ -29,11 +29,11 @@ function wrapToken(className: string, value: string) {
   return `<span class="${className}">${escapeHtml(value)}</span>`
 }
 
-const keyword = (value: string) => wrapToken('text-emerald-300', value)
-const variable = (value: string) => wrapToken('text-sky-200', value)
-const operator = (value: string) => wrapToken('text-slate-400', value)
-const string = (value: string) => wrapToken('text-amber-200', value)
-const comment = (value: string) => wrapToken('text-slate-500', value)
+const keyword = (value: string) => wrapToken('use-key-modal__syntax-keyword', value)
+const variable = (value: string) => wrapToken('use-key-modal__syntax-variable', value)
+const operator = (value: string) => wrapToken('use-key-modal__syntax-operator', value)
+const string = (value: string) => wrapToken('use-key-modal__syntax-string', value)
+const comment = (value: string) => wrapToken('use-key-modal__syntax-comment', value)
 
 function buildAnthropicFiles(
   activeTab: string,

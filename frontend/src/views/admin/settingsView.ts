@@ -27,6 +27,7 @@ export function createDefaultSettingsForm(): SettingsForm {
     site_name: 'Sub2API',
     site_logo: '',
     site_subtitle: 'Subscription to API Conversion Platform',
+    frontend_theme: 'factory',
     api_base_url: '',
     contact_info: '',
     doc_url: '',

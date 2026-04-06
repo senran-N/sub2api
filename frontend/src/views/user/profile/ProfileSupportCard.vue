@@ -1,16 +1,14 @@
 <template>
-  <div
-    class="card border-primary-200 bg-primary-50 p-6 dark:bg-primary-900/20"
-  >
+  <div class="profile-support-card card">
     <div class="flex items-center gap-4">
-      <div class="rounded-xl bg-primary-100 p-3 text-primary-600">
+      <div class="profile-support-card__icon">
         <Icon name="chat" size="lg" />
       </div>
       <div>
-        <h3 class="font-semibold text-primary-800 dark:text-primary-200">
+        <h3 class="profile-support-card__title font-semibold">
           {{ title }}
         </h3>
-        <p class="text-sm font-medium">{{ contactInfo }}</p>
+        <p class="theme-text-strong text-sm font-medium">{{ contactInfo }}</p>
       </div>
     </div>
   </div>
@@ -24,3 +22,22 @@ defineProps<{
   contactInfo: string
 }>()
 </script>
+
+<style scoped>
+.profile-support-card {
+  padding: var(--theme-settings-card-body-padding);
+  border-color: color-mix(in srgb, var(--theme-accent) 18%, var(--theme-card-border));
+  background: color-mix(in srgb, var(--theme-accent-soft) 82%, var(--theme-surface));
+}
+
+.profile-support-card__icon {
+  padding: var(--theme-settings-card-panel-padding);
+  border-radius: var(--theme-settings-card-panel-radius);
+  background: color-mix(in srgb, var(--theme-accent-soft) 88%, var(--theme-surface));
+  color: var(--theme-accent);
+}
+
+.profile-support-card__title {
+  color: color-mix(in srgb, var(--theme-accent) 72%, var(--theme-page-text));
+}
+</style>

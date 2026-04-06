@@ -2,7 +2,7 @@
   <div class="flex items-center gap-1">
     <button
       type="button"
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+      class="theme-action-button theme-action-button--success keys-row-actions__button flex flex-col items-center gap-0.5"
       @click="emit('use', row)"
     >
       <Icon name="terminal" size="sm" />
@@ -10,7 +10,7 @@
     </button>
     <button
       type="button"
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+      class="theme-action-button theme-action-button--accent keys-row-actions__button flex flex-col items-center gap-0.5"
       @click="emit('edit', row)"
     >
       <Icon name="edit" size="sm" />
@@ -19,7 +19,7 @@
     <div class="relative" :ref="buttonRef">
       <button
         type="button"
-        class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+        class="theme-action-button theme-action-button--neutral keys-row-actions__button flex flex-col items-center gap-0.5"
         @click.stop="emit('toggle-more', row.id)"
       >
         <Icon name="moreVertical" size="sm" />
@@ -47,3 +47,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.keys-row-actions__button {
+  border-radius: var(--theme-key-row-action-radius);
+  padding: var(--theme-key-row-action-padding);
+}
+</style>

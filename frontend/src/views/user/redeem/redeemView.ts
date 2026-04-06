@@ -13,10 +13,8 @@ export interface RedeemResultData {
 }
 
 export interface RedeemHistoryPresentation {
-  iconBgClass: string
-  iconColorClass: string
   iconName: 'dollar' | 'badge' | 'bolt'
-  valueColorClass: string
+  tone: 'success' | 'danger' | 'brand' | 'info' | 'warning'
 }
 
 interface RedeemErrorLike {
@@ -91,40 +89,30 @@ export function buildRedeemHistoryPresentation(item: RedeemHistoryItem): RedeemH
   if (isBalanceRedeemType(item.type)) {
     return item.value >= 0
       ? {
-          iconBgClass: 'bg-emerald-100 dark:bg-emerald-900/30',
-          iconColorClass: 'text-emerald-600 dark:text-emerald-400',
           iconName: 'dollar',
-          valueColorClass: 'text-emerald-600 dark:text-emerald-400'
+          tone: 'success'
         }
       : {
-          iconBgClass: 'bg-red-100 dark:bg-red-900/30',
-          iconColorClass: 'text-red-600 dark:text-red-400',
           iconName: 'dollar',
-          valueColorClass: 'text-red-600 dark:text-red-400'
+          tone: 'danger'
         }
   }
 
   if (isSubscriptionRedeemType(item.type)) {
     return {
-      iconBgClass: 'bg-purple-100 dark:bg-purple-900/30',
-      iconColorClass: 'text-purple-600 dark:text-purple-400',
       iconName: 'badge',
-      valueColorClass: 'text-purple-600 dark:text-purple-400'
+      tone: 'brand'
     }
   }
 
   return item.value >= 0
     ? {
-        iconBgClass: 'bg-blue-100 dark:bg-blue-900/30',
-        iconColorClass: 'text-blue-600 dark:text-blue-400',
         iconName: 'bolt',
-        valueColorClass: 'text-blue-600 dark:text-blue-400'
+        tone: 'info'
       }
     : {
-        iconBgClass: 'bg-orange-100 dark:bg-orange-900/30',
-        iconColorClass: 'text-orange-600 dark:text-orange-400',
         iconName: 'bolt',
-        valueColorClass: 'text-orange-600 dark:text-orange-400'
+        tone: 'warning'
       }
 }
 

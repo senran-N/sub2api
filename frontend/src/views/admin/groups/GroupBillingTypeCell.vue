@@ -2,10 +2,10 @@
   <div class="space-y-1">
     <span
       :class="[
-        'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
+        'badge',
         group.subscription_type === 'subscription'
-          ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
-          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+          ? 'badge-purple'
+          : 'badge-gray'
       ]"
     >
       {{
@@ -16,7 +16,7 @@
     </span>
     <div
       v-if="group.subscription_type === 'subscription'"
-      class="text-xs text-gray-500 dark:text-gray-400"
+      class="group-billing-type-cell__details text-xs"
     >
       <template
         v-if="group.daily_limit_usd || group.weekly_limit_usd || group.monthly_limit_usd"
@@ -26,7 +26,7 @@
         >
         <span
           v-if="group.daily_limit_usd && (group.weekly_limit_usd || group.monthly_limit_usd)"
-          class="mx-1 text-gray-300 dark:text-gray-600"
+          class="group-billing-type-cell__separator mx-1"
           >·</span
         >
         <span v-if="group.weekly_limit_usd"
@@ -34,14 +34,14 @@
         >
         <span
           v-if="group.weekly_limit_usd && group.monthly_limit_usd"
-          class="mx-1 text-gray-300 dark:text-gray-600"
+          class="group-billing-type-cell__separator mx-1"
           >·</span
         >
         <span v-if="group.monthly_limit_usd"
           >${{ group.monthly_limit_usd }}/{{ t('admin.groups.limitMonth') }}</span
         >
       </template>
-      <span v-else class="text-gray-400 dark:text-gray-500">
+      <span v-else class="group-billing-type-cell__empty">
         {{ t('admin.groups.subscription.noLimit') }}
       </span>
     </div>
@@ -58,3 +58,14 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.group-billing-type-cell__details {
+  color: var(--theme-page-muted);
+}
+
+.group-billing-type-cell__separator,
+.group-billing-type-cell__empty {
+  color: color-mix(in srgb, var(--theme-page-muted) 82%, transparent);
+}
+</style>

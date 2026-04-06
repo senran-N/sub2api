@@ -1,17 +1,17 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="card-header">
+      <h2 class="settings-test-email-card__title text-lg font-semibold">
         {{ t('admin.settings.testEmail.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-test-email-card__description mt-1 text-sm">
         {{ t('admin.settings.testEmail.description') }}
       </p>
     </div>
-    <div class="p-6">
+    <div class="settings-test-email-card__body">
       <div class="flex items-end gap-4">
         <div class="flex-1">
-          <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-test-email-card__label mb-2 block text-sm font-medium">
             {{ t('admin.settings.testEmail.recipientEmail') }}
           </label>
           <input
@@ -79,3 +79,18 @@ function handleInput(event: Event) {
   emit('update:modelValue', (event.target as HTMLInputElement).value)
 }
 </script>
+
+<style scoped>
+.settings-test-email-card__title,
+.settings-test-email-card__label {
+  color: var(--theme-page-text);
+}
+
+.settings-test-email-card__body {
+  padding: var(--theme-settings-card-body-padding);
+}
+
+.settings-test-email-card__description {
+  color: var(--theme-page-muted);
+}
+</style>

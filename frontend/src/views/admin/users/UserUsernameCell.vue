@@ -1,5 +1,5 @@
 <template>
-  <span class="text-sm text-gray-700 dark:text-gray-300">{{ value || '-' }}</span>
+  <span class="theme-text-default text-sm">{{ value || '-' }}</span>
 </template>
 
 <script setup lang="ts">

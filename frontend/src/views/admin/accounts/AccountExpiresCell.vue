@@ -1,16 +1,16 @@
 <template>
   <div class="flex flex-col items-start gap-1">
-    <span class="text-sm text-gray-500 dark:text-dark-400">{{ formattedExpiresAt }}</span>
+    <span class="theme-text-muted text-sm">{{ formattedExpiresAt }}</span>
     <div v-if="isExpired || (account.auto_pause_on_expired && value)" class="flex items-center gap-1">
       <span
         v-if="isExpired"
-        class="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+        class="theme-chip theme-chip--compact theme-chip--warning"
       >
         {{ t('admin.accounts.expired') }}
       </span>
       <span
         v-if="account.auto_pause_on_expired && value"
-        class="inline-flex items-center rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+        class="theme-chip theme-chip--compact theme-chip--success"
       >
         {{ t('admin.accounts.autoPauseOnExpired') }}
       </span>

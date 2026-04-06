@@ -1,4 +1,6 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, type Ref } from 'vue'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
+import { readThemeCssVariable, readThemeRgb } from '@/utils/themeStyles'
 import {
   buildKeyUsageDateParams,
   buildKeyUsageDateRanges,
@@ -20,7 +22,6 @@ import {
 } from './keyUsageView'
 
 interface KeyUsageViewModelOptions {
-  isDark: Ref<boolean>
   locale: Ref<string>
   showError: (message: string) => void
   showInfo: (message: string) => void
@@ -42,10 +43,36 @@ export function useKeyUsageViewModel(options: KeyUsageViewModelOptions) {
   const customEndDate = ref('')
   const ringAnimated = ref(false)
   const displayPcts = ref<number[]>([])
+  const themeVersion = useDocumentThemeVersion()
   let resetTimer: ReturnType<typeof setInterval> | null = null
 
   const dateRanges = computed(() => buildKeyUsageDateRanges(options.t))
-  const ringTrackColor = computed(() => (options.isDark.value ? '#222222' : '#F0F0EE'))
+  const ringTrackColor = computed(() => {
+    themeVersion.value
+    return readThemeCssVariable('--theme-page-border')
+  })
+  const ringGradients = computed(() => {
+    themeVersion.value
+
+    return [
+      {
+        from: readThemeCssVariable('--theme-accent'),
+        to: readThemeRgb('--theme-brand-orange-rgb')
+      },
+      {
+        from: readThemeRgb('--theme-info-rgb'),
+        to: readThemeRgb('--theme-brand-purple-rgb')
+      },
+      {
+        from: readThemeRgb('--theme-success-rgb'),
+        to: readThemeCssVariable('--theme-accent')
+      },
+      {
+        from: readThemeRgb('--theme-warning-rgb'),
+        to: readThemeRgb('--theme-brand-rose-rgb')
+      }
+    ] as const
+  })
 
   const usd = (value: number | null | undefined) => formatKeyUsageUsd(value)
   const fmtNum = (value: number | null | undefined) => formatKeyUsageNumber(value)
@@ -217,6 +244,7 @@ export function useKeyUsageViewModel(options: KeyUsageViewModelOptions) {
     queryKey,
     resultData,
     ringAnimated,
+    ringGradients,
     ringGridClass,
     ringItems,
     ringTrackColor,

@@ -1,11 +1,11 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+    <div class="profile-password-form__header border-b">
+      <h2 class="theme-text-strong text-lg font-medium">
         {{ t('profile.changePassword') }}
       </h2>
     </div>
-    <div class="px-6 py-6">
+    <div class="profile-password-form__body">
       <form @submit.prevent="handleChangePassword" class="space-y-4">
         <div>
           <label for="old_password" class="input-label">
@@ -73,6 +73,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { userAPI } from '@/api'
+import { resolveErrorMessage } from '@/utils/errorMessage'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -100,10 +101,21 @@ const handleChangePassword = async () => {
     await userAPI.changePassword(form.value.old_password, form.value.new_password)
     form.value = { old_password: '', new_password: '', confirm_password: '' }
     appStore.showSuccess(t('profile.passwordChangeSuccess'))
-  } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('profile.passwordChangeFailed'))
+  } catch (error) {
+    appStore.showError(resolveErrorMessage(error, t('profile.passwordChangeFailed')))
   } finally {
     loading.value = false
   }
 }
 </script>
+
+<style scoped>
+.profile-password-form__header {
+  border-color: color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  padding: var(--theme-profile-totp-header-padding-y) var(--theme-profile-totp-header-padding-x);
+}
+
+.profile-password-form__body {
+  padding: var(--theme-profile-totp-body-padding);
+}
+</style>

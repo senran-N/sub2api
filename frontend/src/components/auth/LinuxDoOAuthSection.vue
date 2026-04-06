@@ -30,11 +30,11 @@
     </button>
 
     <div class="flex items-center gap-3">
-      <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-      <span class="text-xs text-gray-500 dark:text-dark-400">
+      <div class="linuxdo-oauth-section__divider h-px flex-1"></div>
+      <span class="theme-text-muted text-xs">
         {{ t('auth.linuxdo.orContinue') }}
       </span>
-      <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+      <div class="linuxdo-oauth-section__divider h-px flex-1"></div>
     </div>
   </div>
 </template>
@@ -59,3 +59,8 @@ function startLogin(): void {
 }
 </script>
 
+<style scoped>
+.linuxdo-oauth-section__divider {
+  background: color-mix(in srgb, var(--theme-card-border) 82%, transparent);
+}
+</style>

@@ -33,24 +33,24 @@ export function getApiKeyQuotaProgressWidth(row: ApiKey): string {
 
 export function getApiKeyQuotaTextTone(row: ApiKey): string {
   if (row.quota_used >= row.quota) {
-    return 'text-red-500'
+    return 'theme-text-danger'
   }
   if (row.quota_used >= row.quota * 0.8) {
-    return 'text-yellow-500'
+    return 'theme-text-warning'
   }
 
-  return 'text-gray-900 dark:text-white'
+  return 'theme-text-default'
 }
 
 export function getApiKeyQuotaBarTone(row: ApiKey): string {
   if (row.quota_used >= row.quota) {
-    return 'bg-red-500'
+    return 'theme-progress-fill--danger'
   }
   if (row.quota_used >= row.quota * 0.8) {
-    return 'bg-yellow-500'
+    return 'theme-progress-fill--warning'
   }
 
-  return 'bg-primary-500'
+  return 'theme-progress-fill--accent'
 }
 
 export function getApiKeyRateLimitTextTone(
@@ -58,13 +58,13 @@ export function getApiKeyRateLimitTextTone(
   limit: number
 ): string {
   if (usage >= limit) {
-    return 'text-red-500'
+    return 'theme-text-danger'
   }
   if (usage >= limit * 0.8) {
-    return 'text-yellow-500'
+    return 'theme-text-warning'
   }
 
-  return 'text-gray-700 dark:text-gray-300'
+  return 'theme-text-default'
 }
 
 export function getApiKeyRateLimitBarTone(
@@ -72,13 +72,13 @@ export function getApiKeyRateLimitBarTone(
   limit: number
 ): string {
   if (usage >= limit) {
-    return 'bg-red-500'
+    return 'theme-progress-fill--danger'
   }
   if (usage >= limit * 0.8) {
-    return 'bg-yellow-500'
+    return 'theme-progress-fill--warning'
   }
 
-  return 'bg-emerald-500'
+  return 'theme-progress-fill--success'
 }
 
 export function getApiKeyRateLimitProgressWidth(
@@ -160,12 +160,12 @@ export function getApiKeyExpirationTextClass(
   now: Date = new Date()
 ): string {
   if (!expiresAt) {
-    return 'text-sm text-gray-400 dark:text-dark-500'
+    return 'text-sm theme-text-subtle'
   }
 
   return new Date(expiresAt) < now
-    ? 'text-sm text-red-500 dark:text-red-400'
-    : 'text-sm text-gray-500 dark:text-dark-400'
+    ? 'text-sm theme-text-danger'
+    : 'text-sm theme-text-muted'
 }
 
 type Translate = (key: string) => string

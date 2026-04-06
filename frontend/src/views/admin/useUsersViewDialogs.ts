@@ -1,10 +1,17 @@
 import { ref } from 'vue'
 import type { AdminUser } from '@/types'
+import {
+  calculateContextMenuPosition,
+  type FloatingPanelPosition,
+  readThemePixelValue
+} from '@/utils/floatingPanel'
 
-export interface UserActionMenuPosition {
-  top: number
-  left: number
-}
+const USER_ACTION_MENU_WIDTH_FALLBACK = 200
+const USER_ACTION_MENU_HEIGHT_FALLBACK = 240
+const FLOATING_PANEL_PADDING_FALLBACK = 8
+const FLOATING_PANEL_GAP_FALLBACK = 4
+
+export interface UserActionMenuPosition extends FloatingPanelPosition {}
 
 export interface UserActionMenuMetrics {
   rect: Pick<DOMRect, 'left' | 'top' | 'bottom' | 'width'>
@@ -15,47 +22,25 @@ export interface UserActionMenuMetrics {
   menuWidth?: number
   menuHeight?: number
   padding?: number
+  gap?: number
   mobileBreakpoint?: number
 }
 
 export function calculateUserActionMenuPosition(
   metrics: UserActionMenuMetrics
 ): UserActionMenuPosition {
-  const menuWidth = metrics.menuWidth ?? 200
-  const menuHeight = metrics.menuHeight ?? 240
-  const padding = metrics.padding ?? 8
-  const mobileBreakpoint = metrics.mobileBreakpoint ?? 768
-
-  if (metrics.viewportWidth < mobileBreakpoint) {
-    const left = Math.max(
-      padding,
-      Math.min(
-        metrics.rect.left + metrics.rect.width / 2 - menuWidth / 2,
-        metrics.viewportWidth - menuWidth - padding
-      )
-    )
-
-    let top = metrics.rect.bottom + 4
-    if (top + menuHeight > metrics.viewportHeight - padding) {
-      top = metrics.rect.top - menuHeight - 4
-      if (top < padding) {
-        top = padding
-      }
-    }
-
-    return { top, left }
-  }
-
-  const left = Math.max(
-    padding,
-    Math.min(metrics.pointerX - menuWidth, metrics.viewportWidth - menuWidth - padding)
-  )
-  let top = metrics.pointerY
-  if (top + menuHeight > metrics.viewportHeight - padding) {
-    top = metrics.viewportHeight - menuHeight - padding
-  }
-
-  return { top, left }
+  return calculateContextMenuPosition({
+    rect: metrics.rect,
+    pointerX: metrics.pointerX,
+    pointerY: metrics.pointerY,
+    viewportWidth: metrics.viewportWidth,
+    viewportHeight: metrics.viewportHeight,
+    panelWidth: metrics.menuWidth ?? USER_ACTION_MENU_WIDTH_FALLBACK,
+    panelHeight: metrics.menuHeight ?? USER_ACTION_MENU_HEIGHT_FALLBACK,
+    padding: metrics.padding ?? FLOATING_PANEL_PADDING_FALLBACK,
+    gap: metrics.gap ?? FLOATING_PANEL_GAP_FALLBACK,
+    mobileBreakpoint: metrics.mobileBreakpoint
+  })
 }
 
 export function useUsersViewDialogs() {
@@ -92,12 +77,21 @@ export function useUsersViewDialogs() {
       return
     }
 
+    const menuWidth = readThemePixelValue('--theme-user-action-menu-width', USER_ACTION_MENU_WIDTH_FALLBACK)
+    const menuHeight = readThemePixelValue('--theme-user-action-menu-estimated-height', USER_ACTION_MENU_HEIGHT_FALLBACK)
+    const padding = readThemePixelValue('--theme-floating-panel-viewport-padding', FLOATING_PANEL_PADDING_FALLBACK)
+    const gap = readThemePixelValue('--theme-floating-panel-gap', FLOATING_PANEL_GAP_FALLBACK)
+
     menuPosition.value = calculateUserActionMenuPosition({
       rect: target.getBoundingClientRect(),
       pointerX: event.clientX,
       pointerY: event.clientY,
       viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight
+      viewportHeight: window.innerHeight,
+      menuWidth,
+      menuHeight,
+      padding,
+      gap
     })
     activeMenuId.value = user.id
   }

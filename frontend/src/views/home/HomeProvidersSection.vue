@@ -1,10 +1,10 @@
 <template>
   <section>
     <div class="mb-8 text-center">
-      <h2 class="mb-3 text-2xl font-bold text-gray-900 dark:text-white">
+      <h2 class="home-providers-section__title mb-3 font-bold">
         {{ title }}
       </h2>
-      <p class="text-sm text-gray-600 dark:text-dark-400">
+      <p class="home-providers-section__description text-sm">
         {{ description }}
       </p>
     </div>
@@ -13,26 +13,26 @@
       <div
         v-for="provider in providers"
         :key="provider.key"
-        class="flex items-center gap-2 rounded-xl px-5 py-3 backdrop-blur-sm"
+        class="home-providers-section__provider flex items-center gap-2 backdrop-blur-sm"
         :class="
           provider.supported
-            ? 'border border-primary-200 bg-white/60 ring-1 ring-primary-500/20 dark:border-primary-800 dark:bg-dark-800/60'
-            : 'border border-gray-200/50 bg-white/40 opacity-60 dark:border-dark-700/50 dark:bg-dark-800/40'
+            ? 'home-providers-section__provider--supported'
+            : 'home-providers-section__provider--unsupported'
         "
-      >
-        <div
-          class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br"
-          :class="provider.accentClass"
         >
-          <span class="text-xs font-bold text-white">{{ provider.initial }}</span>
+          <div
+          class="home-providers-section__avatar flex h-8 w-8 items-center justify-center"
+          :class="`home-providers-section__avatar--${provider.accentTone}`"
+        >
+          <span class="home-providers-section__avatar-text text-xs font-bold">{{ provider.initial }}</span>
         </div>
-        <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ provider.label }}</span>
+        <span class="home-providers-section__provider-label text-sm font-medium">{{ provider.label }}</span>
         <span
-          class="rounded px-1.5 py-0.5 text-[10px] font-medium"
+          class="home-providers-section__status text-[10px] font-medium"
           :class="
             provider.supported
-              ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
-              : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-400'
+              ? 'home-providers-section__status--supported'
+              : 'home-providers-section__status--unsupported'
           "
         >
           {{ provider.statusLabel }}
@@ -51,3 +51,98 @@ defineProps<{
   title: string
 }>()
 </script>
+
+<style scoped>
+.home-providers-section__title,
+.home-providers-section__provider-label {
+  color: var(--theme-page-text);
+}
+
+.home-providers-section__title {
+  font-family: var(--theme-home-section-title-font);
+  font-size: var(--theme-home-section-title-size);
+  letter-spacing: var(--theme-home-section-title-letter-spacing);
+}
+
+.home-providers-section__description {
+  color: var(--theme-page-muted);
+}
+
+.home-providers-section__provider--supported {
+  padding: calc(var(--theme-markdown-block-padding) - 0.25rem) calc(var(--theme-markdown-block-padding) + 0.25rem);
+  border-radius: var(--theme-home-provider-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 18%, var(--theme-card-border));
+  background: color-mix(in srgb, var(--theme-surface) 60%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-accent) 18%, transparent);
+}
+
+.home-providers-section__provider--unsupported {
+  padding: calc(var(--theme-markdown-block-padding) - 0.25rem) calc(var(--theme-markdown-block-padding) + 0.25rem);
+  border-radius: var(--theme-home-provider-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 56%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 40%, transparent);
+  opacity: 0.6;
+}
+
+.home-providers-section__avatar {
+  border-radius: var(--theme-home-provider-avatar-radius);
+}
+
+.home-providers-section__status--supported {
+  border-radius: var(--theme-public-action-radius);
+  padding: var(--theme-account-usage-pill-padding-y) var(--theme-account-usage-pill-padding-x);
+  background: color-mix(in srgb, var(--theme-accent-soft) 82%, var(--theme-surface));
+  color: var(--theme-accent);
+}
+
+.home-providers-section__status--unsupported {
+  border-radius: var(--theme-public-action-radius);
+  padding: var(--theme-account-usage-pill-padding-y) var(--theme-account-usage-pill-padding-x);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+
+.home-providers-section__avatar-text {
+  color: var(--theme-filled-text);
+}
+
+.home-providers-section__avatar--brand-orange {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--theme-brand-orange-rgb)),
+    color-mix(in srgb, rgb(var(--theme-brand-orange-rgb)) 72%, var(--theme-accent-strong))
+  );
+}
+
+.home-providers-section__avatar--success {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--theme-success-rgb)),
+    color-mix(in srgb, rgb(var(--theme-success-rgb)) 72%, var(--theme-accent-strong))
+  );
+}
+
+.home-providers-section__avatar--info {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--theme-info-rgb)),
+    color-mix(in srgb, rgb(var(--theme-info-rgb)) 72%, var(--theme-accent-strong))
+  );
+}
+
+.home-providers-section__avatar--brand-rose {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--theme-brand-rose-rgb)),
+    color-mix(in srgb, rgb(var(--theme-brand-rose-rgb)) 72%, var(--theme-accent-strong))
+  );
+}
+
+.home-providers-section__avatar--neutral {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--theme-page-muted) 84%, var(--theme-page-text)),
+    color-mix(in srgb, var(--theme-page-muted) 64%, var(--theme-accent-strong))
+  );
+}
+</style>

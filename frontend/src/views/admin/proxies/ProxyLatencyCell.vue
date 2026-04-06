@@ -13,10 +13,10 @@
     >
       {{ proxy.latency_ms }}ms
     </span>
-    <span v-else class="text-sm text-gray-400">-</span>
+    <span v-else class="theme-text-subtle text-sm">-</span>
     <div
       v-if="typeof proxy.quality_checked === 'number'"
-      class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400"
+      class="theme-text-muted flex items-center gap-1 text-xs"
       :title="proxy.quality_summary || undefined"
     >
       <span>{{ t('admin.proxies.qualityInline', { grade: proxy.quality_grade || '-', score: proxy.quality_score ?? '-' }) }}</span>

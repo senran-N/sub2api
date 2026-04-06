@@ -1,51 +1,51 @@
 <template>
-  <div class="flex h-full min-h-0 flex-col bg-white dark:bg-dark-900">
+  <div class="ops-error-log-table flex h-full min-h-0 flex-col">
     <!-- Loading State -->
-    <div v-if="loading" class="flex flex-1 items-center justify-center py-10">
-      <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600"></div>
+    <div v-if="loading" class="ops-error-log-table__loading flex flex-1 items-center justify-center">
+      <div class="ops-error-log-table__spinner h-8 w-8 animate-spin rounded-full border-b-2"></div>
     </div>
 
     <!-- Table Container -->
     <div v-else class="flex min-h-0 flex-1 flex-col">
-      <div class="min-h-0 flex-1 overflow-auto border-b border-gray-200 dark:border-dark-700">
-        <table class="w-full border-separate border-spacing-0">
-          <thead class="sticky top-0 z-10 bg-gray-50 dark:bg-dark-800">
+      <div class="ops-error-log-table__scroll min-h-0 flex-1 overflow-auto">
+        <table class="ops-error-log-table__table w-full border-separate border-spacing-0">
+          <thead class="ops-error-log-table__head sticky top-0 z-10">
             <tr>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.time') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.type') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.endpoint') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.platform') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.model') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.group') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.user') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.status') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header text-left">
                 {{ t('admin.ops.errorLog.message') }}
               </th>
-              <th class="border-b border-gray-200 px-4 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              <th class="ops-error-log-table__header ops-error-log-table__header--action text-right">
                 {{ t('admin.ops.errorLog.action') }}
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+          <tbody class="ops-error-log-table__body">
             <tr v-if="rows.length === 0">
-              <td colspan="10" class="py-12 text-center text-sm text-gray-400 dark:text-dark-500">
+              <td colspan="10" class="ops-error-log-table__empty ops-error-log-table__table-cell text-center text-sm">
                 {{ t('admin.ops.errorLog.noErrors') }}
               </td>
             </tr>
@@ -53,23 +53,23 @@
             <tr
               v-for="log in rows"
               :key="log.id"
-              class="group cursor-pointer transition-colors hover:bg-gray-50/80 dark:hover:bg-dark-800/50"
+              class="ops-error-log-table__row group cursor-pointer transition-colors"
               @click="emit('openErrorDetail', log.id)"
             >
               <!-- Time -->
-              <td class="whitespace-nowrap px-4 py-2">
+              <td class="ops-error-log-table__table-cell whitespace-nowrap">
                 <el-tooltip :content="log.request_id || log.client_request_id" placement="top" :show-after="500">
-                  <span class="font-mono text-xs font-medium text-gray-900 dark:text-gray-200">
+                  <span class="ops-error-log-table__text-strong font-mono text-xs font-medium">
                     {{ formatDateTime(log.created_at).split(' ')[1] }}
                   </span>
                 </el-tooltip>
               </td>
 
               <!-- Type -->
-              <td class="whitespace-nowrap px-4 py-2">
+              <td class="ops-error-log-table__table-cell whitespace-nowrap">
                 <span
                   :class="[
-                    'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold ring-1 ring-inset',
+                    'ops-error-log-table__inline-chip inline-flex items-center text-[10px] font-bold ring-1 ring-inset',
                     getTypeBadge(log).className
                   ]"
                 >
@@ -78,81 +78,81 @@
               </td>
 
               <!-- Endpoint -->
-              <td class="px-4 py-2">
-                <div class="max-w-[160px]">
+              <td class="ops-error-log-table__table-cell">
+                <div class="ops-error-log-table__cell-box ops-error-log-table__cell-box--endpoint">
                   <el-tooltip v-if="log.inbound_endpoint" :content="formatEndpointTooltip(log)" placement="top" :show-after="500">
-                    <span class="truncate font-mono text-[11px] text-gray-700 dark:text-gray-300">
+                    <span class="ops-error-log-table__text-body truncate font-mono text-[11px]">
                       {{ log.inbound_endpoint }}
                     </span>
                   </el-tooltip>
-                  <span v-else class="text-xs text-gray-400">-</span>
+                  <span v-else class="ops-error-log-table__text-soft text-xs">-</span>
                 </div>
               </td>
 
               <!-- Platform -->
-              <td class="whitespace-nowrap px-4 py-2">
-                <span class="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+              <td class="ops-error-log-table__table-cell whitespace-nowrap">
+                <span class="theme-chip theme-chip--compact theme-chip--neutral inline-flex items-center uppercase">
                   {{ log.platform || '-' }}
                 </span>
               </td>
 
               <!-- Model -->
-              <td class="px-4 py-2">
-                <div class="max-w-[160px]">
+              <td class="ops-error-log-table__table-cell">
+                <div class="ops-error-log-table__cell-box ops-error-log-table__cell-box--model">
                   <template v-if="hasModelMapping(log)">
                     <el-tooltip :content="modelMappingTooltip(log)" placement="top" :show-after="500">
-                      <span class="flex items-center gap-1 truncate font-mono text-[11px] text-gray-700 dark:text-gray-300">
+                      <span class="ops-error-log-table__text-body flex items-center gap-1 truncate font-mono text-[11px]">
                         <span class="truncate">{{ log.requested_model }}</span>
-                        <span class="flex-shrink-0 text-gray-400">→</span>
-                        <span class="truncate text-primary-600 dark:text-primary-400">{{ log.upstream_model }}</span>
+                        <span class="ops-error-log-table__text-soft flex-shrink-0">→</span>
+                        <span class="ops-error-log-table__text-accent truncate">{{ log.upstream_model }}</span>
                       </span>
                     </el-tooltip>
                   </template>
                   <template v-else>
-                    <span v-if="displayModel(log)" class="truncate font-mono text-[11px] text-gray-700 dark:text-gray-300" :title="displayModel(log)">
+                    <span v-if="displayModel(log)" class="ops-error-log-table__text-body truncate font-mono text-[11px]" :title="displayModel(log)">
                       {{ displayModel(log) }}
                     </span>
-                    <span v-else class="text-xs text-gray-400">-</span>
+                    <span v-else class="ops-error-log-table__text-soft text-xs">-</span>
                   </template>
                 </div>
               </td>
 
               <!-- Group -->
-              <td class="px-4 py-2">
+              <td class="ops-error-log-table__table-cell">
                  <el-tooltip v-if="log.group_id" :content="t('admin.ops.errorLog.id') + ' ' + log.group_id" placement="top" :show-after="500">
-                  <span class="max-w-[100px] truncate text-xs font-medium text-gray-900 dark:text-gray-200">
+                  <span class="ops-error-log-table__text-strong ops-error-log-table__compact-label truncate text-xs font-medium">
                     {{ log.group_name || '-' }}
                   </span>
                 </el-tooltip>
-                <span v-else class="text-xs text-gray-400">-</span>
+                <span v-else class="ops-error-log-table__text-soft text-xs">-</span>
               </td>
 
               <!-- User / Account -->
-              <td class="px-4 py-2">
+              <td class="ops-error-log-table__table-cell">
                 <template v-if="isUpstreamRow(log)">
                   <el-tooltip v-if="log.account_id" :content="t('admin.ops.errorLog.accountId') + ' ' + log.account_id" placement="top" :show-after="500">
-                    <span class="max-w-[100px] truncate text-xs font-medium text-gray-900 dark:text-gray-200">
+                    <span class="ops-error-log-table__text-strong ops-error-log-table__compact-label truncate text-xs font-medium">
                       {{ log.account_name || '-' }}
                     </span>
                   </el-tooltip>
-                  <span v-else class="text-xs text-gray-400">-</span>
+                  <span v-else class="ops-error-log-table__text-soft text-xs">-</span>
                 </template>
                 <template v-else>
                   <el-tooltip v-if="log.user_id" :content="t('admin.ops.errorLog.userId') + ' ' + log.user_id" placement="top" :show-after="500">
-                    <span class="max-w-[100px] truncate text-xs font-medium text-gray-900 dark:text-gray-200">
+                    <span class="ops-error-log-table__text-strong ops-error-log-table__compact-label truncate text-xs font-medium">
                       {{ log.user_email || '-' }}
                     </span>
                   </el-tooltip>
-                  <span v-else class="text-xs text-gray-400">-</span>
+                  <span v-else class="ops-error-log-table__text-soft text-xs">-</span>
                 </template>
               </td>
 
               <!-- Status -->
-              <td class="whitespace-nowrap px-4 py-2">
+              <td class="ops-error-log-table__table-cell whitespace-nowrap">
                 <div class="flex items-center gap-1.5">
                   <span
                     :class="[
-                      'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold ring-1 ring-inset',
+                      'ops-error-log-table__inline-chip inline-flex items-center text-[10px] font-bold ring-1 ring-inset',
                       getStatusClass(log.status_code)
                     ]"
                   >
@@ -160,13 +160,13 @@
                   </span>
                   <span
                     v-if="log.severity"
-                    :class="['rounded px-1.5 py-0.5 text-[10px] font-bold', getSeverityClass(log.severity)]"
+                    :class="getSeverityClass(log.severity)"
                   >
                     {{ log.severity }}
                   </span>
                   <span
                     v-if="log.request_type != null && log.request_type > 0"
-                    class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+                    class="theme-chip theme-chip--compact theme-chip--neutral"
                   >
                     {{ formatRequestType(log.request_type) }}
                   </span>
@@ -174,18 +174,18 @@
               </td>
 
               <!-- Message (Response Content) -->
-              <td class="px-4 py-2">
-                <div class="max-w-[200px]">
-                  <p class="truncate text-[11px] font-medium text-gray-600 dark:text-gray-400" :title="log.message">
+              <td class="ops-error-log-table__table-cell">
+                <div class="ops-error-log-table__cell-box ops-error-log-table__cell-box--message">
+                  <p class="ops-error-log-table__text-muted truncate text-[11px] font-medium" :title="log.message">
                     {{ formatSmartMessage(log.message) || '-' }}
                   </p>
                 </div>
               </td>
 
               <!-- Actions -->
-              <td class="whitespace-nowrap px-4 py-2 text-right" @click.stop>
+              <td class="ops-error-log-table__table-cell ops-error-log-table__header--action whitespace-nowrap text-right" @click.stop>
                 <div class="flex items-center justify-end gap-3">
-                  <button type="button" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 text-xs font-bold" @click="emit('openErrorDetail', log.id)">
+                  <button type="button" class="ops-error-log-table__details text-xs font-bold" @click="emit('openErrorDetail', log.id)">
                     {{ t('admin.ops.errorLog.details') }}
                   </button>
                 </div>
@@ -196,7 +196,7 @@
       </div>
 
       <!-- Pagination -->
-      <div class="bg-gray-50/50 dark:bg-dark-800/50">
+      <div class="ops-error-log-table__pagination">
         <Pagination
           v-if="total > 0"
           :total="total"
@@ -268,23 +268,23 @@ function getTypeBadge(log: OpsErrorLog): { label: string; className: string } {
   const owner = String(log.error_owner || '').toLowerCase()
 
   if (isUpstreamRow(log)) {
-    return { label: t('admin.ops.errorLog.typeUpstream'), className: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-500/30' }
+    return { label: t('admin.ops.errorLog.typeUpstream'), className: 'theme-chip theme-chip--compact theme-chip--danger' }
   }
   if (phase === 'request' && owner === 'client') {
-    return { label: t('admin.ops.errorLog.typeRequest'), className: 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-500/30' }
+    return { label: t('admin.ops.errorLog.typeRequest'), className: 'theme-chip theme-chip--compact theme-chip--warning' }
   }
   if (phase === 'auth' && owner === 'client') {
-    return { label: t('admin.ops.errorLog.typeAuth'), className: 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-500/30' }
+    return { label: t('admin.ops.errorLog.typeAuth'), className: 'theme-chip theme-chip--compact theme-chip--info' }
   }
   if (phase === 'routing' && owner === 'platform') {
-    return { label: t('admin.ops.errorLog.typeRouting'), className: 'bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-900/30 dark:text-purple-400 dark:ring-purple-500/30' }
+    return { label: t('admin.ops.errorLog.typeRouting'), className: 'theme-chip theme-chip--compact theme-chip--brand-purple' }
   }
   if (phase === 'internal' && owner === 'platform') {
-    return { label: t('admin.ops.errorLog.typeInternal'), className: 'bg-gray-100 text-gray-800 ring-gray-600/20 dark:bg-dark-700 dark:text-gray-200 dark:ring-dark-500/40' }
+    return { label: t('admin.ops.errorLog.typeInternal'), className: 'theme-chip theme-chip--compact theme-chip--neutral' }
   }
 
-    const fallback = phase || owner || t('common.unknown')
-    return { label: fallback, className: 'bg-gray-50 text-gray-700 ring-gray-600/10 dark:bg-dark-900 dark:text-gray-300 dark:ring-dark-700' }
+  const fallback = phase || owner || t('common.unknown')
+  return { label: fallback, className: 'theme-chip theme-chip--compact theme-chip--neutral' }
 }
 
 interface Props {
@@ -305,10 +305,10 @@ defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 function getStatusClass(code: number): string {
-  if (code >= 500) return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-500/30'
-  if (code === 429) return 'bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-900/30 dark:text-purple-400 dark:ring-purple-500/30'
-  if (code >= 400) return 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-500/30'
-  return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-900/30 dark:text-gray-400 dark:ring-gray-500/30'
+  if (code >= 500) return 'theme-chip theme-chip--compact theme-chip--danger'
+  if (code === 429) return 'theme-chip theme-chip--compact theme-chip--brand-purple'
+  if (code >= 400) return 'theme-chip theme-chip--compact theme-chip--warning'
+  return 'theme-chip theme-chip--compact theme-chip--neutral'
 }
 
 function formatSmartMessage(msg: string): string {
@@ -334,3 +334,118 @@ function formatSmartMessage(msg: string): string {
 
 }
 </script>
+
+<style scoped>
+.ops-error-log-table {
+  background: var(--theme-surface);
+}
+
+.ops-error-log-table__loading {
+  padding-block: calc(var(--theme-ops-card-padding) * 1.5);
+}
+
+.ops-error-log-table__spinner {
+  border-bottom-color: var(--theme-accent);
+}
+
+.ops-error-log-table__scroll {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+}
+
+.ops-error-log-table__table {
+  min-width: var(--theme-ops-table-min-width);
+}
+
+.ops-error-log-table__head {
+  background: var(--theme-table-head-bg);
+}
+
+.ops-error-log-table__header {
+  padding:
+    calc(var(--theme-ops-table-cell-padding-y) * 0.9)
+    var(--theme-ops-table-cell-padding-x);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+  font-size: var(--theme-table-head-font-size);
+  font-weight: 700;
+  letter-spacing: var(--theme-table-head-letter-spacing);
+  text-transform: var(--theme-table-head-text-transform);
+  color: var(--theme-table-head-text);
+}
+
+.ops-error-log-table__header--action {
+  min-width: fit-content;
+}
+
+.ops-error-log-table__table-cell {
+  padding:
+    calc(var(--theme-ops-table-cell-padding-y) * 0.8)
+    var(--theme-ops-table-cell-padding-x);
+}
+
+.ops-error-log-table__body tr + tr td {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 62%, transparent);
+}
+
+.ops-error-log-table__row:hover {
+  background: color-mix(in srgb, var(--theme-table-row-hover) 100%, var(--theme-surface));
+}
+
+.ops-error-log-table__text-strong {
+  color: var(--theme-page-text);
+}
+
+.ops-error-log-table__text-body {
+  color: color-mix(in srgb, var(--theme-page-text) 80%, var(--theme-page-muted));
+}
+
+.ops-error-log-table__text-muted {
+  color: var(--theme-page-muted);
+}
+
+.ops-error-log-table__text-soft,
+.ops-error-log-table__empty {
+  color: color-mix(in srgb, var(--theme-page-muted) 76%, transparent);
+}
+
+.ops-error-log-table__empty {
+  padding-block: calc(var(--theme-ops-card-padding) * 2);
+}
+
+.ops-error-log-table__text-accent,
+.ops-error-log-table__details {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+}
+
+.ops-error-log-table__details:hover {
+  color: color-mix(in srgb, var(--theme-accent-strong) 20%, var(--theme-accent) 80%);
+}
+
+.ops-error-log-table__pagination {
+  background: color-mix(in srgb, var(--theme-surface-soft) 56%, var(--theme-surface));
+}
+
+.ops-error-log-table__inline-chip {
+  padding:
+    calc(var(--theme-button-padding-y) * 0.2)
+    calc(var(--theme-button-padding-x) * 0.32);
+  border-radius: calc(var(--theme-button-radius) * 0.65);
+}
+
+.ops-error-log-table__cell-box {
+  min-width: 0;
+}
+
+.ops-error-log-table__cell-box--endpoint,
+.ops-error-log-table__cell-box--model {
+  max-width: calc(var(--theme-ops-table-min-width) * 0.2);
+}
+
+.ops-error-log-table__cell-box--message {
+  max-width: calc(var(--theme-ops-table-min-width) * 0.25);
+}
+
+.ops-error-log-table__compact-label {
+  display: inline-block;
+  max-width: calc(var(--theme-ops-table-min-width) * 0.125);
+}
+</style>

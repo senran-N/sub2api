@@ -342,7 +342,7 @@ onUnmounted(() => {
 
 .sora-welcome-subtitle {
   font-size: 16px;
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
   max-width: 480px;
   margin: 0 auto;
   line-height: 1.6;
@@ -359,11 +359,11 @@ onUnmounted(() => {
 
 .sora-example-prompt {
   padding: 16px 20px;
-  background: var(--sora-bg-secondary, #1A1A1A);
-  border: 1px solid var(--sora-border-color, #2A2A2A);
-  border-radius: var(--sora-radius-md, 12px);
+  background: var(--sora-bg-secondary);
+  border: 1px solid var(--sora-border-color);
+  border-radius: var(--sora-radius-md);
   font-size: 13px;
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
   cursor: pointer;
   transition: all 150ms ease;
   text-align: left;
@@ -372,9 +372,9 @@ onUnmounted(() => {
 }
 
 .sora-example-prompt:hover {
-  background: var(--sora-bg-tertiary, #242424);
-  border-color: var(--sora-bg-hover, #333);
-  color: var(--sora-text-primary, #FFF);
+  background: var(--sora-bg-tertiary);
+  border-color: var(--sora-bg-hover);
+  color: var(--sora-text-primary);
   transform: translateY(-1px);
 }
 
@@ -391,14 +391,14 @@ onUnmounted(() => {
   position: fixed;
   top: 80px;
   right: 24px;
-  background: var(--sora-bg-elevated, #2A2A2A);
-  border: 1px solid var(--sora-warning, #F59E0B);
-  border-radius: var(--sora-radius-md, 12px);
+  background: var(--sora-bg-elevated);
+  border: 1px solid var(--sora-warning);
+  border-radius: var(--sora-radius-md);
   padding: 14px 20px;
   font-size: 13px;
-  color: var(--sora-warning, #F59E0B);
+  color: var(--sora-warning);
   z-index: 50;
-  box-shadow: var(--sora-shadow-lg, 0 8px 32px rgba(0,0,0,0.5));
+  box-shadow: var(--sora-shadow-lg);
   animation: sora-slide-in-right 0.3s ease;
   max-width: 340px;
   display: flex;

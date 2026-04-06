@@ -39,32 +39,32 @@ function formatBytes(bytes: number): string {
   gap: 10px;
   padding: 6px 14px;
   background: var(--sora-bg-secondary);
-  border-radius: var(--sora-radius-full, 9999px);
+  border-radius: var(--sora-radius-full);
   font-size: 12px;
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
 }
 
 .sora-quota-bar-wrapper {
   width: 80px;
   height: 4px;
-  background: var(--sora-bg-hover, #333);
+  background: var(--sora-bg-hover);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .sora-quota-bar-fill {
   height: 100%;
-  background: var(--sora-accent-gradient, linear-gradient(135deg, #14b8a6, #0d9488));
+  background: var(--sora-accent-gradient);
   border-radius: 2px;
   transition: width 400ms ease;
 }
 
 .sora-quota-bar-fill.warning {
-  background: var(--sora-warning, #F59E0B) !important;
+  background: var(--sora-warning) !important;
 }
 
 .sora-quota-bar-fill.danger {
-  background: var(--sora-error, #EF4444) !important;
+  background: var(--sora-error) !important;
 }
 
 .sora-quota-text {
@@ -72,11 +72,11 @@ function formatBytes(bytes: number): string {
 }
 
 .sora-quota-text.warning {
-  color: var(--sora-warning, #F59E0B);
+  color: var(--sora-warning);
 }
 
 .sora-quota-text.danger {
-  color: var(--sora-error, #EF4444);
+  color: var(--sora-error);
 }
 
 @media (max-width: 900px) {

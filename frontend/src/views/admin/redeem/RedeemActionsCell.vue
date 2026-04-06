@@ -2,7 +2,7 @@
   <div class="flex items-center space-x-2">
     <button
       v-if="showDelete"
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+      class="theme-action-button theme-action-button--danger"
       @click="emit('delete')"
     >
       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -15,7 +15,7 @@
       </svg>
       <span class="text-xs">{{ t('common.delete') }}</span>
     </button>
-    <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+    <span v-else class="theme-text-subtle">-</span>
   </div>
 </template>
 

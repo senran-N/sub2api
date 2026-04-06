@@ -1,7 +1,8 @@
 <template>
   <div class="flex items-center gap-1">
     <button
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400"
+      type="button"
+      class="theme-action-button theme-action-button--success"
       :disabled="testing"
       @click="emit('test', proxy)"
     >
@@ -29,7 +30,8 @@
       <span class="text-xs">{{ t('admin.proxies.testConnection') }}</span>
     </button>
     <button
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+      type="button"
+      class="theme-action-button theme-action-button--info"
       :disabled="qualityChecking"
       @click="emit('quality-check', proxy)"
     >
@@ -57,14 +59,16 @@
       <span class="text-xs">{{ t('admin.proxies.qualityCheck') }}</span>
     </button>
     <button
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+      type="button"
+      class="theme-action-button theme-action-button--accent"
       @click="emit('edit', proxy)"
     >
       <Icon name="edit" size="sm" />
       <span class="text-xs">{{ t('common.edit') }}</span>
     </button>
     <button
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+      type="button"
+      class="theme-action-button theme-action-button--danger"
       @click="emit('delete', proxy)"
     >
       <Icon name="trash" size="sm" />

@@ -1,5 +1,5 @@
 <template>
-  <span class="text-sm font-mono text-gray-700 dark:text-gray-300">
+  <span class="theme-text-default text-sm font-mono">
     {{ formattedRateMultiplier }}
   </span>
 </template>

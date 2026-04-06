@@ -6,119 +6,206 @@
           <div class="text-sm">
             <button
               v-if="row.user?.email"
-              class="font-medium text-primary-600 underline decoration-dashed underline-offset-2 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-              @click="$emit('userClick', row.user_id, row.user?.email)"
+              class="usage-table__user-link font-medium underline decoration-dashed underline-offset-2 transition-colors"
               :title="t('admin.usage.clickToViewBalance')"
+              @click="$emit('userClick', row.user_id, row.user?.email)"
             >
               {{ row.user.email }}
             </button>
-            <span v-else class="font-medium text-gray-900 dark:text-white">-</span>
-            <span class="ml-1 text-gray-500 dark:text-gray-400">#{{ row.user_id }}</span>
+            <span v-else class="usage-table__text-body font-medium">-</span>
+            <span class="usage-table__text-muted ml-1">#{{ row.user_id }}</span>
           </div>
         </template>
 
         <template #cell-api_key="{ row }">
-          <span class="text-sm text-gray-900 dark:text-white">{{ row.api_key?.name || '-' }}</span>
+          <span class="usage-table__text-body text-sm">{{ row.api_key?.name || '-' }}</span>
         </template>
 
         <template #cell-account="{ row }">
-          <span class="text-sm text-gray-900 dark:text-white">{{ row.account?.name || '-' }}</span>
+          <span class="usage-table__text-body text-sm">{{ row.account?.name || '-' }}</span>
         </template>
 
         <template #cell-model="{ row }">
-          <div v-if="row.model_mapping_chain || (row.upstream_model && row.upstream_model !== row.model) || row.channel_id != null" class="space-y-1 text-xs">
-            <div class="break-all font-medium text-gray-900 dark:text-white">
+          <div
+            v-if="
+              row.model_mapping_chain ||
+              (row.upstream_model && row.upstream_model !== row.model) ||
+              row.channel_id != null
+            "
+            class="space-y-1 text-xs"
+          >
+            <div class="usage-table__text-body break-all font-medium">
               {{ row.model }}
             </div>
-            <div v-if="row.model_mapping_chain" class="break-all text-gray-500 dark:text-gray-400">
+            <div v-if="row.model_mapping_chain" class="usage-table__text-muted break-all">
               {{ row.model_mapping_chain }}
             </div>
-            <div v-else-if="row.upstream_model && row.upstream_model !== row.model" class="break-all text-gray-500 dark:text-gray-400">
+            <div
+              v-else-if="row.upstream_model && row.upstream_model !== row.model"
+              class="usage-table__text-muted break-all"
+            >
               <span class="mr-0.5">↳</span>{{ row.upstream_model }}
             </div>
-            <div v-if="row.channel_id != null" class="inline-flex w-fit items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20">
+            <div
+              v-if="row.channel_id != null"
+              class="theme-chip theme-chip--regular theme-chip--warning inline-flex w-fit"
+            >
               <span>{{ t('usage.channel') }}</span>
               <span>#{{ row.channel_id }}</span>
             </div>
           </div>
-          <span v-else class="font-medium text-gray-900 dark:text-white">{{ row.model }}</span>
+          <span v-else class="usage-table__text-body font-medium">{{ row.model }}</span>
         </template>
 
         <template #cell-reasoning_effort="{ row }">
-          <span class="text-sm text-gray-900 dark:text-white">
+          <span class="usage-table__text-body text-sm">
             {{ formatReasoningEffort(row.reasoning_effort) }}
           </span>
         </template>
 
         <template #cell-endpoint="{ row }">
-          <div class="max-w-[320px] space-y-1 text-xs">
-            <div class="break-all text-gray-700 dark:text-gray-300">
-              <span class="font-medium text-gray-500 dark:text-gray-400">{{ t('usage.inbound') }}:</span>
+          <div class="usage-table__endpoint-cell space-y-1 text-xs">
+            <div class="usage-table__text-support break-all">
+              <span class="usage-table__text-muted font-medium">{{ t('usage.inbound') }}:</span>
               <span class="ml-1">{{ row.inbound_endpoint?.trim() || '-' }}</span>
             </div>
-            <div class="break-all text-gray-700 dark:text-gray-300">
-              <span class="font-medium text-gray-500 dark:text-gray-400">{{ t('usage.upstream') }}:</span>
+            <div class="usage-table__text-support break-all">
+              <span class="usage-table__text-muted font-medium">{{ t('usage.upstream') }}:</span>
               <span class="ml-1">{{ row.upstream_endpoint?.trim() || '-' }}</span>
             </div>
           </div>
         </template>
 
         <template #cell-group="{ row }">
-          <span v-if="row.group" class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+          <span
+            v-if="row.group"
+            class="theme-chip theme-chip--regular theme-chip--brand-purple inline-flex"
+          >
             {{ row.group.name }}
           </span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="usage-table__text-soft text-sm">-</span>
         </template>
 
         <template #cell-stream="{ row }">
-          <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getRequestTypeBadgeClass(row)">
+          <span :class="getRequestTypeBadgeClass(row)">
             {{ getRequestTypeLabel(row) }}
           </span>
         </template>
 
         <template #cell-tokens="{ row }">
-          <!-- 图片生成请求 -->
           <div v-if="row.image_count > 0" class="flex items-center gap-1.5">
-            <svg class="h-4 w-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <svg
+              class="usage-table__tone usage-table__tone--purple h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
             </svg>
-            <span class="font-medium text-gray-900 dark:text-white">{{ row.image_count }}{{ t('usage.imageUnit') }}</span>
-            <span class="text-gray-400">({{ row.image_size || '2K' }})</span>
+            <span class="usage-table__text-body font-medium">
+              {{ row.image_count }}{{ t('usage.imageUnit') }}
+            </span>
+            <span class="usage-table__text-soft">({{ row.image_size || '2K' }})</span>
           </div>
-          <!-- Token 请求 -->
+
           <div v-else class="flex items-center gap-1.5">
             <div class="space-y-1 text-sm">
               <div class="flex items-center gap-2">
                 <div class="inline-flex items-center gap-1">
-                  <Icon name="arrowDown" size="sm" class="h-3.5 w-3.5 text-emerald-500" />
-                  <span class="font-medium text-gray-900 dark:text-white">{{ row.input_tokens?.toLocaleString() || 0 }}</span>
+                  <Icon
+                    name="arrowDown"
+                    size="sm"
+                    class="usage-table__tone usage-table__tone--success h-3.5 w-3.5"
+                  />
+                  <span class="usage-table__text-body font-medium">
+                    {{ row.input_tokens?.toLocaleString() || 0 }}
+                  </span>
                 </div>
                 <div class="inline-flex items-center gap-1">
-                  <Icon name="arrowUp" size="sm" class="h-3.5 w-3.5 text-violet-500" />
-                  <span class="font-medium text-gray-900 dark:text-white">{{ row.output_tokens?.toLocaleString() || 0 }}</span>
+                  <Icon
+                    name="arrowUp"
+                    size="sm"
+                    class="usage-table__tone usage-table__tone--purple h-3.5 w-3.5"
+                  />
+                  <span class="usage-table__text-body font-medium">
+                    {{ row.output_tokens?.toLocaleString() || 0 }}
+                  </span>
                 </div>
               </div>
-              <div v-if="row.cache_read_tokens > 0 || row.cache_creation_tokens > 0" class="flex items-center gap-2">
+
+              <div
+                v-if="row.cache_read_tokens > 0 || row.cache_creation_tokens > 0"
+                class="flex items-center gap-2"
+              >
                 <div v-if="row.cache_read_tokens > 0" class="inline-flex items-center gap-1">
-                  <svg class="h-3.5 w-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
-                  <span class="font-medium text-sky-600 dark:text-sky-400">{{ formatCacheTokens(row.cache_read_tokens) }}</span>
+                  <svg
+                    class="usage-table__tone usage-table__tone--info h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                    />
+                  </svg>
+                  <span class="usage-table__tone usage-table__tone--info font-medium">
+                    {{ formatCacheTokens(row.cache_read_tokens) }}
+                  </span>
                 </div>
+
                 <div v-if="row.cache_creation_tokens > 0" class="inline-flex items-center gap-1">
-                  <svg class="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                  <span class="font-medium text-amber-600 dark:text-amber-400">{{ formatCacheTokens(row.cache_creation_tokens) }}</span>
-                  <span v-if="row.cache_creation_1h_tokens > 0" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-100 text-orange-600 ring-1 ring-inset ring-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:ring-orange-500/30">1h</span>
-                  <span v-if="row.cache_ttl_overridden" :title="t('usage.cacheTtlOverriddenHint')" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:ring-rose-500/30 cursor-help">R</span>
+                  <svg
+                    class="usage-table__tone usage-table__tone--warning h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                  <span class="usage-table__tone usage-table__tone--warning font-medium">
+                    {{ formatCacheTokens(row.cache_creation_tokens) }}
+                  </span>
+                  <span
+                    v-if="row.cache_creation_1h_tokens > 0"
+                    class="theme-chip theme-chip--compact theme-chip--brand-orange"
+                  >
+                    1h
+                  </span>
+                  <span
+                    v-if="row.cache_ttl_overridden"
+                    :title="t('usage.cacheTtlOverriddenHint')"
+                    class="theme-chip theme-chip--compact theme-chip--brand-rose cursor-help"
+                  >
+                    R
+                  </span>
                 </div>
               </div>
             </div>
-            <!-- Token Detail Tooltip -->
+
             <div
               class="group relative"
               @mouseenter="showTokenTooltip($event, row)"
               @mouseleave="hideTokenTooltip"
             >
-              <div class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50">
-                <Icon name="infoCircle" size="xs" class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" />
+              <div class="usage-table__info-trigger flex h-4 w-4 cursor-help items-center justify-center rounded-full transition-colors">
+                <Icon
+                  name="infoCircle"
+                  size="xs"
+                  class="usage-table__info-icon transition-colors"
+                />
               </div>
             </div>
           </div>
@@ -127,45 +214,60 @@
         <template #cell-cost="{ row }">
           <div class="text-sm">
             <div class="flex items-center gap-1.5">
-              <span class="font-medium text-green-600 dark:text-green-400">${{ row.actual_cost?.toFixed(6) || '0.000000' }}</span>
-              <!-- Cost Detail Tooltip -->
+              <span class="usage-table__tone usage-table__tone--success font-medium">
+                ${{ row.actual_cost?.toFixed(6) || '0.000000' }}
+              </span>
               <div
                 class="group relative"
                 @mouseenter="showTooltip($event, row)"
                 @mouseleave="hideTooltip"
               >
-                <div class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50">
-                  <Icon name="infoCircle" size="xs" class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" />
+                <div class="usage-table__info-trigger flex h-4 w-4 cursor-help items-center justify-center rounded-full transition-colors">
+                  <Icon
+                    name="infoCircle"
+                    size="xs"
+                    class="usage-table__info-icon transition-colors"
+                  />
                 </div>
               </div>
             </div>
-            <div v-if="row.account_rate_multiplier != null" class="mt-0.5 text-[11px] text-gray-400">
+            <div v-if="row.account_rate_multiplier != null" class="usage-table__text-soft mt-0.5 text-[11px]">
               A ${{ (row.total_cost * row.account_rate_multiplier).toFixed(6) }}
             </div>
           </div>
         </template>
 
         <template #cell-first_token="{ row }">
-          <span v-if="row.first_token_ms != null" class="text-sm text-gray-600 dark:text-gray-400">{{ formatDuration(row.first_token_ms) }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-if="row.first_token_ms != null" class="usage-table__text-muted text-sm">
+            {{ formatDuration(row.first_token_ms) }}
+          </span>
+          <span v-else class="usage-table__text-soft text-sm">-</span>
         </template>
 
         <template #cell-duration="{ row }">
-          <span class="text-sm text-gray-600 dark:text-gray-400">{{ formatDuration(row.duration_ms) }}</span>
+          <span class="usage-table__text-muted text-sm">{{ formatDuration(row.duration_ms) }}</span>
         </template>
 
         <template #cell-created_at="{ value }">
-          <span class="text-sm text-gray-600 dark:text-gray-400">{{ formatDateTime(value) }}</span>
+          <span class="usage-table__text-muted text-sm">{{ formatDateTime(value) }}</span>
         </template>
 
         <template #cell-user_agent="{ row }">
-          <span v-if="row.user_agent" class="text-sm text-gray-600 dark:text-gray-400 block max-w-[320px] truncate" :title="row.user_agent">{{ formatUserAgent(row.user_agent) }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span
+            v-if="row.user_agent"
+            class="usage-table__text-muted usage-table__user-agent block truncate text-sm"
+            :title="row.user_agent"
+          >
+            {{ formatUserAgent(row.user_agent) }}
+          </span>
+          <span v-else class="usage-table__text-soft text-sm">-</span>
         </template>
 
         <template #cell-ip_address="{ row }">
-          <span v-if="row.ip_address" class="text-sm font-mono text-gray-600 dark:text-gray-400">{{ row.ip_address }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-if="row.ip_address" class="usage-table__text-muted text-sm font-mono">
+            {{ row.ip_address }}
+          </span>
+          <span v-else class="usage-table__text-soft text-sm">-</span>
         </template>
 
         <template #empty><EmptyState :message="t('usage.noRecords')" /></template>
@@ -173,143 +275,254 @@
     </div>
   </div>
 
-  <!-- Token Tooltip Portal -->
   <Teleport to="body">
     <div
       v-if="tokenTooltipVisible"
       class="fixed z-[9999] pointer-events-none -translate-y-1/2"
       :style="{
-        left: tokenTooltipPosition.x + 'px',
-        top: tokenTooltipPosition.y + 'px'
+        left: `${tokenTooltipPosition.x}px`,
+        top: `${tokenTooltipPosition.y}px`
       }"
     >
-      <div class="whitespace-nowrap rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
+      <div class="usage-table__tooltip usage-table__tooltip-surface whitespace-nowrap text-xs shadow-xl">
         <div class="space-y-1.5">
           <div>
-            <div class="text-xs font-semibold text-gray-300 mb-1">{{ t('usage.tokenDetails') }}</div>
-            <div v-if="tokenTooltipData && tokenTooltipData.input_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.inputTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.input_tokens.toLocaleString() }}</span>
+            <div class="usage-table__tooltip-title mb-1 text-xs font-semibold">
+              {{ t('usage.tokenDetails') }}
             </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.output_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.outputTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.output_tokens.toLocaleString() }}</span>
+            <div
+              v-if="tokenTooltipData && tokenTooltipData.input_tokens > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('admin.usage.inputTokens') }}</span>
+              <span class="usage-table__tooltip-value font-medium">
+                {{ tokenTooltipData.input_tokens.toLocaleString() }}
+              </span>
+            </div>
+            <div
+              v-if="tokenTooltipData && tokenTooltipData.output_tokens > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('admin.usage.outputTokens') }}</span>
+              <span class="usage-table__tooltip-value font-medium">
+                {{ tokenTooltipData.output_tokens.toLocaleString() }}
+              </span>
             </div>
             <div v-if="tokenTooltipData && tokenTooltipData.cache_creation_tokens > 0">
-              <!-- 有 5m/1h 明细时，展开显示 -->
-              <template v-if="tokenTooltipData.cache_creation_5m_tokens > 0 || tokenTooltipData.cache_creation_1h_tokens > 0">
-                <div v-if="tokenTooltipData.cache_creation_5m_tokens > 0" class="flex items-center justify-between gap-4">
-                  <span class="text-gray-400 flex items-center gap-1.5">
+              <template
+                v-if="
+                  tokenTooltipData.cache_creation_5m_tokens > 0 ||
+                  tokenTooltipData.cache_creation_1h_tokens > 0
+                "
+              >
+                <div
+                  v-if="tokenTooltipData.cache_creation_5m_tokens > 0"
+                  class="flex items-center justify-between gap-4"
+                >
+                  <span class="usage-table__tooltip-label flex items-center gap-1.5">
                     {{ t('admin.usage.cacheCreation5mTokens') }}
-                    <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-amber-500/20 text-amber-400 ring-1 ring-inset ring-amber-500/30">5m</span>
+                    <span class="usage-table__tooltip-chip usage-table__tooltip-chip--warning">
+                      5m
+                    </span>
                   </span>
-                  <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_5m_tokens.toLocaleString() }}</span>
+                  <span class="usage-table__tooltip-value font-medium">
+                    {{ tokenTooltipData.cache_creation_5m_tokens.toLocaleString() }}
+                  </span>
                 </div>
-                <div v-if="tokenTooltipData.cache_creation_1h_tokens > 0" class="flex items-center justify-between gap-4">
-                  <span class="text-gray-400 flex items-center gap-1.5">
+                <div
+                  v-if="tokenTooltipData.cache_creation_1h_tokens > 0"
+                  class="flex items-center justify-between gap-4"
+                >
+                  <span class="usage-table__tooltip-label flex items-center gap-1.5">
                     {{ t('admin.usage.cacheCreation1hTokens') }}
-                    <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-500/20 text-orange-400 ring-1 ring-inset ring-orange-500/30">1h</span>
+                    <span class="usage-table__tooltip-chip usage-table__tooltip-chip--orange">
+                      1h
+                    </span>
                   </span>
-                  <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_1h_tokens.toLocaleString() }}</span>
+                  <span class="usage-table__tooltip-value font-medium">
+                    {{ tokenTooltipData.cache_creation_1h_tokens.toLocaleString() }}
+                  </span>
                 </div>
               </template>
-              <!-- 无明细时，只显示聚合值 -->
               <div v-else class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('admin.usage.cacheCreationTokens') }}</span>
-                <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_tokens.toLocaleString() }}</span>
+                <span class="usage-table__tooltip-label">{{ t('admin.usage.cacheCreationTokens') }}</span>
+                <span class="usage-table__tooltip-value font-medium">
+                  {{ tokenTooltipData.cache_creation_tokens.toLocaleString() }}
+                </span>
               </div>
             </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.cache_ttl_overridden" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400 flex items-center gap-1.5">
+            <div
+              v-if="tokenTooltipData && tokenTooltipData.cache_ttl_overridden"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label flex items-center gap-1.5">
                 {{ t('usage.cacheTtlOverriddenLabel') }}
-                <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-500/20 text-rose-400 ring-1 ring-inset ring-rose-500/30">R-{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? '5m' : '1H' }}</span>
+                <span class="usage-table__tooltip-chip usage-table__tooltip-chip--rose">
+                  R-{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? '5m' : '1H' }}
+                </span>
               </span>
-              <span class="font-medium text-rose-400">{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? t('usage.cacheTtlOverridden1h') : t('usage.cacheTtlOverridden5m') }}</span>
+              <span class="usage-table__tooltip-value usage-table__tooltip-value--rose font-medium">
+                {{
+                  tokenTooltipData.cache_creation_1h_tokens > 0
+                    ? t('usage.cacheTtlOverridden1h')
+                    : t('usage.cacheTtlOverridden5m')
+                }}
+              </span>
             </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.cache_read_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheReadTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.cache_read_tokens.toLocaleString() }}</span>
+            <div
+              v-if="tokenTooltipData && tokenTooltipData.cache_read_tokens > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('admin.usage.cacheReadTokens') }}</span>
+              <span class="usage-table__tooltip-value font-medium">
+                {{ tokenTooltipData.cache_read_tokens.toLocaleString() }}
+              </span>
             </div>
           </div>
-          <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.totalTokens') }}</span>
-            <span class="font-semibold text-blue-400">{{ ((tokenTooltipData?.input_tokens || 0) + (tokenTooltipData?.output_tokens || 0) + (tokenTooltipData?.cache_creation_tokens || 0) + (tokenTooltipData?.cache_read_tokens || 0)).toLocaleString() }}</span>
+          <div class="usage-table__tooltip-divider flex items-center justify-between gap-6 pt-1.5">
+            <span class="usage-table__tooltip-label">{{ t('usage.totalTokens') }}</span>
+            <span class="usage-table__tooltip-value usage-table__tooltip-value--info font-semibold">
+              {{
+                (
+                  (tokenTooltipData?.input_tokens || 0) +
+                  (tokenTooltipData?.output_tokens || 0) +
+                  (tokenTooltipData?.cache_creation_tokens || 0) +
+                  (tokenTooltipData?.cache_read_tokens || 0)
+                ).toLocaleString()
+              }}
+            </span>
           </div>
         </div>
-        <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
+        <div
+          :class="[
+            'usage-table__tooltip-arrow absolute top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-t-[6px] border-b-transparent border-t-transparent',
+            tokenTooltipPlacement === 'right'
+              ? 'usage-table__tooltip-arrow--right right-full border-r-[6px]'
+              : 'usage-table__tooltip-arrow--left left-full border-l-[6px]'
+          ]"
+        />
       </div>
     </div>
   </Teleport>
 
-  <!-- Cost Tooltip Portal -->
   <Teleport to="body">
     <div
       v-if="tooltipVisible"
       class="fixed z-[9999] pointer-events-none -translate-y-1/2"
       :style="{
-        left: tooltipPosition.x + 'px',
-        top: tooltipPosition.y + 'px'
+        left: `${tooltipPosition.x}px`,
+        top: `${tooltipPosition.y}px`
       }"
     >
-      <div class="whitespace-nowrap rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
+      <div class="usage-table__tooltip usage-table__tooltip-surface whitespace-nowrap text-xs shadow-xl">
         <div class="space-y-1.5">
-          <!-- Cost Breakdown -->
-          <div class="mb-2 border-b border-gray-700 pb-1.5">
-            <div class="text-xs font-semibold text-gray-300 mb-1">{{ t('usage.costDetails') }}</div>
-            <div v-if="tooltipData && tooltipData.input_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.inputCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.input_cost.toFixed(6) }}</span>
+          <div class="usage-table__tooltip-divider mb-2 pb-1.5">
+            <div class="usage-table__tooltip-title mb-1 text-xs font-semibold">
+              {{ t('usage.costDetails') }}
             </div>
-            <div v-if="tooltipData && tooltipData.output_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.outputCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.output_cost.toFixed(6) }}</span>
+            <div
+              v-if="tooltipData && tooltipData.input_cost > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('admin.usage.inputCost') }}</span>
+              <span class="usage-table__tooltip-value font-medium">
+                ${{ tooltipData.input_cost.toFixed(6) }}
+              </span>
             </div>
-            <div v-if="tooltipData && tooltipData.input_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
-              <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, tooltipData.input_tokens) }} {{ t('usage.perMillionTokens') }}</span>
+            <div
+              v-if="tooltipData && tooltipData.output_cost > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('admin.usage.outputCost') }}</span>
+              <span class="usage-table__tooltip-value font-medium">
+                ${{ tooltipData.output_cost.toFixed(6) }}
+              </span>
             </div>
-            <div v-if="tooltipData && tooltipData.output_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('usage.outputTokenPrice') }}</span>
-              <span class="font-medium text-violet-300">{{ formatTokenPricePerMillion(tooltipData.output_cost, tooltipData.output_tokens) }} {{ t('usage.perMillionTokens') }}</span>
+            <div
+              v-if="tooltipData && tooltipData.input_tokens > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('usage.inputTokenPrice') }}</span>
+              <span class="usage-table__tooltip-value usage-table__tooltip-value--info font-medium">
+                {{ formatTokenPricePerMillion(tooltipData.input_cost, tooltipData.input_tokens) }}
+                {{ t('usage.perMillionTokens') }}
+              </span>
             </div>
-            <div v-if="tooltipData && tooltipData.cache_creation_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheCreationCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.cache_creation_cost.toFixed(6) }}</span>
+            <div
+              v-if="tooltipData && tooltipData.output_tokens > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('usage.outputTokenPrice') }}</span>
+              <span class="usage-table__tooltip-value usage-table__tooltip-value--purple font-medium">
+                {{ formatTokenPricePerMillion(tooltipData.output_cost, tooltipData.output_tokens) }}
+                {{ t('usage.perMillionTokens') }}
+              </span>
             </div>
-            <div v-if="tooltipData && tooltipData.cache_read_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheReadCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.cache_read_cost.toFixed(6) }}</span>
+            <div
+              v-if="tooltipData && tooltipData.cache_creation_cost > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('admin.usage.cacheCreationCost') }}</span>
+              <span class="usage-table__tooltip-value font-medium">
+                ${{ tooltipData.cache_creation_cost.toFixed(6) }}
+              </span>
+            </div>
+            <div
+              v-if="tooltipData && tooltipData.cache_read_cost > 0"
+              class="flex items-center justify-between gap-4"
+            >
+              <span class="usage-table__tooltip-label">{{ t('admin.usage.cacheReadCost') }}</span>
+              <span class="usage-table__tooltip-value font-medium">
+                ${{ tooltipData.cache_read_cost.toFixed(6) }}
+              </span>
             </div>
           </div>
-          <!-- Rate and Summary -->
+
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.serviceTier') }}</span>
-            <span class="font-semibold text-cyan-300">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}</span>
+            <span class="usage-table__tooltip-label">{{ t('usage.serviceTier') }}</span>
+            <span class="usage-table__tooltip-value usage-table__tooltip-value--info font-semibold">
+              {{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}
+            </span>
           </div>
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400">{{ (tooltipData?.rate_multiplier || 1).toFixed(2) }}x</span>
+            <span class="usage-table__tooltip-label">{{ t('usage.rate') }}</span>
+            <span class="usage-table__tooltip-value usage-table__tooltip-value--info font-semibold">
+              {{ (tooltipData?.rate_multiplier || 1).toFixed(2) }}x
+            </span>
           </div>
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.accountMultiplier') }}</span>
-            <span class="font-semibold text-blue-400">{{ (tooltipData?.account_rate_multiplier ?? 1).toFixed(2) }}x</span>
+            <span class="usage-table__tooltip-label">{{ t('usage.accountMultiplier') }}</span>
+            <span class="usage-table__tooltip-value usage-table__tooltip-value--info font-semibold">
+              {{ (tooltipData?.account_rate_multiplier ?? 1).toFixed(2) }}x
+            </span>
           </div>
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.original') }}</span>
-            <span class="font-medium text-white">${{ tooltipData?.total_cost?.toFixed(6) || '0.000000' }}</span>
+            <span class="usage-table__tooltip-label">{{ t('usage.original') }}</span>
+            <span class="usage-table__tooltip-value font-medium">
+              ${{ tooltipData?.total_cost?.toFixed(6) || '0.000000' }}
+            </span>
           </div>
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.userBilled') }}</span>
-            <span class="font-semibold text-green-400">${{ tooltipData?.actual_cost?.toFixed(6) || '0.000000' }}</span>
+            <span class="usage-table__tooltip-label">{{ t('usage.userBilled') }}</span>
+            <span class="usage-table__tooltip-value usage-table__tooltip-value--success font-semibold">
+              ${{ tooltipData?.actual_cost?.toFixed(6) || '0.000000' }}
+            </span>
           </div>
-          <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.accountBilled') }}</span>
-            <span class="font-semibold text-green-400">
+          <div class="usage-table__tooltip-divider flex items-center justify-between gap-6 pt-1.5">
+            <span class="usage-table__tooltip-label">{{ t('usage.accountBilled') }}</span>
+            <span class="usage-table__tooltip-value usage-table__tooltip-value--success font-semibold">
               ${{ (((tooltipData?.total_cost || 0) * (tooltipData?.account_rate_multiplier ?? 1)) || 0).toFixed(6) }}
             </span>
           </div>
         </div>
-        <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
+        <div
+          :class="[
+            'usage-table__tooltip-arrow absolute top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-t-[6px] border-b-transparent border-t-transparent',
+            tooltipPlacement === 'right'
+              ? 'usage-table__tooltip-arrow--right right-full border-r-[6px]'
+              : 'usage-table__tooltip-arrow--left left-full border-l-[6px]'
+          ]"
+        />
       </div>
     </div>
   </Teleport>
@@ -330,32 +543,33 @@ import {
   getUsageRequestTypeLabel as resolveUsageRequestTypeLabel
 } from '@/utils/usagePresentation'
 
+type TooltipPlacement = 'left' | 'right'
+
 defineProps(['data', 'loading', 'columns'])
 defineEmits(['userClick'])
+
 const { t } = useI18n()
 
-// Tooltip state - cost
 const tooltipVisible = ref(false)
 const tooltipPosition = ref({ x: 0, y: 0 })
+const tooltipPlacement = ref<TooltipPlacement>('right')
 const tooltipData = ref<AdminUsageLog | null>(null)
 
-// Tooltip state - token
 const tokenTooltipVisible = ref(false)
 const tokenTooltipPosition = ref({ x: 0, y: 0 })
+const tokenTooltipPlacement = ref<TooltipPlacement>('right')
 const tokenTooltipData = ref<AdminUsageLog | null>(null)
 
 const getRequestTypeLabel = (row: AdminUsageLog): string => resolveUsageRequestTypeLabel(row, t)
 const getRequestTypeBadgeClass = (row: AdminUsageLog): string => resolveUsageRequestTypeBadgeClass(row)
 
 const formatCacheTokens = (tokens: number): string => {
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`
   return tokens.toString()
 }
 
-const formatUserAgent = (ua: string): string => {
-  return ua
-}
+const formatUserAgent = (ua: string): string => ua
 
 const formatDuration = (ms: number | null | undefined): string => {
   if (ms == null) return '-'
@@ -363,13 +577,36 @@ const formatDuration = (ms: number | null | undefined): string => {
   return `${(ms / 1000).toFixed(2)}s`
 }
 
-// Cost tooltip functions
+const resolveTooltipGeometry = (
+  target: HTMLElement,
+  preferredWidth: number
+): { x: number; y: number; placement: TooltipPlacement } => {
+  const rect = target.getBoundingClientRect()
+  const horizontalGap = 8
+  const viewportPadding = 12
+  const canPlaceRight = rect.right + preferredWidth + horizontalGap + viewportPadding <= window.innerWidth
+  const placement: TooltipPlacement = canPlaceRight ? 'right' : 'left'
+
+  const x =
+    placement === 'right'
+      ? rect.right + horizontalGap
+      : Math.max(viewportPadding, rect.left - preferredWidth - horizontalGap)
+
+  const y = Math.min(
+    Math.max(rect.top + rect.height / 2, 56),
+    Math.max(56, window.innerHeight - 56)
+  )
+
+  return { x, y, placement }
+}
+
 const showTooltip = (event: MouseEvent, row: AdminUsageLog) => {
   const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
+  const geometry = resolveTooltipGeometry(target, 340)
+
   tooltipData.value = row
-  tooltipPosition.value.x = rect.right + 8
-  tooltipPosition.value.y = rect.top + rect.height / 2
+  tooltipPosition.value = { x: geometry.x, y: geometry.y }
+  tooltipPlacement.value = geometry.placement
   tooltipVisible.value = true
 }
 
@@ -378,13 +615,13 @@ const hideTooltip = () => {
   tooltipData.value = null
 }
 
-// Token tooltip functions
 const showTokenTooltip = (event: MouseEvent, row: AdminUsageLog) => {
   const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
+  const geometry = resolveTooltipGeometry(target, 360)
+
   tokenTooltipData.value = row
-  tokenTooltipPosition.value.x = rect.right + 8
-  tokenTooltipPosition.value.y = rect.top + rect.height / 2
+  tokenTooltipPosition.value = { x: geometry.x, y: geometry.y }
+  tokenTooltipPlacement.value = geometry.placement
   tokenTooltipVisible.value = true
 }
 
@@ -393,3 +630,164 @@ const hideTokenTooltip = () => {
   tokenTooltipData.value = null
 }
 </script>
+
+<style scoped>
+.usage-table__text-body {
+  color: var(--theme-page-text);
+}
+
+.usage-table__text-muted {
+  color: var(--theme-page-muted);
+}
+
+.usage-table__text-soft {
+  color: color-mix(in srgb, var(--theme-page-muted) 76%, transparent);
+}
+
+.usage-table__text-support {
+  color: color-mix(in srgb, var(--theme-page-text) 72%, var(--theme-page-muted));
+}
+
+.usage-table__endpoint-cell {
+  max-width: var(--theme-usage-table-endpoint-max-width);
+}
+
+.usage-table__user-agent {
+  max-width: var(--theme-usage-table-user-agent-max-width);
+}
+
+.usage-table__user-link {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+}
+
+.usage-table__user-link:hover {
+  color: color-mix(in srgb, var(--theme-accent-strong) 20%, var(--theme-accent) 80%);
+}
+
+.usage-table__tone {
+  --usage-table-tone-rgb: var(--theme-info-rgb);
+  color: color-mix(in srgb, rgb(var(--usage-table-tone-rgb)) 84%, var(--theme-page-text));
+}
+
+.usage-table__tone--success {
+  --usage-table-tone-rgb: var(--theme-success-rgb);
+}
+
+.usage-table__tone--info {
+  --usage-table-tone-rgb: var(--theme-info-rgb);
+}
+
+.usage-table__tone--warning {
+  --usage-table-tone-rgb: var(--theme-warning-rgb);
+}
+
+.usage-table__tone--purple {
+  --usage-table-tone-rgb: var(--theme-brand-purple-rgb);
+}
+
+.usage-table__tone--orange {
+  --usage-table-tone-rgb: var(--theme-brand-orange-rgb);
+}
+
+.usage-table__tone--rose {
+  --usage-table-tone-rgb: var(--theme-brand-rose-rgb);
+}
+
+.usage-table__info-trigger {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.usage-table__info-trigger:hover {
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 10%, var(--theme-surface));
+}
+
+.usage-table__info-icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 78%, transparent);
+}
+
+.usage-table__info-trigger:hover .usage-table__info-icon {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.usage-table__tooltip {
+  border: 1px solid color-mix(in srgb, var(--theme-surface-contrast) 16%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-contrast) 94%, var(--theme-surface));
+  color: var(--theme-surface-contrast-text);
+  box-shadow: 0 20px 40px color-mix(in srgb, var(--theme-overlay-strong) 46%, transparent);
+}
+
+.usage-table__tooltip-surface {
+  border-radius: var(--theme-usage-table-tooltip-radius);
+  padding:
+    var(--theme-usage-table-tooltip-padding-y)
+    var(--theme-usage-table-tooltip-padding-x);
+}
+
+.usage-table__tooltip-title,
+.usage-table__tooltip-value {
+  color: var(--theme-surface-contrast-text);
+}
+
+.usage-table__tooltip-label {
+  color: color-mix(in srgb, var(--theme-surface-contrast-text) 62%, transparent);
+}
+
+.usage-table__tooltip-divider {
+  border-top: 1px solid color-mix(in srgb, var(--theme-surface-contrast-text) 16%, transparent);
+}
+
+.usage-table__tooltip-divider:first-child {
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-surface-contrast-text) 16%, transparent);
+}
+
+.usage-table__tooltip-value--info {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 74%, var(--theme-surface-contrast-text));
+}
+
+.usage-table__tooltip-value--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 74%, var(--theme-surface-contrast-text));
+}
+
+.usage-table__tooltip-value--purple {
+  color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 74%, var(--theme-surface-contrast-text));
+}
+
+.usage-table__tooltip-value--rose {
+  color: color-mix(in srgb, rgb(var(--theme-brand-rose-rgb)) 74%, var(--theme-surface-contrast-text));
+}
+
+.usage-table__tooltip-chip {
+  --usage-table-tooltip-chip-rgb: var(--theme-info-rgb);
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, rgb(var(--usage-table-tooltip-chip-rgb)) 20%, transparent);
+  border-radius: calc(var(--theme-button-radius) - 4px);
+  padding: 0 0.25rem;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  background: color-mix(in srgb, rgb(var(--usage-table-tooltip-chip-rgb)) 18%, transparent);
+  color: color-mix(in srgb, rgb(var(--usage-table-tooltip-chip-rgb)) 74%, var(--theme-surface-contrast-text));
+}
+
+.usage-table__tooltip-chip--warning {
+  --usage-table-tooltip-chip-rgb: var(--theme-warning-rgb);
+}
+
+.usage-table__tooltip-chip--orange {
+  --usage-table-tooltip-chip-rgb: var(--theme-brand-orange-rgb);
+}
+
+.usage-table__tooltip-chip--rose {
+  --usage-table-tooltip-chip-rgb: var(--theme-brand-rose-rgb);
+}
+
+.usage-table__tooltip-arrow--right {
+  border-right-color: color-mix(in srgb, var(--theme-surface-contrast) 94%, var(--theme-surface));
+}
+
+.usage-table__tooltip-arrow--left {
+  border-left-color: color-mix(in srgb, var(--theme-surface-contrast) 94%, var(--theme-surface));
+}
+</style>

@@ -15,12 +15,18 @@
         <div class="flex gap-2">
           <div class="relative flex-1">
             <input v-model="form.password" type="text" class="input pr-10" :placeholder="t('admin.users.enterNewPassword')" />
-            <button v-if="form.password" type="button" @click="copyPassword" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700" :class="passwordCopied ? 'text-green-500' : 'text-gray-400'">
+            <button
+              v-if="form.password"
+              type="button"
+              class="user-edit-modal__password-copy theme-icon-button absolute right-2 top-1/2 -translate-y-1/2"
+              :class="passwordCopied ? 'user-edit-modal__password-copy--success' : 'user-edit-modal__password-copy--idle'"
+              @click="copyPassword"
+            >
               <svg v-if="passwordCopied" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
               <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" /></svg>
             </button>
           </div>
-          <button type="button" @click="generatePassword" class="btn btn-secondary px-3">
+          <button type="button" @click="generatePassword" class="btn btn-secondary user-edit-modal__password-generate">
             <Icon name="refresh" size="md" />
           </button>
         </div>
@@ -41,9 +47,9 @@
         <label class="input-label">{{ t('admin.users.soraStorageQuota') }}</label>
         <div class="flex items-center gap-2">
           <input v-model.number="form.sora_storage_quota_gb" type="number" min="0" step="0.1" class="input" placeholder="0" />
-          <span class="shrink-0 text-sm text-gray-500">GB</span>
+          <span class="theme-text-muted shrink-0 text-sm">GB</span>
         </div>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.users.soraStorageQuotaHint') }}</p>
+        <p class="theme-text-muted mt-1 text-xs">{{ t('admin.users.soraStorageQuotaHint') }}</p>
       </div>
       <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
     </form>
@@ -68,33 +74,72 @@ import type { AdminUser, UserAttributeValuesMap } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import UserAttributeForm from '@/components/user/UserAttributeForm.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { resolveErrorMessage } from '@/utils/errorMessage'
 
-const props = defineProps<{ show: boolean, user: AdminUser | null }>()
-const emit = defineEmits(['close', 'success'])
-const { t } = useI18n(); const appStore = useAppStore(); const { copyToClipboard } = useClipboard()
+const props = defineProps<{
+  show: boolean
+  user: AdminUser | null
+}>()
 
-const submitting = ref(false); const passwordCopied = ref(false)
-const form = reactive({ email: '', password: '', username: '', notes: '', concurrency: 1, sora_storage_quota_gb: 0, customAttributes: {} as UserAttributeValuesMap })
+const emit = defineEmits<{
+  close: []
+  success: []
+}>()
 
-watch(() => props.user, (u) => {
-  if (u) {
-    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', concurrency: u.concurrency, sora_storage_quota_gb: Number(((u.sora_storage_quota_bytes || 0) / (1024 * 1024 * 1024)).toFixed(2)), customAttributes: {} })
+const { t } = useI18n()
+const appStore = useAppStore()
+const { copyToClipboard } = useClipboard()
+
+const submitting = ref(false)
+const passwordCopied = ref(false)
+const form = reactive({
+  email: '',
+  password: '',
+  username: '',
+  notes: '',
+  concurrency: 1,
+  sora_storage_quota_gb: 0,
+  customAttributes: {} as UserAttributeValuesMap
+})
+
+watch(() => props.user, (user) => {
+  if (user) {
+    Object.assign(form, {
+      email: user.email,
+      password: '',
+      username: user.username || '',
+      notes: user.notes || '',
+      concurrency: user.concurrency,
+      sora_storage_quota_gb: Number(
+        ((user.sora_storage_quota_bytes || 0) / (1024 * 1024 * 1024)).toFixed(2)
+      ),
+      customAttributes: {}
+    })
     passwordCopied.value = false
   }
 }, { immediate: true })
 
 const generatePassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'
-  let p = ''; for (let i = 0; i < 16; i++) p += chars.charAt(Math.floor(Math.random() * chars.length))
-  form.password = p
+  let password = ''
+  for (let index = 0; index < 16; index += 1) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  form.password = password
 }
+
 const copyPassword = async () => {
   if (form.password && await copyToClipboard(form.password, t('admin.users.passwordCopied'))) {
-    passwordCopied.value = true; setTimeout(() => passwordCopied.value = false, 2000)
+    passwordCopied.value = true
+    setTimeout(() => {
+      passwordCopied.value = false
+    }, 2000)
   }
 }
+
 const handleUpdateUser = async () => {
   if (!props.user) return
+
   if (!form.email.trim()) {
     appStore.showError(t('admin.users.emailRequired'))
     return
@@ -103,16 +148,59 @@ const handleUpdateUser = async () => {
     appStore.showError(t('admin.users.concurrencyMin'))
     return
   }
+
   submitting.value = true
   try {
-    const data: any = { email: form.email, username: form.username, notes: form.notes, concurrency: form.concurrency, sora_storage_quota_bytes: Math.round((form.sora_storage_quota_gb || 0) * 1024 * 1024 * 1024) }
-    if (form.password.trim()) data.password = form.password.trim()
+    const data: Record<string, unknown> = {
+      email: form.email,
+      username: form.username,
+      notes: form.notes,
+      concurrency: form.concurrency,
+      sora_storage_quota_bytes: Math.round((form.sora_storage_quota_gb || 0) * 1024 * 1024 * 1024)
+    }
+
+    if (form.password.trim()) {
+      data.password = form.password.trim()
+    }
+
     await adminAPI.users.update(props.user.id, data)
-    if (Object.keys(form.customAttributes).length > 0) await adminAPI.userAttributes.updateUserAttributeValues(props.user.id, form.customAttributes)
+
+    if (Object.keys(form.customAttributes).length > 0) {
+      await adminAPI.userAttributes.updateUserAttributeValues(props.user.id, form.customAttributes)
+    }
+
     appStore.showSuccess(t('admin.users.userUpdated'))
-    emit('success'); emit('close')
-  } catch (e: any) {
-    appStore.showError(e.response?.data?.detail || t('admin.users.failedToUpdate'))
-  } finally { submitting.value = false }
+    emit('success')
+    emit('close')
+  } catch (error) {
+    appStore.showError(resolveErrorMessage(error, t('admin.users.failedToUpdate')))
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
+
+<style scoped>
+.user-edit-modal__password-copy {
+  border-radius: var(--theme-button-radius);
+  padding: 0.25rem;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.user-edit-modal__password-copy--idle {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.user-edit-modal__password-copy--idle:hover {
+  background: var(--theme-button-ghost-hover-bg);
+  color: var(--theme-page-text);
+}
+
+.user-edit-modal__password-copy--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-edit-modal__password-generate {
+  padding-inline: calc(var(--theme-button-padding-x) * 0.55);
+}
+</style>

@@ -2,13 +2,13 @@
   <button
     type="button"
     @click="toggle"
-    class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-dark-800"
-    :class="[modelValue ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600']"
+    class="toggle-switch relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+    :class="[modelValue ? 'toggle-switch--active' : 'toggle-switch--inactive']"
     role="switch"
     :aria-checked="modelValue"
   >
     <span
-      class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+      class="toggle-switch__thumb pointer-events-none inline-block h-5 w-5 transform rounded-full ring-0 transition duration-200 ease-in-out"
       :class="[modelValue ? 'translate-x-5' : 'translate-x-0']"
     />
   </button>
@@ -27,3 +27,26 @@ function toggle() {
   emit('update:modelValue', !props.modelValue)
 }
 </script>
+
+<style scoped>
+.toggle-switch {
+  border-radius: 9999px;
+}
+
+.toggle-switch:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent-soft) 88%, transparent);
+}
+
+.toggle-switch--active {
+  background: var(--theme-accent);
+}
+
+.toggle-switch--inactive {
+  background: color-mix(in srgb, var(--theme-page-border) 84%, transparent);
+}
+
+.toggle-switch__thumb {
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+</style>

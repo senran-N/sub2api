@@ -1,10 +1,10 @@
 <template>
   <div class="space-y-6">
-    <div class="mb-6 text-center">
-      <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+    <div class="setup-step-header">
+      <h2 class="setup-step-title">
         {{ t('setup.database.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+      <p class="setup-step-description">
         {{ t('setup.database.description') }}
       </p>
     </div>
@@ -100,7 +100,8 @@
         v-else-if="connected"
         name="check"
         size="md"
-        class="mr-2 text-green-500"
+        class="mr-2"
+        style="color: rgb(var(--theme-success-rgb))"
         :stroke-width="2"
       />
       {{

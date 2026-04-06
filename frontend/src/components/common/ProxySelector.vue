@@ -27,7 +27,7 @@
         <!-- Search and Batch Test Header -->
         <div class="select-header">
           <div class="select-search">
-            <Icon name="search" size="sm" class="text-gray-400" />
+            <Icon name="search" size="sm" class="select-search-icon" />
             <input
               ref="searchInputRef"
               v-model="searchQuery"
@@ -72,7 +72,7 @@
             :class="['select-option', modelValue === null && 'select-option-selected']"
           >
             <span class="select-option-label">{{ t('admin.accounts.noProxy') }}</span>
-            <Icon v-if="modelValue === null" name="check" size="sm" class="text-primary-500" />
+            <Icon v-if="modelValue === null" name="check" size="sm" class="select-option-check" />
           </div>
 
           <!-- Proxy options -->
@@ -88,7 +88,7 @@
                 <!-- Account count badge -->
                 <span
                   v-if="proxy.account_count !== undefined"
-                  class="inline-flex flex-shrink-0 items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-dark-600 dark:text-gray-400"
+                  class="theme-chip theme-chip--compact theme-chip--neutral flex-shrink-0"
                 >
                   {{ proxy.account_count }}
                 </span>
@@ -96,7 +96,7 @@
                 <template v-if="testResults[proxy.id]">
                   <span
                     v-if="testResults[proxy.id].success"
-                    class="inline-flex flex-shrink-0 items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                    class="theme-chip theme-chip--compact theme-chip--success flex-shrink-0"
                   >
                     <span v-if="testResults[proxy.id].country">{{
                       testResults[proxy.id].country
@@ -107,13 +107,13 @@
                   </span>
                   <span
                     v-else
-                    class="inline-flex flex-shrink-0 items-center rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                    class="theme-chip theme-chip--compact theme-chip--danger flex-shrink-0"
                   >
                     {{ t('admin.proxies.testFailed') }}
                   </span>
                 </template>
               </div>
-              <div class="truncate text-xs text-gray-500 dark:text-gray-400">
+              <div class="select-option-meta truncate text-xs">
                 {{ proxy.protocol }}://{{ proxy.host }}:{{ proxy.port }}
               </div>
             </div>
@@ -153,7 +153,7 @@
               v-if="modelValue === proxy.id"
               name="check"
               size="sm"
-              class="flex-shrink-0 text-primary-500"
+              class="select-option-check flex-shrink-0"
             />
           </div>
 
@@ -321,22 +321,30 @@ onUnmounted(() => {
 <style scoped>
 .select-trigger {
   @apply flex w-full items-center justify-between gap-2;
-  @apply rounded-xl px-4 py-2.5 text-sm;
-  @apply bg-white dark:bg-dark-800;
-  @apply border border-gray-200 dark:border-dark-600;
-  @apply text-gray-900 dark:text-gray-100;
+  padding: var(--theme-proxy-selector-trigger-padding-y)
+    var(--theme-proxy-selector-trigger-padding-x);
+  font-size: 0.875rem;
   @apply transition-all duration-200;
-  @apply focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30;
-  @apply hover:border-gray-300 dark:hover:border-dark-500;
   @apply cursor-pointer;
+  background: var(--theme-input-bg);
+  border: 1px solid var(--theme-input-border);
+  color: var(--theme-input-text);
+  border-radius: var(--theme-select-radius);
+}
+
+.select-trigger:hover {
+  border-color: color-mix(in srgb, var(--theme-input-border) 60%, var(--theme-page-text));
 }
 
 .select-trigger-open {
-  @apply border-primary-500 ring-2 ring-primary-500/30;
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-accent) 18%, transparent);
 }
 
 .select-trigger-disabled {
-  @apply cursor-not-allowed bg-gray-100 opacity-60 dark:bg-dark-900;
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-input-bg));
+  opacity: 0.6;
 }
 
 .select-value {
@@ -344,21 +352,24 @@ onUnmounted(() => {
 }
 
 .select-icon {
-  @apply flex-shrink-0 text-gray-400 dark:text-dark-400;
+  @apply flex-shrink-0;
+  color: var(--theme-input-placeholder);
 }
 
 .select-dropdown {
   @apply absolute z-[100] mt-2 w-full;
-  @apply bg-white dark:bg-dark-800;
-  @apply rounded-xl;
-  @apply border border-gray-200 dark:border-dark-700;
-  @apply shadow-lg shadow-black/10 dark:shadow-black/30;
   @apply overflow-hidden;
+  background: var(--theme-dropdown-bg);
+  border: 1px solid var(--theme-dropdown-border);
+  box-shadow: var(--theme-dropdown-shadow);
+  border-radius: var(--theme-select-panel-radius);
 }
 
 .select-header {
-  @apply flex items-center gap-2 px-3 py-2;
-  @apply border-b border-gray-100 dark:border-dark-700;
+  @apply flex items-center gap-2;
+  padding: var(--theme-proxy-selector-header-padding-y)
+    var(--theme-proxy-selector-header-padding-x);
+  border-bottom: 1px solid var(--theme-page-border);
 }
 
 .select-search {
@@ -367,33 +378,53 @@ onUnmounted(() => {
 
 .select-search-input {
   @apply flex-1 bg-transparent text-sm;
-  @apply text-gray-900 dark:text-gray-100;
-  @apply placeholder:text-gray-400 dark:placeholder:text-dark-400;
   @apply focus:outline-none;
+  color: var(--theme-input-text);
+}
+
+.select-search-input::placeholder {
+  color: var(--theme-input-placeholder);
+}
+
+.select-search-icon {
+  color: var(--theme-input-placeholder);
 }
 
 .batch-test-btn {
-  @apply flex-shrink-0 rounded-lg p-1.5;
-  @apply text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400;
-  @apply hover:bg-emerald-50 dark:hover:bg-emerald-900/20;
+  @apply flex-shrink-0;
+  padding: var(--theme-proxy-selector-action-padding);
   @apply transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  color: var(--theme-page-muted);
+  border-radius: var(--theme-select-action-radius);
+}
+
+.batch-test-btn:hover {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
 }
 
 .select-options {
-  @apply max-h-60 overflow-y-auto py-1;
+  @apply overflow-y-auto;
+  max-height: var(--theme-proxy-selector-options-max-height);
+  padding-block: var(--theme-proxy-selector-options-padding-y);
 }
 
 .select-option {
   @apply flex items-center justify-between gap-2;
-  @apply px-4 py-2.5 text-sm;
-  @apply text-gray-700 dark:text-gray-300;
+  padding: var(--theme-proxy-selector-option-padding-y)
+    var(--theme-proxy-selector-option-padding-x);
+  font-size: 0.875rem;
   @apply cursor-pointer transition-colors duration-150;
-  @apply hover:bg-gray-50 dark:hover:bg-dark-700;
+  color: var(--theme-page-text);
+}
+
+.select-option:hover {
+  background: var(--theme-dropdown-item-hover-bg);
 }
 
 .select-option-selected {
-  @apply bg-primary-50 dark:bg-primary-900/20;
-  @apply text-primary-700 dark:text-primary-300;
+  background: color-mix(in srgb, var(--theme-accent-soft) 78%, var(--theme-surface));
+  color: var(--theme-accent);
 }
 
 .select-option-label {
@@ -401,15 +432,31 @@ onUnmounted(() => {
 }
 
 .select-empty {
-  @apply px-4 py-8 text-center text-sm;
-  @apply text-gray-500 dark:text-dark-400;
+  padding: var(--theme-proxy-selector-empty-padding-y)
+    var(--theme-proxy-selector-empty-padding-x);
+  @apply text-center text-sm;
+  color: var(--theme-page-muted);
 }
 
 .test-btn {
-  @apply flex-shrink-0 rounded p-1;
-  @apply text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400;
-  @apply hover:bg-emerald-50 dark:hover:bg-emerald-900/20;
+  @apply flex-shrink-0;
+  padding: var(--theme-proxy-selector-test-button-padding);
   @apply transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  color: var(--theme-input-placeholder);
+  border-radius: var(--theme-select-action-radius);
+}
+
+.test-btn:hover {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+}
+
+.select-option-meta {
+  color: var(--theme-page-muted);
+}
+
+.select-option-check {
+  color: var(--theme-accent);
 }
 
 /* Dropdown animation */

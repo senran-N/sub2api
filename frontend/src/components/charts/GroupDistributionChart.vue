@@ -1,7 +1,7 @@
 <template>
-  <div class="card p-4">
+  <div class="card group-distribution-chart__panel">
     <div class="mb-4 flex items-center justify-between gap-3">
-      <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+      <h3 class="group-distribution-chart__title text-sm font-semibold">
         {{ t('admin.dashboard.groupDistribution') }}
       </h3>
       <div
@@ -33,10 +33,10 @@
       <div class="h-48 w-48">
         <Doughnut :data="chartData" :options="doughnutOptions" />
       </div>
-      <div class="max-h-48 flex-1 overflow-y-auto">
+      <div class="group-distribution-chart__legend flex-1 overflow-y-auto">
         <table class="w-full text-xs">
           <thead>
-            <tr class="text-gray-500 dark:text-gray-400">
+            <tr class="group-distribution-chart__table-head">
               <th class="pb-2 text-left">{{ t('admin.dashboard.group') }}</th>
               <th class="pb-2 text-right">{{ t('admin.dashboard.requests') }}</th>
               <th class="pb-2 text-right">{{ t('admin.dashboard.tokens') }}</th>
@@ -47,13 +47,13 @@
           <tbody>
             <template v-for="group in displayGroupStats" :key="group.group_id">
               <tr
-                class="border-t border-gray-100 transition-colors dark:border-gray-700"
-                :class="group.group_id > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-700/40' : ''"
+                class="group-distribution-chart__table-row transition-colors"
+                :class="{ 'group-distribution-chart__table-row--interactive': group.group_id > 0 }"
                 @click="group.group_id > 0 && toggleBreakdown('group', group.group_id)"
               >
                 <td
-                  class="max-w-[100px] truncate py-1.5 font-medium"
-                  :class="group.group_id > 0 ? 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300' : 'text-gray-900 dark:text-white'"
+                  class="group-distribution-chart__name group-distribution-chart__cell group-distribution-chart__cell--name truncate font-medium"
+                  :class="{ 'group-distribution-chart__name--interactive': group.group_id > 0 }"
                   :title="group.group_name || String(group.group_id)"
                 >
                   <span class="inline-flex items-center gap-1">
@@ -62,22 +62,22 @@
                     {{ group.group_name || t('admin.dashboard.noGroup') }}
                   </span>
                 </td>
-                <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+                <td class="group-distribution-chart__muted group-distribution-chart__cell text-right">
                   {{ formatNumber(group.requests) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+                <td class="group-distribution-chart__muted group-distribution-chart__cell text-right">
                   {{ formatTokens(group.total_tokens) }}
                 </td>
-                <td class="py-1.5 text-right text-green-600 dark:text-green-400">
+                <td class="group-distribution-chart__actual group-distribution-chart__cell text-right">
                   ${{ formatCost(group.actual_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td class="group-distribution-chart__standard group-distribution-chart__cell text-right">
                   ${{ formatCost(group.cost) }}
                 </td>
               </tr>
               <!-- User breakdown sub-rows -->
               <tr v-if="expandedKey === `group-${group.group_id}`">
-                <td colspan="5" class="p-0">
+                <td colspan="5" class="group-distribution-chart__breakdown-cell">
                   <UserBreakdownSubTable
                     :items="breakdownItems"
                     :loading="breakdownLoading"
@@ -91,7 +91,7 @@
     </div>
     <div
       v-else
-      class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+      class="group-distribution-chart__muted flex h-48 items-center justify-center text-sm"
     >
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>
@@ -104,13 +104,16 @@ import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import UserBreakdownSubTable from './UserBreakdownSubTable.vue'
 import type { GroupStat, UserBreakdownItem } from '@/types'
 import { getUserBreakdown } from '@/api/admin/dashboard'
+import { getThemeChartSequence, getThemeChartTooltipColors } from '@/utils/themeStyles'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
 const { t } = useI18n()
+const themeVersion = useDocumentThemeVersion()
 
 type DistributionMetric = 'tokens' | 'actual_cost'
 
@@ -158,18 +161,10 @@ const toggleBreakdown = async (type: string, id: number | string) => {
   }
 }
 
-const chartColors = [
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
-  '#f97316',
-  '#6366f1',
-  '#84cc16'
-]
+const chartColors = computed(() => {
+  void themeVersion.value
+  return getThemeChartSequence()
+})
 
 const displayGroupStats = computed(() => {
   if (!props.groupStats?.length) return []
@@ -186,35 +181,43 @@ const chartData = computed(() => {
     datasets: [
       {
         data: displayGroupStats.value.map((g) => props.metric === 'actual_cost' ? g.actual_cost : g.total_tokens),
-        backgroundColor: chartColors.slice(0, displayGroupStats.value.length),
+        backgroundColor: chartColors.value.slice(0, displayGroupStats.value.length),
         borderWidth: 0
       }
     ]
   }
 })
 
-const doughnutOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: false
-    },
-    tooltip: {
-      callbacks: {
-        label: (context: any) => {
-          const value = context.raw as number
-          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
-          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
-          const formattedValue = props.metric === 'actual_cost'
-            ? `$${formatCost(value)}`
-            : formatTokens(value)
-          return `${context.label}: ${formattedValue} (${percentage}%)`
+const doughnutOptions = computed(() => {
+  void themeVersion.value
+  const tooltipColors = getThemeChartTooltipColors()
+
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        backgroundColor: tooltipColors.background,
+        titleColor: tooltipColors.text,
+        bodyColor: tooltipColors.text,
+        callbacks: {
+          label: (context: any) => {
+            const value = context.raw as number
+            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
+            const formattedValue = props.metric === 'actual_cost'
+              ? `$${formatCost(value)}`
+              : formatTokens(value)
+            return `${context.label}: ${formattedValue} (${percentage}%)`
+          }
         }
       }
     }
   }
-}))
+})
 
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000_000) {
@@ -242,3 +245,60 @@ const formatCost = (value: number): string => {
   return value.toFixed(4)
 }
 </script>
+
+<style scoped>
+.group-distribution-chart__title,
+.group-distribution-chart__name {
+  color: var(--theme-page-text);
+}
+
+.group-distribution-chart__panel {
+  padding: var(--theme-group-distribution-card-padding);
+}
+
+.group-distribution-chart__legend {
+  max-height: var(--theme-group-distribution-legend-max-height);
+}
+
+.group-distribution-chart__muted,
+.group-distribution-chart__table-head,
+.group-distribution-chart__standard {
+  color: var(--theme-page-muted);
+}
+
+.group-distribution-chart__table-row {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+}
+
+.group-distribution-chart__cell {
+  padding-block: var(--theme-group-distribution-cell-padding-y);
+}
+
+.group-distribution-chart__cell--name {
+  max-width: var(--theme-group-distribution-name-max-width);
+}
+
+.group-distribution-chart__breakdown-cell {
+  padding: 0;
+}
+
+.group-distribution-chart__table-row--interactive {
+  cursor: pointer;
+}
+
+.group-distribution-chart__table-row--interactive:hover {
+  background: color-mix(in srgb, var(--theme-accent-soft) 64%, var(--theme-surface));
+}
+
+.group-distribution-chart__name--interactive {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.group-distribution-chart__name--interactive:hover {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 94%, var(--theme-page-text));
+}
+
+.group-distribution-chart__actual {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+</style>

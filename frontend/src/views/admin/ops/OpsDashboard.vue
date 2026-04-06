@@ -1,9 +1,14 @@
 <template>
-  <component :is="isFullscreen ? 'div' : AppLayout" :class="isFullscreen ? 'flex min-h-screen flex-col justify-center bg-gray-50 dark:bg-dark-950' : ''">
-    <div :class="[isFullscreen ? 'p-4 md:p-6' : '', 'space-y-6 pb-12']">
+  <component :is="isFullscreen ? 'div' : AppLayout" :class="isFullscreen ? 'ops-dashboard__fullscreen flex min-h-screen flex-col justify-center' : ''">
+    <div
+      :class="[
+        'ops-dashboard__content space-y-6',
+        { 'ops-dashboard__content--fullscreen': isFullscreen }
+      ]"
+    >
       <div
         v-if="errorMessage"
-        class="rounded-2xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400"
+        class="ops-dashboard__error text-sm"
       >
         {{ errorMessage }}
       </div>
@@ -41,10 +46,10 @@
 
       <!-- Row: Concurrency + Throughput -->
       <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <div class="lg:col-span-1 min-h-[360px]">
+        <div class="ops-dashboard__panel-min-height lg:col-span-1">
           <OpsConcurrencyCard :platform-filter="platform" :group-id-filter="groupId" :refresh-token="dashboardRefreshToken" />
         </div>
-        <div class="lg:col-span-1 min-h-[360px]">
+        <div class="ops-dashboard__panel-min-height lg:col-span-1">
           <OpsSwitchRateTrendChart
             :points="switchTrend?.points ?? []"
             :loading="loadingSwitchTrend"
@@ -52,7 +57,7 @@
             :fullscreen="isFullscreen"
           />
         </div>
-        <div class="lg:col-span-2 min-h-[360px]">
+        <div class="ops-dashboard__panel-min-height lg:col-span-2">
           <OpsThroughputTrendChart
             :points="throughputTrend?.points ?? []"
             :by-platform="throughputTrend?.by_platform ?? []"
@@ -830,3 +835,34 @@ watch(showSettingsDialog, async (show) => {
   }
 })
 </script>
+
+<style scoped>
+.ops-dashboard__fullscreen {
+  background: color-mix(in srgb, var(--theme-page-bg) 92%, var(--theme-surface-soft));
+}
+
+.ops-dashboard__content {
+  padding-bottom: var(--theme-ops-dashboard-content-padding-bottom);
+}
+
+.ops-dashboard__content--fullscreen {
+  padding: var(--theme-ops-dashboard-fullscreen-padding-mobile);
+}
+
+@media (min-width: 768px) {
+  .ops-dashboard__content--fullscreen {
+    padding: var(--theme-ops-dashboard-fullscreen-padding-desktop);
+  }
+}
+
+.ops-dashboard__panel-min-height {
+  min-height: var(--theme-ops-dashboard-panel-min-height);
+}
+
+.ops-dashboard__error {
+  border-radius: var(--theme-ops-dashboard-error-radius);
+  padding: var(--theme-ops-dashboard-error-padding);
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+</style>

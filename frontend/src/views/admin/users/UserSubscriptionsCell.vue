@@ -16,7 +16,7 @@
   </div>
   <span
     v-else
-    class="inline-flex items-center gap-1.5 rounded-md bg-gray-50 px-2 py-1 text-xs text-gray-400 dark:bg-dark-700/50 dark:text-dark-500"
+    class="user-subscriptions-cell__empty theme-chip theme-chip--compact theme-chip--neutral inline-flex items-center gap-1.5 text-xs"
   >
     <Icon name="ban" size="xs" class="h-3.5 w-3.5" />
     <span>{{ t('admin.users.noSubscription') }}</span>
@@ -37,3 +37,11 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.user-subscriptions-cell__empty {
+  padding:
+    var(--theme-account-usage-action-padding-y)
+    var(--theme-settings-code-padding-x);
+}
+</style>

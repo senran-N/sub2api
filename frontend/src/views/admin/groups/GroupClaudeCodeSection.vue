@@ -1,14 +1,14 @@
 <template>
   <div v-if="form.platform === 'anthropic'" class="border-t pt-4">
     <div class="mb-1.5 flex items-center gap-1">
-      <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label class="theme-text-default text-sm font-medium">
         {{ t('admin.groups.claudeCode.title') }}
       </label>
       <GroupSectionInfoTooltip :text="t('admin.groups.claudeCode.tooltip')" />
     </div>
     <div class="flex items-center gap-3">
       <Toggle v-model="form.claude_code_only" />
-      <span class="text-sm text-gray-500 dark:text-gray-400">
+      <span class="theme-text-muted text-sm">
         {{ form.claude_code_only ? t('admin.groups.claudeCode.enabled') : t('admin.groups.claudeCode.disabled') }}
       </span>
     </div>

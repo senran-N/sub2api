@@ -33,9 +33,9 @@ describe('opsDashboardHeaderHelpers', () => {
   })
 
   it('maps threshold levels to classes', () => {
-    expect(getThresholdColorClass('critical')).toContain('text-red-600')
-    expect(getThresholdColorClass('warning')).toContain('text-yellow-600')
-    expect(getThresholdColorClass('normal')).toContain('text-green-600')
+    expect(getThresholdColorClass('critical')).toContain('ops-dashboard-header__tone--critical')
+    expect(getThresholdColorClass('warning')).toContain('ops-dashboard-header__tone--warning')
+    expect(getThresholdColorClass('normal')).toContain('ops-dashboard-header__tone--healthy')
   })
 
   it('returns idle diagnosis when the system has no traffic', () => {
@@ -137,15 +137,15 @@ describe('opsDashboardHeaderHelpers', () => {
   it('builds pool usage displays from availability and utilization', () => {
     expect(buildPoolUsageDisplay(false, 50, (key) => key)).toEqual({
       label: 'FAIL',
-      className: 'text-rose-600 dark:text-rose-400'
+      className: 'theme-text-danger'
     })
     expect(buildPoolUsageDisplay(true, 75, (key) => key)).toEqual({
       label: '75%',
-      className: 'text-yellow-600 dark:text-yellow-400'
+      className: 'theme-text-warning'
     })
     expect(buildPoolUsageDisplay(true, null, (key) => key)).toEqual({
       label: 'admin.ops.ok',
-      className: 'text-emerald-600 dark:text-emerald-400'
+      className: 'theme-text-success'
     })
   })
 
@@ -153,7 +153,7 @@ describe('opsDashboardHeaderHelpers', () => {
     expect(buildGoroutineStatusDisplay(16_000, (key) => key)).toEqual({
       status: 'critical',
       label: 'common.critical',
-      className: 'text-rose-600 dark:text-rose-400'
+      className: 'theme-text-danger'
     })
 
     expect(
@@ -178,7 +178,7 @@ describe('opsDashboardHeaderHelpers', () => {
       status: 'warn',
       warnCount: 1,
       label: 'common.warning',
-      className: 'text-yellow-600 dark:text-yellow-400'
+      className: 'theme-text-warning'
     })
   })
 })

@@ -10,7 +10,7 @@
       />
 
       <div class="card">
-        <div class="p-6">
+        <div class="redeem-view__card-content">
           <form class="space-y-5" @submit.prevent="handleRedeem">
             <div>
               <label for="code" class="input-label">
@@ -18,7 +18,7 @@
               </label>
               <div class="relative mt-1">
                 <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-                  <Icon name="gift" size="md" class="text-gray-400 dark:text-dark-500" />
+                  <Icon name="gift" size="md" class="redeem-view__gift-icon" />
                 </div>
                 <input
                   id="code"
@@ -27,7 +27,7 @@
                   required
                   :placeholder="t('redeem.redeemCodePlaceholder')"
                   :disabled="submitting"
-                  class="input py-3 pl-12 text-lg"
+                  class="input redeem-view__code-input text-lg"
                 />
               </div>
               <p class="input-hint">
@@ -38,7 +38,7 @@
             <button
               type="submit"
               :disabled="!redeemCode || submitting"
-              class="btn btn-primary w-full py-3"
+              class="btn btn-primary redeem-view__submit w-full"
             >
               <svg
                 v-if="submitting"
@@ -70,20 +70,20 @@
       <transition name="fade">
         <div
           v-if="redeemResult"
-          class="card border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-900/20"
+          class="redeem-view__result-card redeem-view__result-card--success card"
         >
-          <div class="p-6">
+          <div class="redeem-view__card-content">
             <div class="flex items-start gap-4">
               <div
-                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30"
+                class="redeem-view__result-icon-shell redeem-view__result-icon-shell--success flex flex-shrink-0 items-center justify-center"
               >
-                <Icon name="checkCircle" size="md" class="text-emerald-600 dark:text-emerald-400" />
+                <Icon name="checkCircle" size="md" class="redeem-view__result-tone redeem-view__result-tone--success" />
               </div>
               <div class="flex-1">
-                <h3 class="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                <h3 class="redeem-view__result-title redeem-view__result-title--success text-sm font-semibold">
                   {{ t('redeem.redeemSuccess') }}
                 </h3>
-                <div class="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
+                <div class="redeem-view__result-body redeem-view__result-body--success mt-2 text-sm">
                   <p>{{ redeemResult.message }}</p>
                   <div class="mt-3 space-y-1">
                     <p v-if="redeemResult.type === 'balance'" class="font-medium">
@@ -121,20 +121,20 @@
       <transition name="fade">
         <div
           v-if="errorMessage"
-          class="card border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-900/20"
+          class="redeem-view__result-card redeem-view__result-card--danger card"
         >
-          <div class="p-6">
+          <div class="redeem-view__card-content">
             <div class="flex items-start gap-4">
               <div
-                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-red-100 dark:bg-red-900/30"
+                class="redeem-view__result-icon-shell redeem-view__result-icon-shell--danger flex flex-shrink-0 items-center justify-center"
               >
-                <Icon name="exclamationCircle" size="md" class="text-red-600 dark:text-red-400" />
+                <Icon name="exclamationCircle" size="md" class="redeem-view__result-tone redeem-view__result-tone--danger" />
               </div>
               <div class="flex-1">
-                <h3 class="text-sm font-semibold text-red-800 dark:text-red-300">
+                <h3 class="redeem-view__result-title redeem-view__result-title--danger text-sm font-semibold">
                   {{ t('redeem.redeemFailed') }}
                 </h3>
-                <p class="mt-2 text-sm text-red-700 dark:text-red-400">
+                <p class="redeem-view__result-body redeem-view__result-body--danger mt-2 text-sm">
                   {{ errorMessage }}
                 </p>
               </div>
@@ -257,6 +257,61 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.redeem-view__gift-icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.redeem-view__card-content {
+  padding: var(--theme-redeem-card-padding);
+}
+
+.redeem-view__code-input {
+  padding-block: var(--theme-redeem-code-input-padding-y);
+  padding-inline-start: var(--theme-redeem-code-input-padding-start);
+}
+
+.redeem-view__submit {
+  padding-block: var(--theme-redeem-submit-padding-y);
+}
+
+.redeem-view__result-card--success {
+  border-color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 28%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+}
+
+.redeem-view__result-card--danger {
+  border-color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 28%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+}
+
+.redeem-view__result-icon-shell--success {
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 14%, var(--theme-surface));
+}
+
+.redeem-view__result-icon-shell--danger {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 14%, var(--theme-surface));
+}
+
+.redeem-view__result-icon-shell {
+  width: var(--theme-redeem-result-icon-size);
+  height: var(--theme-redeem-result-icon-size);
+  border-radius: var(--theme-redeem-result-icon-radius);
+}
+
+.redeem-view__result-tone--success,
+.redeem-view__result-title--success,
+.redeem-view__result-body--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.redeem-view__result-tone--danger,
+.redeem-view__result-title--danger,
+.redeem-view__result-body--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+</style>
 
 <style scoped>
 .fade-enter-active,

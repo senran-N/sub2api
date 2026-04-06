@@ -35,8 +35,8 @@ describe('keysView helpers', () => {
   it('builds quota display tones and widths', () => {
     const row = { quota: 100, quota_used: 85 } as any
     expect(getApiKeyQuotaProgressWidth(row)).toBe('85%')
-    expect(getApiKeyQuotaTextTone(row)).toBe('text-yellow-500')
-    expect(getApiKeyQuotaBarTone(row)).toBe('bg-yellow-500')
+    expect(getApiKeyQuotaTextTone(row)).toBe('theme-text-warning')
+    expect(getApiKeyQuotaBarTone(row)).toBe('theme-progress-fill--warning')
   })
 
   it('builds rate limit windows and tones', () => {
@@ -68,8 +68,8 @@ describe('keysView helpers', () => {
         resetAt: '2026-04-12T10:00:00Z'
       }
     ])
-    expect(getApiKeyRateLimitTextTone(8, 10)).toBe('text-yellow-500')
-    expect(getApiKeyRateLimitBarTone(31, 30)).toBe('bg-red-500')
+    expect(getApiKeyRateLimitTextTone(8, 10)).toBe('theme-text-warning')
+    expect(getApiKeyRateLimitBarTone(31, 30)).toBe('theme-progress-fill--danger')
     expect(getApiKeyRateLimitProgressWidth(15, 10)).toBe('100%')
     expect(hasApiKeyRateLimitUsage(row)).toBe(true)
   })
@@ -85,10 +85,10 @@ describe('keysView helpers', () => {
     expect(hasApiKeyIpRestrictions({ ip_whitelist: ['1.1.1.1'], ip_blacklist: [] } as any)).toBe(
       true
     )
-    expect(getApiKeyExpirationTextClass(undefined)).toContain('text-gray-400')
+    expect(getApiKeyExpirationTextClass(undefined)).toContain('theme-text-subtle')
     expect(
       getApiKeyExpirationTextClass('2026-04-04T00:00:00Z', new Date('2026-04-05T00:00:00Z'))
-    ).toContain('text-red-500')
+    ).toContain('theme-text-danger')
   })
 
   it('formats reset timers and builds ccs import deeplinks', () => {

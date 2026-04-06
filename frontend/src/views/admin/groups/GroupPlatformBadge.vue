@@ -1,7 +1,7 @@
 <template>
   <span
     :class="[
-      'inline-flex items-center rounded-full text-xs font-medium',
+      'group-platform-badge theme-chip theme-chip--regular inline-flex items-center text-xs',
       badgeClass,
       getGroupPlatformBadgeClass(platform)
     ]"
@@ -25,9 +25,17 @@ withDefaults(
   }>(),
   {
     showIcon: true,
-    badgeClass: 'gap-1.5 px-2.5 py-0.5'
+    badgeClass: 'gap-1.5'
   }
 )
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.group-platform-badge {
+  gap: 0.375rem;
+  padding: var(--theme-group-selector-padding);
+  border-radius: var(--theme-button-radius);
+}
+</style>

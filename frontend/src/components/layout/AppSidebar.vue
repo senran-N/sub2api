@@ -1,41 +1,41 @@
 <template>
   <aside
     ref="sidebarRef"
-    class="sidebar"
+    class="app-sidebar"
     :class="[
-      sidebarCollapsed ? 'w-[72px]' : 'w-64',
+      sidebarCollapsed ? 'app-sidebar--collapsed' : 'app-sidebar--expanded',
       { '-translate-x-full lg:translate-x-0': !mobileOpen }
     ]"
   >
-    <!-- Logo/Brand -->
-    <div class="sidebar-header">
-      <!-- Custom Logo or Default Logo -->
-      <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow">
-        <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+    <div class="app-sidebar__header">
+      <div class="app-sidebar__brand-mark">
+        <img
+          v-if="settingsLoaded"
+          :src="siteLogo || '/logo.png'"
+          alt="Logo"
+          class="h-full w-full object-contain"
+        />
       </div>
       <transition name="fade">
-        <div v-if="!sidebarCollapsed" class="flex flex-col">
-          <span class="text-lg font-bold text-gray-900 dark:text-white">
-            {{ siteName }}
-          </span>
-          <!-- Version Badge -->
-          <VersionBadge :version="siteVersion" />
+        <div v-if="!sidebarCollapsed" class="app-sidebar__brand-copy">
+          <span class="app-sidebar__brand-name">{{ siteName }}</span>
+          <div class="app-sidebar__brand-meta">
+            <VersionBadge :version="siteVersion" />
+            <span class="app-sidebar__theme-tag">{{ activeTheme.label }}</span>
+          </div>
         </div>
       </transition>
     </div>
 
-    <!-- Navigation -->
-    <nav class="sidebar-nav scrollbar-hide">
-      <!-- Admin View: Admin menu first, then personal menu -->
+    <nav class="app-sidebar__nav scrollbar-hide">
       <template v-if="isAdmin">
-        <!-- Admin Section -->
-        <div class="sidebar-section">
+        <div class="app-sidebar__section">
           <router-link
             v-for="item in adminNavItems"
             :key="item.path"
             :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path) }"
+            class="app-sidebar__link mb-1"
+            :class="{ 'app-sidebar__link--active': isActive(item.path) }"
             :title="sidebarCollapsed ? item.label : undefined"
             :id="
               item.path === '/admin/accounts'
@@ -48,7 +48,11 @@
             "
             @click="handleMenuItemClick(item.path)"
           >
-            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+            <span
+              v-if="item.iconSvg"
+              class="h-5 w-5 flex-shrink-0 sidebar-svg-icon"
+              v-html="sanitizeSvg(item.iconSvg)"
+            ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <transition name="fade">
               <span v-if="!sidebarCollapsed">{{ item.label }}</span>
@@ -56,24 +60,27 @@
           </router-link>
         </div>
 
-        <!-- Personal Section for Admin (hidden in simple mode) -->
-        <div v-if="!authStore.isSimpleMode" class="sidebar-section">
-          <div v-if="!sidebarCollapsed" class="sidebar-section-title">
+        <div v-if="!authStore.isSimpleMode" class="app-sidebar__section">
+          <div v-if="!sidebarCollapsed" class="app-sidebar__section-title">
             {{ t('nav.myAccount') }}
           </div>
-          <div v-else class="mx-3 my-3 h-px bg-gray-200 dark:bg-dark-700"></div>
+          <div v-else class="app-sidebar__section-divider"></div>
 
           <router-link
             v-for="item in personalNavItems"
             :key="item.path"
             :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path) }"
+            class="app-sidebar__link mb-1"
+            :class="{ 'app-sidebar__link--active': isActive(item.path) }"
             :title="sidebarCollapsed ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
             @click="handleMenuItemClick(item.path)"
           >
-            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+            <span
+              v-if="item.iconSvg"
+              class="h-5 w-5 flex-shrink-0 sidebar-svg-icon"
+              v-html="sanitizeSvg(item.iconSvg)"
+            ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <transition name="fade">
               <span v-if="!sidebarCollapsed">{{ item.label }}</span>
@@ -82,20 +89,23 @@
         </div>
       </template>
 
-      <!-- Regular User View -->
       <template v-else-if="!appStore.backendModeEnabled">
-        <div class="sidebar-section">
+        <div class="app-sidebar__section">
           <router-link
             v-for="item in userNavItems"
             :key="item.path"
             :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path) }"
+            class="app-sidebar__link mb-1"
+            :class="{ 'app-sidebar__link--active': isActive(item.path) }"
             :title="sidebarCollapsed ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
             @click="handleMenuItemClick(item.path)"
           >
-            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+            <span
+              v-if="item.iconSvg"
+              class="h-5 w-5 flex-shrink-0 sidebar-svg-icon"
+              v-html="sanitizeSvg(item.iconSvg)"
+            ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <transition name="fade">
               <span v-if="!sidebarCollapsed">{{ item.label }}</span>
@@ -105,15 +115,13 @@
       </template>
     </nav>
 
-    <!-- Bottom Section -->
-    <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
-      <!-- Theme Toggle -->
+    <div class="app-sidebar__footer">
       <button
         @click="toggleTheme"
-        class="sidebar-link mb-2 w-full"
+        class="app-sidebar__link mb-2 w-full"
         :title="sidebarCollapsed ? (isDark ? t('nav.lightMode') : t('nav.darkMode')) : undefined"
       >
-        <SunIcon v-if="isDark" class="h-5 w-5 flex-shrink-0 text-amber-500" />
+        <SunIcon v-if="isDark" class="app-sidebar__theme-icon app-sidebar__theme-icon--light h-5 w-5 flex-shrink-0" />
         <MoonIcon v-else class="h-5 w-5 flex-shrink-0" />
         <transition name="fade">
           <span v-if="!sidebarCollapsed">{{
@@ -122,10 +130,9 @@
         </transition>
       </button>
 
-      <!-- Collapse Button -->
       <button
         @click="toggleSidebar"
-        class="sidebar-link w-full"
+        class="app-sidebar__link w-full"
         :title="sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
       >
         <ChevronDoubleLeftIcon v-if="!sidebarCollapsed" class="h-5 w-5 flex-shrink-0" />
@@ -137,12 +144,11 @@
     </div>
   </aside>
 
-  <!-- Mobile Overlay -->
   <transition name="fade">
     <div
       v-if="mobileOpen"
       ref="overlayRef"
-      class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+      class="app-sidebar__overlay fixed inset-0 z-30 lg:hidden"
       @click="closeMobile"
     ></div>
   </transition>
@@ -155,6 +161,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
+import { getFrontendThemeDefinition } from '@/themes'
 import { sanitizeSvg } from '@/utils/sanitize'
 
 interface NavItem {
@@ -203,6 +210,7 @@ const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
+const activeTheme = computed(() => getFrontendThemeDefinition(appStore.frontendTheme))
 
 // SVG Icon Components
 const DashboardIcon = {
@@ -719,5 +727,13 @@ onMounted(() => {
   height: 1.25rem;
   stroke: currentColor;
   fill: none;
+}
+
+.app-sidebar__theme-icon--light {
+  color: color-mix(in srgb, var(--theme-accent) 78%, rgb(var(--theme-warning-rgb)));
+}
+
+.app-sidebar__overlay {
+  background: color-mix(in srgb, var(--theme-overlay-strong) 100%, transparent);
 }
 </style>

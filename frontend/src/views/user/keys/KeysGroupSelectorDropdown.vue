@@ -3,7 +3,7 @@
     <div v-if="show && position">
       <div class="fixed inset-0 z-[100000019]" @click="emit('close')"></div>
       <div
-        class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10 sm:w-max sm:min-w-[380px]"
+        class="keys-group-selector-dropdown fixed z-[100000020] animate-in fade-in slide-in-from-top-2 duration-200"
         style="pointer-events: auto !important;"
         :style="{
           top: position.top !== undefined ? `${position.top}px` : undefined,
@@ -11,10 +11,10 @@
           left: `${position.left}px`
         }"
       >
-        <div class="border-b border-gray-100 p-2 dark:border-dark-700">
+        <div class="keys-group-selector-dropdown__header">
           <div class="relative">
             <svg
-              class="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+              class="keys-group-selector-dropdown__search-icon"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -29,7 +29,7 @@
             <input
               :value="searchQuery"
               type="text"
-              class="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-8 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-300 dark:border-dark-600 dark:bg-dark-700 dark:text-white dark:placeholder-gray-500 dark:focus:border-primary-600 dark:focus:ring-primary-600"
+              class="keys-group-selector-dropdown__search"
               :placeholder="t('keys.searchGroup')"
               @click.stop
               @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
@@ -37,15 +37,15 @@
           </div>
         </div>
 
-        <div class="max-h-80 overflow-y-auto p-1.5">
+        <div class="keys-group-selector-dropdown__list">
           <button
             v-for="option in options"
             :key="option.value"
-            class="flex w-full items-center justify-between rounded-lg border-b border-gray-100 px-3 py-2.5 text-sm transition-colors last:border-0 dark:border-dark-700"
+            class="keys-group-selector-dropdown__option"
             :class="
               selectedGroupId === option.value
-                ? 'bg-primary-50 dark:bg-primary-900/20'
-                : 'hover:bg-gray-100 dark:hover:bg-dark-700'
+                ? 'keys-group-selector-dropdown__option--selected'
+                : 'keys-group-selector-dropdown__option--interactive'
             "
             :title="option.description || undefined"
             @click="emit('select', option.value)"
@@ -61,7 +61,7 @@
             />
           </button>
 
-          <div v-if="options.length === 0" class="py-4 text-center text-sm text-gray-400 dark:text-gray-500">
+          <div v-if="options.length === 0" class="keys-group-selector-dropdown__empty">
             {{ t('keys.noGroupFound') }}
           </div>
         </div>
@@ -92,3 +92,106 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.keys-group-selector-dropdown {
+  width: calc(100vw - 2rem);
+  max-width: calc(100vw - 2rem);
+  overflow: hidden;
+  border-radius: calc(var(--theme-surface-radius) + 4px);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+}
+
+.keys-group-selector-dropdown__header {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+  padding: calc(var(--theme-user-api-keys-dropdown-padding) + 0.125rem);
+}
+
+.keys-group-selector-dropdown__header,
+.keys-group-selector-dropdown__option {
+  border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.keys-group-selector-dropdown__search-icon {
+  position: absolute;
+  left: calc(var(--theme-user-api-keys-dropdown-padding) + 0.375rem);
+  top: 50%;
+  height: 1rem;
+  width: 1rem;
+  transform: translateY(-50%);
+}
+
+.keys-group-selector-dropdown__search-icon,
+.keys-group-selector-dropdown__empty {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.keys-group-selector-dropdown__search {
+  width: 100%;
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  padding: calc(var(--theme-user-api-keys-dropdown-padding) + 0.125rem) calc(var(--theme-user-api-keys-dropdown-padding) + 0.5rem) calc(var(--theme-user-api-keys-dropdown-padding) + 0.125rem) calc(var(--theme-user-api-keys-dropdown-padding) * 2 + 1rem);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.keys-group-selector-dropdown__search {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.keys-group-selector-dropdown__search::placeholder {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.keys-group-selector-dropdown__search:focus {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent-soft) 88%, transparent);
+}
+
+.keys-group-selector-dropdown__list {
+  max-height: calc(var(--theme-user-api-keys-dropdown-max-height) + 4rem);
+  overflow-y: auto;
+  padding: var(--theme-user-api-keys-dropdown-padding);
+}
+
+.keys-group-selector-dropdown__option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  padding: calc(var(--theme-user-api-keys-dropdown-padding) + 0.25rem) calc(var(--theme-user-api-keys-dropdown-padding) + 0.5rem);
+  font-size: 0.875rem;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.keys-group-selector-dropdown__option:last-child {
+  border-bottom: 0;
+}
+
+.keys-group-selector-dropdown__empty {
+  padding: calc(var(--theme-user-api-keys-dropdown-padding) * 2) 0;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.keys-group-selector-dropdown__option--selected {
+  background: color-mix(in srgb, var(--theme-accent-soft) 82%, var(--theme-surface));
+}
+
+.keys-group-selector-dropdown__option--interactive:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+@media (min-width: 640px) {
+  .keys-group-selector-dropdown {
+    width: max-content;
+    min-width: max(var(--theme-user-api-keys-dropdown-width), 23.75rem);
+    max-width: min(90vw, 32rem);
+  }
+}
+</style>

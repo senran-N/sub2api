@@ -22,7 +22,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-
 const loading = ref(false)
 const rows = ref<OpsErrorLog[]>([])
 const total = ref(0)
@@ -34,7 +33,6 @@ const statusCode = ref<number | 'other' | null>(null)
 const phase = ref<string>('')
 const errorOwner = ref<string>('')
 const viewMode = ref<'errors' | 'excluded' | 'all'>('errors')
-
 
 const modalTitle = computed(() => {
   return props.errorType === 'upstream' ? t('admin.ops.errorDetails.upstreamErrors') : t('admin.ops.errorDetails.requestErrors')
@@ -67,6 +65,28 @@ const viewModeSelectOptions = computed(() => {
   ]
 })
 
+type StatusCodeFilter = number | 'other' | null
+
+function normalizeStatusCode(value: unknown): StatusCodeFilter {
+  if (value === 'other') {
+    return value
+  }
+
+  if (value == null) {
+    return null
+  }
+
+  return typeof value === 'number' ? value : Number(value)
+}
+
+function normalizeViewMode(value: unknown): 'errors' | 'excluded' | 'all' {
+  if (value === 'excluded' || value === 'all') {
+    return value
+  }
+
+  return 'errors'
+}
+
 const phaseSelectOptions = computed(() => {
   const options = [
     { value: '', label: t('common.all') },
@@ -89,7 +109,7 @@ async function fetchErrorLogs() {
 
   loading.value = true
   try {
-    const params: Record<string, any> = {
+    const params: Record<string, string | number> = {
       page: page.value,
       page_size: pageSize.value,
       time_range: props.timeRange,
@@ -110,7 +130,6 @@ async function fetchErrorLogs() {
     const ownerVal = String(errorOwner.value || '').trim()
     if (ownerVal) params.error_owner = ownerVal
 
-
     const res = props.errorType === 'upstream'
       ? await opsAPI.listUpstreamErrors(params)
       : await opsAPI.listRequestErrors(params)
@@ -125,16 +144,15 @@ async function fetchErrorLogs() {
   }
 }
 
-  function resetFilters() {
-    q.value = ''
-    statusCode.value = null
-    phase.value = props.errorType === 'upstream' ? 'upstream' : ''
-    errorOwner.value = ''
-    viewMode.value = 'errors'
-    page.value = 1
-    fetchErrorLogs()
-  }
-
+function resetFilters() {
+  q.value = ''
+  statusCode.value = null
+  phase.value = props.errorType === 'upstream' ? 'upstream' : ''
+  errorOwner.value = ''
+  viewMode.value = 'errors'
+  page.value = 1
+  fetchErrorLogs()
+}
 
 watch(
   () => props.show,
@@ -189,14 +207,13 @@ watch(
 <template>
   <BaseDialog :show="show" :title="modalTitle" width="full" @close="close">
     <div class="flex h-full min-h-0 flex-col">
-      <!-- Filters -->
-      <div class="mb-4 flex-shrink-0 border-b border-gray-200 pb-4 dark:border-dark-700">
-        <div class="grid grid-cols-8 gap-2">
-          <div class="col-span-2 compact-select">
+      <div class="ops-error-details-modal__filters">
+        <div class="ops-error-details-modal__filter-grid">
+          <div class="ops-error-details-modal__filter-col ops-error-details-modal__filter-col--search compact-select">
             <div class="relative group">
               <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                 <svg
-                  class="h-3.5 w-3.5 text-gray-400 transition-colors group-focus-within:text-blue-500"
+                  class="ops-error-details-modal__search-icon h-3.5 w-3.5 transition-colors"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -207,41 +224,40 @@ watch(
               <input
                 v-model="q"
                 type="text"
-                class="w-full rounded-lg border-gray-200 bg-gray-50/50 py-1.5 pl-9 pr-3 text-xs font-medium text-gray-700 transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/10 dark:border-dark-700 dark:bg-dark-900 dark:text-gray-300 dark:focus:bg-dark-800"
+                class="ops-error-details-modal__search-input"
                 :placeholder="t('admin.ops.errorDetails.searchPlaceholder')"
               />
             </div>
           </div>
 
-          <div class="compact-select">
-            <Select :model-value="statusCode" :options="statusCodeSelectOptions" @update:model-value="statusCode = $event as any" />
+          <div class="ops-error-details-modal__filter-col compact-select">
+            <Select :model-value="statusCode" :options="statusCodeSelectOptions" @update:model-value="statusCode = normalizeStatusCode($event)" />
           </div>
 
-          <div class="compact-select">
+          <div class="ops-error-details-modal__filter-col compact-select">
             <Select :model-value="phase" :options="phaseSelectOptions" @update:model-value="phase = String($event ?? '')" />
           </div>
 
-          <div class="compact-select">
+          <div class="ops-error-details-modal__filter-col compact-select">
             <Select :model-value="errorOwner" :options="ownerSelectOptions" @update:model-value="errorOwner = String($event ?? '')" />
           </div>
 
 
 
-          <div class="compact-select">
-            <Select :model-value="viewMode" :options="viewModeSelectOptions" @update:model-value="viewMode = $event as any" />
+          <div class="ops-error-details-modal__filter-col compact-select">
+            <Select :model-value="viewMode" :options="viewModeSelectOptions" @update:model-value="viewMode = normalizeViewMode($event)" />
           </div>
 
-          <div class="flex items-center justify-end">
-            <button type="button" class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600" @click="resetFilters">
+          <div class="ops-error-details-modal__filter-col ops-error-details-modal__filter-col--action">
+            <button type="button" class="ops-error-details-modal__reset" @click="resetFilters">
               {{ t('common.reset') }}
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Body -->
       <div class="flex min-h-0 flex-1 flex-col">
-        <div class="mb-2 flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">
+        <div class="ops-error-details-modal__meta mb-2 flex-shrink-0 text-xs">
           {{ t('admin.ops.errorDetails.total') }} {{ total }}
         </div>
 
@@ -263,8 +279,91 @@ watch(
   </BaseDialog>
 </template>
 
-<style>
-.compact-select .select-trigger {
-  @apply py-1.5 px-3 text-xs rounded-lg;
+<style scoped>
+.ops-error-details-modal__filters {
+  border-bottom: 1px solid var(--theme-page-border);
+  padding: calc(var(--theme-ops-panel-padding) * 0.75) calc(var(--theme-ops-panel-padding) * 0.5);
+  margin-bottom: var(--theme-ops-panel-padding);
+}
+
+.ops-error-details-modal__filter-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: calc(var(--theme-ops-panel-padding) * 0.5);
+}
+
+.ops-error-details-modal__filter-col {
+  min-width: 0;
+}
+
+.ops-error-details-modal__filter-col--search {
+  grid-column: span 2;
+}
+
+.ops-error-details-modal__filter-col--action {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.ops-error-details-modal__search-icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.group:focus-within .ops-error-details-modal__search-icon {
+  color: var(--theme-accent);
+}
+
+.ops-error-details-modal__search-input {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  border-radius: calc(var(--theme-button-radius) * 1.1);
+  background: color-mix(in srgb, var(--theme-surface-soft) 84%, var(--theme-surface));
+  color: var(--theme-page-text);
+  padding:
+    calc(var(--theme-button-padding-y) * 0.8)
+    calc(var(--theme-button-padding-x) * 0.85);
+  padding-left: calc(var(--theme-button-padding-x) * 1.8 + 0.75rem);
+  font-size: 0.75rem;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.ops-error-details-modal__search-input:focus {
+  outline: none;
+  border-color: var(--theme-accent);
+  background: var(--theme-surface);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-accent) 14%, transparent);
+}
+
+.ops-error-details-modal__search-input::placeholder {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.ops-error-details-modal__reset {
+  padding:
+    calc(var(--theme-button-padding-y) * 0.7)
+    calc(var(--theme-button-padding-x) * 0.8);
+  border-radius: var(--theme-button-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+  color: color-mix(in srgb, var(--theme-page-text) 82%, transparent);
+  font-weight: 600;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.ops-error-details-modal__reset:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 72%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.ops-error-details-modal__meta {
+  color: var(--theme-page-muted);
+}
+
+.compact-select :deep(.select-trigger) {
+  border-radius: var(--theme-select-action-radius);
+  padding:
+    calc(var(--theme-button-padding-y) * 0.65)
+    calc(var(--theme-button-padding-x) * 0.75);
+  font-size: 0.75rem;
 }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <span
     :class="[
-      'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium transition-colors',
+      'theme-chip theme-chip--regular group-badge',
       badgeClass
     ]"
   >
@@ -10,10 +10,10 @@
     <!-- Group name -->
     <span class="truncate">{{ name }}</span>
     <!-- Right side label -->
-    <span v-if="showLabel" :class="labelClass">
+    <span v-if="showLabel" :class="['theme-chip theme-chip--compact group-badge__label', labelClass]">
       <template v-if="hasCustomRate">
         <!-- 原倍率删除线 + 专属倍率高亮 -->
-        <span class="line-through opacity-50 mr-0.5">{{ rateMultiplier }}x</span>
+        <span class="mr-0.5 line-through opacity-50">{{ rateMultiplier }}x</span>
         <span class="font-bold">{{ userRateMultiplier }}x</span>
       </template>
       <template v-else>
@@ -87,67 +87,71 @@ const labelText = computed(() => {
 
 // Label style based on type and days remaining
 const labelClass = computed(() => {
-  const base = 'px-1.5 py-0.5 rounded text-[10px] font-semibold'
-
   if (!isSubscription.value) {
-    // Standard: subtle background (不再为专属倍率使用不同的背景色)
-    return `${base} bg-black/10 dark:bg-white/10`
+    return 'theme-chip--neutral group-badge__label--default'
   }
 
-  // 订阅类型：根据剩余天数显示不同颜色
   if (props.daysRemaining !== null && props.daysRemaining !== undefined) {
     if (props.daysRemaining <= 0 || props.daysRemaining <= 3) {
-      // 已过期或紧急（<=3天）：红色
-      return `${base} bg-red-200/80 text-red-800 dark:bg-red-800/50 dark:text-red-300`
+      return 'theme-chip--danger'
     }
     if (props.daysRemaining <= 7) {
-      // 警告（<=7天）：橙色
-      return `${base} bg-amber-200/80 text-amber-800 dark:bg-amber-800/50 dark:text-amber-300`
+      return 'theme-chip--warning'
     }
   }
 
-  // 正常状态或无天数：根据平台显示主题色
   if (props.platform === 'anthropic') {
-    return `${base} bg-orange-200/60 text-orange-800 dark:bg-orange-800/40 dark:text-orange-300`
+    return 'theme-chip--brand-orange'
   }
   if (props.platform === 'openai') {
-    return `${base} bg-emerald-200/60 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300`
+    return 'theme-chip--success'
   }
   if (props.platform === 'gemini') {
-    return `${base} bg-blue-200/60 text-blue-800 dark:bg-blue-800/40 dark:text-blue-300`
+    return 'theme-chip--info'
   }
   if (props.platform === 'sora') {
-    return `${base} bg-rose-200/60 text-rose-800 dark:bg-rose-800/40 dark:text-rose-300`
+    return 'theme-chip--brand-rose'
   }
-  return `${base} bg-violet-200/60 text-violet-800 dark:bg-violet-800/40 dark:text-violet-300`
+  return 'theme-chip--brand-purple'
 })
 
 // Badge color based on platform and subscription type
 const badgeClass = computed(() => {
   if (props.platform === 'anthropic') {
-    // Claude: orange theme
     return isSubscription.value
-      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-      : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
+      ? 'theme-chip--brand-orange'
+      : 'theme-chip--warning'
   } else if (props.platform === 'openai') {
-    // OpenAI: green theme
     return isSubscription.value
-      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-      : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+      ? 'theme-chip--success'
+      : 'theme-chip--accent'
   }
   if (props.platform === 'gemini') {
     return isSubscription.value
-      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-      : 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400'
+      ? 'theme-chip--info'
+      : 'theme-chip--accent'
   }
   if (props.platform === 'sora') {
     return isSubscription.value
-      ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
-      : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400'
+      ? 'theme-chip--brand-rose'
+      : 'theme-chip--accent'
   }
-  // Fallback: original colors
   return isSubscription.value
-    ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
-    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+    ? 'theme-chip--brand-purple'
+    : 'theme-chip--accent'
 })
 </script>
+
+<style scoped>
+.group-badge {
+  max-width: 100%;
+}
+
+.group-badge__label {
+  font-weight: 600;
+}
+
+.group-badge__label--default {
+  border-style: dashed;
+}
+</style>

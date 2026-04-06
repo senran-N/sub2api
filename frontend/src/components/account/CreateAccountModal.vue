@@ -7,31 +7,31 @@
   >
     <!-- Step Indicator for OAuth accounts -->
     <div v-if="isOAuthFlow" class="mb-6 flex items-center justify-center">
-      <div class="flex items-center space-x-4">
-        <div class="flex items-center">
+      <div class="create-account-modal__stepper flex items-center space-x-4">
+        <div class="create-account-modal__step-group flex items-center">
           <div
             :class="[
-              'flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold',
-              step >= 1 ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-500 dark:bg-dark-600'
+              'create-account-modal__step-node flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold',
+              step >= 1 ? 'create-account-modal__step-node--active' : 'create-account-modal__step-node--idle'
             ]"
           >
             1
           </div>
-          <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{
+          <span class="create-account-modal__step-label ml-2 text-sm font-medium">{{
             t('admin.accounts.oauth.authMethod')
           }}</span>
         </div>
-        <div class="h-0.5 w-8 bg-gray-300 dark:bg-dark-600" />
-        <div class="flex items-center">
+        <div class="create-account-modal__step-connector h-0.5 w-8" />
+        <div class="create-account-modal__step-group flex items-center">
           <div
             :class="[
-              'flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold',
-              step >= 2 ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-500 dark:bg-dark-600'
+              'create-account-modal__step-node flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold',
+              step >= 2 ? 'create-account-modal__step-node--active' : 'create-account-modal__step-node--idle'
             ]"
           >
             2
           </div>
-          <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{
+          <span class="create-account-modal__step-label ml-2 text-sm font-medium">{{
             oauthStepTitle
           }}</span>
         </div>
@@ -70,15 +70,15 @@
       <!-- Platform Selection - Segmented Control Style -->
       <div>
         <label class="input-label">{{ t('admin.accounts.platform') }}</label>
-        <div class="mt-2 flex rounded-lg bg-gray-100 p-1 dark:bg-dark-700" data-tour="account-form-platform">
+        <div class="segmented-control mt-2 flex" data-tour="account-form-platform">
           <button
             type="button"
             @click="form.platform = 'anthropic'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
               form.platform === 'anthropic'
-                ? 'bg-white text-orange-600 shadow-sm dark:bg-dark-600 dark:text-orange-400'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--anthropic'
+                : 'create-account-modal__platform-button--idle'
             ]"
           >
             <Icon name="sparkles" size="sm" />
@@ -88,10 +88,10 @@
             type="button"
             @click="form.platform = 'openai'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
               form.platform === 'openai'
-                ? 'bg-white text-green-600 shadow-sm dark:bg-dark-600 dark:text-green-400'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--openai'
+                : 'create-account-modal__platform-button--idle'
             ]"
           >
             <svg
@@ -113,10 +113,10 @@
             type="button"
             @click="form.platform = 'sora'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
               form.platform === 'sora'
-                ? 'bg-white text-rose-600 shadow-sm dark:bg-dark-600 dark:text-rose-400'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--sora'
+                : 'create-account-modal__platform-button--idle'
             ]"
           >
             <svg
@@ -135,10 +135,10 @@
             type="button"
             @click="form.platform = 'gemini'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
               form.platform === 'gemini'
-                ? 'bg-white text-blue-600 shadow-sm dark:bg-dark-600 dark:text-blue-400'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--gemini'
+                : 'create-account-modal__platform-button--idle'
             ]"
           >
             <svg
@@ -160,10 +160,10 @@
             type="button"
             @click="form.platform = 'antigravity'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
               form.platform === 'antigravity'
-                ? 'bg-white text-purple-600 shadow-sm dark:bg-dark-600 dark:text-purple-400'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--antigravity'
+                : 'create-account-modal__platform-button--idle'
             ]"
           >
             <Icon name="cloud" size="sm" />
@@ -179,51 +179,27 @@
           <button
             type="button"
             @click="soraAccountType = 'oauth'; accountCategory = 'oauth-based'; addMethod = 'oauth'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              soraAccountType === 'oauth'
-                ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/20'
-                : 'border-gray-200 hover:border-rose-300 dark:border-dark-600 dark:hover:border-rose-700'
-            ]"
+            :class="getChoiceCardClasses(soraAccountType === 'oauth', 'rose')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                soraAccountType === 'oauth'
-                  ? 'bg-rose-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(soraAccountType === 'oauth', 'rose')">
               <Icon name="key" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">OAuth</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.chatgptOauth') }}</span>
+              <span class="create-account-modal__choice-title block text-sm font-medium">OAuth</span>
+              <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.chatgptOauth') }}</span>
             </div>
           </button>
           <button
             type="button"
             @click="soraAccountType = 'apikey'; accountCategory = 'apikey'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              soraAccountType === 'apikey'
-                ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/20'
-                : 'border-gray-200 hover:border-rose-300 dark:border-dark-600 dark:hover:border-rose-700'
-            ]"
+            :class="getChoiceCardClasses(soraAccountType === 'apikey', 'rose')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                soraAccountType === 'apikey'
-                  ? 'bg-rose-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(soraAccountType === 'apikey', 'rose')">
               <Icon name="link" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.types.soraApiKey') }}</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.soraApiKeyHint') }}</span>
+              <span class="create-account-modal__choice-title block text-sm font-medium">{{ t('admin.accounts.types.soraApiKey') }}</span>
+              <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.soraApiKeyHint') }}</span>
             </div>
           </button>
         </div>
@@ -236,28 +212,16 @@
           <button
             type="button"
             @click="accountCategory = 'oauth-based'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              accountCategory === 'oauth-based'
-                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                : 'border-gray-200 hover:border-orange-300 dark:border-dark-600 dark:hover:border-orange-700'
-            ]"
+            :class="getChoiceCardClasses(accountCategory === 'oauth-based', 'orange')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                accountCategory === 'oauth-based'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(accountCategory === 'oauth-based', 'orange')">
               <Icon name="sparkles" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">{{
+              <span class="create-account-modal__choice-title block text-sm font-medium">{{
                 t('admin.accounts.claudeCode')
               }}</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{
+              <span class="create-account-modal__choice-description text-xs">{{
                 t('admin.accounts.oauthSetupToken')
               }}</span>
             </div>
@@ -266,28 +230,16 @@
           <button
             type="button"
             @click="accountCategory = 'apikey'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              accountCategory === 'apikey'
-                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                : 'border-gray-200 hover:border-purple-300 dark:border-dark-600 dark:hover:border-purple-700'
-            ]"
+            :class="getChoiceCardClasses(accountCategory === 'apikey', 'purple')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                accountCategory === 'apikey'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(accountCategory === 'apikey', 'purple')">
               <Icon name="key" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">{{
+              <span class="create-account-modal__choice-title block text-sm font-medium">{{
                 t('admin.accounts.claudeConsole')
               }}</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{
+              <span class="create-account-modal__choice-description text-xs">{{
                 t('admin.accounts.apiKey')
               }}</span>
             </div>
@@ -296,28 +248,16 @@
           <button
             type="button"
             @click="accountCategory = 'bedrock'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              accountCategory === 'bedrock'
-                ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
-                : 'border-gray-200 hover:border-amber-300 dark:border-dark-600 dark:hover:border-amber-700'
-            ]"
+            :class="getChoiceCardClasses(accountCategory === 'bedrock', 'amber')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                accountCategory === 'bedrock'
-                  ? 'bg-amber-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(accountCategory === 'bedrock', 'amber')">
               <Icon name="cloud" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">{{
+              <span class="create-account-modal__choice-title block text-sm font-medium">{{
                 t('admin.accounts.bedrockLabel')
               }}</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{
+              <span class="create-account-modal__choice-description text-xs">{{
                 t('admin.accounts.bedrockDesc')
               }}</span>
             </div>
@@ -333,52 +273,28 @@
           <button
             type="button"
             @click="accountCategory = 'oauth-based'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              accountCategory === 'oauth-based'
-                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                : 'border-gray-200 hover:border-green-300 dark:border-dark-600 dark:hover:border-green-700'
-            ]"
+            :class="getChoiceCardClasses(accountCategory === 'oauth-based', 'green')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                accountCategory === 'oauth-based'
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(accountCategory === 'oauth-based', 'green')">
               <Icon name="key" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">OAuth</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.chatgptOauth') }}</span>
+              <span class="create-account-modal__choice-title block text-sm font-medium">OAuth</span>
+              <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.chatgptOauth') }}</span>
             </div>
           </button>
 
           <button
             type="button"
             @click="accountCategory = 'apikey'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              accountCategory === 'apikey'
-                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                : 'border-gray-200 hover:border-purple-300 dark:border-dark-600 dark:hover:border-purple-700'
-            ]"
+            :class="getChoiceCardClasses(accountCategory === 'apikey', 'purple')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                accountCategory === 'apikey'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(accountCategory === 'apikey', 'purple')">
               <Icon name="key" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">API Key</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.responsesApi') }}</span>
+              <span class="create-account-modal__choice-title block text-sm font-medium">API Key</span>
+              <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.responsesApi') }}</span>
             </div>
           </button>
         </div>
@@ -391,7 +307,7 @@
           <button
             type="button"
             @click="showGeminiHelpDialog = true"
-            class="flex items-center gap-1 rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+            class="create-account-modal__help-button"
           >
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
@@ -403,28 +319,16 @@
           <button
             type="button"
             @click="accountCategory = 'oauth-based'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              accountCategory === 'oauth-based'
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-gray-200 hover:border-blue-300 dark:border-dark-600 dark:hover:border-blue-700'
-            ]"
+            :class="getChoiceCardClasses(accountCategory === 'oauth-based', 'blue')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                accountCategory === 'oauth-based'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(accountCategory === 'oauth-based', 'blue')">
               <Icon name="key" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">
+              <span class="create-account-modal__choice-title block text-sm font-medium">
                 {{ t('admin.accounts.gemini.accountType.oauthTitle') }}
               </span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">
+              <span class="create-account-modal__choice-description text-xs">
                 {{ t('admin.accounts.gemini.accountType.oauthDesc') }}
               </span>
             </div>
@@ -433,21 +337,9 @@
           <button
             type="button"
             @click="accountCategory = 'apikey'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              accountCategory === 'apikey'
-                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                : 'border-gray-200 hover:border-purple-300 dark:border-dark-600 dark:hover:border-purple-700'
-            ]"
+            :class="getChoiceCardClasses(accountCategory === 'apikey', 'purple')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                accountCategory === 'apikey'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(accountCategory === 'apikey', 'purple')">
               <svg
                 class="h-4 w-4"
                 fill="none"
@@ -463,10 +355,10 @@
               </svg>
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">
+              <span class="create-account-modal__choice-title block text-sm font-medium">
                 {{ t('admin.accounts.gemini.accountType.apiKeyTitle') }}
               </span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">
+              <span class="create-account-modal__choice-description text-xs">
                 {{ t('admin.accounts.gemini.accountType.apiKeyDesc') }}
               </span>
             </div>
@@ -475,13 +367,13 @@
 
         <div
           v-if="accountCategory === 'apikey'"
-          class="mt-3 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800 dark:border-purple-800/40 dark:bg-purple-900/20 dark:text-purple-200"
+          class="create-account-modal__notice create-account-modal__notice--purple create-account-modal__notice-inline mt-3 text-xs"
         >
           <p>{{ t('admin.accounts.gemini.accountType.apiKeyNote') }}</p>
           <div class="mt-2 flex flex-wrap gap-2">
             <a
               :href="geminiHelpLinks.apiKey"
-              class="font-medium text-blue-600 hover:underline dark:text-blue-400"
+              class="create-account-modal__link font-medium"
               target="_blank"
               rel="noreferrer"
             >
@@ -498,39 +390,23 @@
             <button
               type="button"
               @click="handleSelectGeminiOAuthType('google_one')"
-              :class="[
-                'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-                geminiOAuthType === 'google_one'
-                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                  : 'border-gray-200 hover:border-purple-300 dark:border-dark-600 dark:hover:border-purple-700'
-              ]"
+              :class="getChoiceCardClasses(geminiOAuthType === 'google_one', 'purple')"
             >
-              <div
-                :class="[
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                  geminiOAuthType === 'google_one'
-                    ? 'bg-purple-500 text-white'
-                    : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-                ]"
-              >
+              <div :class="getChoiceIconClasses(geminiOAuthType === 'google_one', 'purple')">
                 <Icon name="user" size="sm" />
               </div>
               <div class="min-w-0">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                <span class="create-account-modal__choice-title block text-sm font-medium">
                   Google One
                 </span>
-                <span class="text-xs text-gray-500 dark:text-gray-400">
+                <span class="create-account-modal__choice-description text-xs">
                   个人账号，享受 Google One 订阅配额
                 </span>
                 <div class="mt-2 flex flex-wrap gap-1">
-                  <span
-                    class="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
-                  >
+                  <span :class="getToneTagClasses('purple')">
                     推荐个人用户
                   </span>
-                  <span
-                    class="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                  >
+                  <span :class="getToneTagClasses('emerald')">
                     无需 GCP
                   </span>
                 </div>
@@ -541,35 +417,23 @@
             <button
               type="button"
               @click="handleSelectGeminiOAuthType('code_assist')"
-              :class="[
-                'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-                geminiOAuthType === 'code_assist'
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 hover:border-blue-300 dark:border-dark-600 dark:hover:border-blue-700'
-              ]"
+              :class="getChoiceCardClasses(geminiOAuthType === 'code_assist', 'blue')"
             >
-              <div
-                :class="[
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                  geminiOAuthType === 'code_assist'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-                ]"
-              >
+              <div :class="getChoiceIconClasses(geminiOAuthType === 'code_assist', 'blue')">
                 <Icon name="cloud" size="sm" />
               </div>
               <div class="min-w-0">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                <span class="create-account-modal__choice-title block text-sm font-medium">
                   GCP Code Assist
                 </span>
-                <span class="text-xs text-gray-500 dark:text-gray-400">
+                <span class="create-account-modal__choice-description text-xs">
                   企业级，需要 GCP 项目
                 </span>
-                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <div class="create-account-modal__choice-description mt-1 text-xs">
                   需要激活 GCP 项目并绑定信用卡
                   <a
                     :href="geminiHelpLinks.gcpProject"
-                    class="ml-1 text-blue-600 hover:underline dark:text-blue-400"
+                    class="create-account-modal__link ml-1"
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -577,14 +441,10 @@
                   </a>
                 </div>
                 <div class="mt-2 flex flex-wrap gap-1">
-                  <span
-                    class="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                  >
+                  <span :class="getToneTagClasses('blue')">
                     企业用户
                   </span>
-                  <span
-                    class="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                  >
+                  <span :class="getToneTagClasses('emerald')">
                     高并发
                   </span>
                 </div>
@@ -597,7 +457,7 @@
             <button
               type="button"
               @click="showAdvancedOAuth = !showAdvancedOAuth"
-              class="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+              class="create-account-modal__inline-toggle flex items-center gap-2 text-sm"
             >
               <svg
                 :class="['h-4 w-4 transition-transform', showAdvancedOAuth ? 'rotate-90' : '']"
@@ -618,22 +478,9 @@
               type="button"
               :disabled="!geminiAIStudioOAuthEnabled"
               @click="handleSelectGeminiOAuthType('ai_studio')"
-              :class="[
-                'flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-                !geminiAIStudioOAuthEnabled ? 'cursor-not-allowed opacity-60' : '',
-                geminiOAuthType === 'ai_studio'
-                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
-                  : 'border-gray-200 hover:border-amber-300 dark:border-dark-600 dark:hover:border-amber-700'
-              ]"
+              :class="getChoiceCardClasses(geminiOAuthType === 'ai_studio', 'amber', !geminiAIStudioOAuthEnabled)"
             >
-              <div
-                :class="[
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                  geminiOAuthType === 'ai_studio'
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-                ]"
-              >
+              <div :class="getChoiceIconClasses(geminiOAuthType === 'ai_studio', 'amber')">
                 <svg
                   class="h-4 w-4"
                   fill="none"
@@ -649,31 +496,27 @@
                 </svg>
               </div>
               <div class="min-w-0">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                <span class="create-account-modal__choice-title block text-sm font-medium">
                   {{ t('admin.accounts.gemini.oauthType.customTitle') }}
                 </span>
-                <span class="text-xs text-gray-500 dark:text-gray-400">
+                <span class="create-account-modal__choice-description text-xs">
                   {{ t('admin.accounts.gemini.oauthType.customDesc') }}
                 </span>
-                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <div class="create-account-modal__choice-description mt-1 text-xs">
                   {{ t('admin.accounts.gemini.oauthType.customRequirement') }}
                 </div>
                 <div class="mt-2 flex flex-wrap gap-1">
-                  <span
-                    class="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                  >
+                  <span :class="getToneTagClasses('amber')">
                     {{ t('admin.accounts.gemini.oauthType.badges.orgManaged') }}
                   </span>
-                  <span
-                    class="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                  >
+                  <span :class="getToneTagClasses('amber')">
                     {{ t('admin.accounts.gemini.oauthType.badges.adminRequired') }}
                   </span>
                 </div>
               </div>
               <span
                 v-if="!geminiAIStudioOAuthEnabled"
-                class="ml-auto shrink-0 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                :class="['create-account-modal__tone-tag-anchor', getToneTagClasses('amber')]"
               >
                 {{ t('admin.accounts.oauth.gemini.aiStudioNotConfiguredShort') }}
               </span>
@@ -681,7 +524,7 @@
 
             <div
               v-if="!geminiAIStudioOAuthEnabled"
-              class="pointer-events-none absolute right-0 top-full z-50 mt-2 w-80 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200"
+              class="create-account-modal__notice create-account-modal__notice--amber create-account-modal__notice-tooltip pointer-events-none absolute right-0 top-full z-50 mt-2 text-xs opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
             >
               {{ t('admin.accounts.oauth.gemini.aiStudioNotConfiguredTip') }}
             </div>
@@ -731,52 +574,28 @@
           <button
             type="button"
             @click="antigravityAccountType = 'oauth'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              antigravityAccountType === 'oauth'
-                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                : 'border-gray-200 hover:border-purple-300 dark:border-dark-600 dark:hover:border-purple-700'
-            ]"
+            :class="getChoiceCardClasses(antigravityAccountType === 'oauth', 'purple')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                antigravityAccountType === 'oauth'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(antigravityAccountType === 'oauth', 'purple')">
               <Icon name="key" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">OAuth</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.antigravityOauth') }}</span>
+              <span class="create-account-modal__choice-title block text-sm font-medium">OAuth</span>
+              <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.antigravityOauth') }}</span>
             </div>
           </button>
 
           <button
             type="button"
             @click="antigravityAccountType = 'upstream'"
-            :class="[
-              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              antigravityAccountType === 'upstream'
-                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                : 'border-gray-200 hover:border-purple-300 dark:border-dark-600 dark:hover:border-purple-700'
-            ]"
+            :class="getChoiceCardClasses(antigravityAccountType === 'upstream', 'purple')"
           >
-            <div
-              :class="[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                antigravityAccountType === 'upstream'
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
-              ]"
-            >
+            <div :class="getChoiceIconClasses(antigravityAccountType === 'upstream', 'purple')">
               <Icon name="cloud" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">API Key</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.antigravityApikey') }}</span>
+              <span class="create-account-modal__choice-title block text-sm font-medium">API Key</span>
+              <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.antigravityApikey') }}</span>
             </div>
           </button>
         </div>
@@ -810,13 +629,13 @@
 
       <!-- Antigravity model restriction (applies to OAuth + Upstream) -->
       <!-- Antigravity 只支持模型映射模式，不支持白名单模式 -->
-      <div v-if="form.platform === 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div v-if="form.platform === 'antigravity'" class="form-section">
         <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
         <!-- Mapping Mode Only (no toggle for Antigravity) -->
         <div>
-          <div class="mb-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
-            <p class="text-xs text-purple-700 dark:text-purple-400">
+          <div class="create-account-modal__notice create-account-modal__notice--purple create-account-modal__notice-block mb-3">
+            <p class="text-xs">
               {{ t('admin.accounts.mapRequestModels') }}
             </p>
           </div>
@@ -831,28 +650,22 @@
                 <input
                   v-model="mapping.from"
                   type="text"
-                  :class="[
-                    'input flex-1',
-                    !isValidWildcardPattern(mapping.from) ? 'border-red-500 dark:border-red-500' : ''
-                  ]"
+                  :class="getValidationInputClasses(!isValidWildcardPattern(mapping.from), 'flex-1')"
                   :placeholder="t('admin.accounts.requestModel')"
                 />
-                <svg class="h-4 w-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="create-account-modal__choice-description h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
                 <input
                   v-model="mapping.to"
                   type="text"
-                  :class="[
-                    'input flex-1',
-                    mapping.to.includes('*') ? 'border-red-500 dark:border-red-500' : ''
-                  ]"
+                  :class="getValidationInputClasses(mapping.to.includes('*'), 'flex-1')"
                   :placeholder="t('admin.accounts.actualModel')"
                 />
                 <button
                   type="button"
                   @click="removeAntigravityModelMapping(index)"
-                  class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                  class="create-account-modal__status-chip create-account-modal__status-chip--danger create-account-modal__status-chip-action"
                 >
                   <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -865,10 +678,10 @@
                 </button>
               </div>
               <!-- 校验错误提示 -->
-              <p v-if="!isValidWildcardPattern(mapping.from)" class="text-xs text-red-500">
+              <p v-if="!isValidWildcardPattern(mapping.from)" class="create-account-modal__error-text">
                 {{ t('admin.accounts.wildcardOnlyAtEnd') }}
               </p>
-              <p v-if="mapping.to.includes('*')" class="text-xs text-red-500">
+              <p v-if="mapping.to.includes('*')" class="create-account-modal__error-text">
                 {{ t('admin.accounts.targetNoWildcard') }}
               </p>
             </div>
@@ -877,7 +690,7 @@
           <button
             type="button"
             @click="addAntigravityModelMapping"
-            class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+            class="btn btn-secondary mb-3 w-full border-2 border-dashed"
           >
             <svg class="mr-1 inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -891,7 +704,7 @@
               :key="preset.label"
               type="button"
               @click="addAntigravityPresetMapping(preset.from, preset.to)"
-              :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
+              :class="getPresetMappingChipClasses(preset.tone)"
             >
               + {{ preset.label }}
             </button>
@@ -903,23 +716,23 @@
       <div v-if="form.platform === 'anthropic' && isOAuthFlow">
         <label class="input-label">{{ t('admin.accounts.addMethod') }}</label>
         <div class="mt-2 flex gap-4">
-          <label class="flex cursor-pointer items-center">
+          <label :class="getRadioOptionClasses(addMethod === 'oauth')">
             <input
               v-model="addMethod"
               type="radio"
               value="oauth"
-              class="mr-2 text-primary-600 focus:ring-primary-500"
+              class="create-account-modal__radio-input"
             />
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.types.oauth') }}</span>
+            <span class="create-account-modal__choice-title text-sm">{{ t('admin.accounts.types.oauth') }}</span>
           </label>
-          <label class="flex cursor-pointer items-center">
+          <label :class="getRadioOptionClasses(addMethod === 'setup-token')">
             <input
               v-model="addMethod"
               type="radio"
               value="setup-token"
-              class="mr-2 text-primary-600 focus:ring-primary-500"
+              class="create-account-modal__radio-input"
             />
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{
+            <span class="create-account-modal__choice-title text-sm">{{
               t('admin.accounts.setupTokenLongLived')
             }}</span>
           </label>
@@ -973,14 +786,14 @@
         </div>
 
         <!-- Model Restriction Section (Antigravity 已在上层条件排除) -->
-        <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="form-section">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
             v-if="isOpenAIModelRestrictionDisabled"
-            class="mb-3 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
+            class="create-account-modal__notice create-account-modal__notice--amber create-account-modal__notice-block mb-3"
           >
-            <p class="text-xs text-amber-700 dark:text-amber-400">
+            <p class="text-xs">
               {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
             </p>
           </div>
@@ -991,12 +804,7 @@
               <button
                 type="button"
                 @click="modelRestrictionMode = 'whitelist'"
-                :class="[
-                  'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                  modelRestrictionMode === 'whitelist'
-                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-                ]"
+                :class="getModeToggleClasses(modelRestrictionMode === 'whitelist', 'accent')"
               >
                 <svg
                   class="mr-1.5 inline h-4 w-4"
@@ -1016,12 +824,7 @@
               <button
                 type="button"
                 @click="modelRestrictionMode = 'mapping'"
-                :class="[
-                  'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                  modelRestrictionMode === 'mapping'
-                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-                ]"
+                :class="getModeToggleClasses(modelRestrictionMode === 'mapping', 'purple')"
               >
                 <svg
                   class="mr-1.5 inline h-4 w-4"
@@ -1043,7 +846,7 @@
             <!-- Whitelist Mode -->
             <div v-if="modelRestrictionMode === 'whitelist'">
               <ModelWhitelistSelector v-model="allowedModels" :platform="form.platform" />
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description text-xs">
                 {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
                 <span v-if="allowedModels.length === 0">{{
                   t('admin.accounts.supportsAllModels')
@@ -1053,8 +856,8 @@
 
             <!-- Mapping Mode -->
             <div v-else>
-              <div class="mb-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
-                <p class="text-xs text-purple-700 dark:text-purple-400">
+              <div class="create-account-modal__notice create-account-modal__notice--purple create-account-modal__notice-block mb-3">
+                <p class="text-xs">
                   <svg
                     class="mr-1 inline h-4 w-4"
                     fill="none"
@@ -1086,7 +889,7 @@
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
-                  class="h-4 w-4 flex-shrink-0 text-gray-400"
+                  class="create-account-modal__choice-description h-4 w-4 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1107,7 +910,7 @@
                 <button
                   type="button"
                   @click="removeModelMapping(index)"
-                  class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                  class="create-account-modal__status-chip create-account-modal__status-chip--danger create-account-modal__status-chip-action"
                 >
                   <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -1124,7 +927,7 @@
             <button
               type="button"
               @click="addModelMapping"
-              class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+              class="btn btn-secondary mb-3 w-full border-2 border-dashed"
             >
               <svg
                 class="mr-1 inline h-4 w-4"
@@ -1149,7 +952,7 @@
                   :key="preset.label"
                   type="button"
                   @click="addPresetMapping(preset.from, preset.to)"
-                  :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
+                  :class="getPresetMappingChipClasses(preset.tone)"
                 >
                   + {{ preset.label }}
                 </button>
@@ -1159,32 +962,24 @@
         </div>
 
         <!-- Pool Mode Section -->
-        <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="form-section">
           <div class="mb-3 flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.poolMode') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.poolModeHint') }}
               </p>
             </div>
             <button
               type="button"
               @click="poolModeEnabled = !poolModeEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                poolModeEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(poolModeEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  poolModeEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(poolModeEnabled)" />
             </button>
           </div>
-          <div v-if="poolModeEnabled" class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-            <p class="text-xs text-blue-700 dark:text-blue-400">
+          <div v-if="poolModeEnabled" class="create-account-modal__notice create-account-modal__notice--blue create-account-modal__notice-block">
+            <p class="text-xs">
               <Icon name="exclamationCircle" size="sm" class="mr-1 inline" :stroke-width="2" />
               {{ t('admin.accounts.poolModeInfo') }}
             </p>
@@ -1199,7 +994,7 @@
               step="1"
               class="input"
             />
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{
                 t('admin.accounts.poolModeRetryCountHint', {
                   default: DEFAULT_POOL_MODE_RETRY_COUNT,
@@ -1211,34 +1006,26 @@
         </div>
 
         <!-- Custom Error Codes Section -->
-        <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="form-section">
           <div class="mb-3 flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.customErrorCodes') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.customErrorCodesHint') }}
               </p>
             </div>
             <button
               type="button"
               @click="customErrorCodesEnabled = !customErrorCodesEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                customErrorCodesEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(customErrorCodesEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  customErrorCodesEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(customErrorCodesEnabled)" />
             </button>
           </div>
 
           <div v-if="customErrorCodesEnabled" class="space-y-3">
-            <div class="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
-              <p class="text-xs text-amber-700 dark:text-amber-400">
+            <div class="create-account-modal__notice create-account-modal__notice--amber create-account-modal__notice-block">
+              <p class="text-xs">
                 <Icon name="exclamationTriangle" size="sm" class="mr-1 inline" :stroke-width="2" />
                 {{ t('admin.accounts.customErrorCodesWarning') }}
               </p>
@@ -1251,12 +1038,7 @@
                 :key="code.value"
                 type="button"
                 @click="toggleErrorCode(code.value)"
-                :class="[
-                  'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-                  selectedErrorCodes.includes(code.value)
-                    ? 'bg-red-100 text-red-700 ring-1 ring-red-500 dark:bg-red-900/30 dark:text-red-400'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-                ]"
+                :class="getStatusChipClasses(selectedErrorCodes.includes(code.value), 'danger')"
               >
                 {{ code.value }} {{ code.label }}
               </button>
@@ -1273,7 +1055,7 @@
                 :placeholder="t('admin.accounts.enterErrorCode')"
                 @keyup.enter="addCustomErrorCode"
               />
-              <button type="button" @click="addCustomErrorCode" class="btn btn-secondary px-3">
+              <button type="button" @click="addCustomErrorCode" class="btn btn-secondary create-account-modal__secondary-button">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     stroke-linecap="round"
@@ -1290,18 +1072,18 @@
               <span
                 v-for="code in selectedErrorCodes.sort((a, b) => a - b)"
                 :key="code"
-                class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                class="create-account-modal__status-chip create-account-modal__status-chip--danger create-account-modal__status-chip-inline"
               >
                 {{ code }}
                 <button
                   type="button"
                   @click="removeErrorCode(code)"
-                  class="hover:text-red-900 dark:hover:text-red-300"
+                  class="create-account-modal__choice-title"
                 >
                   <Icon name="x" size="sm" :stroke-width="2" />
                 </button>
               </span>
-              <span v-if="selectedErrorCodes.length === 0" class="text-xs text-gray-400">
+              <span v-if="selectedErrorCodes.length === 0" class="create-account-modal__choice-description text-xs">
                 {{ t('admin.accounts.noneSelectedUsesDefault') }}
               </span>
             </div>
@@ -1316,23 +1098,23 @@
         <div>
           <label class="input-label">{{ t('admin.accounts.bedrockAuthMode') }}</label>
           <div class="mt-2 flex gap-4">
-            <label class="flex cursor-pointer items-center">
+            <label :class="getRadioOptionClasses(bedrockAuthMode === 'sigv4')">
               <input
                 v-model="bedrockAuthMode"
                 type="radio"
                 value="sigv4"
-                class="mr-2 text-primary-600 focus:ring-primary-500"
+                class="create-account-modal__radio-input"
               />
-              <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.bedrockAuthModeSigv4') }}</span>
+              <span class="create-account-modal__choice-title text-sm">{{ t('admin.accounts.bedrockAuthModeSigv4') }}</span>
             </label>
-            <label class="flex cursor-pointer items-center">
+            <label :class="getRadioOptionClasses(bedrockAuthMode === 'apikey')">
               <input
                 v-model="bedrockAuthMode"
                 type="radio"
                 value="apikey"
-                class="mr-2 text-primary-600 focus:ring-primary-500"
+                class="create-account-modal__radio-input"
               />
-              <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.bedrockAuthModeApikey') }}</span>
+              <span class="create-account-modal__choice-title text-sm">{{ t('admin.accounts.bedrockAuthModeApikey') }}</span>
             </label>
           </div>
         </div>
@@ -1423,19 +1205,19 @@
 
         <!-- Shared: Force Global -->
         <div>
-          <label class="flex items-center gap-2 cursor-pointer">
+          <label class="create-account-modal__checkbox">
             <input
               v-model="bedrockForceGlobal"
               type="checkbox"
-              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500"
+              class="create-account-modal__checkbox-input"
             />
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.bedrockForceGlobal') }}</span>
+            <span class="create-account-modal__choice-title text-sm">{{ t('admin.accounts.bedrockForceGlobal') }}</span>
           </label>
           <p class="input-hint mt-1">{{ t('admin.accounts.bedrockForceGlobalHint') }}</p>
         </div>
 
         <!-- Model Restriction Section for Bedrock -->
-        <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="form-section">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <!-- Mode Toggle -->
@@ -1443,24 +1225,14 @@
             <button
               type="button"
               @click="modelRestrictionMode = 'whitelist'"
-              :class="[
-                'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                modelRestrictionMode === 'whitelist'
-                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-              ]"
+              :class="getModeToggleClasses(modelRestrictionMode === 'whitelist', 'accent')"
             >
               {{ t('admin.accounts.modelWhitelist') }}
             </button>
             <button
               type="button"
               @click="modelRestrictionMode = 'mapping'"
-              :class="[
-                'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                modelRestrictionMode === 'mapping'
-                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-              ]"
+              :class="getModeToggleClasses(modelRestrictionMode === 'mapping', 'purple')"
             >
               {{ t('admin.accounts.modelMapping') }}
             </button>
@@ -1469,7 +1241,7 @@
           <!-- Whitelist Mode -->
           <div v-if="modelRestrictionMode === 'whitelist'">
             <ModelWhitelistSelector v-model="allowedModels" platform="anthropic" />
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description text-xs">
               {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
               <span v-if="allowedModels.length === 0">{{ t('admin.accounts.supportsAllModels') }}</span>
             </p>
@@ -1479,9 +1251,9 @@
           <div v-else class="space-y-3">
             <div v-for="(mapping, index) in modelMappings" :key="index" class="flex items-center gap-2">
               <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
-              <span class="text-gray-400">→</span>
+              <span class="create-account-modal__choice-description">→</span>
               <input v-model="mapping.to" type="text" class="input flex-1" :placeholder="t('admin.accounts.toModel')" />
-              <button type="button" @click="modelMappings.splice(index, 1)" class="text-red-500 hover:text-red-700">
+              <button type="button" @click="modelMappings.splice(index, 1)" class="create-account-modal__status-chip create-account-modal__status-chip--danger">
                 <Icon name="trash" size="sm" />
               </button>
             </div>
@@ -1495,7 +1267,7 @@
                 :key="preset.from"
                 type="button"
                 @click="addPresetMapping(preset.from, preset.to)"
-                :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
+                :class="getPresetMappingChipClasses(preset.tone)"
               >
                 + {{ preset.label }}
               </button>
@@ -1504,32 +1276,24 @@
         </div>
 
         <!-- Pool Mode Section for Bedrock -->
-        <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="form-section">
           <div class="mb-3 flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.poolMode') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.poolModeHint') }}
               </p>
             </div>
             <button
               type="button"
               @click="poolModeEnabled = !poolModeEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                poolModeEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(poolModeEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  poolModeEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(poolModeEnabled)" />
             </button>
           </div>
-          <div v-if="poolModeEnabled" class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-            <p class="text-xs text-blue-700 dark:text-blue-400">
+          <div v-if="poolModeEnabled" class="create-account-modal__notice create-account-modal__notice--blue create-account-modal__notice-block">
+            <p class="text-xs">
               <Icon name="exclamationCircle" size="sm" class="mr-1 inline" :stroke-width="2" />
               {{ t('admin.accounts.poolModeInfo') }}
             </p>
@@ -1544,7 +1308,7 @@
               step="1"
               class="input"
             />
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{
                 t('admin.accounts.poolModeRetryCountHint', {
                   default: DEFAULT_POOL_MODE_RETRY_COUNT,
@@ -1557,10 +1321,10 @@
       </div>
 
       <!-- API Key / Bedrock 账号配额限制 -->
-      <div v-if="form.type === 'apikey' || form.type === 'bedrock'" class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
+      <div v-if="form.type === 'apikey' || form.type === 'bedrock'" class="form-section space-y-4">
         <div class="mb-3">
           <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaLimit') }}</h3>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p class="create-account-modal__choice-description mt-1 text-xs">
             {{ t('admin.accounts.quotaLimitHint') }}
           </p>
         </div>
@@ -1589,15 +1353,15 @@
       <!-- OpenAI OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
       <div
         v-if="form.platform === 'openai' && accountCategory === 'oauth-based'"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        class="form-section"
       >
         <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
         <div
           v-if="isOpenAIModelRestrictionDisabled"
-          class="mb-3 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
+          class="create-account-modal__notice create-account-modal__notice--amber create-account-modal__notice-block mb-3"
         >
-          <p class="text-xs text-amber-700 dark:text-amber-400">
+          <p class="text-xs">
             {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
           </p>
         </div>
@@ -1608,24 +1372,14 @@
             <button
               type="button"
               @click="modelRestrictionMode = 'whitelist'"
-              :class="[
-                'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                modelRestrictionMode === 'whitelist'
-                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-              ]"
+              :class="getModeToggleClasses(modelRestrictionMode === 'whitelist', 'accent')"
             >
               {{ t('admin.accounts.modelWhitelist') }}
             </button>
             <button
               type="button"
               @click="modelRestrictionMode = 'mapping'"
-              :class="[
-                'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                modelRestrictionMode === 'mapping'
-                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-              ]"
+              :class="getModeToggleClasses(modelRestrictionMode === 'mapping', 'purple')"
             >
               {{ t('admin.accounts.modelMapping') }}
             </button>
@@ -1634,7 +1388,7 @@
           <!-- Whitelist Mode -->
           <div v-if="modelRestrictionMode === 'whitelist'">
             <ModelWhitelistSelector v-model="allowedModels" :platform="form.platform" />
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description text-xs">
               {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
               <span v-if="allowedModels.length === 0">{{
                 t('admin.accounts.supportsAllModels')
@@ -1644,8 +1398,8 @@
 
           <!-- Mapping Mode -->
           <div v-else>
-            <div class="mb-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
-              <p class="text-xs text-purple-700 dark:text-purple-400">
+            <div class="create-account-modal__notice create-account-modal__notice--purple create-account-modal__notice-block mb-3">
+              <p class="text-xs">
                 {{ t('admin.accounts.mapRequestModels') }}
               </p>
             </div>
@@ -1663,7 +1417,7 @@
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
-                  class="h-4 w-4 flex-shrink-0 text-gray-400"
+                  class="create-account-modal__choice-description h-4 w-4 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1684,7 +1438,7 @@
                 <button
                   type="button"
                   @click="removeModelMapping(index)"
-                  class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                  class="create-account-modal__status-chip create-account-modal__status-chip--danger create-account-modal__status-chip-action"
                 >
                   <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -1701,7 +1455,7 @@
             <button
               type="button"
               @click="addModelMapping"
-              class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+              class="btn btn-secondary mb-3 w-full border-2 border-dashed"
             >
               + {{ t('admin.accounts.addMapping') }}
             </button>
@@ -1713,7 +1467,7 @@
                 :key="'oauth-' + preset.label"
                 type="button"
                 @click="addPresetMapping(preset.from, preset.to)"
-                :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
+                :class="getPresetMappingChipClasses(preset.tone)"
               >
                 + {{ preset.label }}
               </button>
@@ -1723,34 +1477,26 @@
       </div>
 
       <!-- Temp Unschedulable Rules -->
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
+      <div class="form-section space-y-4">
         <div class="mb-3 flex items-center justify-between">
           <div>
             <label class="input-label mb-0">{{ t('admin.accounts.tempUnschedulable.title') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{ t('admin.accounts.tempUnschedulable.hint') }}
             </p>
           </div>
           <button
             type="button"
             @click="tempUnschedEnabled = !tempUnschedEnabled"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              tempUnschedEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-            ]"
+            :class="getSwitchTrackClasses(tempUnschedEnabled)"
           >
-            <span
-              :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                tempUnschedEnabled ? 'translate-x-5' : 'translate-x-0'
-              ]"
-            />
+            <span :class="getSwitchThumbClasses(tempUnschedEnabled)" />
           </button>
         </div>
 
         <div v-if="tempUnschedEnabled" class="space-y-3">
-          <div class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-              <p class="text-xs text-blue-700 dark:text-blue-400">
+          <div class="create-account-modal__notice create-account-modal__notice--blue create-account-modal__notice-block">
+              <p class="text-xs">
                 <Icon name="exclamationTriangle" size="sm" class="mr-1 inline" :stroke-width="2" />
                 {{ t('admin.accounts.tempUnschedulable.notice') }}
               </p>
@@ -1762,7 +1508,7 @@
               :key="preset.label"
               type="button"
               @click="addTempUnschedRule(preset.rule)"
-              class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-300 dark:hover:bg-dark-500"
+              class="create-account-modal__tag-button"
             >
               + {{ preset.label }}
             </button>
@@ -1772,10 +1518,10 @@
             <div
               v-for="(rule, index) in tempUnschedRules"
               :key="getTempUnschedRuleKey(rule)"
-              class="rounded-lg border border-gray-200 p-3 dark:border-dark-600"
+              class="create-account-modal__rule-card"
             >
               <div class="mb-2 flex items-center justify-between">
-                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                <span class="create-account-modal__rule-index">
                   {{ t('admin.accounts.tempUnschedulable.ruleIndex', { index: index + 1 }) }}
                 </span>
                 <div class="flex items-center gap-2">
@@ -1783,7 +1529,7 @@
                     type="button"
                     :disabled="index === 0"
                     @click="moveTempUnschedRule(index, -1)"
-                    class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
+                    class="create-account-modal__icon-button"
                   >
                     <Icon name="chevronUp" size="sm" :stroke-width="2" />
                   </button>
@@ -1791,7 +1537,7 @@
                     type="button"
                     :disabled="index === tempUnschedRules.length - 1"
                     @click="moveTempUnschedRule(index, 1)"
-                    class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
+                    class="create-account-modal__icon-button"
                   >
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -1800,7 +1546,7 @@
                   <button
                     type="button"
                     @click="removeTempUnschedRule(index)"
-                    class="rounded p-1 text-red-500 transition-colors hover:text-red-600"
+                    class="create-account-modal__icon-button create-account-modal__icon-button--danger"
                   >
                     <Icon name="x" size="sm" :stroke-width="2" />
                   </button>
@@ -1855,7 +1601,7 @@
           <button
             type="button"
             @click="addTempUnschedRule()"
-            class="w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+            class="create-account-modal__dashed-action w-full"
           >
             <svg
               class="mr-1 inline h-4 w-4"
@@ -1873,31 +1619,23 @@
       <!-- Intercept Warmup Requests (Anthropic/Antigravity) -->
       <div
         v-if="form.platform === 'anthropic' || form.platform === 'antigravity'"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        class="form-section"
       >
         <div class="flex items-center justify-between">
           <div>
             <label class="input-label mb-0">{{
               t('admin.accounts.interceptWarmupRequests')
             }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{ t('admin.accounts.interceptWarmupRequestsDesc') }}
             </p>
           </div>
           <button
             type="button"
             @click="interceptWarmupRequests = !interceptWarmupRequests"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              interceptWarmupRequests ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-            ]"
+            :class="getSwitchTrackClasses(interceptWarmupRequests)"
           >
-            <span
-              :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                interceptWarmupRequests ? 'translate-x-5' : 'translate-x-0'
-              ]"
-            />
+            <span :class="getSwitchThumbClasses(interceptWarmupRequests)" />
           </button>
         </div>
       </div>
@@ -1905,38 +1643,30 @@
       <!-- Quota Control Section (Anthropic OAuth/SetupToken only) -->
       <div
         v-if="form.platform === 'anthropic' && accountCategory === 'oauth-based'"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4"
+        class="form-section space-y-4"
       >
         <div class="mb-3">
           <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaControl.title') }}</h3>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p class="create-account-modal__choice-description mt-1 text-xs">
             {{ t('admin.accounts.quotaControl.hint') }}
           </p>
         </div>
 
         <!-- Window Cost Limit -->
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+        <div class="create-account-modal__config-card">
           <div class="mb-3 flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.windowCost.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.quotaControl.windowCost.hint') }}
               </p>
             </div>
             <button
               type="button"
               @click="windowCostEnabled = !windowCostEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                windowCostEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(windowCostEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  windowCostEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(windowCostEnabled)" />
             </button>
           </div>
 
@@ -1944,7 +1674,7 @@
             <div>
               <label class="input-label">{{ t('admin.accounts.quotaControl.windowCost.limit') }}</label>
               <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+                <span class="create-account-modal__choice-description absolute left-3 top-1/2 -translate-y-1/2">$</span>
                 <input
                   v-model.number="windowCostLimit"
                   type="number"
@@ -1959,7 +1689,7 @@
             <div>
               <label class="input-label">{{ t('admin.accounts.quotaControl.windowCost.stickyReserve') }}</label>
               <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+                <span class="create-account-modal__choice-description absolute left-3 top-1/2 -translate-y-1/2">$</span>
                 <input
                   v-model.number="windowCostStickyReserve"
                   type="number"
@@ -1975,28 +1705,20 @@
         </div>
 
         <!-- Session Limit -->
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+        <div class="create-account-modal__config-card">
           <div class="mb-3 flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.sessionLimit.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.quotaControl.sessionLimit.hint') }}
               </p>
             </div>
             <button
               type="button"
               @click="sessionLimitEnabled = !sessionLimitEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                sessionLimitEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(sessionLimitEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  sessionLimitEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(sessionLimitEnabled)" />
             </button>
           </div>
 
@@ -2024,7 +1746,7 @@
                   class="input pr-12"
                   :placeholder="t('admin.accounts.quotaControl.sessionLimit.idleTimeoutPlaceholder')"
                 />
-                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">{{ t('common.minutes') }}</span>
+                <span class="create-account-modal__choice-description absolute right-3 top-1/2 -translate-y-1/2">{{ t('common.minutes') }}</span>
               </div>
               <p class="input-hint">{{ t('admin.accounts.quotaControl.sessionLimit.idleTimeoutHint') }}</p>
             </div>
@@ -2032,28 +1754,20 @@
         </div>
 
         <!-- RPM Limit -->
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+        <div class="create-account-modal__config-card">
           <div class="mb-3 flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.rpmLimit.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.quotaControl.rpmLimit.hint') }}
               </p>
             </div>
             <button
               type="button"
               @click="rpmLimitEnabled = !rpmLimitEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                rpmLimitEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(rpmLimitEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  rpmLimitEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(rpmLimitEnabled)" />
             </button>
           </div>
 
@@ -2078,12 +1792,7 @@
                 <button
                   type="button"
                   @click="rpmStrategy = 'tiered'"
-                  :class="[
-                    'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                    rpmStrategy === 'tiered'
-                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-                  ]"
+                  :class="getModeToggleClasses(rpmStrategy === 'tiered', 'accent')"
                 >
                   <div class="text-center">
                     <div>{{ t('admin.accounts.quotaControl.rpmLimit.strategyTiered') }}</div>
@@ -2093,12 +1802,7 @@
                 <button
                   type="button"
                   @click="rpmStrategy = 'sticky_exempt'"
-                  :class="[
-                    'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                    rpmStrategy === 'sticky_exempt'
-                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-                  ]"
+                  :class="getModeToggleClasses(rpmStrategy === 'sticky_exempt', 'accent')"
                 >
                   <div class="text-center">
                     <div>{{ t('admin.accounts.quotaControl.rpmLimit.strategyStickyExempt') }}</div>
@@ -2126,18 +1830,13 @@
           <!-- 用户消息限速模式（独立于 RPM 开关，始终可见） -->
           <div class="mt-4">
             <label class="input-label">{{ t('admin.accounts.quotaControl.rpmLimit.userMsgQueue') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
+            <p class="create-account-modal__choice-description mt-1 mb-2 text-xs">
               {{ t('admin.accounts.quotaControl.rpmLimit.userMsgQueueHint') }}
             </p>
             <div class="flex space-x-2">
               <button type="button" v-for="opt in umqModeOptions" :key="opt.value"
                 @click="userMsgQueueMode = opt.value"
-                :class="[
-                  'px-3 py-1.5 text-sm rounded-md border transition-colors',
-                  userMsgQueueMode === opt.value
-                    ? 'bg-primary-600 text-white border-primary-600'
-                    : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-dark-500 hover:bg-gray-50 dark:hover:bg-dark-600'
-                ]">
+                :class="getSegmentOptionClasses(userMsgQueueMode === opt.value)">
                 {{ opt.label }}
               </button>
             </div>
@@ -2145,28 +1844,20 @@
         </div>
 
         <!-- TLS Fingerprint -->
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+        <div class="create-account-modal__config-card">
           <div class="flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.tlsFingerprint.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.quotaControl.tlsFingerprint.hint') }}
               </p>
             </div>
             <button
               type="button"
               @click="tlsFingerprintEnabled = !tlsFingerprintEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                tlsFingerprintEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(tlsFingerprintEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  tlsFingerprintEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(tlsFingerprintEnabled)" />
             </button>
           </div>
           <!-- Profile selector -->
@@ -2180,95 +1871,71 @@
         </div>
 
         <!-- Session ID Masking -->
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+        <div class="create-account-modal__config-card">
           <div class="flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.sessionIdMasking.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.quotaControl.sessionIdMasking.hint') }}
               </p>
             </div>
             <button
               type="button"
               @click="sessionIdMaskingEnabled = !sessionIdMaskingEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                sessionIdMaskingEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(sessionIdMaskingEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  sessionIdMaskingEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(sessionIdMaskingEnabled)" />
             </button>
           </div>
         </div>
 
         <!-- Cache TTL Override -->
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+        <div class="create-account-modal__config-card">
           <div class="flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.cacheTTLOverride.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.quotaControl.cacheTTLOverride.hint') }}
               </p>
             </div>
             <button
               type="button"
               @click="cacheTTLOverrideEnabled = !cacheTTLOverrideEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                cacheTTLOverrideEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(cacheTTLOverrideEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  cacheTTLOverrideEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(cacheTTLOverrideEnabled)" />
             </button>
           </div>
           <div v-if="cacheTTLOverrideEnabled" class="mt-3">
             <label class="input-label text-xs">{{ t('admin.accounts.quotaControl.cacheTTLOverride.target') }}</label>
             <select
               v-model="cacheTTLOverrideTarget"
-              class="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-500 dark:bg-dark-700 dark:text-white"
+              class="input mt-1"
             >
               <option value="5m">5m</option>
               <option value="1h">1h</option>
             </select>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="input-hint mt-1">
               {{ t('admin.accounts.quotaControl.cacheTTLOverride.targetHint') }}
             </p>
           </div>
         </div>
 
         <!-- Custom Base URL Relay -->
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+        <div class="create-account-modal__config-card">
           <div class="flex items-center justify-between">
             <div>
               <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.customBaseUrl.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p class="create-account-modal__choice-description mt-1 text-xs">
                 {{ t('admin.accounts.quotaControl.customBaseUrl.hint') }}
               </p>
             </div>
             <button
               type="button"
               @click="customBaseUrlEnabled = !customBaseUrlEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                customBaseUrlEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
+              :class="getSwitchTrackClasses(customBaseUrlEnabled)"
             >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  customBaseUrlEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
+              <span :class="getSwitchThumbClasses(customBaseUrlEnabled)" />
             </button>
           </div>
           <div v-if="customBaseUrlEnabled" class="mt-3">
@@ -2317,7 +1984,7 @@
           <p class="input-hint">{{ t('admin.accounts.billingRateMultiplierHint') }}</p>
         </div>
       </div>
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="form-section">
         <label class="input-label">{{ t('admin.accounts.expiresAt') }}</label>
         <input v-model="expiresAtInput" type="datetime-local" class="input" />
         <p class="input-hint">{{ t('admin.accounts.expiresAtHint') }}</p>
@@ -2326,29 +1993,21 @@
       <!-- OpenAI 自动透传开关（OAuth/API Key） -->
       <div
         v-if="form.platform === 'openai'"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        class="form-section"
       >
         <div class="flex items-center justify-between">
           <div>
             <label class="input-label mb-0">{{ t('admin.accounts.openai.oauthPassthrough') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{ t('admin.accounts.openai.oauthPassthroughDesc') }}
             </p>
           </div>
           <button
             type="button"
             @click="openaiPassthroughEnabled = !openaiPassthroughEnabled"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              openaiPassthroughEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-            ]"
+            :class="getSwitchTrackClasses(openaiPassthroughEnabled)"
           >
-            <span
-              :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                openaiPassthroughEnabled ? 'translate-x-5' : 'translate-x-0'
-              ]"
-            />
+            <span :class="getSwitchThumbClasses(openaiPassthroughEnabled)" />
           </button>
         </div>
       </div>
@@ -2356,15 +2015,15 @@
       <!-- OpenAI WS Mode 三态（off/ctx_pool/passthrough） -->
       <div
         v-if="form.platform === 'openai' && (accountCategory === 'oauth-based' || accountCategory === 'apikey')"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        class="form-section"
       >
         <div class="flex items-center justify-between">
           <div>
             <label class="input-label mb-0">{{ t('admin.accounts.openai.wsMode') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{ t('admin.accounts.openai.wsModeDesc') }}
             </p>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{ t(openAIWSModeConcurrencyHintKey) }}
             </p>
           </div>
@@ -2377,29 +2036,21 @@
       <!-- Anthropic API Key 自动透传开关 -->
       <div
         v-if="form.platform === 'anthropic' && accountCategory === 'apikey'"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        class="form-section"
       >
         <div class="flex items-center justify-between">
           <div>
             <label class="input-label mb-0">{{ t('admin.accounts.anthropic.apiKeyPassthrough') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{ t('admin.accounts.anthropic.apiKeyPassthroughDesc') }}
             </p>
           </div>
           <button
             type="button"
             @click="anthropicPassthroughEnabled = !anthropicPassthroughEnabled"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              anthropicPassthroughEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-            ]"
+            :class="getSwitchTrackClasses(anthropicPassthroughEnabled)"
           >
-            <span
-              :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                anthropicPassthroughEnabled ? 'translate-x-5' : 'translate-x-0'
-              ]"
-            />
+            <span :class="getSwitchThumbClasses(anthropicPassthroughEnabled)" />
           </button>
         </div>
       </div>
@@ -2407,29 +2058,21 @@
       <!-- OpenAI OAuth Codex 官方客户端限制开关 -->
       <div
         v-if="form.platform === 'openai' && accountCategory === 'oauth-based'"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        class="form-section"
       >
         <div class="flex items-center justify-between">
           <div>
             <label class="input-label mb-0">{{ t('admin.accounts.openai.codexCLIOnly') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{ t('admin.accounts.openai.codexCLIOnlyDesc') }}
             </p>
           </div>
           <button
             type="button"
             @click="codexCLIOnlyEnabled = !codexCLIOnlyEnabled"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              codexCLIOnlyEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-            ]"
+            :class="getSwitchTrackClasses(codexCLIOnlyEnabled)"
           >
-            <span
-              :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                codexCLIOnlyEnabled ? 'translate-x-5' : 'translate-x-0'
-              ]"
-            />
+            <span :class="getSwitchThumbClasses(codexCLIOnlyEnabled)" />
           </button>
         </div>
       </div>
@@ -2440,82 +2083,61 @@
             <label class="input-label mb-0">{{
               t('admin.accounts.autoPauseOnExpired')
             }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="create-account-modal__choice-description mt-1 text-xs">
               {{ t('admin.accounts.autoPauseOnExpiredDesc') }}
             </p>
           </div>
           <button
             type="button"
             @click="autoPauseOnExpired = !autoPauseOnExpired"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              autoPauseOnExpired ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-            ]"
+            :class="getSwitchTrackClasses(autoPauseOnExpired)"
           >
-            <span
-              :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                autoPauseOnExpired ? 'translate-x-5' : 'translate-x-0'
-              ]"
-            />
+            <span :class="getSwitchThumbClasses(autoPauseOnExpired)" />
           </button>
         </div>
       </div>
 
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="create-account-modal__extra-options">
         <!-- Mixed Scheduling (only for antigravity accounts) -->
         <div v-if="form.platform === 'antigravity'" class="flex items-center gap-2">
-          <label class="flex cursor-pointer items-center gap-2">
+          <label class="create-account-modal__checkbox">
             <input
               type="checkbox"
               v-model="mixedScheduling"
-              class="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500 dark:border-dark-500"
+              class="create-account-modal__checkbox-input"
             />
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span class="create-account-modal__choice-title text-sm">
               {{ t('admin.accounts.mixedScheduling') }}
             </span>
           </label>
           <div class="group relative">
-            <span
-              class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-200 text-xs text-gray-500 hover:bg-gray-300 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500"
-            >
+            <span class="create-account-modal__tooltip-trigger">
               ?
             </span>
-            <!-- Tooltip（向下显示避免被弹窗裁剪） -->
-            <div
-              class="pointer-events-none absolute left-0 top-full z-[100] mt-1.5 w-72 rounded bg-gray-900 px-3 py-2 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
-            >
+            <div class="create-account-modal__tooltip-panel">
               {{ t('admin.accounts.mixedSchedulingTooltip') }}
-              <div
-                class="absolute bottom-full left-3 border-4 border-transparent border-b-gray-900 dark:border-b-gray-700"
-              ></div>
+              <div class="create-account-modal__tooltip-arrow"></div>
             </div>
           </div>
         </div>
         <div v-if="form.platform === 'antigravity'" class="mt-3 flex items-center gap-2">
-          <label class="flex cursor-pointer items-center gap-2">
+          <label class="create-account-modal__checkbox">
             <input
               type="checkbox"
               v-model="allowOverages"
-              class="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500 dark:border-dark-500"
+              class="create-account-modal__checkbox-input"
             />
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span class="create-account-modal__choice-title text-sm">
               {{ t('admin.accounts.allowOverages') }}
             </span>
           </label>
           <div class="group relative">
-            <span
-              class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-200 text-xs text-gray-500 hover:bg-gray-300 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500"
-            >
+            <span class="create-account-modal__tooltip-trigger">
               ?
             </span>
-            <div
-              class="pointer-events-none absolute left-0 top-full z-[100] mt-1.5 w-72 rounded bg-gray-900 px-3 py-2 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
-            >
+            <div class="create-account-modal__tooltip-panel">
               {{ t('admin.accounts.allowOveragesTooltip') }}
-              <div
-                class="absolute bottom-full left-3 border-4 border-transparent border-b-gray-900 dark:border-b-gray-700"
-              ></div>
+              <div class="create-account-modal__tooltip-arrow"></div>
             </div>
           </div>
         </div>
@@ -2649,29 +2271,29 @@
     :show="showGeminiHelpDialog"
     :title="t('admin.accounts.gemini.helpDialog.title')"
     @close="showGeminiHelpDialog = false"
-    max-width="max-w-3xl"
+    width="wide"
   >
     <div class="space-y-6">
       <!-- Setup Guide Section -->
       <div>
-        <h3 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+        <h3 class="create-account-modal__dialog-title">
           {{ t('admin.accounts.gemini.setupGuide.title') }}
         </h3>
         <div class="space-y-4">
           <div>
-            <p class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <p class="create-account-modal__dialog-subtitle">
               {{ t('admin.accounts.gemini.setupGuide.checklistTitle') }}
             </p>
-            <ul class="list-inside list-disc space-y-1 text-sm text-gray-600 dark:text-gray-400">
+            <ul class="create-account-modal__dialog-list">
               <li>{{ t('admin.accounts.gemini.setupGuide.checklistItems.usIp') }}</li>
               <li>{{ t('admin.accounts.gemini.setupGuide.checklistItems.age') }}</li>
             </ul>
           </div>
           <div>
-            <p class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <p class="create-account-modal__dialog-subtitle">
               {{ t('admin.accounts.gemini.setupGuide.activationTitle') }}
             </p>
-            <ul class="list-inside list-disc space-y-1 text-sm text-gray-600 dark:text-gray-400">
+            <ul class="create-account-modal__dialog-list">
               <li>{{ t('admin.accounts.gemini.setupGuide.activationItems.geminiWeb') }}</li>
               <li>{{ t('admin.accounts.gemini.setupGuide.activationItems.gcpProject') }}</li>
             </ul>
@@ -2680,34 +2302,34 @@
                 href="https://policies.google.com/terms"
                 target="_blank"
                 rel="noreferrer"
-                class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                class="create-account-modal__link text-sm"
               >
                 {{ t('admin.accounts.gemini.setupGuide.links.countryCheck') }}
               </a>
-              <span class="text-gray-400">·</span>
+              <span class="create-account-modal__choice-description">·</span>
               <a
                 href="https://policies.google.com/country-association-form"
                 target="_blank"
                 rel="noreferrer"
-                class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                class="create-account-modal__link text-sm"
               >
                 修改归属地
               </a>
-              <span class="text-gray-400">·</span>
+              <span class="create-account-modal__choice-description">·</span>
               <a
                 href="https://gemini.google.com/gems/create?hl=en-US&pli=1"
                 target="_blank"
                 rel="noreferrer"
-                class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                class="create-account-modal__link text-sm"
               >
                 {{ t('admin.accounts.gemini.setupGuide.links.geminiWebActivation') }}
               </a>
-              <span class="text-gray-400">·</span>
+              <span class="create-account-modal__choice-description">·</span>
               <a
                 href="https://console.cloud.google.com"
                 target="_blank"
                 rel="noreferrer"
-                class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                class="create-account-modal__link text-sm"
               >
                 {{ t('admin.accounts.gemini.setupGuide.links.gcpProject') }}
               </a>
@@ -2717,81 +2339,81 @@
       </div>
 
       <!-- Quota Policy Section -->
-      <div class="border-t border-gray-200 pt-6 dark:border-dark-600">
-        <h3 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+      <div class="form-section pt-6">
+        <h3 class="create-account-modal__choice-title mb-3 text-sm font-semibold">
           {{ t('admin.accounts.gemini.quotaPolicy.title') }}
         </h3>
-        <p class="mb-4 text-xs text-amber-600 dark:text-amber-400">
+        <p class="create-account-modal__notice create-account-modal__notice--amber create-account-modal__notice-inline mb-4 text-xs">
           {{ t('admin.accounts.gemini.quotaPolicy.note') }}
         </p>
         <div class="overflow-x-auto">
           <table class="w-full text-xs">
-            <thead class="bg-gray-50 dark:bg-dark-600">
+            <thead class="create-account-modal__table-head">
               <tr>
-                <th class="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">
+                <th class="create-account-modal__table-heading">
                   {{ t('admin.accounts.gemini.quotaPolicy.columns.channel') }}
                 </th>
-                <th class="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">
+                <th class="create-account-modal__table-heading">
                   {{ t('admin.accounts.gemini.quotaPolicy.columns.account') }}
                 </th>
-                <th class="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">
+                <th class="create-account-modal__table-heading">
                   {{ t('admin.accounts.gemini.quotaPolicy.columns.limits') }}
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-dark-600">
+            <tbody class="create-account-modal__table-body">
               <tr>
-                <td class="px-3 py-2 text-gray-900 dark:text-white">
+                <td class="create-account-modal__table-primary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.googleOne.channel') }}
                 </td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Free</td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
+                <td class="create-account-modal__table-secondary">Free</td>
+                <td class="create-account-modal__table-secondary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.googleOne.limitsFree') }}
                 </td>
               </tr>
               <tr>
-                <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Pro</td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
+                <td class="create-account-modal__table-primary"></td>
+                <td class="create-account-modal__table-secondary">Pro</td>
+                <td class="create-account-modal__table-secondary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.googleOne.limitsPro') }}
                 </td>
               </tr>
               <tr>
-                <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Ultra</td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
+                <td class="create-account-modal__table-primary"></td>
+                <td class="create-account-modal__table-secondary">Ultra</td>
+                <td class="create-account-modal__table-secondary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.googleOne.limitsUltra') }}
                 </td>
               </tr>
               <tr>
-                <td class="px-3 py-2 text-gray-900 dark:text-white">
+                <td class="create-account-modal__table-primary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.channel') }}
                 </td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Standard</td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
+                <td class="create-account-modal__table-secondary">Standard</td>
+                <td class="create-account-modal__table-secondary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.limitsStandard') }}
                 </td>
               </tr>
               <tr>
-                <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Enterprise</td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
+                <td class="create-account-modal__table-primary"></td>
+                <td class="create-account-modal__table-secondary">Enterprise</td>
+                <td class="create-account-modal__table-secondary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.limitsEnterprise') }}
                 </td>
               </tr>
               <tr>
-                <td class="px-3 py-2 text-gray-900 dark:text-white">
+                <td class="create-account-modal__table-primary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.aiStudio.channel') }}
                 </td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Free</td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
+                <td class="create-account-modal__table-secondary">Free</td>
+                <td class="create-account-modal__table-secondary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.aiStudio.limitsFree') }}
                 </td>
               </tr>
               <tr>
-                <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Paid</td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
+                <td class="create-account-modal__table-primary"></td>
+                <td class="create-account-modal__table-secondary">Paid</td>
+                <td class="create-account-modal__table-secondary">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.aiStudio.limitsPaid') }}
                 </td>
               </tr>
@@ -2803,7 +2425,7 @@
             :href="geminiQuotaDocs.codeAssist"
             target="_blank"
             rel="noreferrer"
-            class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            class="create-account-modal__link text-sm"
           >
             {{ t('admin.accounts.gemini.quotaPolicy.docs.codeAssist') }}
           </a>
@@ -2811,7 +2433,7 @@
             :href="geminiQuotaDocs.aiStudio"
             target="_blank"
             rel="noreferrer"
-            class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            class="create-account-modal__link text-sm"
           >
             {{ t('admin.accounts.gemini.quotaPolicy.docs.aiStudio') }}
           </a>
@@ -2819,7 +2441,7 @@
             :href="geminiQuotaDocs.vertex"
             target="_blank"
             rel="noreferrer"
-            class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            class="create-account-modal__link text-sm"
           >
             {{ t('admin.accounts.gemini.quotaPolicy.docs.vertex') }}
           </a>
@@ -2827,8 +2449,8 @@
       </div>
 
       <!-- API Key Links Section -->
-      <div class="border-t border-gray-200 pt-6 dark:border-dark-600">
-        <h3 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+      <div class="form-section pt-6">
+        <h3 class="create-account-modal__choice-title mb-3 text-sm font-semibold">
           {{ t('admin.accounts.gemini.helpDialog.apiKeySection') }}
         </h3>
         <div class="flex flex-wrap gap-3">
@@ -2836,7 +2458,7 @@
             :href="geminiHelpLinks.apiKey"
             target="_blank"
             rel="noreferrer"
-            class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            class="create-account-modal__link text-sm"
           >
             {{ t('admin.accounts.gemini.accountType.apiKeyLink') }}
           </a>
@@ -2844,7 +2466,7 @@
             :href="geminiHelpLinks.aiStudioPricing"
             target="_blank"
             rel="noreferrer"
-            class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            class="create-account-modal__link text-sm"
           >
             {{ t('admin.accounts.gemini.accountType.quotaLink') }}
           </a>
@@ -2880,6 +2502,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import {
   claudeModels,
+  getPresetMappingChipClasses,
   getPresetMappingsByPlatform,
   getModelsByPlatform,
   commonErrorCodes,
@@ -3192,6 +2815,91 @@ const mixedChannelWarningMessageText = computed(() => {
     t
   })
 })
+
+type CreateAccountTone = 'rose' | 'orange' | 'purple' | 'amber' | 'green' | 'blue' | 'emerald'
+type CreateAccountModeTone = 'accent' | 'purple' | 'danger'
+
+function joinClassNames(classNames: Array<string | false | null | undefined>) {
+  return classNames.filter(Boolean).join(' ')
+}
+
+function getChoiceCardClasses(isSelected: boolean, tone: CreateAccountTone, isDisabled = false) {
+  return joinClassNames([
+    'create-account-modal__choice-card create-account-modal__choice-card-control flex items-center gap-3 border-2 text-left transition-all',
+    isSelected ? `create-account-modal__choice-card--${tone}` : 'create-account-modal__choice-card--idle',
+    isDisabled && 'create-account-modal__choice-card--disabled'
+  ])
+}
+
+function getChoiceIconClasses(isSelected: boolean, tone: CreateAccountTone) {
+  return joinClassNames([
+    'create-account-modal__choice-icon create-account-modal__choice-icon-control flex h-8 w-8 shrink-0 items-center justify-center',
+    isSelected ? `create-account-modal__choice-icon--${tone}` : 'create-account-modal__choice-icon--idle'
+  ])
+}
+
+function getToneTagClasses(tone: CreateAccountTone) {
+  return joinClassNames([
+    'create-account-modal__tone-tag create-account-modal__tone-tag-control text-[10px] font-semibold',
+    `create-account-modal__tone-tag--${tone}`
+  ])
+}
+
+function getModeToggleClasses(isSelected: boolean, tone: CreateAccountModeTone) {
+  return joinClassNames([
+    'create-account-modal__mode-toggle create-account-modal__mode-toggle-control flex-1 text-sm font-medium transition-all',
+    isSelected
+      ? `create-account-modal__mode-toggle--${tone}`
+      : 'create-account-modal__mode-toggle--idle'
+  ])
+}
+
+function getSwitchTrackClasses(isEnabled: boolean) {
+  return joinClassNames([
+    'create-account-modal__switch relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+    isEnabled ? 'create-account-modal__switch--enabled' : 'create-account-modal__switch--disabled'
+  ])
+}
+
+function getSwitchThumbClasses(isEnabled: boolean) {
+  return joinClassNames([
+    'create-account-modal__switch-thumb pointer-events-none inline-block h-5 w-5 transform rounded-full shadow ring-0 transition duration-200 ease-in-out',
+    isEnabled ? 'translate-x-5' : 'translate-x-0'
+  ])
+}
+
+function getStatusChipClasses(isSelected: boolean, tone: CreateAccountModeTone = 'danger') {
+  return joinClassNames([
+    'create-account-modal__status-chip create-account-modal__status-chip-control text-sm font-medium transition-colors',
+    isSelected
+      ? `create-account-modal__status-chip--${tone}`
+      : 'create-account-modal__status-chip--idle'
+  ])
+}
+
+function getValidationInputClasses(hasError: boolean, extraClassName = '') {
+  return joinClassNames([
+    'input',
+    extraClassName,
+    hasError && 'input-error'
+  ])
+}
+
+function getRadioOptionClasses(isSelected: boolean) {
+  return joinClassNames([
+    'create-account-modal__radio-option',
+    isSelected && 'create-account-modal__radio-option--active'
+  ])
+}
+
+function getSegmentOptionClasses(isSelected: boolean) {
+  return joinClassNames([
+    'create-account-modal__segment-option',
+    isSelected
+      ? 'create-account-modal__segment-option--active'
+      : 'create-account-modal__segment-option--idle'
+  ])
+}
 
 // Computed: current preset mappings based on platform
 const presetMappings = computed(() => getPresetMappingsByPlatform(form.platform))
@@ -4795,3 +4503,594 @@ const handleCookieAuth = async (sessionKey: string) => {
   }
 }
 </script>
+
+<style scoped>
+.create-account-modal__step-node--active {
+  background: var(--theme-accent);
+  color: var(--theme-filled-text);
+}
+
+.create-account-modal__step-node--idle {
+  background: color-mix(in srgb, var(--theme-page-border) 84%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+
+.create-account-modal__step-label {
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__step-connector {
+  background: color-mix(in srgb, var(--theme-page-border) 78%, transparent);
+}
+
+.create-account-modal__platform-button {
+  color: var(--theme-page-muted);
+}
+
+.create-account-modal__platform-button-control {
+  border-radius: calc(var(--theme-button-radius) - 2px);
+  padding: 0.625rem 1rem;
+}
+
+.create-account-modal__platform-button--idle:hover {
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__platform-button--active {
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.create-account-modal__platform-button--anthropic {
+  color: color-mix(in srgb, rgb(var(--theme-brand-orange-rgb)) 84%, var(--theme-page-text));
+}
+
+.create-account-modal__platform-button--openai {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.create-account-modal__platform-button--sora {
+  color: color-mix(in srgb, rgb(var(--theme-brand-rose-rgb)) 84%, var(--theme-page-text));
+}
+
+.create-account-modal__platform-button--gemini {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.create-account-modal__platform-button--antigravity {
+  color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 84%, var(--theme-page-text));
+}
+
+.create-account-modal__choice-card {
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  padding: 0.75rem;
+  border-color: color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
+}
+
+.create-account-modal__choice-card:hover {
+  border-color: color-mix(in srgb, var(--theme-page-border) 92%, var(--theme-accent));
+}
+
+.create-account-modal__choice-card--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.create-account-modal__choice-card--idle {
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__choice-icon--idle {
+  background: color-mix(in srgb, var(--theme-page-border) 86%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+
+.create-account-modal__choice-icon-control {
+  border-radius: calc(var(--theme-button-radius) + 1px);
+}
+
+.create-account-modal__choice-title {
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__choice-description {
+  color: var(--theme-page-muted);
+}
+
+.create-account-modal__help-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: var(--theme-button-radius);
+  padding: calc(var(--theme-button-padding-y) * 0.4) calc(var(--theme-button-padding-x) * 0.4);
+  font-size: 0.75rem;
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 82%, var(--theme-page-text));
+}
+
+.create-account-modal__help-button:hover {
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 10%, var(--theme-surface));
+}
+
+.create-account-modal__error-text {
+  color: rgb(var(--theme-danger-rgb));
+  font-size: 0.75rem;
+}
+
+.create-account-modal__link {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.create-account-modal__link:hover {
+  text-decoration: underline;
+}
+
+.create-account-modal__inline-toggle {
+  color: var(--theme-page-muted);
+}
+
+.create-account-modal__inline-toggle:hover {
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__notice {
+  border-radius: var(--theme-auth-feedback-radius);
+  border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.create-account-modal__notice-inline {
+  padding: 0.5rem 0.75rem;
+}
+
+.create-account-modal__notice-block {
+  padding: var(--theme-auth-callback-feedback-padding);
+}
+
+.create-account-modal__notice-tooltip {
+  width: 20rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--theme-button-radius);
+}
+
+.form-section {
+  border-top: 1px solid color-mix(in srgb, var(--theme-page-border) 76%, transparent);
+  padding-top: 1rem;
+}
+
+.create-account-modal__config-card {
+  border-radius: var(--theme-surface-radius);
+  padding: var(--theme-markdown-block-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 90%, var(--theme-surface));
+}
+
+.create-account-modal__tone-tag {
+  display: inline-flex;
+  align-items: center;
+}
+
+.create-account-modal__tone-tag-control {
+  border-radius: var(--theme-button-radius);
+  padding: 0.125rem 0.5rem;
+}
+
+.create-account-modal__tone-tag-anchor {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.create-account-modal__secondary-button {
+  padding-inline: calc(var(--theme-button-padding-x) * 0.75);
+}
+
+.create-account-modal__choice-card--rose,
+.create-account-modal__choice-icon--rose,
+.create-account-modal__tone-tag--rose,
+.create-account-modal__notice--rose {
+  --create-account-tone-rgb: var(--theme-brand-rose-rgb);
+}
+
+.create-account-modal__choice-card--orange,
+.create-account-modal__choice-icon--orange,
+.create-account-modal__tone-tag--orange,
+.create-account-modal__notice--orange {
+  --create-account-tone-rgb: var(--theme-brand-orange-rgb);
+}
+
+.create-account-modal__choice-card--purple,
+.create-account-modal__choice-icon--purple,
+.create-account-modal__tone-tag--purple,
+.create-account-modal__notice--purple {
+  --create-account-tone-rgb: var(--theme-brand-purple-rgb);
+}
+
+.create-account-modal__choice-card--amber,
+.create-account-modal__choice-icon--amber,
+.create-account-modal__tone-tag--amber,
+.create-account-modal__notice--amber {
+  --create-account-tone-rgb: var(--theme-warning-rgb);
+}
+
+.create-account-modal__choice-card--green,
+.create-account-modal__choice-icon--green,
+.create-account-modal__tone-tag--green,
+.create-account-modal__notice--green {
+  --create-account-tone-rgb: var(--theme-success-rgb);
+}
+
+.create-account-modal__choice-card--blue,
+.create-account-modal__choice-icon--blue,
+.create-account-modal__tone-tag--blue,
+.create-account-modal__notice--blue {
+  --create-account-tone-rgb: var(--theme-info-rgb);
+}
+
+.create-account-modal__choice-card--emerald,
+.create-account-modal__choice-icon--emerald,
+.create-account-modal__tone-tag--emerald,
+.create-account-modal__notice--emerald {
+  --create-account-tone-rgb: var(--theme-success-rgb);
+}
+
+.create-account-modal__choice-card--rose,
+.create-account-modal__choice-card--orange,
+.create-account-modal__choice-card--purple,
+.create-account-modal__choice-card--amber,
+.create-account-modal__choice-card--green,
+.create-account-modal__choice-card--blue,
+.create-account-modal__choice-card--emerald {
+  border-color: rgb(var(--create-account-tone-rgb));
+  background: color-mix(in srgb, rgb(var(--create-account-tone-rgb)) 12%, var(--theme-surface));
+}
+
+.create-account-modal__choice-icon--rose,
+.create-account-modal__choice-icon--orange,
+.create-account-modal__choice-icon--purple,
+.create-account-modal__choice-icon--amber,
+.create-account-modal__choice-icon--green,
+.create-account-modal__choice-icon--blue,
+.create-account-modal__choice-icon--emerald {
+  background: rgb(var(--create-account-tone-rgb));
+  color: var(--theme-filled-text);
+}
+
+.create-account-modal__tone-tag--rose,
+.create-account-modal__tone-tag--orange,
+.create-account-modal__tone-tag--purple,
+.create-account-modal__tone-tag--amber,
+.create-account-modal__tone-tag--green,
+.create-account-modal__tone-tag--blue,
+.create-account-modal__tone-tag--emerald {
+  background: color-mix(in srgb, rgb(var(--create-account-tone-rgb)) 16%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--create-account-tone-rgb)) 88%, var(--theme-page-text));
+}
+
+.create-account-modal__notice--rose,
+.create-account-modal__notice--orange,
+.create-account-modal__notice--purple,
+.create-account-modal__notice--amber,
+.create-account-modal__notice--green,
+.create-account-modal__notice--blue,
+.create-account-modal__notice--emerald {
+  background: color-mix(in srgb, rgb(var(--create-account-tone-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--create-account-tone-rgb)) 84%, var(--theme-page-text));
+}
+
+.create-account-modal__radio-option,
+.create-account-modal__checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.create-account-modal__radio-option {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 84%, var(--theme-surface));
+  padding: 0.55rem 0.8rem;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.create-account-modal__radio-option--active {
+  border-color: color-mix(in srgb, var(--theme-accent) 64%, var(--theme-card-border));
+  background: color-mix(in srgb, var(--theme-accent-soft) 78%, var(--theme-surface));
+}
+
+.create-account-modal__radio-input,
+.create-account-modal__checkbox-input {
+  accent-color: var(--theme-accent);
+}
+
+.create-account-modal__checkbox-input {
+  border: 1px solid var(--theme-input-border);
+  border-radius: 0.375rem;
+}
+
+.create-account-modal__mode-toggle--idle,
+.create-account-modal__status-chip--idle {
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+
+.create-account-modal__mode-toggle-control {
+  border-radius: var(--theme-button-radius);
+  padding: 0.5rem 1rem;
+}
+
+.create-account-modal__status-chip-control {
+  border-radius: var(--theme-button-radius);
+  padding: 0.375rem 0.75rem;
+}
+
+.create-account-modal__status-chip-action {
+  border-radius: var(--theme-button-radius);
+  padding: 0.5rem;
+}
+
+.create-account-modal__status-chip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  padding: 0.125rem 0.625rem;
+}
+
+.create-account-modal__mode-toggle--idle:hover,
+.create-account-modal__status-chip--idle:hover {
+  background: color-mix(in srgb, var(--theme-page-border) 66%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__mode-toggle--accent {
+  background: color-mix(in srgb, var(--theme-accent) 14%, var(--theme-surface));
+  color: color-mix(in srgb, var(--theme-accent) 90%, var(--theme-page-text));
+}
+
+.create-account-modal__mode-toggle--purple,
+.create-account-modal__status-chip--purple {
+  background: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 14%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 88%, var(--theme-page-text));
+}
+
+.create-account-modal__mode-toggle--danger,
+.create-account-modal__status-chip--danger {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 12%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 88%, var(--theme-page-text));
+}
+
+.create-account-modal__switch {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-page-border) 40%, transparent);
+}
+
+.create-account-modal__switch:focus-visible {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--theme-accent) 22%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--theme-accent) 12%, transparent);
+}
+
+.create-account-modal__switch--enabled {
+  background: var(--theme-accent);
+}
+
+.create-account-modal__switch--disabled {
+  background: color-mix(in srgb, var(--theme-page-border) 76%, var(--theme-surface));
+}
+
+.create-account-modal__switch-thumb {
+  background: var(--theme-surface-contrast);
+}
+
+.create-account-modal__segment-option {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 82%, transparent);
+  border-radius: calc(var(--theme-button-radius) - 2px);
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.create-account-modal__segment-option--active {
+  border-color: var(--theme-accent);
+  background: var(--theme-accent);
+  color: var(--theme-filled-text);
+}
+
+.create-account-modal__segment-option--idle {
+  background: var(--theme-surface);
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__segment-option--idle:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+}
+
+.create-account-modal__tag-button {
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+  color: var(--theme-page-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.create-account-modal__tag-button:hover,
+.create-account-modal__tag-button:focus-visible {
+  background: color-mix(in srgb, var(--theme-page-border) 72%, var(--theme-surface));
+  color: var(--theme-page-text);
+  outline: none;
+}
+
+.create-account-modal__rule-card {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 80%, transparent);
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  background: var(--theme-surface);
+  padding: 0.75rem;
+}
+
+.create-account-modal__rule-index {
+  color: var(--theme-page-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.create-account-modal__icon-button {
+  border-radius: calc(var(--theme-button-radius) - 4px);
+  color: var(--theme-page-muted);
+  padding: 0.25rem;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.create-account-modal__icon-button:hover,
+.create-account-modal__icon-button:focus-visible {
+  background: color-mix(in srgb, var(--theme-button-ghost-hover-bg) 90%, transparent);
+  color: var(--theme-page-text);
+  outline: none;
+}
+
+.create-account-modal__icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.create-account-modal__icon-button--danger {
+  color: rgb(var(--theme-danger-rgb));
+}
+
+.create-account-modal__icon-button--danger:hover,
+.create-account-modal__icon-button--danger:focus-visible {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, transparent);
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 88%, var(--theme-page-text));
+}
+
+.create-account-modal__dashed-action {
+  border: 2px dashed color-mix(in srgb, var(--theme-card-border) 90%, transparent);
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+  padding: 0.625rem 1rem;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.create-account-modal__dashed-action:hover,
+.create-account-modal__dashed-action:focus-visible {
+  border-color: color-mix(in srgb, var(--theme-accent) 32%, var(--theme-card-border));
+  background: color-mix(in srgb, var(--theme-accent-soft) 46%, var(--theme-surface));
+  color: var(--theme-page-text);
+  outline: none;
+}
+
+.create-account-modal__extra-options {
+  border-top: 1px solid color-mix(in srgb, var(--theme-page-border) 76%, transparent);
+  padding-top: 1rem;
+}
+
+.create-account-modal__tooltip-trigger {
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
+  cursor: help;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--theme-page-border) 82%, var(--theme-surface));
+  color: var(--theme-page-muted);
+  font-size: 0.75rem;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.create-account-modal__tooltip-trigger:hover {
+  background: color-mix(in srgb, var(--theme-page-border) 92%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__tooltip-panel {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 100;
+  width: 18rem;
+  margin-top: 0.375rem;
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  background: var(--theme-surface-contrast);
+  color: var(--theme-surface-contrast-text);
+  font-size: 0.75rem;
+  opacity: 0;
+  padding: 0.625rem 0.75rem;
+  transition: opacity 0.18s ease;
+}
+
+.group:hover .create-account-modal__tooltip-panel {
+  opacity: 1;
+}
+
+.create-account-modal__tooltip-arrow {
+  position: absolute;
+  bottom: 100%;
+  left: 0.75rem;
+  border: 4px solid transparent;
+  border-bottom-color: var(--theme-surface-contrast);
+}
+
+.create-account-modal__dialog-title,
+.create-account-modal__dialog-subtitle {
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__dialog-title {
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.create-account-modal__dialog-subtitle {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.create-account-modal__dialog-list {
+  list-style: disc;
+  list-style-position: inside;
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+}
+
+.create-account-modal__table-head {
+  background: color-mix(in srgb, var(--theme-surface-soft) 92%, var(--theme-surface));
+}
+
+.create-account-modal__table-body {
+  border-top: 1px solid color-mix(in srgb, var(--theme-page-border) 74%, transparent);
+}
+
+.create-account-modal__table-heading {
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  text-align: left;
+  font-weight: 500;
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__table-primary {
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  color: var(--theme-page-text);
+}
+
+.create-account-modal__table-secondary {
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  color: var(--theme-page-muted);
+}
+</style>

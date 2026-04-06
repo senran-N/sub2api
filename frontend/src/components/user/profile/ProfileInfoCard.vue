@@ -1,17 +1,12 @@
 <template>
   <div class="card overflow-hidden">
-    <div
-      class="border-b border-gray-100 bg-gradient-to-r from-primary-500/10 to-primary-600/5 px-6 py-5 dark:border-dark-700 dark:from-primary-500/20 dark:to-primary-600/10"
-    >
+    <div class="profile-info-card__hero">
       <div class="flex items-center gap-4">
-        <!-- Avatar -->
-        <div
-          class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 text-2xl font-bold text-white shadow-lg shadow-primary-500/20"
-        >
+        <div class="profile-info-card__avatar flex items-center justify-center text-2xl font-bold">
           {{ user?.email?.charAt(0).toUpperCase() || 'U' }}
         </div>
         <div class="min-w-0 flex-1">
-          <h2 class="truncate text-lg font-semibold text-gray-900 dark:text-white">
+          <h2 class="profile-info-card__title truncate text-lg font-semibold">
             {{ user?.email }}
           </h2>
           <div class="mt-1 flex items-center gap-2">
@@ -27,17 +22,17 @@
         </div>
       </div>
     </div>
-    <div class="px-6 py-4">
+    <div class="profile-info-card__body">
       <div class="space-y-3">
-        <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-          <Icon name="mail" size="sm" class="text-gray-400 dark:text-gray-500" />
+        <div class="profile-info-card__detail flex items-center gap-3 text-sm">
+          <Icon name="mail" size="sm" class="profile-info-card__detail-icon" />
           <span class="truncate">{{ user?.email }}</span>
         </div>
         <div
           v-if="user?.username"
-          class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400"
+          class="profile-info-card__detail flex items-center gap-3 text-sm"
         >
-          <Icon name="user" size="sm" class="text-gray-400 dark:text-gray-500" />
+          <Icon name="user" size="sm" class="profile-info-card__detail-icon" />
           <span class="truncate">{{ user.username }}</span>
         </div>
       </div>
@@ -56,3 +51,48 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.profile-info-card__hero {
+  padding:
+    calc(var(--theme-settings-card-header-padding-y) + 0.25rem)
+    var(--theme-settings-card-header-padding-x);
+  border-bottom: 1px solid var(--theme-page-border);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--theme-accent-soft) 92%, var(--theme-surface)) 0%,
+    color-mix(in srgb, var(--theme-accent) 10%, var(--theme-surface)) 100%
+  );
+}
+
+.profile-info-card__avatar {
+  height: calc(var(--theme-balance-history-avatar-size) + 1.5rem);
+  width: calc(var(--theme-balance-history-avatar-size) + 1.5rem);
+  border-radius: calc(var(--theme-surface-radius) + 4px);
+  color: var(--theme-filled-text);
+  background: linear-gradient(
+    135deg,
+    var(--theme-accent),
+    color-mix(in srgb, var(--theme-accent-strong) 42%, var(--theme-accent))
+  );
+  box-shadow: 0 18px 36px color-mix(in srgb, var(--theme-accent) 24%, transparent);
+}
+
+.profile-info-card__body {
+  padding:
+    var(--theme-settings-card-header-padding-y)
+    var(--theme-settings-card-header-padding-x);
+}
+
+.profile-info-card__title {
+  color: var(--theme-page-text);
+}
+
+.profile-info-card__detail {
+  color: color-mix(in srgb, var(--theme-page-text) 74%, transparent);
+}
+
+.profile-info-card__detail-icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 76%, transparent);
+}
+</style>

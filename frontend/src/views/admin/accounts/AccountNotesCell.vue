@@ -1,12 +1,12 @@
 <template>
   <span
     v-if="notes"
-    class="block max-w-xs truncate text-sm text-gray-600 dark:text-gray-300"
+    class="theme-text-muted block max-w-xs truncate text-sm"
     :title="notes"
   >
     {{ notes }}
   </span>
-  <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+  <span v-else class="theme-text-subtle text-sm">-</span>
 </template>
 
 <script setup lang="ts">

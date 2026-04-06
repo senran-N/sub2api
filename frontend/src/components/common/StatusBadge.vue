@@ -1,12 +1,12 @@
 <template>
-  <div class="flex items-center gap-1.5">
+  <div class="status-badge">
     <span
       :class="[
-        'inline-block h-2 w-2 rounded-full',
+        'status-badge__dot',
         variantClass
       ]"
     ></span>
-    <span class="text-sm text-gray-700 dark:text-gray-300">
+    <span class="status-badge__label">
       {{ label }}
     </span>
   </div>
@@ -24,16 +24,47 @@ const variantClass = computed(() => {
   switch (props.status) {
     case 'active':
     case 'success':
-      return 'bg-green-500'
+      return 'status-badge__dot--success'
     case 'disabled':
     case 'inactive':
     case 'warning':
-      return 'bg-yellow-500'
+      return 'status-badge__dot--warning'
     case 'error':
     case 'danger':
-      return 'bg-red-500'
+      return 'status-badge__dot--danger'
     default:
-      return 'bg-gray-400'
+      return 'status-badge__dot--neutral'
   }
 })
 </script>
+
+<style scoped>
+.status-badge {
+  @apply flex items-center gap-1.5;
+}
+
+.status-badge__dot {
+  @apply inline-block h-2 w-2 rounded-full;
+}
+
+.status-badge__dot--success {
+  background: rgb(var(--theme-success-rgb));
+}
+
+.status-badge__dot--warning {
+  background: rgb(var(--theme-warning-rgb));
+}
+
+.status-badge__dot--danger {
+  background: rgb(var(--theme-danger-rgb));
+}
+
+.status-badge__dot--neutral {
+  background: color-mix(in srgb, var(--theme-page-muted) 66%, transparent);
+}
+
+.status-badge__label {
+  @apply text-sm;
+  color: var(--theme-page-text);
+}
+</style>

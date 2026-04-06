@@ -1,20 +1,20 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="card-header">
+      <h2 class="settings-scheduling-card__title text-lg font-semibold">
         {{ t('admin.settings.scheduling.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-scheduling-card__description mt-1 text-sm">
         {{ t('admin.settings.scheduling.description') }}
       </p>
     </div>
-    <div class="p-6">
+    <div class="settings-scheduling-card__body">
       <div class="flex items-center justify-between">
         <div>
-          <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label class="settings-scheduling-card__label text-sm font-medium">
             {{ t('admin.settings.scheduling.allowUngroupedKey') }}
           </label>
-          <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          <p class="settings-scheduling-card__hint mt-0.5 text-xs">
             {{ t('admin.settings.scheduling.allowUngroupedKeyHint') }}
           </p>
         </div>
@@ -35,3 +35,22 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-scheduling-card__title,
+.settings-scheduling-card__label {
+  color: var(--theme-page-text);
+}
+
+.settings-scheduling-card__description,
+.settings-scheduling-card__hint {
+  color: var(--theme-page-muted);
+}
+
+.settings-scheduling-card__body {
+  padding: var(--theme-settings-card-panel-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-settings-card-body-padding);
+}
+</style>

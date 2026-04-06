@@ -1,5 +1,5 @@
 <template>
-  <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatRelativeTime(value) }}</span>
+  <span class="theme-text-muted text-sm">{{ formatRelativeTime(value) }}</span>
 </template>
 
 <script setup lang="ts">

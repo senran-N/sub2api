@@ -1,12 +1,12 @@
 <template>
   <span
     v-if="value"
-    class="block max-w-[320px] whitespace-normal break-all text-sm text-gray-600 dark:text-gray-400"
+    class="user-usage-user-agent-cell theme-text-muted block whitespace-normal break-all text-sm"
     :title="value"
   >
     {{ value }}
   </span>
-  <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+  <span v-else class="theme-text-subtle text-sm">-</span>
 </template>
 
 <script setup lang="ts">
@@ -14,3 +14,9 @@ defineProps<{
   value?: string | null
 }>()
 </script>
+
+<style scoped>
+.user-usage-user-agent-cell {
+  max-width: var(--theme-usage-table-user-agent-max-width);
+}
+</style>

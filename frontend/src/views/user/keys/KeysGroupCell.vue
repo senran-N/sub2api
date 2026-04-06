@@ -3,7 +3,7 @@
     <button
       :ref="buttonRef"
       @click="$emit('open-selector', row)"
-      class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
+      class="keys-group-cell__trigger flex cursor-pointer items-center gap-2 transition-all duration-200"
       :title="clickToChangeTitle"
     >
       <GroupBadge
@@ -14,12 +14,12 @@
         :rate-multiplier="row.group.rate_multiplier"
         :user-rate-multiplier="row.group ? userGroupRates[row.group.id] : null"
       />
-      <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ noGroupLabel }}</span>
-      <span class="text-xs text-gray-500 dark:text-gray-400">{{ selectGroupLabel }}</span>
+      <span v-else class="keys-group-cell__empty text-sm">{{ noGroupLabel }}</span>
+      <span class="keys-group-cell__hint text-xs">{{ selectGroupLabel }}</span>
       <Icon
         name="sort"
         size="sm"
-        class="text-gray-400 opacity-60 transition-opacity group-hover/dropdown:opacity-100"
+        class="keys-group-cell__icon opacity-60 transition-opacity group-hover/dropdown:opacity-100"
         :stroke-width="2"
       />
     </button>
@@ -45,3 +45,29 @@ defineEmits<{
   'open-selector': [row: ApiKey]
 }>()
 </script>
+
+<style scoped>
+.keys-group-cell__trigger {
+  margin: calc(var(--theme-key-row-action-padding) * -1);
+  border-radius: var(--theme-key-row-action-radius);
+  padding:
+    calc(var(--theme-key-row-action-padding) - 0.125rem)
+    calc(var(--theme-key-row-action-padding) + 0.125rem);
+}
+
+.keys-group-cell__trigger:hover {
+  background: var(--theme-button-ghost-hover-bg);
+}
+
+.keys-group-cell__empty {
+  color: color-mix(in srgb, var(--theme-page-muted) 82%, transparent);
+}
+
+.keys-group-cell__hint {
+  color: var(--theme-page-muted);
+}
+
+.keys-group-cell__icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+</style>

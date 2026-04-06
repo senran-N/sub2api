@@ -2,10 +2,10 @@
   <AuthLayout>
     <div class="space-y-6">
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="login-view__title">
           {{ t('auth.welcomeBack') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="login-view__description mt-2 text-sm">
           {{ t('auth.signInToAccount') }}
         </p>
       </div>
@@ -22,7 +22,7 @@
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="mail" size="md" class="login-view__field-icon" />
             </div>
             <input
               id="email"
@@ -65,13 +65,13 @@
         <transition name="fade">
           <div
             v-if="errorMessage"
-            class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20"
+            class="login-view__error-card"
           >
             <div class="flex items-start gap-3">
               <div class="flex-shrink-0">
-                <Icon name="exclamationCircle" size="md" class="text-red-500" />
+                <Icon name="exclamationCircle" size="md" class="login-view__error-icon" />
               </div>
-              <p class="text-sm text-red-700 dark:text-red-400">
+              <p class="login-view__error-text text-sm">
                 {{ errorMessage }}
               </p>
             </div>
@@ -85,7 +85,7 @@
         >
           <svg
             v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
+            class="theme-filled-spinner -ml-1 mr-2 h-4 w-4 animate-spin"
             fill="none"
             viewBox="0 0 24 24"
           >
@@ -110,11 +110,11 @@
     </div>
 
     <template v-if="!settings.backendModeEnabled" #footer>
-      <p class="text-gray-500 dark:text-dark-400">
+      <p class="login-view__footer">
         {{ t('auth.dontHaveAccount') }}
         <router-link
           to="/register"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="login-view__footer-link font-medium transition-colors"
         >
           {{ t('auth.signUp') }}
         </router-link>
@@ -303,5 +303,39 @@ onMounted(async () => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+.login-view__title {
+  font-family: var(--theme-auth-section-title-font);
+  font-size: var(--theme-auth-section-title-size);
+  font-weight: 700;
+  letter-spacing: var(--theme-auth-section-title-letter-spacing);
+  color: var(--theme-page-text);
+}
+
+.login-view__description,
+.login-view__footer,
+.login-view__field-icon {
+  color: var(--theme-page-muted);
+}
+
+.login-view__error-card {
+  padding: var(--theme-markdown-block-padding);
+  border-radius: var(--theme-auth-feedback-radius);
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-danger-rgb)) 28%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+}
+
+.login-view__error-icon,
+.login-view__error-text {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.login-view__footer-link {
+  color: var(--theme-accent);
+}
+
+.login-view__footer-link:hover {
+  color: color-mix(in srgb, var(--theme-accent) 82%, var(--theme-page-text));
 }
 </style>

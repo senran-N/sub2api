@@ -39,10 +39,7 @@ const { t } = useI18n()
   scrollbar-color: transparent transparent;
 }
 .settings-tabs-scroll:hover {
-  scrollbar-color: rgb(0 0 0 / 0.15) transparent;
-}
-:root.dark .settings-tabs-scroll:hover {
-  scrollbar-color: rgb(255 255 255 / 0.2) transparent;
+  scrollbar-color: color-mix(in srgb, var(--theme-page-muted) 24%, transparent) transparent;
 }
 .settings-tabs-scroll::-webkit-scrollbar {
   height: 3px;
@@ -55,17 +52,17 @@ const { t } = useI18n()
   border-radius: 3px;
 }
 .settings-tabs-scroll:hover::-webkit-scrollbar-thumb {
-  background: rgb(0 0 0 / 0.15);
-}
-:root.dark .settings-tabs-scroll:hover::-webkit-scrollbar-thumb {
-  background: rgb(255 255 255 / 0.2);
+  background: color-mix(in srgb, var(--theme-page-muted) 24%, transparent);
 }
 
 .settings-tabs {
-  @apply inline-flex min-w-full gap-0.5 rounded-2xl
-         border border-gray-100 bg-white/80 p-1 backdrop-blur-sm
-         dark:border-dark-700/50 dark:bg-dark-800/80;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.02);
+  @apply inline-flex min-w-full border backdrop-blur-sm;
+  gap: var(--theme-settings-tabs-nav-gap);
+  border-radius: var(--theme-settings-tabs-nav-radius);
+  padding: var(--theme-settings-tabs-nav-padding);
+  border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 80%, transparent);
+  box-shadow: var(--theme-card-shadow);
 }
 
 @media (min-width: 640px) {
@@ -76,39 +73,37 @@ const { t } = useI18n()
 
 .settings-tab {
   @apply relative flex flex-1 items-center justify-center gap-1.5
-         whitespace-nowrap rounded-xl px-2.5 py-2
+         whitespace-nowrap
          text-sm font-medium
-         text-gray-500 dark:text-dark-400
          transition-all duration-200 ease-out;
+  border-radius: var(--theme-settings-tab-radius);
+  padding: var(--theme-settings-tab-padding-y) var(--theme-settings-tab-padding-x);
+  color: var(--theme-page-muted);
 }
 
 .settings-tab:hover:not(.settings-tab-active) {
-  @apply text-gray-700 dark:text-gray-300;
-  background: rgb(0 0 0 / 0.03);
-}
-
-:root.dark .settings-tab:hover:not(.settings-tab-active) {
-  background: rgb(255 255 255 / 0.04);
+  color: var(--theme-page-text);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
 }
 
 .settings-tab-active {
-  @apply text-primary-600 dark:text-primary-400;
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.08), rgba(20, 184, 166, 0.03));
-  box-shadow: 0 1px 2px rgba(20, 184, 166, 0.1);
-}
-
-:root.dark .settings-tab-active {
-  background: linear-gradient(135deg, rgba(45, 212, 191, 0.12), rgba(45, 212, 191, 0.05));
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  color: var(--theme-accent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--theme-accent-soft) 92%, var(--theme-surface)),
+    color-mix(in srgb, var(--theme-accent-soft) 60%, var(--theme-surface))
+  );
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--theme-accent) 14%, transparent);
 }
 
 .settings-tab-icon {
-  @apply flex h-6 w-6 items-center justify-center rounded-lg
+  @apply flex h-6 w-6 items-center justify-center
          transition-all duration-200;
+  border-radius: var(--theme-settings-tab-icon-radius);
 }
 
 .settings-tab-active .settings-tab-icon {
-  @apply bg-primary-500/15 text-primary-600
-         dark:bg-primary-400/15 dark:text-primary-400;
+  background: color-mix(in srgb, var(--theme-accent-soft) 88%, var(--theme-surface));
+  color: var(--theme-accent);
 }
 </style>

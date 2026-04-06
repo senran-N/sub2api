@@ -2,14 +2,14 @@
   <button
     v-if="accountCount > 0"
     type="button"
-    class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-primary-700 hover:bg-gray-200 dark:bg-dark-600 dark:text-primary-300 dark:hover:bg-dark-500"
+    class="proxy-account-count-cell__button theme-chip theme-chip--compact theme-chip--accent inline-flex items-center"
     @click="emit('accounts', proxy)"
   >
     {{ t('admin.groups.accountsCount', { count: accountCount }) }}
   </button>
   <span
     v-else
-    class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-dark-600 dark:text-gray-300"
+    class="theme-chip theme-chip--compact theme-chip--neutral inline-flex items-center"
   >
     {{ t('admin.groups.accountsCount', { count: 0 }) }}
   </span>
@@ -32,3 +32,14 @@ const { t } = useI18n()
 
 const accountCount = computed(() => props.proxy.account_count || 0)
 </script>
+
+<style scoped>
+.proxy-account-count-cell__button {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.proxy-account-count-cell__button:hover {
+  --theme-chip-bg: color-mix(in srgb, var(--theme-accent-soft) 94%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, var(--theme-accent) 92%, var(--theme-page-text));
+}
+</style>

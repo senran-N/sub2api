@@ -140,6 +140,10 @@ export default {
     // Status
     quotaMode: 'Key Quota Mode',
     walletBalance: 'Wallet Balance',
+    statusActive: 'Active',
+    statusQuotaExhausted: 'Quota Exhausted',
+    statusExpired: 'Expired',
+    statusUnknown: 'Unknown',
     // Ring card titles
     totalQuota: 'Total Quota',
     limit5h: '5-Hour Limit',
@@ -444,6 +448,9 @@ export default {
       completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
     },
     oauth: {
+      callbackTitle: 'OAuth Callback',
+      callbackDescription:
+        'Copy the code and, if required, the state value back into the admin authorization flow.',
       code: 'Code',
       state: 'State',
       fullUrl: 'Full URL'
@@ -1677,6 +1684,14 @@ export default {
         selectPlaceholder: 'Select groups to copy accounts from...',
         hint: 'Multiple groups can be selected, accounts will be deduplicated',
         hintEdit: '⚠️ Warning: This will replace all existing account bindings'
+      },
+      accountFilter: {
+        title: 'Account Filter Controls',
+        oauthOnly: 'Allow OAuth accounts only',
+        oauthOnlyEnabled: 'Enabled: API Key accounts will be excluded',
+        privacySetOnly: 'Allow only accounts with privacy protection configured',
+        privacySetOnlyEnabled: 'Enabled: accounts without Privacy configured will be excluded',
+        disabled: 'Disabled'
       },
       modelRouting: {
         title: 'Model Routing',

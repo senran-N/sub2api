@@ -68,38 +68,38 @@ onBeforeUnmount(() => {
     <div
       v-for="(item, index) in allEndpoints"
       :key="index"
-      class="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs transition-colors hover:border-primary-200 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-primary-700"
+      class="endpoint-popover__chip flex items-center gap-1.5 text-xs transition-colors"
     >
-      <span class="font-medium text-gray-600 dark:text-gray-300">{{ item.name }}</span>
+      <span class="endpoint-popover__name font-medium">{{ item.name }}</span>
       <span
         v-if="item.isDefault"
-        class="rounded bg-primary-50 px-1 py-px text-[10px] font-medium leading-tight text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
+        class="endpoint-popover__default-tag rounded text-[10px] font-medium leading-tight"
       >{{ t('keys.endpoints.default') }}</span>
 
-      <span class="text-gray-300 dark:text-dark-500">|</span>
+      <span class="endpoint-popover__divider">|</span>
 
       <div class="group/endpoint relative flex items-center gap-1.5">
         <div
-          class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-[24rem] -translate-x-1/2 translate-y-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left opacity-0 shadow-[0_14px_36px_-20px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/80 transition-all duration-150 group-hover/endpoint:translate-y-0 group-hover/endpoint:opacity-100 group-focus-within/endpoint:translate-y-0 group-focus-within/endpoint:opacity-100 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700/70"
+          class="endpoint-popover__tooltip pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max -translate-x-1/2 translate-y-1 text-left opacity-0 transition-all duration-150 group-hover/endpoint:translate-y-0 group-hover/endpoint:opacity-100 group-focus-within/endpoint:translate-y-0 group-focus-within/endpoint:opacity-100"
         >
           <p
             v-if="item.description"
-            class="max-w-[24rem] break-words text-xs leading-5 text-slate-600 dark:text-slate-200"
+            class="endpoint-popover__tooltip-description break-words text-xs leading-5"
           >
             {{ item.description }}
           </p>
           <p
-            class="flex items-center gap-1.5 text-[11px] leading-4 text-primary-600 dark:text-primary-300"
+            class="endpoint-popover__tooltip-hint flex items-center gap-1.5 text-[11px] leading-4"
             :class="item.description ? 'mt-1.5' : ''"
           >
-            <span class="h-1.5 w-1.5 rounded-full bg-primary-500 dark:bg-primary-300"></span>
+            <span class="endpoint-popover__tooltip-dot h-1.5 w-1.5 rounded-full"></span>
             {{ tooltipHint(item.endpoint) }}
           </p>
-          <div class="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"></div>
+          <div class="endpoint-popover__tooltip-arrow absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r"></div>
         </div>
 
         <code
-          class="cursor-pointer font-mono text-gray-500 decoration-gray-400 decoration-dashed underline-offset-2 hover:text-primary-600 hover:underline focus:text-primary-600 focus:underline focus:outline-none dark:text-gray-400 dark:decoration-gray-500 dark:hover:text-primary-400 dark:focus:text-primary-400"
+          class="endpoint-popover__endpoint cursor-pointer font-mono decoration-dashed underline-offset-2 focus:outline-none"
           role="button"
           tabindex="0"
           @click="copy(item.endpoint)"
@@ -109,10 +109,10 @@ onBeforeUnmount(() => {
 
         <button
           type="button"
-          class="rounded p-0.5 transition-colors"
+          class="endpoint-popover__icon-button transition-colors"
           :class="copiedEndpoint === item.endpoint
-            ? 'text-emerald-500 dark:text-emerald-400'
-            : 'text-gray-400 hover:text-primary-500 dark:text-gray-500 dark:hover:text-primary-400'"
+            ? 'endpoint-popover__icon-button--copied'
+            : 'endpoint-popover__icon-button--idle'"
           :aria-label="tooltipHint(item.endpoint)"
           @click="copy(item.endpoint)"
         >
@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
           :href="speedTestUrl(item.endpoint)"
           target="_blank"
           rel="noopener noreferrer"
-          class="rounded p-0.5 text-gray-400 transition-colors hover:text-amber-500 dark:text-gray-500 dark:hover:text-amber-400"
+          class="endpoint-popover__icon-button endpoint-popover__icon-button--speed transition-colors"
           :title="t('keys.endpoints.speedTest')"
         >
           <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -139,3 +139,95 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.endpoint-popover__chip {
+  padding: var(--theme-endpoint-popover-chip-padding-y) var(--theme-endpoint-popover-chip-padding-x);
+  border-radius: var(--theme-button-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  background: var(--theme-surface);
+}
+
+.endpoint-popover__chip:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 24%, var(--theme-card-border));
+}
+
+.endpoint-popover__name {
+  color: var(--theme-page-text);
+}
+
+.endpoint-popover__default-tag {
+  padding: var(--theme-endpoint-popover-default-tag-padding-y)
+    var(--theme-endpoint-popover-default-tag-padding-x);
+  background: color-mix(in srgb, var(--theme-accent-soft) 86%, var(--theme-surface));
+  color: var(--theme-accent);
+}
+
+.endpoint-popover__divider {
+  color: color-mix(in srgb, var(--theme-page-muted) 42%, var(--theme-surface));
+}
+
+.endpoint-popover__tooltip {
+  padding: var(--theme-endpoint-popover-tooltip-padding-y)
+    var(--theme-endpoint-popover-tooltip-padding-x);
+  max-width: max(24rem, calc(var(--theme-tooltip-width) * 1.5));
+  border-radius: var(--theme-markdown-block-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.endpoint-popover__tooltip-description {
+  max-width: max(24rem, calc(var(--theme-tooltip-width) * 1.5));
+  color: var(--theme-page-text);
+}
+
+.endpoint-popover__tooltip-hint {
+  color: var(--theme-accent);
+}
+
+.endpoint-popover__tooltip-dot {
+  background: var(--theme-accent);
+}
+
+.endpoint-popover__tooltip-arrow {
+  border-color: color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+  background: var(--theme-surface);
+}
+
+.endpoint-popover__endpoint {
+  color: var(--theme-page-muted);
+  text-decoration-color: color-mix(in srgb, var(--theme-page-muted) 62%, transparent);
+}
+
+.endpoint-popover__endpoint:hover,
+.endpoint-popover__endpoint:focus {
+  color: var(--theme-accent);
+  text-decoration-line: underline;
+}
+
+.endpoint-popover__icon-button {
+  padding: var(--theme-endpoint-popover-icon-button-padding);
+  border-radius: calc(var(--theme-button-radius) - 2px);
+}
+
+.endpoint-popover__icon-button--idle {
+  color: var(--theme-page-muted);
+}
+
+.endpoint-popover__icon-button--idle:hover {
+  color: var(--theme-accent);
+}
+
+.endpoint-popover__icon-button--copied {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.endpoint-popover__icon-button--speed {
+  color: var(--theme-page-muted);
+}
+
+.endpoint-popover__icon-button--speed:hover {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+</style>

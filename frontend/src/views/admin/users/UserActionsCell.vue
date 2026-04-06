@@ -1,7 +1,8 @@
 <template>
   <div class="flex items-center gap-1">
     <button
-      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+      type="button"
+      class="theme-action-button user-actions-cell__button user-actions-cell__button--edit"
       @click="emit('edit', user)"
     >
       <Icon name="edit" size="sm" />
@@ -10,11 +11,12 @@
 
     <button
       v-if="user.role !== 'admin'"
+      type="button"
       :class="[
-        'flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors',
+        'theme-action-button user-actions-cell__button',
         user.status === 'active'
-          ? 'hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400'
-          : 'hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
+          ? 'user-actions-cell__button--warning'
+          : 'user-actions-cell__button--success'
       ]"
       @click="emit('toggle-status', user)"
     >
@@ -26,8 +28,9 @@
     </button>
 
     <button
-      class="action-menu-trigger flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-dark-700 dark:hover:text-white"
-      :class="{ 'bg-gray-100 text-gray-900 dark:bg-dark-700 dark:text-white': menuOpen }"
+      type="button"
+      class="action-menu-trigger theme-action-button user-actions-cell__button user-actions-cell__button--menu"
+      :class="{ 'user-actions-cell__button--active': menuOpen }"
       @click="emit('open-menu', user, $event)"
     >
       <Icon name="more" size="sm" />
@@ -54,3 +57,31 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.user-actions-cell__button {
+  color: var(--theme-page-muted);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.user-actions-cell__button--edit:hover {
+  background: var(--theme-button-ghost-hover-bg);
+  color: var(--theme-accent);
+}
+
+.user-actions-cell__button--warning:hover {
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-actions-cell__button--success:hover {
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-actions-cell__button--menu:hover,
+.user-actions-cell__button--active {
+  background: var(--theme-button-ghost-hover-bg);
+  color: var(--theme-page-text);
+}
+</style>

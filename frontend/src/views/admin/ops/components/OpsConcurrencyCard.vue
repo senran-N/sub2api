@@ -259,6 +259,8 @@ const displayTitle = computed(() => {
   return t('admin.ops.concurrency.byPlatform')
 })
 
+type ConcurrencyTone = 'danger' | 'info' | 'neutral' | 'success' | 'warning'
+
 async function loadData() {
   loading.value = true
   errorMessage.value = ''
@@ -301,11 +303,26 @@ watch(
   }
 )
 
+function joinClassNames(classNames: Array<string | false | null | undefined>): string {
+  return classNames.filter(Boolean).join(' ')
+}
+
+function resolveLoadTone(loadPct: number): ConcurrencyTone {
+  if (loadPct >= 90) return 'danger'
+  if (loadPct >= 70) return 'warning'
+  if (loadPct >= 50) return 'info'
+  return 'success'
+}
+
 function getLoadBarClass(loadPct: number): string {
-  if (loadPct >= 90) return 'bg-red-500 dark:bg-red-600'
-  if (loadPct >= 70) return 'bg-orange-500 dark:bg-orange-600'
-  if (loadPct >= 50) return 'bg-yellow-500 dark:bg-yellow-600'
-  return 'bg-green-500 dark:bg-green-600'
+  const tone = resolveLoadTone(loadPct)
+  return joinClassNames([
+    'ops-concurrency-card__bar h-full rounded-full transition-all duration-300',
+    tone === 'danger' && 'ops-concurrency-card__bar--danger',
+    tone === 'info' && 'ops-concurrency-card__bar--info',
+    tone === 'success' && 'ops-concurrency-card__bar--success',
+    tone === 'warning' && 'ops-concurrency-card__bar--warning'
+  ])
 }
 
 function getLoadBarStyle(loadPct: number): string {
@@ -313,10 +330,42 @@ function getLoadBarStyle(loadPct: number): string {
 }
 
 function getLoadTextClass(loadPct: number): string {
-  if (loadPct >= 90) return 'text-red-600 dark:text-red-400'
-  if (loadPct >= 70) return 'text-orange-600 dark:text-orange-400'
-  if (loadPct >= 50) return 'text-yellow-600 dark:text-yellow-400'
-  return 'text-green-600 dark:text-green-400'
+  const tone = resolveLoadTone(loadPct)
+  return joinClassNames([
+    'ops-concurrency-card__load-text font-bold',
+    tone === 'danger' && 'ops-concurrency-card__load-text--danger',
+    tone === 'info' && 'ops-concurrency-card__load-text--info',
+    tone === 'success' && 'ops-concurrency-card__load-text--success',
+    tone === 'warning' && 'ops-concurrency-card__load-text--warning'
+  ])
+}
+
+function getViewToggleClasses(isActive: boolean): string {
+  return joinClassNames([
+    'ops-concurrency-card__view-toggle flex items-center justify-center transition-colors',
+    isActive
+      ? 'ops-concurrency-card__view-toggle--active'
+      : 'ops-concurrency-card__view-toggle--idle'
+  ])
+}
+
+function getStatusChipClasses(tone: ConcurrencyTone): string {
+  return joinClassNames([
+    'ops-concurrency-card__status-chip theme-chip theme-chip--compact inline-flex items-center gap-1 text-[10px] font-medium',
+    tone === 'danger' && 'theme-chip--danger',
+    tone === 'info' && 'theme-chip--info',
+    tone === 'neutral' && 'theme-chip--neutral',
+    tone === 'success' && 'theme-chip--success',
+    tone === 'warning' && 'theme-chip--warning'
+  ])
+}
+
+function getAccountStatusClasses(row: AccountRow): string {
+  if (row.is_available) return getStatusChipClasses('success')
+  if (row.is_rate_limited) return getStatusChipClasses('warning')
+  if (row.is_overloaded) return getStatusChipClasses('danger')
+  if (row.has_error) return getStatusChipClasses('danger')
+  return getStatusChipClasses('neutral')
 }
 
 function formatDuration(seconds: number): string {
@@ -341,11 +390,11 @@ watch(
 </script>
 
 <template>
-  <div class="flex h-full flex-col rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700">
+  <div class="ops-concurrency-card flex h-full flex-col">
     <!-- 头部 -->
     <div class="mb-4 flex shrink-0 items-center justify-between gap-3">
-      <h3 class="flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white">
-        <svg class="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <h3 class="ops-concurrency-card__title flex items-center gap-2 text-sm font-bold">
+        <svg class="ops-concurrency-card__title-icon h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
         {{ t('admin.ops.concurrency.title') }}
@@ -353,10 +402,7 @@ watch(
       <div class="flex items-center gap-2">
         <!-- 用户视图切换按钮 -->
         <button
-          class="flex items-center justify-center rounded-lg px-2 py-1 transition-colors"
-          :class="showByUser
-            ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-            : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600 dark:hover:text-gray-300'"
+          :class="getViewToggleClasses(showByUser)"
           :title="showByUser ? t('admin.ops.concurrency.switchToPlatform') : t('admin.ops.concurrency.switchToUser')"
           @click="showByUser = !showByUser"
         >
@@ -366,7 +412,7 @@ watch(
         </button>
         <!-- 刷新按钮 -->
         <button
-          class="flex items-center gap-1 rounded-lg bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600"
+          class="ops-concurrency-card__refresh flex items-center gap-1 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="loading"
           :title="t('common.refresh')"
           @click="loadData"
@@ -379,62 +425,62 @@ watch(
     </div>
 
     <!-- 错误提示 -->
-    <div v-if="errorMessage" class="mb-3 shrink-0 rounded-xl bg-red-50 p-2.5 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
+    <div v-if="errorMessage" class="ops-concurrency-card__error mb-3 shrink-0 text-xs">
       {{ errorMessage }}
     </div>
 
     <!-- 禁用状态 -->
     <div
       v-if="!realtimeEnabled"
-      class="flex flex-1 items-center justify-center rounded-xl border border-dashed border-gray-200 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
+      class="ops-concurrency-card__empty flex flex-1 items-center justify-center border border-dashed text-sm"
     >
       {{ t('admin.ops.concurrency.disabledHint') }}
     </div>
 
     <!-- 数据展示区域 -->
-    <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 dark:border-dark-700">
+    <div v-else class="ops-concurrency-card__shell flex min-h-0 flex-1 flex-col overflow-hidden border">
       <!-- 维度标题栏 -->
-      <div class="flex shrink-0 items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+      <div class="ops-concurrency-card__shell-head flex shrink-0 items-center justify-between border-b">
+        <span class="ops-concurrency-card__subtitle text-[10px] font-bold uppercase tracking-wider">
           {{ displayTitle }}
         </span>
-        <span class="text-[10px] text-gray-500 dark:text-gray-400">
+        <span class="ops-concurrency-card__subtitle text-[10px]">
           {{ t('admin.ops.concurrency.totalRows', { count: displayRows.length }) }}
         </span>
       </div>
 
       <!-- 空状态 -->
-      <div v-if="displayRows.length === 0" class="flex flex-1 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+      <div v-if="displayRows.length === 0" class="ops-concurrency-card__empty flex flex-1 items-center justify-center text-sm">
         {{ t('admin.ops.concurrency.empty') }}
       </div>
 
       <!-- 用户视图 -->
-      <div v-else-if="displayDimension === 'user'" class="custom-scrollbar max-h-[360px] flex-1 space-y-2 overflow-y-auto p-3">
-        <div v-for="row in (displayRows as UserRow[])" :key="row.key" class="rounded-lg bg-gray-50 p-2.5 dark:bg-dark-900">
+      <div v-else-if="displayDimension === 'user'" class="ops-concurrency-card__list custom-scrollbar flex-1 space-y-2 overflow-y-auto">
+        <div v-for="row in (displayRows as UserRow[])" :key="row.key" class="ops-concurrency-card__row ops-concurrency-card__row--compact">
           <!-- 用户信息和并发 -->
           <div class="mb-1.5 flex items-center justify-between gap-2">
             <div class="flex min-w-0 flex-1 items-center gap-1.5">
-              <span class="truncate text-[11px] font-bold text-gray-900 dark:text-white" :title="row.username || row.user_email">
+              <span class="ops-concurrency-card__primary truncate text-[11px] font-bold" :title="row.username || row.user_email">
                 {{ row.username || row.user_email }}
               </span>
-              <span v-if="row.username" class="shrink-0 truncate text-[10px] text-gray-400 dark:text-gray-500" :title="row.user_email">
+              <span v-if="row.username" class="ops-concurrency-card__subtitle shrink-0 truncate text-[10px]" :title="row.user_email">
                 {{ row.user_email }}
               </span>
             </div>
             <div class="flex shrink-0 items-center gap-2 text-[10px]">
-              <span class="font-mono font-bold text-gray-900 dark:text-white"> {{ row.current_in_use }}/{{ row.max_capacity }} </span>
+              <span class="ops-concurrency-card__primary font-mono font-bold"> {{ row.current_in_use }}/{{ row.max_capacity }} </span>
               <span :class="['font-bold', getLoadTextClass(row.load_percentage)]"> {{ Math.round(row.load_percentage) }}% </span>
             </div>
           </div>
 
           <!-- 进度条 -->
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700">
-            <div class="h-full rounded-full transition-all duration-300" :class="getLoadBarClass(row.load_percentage)" :style="getLoadBarStyle(row.load_percentage)"></div>
+          <div class="ops-concurrency-card__track h-1.5 w-full overflow-hidden rounded-full">
+            <div :class="getLoadBarClass(row.load_percentage)" :style="getLoadBarStyle(row.load_percentage)"></div>
           </div>
 
           <!-- 等待队列 -->
           <div v-if="row.waiting_in_queue > 0" class="mt-1.5 flex justify-end">
-            <span class="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+            <span class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact text-[10px] font-semibold">
               {{ t('admin.ops.concurrency.queued', { count: row.waiting_in_queue }) }}
             </span>
           </div>
@@ -442,28 +488,27 @@ watch(
       </div>
 
       <!-- 汇总视图（平台/分组） -->
-      <div v-else-if="displayDimension === 'platform' || displayDimension === 'group'" class="custom-scrollbar max-h-[360px] flex-1 space-y-2 overflow-y-auto p-3">
-        <div v-for="row in (displayRows as SummaryRow[])" :key="row.key" class="rounded-lg bg-gray-50 p-3 dark:bg-dark-900">
+      <div v-else-if="displayDimension === 'platform' || displayDimension === 'group'" class="ops-concurrency-card__list custom-scrollbar flex-1 space-y-2 overflow-y-auto">
+        <div v-for="row in (displayRows as SummaryRow[])" :key="row.key" class="ops-concurrency-card__row ops-concurrency-card__row--regular">
           <!-- 标题行 -->
           <div class="mb-2 flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-              <div class="truncate text-[11px] font-bold text-gray-900 dark:text-white" :title="row.name">
+              <div class="ops-concurrency-card__primary truncate text-[11px] font-bold" :title="row.name">
                 {{ row.name }}
               </div>
-              <span v-if="displayDimension === 'group' && row.platform" class="text-[10px] text-gray-400 dark:text-gray-500">
+              <span v-if="displayDimension === 'group' && row.platform" class="ops-concurrency-card__subtitle text-[10px]">
                 {{ row.platform.toUpperCase() }}
               </span>
             </div>
             <div class="flex shrink-0 items-center gap-2 text-[10px]">
-              <span class="font-mono font-bold text-gray-900 dark:text-white"> {{ row.used_concurrency }}/{{ row.total_concurrency }} </span>
+              <span class="ops-concurrency-card__primary font-mono font-bold"> {{ row.used_concurrency }}/{{ row.total_concurrency }} </span>
               <span :class="['font-bold', getLoadTextClass(row.concurrency_percentage)]"> {{ row.concurrency_percentage }}% </span>
             </div>
           </div>
 
           <!-- 进度条 -->
-          <div class="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700">
+          <div class="ops-concurrency-card__track mb-2 h-1.5 w-full overflow-hidden rounded-full">
             <div
-              class="h-full rounded-full transition-all duration-300"
               :class="getLoadBarClass(row.concurrency_percentage)"
               :style="getLoadBarStyle(row.concurrency_percentage)"
             ></div>
@@ -473,7 +518,7 @@ watch(
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
             <!-- 账号统计 -->
             <div class="flex items-center gap-1">
-              <svg class="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="ops-concurrency-card__subtitle h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -481,17 +526,17 @@ watch(
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                 />
               </svg>
-              <span class="text-gray-600 dark:text-gray-300">
-                <span class="font-bold text-green-600 dark:text-green-400">{{ row.available_accounts }}</span
+              <span class="ops-concurrency-card__secondary">
+                <span class="ops-concurrency-card__success font-bold">{{ row.available_accounts }}</span
                 >/{{ row.total_accounts }}
               </span>
-              <span class="text-gray-400 dark:text-gray-500">{{ row.availability_percentage }}%</span>
+              <span class="ops-concurrency-card__subtitle">{{ row.availability_percentage }}%</span>
             </div>
 
             <!-- 限流账号 -->
             <span
               v-if="row.rate_limited_accounts > 0"
-              class="rounded-full bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+              class="ops-concurrency-card__status-chip theme-chip theme-chip--warning theme-chip--compact font-semibold"
             >
               {{ t('admin.ops.concurrency.rateLimited', { count: row.rate_limited_accounts }) }}
             </span>
@@ -499,7 +544,7 @@ watch(
             <!-- 异常账号 -->
             <span
               v-if="row.error_accounts > 0"
-              class="rounded-full bg-red-100 px-1.5 py-0.5 font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400"
+              class="ops-concurrency-card__status-chip theme-chip theme-chip--danger theme-chip--compact font-semibold"
             >
               {{ t('admin.ops.concurrency.errorAccounts', { count: row.error_accounts }) }}
             </span>
@@ -507,7 +552,7 @@ watch(
             <!-- 等待队列 -->
             <span
               v-if="row.waiting_in_queue > 0"
-              class="rounded-full bg-purple-100 px-1.5 py-0.5 font-semibold text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+              class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact font-semibold"
             >
               {{ t('admin.ops.concurrency.queued', { count: row.waiting_in_queue }) }}
             </span>
@@ -516,25 +561,25 @@ watch(
       </div>
 
       <!-- 账号详细视图 -->
-      <div v-else class="custom-scrollbar max-h-[360px] flex-1 space-y-2 overflow-y-auto p-3">
-        <div v-for="row in (displayRows as AccountRow[])" :key="row.key" class="rounded-lg bg-gray-50 p-2.5 dark:bg-dark-900">
+      <div v-else class="ops-concurrency-card__list custom-scrollbar flex-1 space-y-2 overflow-y-auto">
+        <div v-for="row in (displayRows as AccountRow[])" :key="row.key" class="ops-concurrency-card__row ops-concurrency-card__row--compact">
           <!-- 账号名称和并发 -->
           <div class="mb-1.5 flex items-center justify-between gap-2">
             <div class="min-w-0 flex-1">
-              <div class="truncate text-[11px] font-bold text-gray-900 dark:text-white" :title="row.name">
+              <div class="ops-concurrency-card__primary truncate text-[11px] font-bold" :title="row.name">
                 {{ row.name }}
               </div>
-              <div class="mt-0.5 text-[9px] text-gray-400 dark:text-gray-500">
+              <div class="ops-concurrency-card__subtitle mt-0.5 text-[9px]">
                 {{ row.group_name }}
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
               <!-- 并发使用 -->
-              <span class="font-mono text-[11px] font-bold text-gray-900 dark:text-white"> {{ row.current_in_use }}/{{ row.max_capacity }} </span>
+              <span class="ops-concurrency-card__primary font-mono text-[11px] font-bold"> {{ row.current_in_use }}/{{ row.max_capacity }} </span>
               <!-- 状态徽章 -->
               <span
                 v-if="row.is_available"
-                class="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                :class="getAccountStatusClasses(row)"
               >
                 <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -543,7 +588,7 @@ watch(
               </span>
               <span
                 v-else-if="row.is_rate_limited"
-                class="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                :class="getAccountStatusClasses(row)"
               >
                 <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -552,7 +597,7 @@ watch(
               </span>
               <span
                 v-else-if="row.is_overloaded"
-                class="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                :class="getAccountStatusClasses(row)"
               >
                 <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -566,7 +611,7 @@ watch(
               </span>
               <span
                 v-else-if="row.has_error"
-                class="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                :class="getAccountStatusClasses(row)"
               >
                 <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -575,7 +620,7 @@ watch(
               </span>
               <span
                 v-else
-                class="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                :class="getAccountStatusClasses(row)"
               >
                 {{ t('admin.ops.accountAvailability.unavailable') }}
               </span>
@@ -583,13 +628,13 @@ watch(
           </div>
 
           <!-- 进度条 -->
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700">
-            <div class="h-full rounded-full transition-all duration-300" :class="getLoadBarClass(row.load_percentage)" :style="getLoadBarStyle(row.load_percentage)"></div>
+          <div class="ops-concurrency-card__track h-1.5 w-full overflow-hidden rounded-full">
+            <div :class="getLoadBarClass(row.load_percentage)" :style="getLoadBarStyle(row.load_percentage)"></div>
           </div>
 
           <!-- 等待队列 -->
           <div v-if="row.waiting_in_queue > 0" class="mt-1.5 flex justify-end">
-            <span class="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+            <span class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact text-[10px] font-semibold">
               {{ t('admin.ops.concurrency.queued', { count: row.waiting_in_queue }) }}
             </span>
           </div>
@@ -600,9 +645,135 @@ watch(
 </template>
 
 <style scoped>
+.ops-concurrency-card {
+  padding: var(--theme-ops-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  border-radius: var(--theme-surface-radius);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.ops-concurrency-card__title,
+.ops-concurrency-card__primary,
+.ops-concurrency-card__secondary {
+  color: var(--theme-page-text);
+}
+
+.ops-concurrency-card__subtitle {
+  color: var(--theme-page-muted);
+}
+
+.ops-concurrency-card__title-icon {
+  color: rgb(var(--theme-info-rgb));
+}
+
+.ops-concurrency-card__view-toggle--active {
+  padding: calc(var(--theme-ops-table-cell-padding-compact-y) * 0.9) var(--theme-ops-table-cell-padding-compact-x);
+  border-radius: var(--theme-button-radius);
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 12%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-concurrency-card__view-toggle--idle,
+.ops-concurrency-card__refresh {
+  padding: calc(var(--theme-ops-table-cell-padding-compact-y) * 0.9) var(--theme-ops-table-cell-padding-compact-x);
+  border-radius: var(--theme-button-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+
+.ops-concurrency-card__view-toggle--idle:hover,
+.ops-concurrency-card__refresh:hover {
+  background: color-mix(in srgb, var(--theme-page-border) 66%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.ops-concurrency-card__error {
+  padding: var(--theme-ops-row-padding-compact);
+  border-radius: var(--theme-select-panel-radius);
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-concurrency-card__empty,
+.ops-concurrency-card__shell {
+  border-radius: var(--theme-select-panel-radius);
+  border-color: color-mix(in srgb, var(--theme-page-border) 74%, transparent);
+}
+
+.ops-concurrency-card__shell-head {
+  padding:
+    var(--theme-ops-table-cell-padding-compact-y)
+    var(--theme-ops-table-cell-padding-compact-x);
+  border-color: color-mix(in srgb, var(--theme-page-border) 70%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 92%, var(--theme-surface));
+}
+
+.ops-concurrency-card__list {
+  max-height: var(--theme-ops-list-max-height);
+  padding: var(--theme-ops-table-cell-padding-compact-x);
+}
+
+.ops-concurrency-card__row {
+  border-radius: var(--theme-button-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.ops-concurrency-card__row--compact {
+  padding: var(--theme-ops-row-padding-compact);
+}
+
+.ops-concurrency-card__row--regular {
+  padding: var(--theme-ops-row-padding-regular);
+}
+
+.ops-concurrency-card__status-chip {
+  padding:
+    calc(var(--theme-button-padding-y) * 0.2)
+    calc(var(--theme-button-padding-x) * 0.32);
+  border-radius: calc(var(--theme-button-radius) * 0.75);
+}
+
+.ops-concurrency-card__track {
+  background: color-mix(in srgb, var(--theme-page-border) 62%, var(--theme-surface));
+}
+
+.ops-concurrency-card__bar--danger {
+  background: rgb(var(--theme-danger-rgb));
+}
+
+.ops-concurrency-card__bar--warning {
+  background: rgb(var(--theme-warning-rgb));
+}
+
+.ops-concurrency-card__bar--info {
+  background: rgb(var(--theme-info-rgb));
+}
+
+.ops-concurrency-card__bar--success {
+  background: rgb(var(--theme-success-rgb));
+}
+
+.ops-concurrency-card__load-text--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-concurrency-card__load-text--warning {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-concurrency-card__load-text--info {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-concurrency-card__load-text--success,
+.ops-concurrency-card__success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  scrollbar-color: color-mix(in srgb, var(--theme-page-muted) 34%, transparent) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -614,11 +785,11 @@ watch(
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.3);
+  background-color: color-mix(in srgb, var(--theme-page-muted) 34%, transparent);
   border-radius: 3px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(156, 163, 175, 0.5);
+  background-color: color-mix(in srgb, var(--theme-page-muted) 50%, transparent);
 }
 </style>

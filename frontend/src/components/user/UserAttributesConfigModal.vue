@@ -1,9 +1,8 @@
 <template>
   <BaseDialog :show="show" :title="t('admin.users.attributes.title')" width="wide" @close="emit('close')">
     <div class="space-y-4">
-      <!-- Header with Add Button -->
       <div class="flex items-center justify-between">
-        <p class="text-sm text-gray-500 dark:text-dark-400">
+        <p class="user-attributes-config-modal__description text-sm">
           {{ t('admin.users.attributes.description') }}
         </p>
         <button @click="openCreateModal" class="btn btn-primary btn-sm">
@@ -12,45 +11,40 @@
         </button>
       </div>
 
-      <!-- Loading State -->
-      <div v-if="loading" class="flex justify-center py-12">
-        <svg class="h-8 w-8 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+      <div v-if="loading" class="user-attributes-config-modal__state-block flex justify-center">
+        <svg class="user-attributes-config-modal__spinner h-8 w-8 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
         </svg>
       </div>
 
-      <!-- Empty State -->
-      <div v-else-if="attributes.length === 0" class="py-12 text-center">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+      <div v-else-if="attributes.length === 0" class="user-attributes-config-modal__state-block text-center">
+        <svg class="user-attributes-config-modal__empty-icon mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6z" />
         </svg>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="user-attributes-config-modal__description mt-2 text-sm">
           {{ t('admin.users.attributes.noAttributes') }}
         </p>
-        <p class="text-xs text-gray-400 dark:text-dark-500">
+        <p class="user-attributes-config-modal__empty-hint text-xs">
           {{ t('admin.users.attributes.noAttributesHint') }}
         </p>
       </div>
 
-      <!-- Attributes List -->
       <div v-else class="max-h-96 space-y-2 overflow-y-auto">
         <div
           v-for="attr in attributes"
           :key="attr.id"
-          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-dark-600 dark:bg-dark-800"
+          class="user-attributes-config-modal__attribute-row user-attributes-config-modal__attribute-row-layout flex items-center gap-3"
         >
-          <!-- Drag Handle -->
-          <div class="cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" :title="t('admin.users.attributes.dragToReorder')">
+          <div class="user-attributes-config-modal__drag-handle cursor-move" :title="t('admin.users.attributes.dragToReorder')">
             <Icon name="menu" size="md" />
           </div>
 
-          <!-- Attribute Info -->
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <span class="font-medium text-gray-900 dark:text-white">{{ attr.name }}</span>
-              <span class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-500 dark:bg-dark-700 dark:text-dark-400">
+              <span class="user-attributes-config-modal__name font-medium">{{ attr.name }}</span>
+              <span class="theme-chip theme-chip--compact theme-chip--neutral font-mono">
                 {{ attr.key }}
               </span>
               <span v-if="attr.required" class="badge badge-danger text-xs">
@@ -60,24 +54,23 @@
                 {{ t('common.disabled') }}
               </span>
             </div>
-            <div class="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-dark-400">
+            <div class="user-attributes-config-modal__meta mt-0.5 flex items-center gap-2 text-xs">
               <span class="badge badge-gray">{{ t(`admin.users.attributes.types.${attr.type}`) }}</span>
               <span v-if="attr.description" class="truncate">{{ attr.description }}</span>
             </div>
           </div>
 
-          <!-- Actions -->
           <div class="flex items-center gap-1">
             <button
               @click="openEditModal(attr)"
-              class="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+              class="user-attributes-config-modal__icon-button user-attributes-config-modal__icon-button--accent user-attributes-config-modal__icon-button-layout"
               :title="t('common.edit')"
             >
               <Icon name="edit" size="sm" />
             </button>
             <button
               @click="confirmDelete(attr)"
-              class="rounded-lg p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+              class="user-attributes-config-modal__icon-button user-attributes-config-modal__icon-button--danger user-attributes-config-modal__icon-button-layout"
               :title="t('common.delete')"
             >
               <Icon name="trash" size="sm" />
@@ -104,7 +97,6 @@
     @close="closeEditModal"
   >
     <form id="attribute-form" @submit.prevent="handleSave" class="space-y-4">
-      <!-- Key -->
       <div>
         <label class="input-label">{{ t('admin.users.attributes.key') }}</label>
         <input
@@ -119,7 +111,6 @@
         <p class="input-hint">{{ t('admin.users.attributes.keyHint') }}</p>
       </div>
 
-      <!-- Name -->
       <div>
         <label class="input-label">{{ t('admin.users.attributes.name') }}</label>
         <input
@@ -131,7 +122,6 @@
         />
       </div>
 
-      <!-- Type -->
       <div>
         <label class="input-label">{{ t('admin.users.attributes.type') }}</label>
         <Select
@@ -140,7 +130,6 @@
         />
       </div>
 
-      <!-- Options (for select/multi_select) -->
       <div v-if="form.type === 'select' || form.type === 'multi_select'" class="space-y-2">
         <label class="input-label">{{ t('admin.users.attributes.options') }}</label>
         <div v-for="(option, index) in form.options" :key="getOptionKey(option)" class="flex items-center gap-2">
@@ -161,7 +150,7 @@
           <button
             type="button"
             @click="removeOption(index)"
-            class="rounded-lg p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600"
+            class="user-attributes-config-modal__icon-button user-attributes-config-modal__icon-button--danger user-attributes-config-modal__icon-button-layout"
           >
             <Icon name="x" size="sm" :stroke-width="2" />
           </button>
@@ -172,7 +161,6 @@
         </button>
       </div>
 
-      <!-- Description -->
       <div>
         <label class="input-label">{{ t('admin.users.attributes.fieldDescription') }}</label>
         <input
@@ -183,7 +171,6 @@
         />
       </div>
 
-      <!-- Placeholder -->
       <div>
         <label class="input-label">{{ t('admin.users.attributes.placeholder') }}</label>
         <input
@@ -194,15 +181,22 @@
         />
       </div>
 
-      <!-- Required & Enabled -->
       <div class="flex items-center gap-6">
-        <label class="flex items-center gap-2">
-          <input v-model="form.required" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600" />
-          <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.users.attributes.required') }}</span>
+        <label class="user-attributes-config-modal__checkbox-row flex items-center gap-2">
+          <input
+            v-model="form.required"
+            type="checkbox"
+            class="user-attributes-config-modal__checkbox-input user-attributes-config-modal__checkbox-input-layout"
+          />
+          <span class="user-attributes-config-modal__checkbox-label text-sm">{{ t('admin.users.attributes.required') }}</span>
         </label>
-        <label class="flex items-center gap-2">
-          <input v-model="form.enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600" />
-          <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.users.attributes.enabled') }}</span>
+        <label class="user-attributes-config-modal__checkbox-row flex items-center gap-2">
+          <input
+            v-model="form.enabled"
+            type="checkbox"
+            class="user-attributes-config-modal__checkbox-input user-attributes-config-modal__checkbox-input-layout"
+          />
+          <span class="user-attributes-config-modal__checkbox-label text-sm">{{ t('admin.users.attributes.enabled') }}</span>
         </label>
       </div>
     </form>
@@ -284,12 +278,25 @@ const form = reactive({
   options: [] as UserAttributeOption[]
 })
 
+const getErrorMessage = (error: unknown, fallbackMessage: string) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { detail?: string } } }).response
+    if (typeof response?.data?.detail === 'string' && response.data.detail.trim()) {
+      return response.data.detail
+    }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message
+  }
+  return fallbackMessage
+}
+
 const loadAttributes = async () => {
   loading.value = true
   try {
     attributes.value = await adminAPI.userAttributes.listDefinitions()
-  } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.users.attributes.failedToLoad'))
+  } catch (error) {
+    appStore.showError(getErrorMessage(error, t('admin.users.attributes.failedToLoad')))
   } finally {
     loading.value = false
   }
@@ -370,11 +377,11 @@ const handleSave = async () => {
 
     closeEditModal()
     loadAttributes()
-  } catch (error: any) {
+  } catch (error) {
     const msg = editingAttribute.value
       ? t('admin.users.attributes.failedToUpdate')
       : t('admin.users.attributes.failedToCreate')
-    appStore.showError(error.response?.data?.detail || msg)
+    appStore.showError(getErrorMessage(error, msg))
   } finally {
     saving.value = false
   }
@@ -394,8 +401,8 @@ const handleDelete = async () => {
     showDeleteDialog.value = false
     deletingAttribute.value = null
     loadAttributes()
-  } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.users.attributes.failedToDelete'))
+  } catch (error) {
+    appStore.showError(getErrorMessage(error, t('admin.users.attributes.failedToDelete')))
   }
 }
 
@@ -405,3 +412,81 @@ watch(() => props.show, (isShow) => {
   }
 })
 </script>
+
+<style scoped>
+.user-attributes-config-modal__description,
+.user-attributes-config-modal__meta,
+.user-attributes-config-modal__drag-handle,
+.user-attributes-config-modal__empty-icon {
+  color: var(--theme-page-muted);
+}
+
+.user-attributes-config-modal__empty-hint {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, var(--theme-surface));
+}
+
+.user-attributes-config-modal__spinner {
+  color: var(--theme-accent);
+}
+
+.user-attributes-config-modal__attribute-row {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 78%, transparent);
+  background: var(--theme-surface);
+}
+
+.user-attributes-config-modal__state-block {
+  padding-block: var(--theme-user-attributes-state-padding-y);
+}
+
+.user-attributes-config-modal__attribute-row-layout {
+  border-radius: var(--theme-user-attributes-row-radius);
+  padding: var(--theme-user-attributes-row-padding);
+}
+
+.user-attributes-config-modal__drag-handle:hover {
+  color: var(--theme-page-text);
+}
+
+.user-attributes-config-modal__name,
+.user-attributes-config-modal__checkbox-label {
+  color: var(--theme-page-text);
+}
+
+.user-attributes-config-modal__icon-button {
+  color: var(--theme-page-muted);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.user-attributes-config-modal__icon-button-layout {
+  border-radius: var(--theme-user-attributes-icon-button-radius);
+  padding: var(--theme-user-attributes-icon-button-padding);
+}
+
+.user-attributes-config-modal__icon-button--accent:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+  color: var(--theme-accent);
+}
+
+.user-attributes-config-modal__icon-button--danger:hover {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 9%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.user-attributes-config-modal__checkbox-row {
+  cursor: pointer;
+}
+
+.user-attributes-config-modal__checkbox-input {
+  border: 1px solid var(--theme-input-border);
+  background: var(--theme-input-bg);
+  color: var(--theme-accent);
+}
+
+.user-attributes-config-modal__checkbox-input-layout {
+  width: var(--theme-user-attributes-checkbox-size);
+  height: var(--theme-user-attributes-checkbox-size);
+  border-radius: var(--theme-user-attributes-checkbox-radius);
+}
+</style>

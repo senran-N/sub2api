@@ -13,17 +13,13 @@
       class="space-y-4"
       @submit.prevent="handlePreview"
     >
-      <div class="text-sm text-gray-600 dark:text-dark-300">
+      <div class="sync-from-crs-modal__description">
         {{ t('admin.accounts.syncFromCrsDesc') }}
       </div>
-      <div
-        class="rounded-lg bg-gray-50 p-3 text-xs text-gray-500 dark:bg-dark-700/60 dark:text-dark-400"
-      >
+      <div class="sync-from-crs-modal__notice sync-from-crs-modal__notice--neutral">
         {{ t('admin.accounts.crsUpdateBehaviorNote') }}
       </div>
-      <div
-        class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-600 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
-      >
+      <div class="sync-from-crs-modal__notice sync-from-crs-modal__notice--warning">
         {{ t('admin.accounts.crsVersionRequirement') }}
       </div>
 
@@ -58,11 +54,11 @@
           </div>
         </div>
 
-        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-dark-300">
+        <label class="sync-from-crs-modal__checkbox">
           <input
             v-model="form.sync_proxies"
             type="checkbox"
-            class="rounded border-gray-300 dark:border-dark-600"
+            class="sync-from-crs-modal__checkbox-input"
           />
           {{ t('admin.accounts.syncProxies') }}
         </label>
@@ -74,22 +70,20 @@
       <!-- Existing accounts (read-only info) -->
       <div
         v-if="previewResult.existing_accounts.length"
-        class="rounded-lg bg-gray-50 p-3 dark:bg-dark-700/60"
+        class="sync-from-crs-modal__section sync-from-crs-modal__section--muted"
       >
-        <div class="mb-2 text-sm font-medium text-gray-700 dark:text-dark-300">
+        <div class="sync-from-crs-modal__section-title">
           {{ t('admin.accounts.crsExistingAccounts') }}
-          <span class="ml-1 text-xs text-gray-400">({{ previewResult.existing_accounts.length }})</span>
+          <span class="sync-from-crs-modal__section-count">({{ previewResult.existing_accounts.length }})</span>
         </div>
-        <div class="max-h-32 overflow-auto text-xs text-gray-500 dark:text-dark-400">
+        <div class="sync-from-crs-modal__scroll-list sync-from-crs-modal__scroll-list--compact">
           <div
             v-for="acc in previewResult.existing_accounts"
             :key="acc.crs_account_id"
-            class="flex items-center gap-2 py-0.5"
+            class="sync-from-crs-modal__account-row"
           >
-            <span
-              class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-            >{{ acc.platform }} / {{ acc.type }}</span>
-            <span class="truncate">{{ acc.name }}</span>
+            <span :class="getAccountChipClasses('existing')">{{ acc.platform }} / {{ acc.type }}</span>
+            <span class="sync-from-crs-modal__account-name">{{ acc.name }}</span>
           </div>
         </div>
       </div>
@@ -97,52 +91,48 @@
       <!-- New accounts (selectable) -->
       <div v-if="previewResult.new_accounts.length">
         <div class="mb-2 flex items-center justify-between">
-          <div class="text-sm font-medium text-gray-900 dark:text-white">
+          <div class="sync-from-crs-modal__section-title">
             {{ t('admin.accounts.crsNewAccounts') }}
-            <span class="ml-1 text-xs text-gray-400">({{ previewResult.new_accounts.length }})</span>
+            <span class="sync-from-crs-modal__section-count">({{ previewResult.new_accounts.length }})</span>
           </div>
           <div class="flex gap-2">
             <button
               type="button"
-              class="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              class="sync-from-crs-modal__link-button"
               @click="selectAll"
             >{{ t('admin.accounts.crsSelectAll') }}</button>
             <button
               type="button"
-              class="text-xs text-gray-500 hover:text-gray-600 dark:text-gray-400"
+              class="sync-from-crs-modal__secondary-link"
               @click="selectNone"
             >{{ t('admin.accounts.crsSelectNone') }}</button>
           </div>
         </div>
-        <div
-          class="max-h-48 overflow-auto rounded-lg border border-gray-200 p-2 dark:border-dark-600"
-        >
+        <div class="sync-from-crs-modal__scroll-list">
           <label
             v-for="acc in previewResult.new_accounts"
             :key="acc.crs_account_id"
-            class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-dark-700/40"
+            class="sync-from-crs-modal__selectable-row"
           >
             <input
               type="checkbox"
               :checked="selectedIds.has(acc.crs_account_id)"
-              class="rounded border-gray-300 dark:border-dark-600"
+              class="sync-from-crs-modal__checkbox-input"
               @change="toggleSelect(acc.crs_account_id)"
             />
-            <span
-              class="inline-block rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
-            >{{ acc.platform }} / {{ acc.type }}</span>
-            <span class="truncate text-sm text-gray-700 dark:text-dark-300">{{ acc.name }}</span>
+            <span :class="getAccountChipClasses('new')">{{ acc.platform }} / {{ acc.type }}</span>
+            <span class="sync-from-crs-modal__account-name sync-from-crs-modal__account-name--strong">{{ acc.name }}</span>
           </label>
         </div>
-        <div class="mt-1 text-xs text-gray-400">
+        <div class="sync-from-crs-modal__selection-count">
           {{ t('admin.accounts.crsSelectedCount', { count: selectedIds.size }) }}
         </div>
       </div>
 
       <!-- Sync options summary -->
-      <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-dark-400">
+      <div class="sync-from-crs-modal__summary-row">
         <span>{{ t('admin.accounts.syncProxies') }}:</span>
-        <span :class="form.sync_proxies ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-dark-500'">
+        <span :class="getProxySyncStateClasses()">
           {{ form.sync_proxies ? t('common.yes') : t('common.no') }}
         </span>
       </div>
@@ -150,7 +140,7 @@
       <!-- No new accounts -->
       <div
         v-if="!previewResult.new_accounts.length"
-        class="rounded-lg bg-gray-50 p-4 text-center text-sm text-gray-500 dark:bg-dark-700/60 dark:text-dark-400"
+        class="sync-from-crs-modal__empty-state"
       >
         {{ t('admin.accounts.crsNoNewAccounts') }}
         <span v-if="previewResult.existing_accounts.length">
@@ -161,23 +151,19 @@
 
     <!-- Step 3: Result -->
     <div v-else-if="currentStep === 'result' && result" class="space-y-4">
-      <div
-        class="space-y-2 rounded-xl border border-gray-200 p-4 dark:border-dark-700"
-      >
-        <div class="text-sm font-medium text-gray-900 dark:text-white">
+      <div class="sync-from-crs-modal__result-card">
+        <div class="sync-from-crs-modal__result-title">
           {{ t('admin.accounts.syncResult') }}
         </div>
-        <div class="text-sm text-gray-700 dark:text-dark-300">
+        <div class="sync-from-crs-modal__result-summary">
           {{ t('admin.accounts.syncResultSummary', result) }}
         </div>
 
         <div v-if="errorItems.length" class="mt-2">
-          <div class="text-sm font-medium text-red-600 dark:text-red-400">
+          <div class="sync-from-crs-modal__error-title">
             {{ t('admin.accounts.syncErrors') }}
           </div>
-          <div
-            class="mt-2 max-h-48 overflow-auto rounded-lg bg-gray-50 p-3 font-mono text-xs dark:bg-dark-800"
-          >
+          <div class="sync-from-crs-modal__error-log">
             <div v-for="(item, idx) in errorItems" :key="idx" class="whitespace-pre-wrap">
               {{ item.kind }} {{ item.crs_account_id }} — {{ item.action
               }}{{ item.error ? `: ${item.error}` : '' }}
@@ -290,6 +276,28 @@ const errorItems = computed(() => {
   )
 })
 
+const joinClassNames = (...classNames: Array<string | false | null | undefined>) => {
+  return classNames.filter(Boolean).join(' ')
+}
+
+const getAccountChipClasses = (kind: 'existing' | 'new') => {
+  return joinClassNames(
+    'theme-chip theme-chip--compact inline-flex text-[10px] font-semibold',
+    kind === 'new' ? 'theme-chip--success' : 'theme-chip--info'
+  )
+}
+
+const getProxySyncStateClasses = () => {
+  return joinClassNames(
+    'sync-from-crs-modal__summary-value',
+    form.sync_proxies ? 'sync-from-crs-modal__summary-value--enabled' : 'sync-from-crs-modal__summary-value--disabled'
+  )
+}
+
+const getErrorMessage = (error: unknown, fallbackMessage: string) => {
+  return error instanceof Error && error.message ? error.message : fallbackMessage
+}
+
 watch(
   () => props.show,
   (open) => {
@@ -355,8 +363,8 @@ const handlePreview = async () => {
     // Auto-select all new accounts
     selectedIds.value = new Set(res.new_accounts.map((a) => a.crs_account_id))
     currentStep.value = 'preview'
-  } catch (error: any) {
-    appStore.showError(error?.message || t('admin.accounts.crsPreviewFailed'))
+  } catch (error) {
+    appStore.showError(getErrorMessage(error, t('admin.accounts.crsPreviewFailed')))
   } finally {
     previewing.value = false
   }
@@ -386,10 +394,213 @@ const handleSync = async () => {
       appStore.showSuccess(t('admin.accounts.syncCompleted', res))
     }
     emit('synced')
-  } catch (error: any) {
-    appStore.showError(error?.message || t('admin.accounts.syncFailed'))
+  } catch (error) {
+    appStore.showError(getErrorMessage(error, t('admin.accounts.syncFailed')))
   } finally {
     syncing.value = false
   }
 }
 </script>
+
+<style scoped>
+.sync-from-crs-modal__description {
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+}
+
+.sync-from-crs-modal__notice,
+.sync-from-crs-modal__section,
+.sync-from-crs-modal__result-card,
+.sync-from-crs-modal__empty-state,
+.sync-from-crs-modal__scroll-list {
+  border-radius: calc(var(--theme-button-radius) + 2px);
+}
+
+.sync-from-crs-modal__notice {
+  padding: 0.75rem;
+  font-size: 0.75rem;
+}
+
+.sync-from-crs-modal__notice--neutral,
+.sync-from-crs-modal__section--muted,
+.sync-from-crs-modal__empty-state {
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+
+.sync-from-crs-modal__notice--warning {
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-warning-rgb)) 34%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 9%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 74%, var(--theme-page-text));
+}
+
+.sync-from-crs-modal__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--theme-page-text);
+  font-size: 0.875rem;
+}
+
+.sync-from-crs-modal__checkbox-input {
+  border: 1px solid var(--theme-input-border);
+  border-radius: 0.375rem;
+  accent-color: var(--theme-accent);
+}
+
+.sync-from-crs-modal__section {
+  padding: 0.75rem;
+}
+
+.sync-from-crs-modal__section-title,
+.sync-from-crs-modal__result-title {
+  color: var(--theme-page-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.sync-from-crs-modal__section-count,
+.sync-from-crs-modal__selection-count,
+.sync-from-crs-modal__summary-row {
+  color: var(--theme-page-muted);
+  font-size: 0.75rem;
+}
+
+.sync-from-crs-modal__scroll-list {
+  max-height: 12rem;
+  overflow: auto;
+  border: 1px solid var(--theme-card-border);
+  background: var(--theme-surface);
+  padding: 0.5rem;
+}
+
+.sync-from-crs-modal__scroll-list--compact {
+  max-height: 8rem;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.sync-from-crs-modal__account-row,
+.sync-from-crs-modal__selectable-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: calc(var(--theme-button-radius) - 2px);
+}
+
+.sync-from-crs-modal__account-row {
+  padding: 0.125rem 0;
+}
+
+.sync-from-crs-modal__selectable-row {
+  cursor: pointer;
+  padding: 0.5rem;
+  transition: background-color 0.18s ease;
+}
+
+.sync-from-crs-modal__selectable-row:hover {
+  background: color-mix(in srgb, var(--theme-accent-soft) 60%, var(--theme-surface));
+}
+
+.sync-from-crs-modal__account-name {
+  min-width: 0;
+  flex: 1 1 0%;
+  color: var(--theme-page-muted);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-from-crs-modal__account-name--strong,
+.sync-from-crs-modal__result-summary {
+  color: var(--theme-page-text);
+}
+
+.sync-from-crs-modal__link-button,
+.sync-from-crs-modal__secondary-link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: color 0.18s ease;
+}
+
+.sync-from-crs-modal__link-button {
+  color: var(--theme-accent);
+}
+
+.sync-from-crs-modal__secondary-link {
+  color: var(--theme-page-muted);
+}
+
+.sync-from-crs-modal__link-button:hover,
+.sync-from-crs-modal__link-button:focus-visible {
+  color: color-mix(in srgb, var(--theme-accent) 74%, var(--theme-accent-strong));
+  outline: none;
+}
+
+.sync-from-crs-modal__secondary-link:hover,
+.sync-from-crs-modal__secondary-link:focus-visible {
+  color: var(--theme-page-text);
+  outline: none;
+}
+
+.sync-from-crs-modal__selection-count {
+  margin-top: 0.25rem;
+}
+
+.sync-from-crs-modal__summary-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sync-from-crs-modal__summary-value {
+  font-weight: 600;
+}
+
+.sync-from-crs-modal__summary-value--enabled {
+  color: rgb(var(--theme-success-rgb));
+}
+
+.sync-from-crs-modal__summary-value--disabled {
+  color: var(--theme-page-muted);
+}
+
+.sync-from-crs-modal__empty-state,
+.sync-from-crs-modal__result-card {
+  padding: 1rem;
+}
+
+.sync-from-crs-modal__empty-state {
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.sync-from-crs-modal__result-card {
+  border: 1px solid var(--theme-card-border);
+  background: var(--theme-surface);
+}
+
+.sync-from-crs-modal__result-summary {
+  font-size: 0.875rem;
+}
+
+.sync-from-crs-modal__error-title {
+  color: rgb(var(--theme-danger-rgb));
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.sync-from-crs-modal__error-log {
+  max-height: 12rem;
+  overflow: auto;
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
+  color: var(--theme-page-text);
+  font-family: var(--theme-font-mono);
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+}
+</style>

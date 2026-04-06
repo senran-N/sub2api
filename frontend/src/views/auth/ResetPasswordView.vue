@@ -2,25 +2,25 @@
   <AuthLayout>
     <div class="space-y-6">
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="reset-password-view__title">
           {{ t('auth.resetPasswordTitle') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="reset-password-view__subtitle">
           {{ t('auth.resetPasswordHint') }}
         </p>
       </div>
 
       <div v-if="isInvalidLink" class="space-y-6">
-        <div class="rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
-          <div class="flex flex-col items-center gap-4 text-center">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-800/50">
-              <Icon name="exclamationCircle" size="lg" class="text-red-600 dark:text-red-400" />
+        <div class="reset-password-view__notice reset-password-view__notice--danger">
+          <div class="reset-password-view__notice-content">
+            <div class="reset-password-view__notice-icon-shell">
+              <Icon name="exclamationCircle" size="lg" class="reset-password-view__notice-icon reset-password-view__notice-icon--danger" />
             </div>
             <div>
-              <h3 class="text-lg font-semibold text-red-800 dark:text-red-200">
+              <h3 class="reset-password-view__notice-title reset-password-view__notice-title--danger">
                 {{ t('auth.invalidResetLink') }}
               </h3>
-              <p class="mt-2 text-sm text-red-700 dark:text-red-300">
+              <p class="reset-password-view__notice-text reset-password-view__notice-text--danger">
                 {{ t('auth.invalidResetLinkHint') }}
               </p>
             </div>
@@ -30,7 +30,7 @@
         <div class="text-center">
           <router-link
             to="/forgot-password"
-            class="inline-flex items-center gap-2 font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+            class="reset-password-view__inline-link"
           >
             {{ t('auth.requestNewResetLink') }}
           </router-link>
@@ -38,16 +38,16 @@
       </div>
 
       <div v-else-if="isSuccess" class="space-y-6">
-        <div class="rounded-xl border border-green-200 bg-green-50 p-6 dark:border-green-800/50 dark:bg-green-900/20">
-          <div class="flex flex-col items-center gap-4 text-center">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-800/50">
-              <Icon name="checkCircle" size="lg" class="text-green-600 dark:text-green-400" />
+        <div class="reset-password-view__notice reset-password-view__notice--success">
+          <div class="reset-password-view__notice-content">
+            <div class="reset-password-view__notice-icon-shell">
+              <Icon name="checkCircle" size="lg" class="reset-password-view__notice-icon reset-password-view__notice-icon--success" />
             </div>
             <div>
-              <h3 class="text-lg font-semibold text-green-800 dark:text-green-200">
+              <h3 class="reset-password-view__notice-title reset-password-view__notice-title--success">
                 {{ t('auth.passwordResetSuccess') }}
               </h3>
-              <p class="mt-2 text-sm text-green-700 dark:text-green-300">
+              <p class="reset-password-view__notice-text reset-password-view__notice-text--success">
                 {{ t('auth.passwordResetSuccessHint') }}
               </p>
             </div>
@@ -68,8 +68,8 @@
             {{ t('auth.emailLabel') }}
           </label>
           <div class="relative">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+            <div class="reset-password-view__email-icon">
+              <Icon name="mail" size="md" class="reset-password-view__email-icon-symbol" />
             </div>
             <input
               id="email"
@@ -77,7 +77,7 @@
               type="email"
               readonly
               disabled
-              class="input pl-11 bg-gray-50 dark:bg-dark-700"
+              class="input reset-password-view__email-input"
             />
           </div>
         </div>
@@ -103,13 +103,13 @@
         <transition name="fade">
           <div
             v-if="errorMessage"
-            class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20"
+            class="reset-password-view__error-banner"
           >
             <div class="flex items-start gap-3">
               <div class="flex-shrink-0">
-                <Icon name="exclamationCircle" size="md" class="text-red-500" />
+                <Icon name="exclamationCircle" size="md" class="reset-password-view__notice-icon reset-password-view__notice-icon--danger" />
               </div>
-              <p class="text-sm text-red-700 dark:text-red-400">
+              <p class="reset-password-view__notice-text reset-password-view__notice-text--danger">
                 {{ errorMessage }}
               </p>
             </div>
@@ -119,7 +119,7 @@
         <button type="submit" :disabled="isLoading" class="btn btn-primary w-full">
           <svg
             v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
+            class="theme-filled-spinner -ml-1 mr-2 h-4 w-4 animate-spin"
             fill="none"
             viewBox="0 0 24 24"
           >
@@ -144,11 +144,11 @@
     </div>
 
     <template #footer>
-      <p class="text-gray-500 dark:text-dark-400">
+      <p class="reset-password-view__footer-text">
         {{ t('auth.rememberedPassword') }}
         <router-link
           to="/login"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="reset-password-view__inline-link"
         >
           {{ t('auth.signIn') }}
         </router-link>
@@ -233,5 +233,110 @@ onMounted(() => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+.reset-password-view__title,
+.reset-password-view__notice-title {
+  color: var(--theme-page-text);
+}
+
+.reset-password-view__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.reset-password-view__subtitle,
+.reset-password-view__footer-text {
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+}
+
+.reset-password-view__notice,
+.reset-password-view__error-banner {
+  border: 1px solid var(--theme-card-border);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  padding: 1.5rem;
+}
+
+.reset-password-view__notice--danger,
+.reset-password-view__error-banner {
+  border-color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 32%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 8%, var(--theme-surface));
+}
+
+.reset-password-view__notice--success {
+  border-color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 32%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 8%, var(--theme-surface));
+}
+
+.reset-password-view__notice-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.reset-password-view__notice-icon-shell {
+  display: flex;
+  height: 3rem;
+  width: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--theme-surface-soft) 90%, var(--theme-surface));
+}
+
+.reset-password-view__notice-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.reset-password-view__notice-text {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.reset-password-view__notice-icon--danger,
+.reset-password-view__notice-title--danger,
+.reset-password-view__notice-text--danger {
+  color: rgb(var(--theme-danger-rgb));
+}
+
+.reset-password-view__notice-icon--success,
+.reset-password-view__notice-title--success,
+.reset-password-view__notice-text--success {
+  color: rgb(var(--theme-success-rgb));
+}
+
+.reset-password-view__inline-link {
+  color: var(--theme-accent);
+  font-weight: 500;
+  transition: color 0.18s ease;
+}
+
+.reset-password-view__inline-link:hover,
+.reset-password-view__inline-link:focus-visible {
+  color: color-mix(in srgb, var(--theme-accent) 76%, var(--theme-accent-strong));
+  outline: none;
+}
+
+.reset-password-view__email-icon {
+  pointer-events: none;
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 0.875rem;
+}
+
+.reset-password-view__email-icon-symbol {
+  color: var(--theme-page-muted);
+}
+
+.reset-password-view__email-input {
+  background: color-mix(in srgb, var(--theme-surface-soft) 90%, var(--theme-input-bg));
+  padding-left: 2.75rem;
 }
 </style>

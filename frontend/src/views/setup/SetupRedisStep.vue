@@ -1,10 +1,10 @@
 <template>
   <div class="space-y-6">
-    <div class="mb-6 text-center">
-      <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+    <div class="setup-step-header">
+      <h2 class="setup-step-title">
         {{ t('setup.redis.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+      <p class="setup-step-description">
         {{ t('setup.redis.description') }}
       </p>
     </div>
@@ -51,12 +51,12 @@
       </div>
     </div>
 
-    <div class="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-dark-700">
+    <div class="setup-toggle-card flex items-center justify-between">
       <div>
-        <p class="text-sm font-medium text-gray-900 dark:text-white">
+        <p class="setup-toggle-title">
           {{ t('setup.redis.enableTls') }}
         </p>
-        <p class="text-xs text-gray-500 dark:text-dark-400">
+        <p class="setup-toggle-description">
           {{ t('setup.redis.enableTlsHint') }}
         </p>
       </div>
@@ -93,7 +93,8 @@
         v-else-if="connected"
         name="check"
         size="md"
-        class="mr-2 text-green-500"
+        class="mr-2"
+        style="color: rgb(var(--theme-success-rgb))"
         :stroke-width="2"
       />
       {{

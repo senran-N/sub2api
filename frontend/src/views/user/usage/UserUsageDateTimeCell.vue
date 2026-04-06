@@ -1,5 +1,5 @@
 <template>
-  <span class="text-sm text-gray-600 dark:text-gray-400">{{ formatDateTime(value) }}</span>
+  <span class="theme-text-muted text-sm">{{ formatDateTime(value) }}</span>
 </template>
 
 <script setup lang="ts">

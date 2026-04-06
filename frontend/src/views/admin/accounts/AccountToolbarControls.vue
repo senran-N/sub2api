@@ -2,7 +2,7 @@
   <div class="contents">
     <div class="relative" ref="autoRefreshDropdownRef">
       <button
-        class="btn btn-secondary px-2 md:px-3"
+        class="account-toolbar-controls__trigger btn btn-secondary"
         :title="t('admin.accounts.autoRefresh')"
         @click="toggleAutoRefreshDropdown"
       >
@@ -17,7 +17,7 @@
       </button>
       <div
         v-if="showAutoRefreshDropdown"
-        class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+        class="account-toolbar-controls__dropdown account-toolbar-controls__dropdown--wide absolute right-0 z-50 mt-2 origin-top-right"
       >
         <AccountAutoRefreshMenu
           :enabled="autoRefreshEnabled"
@@ -37,7 +37,7 @@
 
     <div class="relative" ref="columnDropdownRef">
       <button
-        class="btn btn-secondary px-2 md:px-3"
+        class="account-toolbar-controls__trigger btn btn-secondary"
         :title="t('admin.users.columnSettings')"
         @click="toggleColumnDropdown"
       >
@@ -46,7 +46,7 @@
       </button>
       <div
         v-if="showColumnDropdown"
-        class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+        class="account-toolbar-controls__dropdown account-toolbar-controls__dropdown--compact absolute right-0 z-50 mt-2 origin-top-right"
       >
         <AccountColumnSettingsMenu
           :toggleable-columns="toggleableColumns"
@@ -127,3 +127,30 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
 </script>
+
+<style scoped>
+.account-toolbar-controls__dropdown {
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.account-toolbar-controls__trigger {
+  padding-inline: var(--theme-settings-code-padding-x);
+}
+
+.account-toolbar-controls__dropdown--wide {
+  width: var(--theme-settings-menu-width-md);
+}
+
+.account-toolbar-controls__dropdown--compact {
+  width: var(--theme-settings-menu-width-sm);
+}
+
+@media (min-width: 768px) {
+  .account-toolbar-controls__trigger {
+    padding-inline: var(--theme-settings-action-padding-x);
+  }
+}
+</style>

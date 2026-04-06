@@ -5,33 +5,39 @@
     width="wide"
     @close="emit('close')"
   >
-    <div v-if="loading" class="flex items-center justify-center py-8">
-      <Icon name="refresh" size="lg" class="animate-spin text-gray-400" />
+    <div
+      v-if="loading"
+      class="flex items-center justify-center promo-code-usages-dialog__status-state"
+    >
+      <Icon name="refresh" size="lg" class="promo-code-usages-dialog__spinner animate-spin" />
     </div>
-    <div v-else-if="usages.length === 0" class="py-8 text-center text-gray-500 dark:text-gray-400">
+    <div
+      v-else-if="usages.length === 0"
+      class="promo-code-usages-dialog__muted promo-code-usages-dialog__status-state text-center"
+    >
       {{ t('admin.promo.noUsages') }}
     </div>
-    <div v-else class="space-y-3">
+    <div v-else class="promo-code-usages-dialog__list">
       <div
         v-for="usage in usages"
         :key="usage.id"
-        class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-dark-600"
+        class="promo-code-usages-dialog__item flex items-center justify-between"
       >
         <div class="flex items-center gap-3">
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-            <Icon name="user" size="sm" class="text-green-600 dark:text-green-400" />
+          <div class="promo-code-usages-dialog__icon-shell">
+            <Icon name="user" size="sm" class="promo-code-usages-dialog__bonus" />
           </div>
           <div>
-            <p class="text-sm font-medium text-gray-900 dark:text-white">
+            <p class="promo-code-usages-dialog__email text-sm font-medium">
               {{ usage.user?.email || t('admin.promo.userPrefix', { id: usage.user_id }) }}
             </p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+            <p class="promo-code-usages-dialog__muted text-xs">
               {{ formatDateTime(usage.used_at) }}
             </p>
           </div>
         </div>
         <div class="text-right">
-          <span class="text-sm font-medium text-green-600 dark:text-green-400">
+          <span class="promo-code-usages-dialog__bonus text-sm font-medium">
             +${{ usage.bonus_amount.toFixed(2) }}
           </span>
         </div>
@@ -83,3 +89,46 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.promo-code-usages-dialog__spinner,
+.promo-code-usages-dialog__muted {
+  color: var(--theme-page-muted);
+}
+
+.promo-code-usages-dialog__status-state {
+  padding: var(--theme-promo-usages-status-padding-y) 0;
+}
+
+.promo-code-usages-dialog__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-promo-usages-list-gap);
+}
+
+.promo-code-usages-dialog__item {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  border-radius: var(--theme-promo-usages-item-radius);
+  padding: var(--theme-promo-usages-item-padding);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.promo-code-usages-dialog__icon-shell {
+  width: var(--theme-promo-usages-icon-shell-size);
+  height: var(--theme-promo-usages-icon-shell-size);
+  border-radius: var(--theme-promo-usages-icon-shell-radius);
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 12%, var(--theme-surface));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.promo-code-usages-dialog__email {
+  color: var(--theme-page-text);
+}
+
+.promo-code-usages-dialog__bonus {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+</style>

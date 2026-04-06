@@ -4,7 +4,7 @@
       <Icon
         name="search"
         size="md"
-        class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+        class="user-filter-fields__search-icon absolute left-3 top-1/2 -translate-y-1/2"
       />
       <input
         :value="searchQuery"
@@ -161,3 +161,9 @@ function updateSelectAttributeFilter(
   props.applyFilter()
 }
 </script>
+
+<style scoped>
+.user-filter-fields__search-icon {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+</style>

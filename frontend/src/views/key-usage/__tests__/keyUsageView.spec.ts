@@ -68,7 +68,7 @@ describe('keyUsageView helpers', () => {
 
     expect(buildKeyUsageStatusInfo(quotaResult, t)).toEqual({
       label: 'keyUsage.quotaMode',
-      statusText: 'Active',
+      statusText: 'keyUsage.statusActive',
       isActive: true
     })
     expect(

@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-xs">
     <span
-      class="block truncate text-sm text-gray-700 dark:text-gray-300"
+      class="theme-text-default block truncate text-sm"
       :title="value"
     >
       {{ value }}

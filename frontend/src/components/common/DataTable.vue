@@ -1,29 +1,29 @@
 <template>
-  <div class="lg:hidden space-y-3">
+  <div class="data-table-mobile lg:hidden">
     <template v-if="loading">
-      <div v-for="i in 5" :key="i" class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900">
+      <div v-for="i in 5" :key="i" class="data-table-mobile__card">
         <div class="space-y-3">
           <div v-for="column in dataColumns" :key="column.key" class="flex justify-between">
-            <div class="h-4 w-20 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
-            <div class="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+            <div class="data-table-mobile__skeleton data-table-mobile__skeleton--label"></div>
+            <div class="data-table-mobile__skeleton data-table-mobile__skeleton--value"></div>
           </div>
-          <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
-            <div class="h-8 w-full animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+          <div v-if="hasActionsColumn" class="data-table-mobile__actions">
+            <div class="data-table-mobile__skeleton data-table-mobile__skeleton--action"></div>
           </div>
         </div>
       </div>
     </template>
 
     <template v-else-if="!data || data.length === 0">
-      <div class="rounded-lg border border-gray-200 bg-white p-12 text-center dark:border-dark-700 dark:bg-dark-900">
+      <div class="data-table-mobile__empty">
         <slot name="empty">
           <div class="flex flex-col items-center">
             <Icon
               name="inbox"
               size="xl"
-              class="mb-4 h-12 w-12 text-gray-400 dark:text-dark-500"
+              class="data-table-mobile__empty-icon"
             />
-            <p class="text-lg font-medium text-gray-900 dark:text-gray-100">
+            <p class="data-table-mobile__empty-title">
               {{ t('empty.noData') }}
             </p>
           </div>
@@ -35,7 +35,7 @@
       <div
         v-for="(row, index) in sortedData"
         :key="resolveRowKey(row, index)"
-        class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900"
+        class="data-table-mobile__card"
       >
         <div class="space-y-3">
           <div
@@ -43,18 +43,18 @@
             :key="column.key"
             class="flex items-start justify-between gap-4"
           >
-            <span class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-dark-400">
+            <span class="data-table-mobile__label">
               {{ column.label }}
             </span>
-            <div class="text-right text-sm text-gray-900 dark:text-gray-100">
+            <div class="data-table-mobile__value">
               <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :expanded="actionsExpanded">
                 {{ column.formatter ? column.formatter(row[column.key], row) : row[column.key] }}
               </slot>
             </div>
           </div>
-          <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
-            <div class="-mx-1 overflow-x-auto scrollbar-hide">
-              <div class="flex items-center gap-1 px-1 min-w-max">
+          <div v-if="hasActionsColumn" class="data-table-mobile__actions">
+            <div class="data-table-mobile__actions-scroll overflow-x-auto scrollbar-hide">
+              <div class="data-table-mobile__actions-row">
                 <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded"></slot>
               </div>
             </div>
@@ -71,18 +71,18 @@
       'actions-expanded': actionsExpanded,
       'is-scrollable': isScrollable
     }"
+    :style="tableLayoutVars"
   >
-    <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
-      <thead class="table-header bg-gray-50 dark:bg-dark-800">
+    <table class="data-table-desktop">
+      <thead class="table-header">
         <tr>
           <th
             v-for="(column, index) in columns"
             :key="column.key"
             scope="col"
             :class="[
-              'sticky-header-cell py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-dark-400',
-              getAdaptivePaddingClass(),
-              { 'cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-700': column.sortable },
+              'data-table-desktop__head-cell sticky-header-cell text-left text-xs font-medium uppercase tracking-wider',
+              { 'data-table-desktop__head-cell--sortable cursor-pointer': column.sortable },
               getStickyColumnClass(column, index),
               column.class
             ]"
@@ -96,7 +96,7 @@
             >
               <div class="flex items-center space-x-1">
                 <span>{{ column.label }}</span>
-                <span v-if="column.sortable" class="text-gray-400 dark:text-dark-500">
+                <span v-if="column.sortable" class="data-table-desktop__sort-indicator">
                   <svg
                     v-if="sortKey === column.key"
                     class="h-4 w-4"
@@ -121,12 +121,16 @@
           </th>
         </tr>
       </thead>
-      <tbody class="table-body divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+      <tbody class="table-body data-table-desktop__body">
         <!-- Loading skeleton -->
         <tr v-if="loading" v-for="i in 5" :key="i">
-          <td v-for="column in columns" :key="column.key" :class="['whitespace-nowrap py-4', getAdaptivePaddingClass()]">
+          <td
+            v-for="column in columns"
+            :key="column.key"
+            :class="['data-table-desktop__cell data-table-desktop__cell--loading whitespace-nowrap']"
+          >
             <div class="animate-pulse">
-              <div class="h-4 w-3/4 rounded bg-gray-200 dark:bg-dark-700"></div>
+              <div class="data-table-mobile__skeleton"></div>
             </div>
           </td>
         </tr>
@@ -135,16 +139,16 @@
         <tr v-else-if="!data || data.length === 0">
           <td
             :colspan="columns.length"
-            :class="['py-12 text-center text-gray-500 dark:text-dark-400', getAdaptivePaddingClass()]"
+            :class="['data-table-desktop__empty data-table-desktop__empty-cell']"
           >
             <slot name="empty">
               <div class="flex flex-col items-center">
                 <Icon
                   name="inbox"
                   size="xl"
-                  class="mb-4 h-12 w-12 text-gray-400 dark:text-dark-500"
+                  class="data-table-mobile__empty-icon"
                 />
-                <p class="text-lg font-medium text-gray-900 dark:text-gray-100">
+                <p class="data-table-mobile__empty-title">
                   {{ t('empty.noData') }}
                 </p>
               </div>
@@ -165,14 +169,13 @@
             :data-row-id="resolveRowKey(sortedData[virtualRow.index], virtualRow.index)"
             :data-index="virtualRow.index"
             :ref="measureElement"
-            class="hover:bg-gray-50 dark:hover:bg-dark-800"
+            class="data-table-desktop__row"
           >
             <td
               v-for="(column, colIndex) in columns"
               :key="column.key"
               :class="[
-                'whitespace-nowrap py-4 text-sm text-gray-900 dark:text-gray-100',
-                getAdaptivePaddingClass(),
+                'data-table-desktop__cell whitespace-nowrap text-sm',
                 getStickyColumnClass(column, colIndex),
                 column.class
               ]"
@@ -591,21 +594,38 @@ const getStickyColumnClass = (column: Column, index: number) => {
   return classes.join(' ')
 }
 
-// 根据列数自适应调整内边距
-const getAdaptivePaddingClass = () => {
+const getAdaptiveCellPaddingX = () => {
   const columnCount = props.columns.length
 
-  // 列数越多，内边距越小
   if (columnCount >= 10) {
-    return 'px-2' // 8px
+    return '0.5rem'
   } else if (columnCount >= 7) {
-    return 'px-3' // 12px
+    return '0.75rem'
   } else if (columnCount >= 5) {
-    return 'px-4' // 16px
+    return '1rem'
   } else {
-    return 'px-6' // 24px (原始值)
+    return '1.5rem'
   }
 }
+
+const getAdaptiveSelectColumnWidth = () => {
+  const columnCount = props.columns.length
+
+  if (columnCount >= 10) {
+    return '2rem'
+  } else if (columnCount >= 7) {
+    return '2.5rem'
+  } else if (columnCount >= 5) {
+    return '3rem'
+  } else {
+    return '4rem'
+  }
+}
+
+const tableLayoutVars = computed(() => ({
+  '--data-table-cell-padding-x': getAdaptiveCellPaddingX(),
+  '--data-table-select-col-width': getAdaptiveSelectColumnWidth(),
+}))
 
 // Init + keep persisted sort state consistent with current columns
 const didInitSort = ref(false)
@@ -661,9 +681,149 @@ defineExpose({
 </script>
 
 <style scoped>
+.data-table-mobile {
+  @apply space-y-3;
+}
+
+.data-table-mobile__card,
+.data-table-mobile__empty {
+  border: var(--theme-card-border-width) solid var(--theme-card-border);
+  border-radius: var(--theme-surface-radius);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.data-table-mobile__card {
+  padding: var(--theme-table-mobile-card-padding);
+}
+
+.data-table-mobile__empty {
+  @apply text-center;
+  padding: var(--theme-table-mobile-empty-padding);
+}
+
+.data-table-mobile__label,
+.data-table-desktop__head-cell,
+.data-table-desktop__empty {
+  color: var(--theme-page-muted);
+}
+
+.data-table-mobile__label {
+  @apply font-medium;
+  font-size: var(--theme-table-head-font-size);
+  letter-spacing: var(--theme-table-head-letter-spacing);
+  text-transform: var(--theme-table-head-text-transform);
+}
+
+.data-table-mobile__value,
+.data-table-mobile__empty-title,
+.data-table-desktop__cell {
+  color: var(--theme-page-text);
+}
+
+.data-table-mobile__value {
+  @apply text-right text-sm;
+}
+
+.data-table-mobile__empty-icon {
+  @apply mb-4 h-12 w-12;
+  color: var(--theme-input-placeholder);
+}
+
+.data-table-mobile__empty-title {
+  @apply font-medium;
+  font-family: var(--theme-empty-title-font);
+  font-size: var(--theme-empty-title-size);
+  letter-spacing: var(--theme-empty-title-letter-spacing);
+}
+
+.data-table-mobile__actions {
+  @apply pt-3;
+  border-top-width: var(--theme-card-divider-width);
+  border-top-style: solid;
+  border-color: var(--theme-page-border);
+}
+
+.data-table-mobile__actions-scroll {
+  margin-inline: calc(var(--theme-table-mobile-actions-strip-padding-x) * -1);
+}
+
+.data-table-mobile__actions-row {
+  @apply flex min-w-max items-center;
+  gap: var(--theme-table-mobile-actions-gap);
+  padding-inline: var(--theme-table-mobile-actions-strip-padding-x);
+}
+
+.data-table-mobile__skeleton {
+  @apply h-4 animate-pulse rounded;
+  background: color-mix(in srgb, var(--theme-page-border) 78%, transparent);
+}
+
+.data-table-mobile__skeleton--label {
+  @apply w-20;
+}
+
+.data-table-mobile__skeleton--value {
+  @apply w-32;
+}
+
+.data-table-mobile__skeleton--action {
+  @apply h-8 w-full;
+}
+
+.data-table-desktop {
+  @apply min-w-full;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.data-table-desktop__head-cell {
+  background: var(--theme-table-head-bg);
+  border-bottom: var(--theme-card-divider-width) solid var(--theme-page-border);
+  font-size: var(--theme-table-head-font-size);
+  letter-spacing: var(--theme-table-head-letter-spacing);
+  text-transform: var(--theme-table-head-text-transform);
+  padding-block: var(--theme-table-head-padding-y);
+  padding-inline: var(--data-table-cell-padding-x, var(--theme-table-cell-padding-x));
+}
+
+.data-table-desktop__head-cell--sortable:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.data-table-desktop__sort-indicator {
+  color: var(--theme-input-placeholder);
+}
+
+.data-table-desktop__body {
+  background: var(--theme-surface);
+}
+
+.data-table-desktop__row {
+  transition: background-color 0.15s ease;
+}
+
+.data-table-desktop__row:hover {
+  background: var(--theme-table-row-hover);
+}
+
+.data-table-desktop__cell {
+  border-bottom: var(--theme-card-divider-width) solid
+    color-mix(in srgb, var(--theme-page-border) 72%, transparent);
+  padding-block: var(--theme-table-cell-padding-y);
+  padding-inline: var(--data-table-cell-padding-x, var(--theme-table-cell-padding-x));
+}
+
+.data-table-desktop__empty-cell {
+  @apply text-center;
+  padding-block: var(--theme-table-empty-padding-y);
+}
+</style>
+
+<style scoped>
 /* 表格横向滚动 */
 .table-wrapper {
-  --select-col-width: 52px; /* 勾选列宽度：px-6 (24px*2) + checkbox (16px) */
+  --select-col-width: var(--data-table-select-col-width, 4rem);
   position: relative;
   overflow-x: auto;
   overflow-y: auto;
@@ -677,11 +837,7 @@ defineExpose({
   position: sticky;
   top: 0;
   z-index: 200;
-  background-color: rgb(249 250 251);
-}
-
-.dark .table-wrapper .table-header {
-  background-color: rgb(31 41 55);
+  background-color: var(--theme-table-head-bg);
 }
 
 /* 表体保持在表头下方 */
@@ -695,11 +851,7 @@ defineExpose({
   position: sticky;
   top: 0;
   z-index: 210; /* 必须高于所有表体内容 */
-  background-color: rgb(249 250 251);
-}
-
-.dark .sticky-header-cell {
-  background-color: rgb(31 41 55);
+  background-color: var(--theme-table-head-bg);
 }
 
 /* Sticky 列基础样式 */
@@ -735,20 +887,12 @@ defineExpose({
 
 /* 表体 sticky 列背景 */
 tbody .sticky-col {
-  background-color: white;
-}
-
-.dark tbody .sticky-col {
-  background-color: rgb(17 24 39);
+  background-color: var(--theme-surface);
 }
 
 /* hover 状态保持 */
 tbody tr:hover .sticky-col {
-  background-color: rgb(249 250 251);
-}
-
-.dark tbody tr:hover .sticky-col {
-  background-color: rgb(31 41 55);
+  background-color: color-mix(in srgb, var(--theme-table-row-hover) 64%, var(--theme-surface));
 }
 
 /* 阴影只在可滚动时显示 */
@@ -761,7 +905,11 @@ tbody tr:hover .sticky-col {
   bottom: 0;
   width: 10px;
   transform: translateX(100%);
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--theme-surface-contrast) 10%, transparent),
+    transparent
+  );
   pointer-events: none;
 }
 
@@ -774,7 +922,11 @@ tbody tr:hover .sticky-col {
   bottom: 0;
   width: 10px;
   transform: translateX(100%);
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--theme-surface-contrast) 10%, transparent),
+    transparent
+  );
   pointer-events: none;
 }
 
@@ -787,17 +939,11 @@ tbody tr:hover .sticky-col {
   bottom: 0;
   width: 10px;
   transform: translateX(-100%);
-  background: linear-gradient(to left, rgba(0, 0, 0, 0.08), transparent);
+  background: linear-gradient(
+    to left,
+    color-mix(in srgb, var(--theme-surface-contrast) 10%, transparent),
+    transparent
+  );
   pointer-events: none;
-}
-
-/* 暗色模式阴影 */
-.dark .is-scrollable .sticky-col-left::after,
-.dark .is-scrollable .sticky-col-left-second::after {
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.2), transparent);
-}
-
-.dark .is-scrollable .sticky-col-right::before {
-  background: linear-gradient(to left, rgba(0, 0, 0, 0.2), transparent);
 }
 </style>

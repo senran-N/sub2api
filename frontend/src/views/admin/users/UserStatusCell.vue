@@ -2,11 +2,11 @@
   <div class="flex items-center gap-1.5">
     <span
       :class="[
-        'inline-block h-2 w-2 rounded-full',
-        status === 'active' ? 'bg-green-500' : 'bg-red-500'
+        'user-status-cell__dot inline-block h-2 w-2 rounded-full',
+        status === 'active' ? 'user-status-cell__dot--active' : 'user-status-cell__dot--disabled'
       ]"
     ></span>
-    <span class="text-sm text-gray-700 dark:text-gray-300">
+    <span class="theme-text-default text-sm">
       {{ status === 'active' ? t('common.active') : t('admin.users.disabled') }}
     </span>
   </div>
@@ -21,3 +21,13 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.user-status-cell__dot--active {
+  background: rgb(var(--theme-success-rgb));
+}
+
+.user-status-cell__dot--disabled {
+  background: rgb(var(--theme-danger-rgb));
+}
+</style>

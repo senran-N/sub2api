@@ -1,5 +1,5 @@
 <template>
-  <div class="mb-6 flex border-b border-gray-200 dark:border-dark-600">
+  <div class="proxy-create-mode-tabs mb-6 flex border-b">
     <button
       type="button"
       :class="tabClass('standard')"
@@ -34,9 +34,41 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const tabClass = (mode: 'standard' | 'batch') => [
-  '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+  'proxy-create-mode-tabs__tab',
   props.modelValue === mode
-    ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+    ? 'proxy-create-mode-tabs__tab--active'
+    : 'proxy-create-mode-tabs__tab--inactive'
 ]
 </script>
+
+<style scoped>
+.proxy-create-mode-tabs {
+  border-color: color-mix(in srgb, var(--theme-card-border) 82%, transparent);
+}
+
+.proxy-create-mode-tabs__tab {
+  transition: color 0.2s ease, border-color 0.2s ease;
+  padding: var(--theme-proxy-selector-trigger-padding-y)
+    var(--theme-proxy-selector-trigger-padding-x);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-bottom-width: 2px;
+  border-bottom-style: solid;
+  border-bottom-color: transparent;
+  margin-bottom: -1px;
+}
+
+.proxy-create-mode-tabs__tab--active {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+.proxy-create-mode-tabs__tab--inactive {
+  border-color: transparent;
+  color: var(--theme-page-muted);
+}
+
+.proxy-create-mode-tabs__tab--inactive:hover {
+  color: var(--theme-page-text);
+}
+</style>

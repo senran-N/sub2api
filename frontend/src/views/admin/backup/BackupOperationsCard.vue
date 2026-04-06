@@ -1,17 +1,17 @@
 <template>
-  <div class="card p-6">
+  <div class="card backup-operations-card__root">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+        <h3 class="backup-operations-card__title text-base font-semibold">
           {{ t('admin.backup.operations.title') }}
         </h3>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <p class="backup-operations-card__description mt-1 text-sm">
           {{ t('admin.backup.operations.description') }}
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex items-center gap-1">
-          <label class="text-xs text-gray-600 dark:text-gray-400">
+          <label class="backup-operations-card__label text-xs">
             {{ t('admin.backup.operations.expireDays') }}
           </label>
           <input
@@ -31,46 +31,42 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="w-full min-w-[800px] text-sm">
+      <div class="table-container table-wrapper overflow-x-auto">
+        <table class="table w-full backup-operations-card__table text-sm">
         <thead>
-          <tr class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-dark-700 dark:text-gray-400">
-            <th class="py-2 pr-4">ID</th>
-            <th class="py-2 pr-4">{{ t('admin.backup.columns.status') }}</th>
-            <th class="py-2 pr-4">{{ t('admin.backup.columns.fileName') }}</th>
-            <th class="py-2 pr-4">{{ t('admin.backup.columns.size') }}</th>
-            <th class="py-2 pr-4">{{ t('admin.backup.columns.expiresAt') }}</th>
-            <th class="py-2 pr-4">{{ t('admin.backup.columns.triggeredBy') }}</th>
-            <th class="py-2 pr-4">{{ t('admin.backup.columns.startedAt') }}</th>
-            <th class="py-2">{{ t('admin.backup.columns.actions') }}</th>
+          <tr>
+            <th class="backup-operations-card__head-cell">ID</th>
+            <th class="backup-operations-card__head-cell">{{ t('admin.backup.columns.status') }}</th>
+            <th class="backup-operations-card__head-cell">{{ t('admin.backup.columns.fileName') }}</th>
+            <th class="backup-operations-card__head-cell">{{ t('admin.backup.columns.size') }}</th>
+            <th class="backup-operations-card__head-cell">{{ t('admin.backup.columns.expiresAt') }}</th>
+            <th class="backup-operations-card__head-cell">{{ t('admin.backup.columns.triggeredBy') }}</th>
+            <th class="backup-operations-card__head-cell">{{ t('admin.backup.columns.startedAt') }}</th>
+            <th class="backup-operations-card__head-cell">{{ t('admin.backup.columns.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr
-            v-for="record in backups"
-            :key="record.id"
-            class="border-b border-gray-100 align-top dark:border-dark-800"
-          >
-            <td class="py-3 pr-4 font-mono text-xs">{{ record.id }}</td>
-            <td class="py-3 pr-4">
-              <span class="rounded px-2 py-0.5 text-xs" :class="getBackupStatusClass(record.status)">
+          <tr v-for="record in backups" :key="record.id" class="align-top">
+            <td class="backup-operations-card__mono-cell">{{ record.id }}</td>
+            <td>
+              <span class="theme-chip theme-chip--compact" :class="getBackupStatusClass(record.status)">
                 {{ getStatusLabel(record) }}
               </span>
             </td>
-            <td class="py-3 pr-4 text-xs">{{ record.file_name }}</td>
-            <td class="py-3 pr-4 text-xs">{{ formatBackupSize(record.size_bytes) }}</td>
-            <td class="py-3 pr-4 text-xs">
+            <td class="backup-operations-card__mono-cell">{{ record.file_name }}</td>
+            <td class="backup-operations-card__meta-cell">{{ formatBackupSize(record.size_bytes) }}</td>
+            <td class="backup-operations-card__meta-cell">
               {{ record.expires_at ? formatBackupDate(record.expires_at) : t('admin.backup.neverExpire') }}
             </td>
-            <td class="py-3 pr-4 text-xs">
+            <td class="backup-operations-card__meta-cell">
               {{
                 record.triggered_by === 'scheduled'
                   ? t('admin.backup.trigger.scheduled')
                   : t('admin.backup.trigger.manual')
               }}
             </td>
-            <td class="py-3 pr-4 text-xs">{{ formatBackupDate(record.started_at) }}</td>
-            <td class="py-3 text-xs">
+            <td class="backup-operations-card__meta-cell">{{ formatBackupDate(record.started_at) }}</td>
+            <td class="backup-operations-card__actions-cell">
               <div class="flex flex-wrap gap-1">
                 <button
                   v-if="record.status === 'completed'"
@@ -104,7 +100,7 @@
             </td>
           </tr>
           <tr v-if="backups.length === 0">
-            <td colspan="8" class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            <td colspan="8" class="backup-operations-card__empty text-center text-sm">
               {{ t('admin.backup.empty') }}
             </td>
           </tr>
@@ -154,3 +150,44 @@ const handleExpireDaysInput = (event: Event) => {
   emit('update:manualExpireDays', value === '' ? 0 : Number(value))
 }
 </script>
+
+<style scoped>
+.backup-operations-card__title {
+  color: var(--theme-page-text);
+}
+
+.backup-operations-card__description,
+.backup-operations-card__label,
+.backup-operations-card__empty {
+  color: var(--theme-page-muted);
+}
+
+.backup-operations-card__head-cell {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.backup-operations-card__mono-cell {
+  font-family: var(--theme-font-mono);
+  font-size: 0.75rem;
+  color: var(--theme-page-text);
+}
+
+.backup-operations-card__meta-cell,
+.backup-operations-card__actions-cell {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--theme-page-text) 78%, transparent);
+}
+
+.backup-operations-card__root {
+  padding: var(--theme-backup-operations-card-padding);
+}
+
+.backup-operations-card__table {
+  min-width: var(--theme-backup-operations-table-min-width);
+}
+
+.backup-operations-card__empty {
+  padding: var(--theme-backup-operations-empty-padding-y) 0;
+}
+</style>

@@ -4,17 +4,17 @@
       class="text-sm"
       :class="
         isSubscriptionExpiringSoon(expiresAt)
-          ? 'text-orange-600 dark:text-orange-400'
-          : 'text-gray-700 dark:text-gray-300'
+          ? 'theme-text-warning'
+          : 'theme-text-default'
       "
     >
       {{ formatDateOnly(expiresAt) }}
     </span>
-    <div v-if="daysRemaining !== null" class="text-xs text-gray-500">
+    <div v-if="daysRemaining !== null" class="theme-text-muted text-xs">
       {{ daysRemaining }} {{ t('admin.subscriptions.daysRemaining') }}
     </div>
   </div>
-  <span v-else class="text-sm text-gray-500">
+  <span v-else class="theme-text-muted text-sm">
     {{ t('admin.subscriptions.noExpiration') }}
   </span>
 </template>

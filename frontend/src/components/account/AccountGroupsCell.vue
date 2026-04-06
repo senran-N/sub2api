@@ -1,7 +1,7 @@
 <template>
-  <div v-if="groups && groups.length > 0" class="relative max-w-56">
+  <div v-if="groups && groups.length > 0" class="account-groups-cell relative">
     <!-- 分组容器：固定最大宽度，最多显示2行 -->
-    <div class="flex flex-wrap gap-1 max-h-14 overflow-hidden">
+    <div class="account-groups-cell__inline-list flex flex-wrap gap-1 overflow-hidden">
       <GroupBadge
         v-for="group in displayGroups"
         :key="group.id"
@@ -10,14 +10,14 @@
         :subscription-type="group.subscription_type"
         :rate-multiplier="group.rate_multiplier"
         :show-rate="false"
-        class="max-w-24"
+        class="account-groups-cell__badge"
       />
       <!-- 更多数量徽章 -->
       <button
         v-if="hiddenCount > 0"
         ref="moreButtonRef"
         @click.stop="showPopover = !showPopover"
-        class="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-300 dark:hover:bg-dark-500 transition-colors cursor-pointer whitespace-nowrap"
+        class="account-groups-cell__more-button inline-flex cursor-pointer items-center gap-0.5 whitespace-nowrap text-xs font-medium transition-colors"
       >
         <span>+{{ hiddenCount }}</span>
       </button>
@@ -36,23 +36,23 @@
         <div
           v-if="showPopover"
           ref="popoverRef"
-          class="fixed z-50 min-w-48 max-w-96 rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-dark-600 dark:bg-dark-800"
+          class="account-groups-cell__popover fixed z-50"
           :style="popoverStyle"
         >
           <div class="mb-2 flex items-center justify-between">
-            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+            <span class="account-groups-cell__count text-xs font-medium">
               {{ t('admin.accounts.groupCountTotal', { count: groups.length }) }}
             </span>
             <button
               @click="showPopover = false"
-              class="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+              class="account-groups-cell__close"
             >
               <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div class="flex flex-wrap gap-1.5 max-h-64 overflow-y-auto">
+          <div class="account-groups-cell__popover-list flex flex-wrap gap-1.5 overflow-y-auto">
             <GroupBadge
               v-for="group in groups"
               :key="group.id"
@@ -74,7 +74,7 @@
       @click="showPopover = false"
     />
   </div>
-  <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+  <span v-else class="account-groups-cell__empty text-sm">-</span>
 </template>
 
 <script setup lang="ts">
@@ -156,3 +156,62 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 })
 </script>
+
+<style scoped>
+.account-groups-cell {
+  max-width: var(--theme-account-groups-cell-max-width);
+}
+
+.account-groups-cell__inline-list {
+  max-height: var(--theme-account-groups-inline-max-height);
+}
+
+.account-groups-cell__badge {
+  max-width: var(--theme-account-groups-badge-max-width);
+}
+
+.account-groups-cell__more-button {
+  border-radius: var(--theme-button-radius);
+  padding:
+    var(--theme-account-usage-action-padding-y)
+    var(--theme-account-usage-action-padding-x);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: color-mix(in srgb, var(--theme-page-text) 76%, transparent);
+}
+
+.account-groups-cell__more-button:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 74%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.account-groups-cell__popover {
+  min-width: var(--theme-user-groups-dropdown-min-width);
+  max-width: var(--theme-account-groups-popover-max-width);
+  border-radius: var(--theme-user-groups-dropdown-radius);
+  padding: var(--theme-group-replace-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.account-groups-cell__popover-list {
+  max-height: var(--theme-account-groups-list-max-height);
+}
+
+.account-groups-cell__count,
+.account-groups-cell__empty {
+  color: var(--theme-page-muted);
+}
+
+.account-groups-cell__close {
+  border-radius: var(--theme-settings-inline-button-radius);
+  padding: var(--theme-settings-inline-button-padding);
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.account-groups-cell__close:hover {
+  background: var(--theme-button-ghost-hover-bg);
+  color: var(--theme-page-text);
+}
+</style>

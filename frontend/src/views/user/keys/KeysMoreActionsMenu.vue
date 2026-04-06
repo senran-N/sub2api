@@ -3,32 +3,32 @@
     <div v-if="show && position && row">
       <div class="fixed inset-0 z-[9998]" @click="emit('close')"></div>
       <div
-        class="fixed z-[9999] w-48 overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 dark:bg-dark-800 dark:ring-white/10"
+        class="keys-more-actions-menu fixed z-[9999] overflow-hidden"
         :style="{ top: `${position.top}px`, left: `${position.left}px` }"
       >
-        <div class="py-1">
+        <div class="keys-more-actions-menu__content">
           <button
             v-if="!hideCcsImportButton"
-            class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+            class="keys-more-actions-menu__button flex w-full items-center gap-2 text-sm"
             @click="handleImport"
           >
-            <Icon name="upload" size="sm" class="text-blue-500" />
+            <Icon name="upload" size="sm" class="keys-more-actions-menu__icon keys-more-actions-menu__icon--info" />
             {{ t('keys.importToCcSwitch') }}
           </button>
           <button
-            class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+            class="keys-more-actions-menu__button flex w-full items-center gap-2 text-sm"
             @click="handleToggleStatus"
           >
             <Icon
               :name="row.status === 'active' ? 'ban' : 'checkCircle'"
               size="sm"
-              :class="row.status === 'active' ? 'text-yellow-500' : 'text-green-500'"
+              :class="row.status === 'active' ? 'keys-more-actions-menu__icon keys-more-actions-menu__icon--warning' : 'keys-more-actions-menu__icon keys-more-actions-menu__icon--success'"
             />
             {{ row.status === 'active' ? t('keys.disable') : t('keys.enable') }}
           </button>
-          <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
+          <div class="keys-more-actions-menu__divider my-1 border-t"></div>
           <button
-            class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            class="keys-more-actions-menu__button keys-more-actions-menu__button--danger flex w-full items-center gap-2 text-sm"
             @click="handleDelete"
           >
             <Icon name="trash" size="sm" />
@@ -76,3 +76,52 @@ function handleDelete() {
   emit('close')
 }
 </script>
+
+<style scoped>
+.keys-more-actions-menu {
+  width: var(--theme-keys-more-actions-menu-width);
+  border-radius: var(--theme-keys-more-actions-menu-radius);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+}
+
+.keys-more-actions-menu__content {
+  padding-block: var(--theme-keys-more-actions-menu-padding-y);
+}
+
+.keys-more-actions-menu__button {
+  padding: var(--theme-keys-more-actions-menu-item-padding-y)
+    var(--theme-keys-more-actions-menu-item-padding-x);
+  color: var(--theme-page-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.keys-more-actions-menu__button:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.keys-more-actions-menu__button--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.keys-more-actions-menu__button--danger:hover {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+}
+
+.keys-more-actions-menu__icon--info {
+  color: rgb(var(--theme-info-rgb));
+}
+
+.keys-more-actions-menu__icon--warning {
+  color: rgb(var(--theme-warning-rgb));
+}
+
+.keys-more-actions-menu__icon--success {
+  color: rgb(var(--theme-success-rgb));
+}
+
+.keys-more-actions-menu__divider {
+  border-color: color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+}
+</style>

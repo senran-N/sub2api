@@ -393,7 +393,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   z-index: 40;
-  background: linear-gradient(to top, var(--sora-bg-primary, #0D0D0D) 60%, transparent 100%);
+  background: linear-gradient(to top, var(--sora-bg-primary) 60%, transparent 100%);
   padding: 20px 24px 24px;
   pointer-events: none;
 }
@@ -405,16 +405,18 @@ onMounted(() => {
 }
 
 .sora-creator-bar-inner {
-  background: var(--sora-bg-secondary, #1A1A1A);
-  border: 1px solid var(--sora-border-color, #2A2A2A);
-  border-radius: var(--sora-radius-xl, 20px);
+  background: var(--sora-bg-secondary);
+  border: 1px solid var(--sora-border-color);
+  border-radius: var(--sora-radius-xl);
   padding: 12px 16px;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .sora-creator-bar-inner.focused {
-  border-color: var(--sora-accent-primary, #14b8a6);
-  box-shadow: 0 0 0 1px var(--sora-accent-primary, #14b8a6), var(--sora-shadow-glow, 0 0 20px rgba(20,184,166,0.3));
+  border-color: var(--sora-accent-primary);
+  box-shadow:
+    0 0 0 1px var(--sora-accent-primary),
+    var(--sora-shadow-glow);
 }
 
 /* 模型选择行 */
@@ -432,10 +434,10 @@ onMounted(() => {
 
 .sora-model-select {
   appearance: none;
-  background: var(--sora-bg-tertiary, #242424);
-  color: var(--sora-text-primary, #FFF);
+  background: var(--sora-bg-tertiary);
+  color: var(--sora-text-primary);
   padding: 5px 28px 5px 10px;
-  border-radius: var(--sora-radius-sm, 8px);
+  border-radius: var(--sora-radius-sm);
   font-size: 12px;
   font-family: "SF Mono", "Fira Code", monospace;
   cursor: pointer;
@@ -444,17 +446,17 @@ onMounted(() => {
 }
 
 .sora-model-select:hover {
-  border-color: var(--sora-bg-hover, #333);
+  border-color: var(--sora-bg-hover);
 }
 
 .sora-model-select:focus {
-  border-color: var(--sora-accent-primary, #14b8a6);
+  border-color: var(--sora-accent-primary);
   outline: none;
 }
 
 .sora-model-select option {
-  background: var(--sora-bg-secondary, #1A1A1A);
-  color: var(--sora-text-primary, #FFF);
+  background: var(--sora-bg-secondary);
+  color: var(--sora-text-primary);
 }
 
 .sora-model-select-arrow {
@@ -464,7 +466,7 @@ onMounted(() => {
   transform: translateY(-50%);
   pointer-events: none;
   font-size: 10px;
-  color: var(--sora-text-tertiary, #666);
+  color: var(--sora-text-tertiary);
 }
 
 .sora-credential-select-wrapper {
@@ -478,11 +480,11 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   padding: 3px 10px;
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  border-radius: var(--sora-radius-full, 9999px);
+  background: color-mix(in srgb, var(--sora-warning) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sora-warning) 20%, transparent);
+  border-radius: var(--sora-radius-full);
   font-size: 11px;
-  color: var(--sora-warning, #F59E0B);
+  color: var(--sora-warning);
 }
 
 /* 参考图预览 */
@@ -505,7 +507,7 @@ onMounted(() => {
   height: 100%;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid var(--sora-border-color, #2A2A2A);
+  border: 1px solid var(--sora-border-color);
 }
 
 .sora-image-preview-remove {
@@ -515,8 +517,8 @@ onMounted(() => {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--sora-error, #EF4444);
-  color: white;
+  background: var(--sora-error);
+  color: var(--theme-filled-text);
   font-size: 10px;
   border: none;
   cursor: pointer;
@@ -528,7 +530,7 @@ onMounted(() => {
 
 .sora-image-preview-label {
   font-size: 12px;
-  color: var(--sora-text-tertiary, #666);
+  color: var(--sora-text-tertiary);
 }
 
 /* 输入框 */
@@ -542,7 +544,7 @@ onMounted(() => {
   max-height: 120px;
   padding: 10px 4px;
   font-size: 14px;
-  color: var(--sora-text-primary, #FFF);
+  color: var(--sora-text-primary);
   background: transparent;
   resize: none;
   line-height: 1.5;
@@ -553,7 +555,7 @@ onMounted(() => {
 }
 
 .sora-creator-textarea::placeholder {
-  color: var(--sora-text-muted, #4A4A4A);
+  color: var(--sora-text-muted);
 }
 
 /* 底部工具行 */
@@ -562,7 +564,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 4px 4px 0;
-  border-top: 1px solid var(--sora-border-subtle, #1F1F1F);
+  border-top: 1px solid var(--sora-border-subtle);
   margin-top: 4px;
   padding-top: 10px;
   gap: 8px;
@@ -580,10 +582,10 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
   padding: 6px 12px;
-  border-radius: var(--sora-radius-full, 9999px);
+  border-radius: var(--sora-radius-full);
   font-size: 12px;
-  color: var(--sora-text-secondary, #A0A0A0);
-  background: var(--sora-bg-tertiary, #242424);
+  color: var(--sora-text-secondary);
+  background: var(--sora-bg-tertiary);
   border: none;
   cursor: pointer;
   transition: all 150ms ease;
@@ -591,14 +593,14 @@ onMounted(() => {
 }
 
 .sora-tool-btn:hover {
-  background: var(--sora-bg-hover, #333);
-  color: var(--sora-text-primary, #FFF);
+  background: var(--sora-bg-hover);
+  color: var(--sora-text-primary);
 }
 
 .sora-tool-btn.active {
-  background: rgba(20, 184, 166, 0.15);
-  color: var(--sora-accent-primary, #14b8a6);
-  border: 1px solid rgba(20, 184, 166, 0.3);
+  background: color-mix(in srgb, var(--sora-accent-primary) 15%, transparent);
+  color: var(--sora-accent-primary);
+  border: 1px solid color-mix(in srgb, var(--sora-accent-primary) 30%, transparent);
 }
 
 .sora-tool-btn-icon {
@@ -609,7 +611,7 @@ onMounted(() => {
 .sora-tool-divider {
   width: 1px;
   height: 20px;
-  background: var(--sora-border-color, #2A2A2A);
+  background: var(--sora-border-color);
   margin: 0 4px;
 }
 
@@ -620,9 +622,9 @@ onMounted(() => {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: var(--sora-radius-sm, 8px);
-  background: var(--sora-bg-tertiary, #242424);
-  color: var(--sora-text-secondary, #A0A0A0);
+  border-radius: var(--sora-radius-sm);
+  background: var(--sora-bg-tertiary);
+  color: var(--sora-text-secondary);
   font-size: 16px;
   border: none;
   cursor: pointer;
@@ -630,8 +632,8 @@ onMounted(() => {
 }
 
 .sora-upload-btn:hover {
-  background: var(--sora-bg-hover, #333);
-  color: var(--sora-text-primary, #FFF);
+  background: var(--sora-bg-hover);
+  color: var(--sora-text-primary);
 }
 
 /* 活跃任务计数 */
@@ -640,12 +642,12 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  background: rgba(20, 184, 166, 0.12);
-  border: 1px solid rgba(20, 184, 166, 0.25);
-  border-radius: var(--sora-radius-full, 9999px);
+  background: color-mix(in srgb, var(--sora-accent-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sora-accent-primary) 25%, transparent);
+  border-radius: var(--sora-radius-full);
   font-size: 12px;
   font-weight: 500;
-  color: var(--sora-accent-primary, #14b8a6);
+  color: var(--sora-accent-primary);
   white-space: nowrap;
   animation: sora-fade-in 0.3s ease;
 }
@@ -654,7 +656,7 @@ onMounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--sora-accent-primary, #14b8a6);
+  background: var(--sora-accent-primary);
   animation: sora-pulse-dot 1.5s ease-in-out infinite;
 }
 
@@ -674,11 +676,11 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 24px;
-  background: var(--sora-accent-gradient, linear-gradient(135deg, #14b8a6, #0d9488));
-  border-radius: var(--sora-radius-full, 9999px);
+  background: var(--sora-accent-gradient);
+  border-radius: var(--sora-radius-full);
   font-size: 13px;
   font-weight: 600;
-  color: white;
+  color: var(--theme-accent-text);
   border: none;
   cursor: pointer;
   transition: all 150ms ease;
@@ -686,8 +688,8 @@ onMounted(() => {
 }
 
 .sora-generate-btn:hover:not(:disabled) {
-  background: var(--sora-accent-gradient-hover, linear-gradient(135deg, #2dd4bf, #14b8a6));
-  box-shadow: var(--sora-shadow-glow, 0 0 20px rgba(20,184,166,0.3));
+  background: var(--sora-accent-gradient-hover);
+  box-shadow: var(--sora-shadow-glow);
   transform: translateY(-1px);
 }
 
@@ -715,7 +717,7 @@ onMounted(() => {
 .sora-image-error {
   text-align: center;
   font-size: 12px;
-  color: var(--sora-error, #EF4444);
+  color: var(--sora-error);
   margin-top: 8px;
   pointer-events: all;
 }

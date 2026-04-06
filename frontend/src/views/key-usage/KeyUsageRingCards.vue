@@ -3,16 +3,16 @@
     <div
       v-for="(ring, index) in items"
       :key="index"
-      class="fade-up rounded-2xl border border-gray-200 bg-white/90 p-8 backdrop-blur-sm transition-all duration-300 hover:shadow-lg dark:border-dark-700 dark:bg-dark-900/90"
+      class="key-usage-ring-cards__card fade-up border backdrop-blur-sm transition-all duration-300 hover:shadow-lg"
       :class="`fade-up-delay-${Math.min(index + 1, 4)}`"
     >
       <div class="mb-6 flex items-center justify-between">
-        <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">
+        <h3 class="key-usage-ring-cards__label text-sm font-semibold uppercase tracking-wider">
           {{ ring.title }}
         </h3>
         <svg
           v-if="ring.iconType === 'clock'"
-          class="h-5 w-5 text-gray-400 dark:text-dark-500"
+          class="key-usage-ring-cards__icon h-5 w-5"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -25,7 +25,7 @@
         </svg>
         <svg
           v-else-if="ring.iconType === 'calendar'"
-          class="h-5 w-5 text-gray-400 dark:text-dark-500"
+          class="key-usage-ring-cards__icon h-5 w-5"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -40,7 +40,7 @@
         </svg>
         <svg
           v-else
-          class="h-5 w-5 text-gray-400 dark:text-dark-500"
+          class="key-usage-ring-cards__icon h-5 w-5"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -87,10 +87,10 @@
               </span>
             </template>
             <template v-else>
-              <span class="text-3xl font-bold tabular-nums text-gray-900 dark:text-white">
+              <span class="key-usage-ring-cards__value text-3xl font-bold tabular-nums">
                 {{ displayPcts[index] ?? 0 }}%
               </span>
-              <span class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">{{ usedLabel }}</span>
+              <span class="key-usage-ring-cards__label mt-0.5 text-xs">{{ usedLabel }}</span>
               <span
                 class="mt-1 text-sm font-semibold tabular-nums"
                 :style="{ color: gradients[index % gradients.length].from }"
@@ -99,7 +99,7 @@
               </span>
               <p
                 v-if="ring.resetAt && formatResetTime(ring.resetAt)"
-                class="mt-0.5 text-xs tabular-nums text-gray-400 dark:text-gray-500"
+                class="key-usage-ring-cards__hint mt-0.5 text-xs tabular-nums"
               >
                 ⟳ {{ formatResetTime(ring.resetAt) }}
               </p>
@@ -137,3 +137,22 @@ function getRingOffset(ring: KeyUsageRingItem): number {
   return props.circumference - (Math.min(ring.pct, 100) / 100) * props.circumference
 }
 </script>
+
+<style scoped>
+.key-usage-ring-cards__card {
+  border-radius: var(--theme-key-usage-card-radius);
+  padding: var(--theme-key-usage-loading-card-padding);
+  border-color: color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 90%, transparent);
+}
+
+.key-usage-ring-cards__label,
+.key-usage-ring-cards__hint,
+.key-usage-ring-cards__icon {
+  color: var(--theme-page-muted);
+}
+
+.key-usage-ring-cards__value {
+  color: var(--theme-page-text);
+}
+</style>

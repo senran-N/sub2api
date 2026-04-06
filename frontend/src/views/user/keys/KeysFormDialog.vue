@@ -32,7 +32,7 @@
               :rate-multiplier="(option as unknown as UserKeyGroupOption).rate"
               :user-rate-multiplier="(option as unknown as UserKeyGroupOption).userRate"
             />
-            <span v-else class="text-gray-400">{{ t('keys.selectGroup') }}</span>
+            <span v-else class="keys-form-dialog__placeholder">{{ t('keys.selectGroup') }}</span>
           </template>
           <template #option="{ option, selected }">
             <GroupOptionItem
@@ -63,11 +63,10 @@
           <input
             v-model="formData.custom_key"
             type="text"
-            class="input font-mono"
+            :class="getCustomKeyInputClasses()"
             :placeholder="t('keys.customKeyPlaceholder')"
-            :class="{ 'border-red-500 dark:border-red-500': customKeyError }"
           />
-          <p v-if="customKeyError" class="mt-1 text-sm text-red-500">{{ customKeyError }}</p>
+          <p v-if="customKeyError" class="keys-form-dialog__error">{{ customKeyError }}</p>
           <p v-else class="input-hint">{{ t('keys.customKeyHint') }}</p>
         </div>
       </div>
@@ -123,7 +122,7 @@
         <div class="space-y-4">
           <div>
             <div class="relative">
-              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <span class="keys-form-dialog__prefix absolute left-3 top-1/2 -translate-y-1/2">$</span>
               <input
                 v-model.number="formData.quota"
                 type="number"
@@ -139,12 +138,12 @@
           <div v-if="isEditMode && selectedKey && selectedKey.quota > 0">
             <label class="input-label">{{ t('keys.quotaUsed') }}</label>
             <div class="flex items-center gap-2">
-              <div class="flex-1 rounded-lg bg-gray-100 px-3 py-2 dark:bg-dark-700">
-                <span class="font-medium text-gray-900 dark:text-white">
+              <div class="keys-form-dialog__usage-box">
+                <span class="keys-form-dialog__usage-current">
                   ${{ selectedKey.quota_used?.toFixed(4) || '0.0000' }}
                 </span>
-                <span class="mx-2 text-gray-400">/</span>
-                <span class="text-gray-500 dark:text-gray-400">
+                <span class="keys-form-dialog__usage-separator">/</span>
+                <span class="keys-form-dialog__usage-limit">
                   ${{ selectedKey.quota?.toFixed(2) || '0.00' }}
                 </span>
               </div>
@@ -179,7 +178,7 @@
           <div v-for="window in rateLimitWindows" :key="window.key">
             <label class="input-label">{{ window.label }}</label>
             <div class="relative">
-              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <span class="keys-form-dialog__prefix absolute left-3 top-1/2 -translate-y-1/2">$</span>
               <input
                 v-model.number="formData[window.modelKey]"
                 type="number"
@@ -192,19 +191,19 @@
 
             <div v-if="isEditMode && selectedKey && selectedKey[window.limitKey] > 0" class="mt-2">
               <div class="flex items-center gap-2">
-                <div class="flex-1 rounded-lg bg-gray-100 px-3 py-2 text-sm dark:bg-dark-700">
-                  <span :class="['font-medium', getUsageTone(selectedKey[window.usageKey], selectedKey[window.limitKey])]">
+                <div class="keys-form-dialog__usage-box keys-form-dialog__usage-box--compact">
+                  <span :class="getUsageToneClasses(selectedKey[window.usageKey], selectedKey[window.limitKey])">
                     ${{ selectedKey[window.usageKey]?.toFixed(4) || '0.0000' }}
                   </span>
-                  <span class="mx-2 text-gray-400">/</span>
-                  <span class="text-gray-500 dark:text-gray-400">
+                  <span class="keys-form-dialog__usage-separator">/</span>
+                  <span class="keys-form-dialog__usage-limit">
                     ${{ selectedKey[window.limitKey]?.toFixed(2) || '0.00' }}
                   </span>
                 </div>
               </div>
-              <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+              <div class="keys-form-dialog__progress-track">
                 <div
-                  :class="['h-full rounded-full transition-all', getUsageBarTone(selectedKey[window.usageKey], selectedKey[window.limitKey])]"
+                  :class="getUsageBarToneClasses(selectedKey[window.usageKey], selectedKey[window.limitKey])"
                   :style="{ width: getUsageWidth(selectedKey[window.usageKey], selectedKey[window.limitKey]) }"
                 />
               </div>
@@ -245,24 +244,14 @@
               v-for="days in ['7', '30', '90']"
               :key="days"
               type="button"
-              :class="[
-                'rounded-lg px-3 py-1.5 text-sm transition-colors',
-                formData.expiration_preset === days
-                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600'
-              ]"
+              :class="getExpirationPresetClasses(formData.expiration_preset === days)"
               @click="emit('set-expiration-days', Number(days))"
             >
               {{ isEditMode ? t('keys.extendDays', { days }) : t('keys.expiresInDays', { days }) }}
             </button>
             <button
               type="button"
-              :class="[
-                'rounded-lg px-3 py-1.5 text-sm transition-colors',
-                formData.expiration_preset === 'custom'
-                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600'
-              ]"
+              :class="getExpirationPresetClasses(formData.expiration_preset === 'custom')"
               @click="formData.expiration_preset = 'custom'"
             >
               {{ t('keys.customDate') }}
@@ -276,8 +265,8 @@
           </div>
 
           <div v-if="isEditMode && selectedKey?.expires_at" class="text-sm">
-            <span class="text-gray-500 dark:text-gray-400">{{ t('keys.currentExpiration') }}: </span>
-            <span class="font-medium text-gray-900 dark:text-white">
+            <span class="keys-form-dialog__current-expiration-label">{{ t('keys.currentExpiration') }}: </span>
+            <span class="keys-form-dialog__current-expiration-value">
               {{ formatDateTime(selectedKey.expires_at) }}
             </span>
           </div>
@@ -327,7 +316,7 @@ import type { ApiKey } from '@/types'
 import { formatDateTime } from '@/utils/format'
 import type { UserKeyFormData, UserKeyGroupOption } from './keysForm'
 
-defineProps<{
+const props = defineProps<{
   show: boolean
   title: string
   isEditMode: boolean
@@ -348,6 +337,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+function joinClassNames(...classNames: Array<string | false | null | undefined>) {
+  return classNames.filter(Boolean).join(' ')
+}
 
 const rateLimitWindows = [
   {
@@ -373,40 +366,53 @@ const rateLimitWindows = [
   }
 ] as const
 
-function toggleClass(enabled: boolean): string[] {
-  return [
-    'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-    enabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-  ]
+function toggleClass(enabled: boolean): string {
+  return joinClassNames(
+    'keys-form-dialog__toggle',
+    enabled ? 'keys-form-dialog__toggle--enabled' : 'keys-form-dialog__toggle--disabled'
+  )
 }
 
-function toggleThumbClass(enabled: boolean): string[] {
-  return [
-    'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+function toggleThumbClass(enabled: boolean): string {
+  return joinClassNames(
+    'keys-form-dialog__toggle-thumb',
     enabled ? 'translate-x-4' : 'translate-x-0'
-  ]
+  )
 }
 
-function getUsageTone(usage: number, limit: number): string {
-  if (usage >= limit) {
-    return 'text-red-500'
-  }
-  if (usage >= limit * 0.8) {
-    return 'text-yellow-500'
-  }
-
-  return 'text-gray-900 dark:text-white'
+function getCustomKeyInputClasses(): string {
+  return joinClassNames('input font-mono', props.customKeyError ? 'input-error' : '')
 }
 
-function getUsageBarTone(usage: number, limit: number): string {
+function getUsageToneClasses(usage: number, limit: number): string {
   if (usage >= limit) {
-    return 'bg-red-500'
+    return 'keys-form-dialog__usage-current keys-form-dialog__usage-current--danger'
   }
   if (usage >= limit * 0.8) {
-    return 'bg-yellow-500'
+    return 'keys-form-dialog__usage-current keys-form-dialog__usage-current--warning'
   }
 
-  return 'bg-green-500'
+  return 'keys-form-dialog__usage-current'
+}
+
+function getUsageBarToneClasses(usage: number, limit: number): string {
+  if (usage >= limit) {
+    return 'keys-form-dialog__progress-bar keys-form-dialog__progress-bar--danger'
+  }
+  if (usage >= limit * 0.8) {
+    return 'keys-form-dialog__progress-bar keys-form-dialog__progress-bar--warning'
+  }
+
+  return 'keys-form-dialog__progress-bar keys-form-dialog__progress-bar--success'
+}
+
+function getExpirationPresetClasses(isSelected: boolean): string {
+  return joinClassNames(
+    'keys-form-dialog__expiration-chip',
+    isSelected
+      ? 'keys-form-dialog__expiration-chip--active'
+      : 'keys-form-dialog__expiration-chip--idle'
+  )
 }
 
 function getUsageWidth(usage: number, limit: number): string {
@@ -417,3 +423,138 @@ function getUsageWidth(usage: number, limit: number): string {
   return `${Math.min((usage / limit) * 100, 100)}%`
 }
 </script>
+
+<style scoped>
+.keys-form-dialog__placeholder,
+.keys-form-dialog__prefix,
+.keys-form-dialog__usage-limit,
+.keys-form-dialog__current-expiration-label {
+  color: var(--theme-page-muted);
+}
+
+.keys-form-dialog__placeholder {
+  font-size: 0.875rem;
+}
+
+.keys-form-dialog__error {
+  color: rgb(var(--theme-danger-rgb));
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.keys-form-dialog__toggle {
+  position: relative;
+  display: inline-flex;
+  height: 1.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  transition: background-color 0.2s ease;
+}
+
+.keys-form-dialog__toggle--enabled {
+  background: var(--theme-accent);
+}
+
+.keys-form-dialog__toggle--disabled {
+  background: color-mix(in srgb, var(--theme-page-border) 76%, var(--theme-surface));
+}
+
+.keys-form-dialog__toggle-thumb {
+  pointer-events: none;
+  display: inline-block;
+  height: 1rem;
+  width: 1rem;
+  transform: translateX(0);
+  border-radius: 9999px;
+  background: var(--theme-surface-contrast-text);
+  box-shadow: var(--theme-card-shadow);
+  transition: transform 0.2s ease;
+}
+
+.keys-form-dialog__usage-box {
+  flex: 1 1 0%;
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+  padding: 0.5rem 0.75rem;
+}
+
+.keys-form-dialog__usage-box--compact {
+  font-size: 0.875rem;
+}
+
+.keys-form-dialog__usage-current,
+.keys-form-dialog__current-expiration-value {
+  color: var(--theme-page-text);
+  font-weight: 600;
+}
+
+.keys-form-dialog__usage-current--danger {
+  color: rgb(var(--theme-danger-rgb));
+}
+
+.keys-form-dialog__usage-current--warning {
+  color: rgb(var(--theme-warning-rgb));
+}
+
+.keys-form-dialog__usage-separator {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+  margin: 0 0.5rem;
+}
+
+.keys-form-dialog__progress-track {
+  height: 0.375rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--theme-page-border) 78%, var(--theme-surface));
+  margin-top: 0.25rem;
+}
+
+.keys-form-dialog__progress-bar {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.2s ease;
+}
+
+.keys-form-dialog__progress-bar--danger {
+  background: rgb(var(--theme-danger-rgb));
+}
+
+.keys-form-dialog__progress-bar--warning {
+  background: rgb(var(--theme-warning-rgb));
+}
+
+.keys-form-dialog__progress-bar--success {
+  background: rgb(var(--theme-success-rgb));
+}
+
+.keys-form-dialog__expiration-chip {
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.keys-form-dialog__expiration-chip--active {
+  background: color-mix(in srgb, var(--theme-accent-soft) 82%, var(--theme-surface));
+  color: color-mix(in srgb, var(--theme-accent) 90%, var(--theme-page-text));
+}
+
+.keys-form-dialog__expiration-chip--idle {
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+
+.keys-form-dialog__expiration-chip--idle:hover,
+.keys-form-dialog__expiration-chip--idle:focus-visible {
+  background: color-mix(in srgb, var(--theme-page-border) 68%, var(--theme-surface));
+  color: var(--theme-page-text);
+  outline: none;
+}
+</style>

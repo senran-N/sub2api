@@ -62,6 +62,7 @@ func TestSettingService_GetPublicSettings_ExposesRegistrationEmailSuffixWhitelis
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, []string{"@example.com", "@foo.bar"}, settings.RegistrationEmailSuffixWhitelist)
+	require.Equal(t, "factory", settings.FrontendTheme)
 }
 
 func TestSettingService_GetPublicSettingsForInjection_FiltersAdminMenuItems(t *testing.T) {

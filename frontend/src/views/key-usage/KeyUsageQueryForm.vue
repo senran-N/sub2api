@@ -2,7 +2,7 @@
   <div class="mx-auto mb-14 max-w-xl">
     <div class="flex gap-3">
       <div class="relative flex-1">
-        <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-500">
+        <div class="key-usage-query-form__input-icon absolute left-4 top-1/2 -translate-y-1/2">
           <svg
             class="h-5 w-5"
             viewBox="0 0 24 24"
@@ -20,13 +20,13 @@
           :value="apiKey"
           :type="keyVisible ? 'text' : 'password'"
           :placeholder="placeholder"
-          class="input-ring h-12 w-full rounded-xl border border-gray-200 bg-white pl-12 pr-12 text-sm text-gray-900 placeholder:text-gray-400 transition-all dark:border-dark-700 dark:bg-dark-900 dark:text-white dark:placeholder:text-dark-500"
+          class="key-usage-query-form__input input-ring w-full text-sm transition-all"
           @input="emit('update:apiKey', ($event.target as HTMLInputElement).value)"
           @keydown.enter="emit('query')"
         />
         <button
           type="button"
-          class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-700 dark:text-dark-500 dark:hover:text-white"
+          class="key-usage-query-form__toggle absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
           @click="emit('toggle-visible')"
         >
           <svg
@@ -62,7 +62,7 @@
       <button
         type="button"
         :disabled="isQuerying"
-        class="flex h-12 items-center gap-2 whitespace-nowrap rounded-xl bg-primary-500 px-7 text-sm font-medium text-white transition-all active:scale-[0.97] hover:bg-primary-600 disabled:opacity-60"
+        class="key-usage-query-form__submit flex items-center gap-2 whitespace-nowrap text-sm font-medium transition-all active:scale-[0.97] disabled:opacity-60"
         @click="emit('query')"
       >
         <svg v-if="isQuerying" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -86,22 +86,22 @@
       </button>
     </div>
 
-    <p class="mt-3 text-center text-xs text-gray-400 dark:text-dark-500">
+    <p class="key-usage-query-form__note mt-3 text-center text-xs">
       {{ privacyNote }}
     </p>
 
     <div v-if="showDatePicker" class="mt-4">
       <div class="flex flex-wrap items-center justify-center gap-2">
-        <span class="text-xs text-gray-500 dark:text-dark-400">{{ dateRangeLabel }}</span>
+        <span class="key-usage-query-form__range-label text-xs">{{ dateRangeLabel }}</span>
         <button
           v-for="range in dateRanges"
           :key="range.key"
           type="button"
-          class="rounded-lg border px-3 py-1.5 text-xs transition-all"
+          class="key-usage-query-form__range-chip border text-xs transition-all"
           :class="
             currentRange === range.key
-              ? 'border-primary-500 bg-primary-500 text-white'
-              : 'border-gray-200 bg-white text-gray-700 hover:border-primary-300 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-200 dark:hover:border-dark-600'
+              ? 'key-usage-query-form__range-chip--active'
+              : 'key-usage-query-form__range-chip--idle'
           "
           @click="emit('set-range', range.key)"
         >
@@ -111,19 +111,19 @@
           <input
             :value="customStartDate"
             type="date"
-            class="input-ring rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 dark:border-dark-700 dark:bg-dark-900 dark:text-white"
+            class="key-usage-query-form__date-input input-ring text-xs"
             @input="emit('update:customStartDate', ($event.target as HTMLInputElement).value)"
           />
-          <span class="text-xs text-gray-400">-</span>
+          <span class="key-usage-query-form__separator text-xs">-</span>
           <input
             :value="customEndDate"
             type="date"
-            class="input-ring rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 dark:border-dark-700 dark:bg-dark-900 dark:text-white"
+            class="key-usage-query-form__date-input input-ring text-xs"
             @input="emit('update:customEndDate', ($event.target as HTMLInputElement).value)"
           />
           <button
             type="button"
-            class="rounded-lg bg-primary-500 px-3 py-1.5 text-xs text-white hover:bg-primary-600"
+            class="key-usage-query-form__apply text-xs"
             @click="emit('query')"
           >
             {{ applyLabel }}
@@ -166,3 +166,89 @@ const emit = defineEmits<{
   query: []
 }>()
 </script>
+
+<style scoped>
+.key-usage-query-form__input-icon,
+.key-usage-query-form__toggle,
+.key-usage-query-form__note,
+.key-usage-query-form__separator {
+  color: var(--theme-page-muted);
+}
+
+.key-usage-query-form__toggle:hover {
+  color: var(--theme-page-text);
+}
+
+.key-usage-query-form__input,
+.key-usage-query-form__date-input {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  background: var(--theme-surface);
+  color: var(--theme-page-text);
+}
+
+.key-usage-query-form__input {
+  height: var(--theme-key-usage-query-input-height);
+  border-radius: var(--theme-key-usage-query-input-radius);
+  padding-left: var(--theme-key-usage-query-input-padding-left);
+  padding-right: var(--theme-key-usage-query-input-padding-right);
+}
+
+.key-usage-query-form__submit {
+  height: var(--theme-key-usage-query-input-height);
+  border-radius: var(--theme-key-usage-query-submit-radius);
+  padding-inline: var(--theme-key-usage-query-submit-padding-x);
+}
+
+.key-usage-query-form__range-chip {
+  border-radius: var(--theme-key-usage-query-range-chip-radius);
+  padding: var(--theme-key-usage-query-range-chip-padding-y)
+    var(--theme-key-usage-query-range-chip-padding-x);
+}
+
+.key-usage-query-form__date-input {
+  border-radius: var(--theme-key-usage-query-date-input-radius);
+  padding: var(--theme-key-usage-query-date-input-padding-y)
+    var(--theme-key-usage-query-date-input-padding-x);
+}
+
+.key-usage-query-form__apply {
+  border-radius: var(--theme-key-usage-query-apply-radius);
+  padding: var(--theme-key-usage-query-apply-padding-y)
+    var(--theme-key-usage-query-apply-padding-x);
+}
+
+.key-usage-query-form__input::placeholder {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.key-usage-query-form__submit,
+.key-usage-query-form__apply {
+  background: var(--theme-accent);
+  color: var(--theme-filled-text);
+}
+
+.key-usage-query-form__submit:hover,
+.key-usage-query-form__apply:hover {
+  background: color-mix(in srgb, var(--theme-accent) 88%, var(--theme-surface-contrast));
+}
+
+.key-usage-query-form__range-label {
+  color: var(--theme-page-muted);
+}
+
+.key-usage-query-form__range-chip--active {
+  border-color: var(--theme-accent);
+  background: var(--theme-accent);
+  color: var(--theme-filled-text);
+}
+
+.key-usage-query-form__range-chip--idle {
+  border-color: color-mix(in srgb, var(--theme-card-border) 74%, transparent);
+  background: var(--theme-surface);
+  color: var(--theme-page-text);
+}
+
+.key-usage-query-form__range-chip--idle:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 28%, var(--theme-card-border));
+}
+</style>

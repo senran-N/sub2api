@@ -186,17 +186,17 @@ export function getUsageProgressClass(
   limit: number | null
 ): string {
   if (!limit || limit === 0) {
-    return 'bg-gray-400'
+    return 'theme-progress-fill--muted'
   }
 
   const percentage = ((used ?? 0) / limit) * 100
   if (percentage >= 90) {
-    return 'bg-red-500'
+    return 'theme-progress-fill--danger'
   }
   if (percentage >= 70) {
-    return 'bg-orange-500'
+    return 'theme-progress-fill--warning'
   }
-  return 'bg-green-500'
+  return 'theme-progress-fill--success'
 }
 
 export function getResetWindowMessage(

@@ -120,7 +120,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 .sora-preview-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--sora-modal-backdrop, rgba(0, 0, 0, 0.4));
+  background: var(--sora-modal-backdrop);
   backdrop-filter: blur(4px);
 }
 
@@ -133,9 +133,9 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   max-width: 90vw;
   overflow: hidden;
   border-radius: 20px;
-  background: var(--sora-bg-secondary, #FFF);
-  border: 1px solid var(--sora-border-color, #E5E7EB);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: var(--sora-bg-secondary);
+  border: 1px solid var(--sora-border-color);
+  box-shadow: var(--sora-shadow-lg);
   animation: sora-modal-in 0.3s ease;
 }
 
@@ -149,19 +149,19 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--sora-border-color, #E5E7EB);
+  border-bottom: 1px solid var(--sora-border-color);
 }
 
 .sora-preview-title {
   font-size: 14px;
   font-weight: 500;
-  color: var(--sora-text-primary, #111827);
+  color: var(--sora-text-primary);
 }
 
 .sora-preview-close {
   padding: 6px;
   border-radius: 8px;
-  color: var(--sora-text-tertiary, #9CA3AF);
+  color: var(--sora-text-tertiary);
   background: none;
   border: none;
   cursor: pointer;
@@ -169,14 +169,14 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .sora-preview-close:hover {
-  background: var(--sora-bg-tertiary, #F3F4F6);
-  color: var(--sora-text-secondary, #6B7280);
+  background: var(--sora-bg-tertiary);
+  color: var(--sora-text-secondary);
 }
 
 .sora-preview-media-area {
   flex: 1;
   overflow: auto;
-  background: var(--sora-bg-primary, #F9FAFB);
+  background: var(--sora-bg-primary);
   padding: 8px;
 }
 
@@ -189,7 +189,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 
 .sora-preview-footer {
   padding: 16px 20px;
-  border-top: 1px solid var(--sora-border-color, #E5E7EB);
+  border-top: 1px solid var(--sora-border-color);
 }
 
 .sora-preview-meta {
@@ -197,22 +197,22 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   align-items: center;
   gap: 12px;
   font-size: 12px;
-  color: var(--sora-text-tertiary, #9CA3AF);
+  color: var(--sora-text-tertiary);
   margin-bottom: 8px;
 }
 
 .sora-preview-model-tag {
   padding: 2px 8px;
-  background: var(--sora-bg-tertiary, #F3F4F6);
+  background: var(--sora-bg-tertiary);
   border-radius: 9999px;
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 11px;
-  color: var(--sora-text-secondary, #6B7280);
+  color: var(--sora-text-secondary);
 }
 
 .sora-preview-prompt {
   font-size: 13px;
-  color: var(--sora-text-secondary, #6B7280);
+  color: var(--sora-text-secondary);
   line-height: 1.5;
   margin-bottom: 16px;
   display: -webkit-box;
@@ -243,7 +243,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 
 .sora-preview-btn.primary {
   background: var(--sora-accent-gradient);
-  color: white;
+  color: var(--theme-accent-text);
 }
 
 .sora-preview-btn.primary:hover {
@@ -251,23 +251,23 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .sora-preview-btn.secondary {
-  background: var(--sora-bg-tertiary, #F3F4F6);
-  color: var(--sora-text-secondary, #6B7280);
+  background: var(--sora-bg-tertiary);
+  color: var(--sora-text-secondary);
 }
 
 .sora-preview-btn.secondary:hover {
-  background: var(--sora-bg-hover, #E5E7EB);
-  color: var(--sora-text-primary, #111827);
+  background: var(--sora-bg-hover);
+  color: var(--sora-text-primary);
 }
 
 .sora-preview-btn.ghost {
   background: transparent;
-  color: var(--sora-text-tertiary, #9CA3AF);
+  color: var(--sora-text-tertiary);
   margin-left: auto;
 }
 
 .sora-preview-btn.ghost:hover {
-  color: var(--sora-text-secondary, #6B7280);
+  color: var(--sora-text-secondary);
 }
 
 /* 过渡动画 */

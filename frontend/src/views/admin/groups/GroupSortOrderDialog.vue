@@ -6,7 +6,7 @@
     @close="$emit('close')"
   >
     <div class="space-y-4">
-      <p class="text-sm text-gray-500 dark:text-gray-400">
+      <p class="group-sort-order-dialog__hint text-sm">
         {{ t('admin.groups.sortOrderHint') }}
       </p>
       <VueDraggable
@@ -17,22 +17,21 @@
         <div
           v-for="group in groups"
           :key="group.id"
-          class="flex cursor-grab items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 transition-shadow hover:shadow-md active:cursor-grabbing dark:border-dark-600 dark:bg-dark-700"
+          class="group-sort-order-dialog__item flex cursor-grab items-center gap-3 active:cursor-grabbing"
         >
-          <div class="text-gray-400">
+          <div class="group-sort-order-dialog__handle">
             <Icon name="menu" size="md" />
           </div>
           <div class="flex-1">
-            <div class="font-medium text-gray-900 dark:text-white">{{ group.name }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">
+            <div class="group-sort-order-dialog__name font-medium">{{ group.name }}</div>
+            <div class="group-sort-order-dialog__meta text-xs">
               <GroupPlatformBadge
                 :platform="group.platform"
                 :show-icon="false"
-                badge-class="gap-1 px-2 py-0.5"
               />
             </div>
           </div>
-          <div class="text-sm text-gray-400">
+          <div class="group-sort-order-dialog__id text-sm">
             #{{ group.id }}
           </div>
         </div>
@@ -104,3 +103,32 @@ const draggableGroups = computed({
   set: (groups) => emit('update:groups', groups)
 })
 </script>
+
+<style scoped>
+.group-sort-order-dialog__hint,
+.group-sort-order-dialog__meta,
+.group-sort-order-dialog__id {
+  color: var(--theme-page-muted);
+}
+
+.group-sort-order-dialog__item {
+  border-radius: var(--theme-button-radius);
+  padding: var(--theme-group-replace-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+  background: var(--theme-surface);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.group-sort-order-dialog__item:hover {
+  border-color: color-mix(in srgb, var(--theme-card-border) 72%, var(--theme-accent));
+  box-shadow: var(--theme-card-shadow);
+}
+
+.group-sort-order-dialog__handle {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.group-sort-order-dialog__name {
+  color: var(--theme-page-text);
+}
+</style>

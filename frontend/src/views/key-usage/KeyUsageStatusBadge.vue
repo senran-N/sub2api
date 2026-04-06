@@ -1,15 +1,17 @@
 <template>
   <div v-if="status" class="mb-2 flex items-center justify-center fade-up">
-    <div
-      class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/90 px-5 py-2.5 shadow-sm backdrop-blur-sm dark:border-dark-700 dark:bg-dark-900/90"
-    >
+    <div class="key-usage-status-badge__pill inline-flex items-center gap-2">
       <span
-        class="pulse-dot h-2.5 w-2.5 rounded-full"
-        :class="status.isActive ? 'bg-emerald-500' : 'bg-rose-500'"
+        class="key-usage-status-badge__dot pulse-dot h-2.5 w-2.5 rounded-full"
+        :class="
+          status.isActive
+            ? 'key-usage-status-badge__dot--active'
+            : 'key-usage-status-badge__dot--inactive'
+        "
       ></span>
-      <span class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
-      <span class="text-xs text-gray-400 dark:text-dark-500">|</span>
-      <span class="text-xs text-gray-500 dark:text-dark-400">{{ status.statusText }}</span>
+      <span class="key-usage-status-badge__label text-sm font-medium">{{ status.label }}</span>
+      <span class="key-usage-status-badge__separator text-xs">|</span>
+      <span class="key-usage-status-badge__meta text-xs">{{ status.statusText }}</span>
     </div>
   </div>
 </template>
@@ -21,3 +23,36 @@ defineProps<{
   status: KeyUsageStatusInfo | null
 }>()
 </script>
+
+<style scoped>
+.key-usage-status-badge__pill {
+  padding:
+    var(--theme-key-usage-query-range-chip-padding-y)
+    calc(var(--theme-key-usage-query-range-chip-padding-x) + 0.5rem);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 84%, transparent);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--theme-surface) 90%, transparent);
+  box-shadow: var(--theme-card-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.key-usage-status-badge__label {
+  color: var(--theme-page-text);
+}
+
+.key-usage-status-badge__separator {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.key-usage-status-badge__meta {
+  color: var(--theme-page-muted);
+}
+
+.key-usage-status-badge__dot--active {
+  background: rgb(var(--theme-success-rgb));
+}
+
+.key-usage-status-badge__dot--inactive {
+  background: rgb(var(--theme-danger-rgb));
+}
+</style>

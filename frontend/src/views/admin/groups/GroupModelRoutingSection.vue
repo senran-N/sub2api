@@ -1,7 +1,7 @@
 <template>
-  <div v-if="form.platform === 'anthropic'" class="border-t pt-4">
+  <div v-if="form.platform === 'anthropic'" class="group-model-routing-section border-t pt-4">
     <div class="mb-1.5 flex items-center gap-1">
-      <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label class="group-model-routing-section__title text-sm font-medium">
         {{ t('admin.groups.modelRouting.title') }}
       </label>
       <GroupSectionInfoTooltip
@@ -12,7 +12,7 @@
 
     <div class="mb-3 flex items-center gap-3">
       <Toggle v-model="form.model_routing_enabled" />
-      <span class="text-sm text-gray-500 dark:text-gray-400">
+      <span class="group-model-routing-section__status text-sm">
         {{
           form.model_routing_enabled
             ? t('admin.groups.modelRouting.enabled')
@@ -21,11 +21,11 @@
       </span>
     </div>
 
-    <p v-if="!form.model_routing_enabled" class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+    <p v-if="!form.model_routing_enabled" class="group-model-routing-section__hint mb-3 text-xs">
       {{ t('admin.groups.modelRouting.disabledHint') }}
     </p>
     <template v-else>
-      <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+      <p class="group-model-routing-section__hint mb-3 text-xs">
         {{ t('admin.groups.modelRouting.noRulesHint') }}
       </p>
 
@@ -48,7 +48,7 @@
 
       <button
         type="button"
-        class="mt-3 flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+        class="group-model-routing-section__add mt-3 flex items-center gap-1.5 text-sm"
         @click="addRoutingRule"
       >
         <Icon name="plus" size="sm" />
@@ -84,3 +84,27 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.group-model-routing-section {
+  border-color: var(--theme-page-border);
+}
+
+.group-model-routing-section__title {
+  color: var(--theme-page-text);
+}
+
+.group-model-routing-section__status,
+.group-model-routing-section__hint {
+  color: var(--theme-page-muted);
+}
+
+.group-model-routing-section__add {
+  color: var(--theme-accent);
+  transition: color 0.2s ease;
+}
+
+.group-model-routing-section__add:hover {
+  color: color-mix(in srgb, var(--theme-accent) 82%, var(--theme-page-text));
+}
+</style>

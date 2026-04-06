@@ -20,18 +20,18 @@ export function buildSubscriptionProgressBarClass(
   limit: number | null | undefined
 ): string {
   if (!limit || limit === 0) {
-    return 'bg-gray-400'
+    return 'subscription-usage-card__progress-bar subscription-usage-card__progress-bar--neutral'
   }
 
   const percentage = ((used || 0) / limit) * 100
   if (percentage >= 90) {
-    return 'bg-red-500'
+    return 'subscription-usage-card__progress-bar subscription-usage-card__progress-bar--danger'
   }
   if (percentage >= 70) {
-    return 'bg-orange-500'
+    return 'subscription-usage-card__progress-bar subscription-usage-card__progress-bar--warning'
   }
 
-  return 'bg-green-500'
+  return 'subscription-usage-card__progress-bar subscription-usage-card__progress-bar--success'
 }
 
 export function formatSubscriptionExpirationDate(
@@ -70,16 +70,16 @@ export function resolveSubscriptionExpirationClass(expiresAt: string, now: Date)
   const days = Math.round((expiresDayStart.getTime() - todayStart.getTime()) / 86400000)
 
   if (days <= 0) {
-    return 'text-red-600 dark:text-red-400 font-medium'
+    return 'subscription-usage-card__expiration subscription-usage-card__expiration--expired'
   }
   if (days <= 3) {
-    return 'text-red-600 dark:text-red-400'
+    return 'subscription-usage-card__expiration subscription-usage-card__expiration--urgent'
   }
   if (days <= 7) {
-    return 'text-orange-600 dark:text-orange-400'
+    return 'subscription-usage-card__expiration subscription-usage-card__expiration--warning'
   }
 
-  return 'text-gray-700 dark:text-gray-300'
+  return 'subscription-usage-card__expiration subscription-usage-card__expiration--default'
 }
 
 export function formatSubscriptionResetTime(

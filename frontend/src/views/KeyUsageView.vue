@@ -1,12 +1,12 @@
 <template>
-  <div class="relative flex min-h-screen flex-col bg-gray-50 dark:bg-dark-950">
-    <header class="relative z-20 px-6 py-4">
-      <nav class="mx-auto flex max-w-6xl items-center justify-between">
+  <div class="key-usage-view relative flex min-h-screen flex-col">
+    <header class="key-usage-view__header relative z-20">
+      <nav class="key-usage-view__nav mx-auto flex items-center justify-between">
         <router-link to="/home" class="flex items-center gap-3">
-          <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
+          <div class="key-usage-view__logo overflow-hidden">
             <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
           </div>
-          <span class="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
+          <span class="key-usage-view__brand text-lg font-semibold tracking-tight">
             {{ siteName }}
           </span>
         </router-link>
@@ -20,12 +20,12 @@
       </nav>
     </header>
 
-    <main class="mx-auto w-full max-w-5xl flex-1 px-6 py-12">
+    <main class="key-usage-view__main mx-auto w-full flex-1">
       <div class="mb-12 text-center">
-        <h1 class="mb-3 text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
+        <h1 class="key-usage-view__title mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
           {{ t('keyUsage.title') }}
         </h1>
-        <p class="mx-auto max-w-md text-base text-gray-500 dark:text-dark-400">
+        <p class="key-usage-view__subtitle mx-auto max-w-md text-base">
           {{ t('keyUsage.subtitle') }}
         </p>
       </div>
@@ -65,7 +65,7 @@
             :used-label="t('keyUsage.used')"
             :track-color="ringTrackColor"
             :circumference="KEY_USAGE_RING_CIRCUMFERENCE"
-            :gradients="KEY_USAGE_RING_GRADIENTS"
+            :gradients="ringGradients"
             :animated="ringAnimated"
             :format-reset-time="formatResetTime"
           />
@@ -108,8 +108,7 @@ import KeyUsageRingCards from './key-usage/KeyUsageRingCards.vue'
 import KeyUsageStatusBadge from './key-usage/KeyUsageStatusBadge.vue'
 import KeyUsageUsageStatsCard from './key-usage/KeyUsageUsageStatsCard.vue'
 import {
-  KEY_USAGE_RING_CIRCUMFERENCE,
-  KEY_USAGE_RING_GRADIENTS
+  KEY_USAGE_RING_CIRCUMFERENCE
 } from './key-usage/keyUsageView'
 import { useKeyUsageViewModel } from './key-usage/useKeyUsageViewModel'
 
@@ -145,6 +144,7 @@ const {
   queryKey,
   resultData,
   ringAnimated,
+  ringGradients,
   ringGridClass,
   ringItems,
   ringTrackColor,
@@ -156,7 +156,6 @@ const {
   usageStatCells,
   usd
 } = useKeyUsageViewModel({
-  isDark,
   locale: computed(() => locale.value),
   showError: appStore.showError,
   showInfo: appStore.showInfo,
@@ -169,3 +168,41 @@ onMounted(() => {
   ensurePublicSettingsLoaded()
 })
 </script>
+
+<style scoped>
+.key-usage-view {
+  background:
+    radial-gradient(circle at top center, color-mix(in srgb, var(--theme-accent-soft) 36%, transparent), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 94%, var(--theme-surface-soft)) 0%, var(--theme-page-bg) 100%);
+}
+
+.key-usage-view__header {
+  padding: var(--theme-public-header-padding-y) 1.5rem;
+}
+
+.key-usage-view__nav,
+.key-usage-view__main {
+  max-width: var(--theme-public-shell-max-width);
+}
+
+.key-usage-view__logo {
+  height: var(--theme-public-logo-size);
+  width: var(--theme-public-logo-size);
+  border-radius: var(--theme-public-logo-radius);
+  border: var(--theme-public-logo-border);
+  box-shadow: var(--theme-public-logo-shadow);
+}
+
+.key-usage-view__main {
+  padding: var(--theme-public-main-padding-y) 1.5rem;
+}
+
+.key-usage-view__brand,
+.key-usage-view__title {
+  color: var(--theme-page-text);
+}
+
+.key-usage-view__subtitle {
+  color: var(--theme-page-muted);
+}
+</style>

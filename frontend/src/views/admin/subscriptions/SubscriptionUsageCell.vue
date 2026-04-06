@@ -1,18 +1,18 @@
 <template>
-  <div class="min-w-[280px] space-y-2">
+  <div class="subscription-usage-cell space-y-2">
     <div v-if="subscription.group?.daily_limit_usd" class="usage-row">
       <div class="flex items-center gap-2">
         <span class="usage-label">{{ t('admin.subscriptions.daily') }}</span>
-        <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+        <div class="subscription-usage-cell__track h-1.5 flex-1 rounded-full">
           <div
-            class="h-1.5 rounded-full transition-all"
+            class="theme-progress-fill h-1.5"
             :class="getUsageProgressClass(subscription.daily_usage_usd, subscription.group?.daily_limit_usd)"
             :style="{ width: getUsageProgressWidth(subscription.daily_usage_usd, subscription.group?.daily_limit_usd) }"
           ></div>
         </div>
         <span class="usage-amount">
           ${{ subscription.daily_usage_usd?.toFixed(2) || '0.00' }}
-          <span class="text-gray-400">/</span>
+          <span class="subscription-usage-cell__separator">/</span>
           ${{ subscription.group?.daily_limit_usd?.toFixed(2) }}
         </span>
       </div>
@@ -37,16 +37,16 @@
     <div v-if="subscription.group?.weekly_limit_usd" class="usage-row">
       <div class="flex items-center gap-2">
         <span class="usage-label">{{ t('admin.subscriptions.weekly') }}</span>
-        <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+        <div class="subscription-usage-cell__track h-1.5 flex-1 rounded-full">
           <div
-            class="h-1.5 rounded-full transition-all"
+            class="theme-progress-fill h-1.5"
             :class="getUsageProgressClass(subscription.weekly_usage_usd, subscription.group?.weekly_limit_usd)"
             :style="{ width: getUsageProgressWidth(subscription.weekly_usage_usd, subscription.group?.weekly_limit_usd) }"
           ></div>
         </div>
         <span class="usage-amount">
           ${{ subscription.weekly_usage_usd?.toFixed(2) || '0.00' }}
-          <span class="text-gray-400">/</span>
+          <span class="subscription-usage-cell__separator">/</span>
           ${{ subscription.group?.weekly_limit_usd?.toFixed(2) }}
         </span>
       </div>
@@ -71,16 +71,16 @@
     <div v-if="subscription.group?.monthly_limit_usd" class="usage-row">
       <div class="flex items-center gap-2">
         <span class="usage-label">{{ t('admin.subscriptions.monthly') }}</span>
-        <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+        <div class="subscription-usage-cell__track h-1.5 flex-1 rounded-full">
           <div
-            class="h-1.5 rounded-full transition-all"
+            class="theme-progress-fill h-1.5"
             :class="getUsageProgressClass(subscription.monthly_usage_usd, subscription.group?.monthly_limit_usd)"
             :style="{ width: getUsageProgressWidth(subscription.monthly_usage_usd, subscription.group?.monthly_limit_usd) }"
           ></div>
         </div>
         <span class="usage-amount">
           ${{ subscription.monthly_usage_usd?.toFixed(2) || '0.00' }}
-          <span class="text-gray-400">/</span>
+          <span class="subscription-usage-cell__separator">/</span>
           ${{ subscription.group?.monthly_limit_usd?.toFixed(2) }}
         </span>
       </div>
@@ -104,10 +104,10 @@
 
     <div
       v-if="!subscription.group?.daily_limit_usd && !subscription.group?.weekly_limit_usd && !subscription.group?.monthly_limit_usd"
-      class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
+      class="subscription-usage-cell__unlimited flex items-center gap-2"
     >
-      <span class="text-lg text-emerald-600 dark:text-emerald-400">∞</span>
-      <span class="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+      <span class="subscription-usage-cell__unlimited-icon text-lg">∞</span>
+      <span class="subscription-usage-cell__unlimited-text text-xs font-medium">
         {{ t('admin.subscriptions.unlimited') }}
       </span>
     </div>
@@ -137,19 +137,49 @@ const formatResetTime = (windowStart: string, period: ResetWindowPeriod): string
 </script>
 
 <style scoped>
+.subscription-usage-cell {
+  min-width: var(--theme-subscription-usage-min-width);
+}
+
 .usage-row {
   @apply space-y-1;
 }
 
 .usage-label {
-  @apply w-10 flex-shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400;
+  @apply w-10 flex-shrink-0 text-xs font-medium;
+  color: var(--theme-page-muted);
 }
 
 .usage-amount {
-  @apply whitespace-nowrap text-xs tabular-nums text-gray-600 dark:text-gray-300;
+  @apply whitespace-nowrap text-xs tabular-nums;
+  color: var(--theme-page-text);
 }
 
 .reset-info {
-  @apply flex items-center gap-1 pl-12 text-[10px] text-blue-600 dark:text-blue-400;
+  @apply flex items-center gap-1 pl-12 text-[10px];
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+}
+
+.subscription-usage-cell__track {
+  background: color-mix(in srgb, var(--theme-page-border) 78%, var(--theme-surface));
+}
+
+.subscription-usage-cell__separator {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, var(--theme-surface));
+}
+
+.subscription-usage-cell__unlimited {
+  padding: calc(var(--theme-markdown-block-padding) * 0.5) calc(var(--theme-markdown-block-padding) * 0.75);
+  border-radius: var(--theme-subscription-panel-radius);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface)),
+    color-mix(in srgb, rgb(var(--theme-info-rgb)) 10%, var(--theme-surface))
+  );
+}
+
+.subscription-usage-cell__unlimited-icon,
+.subscription-usage-cell__unlimited-text {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
 }
 </style>

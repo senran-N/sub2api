@@ -20,20 +20,20 @@ const { t } = useI18n()
   align-items: flex-start;
   gap: 10px;
   padding: 14px 20px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: color-mix(in srgb, var(--sora-warning) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sora-warning) 20%, transparent);
   border-radius: 12px;
   font-size: 13px;
 }
 
 .sora-no-storage-title {
   font-weight: 600;
-  color: var(--sora-warning, #F59E0B);
+  color: var(--sora-warning);
   margin-bottom: 4px;
 }
 
 .sora-no-storage-desc {
-  color: var(--sora-text-secondary, #A0A0A0);
+  color: var(--sora-text-secondary);
   line-height: 1.5;
 }
 </style>

@@ -4,7 +4,7 @@
       {{ label }}
       <span
         v-if="optionalLabel"
-        class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500"
+        class="register-code-field__optional ml-1 text-xs font-normal"
       >
         ({{ optionalLabel }})
       </span>
@@ -14,7 +14,7 @@
         <Icon
           :name="iconName"
           size="md"
-          :class="valid ? 'text-green-500' : 'text-gray-400 dark:text-dark-500'"
+          :class="valid ? 'register-code-field__icon register-code-field__icon--success' : 'register-code-field__icon'"
         />
       </div>
       <input
@@ -31,7 +31,7 @@
         v-if="validating"
         class="absolute inset-y-0 right-0 flex items-center pr-3.5"
       >
-        <svg class="h-4 w-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+        <svg class="register-code-field__spinner h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
             cx="12"
@@ -51,22 +51,22 @@
         v-else-if="valid"
         class="absolute inset-y-0 right-0 flex items-center pr-3.5"
       >
-        <Icon :name="successIconName" size="md" class="text-green-500" />
+        <Icon :name="successIconName" size="md" class="register-code-field__icon register-code-field__icon--success" />
       </div>
       <div
         v-else-if="hasError"
         class="absolute inset-y-0 right-0 flex items-center pr-3.5"
       >
-        <Icon name="exclamationCircle" size="md" class="text-red-500" />
+        <Icon name="exclamationCircle" size="md" class="register-code-field__icon register-code-field__icon--error" />
       </div>
     </div>
     <transition name="fade">
       <div
         v-if="valid && successText"
-        class="mt-2 flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 dark:bg-green-900/20"
+        class="register-code-field__success mt-2 flex items-center gap-2"
       >
-        <Icon :name="successIconName" size="sm" class="text-green-600 dark:text-green-400" />
-        <span class="text-sm text-green-700 dark:text-green-400">
+        <Icon :name="successIconName" size="sm" class="register-code-field__icon register-code-field__icon--success" />
+        <span class="register-code-field__success-text text-sm">
           {{ successText }}
         </span>
       </div>
@@ -120,7 +120,51 @@ const model = computed({
 const hasError = computed(() => props.invalid || Boolean(props.errorText))
 
 const inputClass = computed(() => ({
-  'border-green-500 focus:border-green-500 focus:ring-green-500': props.valid,
-  'border-red-500 focus:border-red-500 focus:ring-red-500': hasError.value
+  'register-code-field__input--valid': props.valid,
+  'register-code-field__input--error': hasError.value
 }))
 </script>
+
+<style scoped>
+.register-code-field__optional,
+.register-code-field__icon,
+.register-code-field__spinner {
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.register-code-field__icon--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.register-code-field__icon--error {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.register-code-field__input--valid {
+  border-color: rgb(var(--theme-success-rgb));
+}
+
+.register-code-field__input--valid:focus {
+  border-color: rgb(var(--theme-success-rgb));
+  box-shadow: 0 0 0 3px color-mix(in srgb, rgb(var(--theme-success-rgb)) 18%, transparent);
+}
+
+.register-code-field__input--error {
+  border-color: rgb(var(--theme-danger-rgb));
+}
+
+.register-code-field__input--error:focus {
+  border-color: rgb(var(--theme-danger-rgb));
+  box-shadow: 0 0 0 3px color-mix(in srgb, rgb(var(--theme-danger-rgb)) 18%, transparent);
+}
+
+.register-code-field__success {
+  padding: var(--theme-register-feedback-padding-y) var(--theme-register-feedback-padding-x);
+  border-radius: var(--theme-register-feedback-radius);
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+}
+
+.register-code-field__success-text {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+</style>

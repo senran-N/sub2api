@@ -46,14 +46,14 @@ export function getUsageRequestTypeBadgeClass(value: UsageRequestTypeLike): stri
   const requestType = resolveUsageRequestType(value)
 
   if (requestType === 'ws_v2') {
-    return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200'
+    return 'theme-chip theme-chip--regular theme-chip--brand-purple'
   }
   if (requestType === 'stream') {
-    return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+    return 'theme-chip theme-chip--regular theme-chip--info'
   }
   if (requestType === 'sync') {
-    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+    return 'theme-chip theme-chip--regular theme-chip--neutral'
   }
 
-  return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+  return 'theme-chip theme-chip--regular theme-chip--warning'
 }

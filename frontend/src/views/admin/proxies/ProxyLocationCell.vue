@@ -6,10 +6,10 @@
       :alt="proxy.country || proxy.country_code"
       class="h-4 w-6 rounded-sm"
     />
-    <span v-if="locationLabel" class="text-sm text-gray-700 dark:text-gray-200">
+    <span v-if="locationLabel" class="theme-text-default text-sm">
       {{ locationLabel }}
     </span>
-    <span v-else class="text-sm text-gray-400">-</span>
+    <span v-else class="theme-text-subtle text-sm">-</span>
   </div>
 </template>
 

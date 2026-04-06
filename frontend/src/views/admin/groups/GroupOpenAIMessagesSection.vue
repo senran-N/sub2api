@@ -1,19 +1,19 @@
 <template>
   <div
     v-if="form.platform === 'openai'"
-    class="mt-4 border-t border-gray-200 pt-4 dark:border-dark-400"
+    class="group-openai-messages-section mt-4 border-t pt-4"
   >
-    <h4 class="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+    <h4 class="group-openai-messages-section__title mb-3 text-sm font-medium">
       {{ t('admin.groups.openaiMessages.title') }}
     </h4>
 
     <div class="flex items-center justify-between">
-      <label class="text-sm text-gray-600 dark:text-gray-400">
+      <label class="group-openai-messages-section__label text-sm">
         {{ t('admin.groups.openaiMessages.allowDispatch') }}
       </label>
       <Toggle v-model="form.allow_messages_dispatch" />
     </div>
-    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+    <p class="group-openai-messages-section__hint mt-1 text-xs">
       {{ t('admin.groups.openaiMessages.allowDispatchHint') }}
     </p>
 
@@ -41,3 +41,18 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.group-openai-messages-section {
+  border-color: var(--theme-page-border);
+}
+
+.group-openai-messages-section__title,
+.group-openai-messages-section__label {
+  color: var(--theme-page-text);
+}
+
+.group-openai-messages-section__hint {
+  color: var(--theme-page-muted);
+}
+</style>

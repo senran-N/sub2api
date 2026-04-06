@@ -7,8 +7,8 @@
   >
     <form id="bulk-edit-account-form" class="space-y-5" @submit.prevent="handleSubmit">
       <!-- Info -->
-      <div class="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-        <p class="text-sm text-blue-700 dark:text-blue-400">
+      <div :class="getNoticeClasses('blue')">
+        <p class="text-sm">
           <svg class="mr-1.5 inline h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
@@ -22,8 +22,8 @@
       </div>
 
       <!-- Mixed platform warning -->
-      <div v-if="isMixedPlatform" class="rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
-        <p class="text-sm text-amber-700 dark:text-amber-400">
+      <div v-if="isMixedPlatform" :class="getNoticeClasses('amber')">
+        <p class="text-sm">
           <svg class="mr-1.5 inline h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
@@ -34,7 +34,7 @@
       <!-- OpenAI passthrough -->
       <div
         v-if="allOpenAIPassthroughCapable"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        class="form-section"
       >
         <div class="mb-3 flex items-center justify-between">
           <div class="flex-1 pr-4">
@@ -45,7 +45,7 @@
             >
               {{ t('admin.accounts.openai.oauthPassthrough') }}
             </label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="bulk-edit-account-modal__muted mt-1 text-xs">
               {{ t('admin.accounts.openai.oauthPassthroughDesc') }}
             </p>
           </div>
@@ -54,7 +54,7 @@
             id="bulk-edit-openai-passthrough-enabled"
             type="checkbox"
             aria-controls="bulk-edit-openai-passthrough-body"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
         <div
@@ -67,15 +67,13 @@
             id="bulk-edit-openai-passthrough-toggle"
             type="button"
             :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              openaiPassthroughEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              getSwitchTrackClasses(openaiPassthroughEnabled)
             ]"
             @click="openaiPassthroughEnabled = !openaiPassthroughEnabled"
           >
             <span
               :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                openaiPassthroughEnabled ? 'translate-x-5' : 'translate-x-0'
+                getSwitchThumbClasses(openaiPassthroughEnabled)
               ]"
             />
           </button>
@@ -83,7 +81,7 @@
       </div>
 
       <!-- Base URL (API Key only) -->
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="form-section">
         <div class="mb-3 flex items-center justify-between">
           <label
             id="bulk-edit-base-url-label"
@@ -97,7 +95,7 @@
             id="bulk-edit-base-url-enabled"
             type="checkbox"
             aria-controls="bulk-edit-base-url"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
         <input
@@ -116,7 +114,7 @@
       </div>
 
       <!-- Model restriction -->
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="form-section">
         <div class="mb-3 flex items-center justify-between">
           <label
             id="bulk-edit-model-restriction-label"
@@ -130,7 +128,7 @@
             id="bulk-edit-model-restriction-enabled"
             type="checkbox"
             aria-controls="bulk-edit-model-restriction-body"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
 
@@ -142,9 +140,9 @@
         >
           <div
             v-if="isOpenAIModelRestrictionDisabled"
-            class="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
+            :class="getNoticeClasses('amber')"
           >
-            <p class="text-xs text-amber-700 dark:text-amber-400">
+            <p class="text-xs">
               {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
             </p>
           </div>
@@ -155,10 +153,7 @@
               <button
                 type="button"
                 :class="[
-                  'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                  modelRestrictionMode === 'whitelist'
-                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
+                  getModeToggleClasses(modelRestrictionMode === 'whitelist', 'accent')
                 ]"
                 @click="modelRestrictionMode = 'whitelist'"
               >
@@ -180,10 +175,7 @@
               <button
                 type="button"
                 :class="[
-                  'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                  modelRestrictionMode === 'mapping'
-                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
+                  getModeToggleClasses(modelRestrictionMode === 'mapping', 'purple')
                 ]"
                 @click="modelRestrictionMode = 'mapping'"
               >
@@ -206,8 +198,8 @@
 
             <!-- Whitelist Mode -->
             <div v-if="modelRestrictionMode === 'whitelist'">
-              <div class="mb-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-                <p class="text-xs text-blue-700 dark:text-blue-400">
+              <div :class="['mb-3', getNoticeClasses('blue')]">
+                <p class="text-xs">
                   <svg
                     class="mr-1 inline h-4 w-4"
                     fill="none"
@@ -230,7 +222,7 @@
                 :platforms="selectedPlatforms"
               />
 
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="bulk-edit-account-modal__muted text-xs">
                 {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
                 <span v-if="allowedModels.length === 0">{{
                   t('admin.accounts.supportsAllModels')
@@ -240,8 +232,8 @@
 
             <!-- Mapping Mode -->
             <div v-else>
-              <div class="mb-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
-                <p class="text-xs text-purple-700 dark:text-purple-400">
+              <div :class="['mb-3', getNoticeClasses('purple')]">
+                <p class="text-xs">
                   <svg
                     class="mr-1 inline h-4 w-4"
                     fill="none"
@@ -273,7 +265,7 @@
                     :placeholder="t('admin.accounts.requestModel')"
                   />
                   <svg
-                    class="h-4 w-4 flex-shrink-0 text-gray-400"
+                    class="bulk-edit-account-modal__mapping-arrow h-4 w-4 flex-shrink-0"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -293,7 +285,7 @@
                   />
                   <button
                     type="button"
-                    class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                    class="bulk-edit-account-modal__mapping-remove transition-colors"
                     @click="removeModelMapping(index)"
                   >
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -310,7 +302,7 @@
 
               <button
                 type="button"
-                class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+                class="bulk-edit-account-modal__mapping-add mb-3 w-full border-2 border-dashed transition-colors"
                 @click="addModelMapping"
               >
                 <svg
@@ -335,7 +327,7 @@
                   v-for="preset in filteredPresets"
                   :key="preset.label"
                   type="button"
-                  :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
+                  :class="getPresetMappingChipClasses(preset.tone)"
                   @click="addPresetMapping(preset.from, preset.to)"
                 >
                   + {{ preset.label }}
@@ -347,7 +339,7 @@
       </div>
 
       <!-- Custom error codes -->
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="form-section">
         <div class="mb-3 flex items-center justify-between">
           <div>
             <label
@@ -357,7 +349,7 @@
             >
               {{ t('admin.accounts.customErrorCodes') }}
             </label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="bulk-edit-account-modal__muted mt-1 text-xs">
               {{ t('admin.accounts.customErrorCodesHint') }}
             </p>
           </div>
@@ -366,13 +358,13 @@
             id="bulk-edit-custom-error-codes-enabled"
             type="checkbox"
             aria-controls="bulk-edit-custom-error-codes-body"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
 
         <div v-if="enableCustomErrorCodes" id="bulk-edit-custom-error-codes-body" class="space-y-3">
-          <div class="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
-            <p class="text-xs text-amber-700 dark:text-amber-400">
+          <div :class="getNoticeClasses('amber')">
+            <p class="text-xs">
               <Icon name="exclamationTriangle" size="sm" class="mr-1 inline" :stroke-width="2" />
               {{ t('admin.accounts.customErrorCodesWarning') }}
             </p>
@@ -385,10 +377,7 @@
               :key="code.value"
               type="button"
               :class="[
-                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-                selectedErrorCodes.includes(code.value)
-                  ? 'bg-red-100 text-red-700 ring-1 ring-red-500 dark:bg-red-900/30 dark:text-red-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
+                getStatusChipClasses(selectedErrorCodes.includes(code.value), 'danger')
               ]"
               @click="toggleErrorCode(code.value)"
             >
@@ -409,7 +398,7 @@
               aria-labelledby="bulk-edit-custom-error-codes-label"
               @keyup.enter="addCustomErrorCode"
             />
-            <button type="button" class="btn btn-secondary px-3" @click="addCustomErrorCode">
+            <button type="button" class="btn btn-secondary btn-sm" @click="addCustomErrorCode">
               <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
@@ -426,18 +415,18 @@
             <span
               v-for="code in selectedErrorCodes.sort((a, b) => a - b)"
               :key="code"
-              class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
+              class="theme-chip theme-chip--danger theme-chip--regular bulk-edit-account-modal__selected-chip"
             >
               {{ code }}
               <button
                 type="button"
-                class="hover:text-red-900 dark:hover:text-red-300"
+                class="bulk-edit-account-modal__chip-remove"
                 @click="removeErrorCode(code)"
               >
                 <Icon name="x" size="xs" class="h-3.5 w-3.5" :stroke-width="2" />
               </button>
             </span>
-            <span v-if="selectedErrorCodes.length === 0" class="text-xs text-gray-400">
+            <span v-if="selectedErrorCodes.length === 0" class="bulk-edit-account-modal__empty-hint text-xs">
               {{ t('admin.accounts.noneSelectedUsesDefault') }}
             </span>
           </div>
@@ -445,7 +434,7 @@
       </div>
 
       <!-- Intercept warmup requests (Anthropic only) -->
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="form-section">
         <div class="flex items-center justify-between">
           <div class="flex-1 pr-4">
             <label
@@ -455,7 +444,7 @@
             >
               {{ t('admin.accounts.interceptWarmupRequests') }}
             </label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p class="bulk-edit-account-modal__muted mt-1 text-xs">
               {{ t('admin.accounts.interceptWarmupRequestsDesc') }}
             </p>
           </div>
@@ -464,22 +453,20 @@
             id="bulk-edit-intercept-warmup-enabled"
             type="checkbox"
             aria-controls="bulk-edit-intercept-warmup-body"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
         <div v-if="enableInterceptWarmup" id="bulk-edit-intercept-warmup-body" class="mt-3">
           <button
             type="button"
             :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              interceptWarmupRequests ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              getSwitchTrackClasses(interceptWarmupRequests)
             ]"
             @click="interceptWarmupRequests = !interceptWarmupRequests"
           >
             <span
               :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                interceptWarmupRequests ? 'translate-x-5' : 'translate-x-0'
+                getSwitchThumbClasses(interceptWarmupRequests)
               ]"
             />
           </button>
@@ -487,7 +474,7 @@
       </div>
 
       <!-- Proxy -->
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="form-section">
         <div class="mb-3 flex items-center justify-between">
           <label
             id="bulk-edit-proxy-label"
@@ -501,7 +488,7 @@
             id="bulk-edit-proxy-enabled"
             type="checkbox"
             aria-controls="bulk-edit-proxy-body"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
         <div id="bulk-edit-proxy-body" :class="!enableProxy && 'pointer-events-none opacity-50'">
@@ -514,7 +501,7 @@
       </div>
 
       <!-- Concurrency & Priority -->
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 border-t border-gray-200 pt-4 dark:border-dark-600 lg:grid-cols-4">
+      <div class="form-section grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <div>
           <div class="mb-3 flex items-center justify-between">
             <label
@@ -529,7 +516,7 @@
               id="bulk-edit-concurrency-enabled"
               type="checkbox"
               aria-controls="bulk-edit-concurrency"
-              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="bulk-edit-account-modal__checkbox rounded"
             />
           </div>
           <input
@@ -558,7 +545,7 @@
               id="bulk-edit-load-factor-enabled"
               type="checkbox"
               aria-controls="bulk-edit-load-factor"
-              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="bulk-edit-account-modal__checkbox rounded"
             />
           </div>
           <input
@@ -588,7 +575,7 @@
               id="bulk-edit-priority-enabled"
               type="checkbox"
               aria-controls="bulk-edit-priority"
-              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="bulk-edit-account-modal__checkbox rounded"
             />
           </div>
           <input
@@ -616,7 +603,7 @@
               id="bulk-edit-rate-multiplier-enabled"
               type="checkbox"
               aria-controls="bulk-edit-rate-multiplier"
-              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="bulk-edit-account-modal__checkbox rounded"
             />
           </div>
           <input
@@ -635,7 +622,7 @@
       </div>
 
       <!-- Status -->
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="form-section">
         <div class="mb-3 flex items-center justify-between">
           <label
             id="bulk-edit-status-label"
@@ -649,7 +636,7 @@
             id="bulk-edit-status-enabled"
             type="checkbox"
             aria-controls="bulk-edit-status"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
         <div id="bulk-edit-status" :class="!enableStatus && 'pointer-events-none opacity-50'">
@@ -662,7 +649,7 @@
       </div>
 
       <!-- OpenAI OAuth WS mode -->
-      <div v-if="allOpenAIOAuth" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div v-if="allOpenAIOAuth" class="form-section">
         <div class="mb-3 flex items-center justify-between">
           <label
             id="bulk-edit-openai-ws-mode-label"
@@ -676,17 +663,17 @@
             id="bulk-edit-openai-ws-mode-enabled"
             type="checkbox"
             aria-controls="bulk-edit-openai-ws-mode"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
         <div
           id="bulk-edit-openai-ws-mode"
           :class="!enableOpenAIWSMode && 'pointer-events-none opacity-50'"
         >
-          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          <p class="bulk-edit-account-modal__muted mb-3 text-xs">
             {{ t('admin.accounts.openai.wsModeDesc') }}
           </p>
-          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          <p class="bulk-edit-account-modal__muted mb-3 text-xs">
             {{ t(openAIWSModeConcurrencyHintKey) }}
           </p>
           <Select
@@ -699,7 +686,7 @@
       </div>
 
       <!-- RPM Limit (仅全部为 Anthropic OAuth/SetupToken 时显示) -->
-      <div v-if="allAnthropicOAuthOrSetupToken" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div v-if="allAnthropicOAuthOrSetupToken" class="form-section">
         <div class="mb-3 flex items-center justify-between">
           <label
             id="bulk-edit-rpm-limit-label"
@@ -713,7 +700,7 @@
             id="bulk-edit-rpm-limit-enabled"
             type="checkbox"
             aria-controls="bulk-edit-rpm-limit-body"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
 
@@ -724,19 +711,17 @@
           aria-labelledby="bulk-edit-rpm-limit-label"
         >
           <div class="mb-3 flex items-center justify-between">
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.quotaControl.rpmLimit.hint') }}</span>
+            <span class="text-sm">{{ t('admin.accounts.quotaControl.rpmLimit.hint') }}</span>
             <button
               type="button"
               @click="rpmLimitEnabled = !rpmLimitEnabled"
               :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                rpmLimitEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+                getSwitchTrackClasses(rpmLimitEnabled)
               ]"
             >
               <span
                 :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  rpmLimitEnabled ? 'translate-x-5' : 'translate-x-0'
+                  getSwitchThumbClasses(rpmLimitEnabled)
                 ]"
               />
             </button>
@@ -764,10 +749,7 @@
                   type="button"
                   @click="bulkRpmStrategy = 'tiered'"
                   :class="[
-                    'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                    bulkRpmStrategy === 'tiered'
-                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
+                    getModeToggleClasses(bulkRpmStrategy === 'tiered', 'accent')
                   ]"
                 >
                   {{ t('admin.accounts.quotaControl.rpmLimit.strategyTiered') }}
@@ -776,10 +758,7 @@
                   type="button"
                   @click="bulkRpmStrategy = 'sticky_exempt'"
                   :class="[
-                    'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                    bulkRpmStrategy === 'sticky_exempt'
-                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
+                    getModeToggleClasses(bulkRpmStrategy === 'sticky_exempt', 'accent')
                   ]"
                 >
                   {{ t('admin.accounts.quotaControl.rpmLimit.strategyStickyExempt') }}
@@ -806,18 +785,13 @@
         <!-- 用户消息限速模式（独立于 RPM 开关，始终可见） -->
         <div class="mt-4">
           <label class="input-label">{{ t('admin.accounts.quotaControl.rpmLimit.userMsgQueue') }}</label>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
+          <p class="bulk-edit-account-modal__umq-hint mt-1 mb-2 text-xs">
             {{ t('admin.accounts.quotaControl.rpmLimit.userMsgQueueHint') }}
           </p>
           <div class="flex space-x-2">
             <button type="button" v-for="opt in umqModeOptions" :key="opt.value"
               @click="userMsgQueueMode = userMsgQueueMode === opt.value ? null : opt.value"
-              :class="[
-                'px-3 py-1.5 text-sm rounded-md border transition-colors',
-                userMsgQueueMode === opt.value
-                  ? 'bg-primary-600 text-white border-primary-600'
-                  : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-dark-500 hover:bg-gray-50 dark:hover:bg-dark-600'
-              ]">
+              :class="getUserMsgQueueOptionClasses(userMsgQueueMode === opt.value)">
               {{ opt.label }}
             </button>
           </div>
@@ -825,7 +799,7 @@
       </div>
 
       <!-- Groups -->
-      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="form-section">
         <div class="mb-3 flex items-center justify-between">
           <label
             id="bulk-edit-groups-label"
@@ -839,7 +813,7 @@
             id="bulk-edit-groups-enabled"
             type="checkbox"
             aria-controls="bulk-edit-groups"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="bulk-edit-account-modal__checkbox rounded"
           />
         </div>
         <div id="bulk-edit-groups" :class="!enableGroups && 'pointer-events-none opacity-50'">
@@ -923,6 +897,7 @@ import {
 } from '@/components/account/accountModalShared'
 import {
   buildModelMappingObject as buildModelMappingPayload,
+  getPresetMappingChipClasses,
   getPresetMappingsByPlatform
 } from '@/composables/useModelWhitelist'
 import {
@@ -1071,6 +1046,61 @@ const openAIWSModeOptions = computed(() => buildAccountOpenAIWSModeOptions(t))
 const openAIWSModeConcurrencyHintKey = computed(() =>
   resolveOpenAIWSModeConcurrencyHintKey(openaiOAuthResponsesWebSocketV2Mode.value)
 )
+
+type BulkEditNoticeTone = 'amber' | 'blue' | 'danger' | 'purple'
+type BulkEditModeTone = 'accent' | 'danger' | 'purple'
+
+function joinClassNames(classNames: Array<string | false | null | undefined>) {
+  return classNames.filter(Boolean).join(' ')
+}
+
+function getNoticeClasses(tone: BulkEditNoticeTone) {
+  return joinClassNames([
+    'bulk-edit-account-modal__notice bulk-edit-account-modal__notice-card border',
+    `bulk-edit-account-modal__notice--${tone}`
+  ])
+}
+
+function getModeToggleClasses(isSelected: boolean, tone: BulkEditModeTone) {
+  return joinClassNames([
+    'bulk-edit-account-modal__mode-toggle bulk-edit-account-modal__mode-toggle-control flex-1 text-sm font-medium transition-all',
+    isSelected
+      ? `bulk-edit-account-modal__mode-toggle--${tone}`
+      : 'bulk-edit-account-modal__mode-toggle--idle'
+  ])
+}
+
+function getSwitchTrackClasses(isEnabled: boolean) {
+  return joinClassNames([
+    'bulk-edit-account-modal__switch relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+    isEnabled ? 'bulk-edit-account-modal__switch--enabled' : 'bulk-edit-account-modal__switch--disabled'
+  ])
+}
+
+function getSwitchThumbClasses(isEnabled: boolean) {
+  return joinClassNames([
+    'bulk-edit-account-modal__switch-thumb pointer-events-none inline-block h-5 w-5 transform rounded-full shadow ring-0 transition duration-200 ease-in-out',
+    isEnabled ? 'translate-x-5' : 'translate-x-0'
+  ])
+}
+
+function getStatusChipClasses(isSelected: boolean, tone: BulkEditModeTone = 'danger') {
+  return joinClassNames([
+    'bulk-edit-account-modal__status-chip bulk-edit-account-modal__status-chip-control text-sm font-medium transition-colors',
+    isSelected
+      ? `bulk-edit-account-modal__status-chip--${tone}`
+      : 'bulk-edit-account-modal__status-chip--idle'
+  ])
+}
+
+function getUserMsgQueueOptionClasses(isSelected: boolean) {
+  return joinClassNames([
+    'bulk-edit-account-modal__umq-option bulk-edit-account-modal__umq-option-control text-sm transition-colors',
+    isSelected
+      ? 'bulk-edit-account-modal__umq-option--selected'
+      : 'bulk-edit-account-modal__umq-option--idle'
+  ])
+}
 
 const appendEmptyModelMapping = (target: ModelMapping[]) => {
   target.push({ from: '', to: '' })
@@ -1481,3 +1511,180 @@ watch(
   }
 )
 </script>
+
+<style scoped>
+.form-section {
+  border-top: 1px solid color-mix(in srgb, var(--theme-page-border) 76%, transparent);
+  padding-top: 1rem;
+}
+
+.bulk-edit-account-modal__muted,
+.bulk-edit-account-modal__mapping-arrow,
+.bulk-edit-account-modal__empty-hint,
+.bulk-edit-account-modal__umq-hint {
+  color: var(--theme-page-muted);
+}
+
+.bulk-edit-account-modal__notice {
+  border-radius: var(--theme-auth-feedback-radius);
+  border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.bulk-edit-account-modal__notice-card {
+  padding: var(--theme-auth-callback-feedback-padding);
+}
+
+.bulk-edit-account-modal__notice--blue {
+  --bulk-edit-tone-rgb: var(--theme-info-rgb);
+}
+
+.bulk-edit-account-modal__notice--amber {
+  --bulk-edit-tone-rgb: var(--theme-warning-rgb);
+}
+
+.bulk-edit-account-modal__notice--purple {
+  --bulk-edit-tone-rgb: var(--theme-brand-purple-rgb);
+}
+
+.bulk-edit-account-modal__notice--danger {
+  --bulk-edit-tone-rgb: var(--theme-danger-rgb);
+}
+
+.bulk-edit-account-modal__notice--blue,
+.bulk-edit-account-modal__notice--amber,
+.bulk-edit-account-modal__notice--purple,
+.bulk-edit-account-modal__notice--danger {
+  background: color-mix(in srgb, rgb(var(--bulk-edit-tone-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--bulk-edit-tone-rgb)) 84%, var(--theme-page-text));
+}
+
+.bulk-edit-account-modal__mode-toggle--idle,
+.bulk-edit-account-modal__status-chip--idle {
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+
+.bulk-edit-account-modal__mode-toggle-control {
+  border-radius: var(--theme-button-radius);
+  padding: 0.5rem 1rem;
+}
+
+.bulk-edit-account-modal__status-chip-control {
+  border-radius: var(--theme-button-radius);
+  padding: 0.375rem 0.75rem;
+}
+
+.bulk-edit-account-modal__mode-toggle--idle:hover,
+.bulk-edit-account-modal__status-chip--idle:hover {
+  background: color-mix(in srgb, var(--theme-page-border) 66%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.bulk-edit-account-modal__mode-toggle--accent,
+.bulk-edit-account-modal__status-chip--accent {
+  background: color-mix(in srgb, var(--theme-accent) 14%, var(--theme-surface));
+  color: color-mix(in srgb, var(--theme-accent) 90%, var(--theme-page-text));
+}
+
+.bulk-edit-account-modal__mode-toggle--purple,
+.bulk-edit-account-modal__status-chip--purple {
+  background: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 14%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 88%, var(--theme-page-text));
+}
+
+.bulk-edit-account-modal__status-chip--danger {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 12%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 88%, var(--theme-page-text));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, rgb(var(--theme-danger-rgb)) 26%, transparent);
+}
+
+.bulk-edit-account-modal__switch {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--theme-page-border) 40%, transparent);
+}
+
+.bulk-edit-account-modal__switch:focus-visible {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--theme-accent) 22%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--theme-accent) 12%, transparent);
+}
+
+.bulk-edit-account-modal__switch--enabled {
+  background: var(--theme-accent);
+}
+
+.bulk-edit-account-modal__switch--disabled {
+  background: color-mix(in srgb, var(--theme-page-border) 76%, var(--theme-surface));
+}
+
+.bulk-edit-account-modal__switch-thumb {
+  background: var(--theme-surface-contrast);
+}
+
+.bulk-edit-account-modal__checkbox {
+  border-color: color-mix(in srgb, var(--theme-input-border) 82%, transparent);
+  color: var(--theme-accent);
+}
+
+.bulk-edit-account-modal__checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-accent) 18%, transparent);
+}
+
+.bulk-edit-account-modal__mapping-remove {
+  border-radius: var(--theme-button-radius);
+  padding: 0.5rem;
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.bulk-edit-account-modal__mapping-remove:hover {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 92%, var(--theme-page-text));
+}
+
+.bulk-edit-account-modal__mapping-add {
+  border-radius: var(--theme-button-radius);
+  padding: 0.5rem 1rem;
+  border-color: color-mix(in srgb, var(--theme-page-border) 76%, transparent);
+  color: var(--theme-page-muted);
+}
+
+.bulk-edit-account-modal__mapping-add:hover {
+  border-color: color-mix(in srgb, var(--theme-page-border) 92%, var(--theme-page-text));
+  color: var(--theme-page-text);
+}
+
+.bulk-edit-account-modal__selected-chip {
+  padding-right: 0.375rem;
+}
+
+.bulk-edit-account-modal__chip-remove {
+  color: inherit;
+  opacity: 0.72;
+}
+
+.bulk-edit-account-modal__chip-remove:hover {
+  opacity: 1;
+}
+
+.bulk-edit-account-modal__umq-option--selected {
+  background: var(--theme-accent);
+  color: var(--theme-accent-text);
+  border-color: var(--theme-accent);
+}
+
+.bulk-edit-account-modal__umq-option-control {
+  border: 1px solid color-mix(in srgb, var(--theme-input-border) 82%, transparent);
+  border-radius: calc(var(--theme-button-radius) - 2px);
+  padding: 0.375rem 0.75rem;
+}
+
+.bulk-edit-account-modal__umq-option--idle {
+  background: var(--theme-surface);
+  color: var(--theme-page-text);
+  border-color: color-mix(in srgb, var(--theme-input-border) 82%, transparent);
+}
+
+.bulk-edit-account-modal__umq-option--idle:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
+}
+</style>

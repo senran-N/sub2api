@@ -28,7 +28,7 @@
       <div>
         <label class="input-label">
           {{ t('admin.promo.maxUses') }}
-          <span class="ml-1 text-xs font-normal text-gray-400">({{ t('admin.promo.zeroUnlimited') }})</span>
+          <span class="theme-field-annotation">({{ t('admin.promo.zeroUnlimited') }})</span>
         </label>
         <input
           v-model.number="form.max_uses"
@@ -44,7 +44,7 @@
       <div>
         <label class="input-label">
           {{ t('admin.promo.expiresAt') }}
-          <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
+          <span class="theme-field-annotation">({{ t('common.optional') }})</span>
         </label>
         <input
           v-model="form.expires_at_str"
@@ -55,7 +55,7 @@
       <div>
         <label class="input-label">
           {{ t('admin.promo.notes') }}
-          <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
+          <span class="theme-field-annotation">({{ t('common.optional') }})</span>
         </label>
         <textarea
           v-model="form.notes"

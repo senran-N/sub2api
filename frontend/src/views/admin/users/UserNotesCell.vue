@@ -3,11 +3,11 @@
     <span
       v-if="notes"
       :title="notes.length > 30 ? notes : undefined"
-      class="block truncate text-sm text-gray-600 dark:text-gray-400"
+      class="theme-text-muted block truncate text-sm"
     >
       {{ displayNotes }}
     </span>
-    <span v-else class="text-sm text-gray-400">-</span>
+    <span v-else class="theme-text-subtle text-sm">-</span>
   </div>
 </template>
 

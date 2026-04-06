@@ -6,6 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Toast, ToastType, PublicSettings } from '@/types'
+import { applyFrontendTheme, FRONTEND_THEME_DEFAULT } from '@/themes'
 import {
   checkUpdates as checkUpdatesAPI,
   type VersionInfo,
@@ -26,6 +27,7 @@ export const useAppStore = defineStore('app', () => {
   const publicSettingsLoading = ref<boolean>(false)
   const siteName = ref<string>('Sub2API')
   const siteLogo = ref<string>('')
+  const frontendTheme = ref<string>(FRONTEND_THEME_DEFAULT)
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
   const apiBaseUrl = ref<string>('')
@@ -226,6 +228,7 @@ export const useAppStore = defineStore('app', () => {
     loading.value = false
     loadingCount.value = 0
     toasts.value = []
+    frontendTheme.value = FRONTEND_THEME_DEFAULT
   }
 
   // ==================== Version Management ====================
@@ -287,6 +290,7 @@ export const useAppStore = defineStore('app', () => {
     cachedPublicSettings.value = config
     siteName.value = config.site_name || 'Sub2API'
     siteLogo.value = config.site_logo || ''
+    frontendTheme.value = applyFrontendTheme(config.frontend_theme)
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''
     apiBaseUrl.value = config.api_base_url || ''
@@ -321,6 +325,7 @@ export const useAppStore = defineStore('app', () => {
         turnstile_site_key: '',
         site_name: siteName.value,
         site_logo: siteLogo.value,
+        frontend_theme: frontendTheme.value,
         site_subtitle: '',
         api_base_url: apiBaseUrl.value,
         contact_info: contactInfo.value,
@@ -390,6 +395,7 @@ export const useAppStore = defineStore('app', () => {
     publicSettingsLoaded,
     siteName,
     siteLogo,
+    frontendTheme,
     siteVersion,
     contactInfo,
     apiBaseUrl,

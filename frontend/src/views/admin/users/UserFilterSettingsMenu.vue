@@ -1,11 +1,9 @@
 <template>
-  <div
-    class="absolute right-0 top-full z-50 mt-1 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
-  >
+  <div class="user-filter-settings-menu absolute right-0 top-full z-50">
     <button
       v-for="filter in builtInFilters"
       :key="filter.key"
-      class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+      class="user-filter-settings-menu__item flex w-full items-center justify-between text-left text-sm"
       @click="emit('toggle-built-in-filter', filter.key)"
     >
       <span>{{ filter.name }}</span>
@@ -13,18 +11,18 @@
         v-if="visibleFilters.has(filter.key)"
         name="check"
         size="sm"
-        class="text-primary-500"
+        class="user-filter-settings-menu__check"
         :stroke-width="2"
       />
     </button>
     <div
       v-if="filterableAttributes.length > 0"
-      class="my-1 border-t border-gray-100 dark:border-dark-700"
+      class="user-filter-settings-menu__divider border-t"
     ></div>
     <button
       v-for="attribute in filterableAttributes"
       :key="attribute.id"
-      class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+      class="user-filter-settings-menu__item flex w-full items-center justify-between text-left text-sm"
       @click="emit('toggle-attribute-filter', attribute)"
     >
       <span>{{ attribute.name }}</span>
@@ -32,7 +30,7 @@
         v-if="visibleFilters.has(`attr_${attribute.id}`)"
         name="check"
         size="sm"
-        class="text-primary-500"
+        class="user-filter-settings-menu__check"
         :stroke-width="2"
       />
     </button>
@@ -55,3 +53,36 @@ const emit = defineEmits<{
   'toggle-attribute-filter': [attribute: UserAttributeDefinition]
 }>()
 </script>
+
+<style scoped>
+.user-filter-settings-menu {
+  width: var(--theme-settings-menu-width-sm);
+  max-height: var(--theme-settings-menu-max-height);
+  overflow-y: auto;
+  margin-top: var(--theme-floating-panel-gap);
+  padding-block: calc(var(--theme-floating-panel-gap) * 0.5 + 0.125rem);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.user-filter-settings-menu__item {
+  padding: calc(var(--theme-button-padding-y) * 0.8) var(--theme-button-padding-x);
+  color: var(--theme-dropdown-text);
+  transition: background-color 0.2s ease;
+}
+
+.user-filter-settings-menu__item:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.user-filter-settings-menu__divider {
+  margin: calc(var(--theme-floating-panel-gap) * 0.5 + 0.125rem) 0;
+  border-color: color-mix(in srgb, var(--theme-dropdown-border) 76%, transparent);
+}
+
+.user-filter-settings-menu__check {
+  color: var(--theme-accent);
+}
+</style>

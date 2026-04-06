@@ -92,10 +92,10 @@ describe('groupsTable helpers', () => {
     expect(formatGroupCost(1234.56)).toBe('1235')
     expect(formatGroupCost(123.45)).toBe('123.5')
     expect(formatGroupCost(12.345)).toBe('12.35')
-    expect(getGroupPlatformBadgeClass('anthropic')).toContain('bg-orange-100')
-    expect(getGroupPlatformBadgeClass('openai')).toContain('bg-emerald-100')
-    expect(getGroupPlatformBadgeClass('antigravity')).toContain('bg-purple-100')
-    expect(getGroupPlatformBadgeClass('gemini')).toContain('bg-blue-100')
+    expect(getGroupPlatformBadgeClass('anthropic')).toBe('theme-chip--brand-orange')
+    expect(getGroupPlatformBadgeClass('openai')).toBe('theme-chip--success')
+    expect(getGroupPlatformBadgeClass('antigravity')).toBe('theme-chip--brand-purple')
+    expect(getGroupPlatformBadgeClass('gemini')).toBe('theme-chip--info')
 
     expect(
       mapGroupUsageSummary([

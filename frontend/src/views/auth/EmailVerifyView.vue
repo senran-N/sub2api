@@ -2,26 +2,26 @@
   <AuthLayout>
     <div class="space-y-6">
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="email-verify-view__title">
           {{ t('auth.verifyYourEmail') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="email-verify-view__subtitle">
           {{ t('auth.sendCodeDesc') }}
-          <span class="font-medium text-gray-700 dark:text-gray-300">{{ session.email }}</span>
+          <span class="email-verify-view__email">{{ session.email }}</span>
         </p>
       </div>
 
       <div
         v-if="!session.hasRegisterData"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
+        class="email-verify-view__notice email-verify-view__notice--warning"
       >
         <div class="flex items-start gap-3">
-          <div class="flex-shrink-0">
-            <Icon name="exclamationCircle" size="md" class="text-amber-500" />
+          <div class="email-verify-view__notice-icon-shell flex-shrink-0">
+            <Icon name="exclamationCircle" size="md" class="email-verify-view__notice-icon email-verify-view__notice-icon--warning" />
           </div>
-          <div class="text-sm text-amber-700 dark:text-amber-400">
-            <p class="font-medium">{{ t('auth.sessionExpired') }}</p>
-            <p class="mt-1">{{ t('auth.sessionExpiredDesc') }}</p>
+          <div class="text-sm">
+            <p class="email-verify-view__notice-title email-verify-view__notice-title--warning font-medium">{{ t('auth.sessionExpired') }}</p>
+            <p class="email-verify-view__notice-text email-verify-view__notice-text--warning mt-1">{{ t('auth.sessionExpiredDesc') }}</p>
           </div>
         </div>
       </div>
@@ -40,7 +40,7 @@
             inputmode="numeric"
             maxlength="6"
             :disabled="isLoading"
-            class="input py-3 text-center font-mono text-xl tracking-[0.5em]"
+            class="email-verify-view__code-input input text-center font-mono text-xl"
             :class="{ 'input-error': errors.code }"
             placeholder="000000"
           />
@@ -52,13 +52,13 @@
 
         <div
           v-if="codeSent"
-          class="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20"
+          class="email-verify-view__notice email-verify-view__notice--success"
         >
           <div class="flex items-start gap-3">
-            <div class="flex-shrink-0">
-              <Icon name="checkCircle" size="md" class="text-green-500" />
+            <div class="email-verify-view__notice-icon-shell flex-shrink-0">
+              <Icon name="checkCircle" size="md" class="email-verify-view__notice-icon email-verify-view__notice-icon--success" />
             </div>
-            <p class="text-sm text-green-700 dark:text-green-400">
+            <p class="email-verify-view__notice-text email-verify-view__notice-text--success text-sm">
               {{ t('auth.codeSentSuccess') }}
             </p>
           </div>
@@ -82,13 +82,13 @@
         <transition name="fade">
           <div
             v-if="errorMessage"
-            class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20"
+            class="email-verify-view__notice email-verify-view__notice--danger"
           >
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0">
-                <Icon name="exclamationCircle" size="md" class="text-red-500" />
+              <div class="email-verify-view__notice-icon-shell flex-shrink-0">
+                <Icon name="exclamationCircle" size="md" class="email-verify-view__notice-icon email-verify-view__notice-icon--danger" />
               </div>
-              <p class="text-sm text-red-700 dark:text-red-400">
+              <p class="email-verify-view__notice-text email-verify-view__notice-text--danger text-sm">
                 {{ errorMessage }}
               </p>
             </div>
@@ -98,7 +98,7 @@
         <button type="submit" :disabled="isLoading || !verifyCode" class="btn btn-primary w-full">
           <svg
             v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
+            class="theme-filled-spinner -ml-1 mr-2 h-4 w-4 animate-spin"
             fill="none"
             viewBox="0 0 24 24"
           >
@@ -125,7 +125,7 @@
             v-if="countdown > 0"
             type="button"
             disabled
-            class="cursor-not-allowed text-sm text-gray-400 dark:text-dark-500"
+            class="email-verify-view__countdown cursor-not-allowed text-sm"
           >
             {{ t('auth.resendCountdown', { countdown }) }}
           </button>
@@ -133,7 +133,7 @@
             v-else
             type="button"
             :disabled="isResendDisabled"
-            class="text-sm text-primary-600 transition-colors hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:text-primary-300"
+            class="email-verify-view__inline-link text-sm disabled:cursor-not-allowed disabled:opacity-50"
             @click="handleResendCode"
           >
             <span v-if="isSendingCode">{{ t('auth.sendingCode') }}</span>
@@ -148,7 +148,7 @@
 
     <template #footer>
       <button
-        class="flex items-center gap-2 text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-gray-300"
+        class="email-verify-view__footer-link flex items-center gap-2"
         @click="handleBack"
       >
         <Icon name="arrowLeft" size="sm" />
@@ -372,5 +372,88 @@ onUnmounted(() => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+.email-verify-view__title,
+.email-verify-view__notice-title {
+  color: var(--theme-page-text);
+}
+
+.email-verify-view__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.email-verify-view__subtitle,
+.email-verify-view__countdown {
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+}
+
+.email-verify-view__email {
+  color: var(--theme-page-text);
+  font-weight: 500;
+}
+
+.email-verify-view__notice {
+  border: 1px solid var(--theme-card-border);
+  border-radius: var(--theme-auth-feedback-radius);
+  padding: var(--theme-auth-feedback-padding);
+}
+
+.email-verify-view__code-input {
+  padding-block: var(--theme-auth-verify-code-padding-y);
+  letter-spacing: var(--theme-auth-verify-code-letter-spacing);
+}
+
+.email-verify-view__notice-content,
+.email-verify-view__notice-icon-shell {
+  display: flex;
+}
+
+.email-verify-view__notice-icon-shell {
+  align-items: center;
+  justify-content: center;
+}
+
+.email-verify-view__notice--warning {
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
+  border-color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 24%, var(--theme-card-border));
+}
+
+.email-verify-view__notice-icon--warning,
+.email-verify-view__notice-text--warning {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.email-verify-view__notice--success {
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+  border-color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 24%, var(--theme-card-border));
+}
+
+.email-verify-view__notice-icon--success,
+.email-verify-view__notice-text--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.email-verify-view__notice--danger {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  border-color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 24%, var(--theme-card-border));
+}
+
+.email-verify-view__notice-icon--danger,
+.email-verify-view__notice-text--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.email-verify-view__inline-link,
+.email-verify-view__footer-link {
+  color: var(--theme-accent);
+  transition: color 0.2s ease;
+}
+
+.email-verify-view__inline-link:hover,
+.email-verify-view__footer-link:hover {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
 }
 </style>

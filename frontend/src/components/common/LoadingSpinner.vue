@@ -39,10 +39,10 @@ const sizeClasses = computed(() => {
 
 const colorClass = computed(() => {
   const colors: Record<SpinnerColor, string> = {
-    primary: 'text-primary-500',
-    secondary: 'text-gray-500 dark:text-dark-400',
-    white: 'text-white',
-    gray: 'text-gray-400 dark:text-dark-500'
+    primary: 'loading-spinner--primary',
+    secondary: 'loading-spinner--secondary',
+    white: 'loading-spinner--white',
+    gray: 'loading-spinner--gray'
   }
   return colors[props.color]
 })
@@ -52,6 +52,22 @@ const colorClass = computed(() => {
 .spinner {
   @apply inline-block rounded-full border-solid border-current border-r-transparent;
   animation: spin 0.75s linear infinite;
+}
+
+.loading-spinner--primary {
+  color: var(--theme-accent);
+}
+
+.loading-spinner--secondary {
+  color: var(--theme-page-muted);
+}
+
+.loading-spinner--white {
+  color: var(--theme-accent-text);
+}
+
+.loading-spinner--gray {
+  color: color-mix(in srgb, var(--theme-page-muted) 70%, transparent);
 }
 
 @keyframes spin {

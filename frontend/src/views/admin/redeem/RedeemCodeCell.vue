@@ -1,12 +1,12 @@
 <template>
   <div class="flex items-center space-x-2">
-    <code class="font-mono text-sm text-gray-900 dark:text-gray-100">{{ code }}</code>
+    <code class="code text-sm">{{ code }}</code>
     <button
       :class="[
-        'flex items-center transition-colors',
+        'redeem-code-cell__copy-button theme-icon-button flex items-center',
         copied
-          ? 'text-green-500'
-          : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+          ? 'theme-icon-button--success'
+          : 'theme-icon-button--neutral'
       ]"
       :title="copied ? t('admin.redeem.copied') : t('keys.copyToClipboard')"
       @click="emit('copy')"
@@ -39,3 +39,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.redeem-code-cell__copy-button {
+  border-radius: var(--theme-button-radius);
+  padding: calc(var(--theme-button-padding-y) / 2);
+}
+</style>

@@ -1,9 +1,9 @@
 <template>
   <div v-if="form.platform === 'antigravity' || form.platform === 'gemini'" class="border-t pt-4">
-    <label class="mb-2 block font-medium text-gray-700 dark:text-gray-300">
+    <label class="theme-text-default mb-2 block font-medium">
       {{ t('admin.groups.imagePricing.title') }}
     </label>
-    <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+    <p class="theme-text-muted mb-3 text-xs">
       {{ t('admin.groups.imagePricing.description') }}
     </p>
     <div class="grid grid-cols-3 gap-3">

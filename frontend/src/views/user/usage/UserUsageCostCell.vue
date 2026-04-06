@@ -1,6 +1,6 @@
 <template>
   <div class="flex items-center gap-1.5 text-sm">
-    <span class="font-medium text-green-600 dark:text-green-400">
+    <span class="theme-text-success font-medium">
       ${{ row.actual_cost.toFixed(6) }}
     </span>
     <button
@@ -11,12 +11,12 @@
       @mouseleave="emit('hide-details')"
     >
       <div
-        class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50"
+        class="theme-info-trigger"
       >
         <Icon
           name="infoCircle"
           size="xs"
-          class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400"
+          class="theme-info-trigger__icon"
         />
       </div>
     </button>

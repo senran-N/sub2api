@@ -140,10 +140,10 @@ describe('subscriptionForm helpers', () => {
 
     expect(getUsageProgressWidth(15, 10)).toBe('100%')
     expect(getUsageProgressWidth(2.5, 10)).toBe('25%')
-    expect(getUsageProgressClass(9, 10)).toBe('bg-red-500')
-    expect(getUsageProgressClass(7.5, 10)).toBe('bg-orange-500')
-    expect(getUsageProgressClass(3, 10)).toBe('bg-green-500')
-    expect(getUsageProgressClass(3, null)).toBe('bg-gray-400')
+    expect(getUsageProgressClass(9, 10)).toBe('theme-progress-fill--danger')
+    expect(getUsageProgressClass(7.5, 10)).toBe('theme-progress-fill--warning')
+    expect(getUsageProgressClass(3, 10)).toBe('theme-progress-fill--success')
+    expect(getUsageProgressClass(3, null)).toBe('theme-progress-fill--muted')
 
     expect(getResetWindowMessage(null, 'daily', now)).toEqual({
       key: 'admin.subscriptions.windowNotActive'

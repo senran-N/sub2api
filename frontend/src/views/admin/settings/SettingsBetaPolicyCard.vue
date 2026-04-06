@@ -1,16 +1,16 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="settings-beta-policy-card__header">
+      <h2 class="settings-beta-policy-card__title text-lg font-semibold">
         {{ t('admin.settings.betaPolicy.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-beta-policy-card__description mt-1 text-sm">
         {{ t('admin.settings.betaPolicy.description') }}
       </p>
     </div>
-    <div class="space-y-5 p-6">
-      <div v-if="loading" class="flex items-center gap-2 text-gray-500">
-        <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"></div>
+    <div class="settings-beta-policy-card__content space-y-5">
+      <div v-if="loading" class="settings-beta-policy-card__loading flex items-center gap-2">
+        <div class="settings-beta-policy-card__spinner h-4 w-4 animate-spin rounded-full border-b-2"></div>
         {{ t('common.loading') }}
       </div>
 
@@ -18,20 +18,20 @@
         <div
           v-for="rule in rules"
           :key="rule.beta_token"
-          class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+          class="settings-beta-policy-card__rule"
         >
           <div class="mb-3 flex items-center gap-2">
-            <span class="text-sm font-medium text-gray-900 dark:text-white">
+            <span class="settings-beta-policy-card__rule-title text-sm font-medium">
               {{ getDisplayName(rule.beta_token) }}
             </span>
-            <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-dark-700 dark:text-gray-400">
+            <span class="settings-beta-policy-card__token text-xs">
               {{ rule.beta_token }}
             </span>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              <label class="settings-beta-policy-card__field-label mb-1 block text-xs font-medium">
                 {{ t('admin.settings.betaPolicy.action') }}
               </label>
               <Select
@@ -42,7 +42,7 @@
             </div>
 
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              <label class="settings-beta-policy-card__field-label mb-1 block text-xs font-medium">
                 {{ t('admin.settings.betaPolicy.scope') }}
               </label>
               <Select
@@ -54,7 +54,7 @@
           </div>
 
           <div v-if="rule.action === 'block'" class="mt-3">
-            <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+            <label class="settings-beta-policy-card__field-label mb-1 block text-xs font-medium">
               {{ t('admin.settings.betaPolicy.errorMessage') }}
             </label>
             <input
@@ -63,13 +63,13 @@
               class="input"
               :placeholder="t('admin.settings.betaPolicy.errorMessagePlaceholder')"
             />
-            <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            <p class="settings-beta-policy-card__hint mt-1 text-xs">
               {{ t('admin.settings.betaPolicy.errorMessageHint') }}
             </p>
           </div>
         </div>
 
-        <div class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700">
+        <div class="settings-beta-policy-card__footer flex justify-end pt-4">
           <button
             type="button"
             :disabled="saving"
@@ -124,3 +124,53 @@ defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-beta-policy-card__header,
+.settings-beta-policy-card__footer {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-beta-policy-card__header {
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-beta-policy-card__title,
+.settings-beta-policy-card__rule-title,
+.settings-beta-policy-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-beta-policy-card__header {
+  padding: var(--theme-settings-card-header-padding-y) var(--theme-settings-card-header-padding-x);
+}
+
+.settings-beta-policy-card__content {
+  padding: var(--theme-settings-card-body-padding);
+}
+
+.settings-beta-policy-card__description,
+.settings-beta-policy-card__loading,
+.settings-beta-policy-card__hint {
+  color: var(--theme-page-muted);
+}
+
+.settings-beta-policy-card__spinner {
+  color: var(--theme-accent);
+}
+
+.settings-beta-policy-card__rule {
+  border-radius: var(--theme-settings-beta-policy-rule-radius);
+  padding: var(--theme-settings-beta-policy-rule-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+}
+
+.settings-beta-policy-card__token {
+  border-radius: var(--theme-settings-beta-policy-token-radius);
+  padding: var(--theme-settings-beta-policy-token-padding-y)
+    var(--theme-settings-beta-policy-token-padding-x);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-muted);
+}
+</style>

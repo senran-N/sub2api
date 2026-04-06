@@ -1,10 +1,10 @@
 <template>
   <div class="space-y-6">
-    <div class="mb-6 text-center">
-      <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+    <div class="setup-step-header">
+      <h2 class="setup-step-title">
         {{ t('setup.admin.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+      <p class="setup-step-description">
         {{ t('setup.admin.description') }}
       </p>
     </div>

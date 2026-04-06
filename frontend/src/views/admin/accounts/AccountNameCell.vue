@@ -1,9 +1,9 @@
 <template>
   <div class="flex flex-col">
-    <span class="font-medium text-gray-900 dark:text-white">{{ account.name }}</span>
+    <span class="theme-text-strong font-medium">{{ account.name }}</span>
     <span
       v-if="emailAddress"
-      class="max-w-[200px] truncate text-xs text-gray-500 dark:text-gray-400"
+      class="theme-text-muted account-name-cell__email truncate text-xs"
       :title="emailAddress"
     >
       {{ emailAddress }}
@@ -24,3 +24,9 @@ const emailAddress = computed(() => {
   return typeof value === 'string' ? value : null
 })
 </script>
+
+<style scoped>
+.account-name-cell__email {
+  max-width: var(--theme-account-name-secondary-max-width);
+}
+</style>

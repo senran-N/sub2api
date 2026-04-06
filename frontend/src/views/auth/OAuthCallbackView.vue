@@ -1,11 +1,12 @@
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-10 dark:bg-dark-900">
-    <div class="mx-auto max-w-2xl">
-      <div class="card p-6">
-        <h1 class="text-lg font-semibold text-gray-900 dark:text-white">OAuth Callback</h1>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          Copy the <code>code</code> (and <code>state</code> if needed) back to the admin
-          authorization flow.
+  <div class="oauth-callback-view min-h-screen">
+    <div class="oauth-callback-view__container mx-auto">
+      <div class="card oauth-callback-view__card">
+        <h1 class="oauth-callback-view__title">
+          {{ t('auth.oauth.callbackTitle') }}
+        </h1>
+        <p class="oauth-callback-view__description mt-2 text-sm">
+          {{ t('auth.oauth.callbackDescription') }}
         </p>
 
         <div class="mt-6 space-y-4">
@@ -14,7 +15,7 @@
             <div class="flex gap-2">
               <input class="input flex-1 font-mono text-sm" :value="code" readonly />
               <button class="btn btn-secondary" type="button" :disabled="!code" @click="copy(code)">
-                Copy
+                {{ t('common.copy') }}
               </button>
             </div>
           </div>
@@ -29,7 +30,7 @@
                 :disabled="!state"
                 @click="copy(state)"
               >
-                Copy
+                {{ t('common.copy') }}
               </button>
             </div>
           </div>
@@ -44,16 +45,13 @@
                 :disabled="!fullUrl"
                 @click="copy(fullUrl)"
               >
-                Copy
+                {{ t('common.copy') }}
               </button>
             </div>
           </div>
 
-          <div
-            v-if="error"
-            class="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-700 dark:bg-red-900/30"
-          >
-            <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+          <div v-if="error" class="oauth-callback-view__error">
+            <p class="oauth-callback-view__error-text text-sm">{{ error }}</p>
           </div>
         </div>
       </div>
@@ -84,6 +82,49 @@ const fullUrl = computed(() => {
 
 const copy = (value: string) => {
   if (!value) return
-  copyToClipboard(value, 'Copied')
+  copyToClipboard(value, t('common.copiedToClipboard'))
 }
 </script>
+
+<style scoped>
+.oauth-callback-view {
+  padding:
+    var(--theme-markdown-block-padding)
+    calc(var(--theme-markdown-block-padding) - 0.25rem)
+    calc(var(--theme-auth-callback-card-padding) - 0.5rem);
+  background:
+    radial-gradient(circle at top center, color-mix(in srgb, var(--theme-accent-soft) 28%, transparent), transparent 42%),
+    var(--theme-page-bg);
+}
+
+.oauth-callback-view__title {
+  font-family: var(--theme-auth-callback-title-font);
+  font-size: var(--theme-auth-callback-title-size);
+  font-weight: 650;
+  letter-spacing: var(--theme-auth-callback-title-letter-spacing);
+  color: var(--theme-page-text);
+}
+
+.oauth-callback-view__description {
+  color: var(--theme-page-muted);
+}
+
+.oauth-callback-view__container {
+  max-width: var(--theme-auth-callback-max-width);
+}
+
+.oauth-callback-view__card {
+  padding: var(--theme-auth-callback-card-padding);
+}
+
+.oauth-callback-view__error {
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-danger-rgb)) 26%, var(--theme-card-border));
+  padding: var(--theme-auth-callback-feedback-padding);
+  border-radius: var(--theme-auth-callback-feedback-radius);
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+}
+
+.oauth-callback-view__error-text {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+</style>

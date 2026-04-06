@@ -1,24 +1,24 @@
 <template>
   <BaseDialog :show="show" :title="t('admin.groups.rateMultipliersTitle')" width="wide" @close="handleClose">
-    <div v-if="group" class="space-y-4">
+    <div v-if="group" class="group-rate-multipliers-modal__content">
       <!-- 分组信息 -->
-      <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-2.5 text-sm dark:bg-dark-700">
-        <span class="inline-flex items-center gap-1.5" :class="platformColorClass">
+      <div class="group-rate-multipliers-modal__group-summary">
+        <span :class="getPlatformChipClasses(group.platform)">
           <PlatformIcon :platform="group.platform" size="sm" />
           {{ t('admin.groups.platforms.' + group.platform) }}
         </span>
-        <span class="text-gray-400">|</span>
-        <span class="font-medium text-gray-900 dark:text-white">{{ group.name }}</span>
-        <span class="text-gray-400">|</span>
-        <span class="text-gray-600 dark:text-gray-400">
+        <span class="group-rate-multipliers-modal__separator">|</span>
+        <span class="group-rate-multipliers-modal__group-name font-medium">{{ group.name }}</span>
+        <span class="group-rate-multipliers-modal__separator">|</span>
+        <span class="group-rate-multipliers-modal__group-meta">
           {{ t('admin.groups.columns.rateMultiplier') }}: {{ group.rate_multiplier }}x
         </span>
       </div>
 
       <!-- 操作区 -->
-      <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+      <div class="group-rate-multipliers-modal__control-panel">
         <!-- 添加用户 -->
-        <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+        <h4 class="group-rate-multipliers-modal__section-title mb-2 text-sm font-medium">
           {{ t('admin.groups.addUserRate') }}
         </h4>
         <div class="flex items-end gap-2">
@@ -34,18 +34,18 @@
             />
             <div
               v-if="showDropdown && searchResults.length > 0"
-              class="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-dark-500 dark:bg-dark-700"
+              class="group-rate-multipliers-modal__search-dropdown"
             >
               <button
                 v-for="user in searchResults"
                 :key="user.id"
                 type="button"
-                class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-dark-600"
+                class="group-rate-multipliers-modal__search-item"
                 @click="selectUser(user)"
               >
-                <span class="text-gray-400">#{{ user.id }}</span>
-                <span class="text-gray-900 dark:text-white">{{ user.username || user.email }}</span>
-                <span v-if="user.username" class="text-xs text-gray-400">{{ user.email }}</span>
+                <span class="group-rate-multipliers-modal__search-id">#{{ user.id }}</span>
+                <span class="group-rate-multipliers-modal__search-name">{{ user.username || user.email }}</span>
+                <span v-if="user.username" class="group-rate-multipliers-modal__search-email text-xs">{{ user.email }}</span>
               </button>
             </div>
           </div>
@@ -56,7 +56,7 @@
               step="0.001"
               min="0"
               autocomplete="off"
-              class="hide-spinner input w-full"
+              class="group-rate-multipliers-modal__number-input hide-spinner input w-full"
               placeholder="1.0"
             />
           </div>
@@ -71,22 +71,22 @@
         </div>
 
         <!-- 批量调整 + 全部清空 -->
-        <div v-if="localEntries.length > 0" class="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3 dark:border-dark-600">
-          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.batchAdjust') }}</span>
+        <div v-if="localEntries.length > 0" class="group-rate-multipliers-modal__batch-bar mt-3 flex items-center gap-3 pt-3">
+          <span class="group-rate-multipliers-modal__batch-label text-xs font-medium">{{ t('admin.groups.batchAdjust') }}</span>
           <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-400">×</span>
+            <span class="group-rate-multipliers-modal__separator text-xs">×</span>
             <input
               v-model.number="batchFactor"
               type="number"
               step="0.1"
               min="0"
               autocomplete="off"
-              class="hide-spinner w-20 rounded border border-gray-200 bg-white px-2 py-1 text-center text-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+              class="group-rate-multipliers-modal__number-input group-rate-multipliers-modal__number-input--compact group-rate-multipliers-modal__number-input--batch hide-spinner"
               placeholder="0.5"
             />
             <button
               type="button"
-              class="btn btn-primary btn-sm shrink-0 px-2.5 py-1 text-xs"
+              class="btn btn-primary btn-sm shrink-0 group-rate-multipliers-modal__batch-apply-button"
               :disabled="!batchFactor || batchFactor <= 0"
               @click="applyBatchFactor"
             >
@@ -96,7 +96,7 @@
           <div class="ml-auto">
             <button
               type="button"
-              class="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+              class="group-rate-multipliers-modal__clear-button"
               @click="clearAllLocal"
             >
               {{ t('admin.groups.clearAll') }}
@@ -106,80 +106,70 @@
       </div>
 
       <!-- 加载状态 -->
-      <div v-if="loading" class="flex justify-center py-6">
-        <svg class="h-6 w-6 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
+      <div v-if="loading" class="group-rate-multipliers-modal__loading">
+        <Icon name="refresh" size="md" class="group-rate-multipliers-modal__loading-icon animate-spin" />
       </div>
 
       <!-- 已设置的用户列表 -->
       <div v-else>
-        <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+        <h4 class="group-rate-multipliers-modal__section-title mb-2 text-sm font-medium">
           {{ t('admin.groups.rateMultipliers') }} ({{ localEntries.length }})
         </h4>
 
-        <div v-if="localEntries.length === 0" class="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+        <div v-if="localEntries.length === 0" class="group-rate-multipliers-modal__empty">
           {{ t('admin.groups.noRateMultipliers') }}
         </div>
 
         <div v-else>
           <!-- 表格 -->
-          <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
-            <div class="max-h-[420px] overflow-y-auto">
+          <div class="group-rate-multipliers-modal__table-shell">
+            <div class="group-rate-multipliers-modal__table-scroll">
               <table class="w-full text-sm">
                 <thead class="sticky top-0 z-[1]">
-                  <tr class="border-b border-gray-200 bg-gray-50 dark:border-dark-600 dark:bg-dark-700">
-                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.userEmail') }}</th>
-                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">ID</th>
-                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.userName') }}</th>
-                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.userNotes') }}</th>
-                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.userStatus') }}</th>
-                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.rateMultiplier') }}</th>
-                    <th v-if="showFinalRate" class="px-3 py-2 text-left text-xs font-medium text-primary-600 dark:text-primary-400">{{ t('admin.groups.finalRate') }}</th>
-                    <th class="w-10 px-2 py-2"></th>
+                  <tr class="group-rate-multipliers-modal__table-head">
+                    <th class="group-rate-multipliers-modal__table-header">{{ t('admin.groups.columns.userEmail') }}</th>
+                    <th class="group-rate-multipliers-modal__table-header">ID</th>
+                    <th class="group-rate-multipliers-modal__table-header">{{ t('admin.groups.columns.userName') }}</th>
+                    <th class="group-rate-multipliers-modal__table-header">{{ t('admin.groups.columns.userNotes') }}</th>
+                    <th class="group-rate-multipliers-modal__table-header">{{ t('admin.groups.columns.userStatus') }}</th>
+                    <th class="group-rate-multipliers-modal__table-header">{{ t('admin.groups.columns.rateMultiplier') }}</th>
+                    <th v-if="showFinalRate" class="group-rate-multipliers-modal__table-header group-rate-multipliers-modal__table-header--accent">{{ t('admin.groups.finalRate') }}</th>
+                    <th class="group-rate-multipliers-modal__table-header group-rate-multipliers-modal__table-header--icon"></th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-dark-600">
+                <tbody class="group-rate-multipliers-modal__table-body">
                   <tr
                     v-for="entry in paginatedLocalEntries"
                     :key="entry.user_id"
-                    class="hover:bg-gray-50 dark:hover:bg-dark-700/50"
+                    class="group-rate-multipliers-modal__table-row"
                   >
-                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ entry.user_email }}</td>
-                    <td class="whitespace-nowrap px-3 py-2 text-gray-400 dark:text-gray-500">{{ entry.user_id }}</td>
-                    <td class="whitespace-nowrap px-3 py-2 text-gray-900 dark:text-white">{{ entry.user_name || '-' }}</td>
-                    <td class="max-w-[160px] truncate px-3 py-2 text-gray-500 dark:text-gray-400" :title="entry.user_notes">{{ entry.user_notes || '-' }}</td>
-                    <td class="whitespace-nowrap px-3 py-2">
-                      <span
-                        :class="[
-                          'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                          entry.user_status === 'active'
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-gray-100 text-gray-600 dark:bg-dark-600 dark:text-gray-400'
-                        ]"
-                      >
+                    <td class="group-rate-multipliers-modal__table-cell group-rate-multipliers-modal__cell-muted">{{ entry.user_email }}</td>
+                    <td class="group-rate-multipliers-modal__table-cell group-rate-multipliers-modal__table-cell--nowrap group-rate-multipliers-modal__cell-soft">{{ entry.user_id }}</td>
+                    <td class="group-rate-multipliers-modal__table-cell group-rate-multipliers-modal__table-cell--nowrap group-rate-multipliers-modal__cell-strong">{{ entry.user_name || '-' }}</td>
+                    <td class="group-rate-multipliers-modal__table-cell group-rate-multipliers-modal__cell-muted group-rate-multipliers-modal__table-cell--notes" :title="entry.user_notes">{{ entry.user_notes || '-' }}</td>
+                    <td class="group-rate-multipliers-modal__table-cell group-rate-multipliers-modal__table-cell--nowrap">
+                      <span :class="getUserStatusClasses(entry.user_status)">
                         {{ entry.user_status }}
                       </span>
                     </td>
-                    <td class="whitespace-nowrap px-3 py-2">
+                    <td class="group-rate-multipliers-modal__table-cell group-rate-multipliers-modal__table-cell--nowrap">
                       <input
                         type="number"
                         step="0.001"
                         min="0"
                         autocomplete="off"
                         :value="entry.rate_multiplier"
-                        class="hide-spinner w-20 rounded border border-gray-200 bg-white px-2 py-1 text-center text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+                        class="group-rate-multipliers-modal__number-input group-rate-multipliers-modal__number-input--compact hide-spinner"
                         @change="updateLocalRate(entry.user_id, ($event.target as HTMLInputElement).value)"
                       />
                     </td>
-                    <td v-if="showFinalRate" class="whitespace-nowrap px-3 py-2 font-medium text-primary-600 dark:text-primary-400">
+                    <td v-if="showFinalRate" class="group-rate-multipliers-modal__table-cell group-rate-multipliers-modal__table-cell--nowrap group-rate-multipliers-modal__final-rate">
                       {{ computeFinalRate(entry.rate_multiplier) }}
                     </td>
-                    <td class="px-2 py-2">
+                    <td class="group-rate-multipliers-modal__table-cell group-rate-multipliers-modal__table-cell--icon">
                       <button
                         type="button"
-                        class="rounded p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        :class="getActionButtonClasses('danger')"
                         @click="removeLocal(entry.user_id)"
                       >
                         <Icon name="trash" size="sm" />
@@ -204,13 +194,13 @@
       </div>
 
       <!-- 底部操作栏 -->
-      <div class="flex items-center gap-3 border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="group-rate-multipliers-modal__footer flex items-center gap-3 pt-4">
         <!-- 左侧：未保存提示 + 撤销 -->
         <template v-if="isDirty">
-          <span class="text-xs text-amber-600 dark:text-amber-400">{{ t('admin.groups.unsavedChanges') }}</span>
+          <span class="group-rate-multipliers-modal__unsaved text-xs">{{ t('admin.groups.unsavedChanges') }}</span>
           <button
             type="button"
-            class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+            class="group-rate-multipliers-modal__revert text-xs font-medium"
             @click="handleCancel"
           >
             {{ t('admin.groups.revertChanges') }}
@@ -218,13 +208,13 @@
         </template>
         <!-- 右侧：关闭 / 保存 -->
         <div class="ml-auto flex items-center gap-3">
-          <button type="button" class="btn btn-sm px-4 py-1.5" @click="handleClose">
+          <button type="button" class="btn btn-sm group-rate-multipliers-modal__footer-button" @click="handleClose">
             {{ t('common.close') }}
           </button>
           <button
             v-if="isDirty"
             type="button"
-            class="btn btn-primary btn-sm px-4 py-1.5"
+            class="btn btn-primary btn-sm group-rate-multipliers-modal__footer-button"
             :disabled="saving"
             @click="handleSave"
           >
@@ -239,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -280,14 +270,38 @@ const batchFactor = ref<number | null>(null)
 
 let searchTimeout: ReturnType<typeof setTimeout>
 
-const platformColorClass = computed(() => {
-  switch (props.group?.platform) {
-    case 'anthropic': return 'text-orange-700 dark:text-orange-400'
-    case 'openai': return 'text-emerald-700 dark:text-emerald-400'
-    case 'antigravity': return 'text-purple-700 dark:text-purple-400'
-    default: return 'text-blue-700 dark:text-blue-400'
+const joinClassNames = (...classNames: Array<string | false | null | undefined>) => {
+  return classNames.filter(Boolean).join(' ')
+}
+
+const getPlatformChipClasses = (platform: string) => {
+  switch (platform) {
+    case 'anthropic':
+      return 'theme-chip theme-chip--regular theme-chip--brand-orange inline-flex items-center gap-1.5'
+    case 'openai':
+      return 'theme-chip theme-chip--regular theme-chip--success inline-flex items-center gap-1.5'
+    case 'antigravity':
+      return 'theme-chip theme-chip--regular theme-chip--brand-purple inline-flex items-center gap-1.5'
+    default:
+      return 'theme-chip theme-chip--regular theme-chip--info inline-flex items-center gap-1.5'
   }
-})
+}
+
+const getUserStatusClasses = (status: string) => {
+  return joinClassNames(
+    'theme-chip theme-chip--regular inline-flex rounded-full',
+    status === 'active'
+      ? 'theme-chip--success'
+      : 'theme-chip--neutral'
+  )
+}
+
+const getActionButtonClasses = (tone: 'danger') => {
+  return joinClassNames(
+    'group-rate-multipliers-modal__action-button',
+    tone === 'danger' && 'group-rate-multipliers-modal__action-button--danger'
+  )
+}
 
 // 是否显示"最终倍率"预览列
 const showFinalRate = computed(() => {
@@ -479,9 +493,14 @@ const handleClickOutside = () => {
   showDropdown.value = false
 }
 
-if (typeof document !== 'undefined') {
+onMounted(() => {
   document.addEventListener('click', handleClickOutside)
-}
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+  clearTimeout(searchTimeout)
+})
 </script>
 
 <style scoped>
@@ -492,5 +511,235 @@ if (typeof document !== 'undefined') {
 }
 .hide-spinner {
   -moz-appearance: textfield;
+}
+
+.group-rate-multipliers-modal__group-summary,
+.group-rate-multipliers-modal__control-panel,
+.group-rate-multipliers-modal__table-shell {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.group-rate-multipliers-modal__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-table-layout-gap);
+}
+
+.group-rate-multipliers-modal__group-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  padding: calc(var(--theme-table-mobile-card-padding) * 0.625) var(--theme-table-mobile-card-padding);
+  font-size: 0.875rem;
+  background: color-mix(in srgb, var(--theme-surface-soft) 72%, var(--theme-surface));
+}
+
+.group-rate-multipliers-modal__control-panel {
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  padding: var(--theme-table-mobile-card-padding);
+}
+
+.group-rate-multipliers-modal__group-name,
+.group-rate-multipliers-modal__section-title,
+.group-rate-multipliers-modal__search-name,
+.group-rate-multipliers-modal__cell-strong {
+  color: var(--theme-page-text);
+}
+
+.group-rate-multipliers-modal__separator,
+.group-rate-multipliers-modal__group-meta,
+.group-rate-multipliers-modal__search-id,
+.group-rate-multipliers-modal__search-email,
+.group-rate-multipliers-modal__batch-label,
+.group-rate-multipliers-modal__cell-muted,
+.group-rate-multipliers-modal__empty {
+  color: var(--theme-page-muted);
+}
+
+.group-rate-multipliers-modal__cell-soft {
+  color: color-mix(in srgb, var(--theme-page-muted) 76%, transparent);
+}
+
+.group-rate-multipliers-modal__search-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  margin-top: var(--theme-floating-panel-gap);
+  max-height: var(--theme-search-dropdown-max-height);
+  overflow-y: auto;
+  border-radius: calc(var(--theme-surface-radius) + 2px);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.group-rate-multipliers-modal__search-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: calc(var(--theme-button-padding-y) * 0.6) calc(var(--theme-button-padding-x) * 0.6);
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--theme-page-text);
+}
+
+.group-rate-multipliers-modal__search-item:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.group-rate-multipliers-modal__number-input {
+  border: 1px solid var(--theme-input-border);
+  border-radius: calc(var(--theme-button-radius) - 2px);
+  background: var(--theme-input-bg);
+  color: var(--theme-input-text);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.group-rate-multipliers-modal__number-input::placeholder {
+  color: var(--theme-input-placeholder);
+}
+
+.group-rate-multipliers-modal__number-input:focus {
+  border-color: color-mix(in srgb, var(--theme-accent) 68%, var(--theme-input-border));
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent) 14%, transparent);
+}
+
+.group-rate-multipliers-modal__number-input--compact {
+  width: 5rem;
+  padding: calc(var(--theme-button-padding-y) * 0.45) calc(var(--theme-button-padding-x) * 0.35);
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.group-rate-multipliers-modal__number-input--batch {
+  width: 5rem;
+}
+
+.group-rate-multipliers-modal__batch-bar,
+.group-rate-multipliers-modal__footer {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+}
+
+.group-rate-multipliers-modal__clear-button {
+  border-radius: calc(var(--theme-button-radius) + 2px);
+  padding: calc(var(--theme-button-padding-y) * 0.6) calc(var(--theme-button-padding-x) * 0.75);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-danger-rgb)) 20%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.group-rate-multipliers-modal__clear-button:hover,
+.group-rate-multipliers-modal__action-button--danger:hover {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 16%, var(--theme-surface));
+}
+
+.group-rate-multipliers-modal__loading-icon,
+.group-rate-multipliers-modal__final-rate,
+.group-rate-multipliers-modal__revert {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+}
+
+.group-rate-multipliers-modal__table-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  background: var(--theme-table-head-bg);
+}
+
+.group-rate-multipliers-modal__table-header {
+  padding: calc(var(--theme-button-padding-y) * 0.8) calc(var(--theme-button-padding-x) * 0.6);
+  text-align: left;
+  font-size: var(--theme-table-head-font-size);
+  font-weight: 500;
+  letter-spacing: var(--theme-table-head-letter-spacing);
+  text-transform: var(--theme-table-head-text-transform);
+  color: var(--theme-table-head-text);
+}
+
+.group-rate-multipliers-modal__table-header--icon {
+  width: 2.5rem;
+}
+
+.group-rate-multipliers-modal__table-header--accent {
+  color: color-mix(in srgb, var(--theme-accent) 84%, var(--theme-page-text));
+}
+
+.group-rate-multipliers-modal__table-scroll {
+  max-height: var(--theme-balance-history-list-max-height);
+  overflow-y: auto;
+}
+
+.group-rate-multipliers-modal__table-cell {
+  padding: calc(var(--theme-button-padding-y) * 0.8) calc(var(--theme-button-padding-x) * 0.6);
+}
+
+.group-rate-multipliers-modal__table-cell--nowrap {
+  white-space: nowrap;
+}
+
+.group-rate-multipliers-modal__table-cell--notes {
+  max-width: calc(var(--theme-settings-menu-width-sm) + 1rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-rate-multipliers-modal__table-cell--icon {
+  width: 2.5rem;
+}
+
+.group-rate-multipliers-modal__table-body tr + tr td {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.group-rate-multipliers-modal__table-row:hover {
+  background: var(--theme-table-row-hover);
+}
+
+.group-rate-multipliers-modal__action-button {
+  border-radius: calc(var(--theme-button-radius) - 2px);
+  padding: 0.25rem;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+}
+
+.group-rate-multipliers-modal__action-button--danger:hover {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.group-rate-multipliers-modal__unsaved {
+  color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.group-rate-multipliers-modal__batch-apply-button,
+.group-rate-multipliers-modal__footer-button {
+  padding: calc(var(--theme-button-padding-y) * 0.5) calc(var(--theme-button-padding-x) * 0.8);
+}
+
+.group-rate-multipliers-modal__loading {
+  display: flex;
+  justify-content: center;
+  padding: calc(var(--theme-table-mobile-empty-padding) * 0.5) 0;
+}
+
+.group-rate-multipliers-modal__empty {
+  padding: calc(var(--theme-table-mobile-empty-padding) * 0.5) 0;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.group-rate-multipliers-modal__revert:hover {
+  color: color-mix(in srgb, var(--theme-accent-strong) 22%, var(--theme-accent) 78%);
 }
 </style>

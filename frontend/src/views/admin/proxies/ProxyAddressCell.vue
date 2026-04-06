@@ -4,7 +4,7 @@
     <div class="relative">
       <button
         type="button"
-        class="rounded p-0.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+        class="proxy-address-cell__copy"
         :title="t('admin.proxies.copyProxyUrl')"
         @click.stop="emit('copy-url', proxy)"
         @contextmenu.prevent="emit('toggle-copy-menu', proxy.id)"
@@ -13,15 +13,15 @@
       </button>
       <div
         v-if="copyMenuOpen"
-        class="absolute left-0 top-full z-50 mt-1 w-auto min-w-[180px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-500 dark:bg-dark-700"
+        class="proxy-address-cell__menu absolute left-0 top-full z-50 w-auto"
       >
         <button
           v-for="format in copyFormats"
           :key="format.label"
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-100 dark:hover:bg-dark-600"
+          class="proxy-address-cell__menu-item flex w-full items-center gap-2 text-left text-xs"
           @click.stop="emit('copy-format', format.value)"
         >
-          <span class="truncate font-mono text-gray-600 dark:text-gray-300">{{ format.label }}</span>
+          <span class="proxy-address-cell__menu-label truncate font-mono">{{ format.label }}</span>
         </button>
       </div>
     </div>
@@ -48,3 +48,40 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.proxy-address-cell__copy {
+  border-radius: var(--theme-proxy-address-copy-radius);
+  padding: var(--theme-proxy-address-copy-padding);
+  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+  transition: color 0.2s ease;
+}
+
+.proxy-address-cell__copy:hover {
+  color: var(--theme-accent);
+}
+
+.proxy-address-cell__menu {
+  min-width: var(--theme-proxy-copy-menu-min-width);
+  margin-top: var(--theme-proxy-address-menu-offset);
+  padding-block: var(--theme-proxy-address-menu-padding-y);
+  border: 1px solid color-mix(in srgb, var(--theme-dropdown-border) 88%, transparent);
+  border-radius: var(--theme-proxy-address-menu-radius);
+  background: var(--theme-dropdown-bg);
+  box-shadow: var(--theme-dropdown-shadow);
+}
+
+.proxy-address-cell__menu-item {
+  padding: var(--theme-proxy-address-menu-item-padding-y)
+    var(--theme-proxy-address-menu-item-padding-x);
+  transition: background-color 0.2s ease;
+}
+
+.proxy-address-cell__menu-item:hover {
+  background: var(--theme-dropdown-item-hover-bg);
+}
+
+.proxy-address-cell__menu-label {
+  color: var(--theme-dropdown-text);
+}
+</style>

@@ -1,7 +1,7 @@
 <template>
-  <div class="card p-4">
+  <div class="model-distribution-chart__card card">
     <div class="mb-4 flex items-center justify-between gap-3">
-      <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+      <h3 class="model-distribution-chart__title">
         {{ !enableRankingView || activeView === 'model_distribution'
           ? t('admin.dashboard.modelDistribution')
           : t('admin.dashboard.spendingRankingTitle') }}
@@ -57,7 +57,7 @@
             {{ t('admin.dashboard.metricActualCost') }}
           </button>
         </div>
-        <div v-if="enableRankingView" class="segmented-control border-0 p-1">
+        <div v-if="enableRankingView" class="model-distribution-chart__view-toggle segmented-control border-0">
           <button
             type="button"
             class="segmented-option"
@@ -88,25 +88,25 @@
       <div class="h-48 w-48">
         <Doughnut :data="chartData" :options="doughnutOptions" />
       </div>
-      <div class="max-h-48 flex-1 overflow-y-auto">
+      <div class="model-distribution-chart__legend flex-1 overflow-y-auto">
         <table class="w-full text-xs">
           <thead>
-            <tr class="text-gray-500 dark:text-gray-400">
-              <th class="pb-2 text-left">{{ t('admin.dashboard.model') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.requests') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.tokens') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.actual') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.standard') }}</th>
+            <tr class="model-distribution-chart__table-head">
+              <th class="model-distribution-chart__table-head-cell model-distribution-chart__table-head-cell--left">{{ t('admin.dashboard.model') }}</th>
+              <th class="model-distribution-chart__table-head-cell">{{ t('admin.dashboard.requests') }}</th>
+              <th class="model-distribution-chart__table-head-cell">{{ t('admin.dashboard.tokens') }}</th>
+              <th class="model-distribution-chart__table-head-cell">{{ t('admin.dashboard.actual') }}</th>
+              <th class="model-distribution-chart__table-head-cell">{{ t('admin.dashboard.standard') }}</th>
             </tr>
           </thead>
           <tbody>
             <template v-for="model in displayModelStats" :key="model.model">
               <tr
-                class="border-t border-gray-100 cursor-pointer transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-dark-700/40"
+                class="model-distribution-chart__row model-distribution-chart__row--interactive"
                 @click="toggleBreakdown('model', model.model)"
               >
                 <td
-                  class="max-w-[100px] truncate py-1.5 font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  class="model-distribution-chart__cell model-distribution-chart__cell--link"
                   :title="model.model"
                 >
                   <span class="inline-flex items-center gap-1">
@@ -115,21 +115,21 @@
                     {{ model.model }}
                   </span>
                 </td>
-                <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+                <td class="model-distribution-chart__cell">
                   {{ formatNumber(model.requests) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+                <td class="model-distribution-chart__cell">
                   {{ formatTokens(model.total_tokens) }}
                 </td>
-                <td class="py-1.5 text-right text-green-600 dark:text-green-400">
+                <td class="model-distribution-chart__cell model-distribution-chart__cell--success">
                   ${{ formatCost(model.actual_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td class="model-distribution-chart__cell model-distribution-chart__cell--muted">
                   ${{ formatCost(model.cost) }}
                 </td>
               </tr>
               <tr v-if="expandedKey === `model-${model.model}`">
-                <td colspan="5" class="p-0">
+                <td colspan="5" class="model-distribution-chart__subtable-cell">
                   <UserBreakdownSubTable
                     :items="breakdownItems"
                     :loading="breakdownLoading"
@@ -143,7 +143,7 @@
     </div>
     <div
       v-else-if="activeView === 'model_distribution'"
-      class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+      class="model-distribution-chart__empty-state"
     >
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>
@@ -153,7 +153,7 @@
     </div>
     <div
       v-else-if="rankingError"
-      class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+      class="model-distribution-chart__empty-state"
     >
       {{ t('admin.dashboard.failedToLoad') }}
     </div>
@@ -161,46 +161,43 @@
       <div class="h-48 w-48">
         <Doughnut :data="rankingChartData" :options="rankingDoughnutOptions" />
       </div>
-      <div class="max-h-48 flex-1 overflow-y-auto">
+      <div class="model-distribution-chart__legend flex-1 overflow-y-auto">
         <table class="w-full text-xs">
           <thead>
-            <tr class="text-gray-500 dark:text-gray-400">
-              <th class="pb-2 text-left">{{ t('admin.dashboard.spendingRankingUser') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.spendingRankingRequests') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.spendingRankingTokens') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.spendingRankingSpend') }}</th>
+            <tr class="model-distribution-chart__table-head">
+              <th class="model-distribution-chart__table-head-cell model-distribution-chart__table-head-cell--left">{{ t('admin.dashboard.spendingRankingUser') }}</th>
+              <th class="model-distribution-chart__table-head-cell">{{ t('admin.dashboard.spendingRankingRequests') }}</th>
+              <th class="model-distribution-chart__table-head-cell">{{ t('admin.dashboard.spendingRankingTokens') }}</th>
+              <th class="model-distribution-chart__table-head-cell">{{ t('admin.dashboard.spendingRankingSpend') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="(item, index) in rankingDisplayItems"
               :key="item.isOther ? 'others' : `${item.user_id}-${index}`"
-              class="border-t border-gray-100 transition-colors dark:border-gray-700"
-              :class="item.isOther
-                ? 'bg-gray-50/70 dark:bg-dark-700/20'
-                : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-700/40'"
+              :class="getRankingRowClasses(item.isOther)"
               @click="item.isOther ? undefined : emit('ranking-click', item)"
             >
-              <td class="py-1.5">
+              <td class="model-distribution-chart__cell model-distribution-chart__cell--left">
                 <div class="flex min-w-0 items-center gap-2">
-                  <span class="shrink-0 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                  <span class="model-distribution-chart__ranking-index">
                     {{ item.isOther ? 'Σ' : `#${index + 1}` }}
                   </span>
                   <span
-                    class="block max-w-[140px] truncate font-medium text-gray-900 dark:text-white"
+                    class="model-distribution-chart__ranking-label"
                     :title="getRankingRowLabel(item)"
                   >
                     {{ getRankingRowLabel(item) }}
                   </span>
                 </div>
               </td>
-              <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+              <td class="model-distribution-chart__cell">
                 {{ formatNumber(item.requests) }}
               </td>
-              <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+              <td class="model-distribution-chart__cell">
                 {{ formatTokens(item.tokens) }}
               </td>
-              <td class="py-1.5 text-right text-green-600 dark:text-green-400">
+              <td class="model-distribution-chart__cell model-distribution-chart__cell--success">
                 ${{ formatCost(item.actual_cost) }}
               </td>
             </tr>
@@ -210,7 +207,7 @@
     </div>
     <div
       v-else
-      class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+      class="model-distribution-chart__empty-state"
     >
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>
@@ -223,9 +220,15 @@ import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import UserBreakdownSubTable from './UserBreakdownSubTable.vue'
 import type { ModelStat, UserSpendingRankingItem, UserBreakdownItem } from '@/types'
 import { getUserBreakdown } from '@/api/admin/dashboard'
+import {
+  getThemeChartSequence,
+  getThemeChartTooltipColors,
+  readThemeCssVariable
+} from '@/utils/themeStyles'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -272,6 +275,7 @@ const props = withDefaults(defineProps<{
 const expandedKey = ref<string | null>(null)
 const breakdownItems = ref<UserBreakdownItem[]>([])
 const breakdownLoading = ref(false)
+const themeVersion = useDocumentThemeVersion()
 
 const toggleBreakdown = async (type: string, id: string) => {
   const key = `${type}-${id}`
@@ -306,20 +310,18 @@ const emit = defineEmits<{
 const enableRankingView = computed(() => props.enableRankingView)
 const activeView = ref<'model_distribution' | 'spending_ranking'>('model_distribution')
 
-const chartColors = [
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
-  '#f97316',
-  '#6366f1',
-  '#84cc16',
-  '#06b6d4',
-  '#a855f7'
-]
+const chartPalette = computed(() => {
+  void themeVersion.value
+
+  return {
+    muted: readThemeCssVariable('--theme-page-muted')
+  }
+})
+
+const chartColors = computed(() => {
+  void themeVersion.value
+  return getThemeChartSequence()
+})
 
 const displayModelStats = computed(() => {
   const sourceStats = props.source === 'upstream'
@@ -334,6 +336,7 @@ const displayModelStats = computed(() => {
 })
 
 const chartData = computed(() => {
+  void themeVersion.value
   if (!displayModelStats.value.length) return null
 
   return {
@@ -341,7 +344,7 @@ const chartData = computed(() => {
     datasets: [
       {
         data: displayModelStats.value.map((m) => props.metric === 'actual_cost' ? m.actual_cost : m.total_tokens),
-        backgroundColor: chartColors.slice(0, displayModelStats.value.length),
+        backgroundColor: chartColors.value.slice(0, displayModelStats.value.length),
         borderWidth: 0
       }
     ]
@@ -349,16 +352,17 @@ const chartData = computed(() => {
 })
 
 const rankingChartData = computed(() => {
+  void themeVersion.value
   if (!props.rankingItems?.length) return null
 
   const labels = props.rankingItems.map((item, index) => `#${index + 1} ${getRankingUserLabel(item)}`)
   const data = props.rankingItems.map((item) => item.actual_cost)
-  const backgroundColor = chartColors.slice(0, props.rankingItems.length)
+  const backgroundColor = chartColors.value.slice(0, props.rankingItems.length)
 
   if (otherRankingItem.value) {
     labels.push(t('admin.dashboard.spendingRankingOther'))
     data.push(otherRankingItem.value.actual_cost)
-    backgroundColor.push('#94a3b8')
+    backgroundColor.push(chartPalette.value.muted)
   }
 
   return {
@@ -403,48 +407,64 @@ const rankingDisplayItems = computed<RankingDisplayItem[]>(() => {
     : [...props.rankingItems]
 })
 
-const doughnutOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: false
-    },
-    tooltip: {
-      callbacks: {
-        label: (context: any) => {
-          const value = context.raw as number
-          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
-          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
-          const formattedValue = props.metric === 'actual_cost'
-            ? `$${formatCost(value)}`
-            : formatTokens(value)
-          return `${context.label}: ${formattedValue} (${percentage}%)`
-        }
-      }
-    }
-  }
-}))
+const doughnutOptions = computed(() => {
+  void themeVersion.value
+  const tooltipColors = getThemeChartTooltipColors()
 
-const rankingDoughnutOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: false
-    },
-    tooltip: {
-      callbacks: {
-        label: (context: any) => {
-          const value = context.raw as number
-          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
-          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
-          return `${context.label}: $${formatCost(value)} (${percentage}%)`
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        backgroundColor: tooltipColors.background,
+        titleColor: tooltipColors.text,
+        bodyColor: tooltipColors.text,
+        callbacks: {
+          label: (context: any) => {
+            const value = context.raw as number
+            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
+            const formattedValue = props.metric === 'actual_cost'
+              ? `$${formatCost(value)}`
+              : formatTokens(value)
+            return `${context.label}: ${formattedValue} (${percentage}%)`
+          }
         }
       }
     }
   }
-}))
+})
+
+const rankingDoughnutOptions = computed(() => {
+  void themeVersion.value
+  const tooltipColors = getThemeChartTooltipColors()
+
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        backgroundColor: tooltipColors.background,
+        titleColor: tooltipColors.text,
+        bodyColor: tooltipColors.text,
+        callbacks: {
+          label: (context: any) => {
+            const value = context.raw as number
+            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
+            return `${context.label}: $${formatCost(value)} (${percentage}%)`
+          }
+        }
+      }
+    }
+  }
+})
 
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000_000) {
@@ -481,4 +501,125 @@ const formatCost = (value: number): string => {
   }
   return value.toFixed(4)
 }
+
+const getRankingRowClasses = (isOther?: boolean) => {
+  return [
+    'model-distribution-chart__row',
+    isOther
+      ? 'model-distribution-chart__row--other'
+      : 'model-distribution-chart__row--interactive'
+  ]
+}
+
 </script>
+
+<style scoped>
+.model-distribution-chart__card {
+  padding: var(--theme-user-dashboard-charts-card-padding);
+}
+
+.model-distribution-chart__title {
+  color: var(--theme-page-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.model-distribution-chart__view-toggle {
+  padding: var(--theme-settings-tabs-nav-padding);
+}
+
+.model-distribution-chart__table-head {
+  color: var(--theme-page-muted);
+}
+
+.model-distribution-chart__table-head-cell {
+  padding-bottom: 0.5rem;
+  text-align: right;
+}
+
+.model-distribution-chart__table-head-cell--left {
+  text-align: left;
+}
+
+.model-distribution-chart__row {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  transition: background-color 0.18s ease;
+}
+
+.model-distribution-chart__row--interactive {
+  cursor: pointer;
+}
+
+.model-distribution-chart__row--interactive:hover {
+  background: color-mix(in srgb, var(--theme-button-ghost-hover-bg) 90%, transparent);
+}
+
+.model-distribution-chart__row--other {
+  background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
+}
+
+.model-distribution-chart__cell {
+  padding: 0.375rem 0;
+  color: var(--theme-page-muted);
+  text-align: right;
+}
+
+.model-distribution-chart__cell--left {
+  text-align: left;
+}
+
+.model-distribution-chart__cell--link {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(var(--theme-info-rgb));
+  font-weight: 600;
+}
+
+.model-distribution-chart__cell--link:hover {
+  color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 82%, var(--theme-page-text));
+}
+
+.model-distribution-chart__legend {
+  max-height: var(--theme-user-dashboard-charts-legend-max-height);
+}
+
+.model-distribution-chart__subtable-cell {
+  padding: 0;
+}
+
+.model-distribution-chart__cell--success {
+  color: rgb(var(--theme-success-rgb));
+}
+
+.model-distribution-chart__cell--muted,
+.model-distribution-chart__ranking-index {
+  color: var(--theme-page-muted);
+}
+
+.model-distribution-chart__ranking-index {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.model-distribution-chart__ranking-label {
+  display: block;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--theme-page-text);
+  font-weight: 600;
+}
+
+.model-distribution-chart__empty-state {
+  display: flex;
+  height: 12rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-page-muted);
+  font-size: 0.875rem;
+}
+</style>

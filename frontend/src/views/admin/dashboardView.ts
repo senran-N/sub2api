@@ -1,19 +1,5 @@
 import type { UserUsageTrendPoint } from '@/types'
-
-const USER_TREND_COLORS = [
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
-  '#f97316',
-  '#6366f1',
-  '#84cc16',
-  '#06b6d4',
-  '#a855f7'
-] as const
+import { getThemeChartSequence, getThemeChartSequenceAlpha } from '@/utils/themeStyles'
 
 export function formatDashboardLocalDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -125,11 +111,13 @@ export function buildDashboardUserTrendChartData(
   })
 
   const sortedDates = Array.from(allDates).sort()
+  const trendColors = getThemeChartSequence()
+  const trendColorsSoft = getThemeChartSequenceAlpha(0.14)
   const datasets = Array.from(userGroups.values()).map((group, index) => ({
     label: group.name,
     data: sortedDates.map((date) => group.data.get(date) || 0),
-    borderColor: USER_TREND_COLORS[index % USER_TREND_COLORS.length],
-    backgroundColor: `${USER_TREND_COLORS[index % USER_TREND_COLORS.length]}20`,
+    borderColor: trendColors[index % trendColors.length],
+    backgroundColor: trendColorsSoft[index % trendColorsSoft.length],
     fill: false,
     tension: 0.3
   }))

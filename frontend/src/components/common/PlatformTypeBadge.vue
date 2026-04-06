@@ -1,12 +1,12 @@
 <template>
   <div class="inline-flex flex-col gap-0.5 text-xs font-medium">
     <!-- Row 1: Platform + Type -->
-    <div class="inline-flex items-center overflow-hidden rounded-md">
-      <span :class="['inline-flex items-center gap-1 px-2 py-1', platformClass]">
+    <div class="inline-flex items-center overflow-hidden">
+      <span :class="['theme-chip theme-chip--segment platform-type-badge__segment platform-type-badge__segment--primary inline-flex items-center gap-1', platformClass]">
         <PlatformIcon :platform="platform" size="xs" />
         <span>{{ platformLabel }}</span>
       </span>
-      <span :class="['inline-flex items-center gap-1 px-1.5 py-1', typeClass]">
+      <span :class="['theme-chip theme-chip--segment platform-type-badge__segment platform-type-badge__segment--secondary inline-flex items-center gap-1', typeClass]">
         <!-- OAuth icon -->
         <svg
           v-if="type === 'oauth'"
@@ -30,13 +30,13 @@
       </span>
     </div>
     <!-- Row 2: Plan type + Privacy mode (only if either exists) -->
-    <div v-if="planLabel || privacyBadge" class="inline-flex items-center overflow-hidden rounded-md">
-      <span v-if="planLabel" :class="['inline-flex items-center gap-1 px-1.5 py-1', planBadgeClass]">
+    <div v-if="planLabel || privacyBadge" class="inline-flex items-center overflow-hidden">
+      <span v-if="planLabel" :class="['theme-chip theme-chip--segment platform-type-badge__segment platform-type-badge__segment--secondary inline-flex items-center gap-1', planBadgeClass]">
         <span>{{ planLabel }}</span>
       </span>
       <span
         v-if="privacyBadge"
-        :class="['inline-flex items-center gap-1 px-1.5 py-1', privacyBadge.class]"
+        :class="['theme-chip theme-chip--segment platform-type-badge__segment platform-type-badge__segment--secondary inline-flex items-center gap-1', privacyBadge.class]"
         :title="privacyBadge.title"
       >
         <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -111,39 +111,39 @@ const planLabel = computed(() => {
 
 const platformClass = computed(() => {
   if (props.platform === 'anthropic') {
-    return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+    return 'theme-chip--brand-orange'
   }
   if (props.platform === 'openai') {
-    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+    return 'theme-chip--success'
   }
   if (props.platform === 'antigravity') {
-    return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+    return 'theme-chip--brand-purple'
   }
   if (props.platform === 'sora') {
-    return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+    return 'theme-chip--brand-rose'
   }
-  return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+  return 'theme-chip--info'
 })
 
 const typeClass = computed(() => {
   if (props.platform === 'anthropic') {
-    return 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
+    return 'theme-chip--warning'
   }
   if (props.platform === 'openai') {
-    return 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+    return 'theme-chip--accent'
   }
   if (props.platform === 'antigravity') {
-    return 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400'
+    return 'theme-chip--brand-purple'
   }
   if (props.platform === 'sora') {
-    return 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400'
+    return 'theme-chip--brand-rose'
   }
-  return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+  return 'theme-chip--info'
 })
 
 const planBadgeClass = computed(() => {
   if (props.planType && props.planType.toLowerCase() === 'abnormal') {
-    return 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+    return 'theme-chip--danger'
   }
   return typeClass.value
 })
@@ -157,20 +157,36 @@ const privacyBadge = computed(() => {
   const shieldCheck = 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z'
   const shieldX = 'M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285zM12 18h.008v.008H12V18z'
   switch (props.privacyMode) {
-    // OpenAI states
     case 'training_off':
-      return { label: 'Private', icon: shieldCheck, title: t('admin.accounts.privacyTrainingOff'), class: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' }
+      return { label: 'Private', icon: shieldCheck, title: t('admin.accounts.privacyTrainingOff'), class: 'theme-chip--success' }
     case 'training_set_cf_blocked':
-      return { label: 'CF', icon: shieldX, title: t('admin.accounts.privacyCfBlocked'), class: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' }
+      return { label: 'CF', icon: shieldX, title: t('admin.accounts.privacyCfBlocked'), class: 'theme-chip--warning' }
     case 'training_set_failed':
-      return { label: 'Fail', icon: shieldX, title: t('admin.accounts.privacyFailed'), class: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' }
-    // Antigravity states
+      return { label: 'Fail', icon: shieldX, title: t('admin.accounts.privacyFailed'), class: 'theme-chip--danger' }
     case 'privacy_set':
-      return { label: 'Private', icon: shieldCheck, title: t('admin.accounts.privacyAntigravitySet'), class: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' }
+      return { label: 'Private', icon: shieldCheck, title: t('admin.accounts.privacyAntigravitySet'), class: 'theme-chip--success' }
     case 'privacy_set_failed':
-      return { label: 'Fail', icon: shieldX, title: t('admin.accounts.privacyAntigravityFailed'), class: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' }
+      return { label: 'Fail', icon: shieldX, title: t('admin.accounts.privacyAntigravityFailed'), class: 'theme-chip--danger' }
     default:
       return null
   }
 })
 </script>
+
+<style scoped>
+.platform-type-badge__segment {
+  min-height: var(--theme-platform-type-badge-min-height);
+  padding-top: var(--theme-platform-type-badge-padding-y);
+  padding-bottom: var(--theme-platform-type-badge-padding-y);
+}
+
+.platform-type-badge__segment--primary {
+  padding-left: var(--theme-platform-type-badge-primary-padding-x);
+  padding-right: var(--theme-platform-type-badge-primary-padding-x);
+}
+
+.platform-type-badge__segment--secondary {
+  padding-left: var(--theme-platform-type-badge-secondary-padding-x);
+  padding-right: var(--theme-platform-type-badge-secondary-padding-x);
+}
+</style>

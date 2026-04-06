@@ -1,26 +1,26 @@
 <template>
   <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+    <div class="settings-stream-timeout-card__header">
+      <h2 class="settings-stream-timeout-card__title text-lg font-semibold">
         {{ t('admin.settings.streamTimeout.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="settings-stream-timeout-card__description mt-1 text-sm">
         {{ t('admin.settings.streamTimeout.description') }}
       </p>
     </div>
-    <div class="space-y-5 p-6">
-      <div v-if="loading" class="flex items-center gap-2 text-gray-500">
-        <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"></div>
+    <div class="settings-stream-timeout-card__body space-y-5">
+      <div v-if="loading" class="settings-stream-timeout-card__loading flex items-center gap-2">
+        <div class="settings-stream-timeout-card__spinner h-4 w-4 animate-spin rounded-full border-b-2"></div>
         {{ t('common.loading') }}
       </div>
 
       <template v-else>
         <div class="flex items-center justify-between">
           <div>
-            <label class="font-medium text-gray-900 dark:text-white">
+            <label class="settings-stream-timeout-card__label font-medium">
               {{ t('admin.settings.streamTimeout.enabled') }}
             </label>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="settings-stream-timeout-card__description text-sm">
               {{ t('admin.settings.streamTimeout.enabledHint') }}
             </p>
           </div>
@@ -29,10 +29,10 @@
 
         <div
           v-if="form.enabled"
-          class="space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
+          class="settings-stream-timeout-card__section space-y-4 pt-4"
         >
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label class="settings-stream-timeout-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.streamTimeout.action') }}
             </label>
             <select v-model="form.action" class="input w-64">
@@ -46,13 +46,13 @@
                 {{ t('admin.settings.streamTimeout.actionNone') }}
               </option>
             </select>
-            <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p class="settings-stream-timeout-card__description mt-1.5 text-xs">
               {{ t('admin.settings.streamTimeout.actionHint') }}
             </p>
           </div>
 
           <div v-if="form.action === 'temp_unsched'">
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label class="settings-stream-timeout-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.streamTimeout.tempUnschedMinutes') }}
             </label>
             <input
@@ -62,13 +62,13 @@
               max="60"
               class="input w-32"
             />
-            <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p class="settings-stream-timeout-card__description mt-1.5 text-xs">
               {{ t('admin.settings.streamTimeout.tempUnschedMinutesHint') }}
             </p>
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label class="settings-stream-timeout-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.streamTimeout.thresholdCount') }}
             </label>
             <input
@@ -78,13 +78,13 @@
               max="10"
               class="input w-32"
             />
-            <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p class="settings-stream-timeout-card__description mt-1.5 text-xs">
               {{ t('admin.settings.streamTimeout.thresholdCountHint') }}
             </p>
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label class="settings-stream-timeout-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.streamTimeout.thresholdWindowMinutes') }}
             </label>
             <input
@@ -94,13 +94,13 @@
               max="60"
               class="input w-32"
             />
-            <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <p class="settings-stream-timeout-card__description mt-1.5 text-xs">
               {{ t('admin.settings.streamTimeout.thresholdWindowMinutesHint') }}
             </p>
           </div>
         </div>
 
-        <div class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700">
+        <div class="settings-stream-timeout-card__footer flex justify-end pt-4">
           <button
             type="button"
             :disabled="saving"
@@ -152,3 +152,40 @@ defineEmits<{
 
 const { t } = useI18n()
 </script>
+
+<style scoped>
+.settings-stream-timeout-card__header,
+.settings-stream-timeout-card__body,
+.settings-stream-timeout-card__section,
+.settings-stream-timeout-card__footer {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-stream-timeout-card__header {
+  padding:
+    var(--theme-settings-card-header-padding-y)
+    var(--theme-settings-card-header-padding-x);
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-stream-timeout-card__body {
+  padding: var(--theme-settings-card-body-padding);
+}
+
+.settings-stream-timeout-card__title,
+.settings-stream-timeout-card__label,
+.settings-stream-timeout-card__field-label {
+  color: var(--theme-page-text);
+}
+
+.settings-stream-timeout-card__description,
+.settings-stream-timeout-card__loading {
+  color: var(--theme-page-muted);
+}
+
+.settings-stream-timeout-card__spinner {
+  border-color: color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+  border-bottom-color: var(--theme-accent);
+}
+</style>

@@ -327,19 +327,19 @@ watch(historyRange, () => {
 
 function severityBadgeClass(severity: string | undefined): string {
   const s = String(severity || '').trim().toLowerCase()
-  if (s === 'p0' || s === 'critical') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-  if (s === 'p1' || s === 'warning') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-  if (s === 'p2' || s === 'info') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-  if (s === 'p3') return 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300'
-  return 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300'
+  if (s === 'p0' || s === 'critical') return getBadgeClasses('danger')
+  if (s === 'p1' || s === 'warning') return getBadgeClasses('warning')
+  if (s === 'p2' || s === 'info') return getBadgeClasses('info')
+  if (s === 'p3') return getBadgeClasses('neutral')
+  return getBadgeClasses('neutral')
 }
 
 function statusBadgeClass(status: string | undefined): string {
   const s = String(status || '').trim().toLowerCase()
-  if (s === 'firing') return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-500/30'
-  if (s === 'resolved') return 'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-900/30 dark:text-green-300 dark:ring-green-500/30'
-  if (s === 'manual_resolved') return 'bg-slate-50 text-slate-700 ring-slate-600/20 dark:bg-slate-900/30 dark:text-slate-300 dark:ring-slate-500/30'
-  return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-900/30 dark:text-gray-300 dark:ring-gray-500/30'
+  if (s === 'firing') return getBadgeClasses('danger')
+  if (s === 'resolved') return getBadgeClasses('success')
+  if (s === 'manual_resolved') return getBadgeClasses('neutral')
+  return getBadgeClasses('neutral')
 }
 
 function formatStatusLabel(status: string | undefined): string {
@@ -352,23 +352,57 @@ function formatStatusLabel(status: string | undefined): string {
 }
 
 const empty = computed(() => events.value.length === 0 && !loading.value)
+
+type AlertEventsTone = 'danger' | 'info' | 'neutral' | 'success' | 'warning'
+
+function joinClassNames(classNames: Array<string | false | null | undefined>) {
+  return classNames.filter(Boolean).join(' ')
+}
+
+function getBadgeClasses(tone: AlertEventsTone) {
+  return joinClassNames([
+    'theme-chip theme-chip--compact ops-alert-events-card__badge',
+    tone === 'danger' && 'theme-chip--danger',
+    tone === 'info' && 'theme-chip--info',
+    tone === 'neutral' && 'theme-chip--neutral',
+    tone === 'success' && 'theme-chip--success',
+    tone === 'warning' && 'theme-chip--warning'
+  ])
+}
+
+function getEmailStateClasses(emailSent: boolean) {
+  return joinClassNames([
+    'ops-alert-events-card__email-state inline-flex items-center justify-end gap-1.5',
+    emailSent
+      ? 'ops-alert-events-card__email-state--sent'
+      : 'ops-alert-events-card__email-state--idle'
+  ])
+}
 </script>
 
 <template>
-  <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700">
+  <div class="ops-alert-events-card">
     <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div class="min-w-0">
-        <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ t('admin.ops.alertEvents.title') }}</h3>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.ops.alertEvents.description') }}</p>
+        <h3 class="ops-alert-events-card__title text-sm font-bold">{{ t('admin.ops.alertEvents.title') }}</h3>
+        <p class="ops-alert-events-card__subtitle mt-1 text-xs">{{ t('admin.ops.alertEvents.description') }}</p>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <Select :model-value="timeRange" :options="timeRangeOptions" class="w-[120px]" @change="timeRange = String($event || '24h')" />
-        <Select :model-value="severity" :options="severityOptions" class="w-[88px]" @change="severity = String($event || '')" />
-        <Select :model-value="status" :options="statusOptions" class="w-[110px]" @change="status = String($event || '')" />
-        <Select :model-value="emailSent" :options="emailSentOptions" class="w-[110px]" @change="emailSent = String($event || '')" />
+      <div class="ops-alert-events-card__filters">
+        <div class="ops-alert-events-card__filter">
+          <Select :model-value="timeRange" :options="timeRangeOptions" class="ops-alert-events-card__filter-select" @change="timeRange = String($event || '24h')" />
+        </div>
+        <div class="ops-alert-events-card__filter">
+          <Select :model-value="severity" :options="severityOptions" class="ops-alert-events-card__filter-select" @change="severity = String($event || '')" />
+        </div>
+        <div class="ops-alert-events-card__filter">
+          <Select :model-value="status" :options="statusOptions" class="ops-alert-events-card__filter-select" @change="status = String($event || '')" />
+        </div>
+        <div class="ops-alert-events-card__filter">
+          <Select :model-value="emailSent" :options="emailSentOptions" class="ops-alert-events-card__filter-select" @change="emailSent = String($event || '')" />
+        </div>
         <button
-          class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600"
+          class="ops-alert-events-card__refresh flex items-center gap-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="loading"
           @click="loadFirstPage"
         >
@@ -380,7 +414,7 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
       </div>
     </div>
 
-    <div v-if="loading" class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+    <div v-if="loading" class="ops-alert-events-card__muted flex items-center gap-2 text-sm">
       <svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -388,98 +422,98 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
       {{ t('admin.ops.alertEvents.loading') }}
     </div>
 
-    <div v-else-if="empty" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400">
+    <div v-else-if="empty" class="ops-alert-events-card__empty border border-dashed text-center text-sm">
       {{ t('admin.ops.alertEvents.empty') }}
     </div>
 
-    <div v-else class="overflow-hidden rounded-xl border border-gray-200 dark:border-dark-700">
-      <div class="max-h-[600px] overflow-auto" @scroll="onScroll">
-        <table class="min-w-[800px] divide-y divide-gray-200 dark:divide-dark-700 w-full">
-          <thead class="sticky top-0 z-10 bg-gray-50 dark:bg-dark-900">
+    <div v-else class="ops-alert-events-card__table-shell overflow-hidden border">
+      <div class="ops-alert-events-card__table-scroll overflow-auto" @scroll="onScroll">
+        <table class="ops-alert-events-card__table w-full">
+          <thead class="ops-alert-events-card__table-head sticky top-0 z-10">
             <tr>
-              <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
                 {{ t('admin.ops.alertEvents.table.time') }}
               </th>
-              <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
                 {{ t('admin.ops.alertEvents.table.severity') }}
               </th>
-              <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
                 {{ t('admin.ops.alertEvents.table.platform') }}
               </th>
-              <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
                 {{ t('admin.ops.alertEvents.table.ruleId') }}
               </th>
-              <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
                 {{ t('admin.ops.alertEvents.table.title') }}
               </th>
-              <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
                 {{ t('admin.ops.alertEvents.table.duration') }}
               </th>
-              <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
                 {{ t('admin.ops.alertEvents.table.dimensions') }}
               </th>
-              <th class="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--regular text-right text-[11px] font-bold uppercase tracking-wider">
                 {{ t('admin.ops.alertEvents.table.email') }}
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-800">
+          <tbody class="ops-alert-events-card__table-body">
             <tr
               v-for="row in events"
               :key="row.id"
-              class="cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-700/50"
+              class="ops-alert-events-card__row cursor-pointer"
               @click="openDetail(row)"
               :title="row.title || ''"
             >
-              <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
+              <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--regular ops-alert-events-card__cell-secondary whitespace-nowrap text-xs">
                 {{ formatDateTime(row.fired_at || row.created_at) }}
               </td>
-              <td class="whitespace-nowrap px-4 py-3">
+              <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--regular whitespace-nowrap">
                 <div class="flex items-center gap-2">
-                  <span class="rounded-full px-2 py-1 text-[10px] font-bold" :class="severityBadgeClass(String(row.severity || ''))">
+                  <span :class="severityBadgeClass(String(row.severity || ''))">
                     {{ row.severity || '-' }}
                   </span>
-                  <span class="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold ring-1 ring-inset" :class="statusBadgeClass(row.status)">
+                  <span :class="statusBadgeClass(row.status)">
                     {{ formatStatusLabel(row.status) }}
                   </span>
                 </div>
               </td>
-              <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
+              <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--regular ops-alert-events-card__cell-secondary whitespace-nowrap text-xs">
                 {{ getDimensionString(row, 'platform') || '-' }}
               </td>
-              <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
+              <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--regular ops-alert-events-card__cell-secondary whitespace-nowrap text-xs">
                 <span class="font-mono">#{{ row.rule_id }}</span>
               </td>
-              <td class="min-w-[260px] px-4 py-3 text-xs text-gray-700 dark:text-gray-200">
-                <div class="font-semibold truncate max-w-[360px]">{{ row.title || '-' }}</div>
-                <div v-if="row.description" class="mt-0.5 line-clamp-2 text-[11px] text-gray-500 dark:text-gray-400">
+              <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--regular ops-alert-events-card__cell-primary ops-alert-events-card__title-cell text-xs">
+                <div class="ops-alert-events-card__title-text ops-alert-events-card__title-line font-semibold truncate">{{ row.title || '-' }}</div>
+                <div v-if="row.description" class="ops-alert-events-card__subtitle mt-0.5 line-clamp-2 text-[11px]">
                   {{ row.description }}
                 </div>
               </td>
-              <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
+              <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--regular ops-alert-events-card__cell-secondary whitespace-nowrap text-xs">
                 {{ formatDurationLabel(row) }}
               </td>
-              <td class="whitespace-nowrap px-4 py-3 text-[11px] text-gray-500 dark:text-gray-400">
+              <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--regular ops-alert-events-card__subtitle whitespace-nowrap text-[11px]">
                 {{ formatDimensionsSummary(row) }}
               </td>
-              <td class="whitespace-nowrap px-4 py-3 text-right text-xs">
+              <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--regular whitespace-nowrap text-right text-xs">
                 <span
-                  class="inline-flex items-center justify-end gap-1.5"
+                  :class="getEmailStateClasses(!!row.email_sent)"
                   :title="row.email_sent ? t('admin.ops.alertEvents.table.emailSent') : t('admin.ops.alertEvents.table.emailIgnored')"
                 >
                   <Icon
                     v-if="row.email_sent"
                     name="checkCircle"
                     size="sm"
-                    class="text-green-600 dark:text-green-400"
+                    class="ops-alert-events-card__email-icon"
                   />
                   <Icon
                     v-else
                     name="ban"
                     size="sm"
-                    class="text-gray-400 dark:text-gray-500"
+                    class="ops-alert-events-card__email-icon"
                   />
-                  <span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                  <span class="text-[11px] font-bold">
                     {{ row.email_sent ? t('admin.ops.alertEvents.table.emailSent') : t('admin.ops.alertEvents.table.emailIgnored') }}
                   </span>
                 </span>
@@ -487,14 +521,14 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
             </tr>
           </tbody>
         </table>
-        <div v-if="loadingMore" class="flex items-center justify-center gap-2 py-3 text-xs text-gray-500 dark:text-gray-400">
+        <div v-if="loadingMore" class="ops-alert-events-card__muted ops-alert-events-card__state ops-alert-events-card__state--compact flex items-center justify-center gap-2 text-xs">
           <svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
           {{ t('admin.ops.alertEvents.loading') }}
         </div>
-        <div v-else-if="!hasMore && events.length > 0" class="py-3 text-center text-xs text-gray-400">
+        <div v-else-if="!hasMore && events.length > 0" class="ops-alert-events-card__subtitle ops-alert-events-card__state ops-alert-events-card__state--compact text-center text-xs">
           -
         </div>
       </div>
@@ -507,41 +541,41 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
       :close-on-click-outside="true"
       @close="closeDetail"
     >
-      <div v-if="detailLoading" class="flex items-center justify-center py-10 text-sm text-gray-500 dark:text-gray-400">
+      <div v-if="detailLoading" class="ops-alert-events-card__muted ops-alert-events-card__state ops-alert-events-card__state--regular flex items-center justify-center text-sm">
         {{ t('admin.ops.alertEvents.detail.loading') }}
       </div>
 
-      <div v-else-if="!selected" class="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+      <div v-else-if="!selected" class="ops-alert-events-card__muted ops-alert-events-card__state ops-alert-events-card__state--regular text-center text-sm">
         {{ t('admin.ops.alertEvents.detail.empty') }}
       </div>
 
       <div v-else class="space-y-5">
-        <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+        <div class="ops-alert-events-card__panel">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div class="flex flex-wrap items-center gap-2">
-                <span class="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold" :class="severityBadgeClass(String(selected.severity || ''))">
+                <span :class="severityBadgeClass(String(selected.severity || ''))">
                   {{ selected.severity || '-' }}
                 </span>
-                <span class="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold ring-1 ring-inset" :class="statusBadgeClass(selected.status)">
+                <span :class="statusBadgeClass(selected.status)">
                   {{ formatStatusLabel(selected.status) }}
                 </span>
               </div>
-              <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
+              <div class="ops-alert-events-card__title-text mt-2 text-sm font-semibold">
                 {{ selected.title || '-' }}
               </div>
-              <div v-if="selected.description" class="mt-1 whitespace-pre-wrap text-xs text-gray-600 dark:text-gray-300">
+              <div v-if="selected.description" class="ops-alert-events-card__cell-secondary mt-1 whitespace-pre-wrap text-xs">
                 {{ selected.description }}
               </div>
             </div>
 
             <div class="flex flex-wrap gap-2">
-              <div class="flex items-center gap-2 rounded-lg bg-white px-2 py-1 ring-1 ring-gray-200 dark:bg-dark-800 dark:ring-dark-700">
-                <span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">{{ t('admin.ops.alertEvents.detail.silence') }}</span>
+              <div class="ops-alert-events-card__action-group flex items-center gap-2">
+                <span class="ops-alert-events-card__cell-secondary text-[11px] font-bold">{{ t('admin.ops.alertEvents.detail.silence') }}</span>
                 <Select
                   :model-value="silenceDuration"
                   :options="silenceDurationOptions"
-                  class="w-[110px]"
+                  class="ops-alert-events-card__select-inline"
                   @change="silenceDuration = String($event || '1h')"
                 />
                 <button type="button" class="btn btn-secondary btn-sm" :disabled="detailActionLoading" @click="silenceAlert">
@@ -559,27 +593,27 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
         </div>
 
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-              <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.alertEvents.detail.firedAt') }}</div>
-              <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ formatDateTime(selected.fired_at || selected.created_at) }}</div>
+            <div class="ops-alert-events-card__panel">
+              <div class="ops-alert-events-card__detail-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.alertEvents.detail.firedAt') }}</div>
+              <div class="ops-alert-events-card__title-text mt-1 text-sm font-medium">{{ formatDateTime(selected.fired_at || selected.created_at) }}</div>
             </div>
-            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-              <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.alertEvents.detail.resolvedAt') }}</div>
-              <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ selected.resolved_at ? formatDateTime(selected.resolved_at) : '-' }}</div>
+            <div class="ops-alert-events-card__panel">
+              <div class="ops-alert-events-card__detail-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.alertEvents.detail.resolvedAt') }}</div>
+              <div class="ops-alert-events-card__title-text mt-1 text-sm font-medium">{{ selected.resolved_at ? formatDateTime(selected.resolved_at) : '-' }}</div>
             </div>
-            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-              <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.alertEvents.detail.ruleId') }}</div>
+            <div class="ops-alert-events-card__panel">
+              <div class="ops-alert-events-card__detail-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.alertEvents.detail.ruleId') }}</div>
               <div class="mt-1 flex flex-wrap items-center gap-2">
-                <div class="font-mono text-sm font-bold text-gray-900 dark:text-white">#{{ selected.rule_id }}</div>
+                <div class="ops-alert-events-card__title-text font-mono text-sm font-bold">#{{ selected.rule_id }}</div>
                 <a
-                  class="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-bold text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-dark-800 dark:text-gray-200 dark:ring-dark-700 dark:hover:bg-dark-700"
+                  class="ops-alert-events-card__link inline-flex items-center gap-1 text-[11px] font-bold"
                   :href="`/admin/ops?open_alert_rules=1&alert_rule_id=${selected.rule_id}`"
                 >
                   <Icon name="externalLink" size="xs" />
                   {{ t('admin.ops.alertEvents.detail.viewRule') }}
                 </a>
                 <a
-                  class="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-bold text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-dark-800 dark:text-gray-200 dark:ring-dark-700 dark:hover:bg-dark-700"
+                  class="ops-alert-events-card__link inline-flex items-center gap-1 text-[11px] font-bold"
                   :href="`/admin/ops?platform=${encodeURIComponent(getDimensionString(selected,'platform')||'')}&group_id=${selected.dimensions?.group_id || ''}&error_type=request&open_error_details=1`"
                 >
                   <Icon name="externalLink" size="xs" />
@@ -587,9 +621,9 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
                 </a>
               </div>
             </div>
-            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-              <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.alertEvents.detail.dimensions') }}</div>
-              <div class="mt-1 text-sm text-gray-900 dark:text-white">
+            <div class="ops-alert-events-card__panel">
+              <div class="ops-alert-events-card__detail-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.alertEvents.detail.dimensions') }}</div>
+              <div class="ops-alert-events-card__title-text mt-1 text-sm">
                 <div v-if="getDimensionString(selected, 'platform')">platform={{ getDimensionString(selected, 'platform') }}</div>
                 <div v-if="selected.dimensions?.group_id">group_id={{ selected.dimensions.group_id }}</div>
                 <div v-if="getDimensionString(selected, 'region')">region={{ getDimensionString(selected, 'region') }}</div>
@@ -598,39 +632,39 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
           </div>
 
 
-        <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+        <div class="ops-alert-events-card__history-shell border">
           <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div class="text-sm font-bold text-gray-900 dark:text-white">{{ t('admin.ops.alertEvents.detail.historyTitle') }}</div>
-              <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.ops.alertEvents.detail.historyHint') }}</div>
+              <div class="ops-alert-events-card__title-text text-sm font-bold">{{ t('admin.ops.alertEvents.detail.historyTitle') }}</div>
+              <div class="ops-alert-events-card__subtitle mt-0.5 text-xs">{{ t('admin.ops.alertEvents.detail.historyHint') }}</div>
             </div>
-            <Select :model-value="historyRange" :options="historyRangeOptions" class="w-[140px]" @change="historyRange = String($event || '7d')" />
+                <Select :model-value="historyRange" :options="historyRangeOptions" class="ops-alert-events-card__filter-select" @change="historyRange = String($event || '7d')" />
           </div>
 
-          <div v-if="historyLoading" class="py-6 text-center text-xs text-gray-500 dark:text-gray-400">
+          <div v-if="historyLoading" class="ops-alert-events-card__muted ops-alert-events-card__state ops-alert-events-card__state--history text-center text-xs">
             {{ t('admin.ops.alertEvents.detail.historyLoading') }}
           </div>
-          <div v-else-if="history.length === 0" class="py-6 text-center text-xs text-gray-500 dark:text-gray-400">
+          <div v-else-if="history.length === 0" class="ops-alert-events-card__muted ops-alert-events-card__state ops-alert-events-card__state--history text-center text-xs">
             {{ t('admin.ops.alertEvents.detail.historyEmpty') }}
           </div>
-          <div v-else class="overflow-hidden rounded-lg border border-gray-100 dark:border-dark-700">
-            <table class="min-w-full divide-y divide-gray-100 dark:divide-dark-700">
-              <thead class="bg-gray-50 dark:bg-dark-900">
+          <div v-else class="ops-alert-events-card__history-table overflow-hidden border">
+            <table class="ops-alert-events-card__table min-w-full">
+              <thead class="ops-alert-events-card__table-head">
                 <tr>
-                  <th class="px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('admin.ops.alertEvents.table.time') }}</th>
-                  <th class="px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('admin.ops.alertEvents.table.status') }}</th>
-                  <th class="px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('admin.ops.alertEvents.table.metric') }}</th>
+                  <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--compact text-left text-[11px] font-bold uppercase tracking-wider">{{ t('admin.ops.alertEvents.table.time') }}</th>
+                  <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--compact text-left text-[11px] font-bold uppercase tracking-wider">{{ t('admin.ops.alertEvents.table.status') }}</th>
+                  <th class="ops-alert-events-card__table-header ops-alert-events-card__table-header--compact text-left text-[11px] font-bold uppercase tracking-wider">{{ t('admin.ops.alertEvents.table.metric') }}</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
-                <tr v-for="it in history" :key="it.id" class="hover:bg-gray-50 dark:hover:bg-dark-700/50">
-                  <td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300">{{ formatDateTime(it.fired_at || it.created_at) }}</td>
-                  <td class="px-3 py-2 text-xs">
-                    <span class="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold ring-1 ring-inset" :class="statusBadgeClass(it.status)">
+              <tbody class="ops-alert-events-card__table-body">
+                <tr v-for="it in history" :key="it.id" class="ops-alert-events-card__row">
+                  <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--compact ops-alert-events-card__cell-secondary text-xs">{{ formatDateTime(it.fired_at || it.created_at) }}</td>
+                  <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--compact text-xs">
+                    <span :class="statusBadgeClass(it.status)">
                       {{ formatStatusLabel(it.status) }}
                     </span>
                   </td>
-                  <td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-300">
+                  <td class="ops-alert-events-card__table-cell ops-alert-events-card__table-cell--compact ops-alert-events-card__cell-secondary text-xs">
                     <span v-if="typeof it.metric_value === 'number' && typeof it.threshold_value === 'number'">
                       {{ it.metric_value.toFixed(2) }} / {{ it.threshold_value.toFixed(2) }}
                     </span>
@@ -646,3 +680,186 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
   </div>
 </template>
 
+<style scoped>
+.ops-alert-events-card {
+  padding: var(--theme-ops-card-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  border-radius: var(--theme-surface-radius);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+}
+
+.ops-alert-events-card__title,
+.ops-alert-events-card__title-text {
+  color: var(--theme-page-text);
+}
+
+.ops-alert-events-card__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--theme-ops-panel-padding) * 0.6);
+  margin-top: calc(var(--theme-ops-panel-padding) * 0.2);
+}
+
+.ops-alert-events-card__filter {
+  flex: 0 1 10rem;
+  min-width: 7.5rem;
+}
+
+.ops-alert-events-card__filter-select {
+  width: 100%;
+}
+
+.ops-alert-events-card__select-inline {
+  width: calc(var(--theme-ops-table-min-width) * 0.1375);
+}
+
+.ops-alert-events-card__subtitle,
+.ops-alert-events-card__muted,
+.ops-alert-events-card__table-header,
+.ops-alert-events-card__detail-kicker {
+  color: var(--theme-page-muted);
+}
+
+.ops-alert-events-card__refresh {
+  padding: calc(var(--theme-button-padding-y) * 0.6) calc(var(--theme-button-padding-x) * 0.75);
+  border-radius: var(--theme-button-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  color: var(--theme-page-text);
+}
+
+.ops-alert-events-card__refresh:hover {
+  background: color-mix(in srgb, var(--theme-page-border) 68%, var(--theme-surface));
+}
+
+.ops-alert-events-card__empty,
+.ops-alert-events-card__table-shell,
+.ops-alert-events-card__history-shell,
+.ops-alert-events-card__history-table {
+  border-color: color-mix(in srgb, var(--theme-page-border) 74%, transparent);
+}
+
+.ops-alert-events-card__empty,
+.ops-alert-events-card__table-shell,
+.ops-alert-events-card__history-shell,
+.ops-alert-events-card__history-table,
+.ops-alert-events-card__panel {
+  border-radius: var(--theme-select-panel-radius);
+}
+
+.ops-alert-events-card__empty {
+  padding: calc(var(--theme-table-mobile-empty-padding) * 0.67);
+}
+
+.ops-alert-events-card__history-shell {
+  padding: var(--theme-ops-panel-padding);
+}
+
+.ops-alert-events-card__state--compact {
+  padding-block: calc(var(--theme-ops-panel-padding) * 0.75);
+}
+
+.ops-alert-events-card__state--regular {
+  padding-block: calc(var(--theme-ops-card-padding) * 1.5);
+}
+
+.ops-alert-events-card__state--history {
+  padding-block: calc(var(--theme-ops-panel-padding) * 1.5);
+}
+
+.ops-alert-events-card__table-scroll {
+  max-height: var(--theme-ops-table-max-height);
+}
+
+.ops-alert-events-card__table {
+  min-width: var(--theme-ops-table-min-width);
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.ops-alert-events-card__table-header--regular,
+.ops-alert-events-card__table-cell--regular {
+  padding:
+    var(--theme-ops-table-cell-padding-y)
+    var(--theme-ops-table-cell-padding-x);
+}
+
+.ops-alert-events-card__table-header--compact,
+.ops-alert-events-card__table-cell--compact {
+  padding:
+    var(--theme-ops-table-cell-padding-compact-y)
+    var(--theme-ops-table-cell-padding-compact-x);
+}
+
+.ops-alert-events-card__table-head {
+  background: color-mix(in srgb, var(--theme-surface-soft) 92%, var(--theme-surface));
+}
+
+.ops-alert-events-card__table-body {
+  background: var(--theme-surface);
+}
+
+.ops-alert-events-card__table-body :deep(tr + tr) td {
+  border-top: 1px solid color-mix(in srgb, var(--theme-page-border) 70%, transparent);
+}
+
+.ops-alert-events-card__row:hover {
+  background: color-mix(in srgb, var(--theme-table-row-hover) 64%, var(--theme-surface));
+}
+
+.ops-alert-events-card__cell-primary,
+.ops-alert-events-card__cell-secondary,
+.ops-alert-events-card__email-state {
+  color: var(--theme-page-text);
+}
+
+.ops-alert-events-card__cell-secondary {
+  color: color-mix(in srgb, var(--theme-page-text) 72%, var(--theme-page-muted));
+}
+
+.ops-alert-events-card__title-cell {
+  min-width: var(--theme-ops-alert-events-title-min-width);
+}
+
+.ops-alert-events-card__title-line {
+  max-width: var(--theme-ops-alert-events-title-max-width);
+}
+
+.ops-alert-events-card__badge {
+  justify-content: center;
+  min-width: 3rem;
+}
+
+.ops-alert-events-card__email-state--sent {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-alert-events-card__email-state--idle {
+  color: var(--theme-page-muted);
+}
+
+.ops-alert-events-card__email-icon {
+  color: currentColor;
+}
+
+.ops-alert-events-card__panel {
+  padding: var(--theme-ops-panel-padding);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.ops-alert-events-card__action-group,
+.ops-alert-events-card__link {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--theme-page-border) 72%, transparent);
+  border-radius: var(--theme-button-radius);
+  background: var(--theme-surface);
+}
+
+.ops-alert-events-card__link {
+  color: var(--theme-page-text);
+}
+
+.ops-alert-events-card__link:hover {
+  background: color-mix(in srgb, var(--theme-surface-soft) 84%, var(--theme-surface));
+}
+</style>

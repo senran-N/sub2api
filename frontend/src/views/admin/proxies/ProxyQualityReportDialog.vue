@@ -6,26 +6,26 @@
     @close="emit('close')"
   >
     <div v-if="report" class="space-y-4">
-      <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-600 dark:bg-dark-700">
+      <div class="proxy-quality__panel">
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">
+            <div class="proxy-quality__muted text-sm">
               {{ proxyName || '-' }}
             </div>
-            <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">
+            <div class="proxy-quality__text mt-1 text-sm">
               {{ report.summary }}
             </div>
           </div>
           <div class="text-right">
-            <div class="text-2xl font-semibold text-gray-900 dark:text-white">
+            <div class="proxy-quality__score text-2xl font-semibold">
               {{ report.score }}
             </div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">
+            <div class="proxy-quality__muted text-xs">
               {{ t('admin.proxies.qualityGrade', { grade: report.grade }) }}
             </div>
           </div>
         </div>
-        <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-2">
+        <div class="proxy-quality__meta mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
           <div>{{ t('admin.proxies.qualityExitIP') }}: {{ report.exit_ip || '-' }}</div>
           <div>{{ t('admin.proxies.qualityCountry') }}: {{ report.country || '-' }}</div>
           <div>
@@ -52,9 +52,9 @@
 
       <div
         v-if="report.category_scores"
-        class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+        class="proxy-quality__panel"
       >
-        <div class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+        <div class="proxy-quality__muted mb-2 text-xs font-medium">
           {{ t('admin.proxies.qualityCategoryTitle') }}
         </div>
         <div class="space-y-2">
@@ -63,51 +63,51 @@
             :key="category.key"
             class="flex items-center gap-2 text-xs"
           >
-            <span class="w-28 shrink-0 text-gray-600 dark:text-gray-300">
+            <span class="proxy-quality__meta w-28 shrink-0">
               {{ category.label }} ({{ category.weight }}%)
             </span>
-            <div class="h-2 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+            <div class="proxy-quality__track h-2 flex-1 rounded-full">
               <div
-                class="h-2 rounded-full transition-all"
+                class="theme-progress-fill h-2"
                 :class="getProxyScoreBarColor(category.score)"
                 :style="{ width: `${category.score}%` }"
               />
             </div>
-            <span class="w-8 text-right text-gray-500 dark:text-gray-400">
+            <span class="proxy-quality__muted w-8 text-right">
               {{ category.score }}
             </span>
           </div>
         </div>
       </div>
 
-      <div class="max-h-80 overflow-auto rounded-lg border border-gray-200 dark:border-dark-600">
-        <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
-          <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-dark-800 dark:text-dark-400">
+      <div class="proxy-quality__table-wrap overflow-auto">
+        <table class="table min-w-full text-sm">
+          <thead class="text-xs uppercase">
             <tr>
-              <th class="px-3 py-2 text-left">{{ t('admin.proxies.qualityTableTarget') }}</th>
-              <th class="px-3 py-2 text-left">{{ t('admin.proxies.qualityTableStatus') }}</th>
-              <th class="px-3 py-2 text-left">HTTP</th>
-              <th class="px-3 py-2 text-left">{{ t('admin.proxies.qualityTableLatency') }}</th>
-              <th class="px-3 py-2 text-left">{{ t('admin.proxies.qualityTableMessage') }}</th>
+              <th class="proxy-quality__table-head-cell">{{ t('admin.proxies.qualityTableTarget') }}</th>
+              <th class="proxy-quality__table-head-cell">{{ t('admin.proxies.qualityTableStatus') }}</th>
+              <th class="proxy-quality__table-head-cell">HTTP</th>
+              <th class="proxy-quality__table-head-cell">{{ t('admin.proxies.qualityTableLatency') }}</th>
+              <th class="proxy-quality__table-head-cell">{{ t('admin.proxies.qualityTableMessage') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+          <tbody>
             <tr v-for="item in report.items" :key="item.target">
-              <td class="px-3 py-2 text-gray-900 dark:text-white">
+              <td class="proxy-quality__table-cell proxy-quality__text">
                 {{ getQualityTargetLabel(item.target, t) }}
               </td>
-              <td class="px-3 py-2">
+              <td class="proxy-quality__table-cell">
                 <span class="badge" :class="getQualityStatusClass(item.status)">
                   {{ getQualityStatusLabel(item.status, t) }}
                 </span>
               </td>
-              <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ item.http_status ?? '-' }}</td>
-              <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
+              <td class="proxy-quality__table-cell proxy-quality__meta">{{ item.http_status ?? '-' }}</td>
+              <td class="proxy-quality__table-cell proxy-quality__meta">
                 {{ typeof item.latency_ms === 'number' ? `${item.latency_ms}ms` : '-' }}
               </td>
-              <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
+              <td class="proxy-quality__table-cell proxy-quality__meta">
                 <span>{{ item.message || '-' }}</span>
-                <span v-if="item.cf_ray" class="ml-1 text-xs text-gray-400">
+                <span v-if="item.cf_ray" class="proxy-quality__muted ml-1 text-xs">
                   (cf-ray: {{ item.cf_ray }})
                 </span>
               </td>
@@ -168,3 +168,47 @@ const checkedAtLabel = computed(() => {
   return new Date(props.report.checked_at * 1000).toLocaleString()
 })
 </script>
+
+<style scoped>
+.proxy-quality__panel,
+.proxy-quality__table-wrap {
+  border-radius: var(--theme-surface-radius);
+  border: 1px solid var(--theme-card-border);
+  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
+}
+
+.proxy-quality__panel {
+  padding: var(--theme-proxy-quality-panel-padding);
+}
+
+.proxy-quality__table-wrap {
+  max-height: var(--theme-proxy-quality-table-max-height);
+  background: var(--theme-surface);
+}
+
+.proxy-quality__score,
+.proxy-quality__text {
+  color: var(--theme-page-text);
+}
+
+.proxy-quality__table-head-cell,
+.proxy-quality__table-cell {
+  padding: var(--theme-table-cell-padding-y) var(--theme-table-cell-padding-x);
+  text-align: left;
+}
+
+.proxy-quality__table-head-cell {
+  font-size: var(--theme-table-head-font-size);
+  letter-spacing: var(--theme-table-head-letter-spacing);
+  text-transform: var(--theme-table-head-text-transform);
+}
+
+.proxy-quality__muted,
+.proxy-quality__meta {
+  color: var(--theme-page-muted);
+}
+
+.proxy-quality__track {
+  background: color-mix(in srgb, var(--theme-page-border) 78%, transparent);
+}
+</style>

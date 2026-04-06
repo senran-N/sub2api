@@ -1,5 +1,5 @@
 <template>
-  <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+  <span class="theme-text-strong font-medium">{{ value }}</span>
 </template>
 
 <script setup lang="ts">
