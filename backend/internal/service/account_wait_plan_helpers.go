@@ -37,6 +37,27 @@ func buildStickySessionWaitPlanIfConcurrencyEnabled(
 	return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), true
 }
 
+func tryAcquireOrBuildStickyWaitPlan(
+	ctx context.Context,
+	account *Account,
+	accountID int64,
+	cfg config.GatewaySchedulingConfig,
+	concurrencyService *ConcurrencyService,
+	acquireFn func(context.Context, int64, int) (*AcquireResult, error),
+	onAcquired func(*AcquireResult) *AccountSelectionResult,
+) (*AccountSelectionResult, bool) {
+	if account == nil || acquireFn == nil || onAcquired == nil {
+		return nil, false
+	}
+
+	result, acquireErr := acquireFn(ctx, accountID, account.Concurrency)
+	if acquireErr == nil && result.Acquired {
+		return onAcquired(result), true
+	}
+
+	return buildStickySessionWaitPlanIfConcurrencyEnabled(account, cfg, concurrencyService)
+}
+
 func buildStickyAwareFallbackWaitPlan(
 	ctx context.Context,
 	account *Account,

@@ -42,15 +42,20 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, nil
 	}
 
-	result, acquireErr := s.service.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
-	if acquireErr == nil && result.Acquired {
-		_ = s.service.refreshStickySessionTTL(ctx, req.GroupID, sessionHash, s.service.openAIWSSessionStickyTTL())
-		return newAcquiredAccountSelection(account, result.ReleaseFunc), nil
-	}
-
 	cfg := s.service.schedulingConfig()
-	if waitPlan, ok := buildStickySessionWaitPlanIfConcurrencyEnabled(account, cfg, s.service.concurrencyService); ok {
-		return waitPlan, nil
+	if selection, ok := tryAcquireOrBuildStickyWaitPlan(
+		ctx,
+		account,
+		accountID,
+		cfg,
+		s.service.concurrencyService,
+		s.service.tryAcquireAccountSlot,
+		func(result *AcquireResult) *AccountSelectionResult {
+			_ = s.service.refreshStickySessionTTL(ctx, req.GroupID, sessionHash, s.service.openAIWSSessionStickyTTL())
+			return newAcquiredAccountSelection(account, result.ReleaseFunc)
+		},
+	); ok {
+		return selection, nil
 	}
 	return nil, nil
 }

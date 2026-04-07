@@ -80,3 +80,23 @@ type userAdminService interface {
 type usageUserSearchService interface {
 	ListUsers(ctx context.Context, page, pageSize int, filters service.UserListFilters) ([]service.User, int64, error)
 }
+
+type adminAPIKeyService interface {
+	AdminUpdateAPIKeyGroupID(ctx context.Context, keyID int64, groupID *int64) (*service.AdminUpdateAPIKeyGroupIDResult, error)
+}
+
+type openAIOAuthAdminService interface {
+	GetProxy(ctx context.Context, id int64) (*service.Proxy, error)
+	GetAccount(ctx context.Context, id int64) (*service.Account, error)
+	UpdateAccount(ctx context.Context, id int64, input *service.UpdateAccountInput) (*service.Account, error)
+	CreateAccount(ctx context.Context, input *service.CreateAccountInput) (*service.Account, error)
+}
+
+type redeemCodeAdminService interface {
+	ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string) ([]service.RedeemCode, int64, error)
+	GetRedeemCode(ctx context.Context, id int64) (*service.RedeemCode, error)
+	GenerateRedeemCodes(ctx context.Context, input *service.GenerateRedeemCodesInput) ([]service.RedeemCode, error)
+	DeleteRedeemCode(ctx context.Context, id int64) error
+	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
+	ExpireRedeemCode(ctx context.Context, id int64) (*service.RedeemCode, error)
+}

@@ -84,3 +84,104 @@ func TestBuildStickySessionWaitPlanIfConcurrencyEnabled_AlwaysBuildsWhenServiceE
 	require.Equal(t, 11*time.Second, result.WaitPlan.Timeout)
 	require.Equal(t, 1, result.WaitPlan.MaxWaiting)
 }
+
+func TestTryAcquireOrBuildStickyWaitPlan_Acquired(t *testing.T) {
+	account := &Account{ID: 90, Concurrency: 3}
+	cfg := config.GatewaySchedulingConfig{
+		StickySessionWaitTimeout: 13 * time.Second,
+		StickySessionMaxWaiting:  5,
+	}
+	concurrencyService := NewConcurrencyService(stubConcurrencyCache{
+		waitCounts: map[int64]int{90: 999},
+	})
+	releaseCalled := false
+	onAcquireCalled := false
+
+	result, ok := tryAcquireOrBuildStickyWaitPlan(
+		context.Background(),
+		account,
+		account.ID,
+		cfg,
+		concurrencyService,
+		func(context.Context, int64, int) (*AcquireResult, error) {
+			return &AcquireResult{
+				Acquired: true,
+				ReleaseFunc: func() {
+					releaseCalled = true
+				},
+			}, nil
+		},
+		func(acquired *AcquireResult) *AccountSelectionResult {
+			onAcquireCalled = true
+			return newAcquiredAccountSelection(account, acquired.ReleaseFunc)
+		},
+	)
+
+	require.True(t, ok)
+	require.True(t, onAcquireCalled)
+	require.NotNil(t, result)
+	require.True(t, result.Acquired)
+	require.NotNil(t, result.ReleaseFunc)
+	result.ReleaseFunc()
+	require.True(t, releaseCalled)
+}
+
+func TestTryAcquireOrBuildStickyWaitPlan_AcquireFailedReturnsStickyWaitPlan(t *testing.T) {
+	account := &Account{ID: 91, Concurrency: 2}
+	cfg := config.GatewaySchedulingConfig{
+		StickySessionWaitTimeout: 17 * time.Second,
+		StickySessionMaxWaiting:  4,
+	}
+	concurrencyService := NewConcurrencyService(stubConcurrencyCache{
+		waitCounts: map[int64]int{91: 1000},
+	})
+	onAcquireCalled := false
+
+	result, ok := tryAcquireOrBuildStickyWaitPlan(
+		context.Background(),
+		account,
+		account.ID,
+		cfg,
+		concurrencyService,
+		func(context.Context, int64, int) (*AcquireResult, error) {
+			return &AcquireResult{Acquired: false}, nil
+		},
+		func(*AcquireResult) *AccountSelectionResult {
+			onAcquireCalled = true
+			return nil
+		},
+	)
+
+	require.True(t, ok)
+	require.False(t, onAcquireCalled)
+	require.NotNil(t, result)
+	require.NotNil(t, result.WaitPlan)
+	require.Equal(t, int64(91), result.WaitPlan.AccountID)
+	require.Equal(t, 17*time.Second, result.WaitPlan.Timeout)
+	require.Equal(t, 4, result.WaitPlan.MaxWaiting)
+}
+
+func TestTryAcquireOrBuildStickyWaitPlan_AcquireFailedWithoutConcurrencyService(t *testing.T) {
+	account := &Account{ID: 92, Concurrency: 1}
+	cfg := config.GatewaySchedulingConfig{
+		StickySessionWaitTimeout: 19 * time.Second,
+		StickySessionMaxWaiting:  2,
+	}
+
+	result, ok := tryAcquireOrBuildStickyWaitPlan(
+		context.Background(),
+		account,
+		account.ID,
+		cfg,
+		nil,
+		func(context.Context, int64, int) (*AcquireResult, error) {
+			return &AcquireResult{Acquired: false}, nil
+		},
+		func(*AcquireResult) *AccountSelectionResult {
+			return nil
+		},
+	)
+
+	require.False(t, ok)
+	require.Nil(t, result)
+}

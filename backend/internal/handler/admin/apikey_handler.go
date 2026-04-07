@@ -5,18 +5,17 @@ import (
 
 	"github.com/senran-N/sub2api/internal/handler/dto"
 	"github.com/senran-N/sub2api/internal/pkg/response"
-	"github.com/senran-N/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 // AdminAPIKeyHandler handles admin API key management
 type AdminAPIKeyHandler struct {
-	adminService service.AdminService
+	adminService adminAPIKeyService
 }
 
 // NewAdminAPIKeyHandler creates a new admin API key handler
-func NewAdminAPIKeyHandler(adminService service.AdminService) *AdminAPIKeyHandler {
+func NewAdminAPIKeyHandler(adminService adminAPIKeyService) *AdminAPIKeyHandler {
 	return &AdminAPIKeyHandler{
 		adminService: adminService,
 	}

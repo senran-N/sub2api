@@ -7,7 +7,7 @@ import type {
   UserSpendingRankingItem,
   UserUsageTrendPoint
 } from '@/types'
-import { useDashboardViewData } from '../dashboard/useDashboardViewData'
+import { useDashboardViewData } from '../useDashboardViewData'
 
 const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking } = vi.hoisted(() => ({
   getSnapshotV2: vi.fn(),

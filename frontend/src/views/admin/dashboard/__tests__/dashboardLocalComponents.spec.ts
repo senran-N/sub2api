@@ -1,10 +1,10 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import type { DashboardStats } from '@/types'
-import DashboardChartControls from '../dashboard/DashboardChartControls.vue'
-import DashboardLoadingSkeleton from '../dashboard/DashboardLoadingSkeleton.vue'
-import DashboardStatsCards from '../dashboard/DashboardStatsCards.vue'
-import DashboardUserTrendCard from '../dashboard/DashboardUserTrendCard.vue'
+import DashboardChartControls from '../DashboardChartControls.vue'
+import DashboardLoadingSkeleton from '../DashboardLoadingSkeleton.vue'
+import DashboardStatsCards from '../DashboardStatsCards.vue'
+import DashboardUserTrendCard from '../DashboardUserTrendCard.vue'
 
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
