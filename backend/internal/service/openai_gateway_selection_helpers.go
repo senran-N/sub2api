@@ -7,6 +7,17 @@ import (
 	"github.com/senran-N/sub2api/internal/config"
 )
 
+func isOpenAIAccountBaseEligible(account *Account) bool {
+	return account != nil && account.IsOpenAI() && account.IsSchedulable()
+}
+
+func isOpenAIAccountModelEligible(account *Account, requestedModel string) bool {
+	if requestedModel == "" {
+		return true
+	}
+	return account != nil && account.IsModelSupported(requestedModel)
+}
+
 // isOpenAIAccountExcluded reports whether the account is in exclusion set.
 func isOpenAIAccountExcluded(excludedIDs map[int64]struct{}, accountID int64) bool {
 	if excludedIDs == nil {
@@ -149,10 +160,10 @@ func (s *OpenAIGatewayService) resolveOpenAIStickySessionAccount(
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil, 0
 	}
-	if !account.IsSchedulable() || !account.IsOpenAI() {
+	if !isOpenAIAccountBaseEligible(account) {
 		return nil, 0
 	}
-	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+	if !isOpenAIAccountModelEligible(account, requestedModel) {
 		return nil, 0
 	}
 

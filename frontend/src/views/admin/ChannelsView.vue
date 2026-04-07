@@ -365,7 +365,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { Channel, ChannelModelPricing, CreateChannelRequest, UpdateChannelRequest } from '@/api/admin/channels'
+import type { Channel, CreateChannelRequest, UpdateChannelRequest } from '@/api/admin/channels'
 import type { AdminGroup, GroupPlatform } from '@/types'
 import type { Column } from '@/components/common/types'
 import { useAppStore } from '@/stores/app'
@@ -384,22 +384,31 @@ import Icon from '@/components/icons/Icon.vue'
 import PricingEntryCard from '@/components/admin/channel/PricingEntryCard.vue'
 import type { PricingFormEntry } from '@/components/admin/channel/types'
 import {
-  apiIntervalsToForm,
-  findModelConflict,
-  formIntervalsToAPI,
-  mTokToPerToken,
-  perTokenToMTok,
-  validateIntervals
-} from '@/components/admin/channel/types'
-
-interface PlatformSection {
-  platform: GroupPlatform
-  enabled: boolean
-  collapsed: boolean
-  group_ids: number[]
-  model_mapping: Record<string, string>
-  model_pricing: PricingFormEntry[]
-}
+  platformOrder,
+  formatDate,
+  getActionButtonClasses,
+  getGroupChipClasses,
+  getPlatformTextClass,
+  getPlatformToggleClasses,
+  getRateBadgeClass
+} from './channels/viewHelpers'
+import {
+  addChannelMappingEntry,
+  addChannelPricingEntry,
+  buildChannelGroupConflictMap,
+  buildChannelSectionsFromAPI,
+  createDefaultChannelFormState,
+  getActiveChannelPlatforms,
+  removeChannelMappingEntry,
+  removeChannelPricingEntry,
+  renameChannelMappingKey,
+  resetChannelForm,
+  serializeChannelForm,
+  toggleChannelGroupInSection,
+  toggleChannelPlatform,
+  updateChannelPricingEntry,
+  validateChannelForm
+} from './channels/channelForm'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -452,98 +461,15 @@ const allGroups = ref<AdminGroup[]>([])
 const groupsLoading = ref(false)
 const allChannelsForConflict = ref<Channel[]>([])
 
-const form = reactive({
-  name: '',
-  description: '',
-  status: 'active',
-  restrict_models: false,
-  billing_model_source: 'channel_mapped' as string,
-  platforms: [] as PlatformSection[]
-})
+const form = reactive(createDefaultChannelFormState())
 
 let abortController: AbortController | null = null
 let searchTimeout: ReturnType<typeof setTimeout>
 
-const platformOrder: GroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity']
-
-function joinClassNames(...classNames: Array<string | false | null | undefined>): string {
-  return classNames.filter(Boolean).join(' ')
-}
-
-function getPlatformTextClass(platform: string): string {
-  switch (platform) {
-    case 'anthropic': return 'channel-view__tone-text channel-view__tone-text--brand-orange'
-    case 'openai': return 'channel-view__tone-text channel-view__tone-text--success'
-    case 'gemini': return 'channel-view__tone-text channel-view__tone-text--info'
-    case 'antigravity': return 'channel-view__tone-text channel-view__tone-text--brand-purple'
-    case 'sora': return 'channel-view__tone-text channel-view__tone-text--brand-rose'
-    default: return 'channel-view__text-muted'
-  }
-}
-
-function getRateBadgeClass(platform: string): string {
-  switch (platform) {
-    case 'anthropic': return 'theme-chip theme-chip--compact theme-chip--brand-orange'
-    case 'openai': return 'theme-chip theme-chip--compact theme-chip--success'
-    case 'gemini': return 'theme-chip theme-chip--compact theme-chip--info'
-    case 'antigravity': return 'theme-chip theme-chip--compact theme-chip--brand-purple'
-    case 'sora': return 'theme-chip theme-chip--compact theme-chip--brand-rose'
-    default: return 'theme-chip theme-chip--compact theme-chip--neutral'
-  }
-}
-
-function getPlatformToggleClasses(platform: GroupPlatform, active: boolean): string {
-  return joinClassNames(
-    'channel-view__platform-toggle inline-flex cursor-pointer items-center gap-1.5 border text-sm transition-colors',
-    active && 'channel-view__platform-toggle--active',
-    getPlatformTextClass(platform)
-  )
-}
-
-function getGroupChipClasses(platform: GroupPlatform, selected: boolean, disabled: boolean): string {
-  return joinClassNames(
-    'channel-view__group-chip inline-flex cursor-pointer items-center gap-1.5 border text-xs transition-colors',
-    selected && 'channel-view__group-chip--selected',
-    disabled && 'opacity-40',
-    getPlatformTextClass(platform)
-  )
-}
-
-function getActionButtonClasses(tone: 'info' | 'danger'): string {
-  return joinClassNames(
-    'channel-view__action-button flex flex-col items-center gap-0.5 transition-colors',
-    tone === 'info' ? 'channel-view__action-button--info' : 'channel-view__action-button--danger'
-  )
-}
-
-function formatDate(value: string): string {
-  if (!value) return '-'
-  return new Date(value).toLocaleDateString()
-}
-
-const activePlatforms = computed(() => form.platforms.filter(s => s.enabled).map(s => s.platform))
-
-function addPlatformSection(platform: GroupPlatform) {
-  form.platforms.push({
-    platform,
-    enabled: true,
-    collapsed: false,
-    group_ids: [],
-    model_mapping: {},
-    model_pricing: []
-  })
-}
+const activePlatforms = computed(() => getActiveChannelPlatforms(form.platforms))
 
 function togglePlatform(platform: GroupPlatform) {
-  const section = form.platforms.find(s => s.platform === platform)
-  if (section) {
-    section.enabled = !section.enabled
-    if (!section.enabled && activeTab.value === platform) {
-      activeTab.value = 'basic'
-    }
-    return
-  }
-  addPlatformSection(platform)
+  activeTab.value = toggleChannelPlatform(form.platforms, platform, activeTab.value)
 }
 
 function getGroupsForPlatform(platform: GroupPlatform): AdminGroup[] {
@@ -551,14 +477,7 @@ function getGroupsForPlatform(platform: GroupPlatform): AdminGroup[] {
 }
 
 const groupToChannelMap = computed(() => {
-  const map = new Map<number, Channel>()
-  for (const channel of allChannelsForConflict.value) {
-    if (editingChannel.value && channel.id === editingChannel.value.id) continue
-    for (const groupID of channel.group_ids || []) {
-      map.set(groupID, channel)
-    }
-  }
-  return map
+  return buildChannelGroupConflictMap(allChannelsForConflict.value, editingChannel.value?.id)
 })
 
 function isGroupInOtherChannel(groupId: number, _platform: string): boolean {
@@ -580,150 +499,31 @@ const deleteConfirmMessage = computed(() => {
 })
 
 function toggleGroupInSection(sectionIdx: number, groupId: number) {
-  const section = form.platforms[sectionIdx]
-  const idx = section.group_ids.indexOf(groupId)
-  if (idx >= 0) {
-    section.group_ids.splice(idx, 1)
-  } else {
-    section.group_ids.push(groupId)
-  }
+  toggleChannelGroupInSection(form.platforms, sectionIdx, groupId)
 }
 
 function addPricingEntry(sectionIdx: number) {
-  form.platforms[sectionIdx].model_pricing.push({
-    models: [],
-    billing_mode: 'token',
-    input_price: null,
-    output_price: null,
-    cache_write_price: null,
-    cache_read_price: null,
-    image_output_price: null,
-    per_request_price: null,
-    intervals: []
-  })
+  addChannelPricingEntry(form.platforms, sectionIdx)
 }
 
 function updatePricingEntry(sectionIdx: number, idx: number, updated: PricingFormEntry) {
-  form.platforms[sectionIdx].model_pricing.splice(idx, 1, updated)
+  updateChannelPricingEntry(form.platforms, sectionIdx, idx, updated)
 }
 
 function removePricingEntry(sectionIdx: number, idx: number) {
-  form.platforms[sectionIdx].model_pricing.splice(idx, 1)
+  removeChannelPricingEntry(form.platforms, sectionIdx, idx)
 }
 
 function addMappingEntry(sectionIdx: number) {
-  const mapping = form.platforms[sectionIdx].model_mapping
-  let key = ''
-  let i = 1
-  while (key === '' || key in mapping) {
-    key = `model-${i}`
-    i++
-  }
-  mapping[key] = ''
+  addChannelMappingEntry(form.platforms, sectionIdx)
 }
 
 function removeMappingEntry(sectionIdx: number, key: string) {
-  delete form.platforms[sectionIdx].model_mapping[key]
+  removeChannelMappingEntry(form.platforms, sectionIdx, key)
 }
 
 function renameMappingKey(sectionIdx: number, oldKey: string, newKey: string) {
-  const trimmed = newKey.trim()
-  if (!trimmed || trimmed === oldKey) return
-  const mapping = form.platforms[sectionIdx].model_mapping
-  if (trimmed in mapping) return
-  const value = mapping[oldKey]
-  delete mapping[oldKey]
-  mapping[trimmed] = value
-}
-
-function formToAPI(): {
-  group_ids: number[]
-  model_pricing: ChannelModelPricing[]
-  model_mapping: Record<string, Record<string, string>>
-} {
-  const group_ids: number[] = []
-  const model_pricing: ChannelModelPricing[] = []
-  const model_mapping: Record<string, Record<string, string>> = {}
-
-  for (const section of form.platforms) {
-    if (!section.enabled) continue
-    group_ids.push(...section.group_ids)
-
-    if (Object.keys(section.model_mapping).length > 0) {
-      model_mapping[section.platform] = { ...section.model_mapping }
-    }
-
-    for (const entry of section.model_pricing) {
-      if (entry.models.length === 0) continue
-      model_pricing.push({
-        platform: section.platform,
-        models: entry.models,
-        billing_mode: entry.billing_mode,
-        input_price: mTokToPerToken(entry.input_price),
-        output_price: mTokToPerToken(entry.output_price),
-        cache_write_price: mTokToPerToken(entry.cache_write_price),
-        cache_read_price: mTokToPerToken(entry.cache_read_price),
-        image_output_price: mTokToPerToken(entry.image_output_price),
-        per_request_price: entry.per_request_price != null && entry.per_request_price !== '' ? Number(entry.per_request_price) : null,
-        intervals: formIntervalsToAPI(entry.intervals || [])
-      })
-    }
-  }
-
-  return { group_ids, model_pricing, model_mapping }
-}
-
-function apiToForm(channel: Channel): PlatformSection[] {
-  const groupPlatformMap = new Map<number, GroupPlatform>()
-  for (const group of allGroups.value) {
-    groupPlatformMap.set(group.id, group.platform)
-  }
-
-  const active = new Set<GroupPlatform>()
-  for (const groupID of channel.group_ids || []) {
-    const platform = groupPlatformMap.get(groupID)
-    if (platform) active.add(platform)
-  }
-  for (const pricing of channel.model_pricing || []) {
-    if (pricing.platform) active.add(pricing.platform as GroupPlatform)
-  }
-  for (const platform of Object.keys(channel.model_mapping || {})) {
-    if (platformOrder.includes(platform as GroupPlatform)) {
-      active.add(platform as GroupPlatform)
-    }
-  }
-
-  const sections: PlatformSection[] = []
-  for (const platform of platformOrder) {
-    if (!active.has(platform)) continue
-
-    const groupIds = (channel.group_ids || []).filter(groupID => groupPlatformMap.get(groupID) === platform)
-    const mapping = (channel.model_mapping || {})[platform] || {}
-    const pricing = (channel.model_pricing || [])
-      .filter(item => (item.platform || 'anthropic') === platform)
-      .map(item => ({
-        models: item.models || [],
-        billing_mode: item.billing_mode,
-        input_price: perTokenToMTok(item.input_price),
-        output_price: perTokenToMTok(item.output_price),
-        cache_write_price: perTokenToMTok(item.cache_write_price),
-        cache_read_price: perTokenToMTok(item.cache_read_price),
-        image_output_price: perTokenToMTok(item.image_output_price),
-        per_request_price: item.per_request_price,
-        intervals: apiIntervalsToForm(item.intervals || [])
-      } as PricingFormEntry))
-
-    sections.push({
-      platform,
-      enabled: true,
-      collapsed: false,
-      group_ids: groupIds,
-      model_mapping: { ...mapping },
-      model_pricing: pricing
-    })
-  }
-
-  return sections
+  renameChannelMappingKey(form.platforms, sectionIdx, oldKey, newKey)
 }
 
 async function loadChannels() {
@@ -798,12 +598,7 @@ function handlePageSizeChange(pageSize: number) {
 }
 
 function resetForm() {
-  form.name = ''
-  form.description = ''
-  form.status = 'active'
-  form.restrict_models = false
-  form.billing_model_source = 'channel_mapped'
-  form.platforms = []
+  resetChannelForm(form)
   activeTab.value = 'basic'
 }
 
@@ -822,7 +617,7 @@ async function openEditDialog(channel: Channel) {
   form.restrict_models = channel.restrict_models || false
   form.billing_model_source = channel.billing_model_source || 'channel_mapped'
   await Promise.all([loadGroups(), loadAllChannelsForConflict()])
-  form.platforms = apiToForm(channel)
+  form.platforms = buildChannelSectionsFromAPI(channel, allGroups.value, platformOrder)
   showDialog.value = true
 }
 
@@ -834,82 +629,16 @@ function closeDialog() {
 
 async function handleSubmit() {
   if (submitting.value) return
-  if (!form.name.trim()) {
-    appStore.showError(t('admin.channels.nameRequired'))
+  const validationFailure = validateChannelForm(form, t)
+  if (validationFailure) {
+    appStore.showError(validationFailure.message)
+    if (validationFailure.activeTab) {
+      activeTab.value = validationFailure.activeTab
+    }
     return
   }
 
-  for (const section of form.platforms.filter(s => s.enabled)) {
-    if (section.group_ids.length === 0) {
-      const platformLabel = t(`admin.groups.platforms.${section.platform}`, section.platform)
-      appStore.showError(t('admin.channels.noGroupsSelected', { platform: platformLabel }))
-      activeTab.value = section.platform
-      return
-    }
-    for (const entry of section.model_pricing) {
-      if (entry.models.length === 0) {
-        const platformLabel = t(`admin.groups.platforms.${section.platform}`, section.platform)
-        appStore.showError(t('admin.channels.emptyModelsInPricing', { platform: platformLabel }))
-        activeTab.value = section.platform
-        return
-      }
-    }
-  }
-
-  for (const section of form.platforms.filter(s => s.enabled)) {
-    const allModels: string[] = []
-    for (const entry of section.model_pricing) {
-      allModels.push(...entry.models)
-    }
-    const pricingConflict = findModelConflict(allModels)
-    if (pricingConflict) {
-      appStore.showError(
-        t('admin.channels.modelConflict', { model1: pricingConflict[0], model2: pricingConflict[1] })
-      )
-      activeTab.value = section.platform
-      return
-    }
-
-    const mappingKeys = Object.keys(section.model_mapping)
-    if (mappingKeys.length === 0) continue
-    const mappingConflict = findModelConflict(mappingKeys)
-    if (mappingConflict) {
-      appStore.showError(
-        t('admin.channels.mappingConflict', { model1: mappingConflict[0], model2: mappingConflict[1] })
-      )
-      activeTab.value = section.platform
-      return
-    }
-  }
-
-  for (const section of form.platforms.filter(s => s.enabled)) {
-    for (const entry of section.model_pricing) {
-      if (entry.models.length === 0) continue
-      if (
-        (entry.billing_mode === 'per_request' || entry.billing_mode === 'image') &&
-        (entry.per_request_price == null || entry.per_request_price === '') &&
-        (!entry.intervals || entry.intervals.length === 0)
-      ) {
-        appStore.showError(t('admin.channels.form.perRequestPriceRequired'))
-        return
-      }
-    }
-  }
-
-  for (const section of form.platforms.filter(s => s.enabled)) {
-    for (const entry of section.model_pricing) {
-      if (!entry.intervals || entry.intervals.length === 0) continue
-      const intervalErr = validateIntervals(entry.intervals)
-      if (!intervalErr) continue
-      const platformLabel = t(`admin.groups.platforms.${section.platform}`, section.platform)
-      const modelLabel = entry.models.join(', ') || '未命名'
-      appStore.showError(`${platformLabel} - ${modelLabel}: ${intervalErr}`)
-      activeTab.value = section.platform
-      return
-    }
-  }
-
-  const { group_ids, model_pricing, model_mapping } = formToAPI()
+  const { group_ids, model_pricing, model_mapping } = serializeChannelForm(form)
 
   submitting.value = true
   try {

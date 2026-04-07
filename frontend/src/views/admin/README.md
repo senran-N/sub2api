@@ -23,6 +23,10 @@ Feature-specific logic should live with the feature UI:
   - Sora profile cards and drawers
   - data-management-only form helpers
   - data-management-only composables
+- `channels/`
+  - channel form serializers and validators
+  - channel-only style and table helpers
+  - channels-only feature tests
 - `settings/`
   - cards and tabs
   - settings form helpers

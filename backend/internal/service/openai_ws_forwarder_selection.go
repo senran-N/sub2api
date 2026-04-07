@@ -30,10 +30,8 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 	if err != nil || accountID <= 0 {
 		return nil, nil
 	}
-	if excludedIDs != nil {
-		if _, excluded := excludedIDs[accountID]; excluded {
-			return nil, nil
-		}
+	if isOpenAIAccountExcluded(excludedIDs, accountID) {
+		return nil, nil
 	}
 
 	account, err := s.getSchedulableAccount(ctx, accountID)
@@ -46,11 +44,11 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 	if s.getOpenAIWSProtocolResolver().Resolve(account).Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
 		return nil, nil
 	}
-	if shouldClearStickySession(account, requestedModel) || !account.IsOpenAI() || !account.IsSchedulable() {
+	if shouldClearStickySession(account, requestedModel) || !isOpenAIAccountBaseEligible(account) {
 		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
 		return nil, nil
 	}
-	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+	if !isOpenAIAccountModelEligible(account, requestedModel) {
 		return nil, nil
 	}
 	account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
