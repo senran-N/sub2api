@@ -24,7 +24,7 @@ func (s *adminServiceImpl) invalidateDeletedGroupSubscriptions(affectedUserIDs [
 		return
 	}
 
-	go func() {
+	runDetachedTask("invalidate_deleted_group_subscriptions", func(ctx context.Context) {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		for _, userID := range affectedUserIDs {
@@ -32,7 +32,7 @@ func (s *adminServiceImpl) invalidateDeletedGroupSubscriptions(affectedUserIDs [
 				logger.LegacyPrintf("service.admin", "invalidate subscription cache failed: user_id=%d group_id=%d err=%v", userID, groupID, err)
 			}
 		}
-	}()
+	}, "group_id", groupID)
 }
 
 func (s *adminServiceImpl) invalidateDeletedGroupAuthCache(ctx context.Context, keys []string) {

@@ -130,47 +130,36 @@ func ProvideAntigravityTokenProvider(
 
 // ProvideDashboardAggregationService 创建并启动仪表盘聚合服务
 func ProvideDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, cfg *config.Config) *DashboardAggregationService {
-	svc := NewDashboardAggregationService(repo, timingWheel, cfg)
-	svc.Start()
-	return svc
+	return startBackgroundService(newDashboardAggregationServiceForLifecycle(repo, timingWheel, cfg))
 }
 
 // ProvideUsageCleanupService 创建并启动使用记录清理任务服务
 func ProvideUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
-	svc := NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
-	svc.Start()
-	return svc
+	return startBackgroundService(newUsageCleanupServiceForLifecycle(repo, timingWheel, dashboardAgg, cfg))
 }
 
 // ProvideAccountExpiryService creates and starts AccountExpiryService.
 func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpiryService {
-	svc := NewAccountExpiryService(accountRepo, time.Minute)
-	svc.Start()
-	return svc
+	return startBackgroundService(newAccountExpiryServiceForLifecycle(accountRepo))
 }
 
 // ProvideSubscriptionExpiryService creates and starts SubscriptionExpiryService.
 func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository) *SubscriptionExpiryService {
-	svc := NewSubscriptionExpiryService(userSubRepo, time.Minute)
-	svc.Start()
-	return svc
+	return startBackgroundService(newSubscriptionExpiryServiceForLifecycle(userSubRepo))
 }
 
 // ProvideTimingWheelService creates and starts TimingWheelService
 func ProvideTimingWheelService() (*TimingWheelService, error) {
-	svc, err := NewTimingWheelService()
+	svc, err := newTimingWheelServiceForLifecycle()
 	if err != nil {
 		return nil, err
 	}
-	svc.Start()
-	return svc, nil
+	return startBackgroundService(svc), nil
 }
 
 // ProvideDeferredService creates and starts DeferredService
 func ProvideDeferredService(accountRepo AccountRepository, timingWheel *TimingWheelService) *DeferredService {
-	svc := NewDeferredService(accountRepo, timingWheel, 10*time.Second)
-	svc.Start()
-	return svc
+	return startBackgroundService(newDeferredServiceForLifecycle(accountRepo, timingWheel))
 }
 
 // ProvideConcurrencyService creates ConcurrencyService and starts slot cleanup worker.

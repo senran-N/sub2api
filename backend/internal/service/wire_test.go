@@ -8,6 +8,26 @@ import (
 	"github.com/zeromicro/go-zero/core/collection"
 )
 
+type lifecycleStartableStub struct {
+	startCalls int
+}
+
+func (s *lifecycleStartableStub) Start() {
+	s.startCalls++
+}
+
+func TestStartBackgroundService_StartsAndReturnsSameInstance(t *testing.T) {
+	svc := &lifecycleStartableStub{}
+	returned := startBackgroundService(svc)
+
+	if returned != svc {
+		t.Fatalf("期望返回同一个实例")
+	}
+	if svc.startCalls != 1 {
+		t.Fatalf("期望 Start 被调用 1 次，实际: %d", svc.startCalls)
+	}
+}
+
 func TestProvideTimingWheelService_ReturnsError(t *testing.T) {
 	original := newTimingWheel
 	t.Cleanup(func() { newTimingWheel = original })

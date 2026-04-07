@@ -3,9 +3,6 @@ package admin
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -45,7 +42,7 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 
 // AccountHandler handles admin account management
 type AccountHandler struct {
-	adminService            service.AdminService
+	adminService            accountAdminService
 	oauthService            *service.OAuthService
 	openaiOAuthService      *service.OpenAIOAuthService
 	geminiOAuthService      *service.GeminiOAuthService
@@ -63,7 +60,7 @@ type AccountHandler struct {
 
 // NewAccountHandler creates a new admin account handler
 func NewAccountHandler(
-	adminService service.AdminService,
+	adminService accountAdminService,
 	oauthService *service.OAuthService,
 	openaiOAuthService *service.OpenAIOAuthService,
 	geminiOAuthService *service.GeminiOAuthService,
@@ -237,10 +234,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 
 	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, lite)
 	if etag != "" {
-		c.Header("ETag", etag)
-		c.Header("Vary", "If-None-Match")
-		if ifNoneMatchMatched(c.GetHeader("If-None-Match"), etag) {
-			c.Status(http.StatusNotModified)
+		if respondNotModifiedIfETagMatches(c, etag) {
 			return
 		}
 	}
@@ -307,31 +301,7 @@ func buildAccountsListETag(
 		Lite:        lite,
 		Items:       items,
 	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return ""
-	}
-	sum := sha256.Sum256(raw)
-	return "\"" + hex.EncodeToString(sum[:]) + "\""
-}
-
-func ifNoneMatchMatched(ifNoneMatch, etag string) bool {
-	if etag == "" || ifNoneMatch == "" {
-		return false
-	}
-	for _, token := range strings.Split(ifNoneMatch, ",") {
-		candidate := strings.TrimSpace(token)
-		if candidate == "*" {
-			return true
-		}
-		if candidate == etag {
-			return true
-		}
-		if strings.HasPrefix(candidate, "W/") && strings.TrimPrefix(candidate, "W/") == etag {
-			return true
-		}
-	}
-	return false
+	return buildETagFromAny(payload)
 }
 
 // GetByID handles getting an account by ID
@@ -1615,34 +1585,19 @@ func (h *AccountHandler) GetBatchTodayStats(c *gin.Context) {
 	}
 
 	cacheKey := buildAccountTodayStatsBatchCacheKey(accountIDs)
-	if cached, ok := accountTodayStatsBatchCache.Get(cacheKey); ok {
-		if cached.ETag != "" {
-			c.Header("ETag", cached.ETag)
-			c.Header("Vary", "If-None-Match")
-			if ifNoneMatchMatched(c.GetHeader("If-None-Match"), cached.ETag) {
-				c.Status(http.StatusNotModified)
-				return
-			}
+	cached, hit, err := accountTodayStatsBatchCache.GetOrLoad(cacheKey, func() (any, error) {
+		stats, err := h.accountUsageService.GetTodayStatsBatch(c.Request.Context(), accountIDs)
+		if err != nil {
+			return nil, err
 		}
-		c.Header("X-Snapshot-Cache", "hit")
-		response.Success(c, cached.Payload)
-		return
-	}
-
-	stats, err := h.accountUsageService.GetTodayStatsBatch(c.Request.Context(), accountIDs)
+		return gin.H{"stats": stats}, nil
+	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 
-	payload := gin.H{"stats": stats}
-	cached := accountTodayStatsBatchCache.Set(cacheKey, payload)
-	if cached.ETag != "" {
-		c.Header("ETag", cached.ETag)
-		c.Header("Vary", "If-None-Match")
-	}
-	c.Header("X-Snapshot-Cache", "miss")
-	response.Success(c, payload)
+	respondSnapshotCacheEntry(c, cached, hit)
 }
 
 // SetSchedulableRequest represents the request body for setting schedulable status

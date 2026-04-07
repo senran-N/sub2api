@@ -4,15 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	"github.com/senran-N/sub2api/internal/pkg/usagestats"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 var dashboardSnapshotV2Cache = newSnapshotCache(30 * time.Second)
@@ -132,16 +131,7 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 		response.Error(c, 500, err.Error())
 		return
 	}
-	if cached.ETag != "" {
-		c.Header("ETag", cached.ETag)
-		c.Header("Vary", "If-None-Match")
-		if ifNoneMatchMatched(c.GetHeader("If-None-Match"), cached.ETag) {
-			c.Status(http.StatusNotModified)
-			return
-		}
-	}
-	c.Header("X-Snapshot-Cache", cacheStatusValue(hit))
-	response.Success(c, cached.Payload)
+	respondSnapshotCacheEntry(c, cached, hit)
 }
 
 func (h *DashboardHandler) buildSnapshotV2Response(

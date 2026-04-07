@@ -124,7 +124,9 @@ func (s *adminServiceImpl) CreateProxy(ctx context.Context, input *CreateProxyIn
 	if err := s.proxyRepo.Create(ctx, proxy); err != nil {
 		return nil, err
 	}
-	go s.probeProxyLatency(context.Background(), proxy)
+	runDetachedTask("probe_proxy_latency", func(ctx context.Context) {
+		s.probeProxyLatency(ctx, proxy)
+	}, "proxy_id", proxy.ID)
 	return proxy, nil
 }
 

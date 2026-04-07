@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/senran-N/sub2api/internal/pkg/logger"
@@ -76,23 +75,13 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if account.Type == AccountTypeOAuth {
 		switch account.Platform {
 		case PlatformOpenAI:
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("create_account_openai_privacy_panic", "account_id", account.ID, "recover", r)
-					}
-				}()
-				s.EnsureOpenAIPrivacy(context.Background(), account)
-			}()
+			runDetachedTask("create_account_openai_privacy", func(ctx context.Context) {
+				s.EnsureOpenAIPrivacy(ctx, account)
+			}, "account_id", account.ID)
 		case PlatformAntigravity:
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("create_account_antigravity_privacy_panic", "account_id", account.ID, "recover", r)
-					}
-				}()
-				s.EnsureAntigravityPrivacy(context.Background(), account)
-			}()
+			runDetachedTask("create_account_antigravity_privacy", func(ctx context.Context) {
+				s.EnsureAntigravityPrivacy(ctx, account)
+			}, "account_id", account.ID)
 		}
 	}
 

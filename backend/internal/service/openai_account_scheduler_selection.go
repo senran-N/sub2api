@@ -22,30 +22,20 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, nil
 	}
 
-	accountID := req.StickyAccountID
-	if accountID <= 0 {
-		var err error
-		accountID, err = s.service.getStickySessionAccountID(ctx, req.GroupID, sessionHash)
-		if err != nil || accountID <= 0 {
-			return nil, nil
-		}
-	}
-	if req.ExcludedIDs != nil {
-		if _, excluded := req.ExcludedIDs[accountID]; excluded {
-			return nil, nil
-		}
-	}
-
-	account, err := s.service.getSchedulableAccount(ctx, accountID)
-	if err != nil || account == nil {
-		_ = s.service.deleteStickySessionAccountID(ctx, req.GroupID, sessionHash)
-		return nil, nil
-	}
-	if shouldClearStickySession(account, req.RequestedModel) || !account.IsOpenAI() || !account.IsSchedulable() {
-		_ = s.service.deleteStickySessionAccountID(ctx, req.GroupID, sessionHash)
-		return nil, nil
-	}
-	if req.RequestedModel != "" && !account.IsModelSupported(req.RequestedModel) {
+	account, accountID := s.service.resolveOpenAIStickySessionAccount(
+		ctx,
+		req.GroupID,
+		sessionHash,
+		req.RequestedModel,
+		req.ExcludedIDs,
+		req.StickyAccountID,
+		openAIStickySessionResolvePolicy{
+			deleteOnLookupMiss: true,
+			refreshTTLOnHit:    false,
+			recheckOnResolve:   true,
+		},
+	)
+	if account == nil {
 		return nil, nil
 	}
 	if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
@@ -53,33 +43,15 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, nil
 	}
 
-	account = s.service.recheckSelectedOpenAIAccountFromDB(ctx, account, req.RequestedModel)
-	if account == nil {
-		_ = s.service.deleteStickySessionAccountID(ctx, req.GroupID, sessionHash)
-		return nil, nil
-	}
-
 	result, acquireErr := s.service.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 	if acquireErr == nil && result.Acquired {
 		_ = s.service.refreshStickySessionTTL(ctx, req.GroupID, sessionHash, s.service.openAIWSSessionStickyTTL())
-		return &AccountSelectionResult{
-			Account:     account,
-			Acquired:    true,
-			ReleaseFunc: result.ReleaseFunc,
-		}, nil
+		return newAcquiredAccountSelection(account, result.ReleaseFunc), nil
 	}
 
 	cfg := s.service.schedulingConfig()
 	if s.service.concurrencyService != nil {
-		return &AccountSelectionResult{
-			Account: account,
-			WaitPlan: &AccountWaitPlan{
-				AccountID:      accountID,
-				MaxConcurrency: account.Concurrency,
-				Timeout:        cfg.StickySessionWaitTimeout,
-				MaxWaiting:     cfg.StickySessionMaxWaiting,
-			},
-		}, nil
+		return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), nil
 	}
 	return nil, nil
 }
@@ -513,11 +485,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			if req.SessionHash != "" {
 				_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, verified.ID)
 			}
-			return &AccountSelectionResult{
-				Account:     verified,
-				Acquired:    true,
-				ReleaseFunc: result.ReleaseFunc,
-			}, len(candidates), topK, loadSkew, nil
+			return newAcquiredAccountSelection(verified, result.ReleaseFunc), len(candidates), topK, loadSkew, nil
 		}
 	}
 
@@ -526,15 +494,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	if waitCandidate != nil {
 		fresh := s.service.resolveFreshSchedulableOpenAIAccount(ctx, waitCandidate.account, req.RequestedModel)
 		if fresh != nil && s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
-			return &AccountSelectionResult{
-				Account: fresh,
-				WaitPlan: &AccountWaitPlan{
-					AccountID:      fresh.ID,
-					MaxConcurrency: fresh.Concurrency,
-					Timeout:        cfg.FallbackWaitTimeout,
-					MaxWaiting:     cfg.FallbackMaxWaiting,
-				},
-			}, len(candidates), topK, loadSkew, nil
+			return newWaitPlanAccountSelection(fresh, cfg.FallbackWaitTimeout, cfg.FallbackMaxWaiting), len(candidates), topK, loadSkew, nil
 		}
 	}
 
