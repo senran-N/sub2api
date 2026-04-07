@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SoraS3Profile } from '@/api/admin/settings'
-import { useDataManagementSoraProfiles } from '../dataManagement/useSoraProfiles'
+import { useDataManagementSoraProfiles } from '../useSoraProfiles'
 
 const {
   listSoraS3Profiles,

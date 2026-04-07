@@ -24,6 +24,19 @@ func tryBuildStickySessionWaitPlan(
 	return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), true
 }
 
+// buildStickySessionWaitPlanIfConcurrencyEnabled preserves legacy sticky behavior:
+// once concurrency service exists, always return sticky wait-plan without queue-limit check.
+func buildStickySessionWaitPlanIfConcurrencyEnabled(
+	account *Account,
+	cfg config.GatewaySchedulingConfig,
+	concurrencyService *ConcurrencyService,
+) (*AccountSelectionResult, bool) {
+	if account == nil || concurrencyService == nil {
+		return nil, false
+	}
+	return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), true
+}
+
 func buildStickyAwareFallbackWaitPlan(
 	ctx context.Context,
 	account *Account,

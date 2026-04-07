@@ -9,7 +9,7 @@ import {
   formatStorageQuotaGB,
   getPreferredSoraProfileID,
   validateSoraS3ProfileForm
-} from '../dataManagement/dataManagementHelpers'
+} from '../dataManagementHelpers'
 
 function createProfile(overrides: Partial<SoraS3Profile> = {}): SoraS3Profile {
   return {
@@ -31,7 +31,7 @@ function createProfile(overrides: Partial<SoraS3Profile> = {}): SoraS3Profile {
   }
 }
 
-describe('dataManagementView helpers', () => {
+describe('dataManagement helpers', () => {
   it('formats quota/date and selects preferred profile', () => {
     expect(formatStorageQuotaGB(0)).toBe('0 GB')
     expect(formatStorageQuotaGB(5 * 1024 * 1024 * 1024)).toBe('5.0 GB')

@@ -49,8 +49,8 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 	}
 
 	cfg := s.service.schedulingConfig()
-	if s.service.concurrencyService != nil {
-		return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), nil
+	if waitPlan, ok := buildStickySessionWaitPlanIfConcurrencyEnabled(account, cfg, s.service.concurrencyService); ok {
+		return waitPlan, nil
 	}
 	return nil, nil
 }

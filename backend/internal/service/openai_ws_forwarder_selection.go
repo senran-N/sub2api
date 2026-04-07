@@ -69,8 +69,8 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 	}
 
 	cfg := s.schedulingConfig()
-	if s.concurrencyService != nil {
-		return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), nil
+	if waitPlan, ok := buildStickySessionWaitPlanIfConcurrencyEnabled(account, cfg, s.concurrencyService); ok {
+		return waitPlan, nil
 	}
 	return nil, nil
 }
