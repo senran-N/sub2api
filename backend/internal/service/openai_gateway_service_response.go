@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/pkg/apicompat"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
@@ -93,13 +95,28 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 	errorEventSent := false
 	clientDisconnected := false
+	clientEventOpen := false
 	sawTerminalEvent := false
+	closeClientEventIfNeeded := func() bool {
+		if clientDisconnected || !clientEventOpen {
+			return true
+		}
+		if _, err := bufferedWriter.WriteString("\n"); err != nil {
+			clientDisconnected = true
+			return false
+		}
+		clientEventOpen = false
+		return true
+	}
 	sendErrorEvent := func(reason string) {
 		if errorEventSent || clientDisconnected {
 			return
 		}
 		errorEventSent = true
 		payload := `{"type":"error","sequence_number":0,"error":{"type":"upstream_error","message":` + strconv.Quote(reason) + `,"code":` + strconv.Quote(reason) + `}}`
+		if !closeClientEventIfNeeded() {
+			return
+		}
 		if err := flushBuffered(); err != nil {
 			clientDisconnected = true
 			return
@@ -119,6 +136,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	}
 	finalizeStream := func() (*openaiStreamingResult, error) {
 		if !clientDisconnected {
+			if !closeClientEventIfNeeded() {
+				clientDisconnected = true
+			}
 			if err := flushBuffered(); err != nil {
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during final flush, returning collected usage")
@@ -186,6 +206,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 						logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
 					}
 				}
+				if !clientDisconnected {
+					clientEventOpen = line != ""
+				}
 			}
 
 			if firstTokenMs == nil && data != "" && data != "[DONE]" {
@@ -208,6 +231,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 					clientDisconnected = true
 					logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
 				}
+			}
+			if !clientDisconnected {
+				clientEventOpen = line != ""
 			}
 		}
 	}
@@ -288,6 +314,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if time.Since(lastDataAt) < keepaliveInterval {
 				continue
 			}
+			if !closeClientEventIfNeeded() {
+				continue
+			}
 			if _, err := bufferedWriter.WriteString(":\n\n"); err != nil {
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
@@ -361,7 +390,9 @@ func (s *OpenAIGatewayService) parseSSEUsageBytes(data []byte, usage *OpenAIUsag
 		return
 	}
 	eventType := gjson.GetBytes(data, "type").String()
-	if eventType != "response.completed" && eventType != "response.done" {
+	switch eventType {
+	case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
+	default:
 		return
 	}
 	usage.InputTokens = int(gjson.GetBytes(data, "response.usage.input_tokens").Int())
@@ -488,7 +519,7 @@ func extractOpenAISSETerminalEvent(body string) (string, []byte, bool) {
 		}
 		eventType := strings.TrimSpace(gjson.Get(data, "type").String())
 		switch eventType {
-		case "response.completed", "response.done", "response.failed":
+		case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
 			return eventType, []byte(data), true
 		}
 	}
@@ -525,15 +556,26 @@ func (s *OpenAIGatewayService) writeOpenAINonStreamingProtocolError(resp *http.R
 }
 
 func extractCodexFinalResponse(body string) ([]byte, bool) {
+	collector := newOpenAIResponsesOutputCollector()
 	lines := strings.Split(body, "\n")
 	for _, line := range lines {
 		data, ok := extractOpenAISSEDataLine(line)
 		if !ok || data == "" || data == "[DONE]" {
 			continue
 		}
+		collector.ConsumePayload([]byte(data))
 		eventType := gjson.Get(data, "type").String()
-		if eventType == "response.done" || eventType == "response.completed" {
+		switch eventType {
+		case "response.done", "response.completed", "response.incomplete", "response.cancelled", "response.canceled":
 			if response := gjson.Get(data, "response"); response.Exists() && response.Type == gjson.JSON && response.Raw != "" {
+				var finalResponse apicompat.ResponsesResponse
+				if err := json.Unmarshal([]byte(response.Raw), &finalResponse); err == nil {
+					if repaired := collector.RepairResponse(&finalResponse); repaired != nil {
+						if repairedBody, marshalErr := json.Marshal(repaired); marshalErr == nil {
+							return repairedBody, true
+						}
+					}
+				}
 				return []byte(response.Raw), true
 			}
 		}
