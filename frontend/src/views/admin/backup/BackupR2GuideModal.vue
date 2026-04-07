@@ -109,7 +109,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { buildBackupR2ConfigRows } from '../backupView'
+import { buildBackupR2ConfigRows } from './backupView'
 
 defineProps<{
   show: boolean

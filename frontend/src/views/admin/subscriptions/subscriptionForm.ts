@@ -119,6 +119,22 @@ export function buildExtendSubscriptionRequest(
   }
 }
 
+export function validateAssignSubscriptionForm(form: AssignSubscriptionForm): string | null {
+  if (!form.user_id) {
+    return 'admin.subscriptions.pleaseSelectUser'
+  }
+
+  if (!form.group_id) {
+    return 'admin.subscriptions.pleaseSelectGroup'
+  }
+
+  if (!form.validity_days || form.validity_days < 1) {
+    return 'admin.subscriptions.validityDaysRequired'
+  }
+
+  return null
+}
+
 export function buildSubscriptionGroupOptions(groups: Group[]): SubscriptionGroupOption[] {
   return groups
     .filter((group) => group.subscription_type === 'subscription' && group.status === 'active')
@@ -167,6 +183,18 @@ export function willSubscriptionAdjustmentRemainActive(
 
   const newExpiresAt = new Date(subscription.expires_at).getTime() + days * DAY_IN_MS
   return newExpiresAt > now.getTime()
+}
+
+export function validateExtendSubscriptionAdjustment(
+  subscription: Pick<UserSubscription, 'expires_at'>,
+  form: ExtendSubscriptionForm,
+  now: Date = new Date()
+): string | null {
+  if (!willSubscriptionAdjustmentRemainActive(subscription, form.days, now)) {
+    return 'admin.subscriptions.adjustWouldExpire'
+  }
+
+  return null
 }
 
 export function getUsageProgressWidth(

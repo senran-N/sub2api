@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { adminAPI } from '@/api'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   createDefaultBackupS3Config,
   createDefaultBackupScheduleConfig
@@ -9,13 +10,6 @@ interface BackupViewConfigOptions {
   t: (key: string, params?: Record<string, unknown>) => string
   showError: (message: string) => void
   showSuccess: (message: string) => void
-}
-
-function getErrorMessage(
-  error: unknown,
-  fallback: string
-): string {
-  return (error as { message?: string })?.message || fallback
 }
 
 export function useBackupViewConfig(options: BackupViewConfigOptions) {
@@ -41,7 +35,7 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
       }
       s3SecretConfigured.value = Boolean(config.access_key_id)
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     }
   }
 
@@ -52,7 +46,7 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
       options.showSuccess(options.t('admin.backup.s3.saved'))
       await loadS3Config()
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       savingS3.value = false
     }
@@ -68,7 +62,7 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
         options.showError(result.message || options.t('admin.backup.s3.testFailed'))
       }
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       testingS3.value = false
     }
@@ -84,7 +78,7 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
         retain_count: config.retain_count || 10
       }
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     }
   }
 
@@ -94,7 +88,7 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
       await adminAPI.backup.updateSchedule(scheduleForm.value)
       options.showSuccess(options.t('admin.backup.schedule.saved'))
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       savingSchedule.value = false
     }

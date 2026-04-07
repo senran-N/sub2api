@@ -29,7 +29,7 @@ import { formatDateTime } from '@/utils/format'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { AdminUser } from '@/types'
-import { getUserSubscriptionDaysRemaining } from '../usersTable'
+import { getUserSubscriptionDaysRemaining } from './usersTable'
 
 defineProps<{
   user: AdminUser

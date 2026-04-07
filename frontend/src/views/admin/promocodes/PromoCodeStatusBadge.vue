@@ -10,7 +10,7 @@ import type { PromoCode } from '@/types'
 import {
   getPromoCodeStatusClass,
   getPromoCodeStatusLabelKey
-} from '../promoCodeForm'
+} from './promoCodeForm'
 
 defineProps<{
   code: PromoCode

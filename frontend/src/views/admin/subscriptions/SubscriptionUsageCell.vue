@@ -122,7 +122,7 @@ import {
   getUsageProgressClass,
   getUsageProgressWidth,
   type ResetWindowPeriod
-} from '../subscriptionForm'
+} from './subscriptionForm'
 
 defineProps<{
   subscription: UserSubscription

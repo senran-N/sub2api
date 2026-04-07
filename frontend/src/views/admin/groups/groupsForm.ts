@@ -66,6 +66,8 @@ export interface EditGroupForm extends GroupBaseForm {
   status: AdminGroup['status']
 }
 
+export type GroupDialogForm = CreateGroupForm | EditGroupForm
+
 export function createDefaultCreateGroupForm(): CreateGroupForm {
   return {
     name: '',
@@ -221,7 +223,7 @@ export function buildCopyAccountsGroupOptions(
     .map((group) => ({
       value: group.id,
       label: `${group.name} (${group.account_count || 0} 个账号)`
-      }))
+    }))
 }
 
 export function addCopyAccountsGroupSelection(selectedGroupIds: number[], groupId: number): void {

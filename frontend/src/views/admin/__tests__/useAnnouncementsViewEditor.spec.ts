@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAnnouncementsViewEditor } from '../useAnnouncementsViewEditor'
+import { useAnnouncementsViewEditor } from '../announcements/useAnnouncementsViewEditor'
 import type { AdminGroup, Announcement } from '@/types'
 
 const { getAllGroups, createAnnouncement, updateAnnouncement } = vi.hoisted(() => ({

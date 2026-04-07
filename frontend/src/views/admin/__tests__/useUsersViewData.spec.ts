@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, ref } from 'vue'
 import type { AdminGroup, AdminUser, UserAttributeDefinition } from '@/types'
-import { useUsersViewData } from '../useUsersViewData'
+import { useUsersViewData } from '../users/useUsersViewData'
 
 const { listUsers, getAllGroups, listEnabledDefinitions, getBatchUserAttributes, getBatchUsersUsage } =
   vi.hoisted(() => ({

@@ -26,7 +26,7 @@ import { formatDateOnly } from '@/utils/format'
 import {
   getSubscriptionDaysRemaining,
   isSubscriptionExpiringSoon
-} from '../subscriptionForm'
+} from './subscriptionForm'
 
 const props = defineProps<{
   expiresAt: string | null

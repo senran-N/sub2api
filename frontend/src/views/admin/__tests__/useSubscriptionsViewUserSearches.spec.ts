@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { reactive } from 'vue'
-import {
-  createDefaultAssignSubscriptionForm,
-  createDefaultSubscriptionFilters
-} from '../subscriptionForm'
-import { useSubscriptionsViewUserSearches } from '../useSubscriptionsViewUserSearches'
+import { useSubscriptionsViewUserSearches } from '../subscriptions/useSubscriptionsViewUserSearches'
 
 describe('useSubscriptionsViewUserSearches', () => {
   beforeEach(() => {
@@ -17,16 +12,18 @@ describe('useSubscriptionsViewUserSearches', () => {
   })
 
   it('searches and selects filter users with debounce', async () => {
-    const filters = reactive(createDefaultSubscriptionFilters())
-    const assignForm = reactive(createDefaultAssignSubscriptionForm())
     const applyFilters = vi.fn()
     const searchUsers = vi.fn().mockResolvedValue([{ id: 7, email: 'demo@example.com' }])
+    const selectFilterUser = vi.fn()
+    const clearFilterUser = vi.fn()
 
     const state = useSubscriptionsViewUserSearches({
-      filters,
-      assignForm,
       applyFilters,
-      searchUsers
+      searchUsers,
+      selectFilterUser,
+      clearFilterUser,
+      selectAssignUser: vi.fn(),
+      clearAssignUser: vi.fn()
     })
 
     state.filterUserKeyword.value = 'demo'
@@ -40,24 +37,26 @@ describe('useSubscriptionsViewUserSearches', () => {
     expect(state.filterUserResults.value).toEqual([{ id: 7, email: 'demo@example.com' }])
 
     state.selectFilterUser({ id: 7, email: 'demo@example.com' })
-    expect(filters.user_id).toBe(7)
+    expect(selectFilterUser).toHaveBeenCalledWith(7)
     expect(applyFilters).toHaveBeenCalledTimes(1)
 
     state.clearFilterUser()
-    expect(filters.user_id).toBeNull()
+    expect(clearFilterUser).toHaveBeenCalledTimes(1)
     expect(applyFilters).toHaveBeenCalledTimes(2)
   })
 
   it('searches assign users and resets assign state', async () => {
-    const filters = reactive(createDefaultSubscriptionFilters())
-    const assignForm = reactive(createDefaultAssignSubscriptionForm())
     const searchUsers = vi.fn().mockResolvedValue([{ id: 9, email: 'assign@example.com' }])
+    const selectAssignUser = vi.fn()
+    const clearAssignUser = vi.fn()
 
     const state = useSubscriptionsViewUserSearches({
-      filters,
-      assignForm,
       applyFilters: vi.fn(),
-      searchUsers
+      searchUsers,
+      selectFilterUser: vi.fn(),
+      clearFilterUser: vi.fn(),
+      selectAssignUser,
+      clearAssignUser
     })
 
     state.userSearchKeyword.value = 'assign'
@@ -67,10 +66,10 @@ describe('useSubscriptionsViewUserSearches', () => {
 
     expect(searchUsers).toHaveBeenCalledWith('assign')
     state.selectUser({ id: 9, email: 'assign@example.com' })
-    expect(assignForm.user_id).toBe(9)
+    expect(selectAssignUser).toHaveBeenCalledWith(9)
 
     state.resetAssignSearch()
-    expect(assignForm.user_id).toBeNull()
+    expect(clearAssignUser).toHaveBeenCalledTimes(1)
     expect(state.userSearchKeyword.value).toBe('')
     expect(state.showUserDropdown.value).toBe(false)
   })

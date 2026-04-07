@@ -1,6 +1,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { AdminGroup } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   applyCreateFormPlatformRules,
   applyCreateFormSubscriptionTypeRules,
@@ -24,19 +25,6 @@ interface GroupsViewManagementOptions {
   loadGroups: () => Promise<void>
   isCurrentOnboardingStep: (selector: string) => boolean
   advanceOnboarding: (delay?: number) => void
-}
-
-function getGroupsViewErrorDetail(error: unknown): string | null {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'response' in error &&
-    typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail ===
-      'string'
-  ) {
-    return (error as { response?: { data?: { detail?: string } } }).response!.data!.detail || null
-  }
-  return null
 }
 
 export function useGroupsViewManagement(options: GroupsViewManagementOptions) {
@@ -138,7 +126,9 @@ export function useGroupsViewManagement(options: GroupsViewManagementOptions) {
         options.advanceOnboarding(500)
       }
     } catch (error) {
-      options.showError(getGroupsViewErrorDetail(error) || options.t('admin.groups.failedToCreate'))
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.groups.failedToCreate'))
+      )
       console.error('Error creating group:', error)
     } finally {
       submitting.value = false
@@ -171,7 +161,9 @@ export function useGroupsViewManagement(options: GroupsViewManagementOptions) {
       closeEditModal()
       await options.loadGroups()
     } catch (error) {
-      options.showError(getGroupsViewErrorDetail(error) || options.t('admin.groups.failedToUpdate'))
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.groups.failedToUpdate'))
+      )
       console.error('Error updating group:', error)
     } finally {
       submitting.value = false
@@ -200,7 +192,9 @@ export function useGroupsViewManagement(options: GroupsViewManagementOptions) {
       deletingGroup.value = null
       await options.loadGroups()
     } catch (error) {
-      options.showError(getGroupsViewErrorDetail(error) || options.t('admin.groups.failedToDelete'))
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.groups.failedToDelete'))
+      )
       console.error('Error deleting group:', error)
     }
   }

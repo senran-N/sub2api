@@ -14,7 +14,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
-import type { CreateGroupForm, EditGroupForm, NullableNumberSelectOption } from '../groupsForm'
+import type { CreateGroupForm, EditGroupForm, NullableNumberSelectOption } from './groupsForm'
 
 const props = defineProps<{
   form: CreateGroupForm | EditGroupForm

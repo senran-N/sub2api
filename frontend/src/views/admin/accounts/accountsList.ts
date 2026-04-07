@@ -41,8 +41,12 @@ export interface AccountListFilters {
   platform?: string
   type?: string
   status?: string
+  privacy_mode?: string
+  group?: string
   search?: string
 }
+
+export type AccountListQuery = Required<AccountListFilters>
 
 export interface AccountListPagination {
   page: number
@@ -246,6 +250,36 @@ export function accountMatchesCurrentFilters(
       }
     } else if (account.status !== filters.status) {
       return false
+    }
+  }
+
+  if (filters.privacy_mode) {
+    const privacyMode = String(account.extra?.privacy_mode ?? '')
+    if (filters.privacy_mode === '__unset__') {
+      if (privacyMode) {
+        return false
+      }
+    } else if (privacyMode !== filters.privacy_mode) {
+      return false
+    }
+  }
+
+  if (filters.group) {
+    const groupIDs = Array.isArray(account.group_ids)
+      ? account.group_ids
+      : Array.isArray(account.groups)
+        ? account.groups.map((group) => group.id)
+        : []
+
+    if (filters.group === 'ungrouped') {
+      if (groupIDs.length > 0) {
+        return false
+      }
+    } else {
+      const targetGroupID = Number.parseInt(filters.group, 10)
+      if (!Number.isInteger(targetGroupID) || !groupIDs.includes(targetGroupID)) {
+        return false
+      }
     }
   }
 

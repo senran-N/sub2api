@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed } from 'vue'
-import { useAccountsViewColumns } from '../useAccountsViewColumns'
+import { useAccountsViewColumns } from '../accounts/useAccountsViewColumns'
 
 describe('useAccountsViewColumns', () => {
   beforeEach(() => {

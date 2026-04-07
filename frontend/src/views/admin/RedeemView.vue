@@ -145,8 +145,8 @@ import RedeemStatusBadge from './redeem/RedeemStatusBadge.vue'
 import RedeemToolbar from './redeem/RedeemToolbar.vue'
 import RedeemTypeBadge from './redeem/RedeemTypeBadge.vue'
 import RedeemValueCell from './redeem/RedeemValueCell.vue'
-import { useRedeemGeneration } from './useRedeemGeneration'
-import { useRedeemViewData } from './useRedeemViewData'
+import { useRedeemGeneration } from './redeem/useRedeemGeneration'
+import { useRedeemViewData } from './redeem/useRedeemViewData'
 
 const { t } = useI18n()
 const appStore = useAppStore()

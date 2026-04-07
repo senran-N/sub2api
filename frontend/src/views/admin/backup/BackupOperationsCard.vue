@@ -117,7 +117,7 @@ import {
   formatBackupDate,
   formatBackupSize,
   getBackupStatusClass
-} from '../backupView'
+} from './backupView'
 
 defineProps<{
   backups: BackupRecord[]

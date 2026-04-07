@@ -29,7 +29,7 @@ import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
-import type { CreateGroupForm, EditGroupForm } from '../groupsForm'
+import type { CreateGroupForm, EditGroupForm } from './groupsForm'
 import GroupSectionInfoTooltip from './GroupSectionInfoTooltip.vue'
 
 defineProps<{

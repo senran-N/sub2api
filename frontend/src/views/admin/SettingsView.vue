@@ -183,8 +183,8 @@ import SettingsTestEmailCard from './settings/SettingsTestEmailCard.vue'
 import SettingsLoadingState from './settings/SettingsLoadingState.vue'
 import SettingsTabsNav from './settings/SettingsTabsNav.vue'
 import SettingsTurnstileCard from './settings/SettingsTurnstileCard.vue'
-import { useSettingsViewForm } from './useSettingsViewForm'
-import { useSettingsViewPolicies } from './useSettingsViewPolicies'
+import { useSettingsViewForm } from './settings/useSettingsViewForm'
+import { useSettingsViewPolicies } from './settings/useSettingsViewPolicies'
 
 const BackupSettings = defineAsyncComponent(() => import('@/views/admin/BackupView.vue'))
 const DataManagementSettings = defineAsyncComponent(() => import('@/views/admin/DataManagementView.vue'))

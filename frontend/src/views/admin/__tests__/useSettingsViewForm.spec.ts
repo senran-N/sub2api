@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminGroup } from '@/types'
 import type { SystemSettings } from '@/api/admin/settings'
-import { useSettingsViewForm } from '../useSettingsViewForm'
+import { useSettingsViewForm } from '../settings/useSettingsViewForm'
 
 const { getSettings, updateSettings, testSmtpConnection, sendTestEmail, getAllGroups } = vi.hoisted(
   () => ({

@@ -15,7 +15,7 @@
 import { useI18n } from 'vue-i18n'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import type { GroupPlatform } from '@/types'
-import { getGroupPlatformBadgeClass } from '../groupsTable'
+import { getGroupPlatformBadgeClass } from './groupDisplay'
 
 withDefaults(
   defineProps<{

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useBackupViewConfig } from '../useBackupViewConfig'
+import { useBackupViewConfig } from '../backup/useBackupViewConfig'
 
 const { getS3Config, updateS3Config, testS3Connection, getSchedule, updateSchedule } = vi.hoisted(
   () => ({
@@ -93,5 +93,21 @@ describe('useBackupViewConfig', () => {
     await config.saveSchedule()
     expect(updateSchedule).toHaveBeenCalledWith(config.scheduleForm.value)
     expect(showSuccess).toHaveBeenCalledWith('admin.backup.schedule.saved')
+  })
+
+  it('uses shared request error details when S3 load fails', async () => {
+    const showError = vi.fn()
+    const config = useBackupViewConfig({
+      t: (key: string) => key,
+      showError,
+      showSuccess: vi.fn()
+    })
+    getS3Config.mockRejectedValueOnce({
+      response: { data: { detail: 'backup-config-failed' } }
+    })
+
+    await config.loadS3Config()
+
+    expect(showError).toHaveBeenCalledWith('backup-config-failed')
   })
 })

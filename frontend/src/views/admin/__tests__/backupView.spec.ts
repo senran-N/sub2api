@@ -9,7 +9,7 @@ import {
   formatBackupDate,
   formatBackupSize,
   getBackupStatusClass
-} from '../backupView'
+} from '../backup/backupView'
 
 function createRecord(overrides: Partial<BackupRecord> = {}): BackupRecord {
   return {

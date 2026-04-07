@@ -12,7 +12,7 @@ import {
   getUsageQueryNumberValue,
   getUsageQueryStringValue,
   resetUsagePaginationPage
-} from '../usageViewState'
+} from '../usage/usageViewState'
 
 describe('usageViewState helpers', () => {
   it('formats local dates and derives default 24 hour ranges', () => {

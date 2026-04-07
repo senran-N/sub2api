@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { adminAPI } from '@/api'
 import type { BackupRecord } from '@/api/admin/backup'
+import { hasResponseStatus, resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   BACKUP_MAX_POLL_COUNT,
   findRestoringBackup,
@@ -15,13 +16,6 @@ interface BackupViewOperationsOptions {
   confirm: (message: string) => boolean
   prompt: (message: string) => string | null
   openUrl: (url: string) => void
-}
-
-function getErrorMessage(
-  error: unknown,
-  fallback: string
-): string {
-  return (error as { message?: string })?.message || fallback
 }
 
 export function useBackupViewOperations(options: BackupViewOperationsOptions) {
@@ -61,7 +55,7 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
       const result = await adminAPI.backup.listBackups()
       backups.value = result.items || []
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       loadingBackups.value = false
     }
@@ -158,10 +152,10 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
       backups.value.unshift(record)
       startPolling(record.id)
     } catch (error: any) {
-      if (error?.response?.status === 409) {
+      if (hasResponseStatus(error, 409)) {
         options.showWarning(options.t('admin.backup.operations.alreadyInProgress'))
       } else {
-        options.showError(getErrorMessage(error, options.t('errors.networkError')))
+        options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
       }
       creatingBackup.value = false
     }
@@ -172,7 +166,7 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
       const result = await adminAPI.backup.getDownloadURL(id)
       options.openUrl(result.url)
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     }
   }
 
@@ -190,11 +184,11 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
       const record = await adminAPI.backup.restoreBackup(id, password)
       updateRecordInList(record)
       startRestorePolling(id)
-    } catch (error: any) {
-      if (error?.response?.status === 409) {
+    } catch (error) {
+      if (hasResponseStatus(error, 409)) {
         options.showWarning(options.t('admin.backup.operations.restoreRunning'))
       } else {
-        options.showError(getErrorMessage(error, options.t('errors.networkError')))
+        options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
       }
       restoringId.value = ''
     }
@@ -210,7 +204,7 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
       options.showSuccess(options.t('admin.backup.actions.deleted'))
       await loadBackups()
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     }
   }
 

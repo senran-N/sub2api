@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { useAccountsViewDialogs } from '../useAccountsViewDialogs'
+import { useAccountsViewDialogs } from '../accounts/useAccountsViewDialogs'
 
 describe('useAccountsViewDialogs', () => {
   it('opens export dialog with proxy export enabled by default', () => {

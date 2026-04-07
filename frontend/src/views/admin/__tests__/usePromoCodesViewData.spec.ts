@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { usePromoCodesViewData } from '../usePromoCodesViewData'
+import { usePromoCodesViewData } from '../promocodes/usePromoCodesViewData'
 
 const { listPromoCodes } = vi.hoisted(() => ({
   listPromoCodes: vi.fn()
@@ -112,9 +112,11 @@ describe('usePromoCodesViewData', () => {
       copyToClipboard: vi.fn().mockResolvedValue(true)
     })
 
-    listPromoCodes.mockRejectedValueOnce(new Error('boom'))
+    listPromoCodes.mockRejectedValueOnce({
+      response: { data: { message: 'promo-load-failed' } }
+    })
     await state.loadCodes()
-    expect(showError).toHaveBeenCalledWith('admin.promo.failedToLoad')
+    expect(showError).toHaveBeenCalledWith('promo-load-failed')
 
     listPromoCodes.mockRejectedValueOnce({ name: 'AbortError' })
     await state.loadCodes()

@@ -55,7 +55,7 @@
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
-import type { CreateGroupForm, EditGroupForm } from '../groupsForm'
+import type { CreateGroupForm, EditGroupForm } from './groupsForm'
 
 defineProps<{
   form: CreateGroupForm | EditGroupForm

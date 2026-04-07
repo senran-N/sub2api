@@ -201,18 +201,19 @@ import AccountSchedulableToggle from './accounts/AccountSchedulableToggle.vue'
 import AccountToolbarControls from './accounts/AccountToolbarControls.vue'
 import {
   ACCOUNT_SORT_STORAGE_KEY,
+  type AccountListQuery,
   patchAccountList,
   updateSchedulableAccounts
-} from './accountsList'
-import { useAccountsViewColumns } from './useAccountsViewColumns'
-import { useAccountsViewActions } from './useAccountsViewActions'
-import { useAccountsViewBootstrap } from './useAccountsViewBootstrap'
-import { useAccountsViewDialogs } from './useAccountsViewDialogs'
+} from './accounts/accountsList'
+import { useAccountsViewColumns } from './accounts/useAccountsViewColumns'
+import { useAccountsViewActions } from './accounts/useAccountsViewActions'
+import { useAccountsViewBootstrap } from './accounts/useAccountsViewBootstrap'
+import { useAccountsViewDialogs } from './accounts/useAccountsViewDialogs'
 import {
   downloadAccountsExportJson,
   useAccountsViewExport
-} from './useAccountsViewExport'
-import { useAccountsViewRefresh } from './useAccountsViewRefresh'
+} from './accounts/useAccountsViewExport'
+import { useAccountsViewRefresh } from './accounts/useAccountsViewRefresh'
 
 const CreateAccountModal = defineAsyncComponent(() => import('@/components/account/CreateAccountModal.vue'))
 const EditAccountModal = defineAsyncComponent(() => import('@/components/account/EditAccountModal.vue'))
@@ -291,7 +292,7 @@ const {
   debouncedReload: baseDebouncedReload,
   handlePageChange: baseHandlePageChange,
   handlePageSizeChange: baseHandlePageSizeChange
-} = useTableLoader<Account, any>({
+} = useTableLoader<Account, AccountListQuery>({
   fetchFn: adminAPI.accounts.list,
   initialParams: { platform: '', type: '', status: '', privacy_mode: '', group: '', search: '' }
 })
@@ -422,6 +423,8 @@ const patchAccountInList = (updatedAccount: Account) => {
       platform: params.platform,
       type: params.type,
       status: params.status,
+      privacy_mode: params.privacy_mode,
+      group: params.group,
       search: params.search
     },
     pagination,

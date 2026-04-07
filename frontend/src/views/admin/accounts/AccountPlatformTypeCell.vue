@@ -26,7 +26,7 @@ import type { Account } from '@/types'
 import {
   getAccountAntigravityTierClass,
   getAccountAntigravityTierLabel
-} from '../accountsView'
+} from './accountsView'
 
 const props = defineProps<{
   account: Account

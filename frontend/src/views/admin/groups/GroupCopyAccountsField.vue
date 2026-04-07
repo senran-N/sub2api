@@ -57,7 +57,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
-import type { NumberSelectOption } from '../groupsForm'
+import type { NumberSelectOption } from './groupsForm'
 
 const props = defineProps<{
   options: NumberSelectOption[]

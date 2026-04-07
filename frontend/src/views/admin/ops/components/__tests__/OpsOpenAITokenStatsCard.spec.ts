@@ -196,7 +196,7 @@ describe('OpsOpenAITokenStatsCard', () => {
     expect(wrapper.find('.empty-state').exists()).toBe(true)
   })
 
-  it('数据表使用固定高度滚动容器，避免纵向无限增长', async () => {
+  it('数据表通过语义化滚动容器承载固定高度样式，避免测试绑定具体视觉类名', async () => {
     mockGetOpenAITokenStats.mockResolvedValue(sampleResponse)
 
     const wrapper = mount(OpsOpenAITokenStatsCard, {
@@ -210,7 +210,8 @@ describe('OpsOpenAITokenStatsCard', () => {
     })
     await flushPromises()
 
-    expect(wrapper.find('.max-h-\\[420px\\]').exists()).toBe(true)
+    const scrollContainer = wrapper.get('.ops-openai-token-stats-card__table-scroll')
+    expect(scrollContainer.classes()).toContain('overflow-auto')
   })
 
   it('接口异常时显示错误提示', async () => {

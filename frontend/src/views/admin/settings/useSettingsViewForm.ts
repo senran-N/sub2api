@@ -1,6 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { adminAPI } from '@/api'
 import type { AdminGroup } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   isRegistrationEmailSuffixDomainValid,
   normalizeRegistrationEmailSuffixDomain,
@@ -10,14 +11,17 @@ import {
   addCustomEndpoint,
   addCustomMenuItem,
   addNextDefaultSubscription,
+  buildSendTestEmailRequest,
+  buildSmtpTestConnectionRequest,
   buildSettingsUpdatePayload,
+  createDefaultSettingsForm,
+  getSettingsLinuxdoRedirectUrlSuggestion,
   hydrateSettingsForm,
   moveCustomMenuItem,
   removeCustomEndpoint,
   removeCustomMenuItem,
   removeDefaultSubscription as removeDefaultSubscriptionItem
 } from './settingsForm'
-import { createDefaultSettingsForm, getSettingsLinuxdoRedirectUrlSuggestion } from './settingsView'
 
 interface DefaultSubscriptionGroupOption {
   value: number
@@ -46,7 +50,6 @@ const REGISTRATION_EMAIL_SUFFIX_SEPARATOR_KEYS = new Set([
   'Enter',
   'Tab'
 ])
-
 export function useSettingsViewForm(options: SettingsViewFormOptions) {
   const loading = ref(true)
   const loadFailed = ref(false)
@@ -76,22 +79,6 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
       options.location ?? (typeof window === 'undefined' ? undefined : window.location)
     )
   )
-
-  function getErrorMessage(error: unknown): string {
-    if (error instanceof Error && error.message) {
-      return error.message
-    }
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'message' in error &&
-      typeof error.message === 'string' &&
-      error.message
-    ) {
-      return error.message
-    }
-    return options.t('common.unknownError')
-  }
 
   function removeRegistrationEmailSuffixWhitelistTag(suffix: string) {
     registrationEmailSuffixWhitelistTags.value = registrationEmailSuffixWhitelistTags.value.filter(
@@ -203,7 +190,9 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
       smtpPasswordManuallyEdited.value = false
     } catch (error) {
       loadFailed.value = true
-      options.showError(`${options.t('admin.settings.failedToLoad')}: ${getErrorMessage(error)}`)
+      options.showError(
+        `${options.t('admin.settings.failedToLoad')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
+      )
     } finally {
       loading.value = false
     }
@@ -269,7 +258,9 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
       await options.refreshAdminSettings(true)
       options.showSuccess(options.t('admin.settings.settingsSaved'))
     } catch (error) {
-      options.showError(`${options.t('admin.settings.failedToSave')}: ${getErrorMessage(error)}`)
+      options.showError(
+        `${options.t('admin.settings.failedToSave')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
+      )
     } finally {
       saving.value = false
     }
@@ -279,18 +270,13 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
     testingSmtp.value = true
 
     try {
-      const smtpPassword = smtpPasswordManuallyEdited.value ? form.smtp_password : ''
-      const result = await adminAPI.settings.testSmtpConnection({
-        smtp_host: form.smtp_host,
-        smtp_port: form.smtp_port,
-        smtp_username: form.smtp_username,
-        smtp_password: smtpPassword,
-        smtp_use_tls: form.smtp_use_tls
-      })
+      const result = await adminAPI.settings.testSmtpConnection(
+        buildSmtpTestConnectionRequest(form, smtpPasswordManuallyEdited.value)
+      )
       options.showSuccess(result.message || options.t('admin.settings.smtpConnectionSuccess'))
     } catch (error) {
       options.showError(
-        `${options.t('admin.settings.failedToTestSmtp')}: ${getErrorMessage(error)}`
+        `${options.t('admin.settings.failedToTestSmtp')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
       testingSmtp.value = false
@@ -306,21 +292,17 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
     sendingTestEmail.value = true
 
     try {
-      const smtpPassword = smtpPasswordManuallyEdited.value ? form.smtp_password : ''
-      const result = await adminAPI.settings.sendTestEmail({
-        email: testEmailAddress.value,
-        smtp_host: form.smtp_host,
-        smtp_port: form.smtp_port,
-        smtp_username: form.smtp_username,
-        smtp_password: smtpPassword,
-        smtp_from_email: form.smtp_from_email,
-        smtp_from_name: form.smtp_from_name,
-        smtp_use_tls: form.smtp_use_tls
-      })
+      const result = await adminAPI.settings.sendTestEmail(
+        buildSendTestEmailRequest(
+          form,
+          testEmailAddress.value,
+          smtpPasswordManuallyEdited.value
+        )
+      )
       options.showSuccess(result.message || options.t('admin.settings.testEmailSent'))
     } catch (error) {
       options.showError(
-        `${options.t('admin.settings.failedToSendTestEmail')}: ${getErrorMessage(error)}`
+        `${options.t('admin.settings.failedToSendTestEmail')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
       sendingTestEmail.value = false

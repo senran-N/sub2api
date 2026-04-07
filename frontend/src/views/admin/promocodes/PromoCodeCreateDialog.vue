@@ -82,7 +82,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import type { PromoCodeCreateForm } from '../promoCodeForm'
+import type { PromoCodeCreateForm } from './promoCodeForm'
 
 defineProps<{
   show: boolean

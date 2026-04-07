@@ -4,7 +4,7 @@ import type { BackupRecord } from '@/api/admin/backup'
 import {
   createDefaultBackupS3Config,
   createDefaultBackupScheduleConfig
-} from '../backupView'
+} from '../backup/backupView'
 import BackupOperationsCard from '../backup/BackupOperationsCard.vue'
 import BackupR2GuideModal from '../backup/BackupR2GuideModal.vue'
 import BackupS3ConfigCard from '../backup/BackupS3ConfigCard.vue'

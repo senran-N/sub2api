@@ -8,7 +8,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Announcement } from '@/types'
-import { getAnnouncementStatusLabel } from '../announcementsForm'
+import { getAnnouncementStatusLabel } from './announcementsForm'
 
 const props = defineProps<{
   status: Announcement['status']

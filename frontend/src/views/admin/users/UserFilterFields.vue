@@ -92,7 +92,7 @@ import type { SelectOption } from '@/components/common/Select.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { UserAttributeDefinition } from '@/types'
-import type { UsersFilterState } from '../usersTable'
+import type { UsersFilterState } from './usersTable'
 
 const props = defineProps<{
   searchQuery: string

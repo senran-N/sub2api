@@ -71,8 +71,8 @@ import { useI18n } from 'vue-i18n'
 import { formatDateOnly } from '@/utils/format'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import type { UserSubscription } from '@/types'
-import type { ExtendSubscriptionForm } from '../subscriptionForm'
-import { getSubscriptionDaysRemaining } from '../subscriptionForm'
+import type { ExtendSubscriptionForm } from './subscriptionForm'
+import { getSubscriptionDaysRemaining } from './subscriptionForm'
 
 defineProps<{
   show: boolean

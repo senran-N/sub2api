@@ -10,7 +10,7 @@ import {
   getGeneratedRedeemTextareaHeight,
   resetRedeemGenerationSubscriptionFields,
   syncRedeemGenerationFormValue
-} from '../redeemForm'
+} from '../redeem/redeemForm'
 
 function createGroup(overrides: Partial<Group> = {}): Group {
   return {

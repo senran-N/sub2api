@@ -43,10 +43,10 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { SettingsForm } from '../settingsForm'
+import type { SettingsClaudeCodeFields } from './settingsForm'
 
 defineProps<{
-  form: SettingsForm
+  form: SettingsClaudeCodeFields
 }>()
 
 const { t } = useI18n()

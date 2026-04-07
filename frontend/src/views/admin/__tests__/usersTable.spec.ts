@@ -17,7 +17,7 @@ import {
   getUserSubscriptionDaysRemaining,
   toggleBuiltInUserFilter,
   toggleUserAttributeFilter
-} from '../usersTable'
+} from '../users/usersTable'
 
 function createAdminGroup(overrides: Partial<AdminGroup> = {}): AdminGroup {
   return {

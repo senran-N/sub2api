@@ -1,10 +1,12 @@
 import { ref, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { UserSubscription } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   buildAssignSubscriptionRequest,
   buildExtendSubscriptionRequest,
-  willSubscriptionAdjustmentRemainActive,
+  validateAssignSubscriptionForm,
+  validateExtendSubscriptionAdjustment,
   type AssignSubscriptionForm,
   type ExtendSubscriptionForm
 } from './subscriptionForm'
@@ -33,16 +35,9 @@ export function useSubscriptionsViewActions(options: SubscriptionsViewActionsOpt
   const resettingQuota = ref(false)
 
   const handleAssignSubscription = async () => {
-    if (!options.assignForm.user_id) {
-      options.showError(options.t('admin.subscriptions.pleaseSelectUser'))
-      return
-    }
-    if (!options.assignForm.group_id) {
-      options.showError(options.t('admin.subscriptions.pleaseSelectGroup'))
-      return
-    }
-    if (!options.assignForm.validity_days || options.assignForm.validity_days < 1) {
-      options.showError(options.t('admin.subscriptions.validityDaysRequired'))
+    const validationErrorKey = validateAssignSubscriptionForm(options.assignForm)
+    if (validationErrorKey) {
+      options.showError(options.t(validationErrorKey))
       return
     }
 
@@ -52,8 +47,10 @@ export function useSubscriptionsViewActions(options: SubscriptionsViewActionsOpt
       options.showSuccess(options.t('admin.subscriptions.subscriptionAssigned'))
       options.closeAssignModal()
       await options.reloadSubscriptions()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.subscriptions.failedToAssign'))
+    } catch (error) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.subscriptions.failedToAssign'))
+      )
       console.error('Error assigning subscription:', error)
     } finally {
       submitting.value = false
@@ -69,13 +66,12 @@ export function useSubscriptionsViewActions(options: SubscriptionsViewActionsOpt
       return
     }
 
-    if (
-      !willSubscriptionAdjustmentRemainActive(
-        options.extendingSubscription.value,
-        options.extendForm.days
-      )
-    ) {
-      options.showError(options.t('admin.subscriptions.adjustWouldExpire'))
+    const validationErrorKey = validateExtendSubscriptionAdjustment(
+      options.extendingSubscription.value,
+      options.extendForm
+    )
+    if (validationErrorKey) {
+      options.showError(options.t(validationErrorKey))
       return
     }
 
@@ -88,8 +84,10 @@ export function useSubscriptionsViewActions(options: SubscriptionsViewActionsOpt
       options.showSuccess(options.t('admin.subscriptions.subscriptionAdjusted'))
       options.closeExtendModal()
       await options.reloadSubscriptions()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.subscriptions.failedToAdjust'))
+    } catch (error) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.subscriptions.failedToAdjust'))
+      )
       console.error('Error adjusting subscription:', error)
     } finally {
       submitting.value = false
@@ -110,8 +108,10 @@ export function useSubscriptionsViewActions(options: SubscriptionsViewActionsOpt
       options.showSuccess(options.t('admin.subscriptions.subscriptionRevoked'))
       options.closeRevokeDialog()
       await options.reloadSubscriptions()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.subscriptions.failedToRevoke'))
+    } catch (error) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.subscriptions.failedToRevoke'))
+      )
       console.error('Error revoking subscription:', error)
     }
   }
@@ -135,9 +135,9 @@ export function useSubscriptionsViewActions(options: SubscriptionsViewActionsOpt
       options.showSuccess(options.t('admin.subscriptions.quotaResetSuccess'))
       options.closeResetQuotaConfirm()
       await options.reloadSubscriptions()
-    } catch (error: any) {
+    } catch (error) {
       options.showError(
-        error.response?.data?.detail || options.t('admin.subscriptions.failedToResetQuota')
+        resolveRequestErrorMessage(error, options.t('admin.subscriptions.failedToResetQuota'))
       )
       console.error('Error resetting quota:', error)
     } finally {

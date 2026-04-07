@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { useGroupsViewManagement } from '../useGroupsViewManagement'
+import { useGroupsViewManagement } from '../groups/useGroupsViewManagement'
 import type { AdminGroup } from '@/types'
 
 const { createGroupRequest, updateGroupRequest, deleteGroupRequest } = vi.hoisted(() => ({
@@ -156,5 +156,25 @@ describe('useGroupsViewManagement', () => {
     await state.confirmDelete()
     expect(deleteGroupRequest).toHaveBeenCalledWith(1)
     expect(showSuccess).toHaveBeenCalledWith('admin.groups.groupDeleted')
+  })
+
+  it('surfaces shared request error details for create failures', async () => {
+    const showError = vi.fn()
+    const state = useGroupsViewManagement({
+      t: (key: string) => key,
+      showError,
+      showSuccess: vi.fn(),
+      loadGroups: vi.fn().mockResolvedValue(undefined),
+      isCurrentOnboardingStep: vi.fn(() => false),
+      advanceOnboarding: vi.fn()
+    })
+    createGroupRequest.mockRejectedValueOnce({
+      response: { data: { detail: 'group-create-failed' } }
+    })
+
+    state.createForm.name = 'New Group'
+    await state.handleCreateGroup()
+
+    expect(showError).toHaveBeenCalledWith('group-create-failed')
   })
 })

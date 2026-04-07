@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import {
   downloadAccountsExportJson,
   useAccountsViewExport
-} from '../useAccountsViewExport'
+} from '../accounts/useAccountsViewExport'
 
 describe('useAccountsViewExport', () => {
   beforeEach(() => {

@@ -108,6 +108,7 @@ describe('settings general cards', () => {
       },
       global: {
         stubs: {
+          Select: SelectStub,
           Toggle: ToggleStub,
           ImageUpload: ImageUploadStub
         }
@@ -117,9 +118,9 @@ describe('settings general cards', () => {
     expect(wrapper.text()).toContain('admin.settings.site.backendMode')
 
     await wrapper.find('.toggle').setValue(true)
-    await wrapper.get('button.rounded').trigger('click')
+    await wrapper.get('.settings-site-card__remove-button').trigger('click')
     await wrapper.get('.image-upload').trigger('click')
-    await wrapper.get('button.w-full').trigger('click')
+    await wrapper.get('.settings-site-card__add-button').trigger('click')
 
     expect(form.backend_mode_enabled).toBe(true)
     expect(form.site_logo).toBe('next-value')

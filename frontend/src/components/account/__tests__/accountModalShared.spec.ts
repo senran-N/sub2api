@@ -3,9 +3,14 @@ import {
   buildAccountOpenAIWSModeOptions,
   buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
+  buildEditAccountBasePayload,
   buildAccountUmqModeOptions,
   buildMixedChannelDetails,
+  createDefaultCreateAccountForm,
+  createDefaultEditAccountForm,
+  hydrateEditAccountForm,
   needsMixedChannelCheck,
+  resetCreateAccountForm,
   resolveAccountApiKeyHint,
   resolveAccountBaseUrlHint,
   resolveCreateAccountOAuthStepTitle,
@@ -105,6 +110,77 @@ describe('accountModalShared', () => {
       quota_weekly_reset_day: 5,
       quota_weekly_reset_hour: 9,
       quota_reset_timezone: 'UTC'
+    })
+  })
+
+  it('builds, resets, hydrates, and normalizes shared account form state', () => {
+    const createForm = createDefaultCreateAccountForm()
+    createForm.name = 'Changed'
+    resetCreateAccountForm(createForm)
+    expect(createForm).toEqual({
+      name: '',
+      notes: '',
+      platform: 'anthropic',
+      type: 'oauth',
+      credentials: {},
+      proxy_id: null,
+      concurrency: 10,
+      load_factor: null,
+      priority: 1,
+      rate_multiplier: 1,
+      group_ids: [],
+      expires_at: null
+    })
+
+    const editForm = createDefaultEditAccountForm()
+    hydrateEditAccountForm(editForm, {
+      name: 'Demo',
+      notes: null,
+      proxy_id: null,
+      concurrency: 4,
+      load_factor: null,
+      priority: 8,
+      rate_multiplier: null,
+      status: 'error',
+      group_ids: [1, 2],
+      expires_at: 123
+    } as any)
+
+    expect(editForm).toEqual({
+      name: 'Demo',
+      notes: '',
+      proxy_id: null,
+      concurrency: 4,
+      load_factor: null,
+      priority: 8,
+      rate_multiplier: 1,
+      status: 'error',
+      group_ids: [1, 2],
+      expires_at: 123
+    })
+
+    expect(
+      buildEditAccountBasePayload(
+        {
+          ...editForm,
+          proxy_id: null,
+          expires_at: null,
+          load_factor: -1
+        },
+        true
+      )
+    ).toEqual({
+      name: 'Demo',
+      notes: '',
+      proxy_id: 0,
+      concurrency: 4,
+      load_factor: 0,
+      priority: 8,
+      rate_multiplier: 1,
+      status: 'error',
+      group_ids: [1, 2],
+      expires_at: 0,
+      auto_pause_on_expired: true
     })
   })
 })

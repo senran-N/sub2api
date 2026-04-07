@@ -33,7 +33,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
-import { ACCOUNT_AUTO_REFRESH_INTERVALS } from '../accountsList'
+import { ACCOUNT_AUTO_REFRESH_INTERVALS } from './accountsList'
 
 type AccountAutoRefreshInterval = (typeof ACCOUNT_AUTO_REFRESH_INTERVALS)[number]
 

@@ -1,15 +1,18 @@
 import { computed, reactive, ref } from 'vue'
 import type { BetaPolicyRule } from '@/api/admin/settings'
 import { adminAPI } from '@/api'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   createDefaultBetaPolicyRules,
   createDefaultOverloadCooldownSettings,
   createDefaultRectifierSettings,
   createDefaultStreamTimeoutSettings,
+} from './settingsForm'
+import {
   getSettingsBetaDisplayName,
   maskSettingsApiKey,
   sanitizeRectifierPatterns
-} from './settingsView'
+} from './settingsPolicies'
 
 interface SettingsViewPoliciesOptions {
   t: (key: string, params?: Record<string, unknown>) => string
@@ -57,22 +60,6 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
     { value: 'bedrock', label: options.t('admin.settings.betaPolicy.scopeBedrock') }
   ])
 
-  function getErrorMessage(error: unknown): string {
-    if (error instanceof Error && error.message) {
-      return error.message
-    }
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'message' in error &&
-      typeof error.message === 'string' &&
-      error.message
-    ) {
-      return error.message
-    }
-    return options.t('common.unknownError')
-  }
-
   function getBetaDisplayName(token: string): string {
     return getSettingsBetaDisplayName(token)
   }
@@ -99,7 +86,7 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
       adminApiKeyMasked.value = maskSettingsApiKey(result.key)
       options.showSuccess(options.t('admin.settings.adminApiKey.keyGenerated'))
     } catch (error) {
-      options.showError(getErrorMessage(error))
+      options.showError(resolveRequestErrorMessage(error, options.t('common.unknownError')))
     } finally {
       adminApiKeyOperating.value = false
     }
@@ -125,7 +112,7 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
       newAdminApiKey.value = ''
       options.showSuccess(options.t('admin.settings.adminApiKey.keyDeleted'))
     } catch (error) {
-      options.showError(getErrorMessage(error))
+      options.showError(resolveRequestErrorMessage(error, options.t('common.unknownError')))
     } finally {
       adminApiKeyOperating.value = false
     }
@@ -162,7 +149,7 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
       options.showSuccess(options.t('admin.settings.overloadCooldown.saved'))
     } catch (error) {
       options.showError(
-        `${options.t('admin.settings.overloadCooldown.saveFailed')}: ${getErrorMessage(error)}`
+        `${options.t('admin.settings.overloadCooldown.saveFailed')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
       overloadCooldownSaving.value = false
@@ -196,7 +183,7 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
       options.showSuccess(options.t('admin.settings.streamTimeout.saved'))
     } catch (error) {
       options.showError(
-        `${options.t('admin.settings.streamTimeout.saveFailed')}: ${getErrorMessage(error)}`
+        `${options.t('admin.settings.streamTimeout.saveFailed')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
       streamTimeoutSaving.value = false
@@ -235,7 +222,7 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
       options.showSuccess(options.t('admin.settings.rectifier.saved'))
     } catch (error) {
       options.showError(
-        `${options.t('admin.settings.rectifier.saveFailed')}: ${getErrorMessage(error)}`
+        `${options.t('admin.settings.rectifier.saveFailed')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
       rectifierSaving.value = false
@@ -264,7 +251,7 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
       options.showSuccess(options.t('admin.settings.betaPolicy.saved'))
     } catch (error) {
       options.showError(
-        `${options.t('admin.settings.betaPolicy.saveFailed')}: ${getErrorMessage(error)}`
+        `${options.t('admin.settings.betaPolicy.saveFailed')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
       betaPolicySaving.value = false

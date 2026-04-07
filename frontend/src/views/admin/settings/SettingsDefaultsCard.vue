@@ -143,7 +143,7 @@ import { useI18n } from 'vue-i18n'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-import type { SettingsForm } from '../settingsForm'
+import type { SettingsDefaultsFields } from './settingsForm'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 
 interface DefaultSubscriptionGroupOptionView {
@@ -155,7 +155,7 @@ interface DefaultSubscriptionGroupOptionView {
 }
 
 defineProps<{
-  form: SettingsForm
+  form: SettingsDefaultsFields
   defaultSubscriptionGroupOptions: SelectOption[]
   toDefaultSubscriptionGroupOption: (option: unknown) => DefaultSubscriptionGroupOptionView
 }>()

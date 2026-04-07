@@ -9,7 +9,7 @@ import {
   loadUsageHiddenColumns,
   saveUsageHiddenColumns,
   toggleUsageHiddenColumn
-} from '../usageColumns'
+} from '../usage/usageColumns'
 
 describe('usageColumns', () => {
   beforeEach(() => {

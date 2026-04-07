@@ -189,4 +189,25 @@ describe('useGroupsViewData', () => {
     await state.loadGroups()
     expect(showError).not.toHaveBeenCalled()
   })
+
+  it('surfaces shared request details for sort order failures', async () => {
+    updateSortOrder.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'sort-update-failed'
+        }
+      }
+    })
+    const showError = vi.fn()
+    const state = useGroupsViewData({
+      t: (key: string) => key,
+      showError,
+      showSuccess: vi.fn()
+    })
+    state.sortableGroups.value = [createGroup({ id: 1, sort_order: 10 })]
+
+    await state.saveSortOrder()
+
+    expect(showError).toHaveBeenCalledWith('sort-update-failed')
+  })
 })

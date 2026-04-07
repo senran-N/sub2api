@@ -5,13 +5,15 @@ import {
   createDefaultRectifierSettings,
   createDefaultSettingsForm,
   createDefaultStreamTimeoutSettings,
+  getSettingsLinuxdoRedirectUrlSuggestion
+} from '../settings/settingsForm'
+import {
   getSettingsBetaDisplayName,
-  getSettingsLinuxdoRedirectUrlSuggestion,
   maskSettingsApiKey,
   sanitizeRectifierPatterns
-} from '../settingsView'
+} from '../settings/settingsPolicies'
 
-describe('settingsView helpers', () => {
+describe('settings feature helpers', () => {
   it('creates default settings and section state', () => {
     const form = createDefaultSettingsForm()
     expect(form.site_name).toBe('Sub2API')

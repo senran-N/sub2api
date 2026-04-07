@@ -129,8 +129,8 @@ import AnnouncementTargetingCell from './announcements/AnnouncementTargetingCell
 import AnnouncementTimeRangeCell from './announcements/AnnouncementTimeRangeCell.vue'
 import AnnouncementTitleCell from './announcements/AnnouncementTitleCell.vue'
 import AnnouncementsToolbar from './announcements/AnnouncementsToolbar.vue'
-import { useAnnouncementsViewData } from './useAnnouncementsViewData'
-import { useAnnouncementsViewEditor } from './useAnnouncementsViewEditor'
+import { useAnnouncementsViewData } from './announcements/useAnnouncementsViewData'
+import { useAnnouncementsViewEditor } from './announcements/useAnnouncementsViewEditor'
 
 const { t } = useI18n()
 const appStore = useAppStore()

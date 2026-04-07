@@ -22,7 +22,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/types'
-import { formatAccountExpiresAt, isAccountExpired } from '../accountsView'
+import { formatAccountExpiresAt, isAccountExpired } from './accountsView'
 
 const props = defineProps<{
   account: Account

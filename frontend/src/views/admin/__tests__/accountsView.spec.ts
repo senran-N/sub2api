@@ -10,7 +10,7 @@ import {
   getAccountAntigravityTierClass,
   getAccountAntigravityTierLabel,
   isAccountExpired
-} from '../accountsView'
+} from '../accounts/accountsView'
 
 describe('accountsView helpers', () => {
   it('builds localized auto refresh labels and account table columns', () => {

@@ -109,13 +109,13 @@ import {
   buildDefaultUsageFilters,
   buildResetUsageState,
   getLast24HoursUsageRange,
-} from './usageViewState'
+} from './usage/usageViewState'
 import {
   useUsageViewData,
   type ModelDistributionSource
-} from './useUsageViewData'
-import { useUsageViewColumns } from './useUsageViewColumns'
-import { useUsageViewDialogs } from './useUsageViewDialogs'
+} from './usage/useUsageViewData'
+import { useUsageViewColumns } from './usage/useUsageViewColumns'
+import { useUsageViewDialogs } from './usage/useUsageViewDialogs'
 import UsageChartsToolbar from './usage/UsageChartsToolbar.vue'
 import UsageColumnSettingsControl from './usage/UsageColumnSettingsControl.vue'
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSubscriptionsViewData } from '../useSubscriptionsViewData'
+import { useSubscriptionsViewData } from '../subscriptions/useSubscriptionsViewData'
 
 const { listSubscriptions, getAllGroups } = vi.hoisted(() => ({
   listSubscriptions: vi.fn(),
@@ -71,10 +71,12 @@ describe('useSubscriptionsViewData', () => {
   it('reports non-abort subscription load failures', async () => {
     const showLoadError = vi.fn()
     const state = useSubscriptionsViewData({ showLoadError })
-    listSubscriptions.mockRejectedValueOnce(new Error('boom'))
+    listSubscriptions.mockRejectedValueOnce({
+      response: { data: { detail: 'subscription-load-failed' } }
+    })
 
     await state.loadSubscriptions()
 
-    expect(showLoadError).toHaveBeenCalledTimes(1)
+    expect(showLoadError).toHaveBeenCalledWith('subscription-load-failed')
   })
 })

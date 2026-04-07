@@ -48,7 +48,7 @@ import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { RedeemCodeType } from '@/types'
-import type { RedeemStatusFilter } from '../redeemForm'
+import type { RedeemStatusFilter } from './redeemForm'
 
 defineProps<{
   searchQuery: string

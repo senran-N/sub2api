@@ -3,7 +3,7 @@ import type { AdminUser } from '@/types'
 import {
   calculateUserActionMenuPosition,
   useUsersViewDialogs
-} from '../useUsersViewDialogs'
+} from '../users/useUsersViewDialogs'
 
 function createAdminUser(overrides: Partial<AdminUser> = {}): AdminUser {
   return {

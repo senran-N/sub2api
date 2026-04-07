@@ -6,7 +6,7 @@ import {
   USER_HIDDEN_COLUMNS_KEY,
   USER_VISIBLE_FILTERS_KEY,
   useUsersViewState
-} from '../useUsersViewState'
+} from '../users/useUsersViewState'
 
 function createAttributeDefinition(
   overrides: Partial<UserAttributeDefinition> = {}

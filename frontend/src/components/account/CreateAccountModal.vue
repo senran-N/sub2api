@@ -2541,31 +2541,44 @@ import {
   buildAccountTempUnschedPresets,
   buildAccountUmqModeOptions,
   buildMixedChannelDetails,
+  createDefaultCreateAccountForm,
   geminiHelpLinks,
   geminiQuotaDocs,
   needsMixedChannelCheck,
+  resetCreateAccountForm,
   resolveAccountApiKeyHint,
   resolveAccountBaseUrlHint,
   resolveCreateAccountOAuthStepTitle,
-  resolveMixedChannelWarningMessage
+  resolveMixedChannelWarningMessage,
+  type CreateAccountForm
 } from '@/components/account/accountModalShared'
 import {
+  buildCreateAccountRequest,
   buildCreateAccountSharedPayload,
+  buildCreateApiKeyCredentials,
+  buildCreateAnthropicOAuthAccountPayload,
   buildCreateBatchAccountName,
+  buildCreateOpenAICompatOAuthTarget,
   buildCreateAnthropicExtra,
   buildCreateAnthropicQuotaControlExtra,
+  buildCreateAntigravityOAuthCredentials,
+  buildCreateAntigravityUpstreamCredentials,
   buildCreateAntigravityExtra,
+  buildCreateBedrockCredentials,
   buildCreateOpenAIExtra,
-  buildCreateOAuthAccountPayload,
-  buildCreateSoraOAuthCredentials,
   buildCreateSoraExtra,
   resolveBatchCreateOutcome,
   resolveCreateAccountGeminiSelectedTier,
   resolveCreateAccountOAuthFlow
 } from '@/components/account/createAccountModalHelpers'
 import {
-  applyInterceptWarmup,
-  applyTempUnschedConfig,
+  appendEmptyModelMapping,
+  appendPresetModelMapping,
+  applyTempUnschedCredentialsState,
+  confirmCustomErrorCodeSelection,
+  removeModelMappingAt
+} from '@/components/account/accountModalInteractions'
+import {
   assignBuiltModelMapping,
   buildTempUnschedRules,
   createTempUnschedRule,
@@ -2573,8 +2586,6 @@ import {
   getDefaultBaseURL,
   MAX_POOL_MODE_RETRY_COUNT,
   moveItemInPlace,
-  normalizePoolModeRetryCount,
-  replaceAntigravityModelMapping,
   type ModelMapping,
   type TempUnschedRuleForm
 } from '@/components/account/credentialsBuilder'
@@ -2586,6 +2597,13 @@ import {
   resolveOpenAIWSModeConcurrencyHintKey,
   type OpenAIWSMode
 } from '@/utils/openaiWsMode'
+import {
+  consumeValidationFailureMessage,
+  resolveAnthropicExchangeEndpoint,
+  resolveOAuthExchangeState,
+  runBatchCreateFlow,
+  runOAuthExchangeFlow
+} from '@/components/account/oauthAuthorizationFlowHelpers'
 import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
 
 // Type for exposed OAuthAuthorizationFlow component
@@ -2905,20 +2923,7 @@ function getSegmentOptionClasses(isSelected: boolean) {
 const presetMappings = computed(() => getPresetMappingsByPlatform(form.platform))
 const tempUnschedPresets = computed(() => buildAccountTempUnschedPresets(t))
 
-const form = reactive({
-  name: '',
-  notes: '',
-  platform: 'anthropic' as AccountPlatform,
-  type: 'oauth' as AccountType, // Will be 'oauth', 'setup-token', or 'apikey'
-  credentials: {} as Record<string, unknown>,
-  proxy_id: null as number | null,
-  concurrency: 10,
-  load_factor: null as number | null,
-  priority: 1,
-  rate_multiplier: 1,
-  group_ids: [] as number[],
-  expires_at: null as number | null
-})
+const form = reactive<CreateAccountForm>(createDefaultCreateAccountForm())
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
@@ -3115,22 +3120,6 @@ watch(
 )
 
 // Model mapping helpers
-const appendEmptyModelMapping = (target: ModelMapping[]) => {
-  target.push({ from: '', to: '' })
-}
-
-const removeModelMappingAt = (target: ModelMapping[], index: number) => {
-  target.splice(index, 1)
-}
-
-const appendPresetModelMapping = (target: ModelMapping[], from: string, to: string) => {
-  if (target.some((mapping) => mapping.from === from)) {
-    appStore.showInfo(t('admin.accounts.mappingExists', { model: from }))
-    return
-  }
-  target.push({ from, to })
-}
-
 const addModelMapping = () => {
   appendEmptyModelMapping(modelMappings.value)
 }
@@ -3140,7 +3129,9 @@ const removeModelMapping = (index: number) => {
 }
 
 const addPresetMapping = (from: string, to: string) => {
-  appendPresetModelMapping(modelMappings.value, from, to)
+  appendPresetModelMapping(modelMappings.value, from, to, (model) => {
+    appStore.showInfo(t('admin.accounts.mappingExists', { model }))
+  })
 }
 
 const addAntigravityModelMapping = () => {
@@ -3152,24 +3143,16 @@ const removeAntigravityModelMapping = (index: number) => {
 }
 
 const addAntigravityPresetMapping = (from: string, to: string) => {
-  appendPresetModelMapping(antigravityModelMappings.value, from, to)
-}
-
-const confirmCustomErrorCodeSelection = (code: number) => {
-  if (code === 429) {
-    return confirm(t('admin.accounts.customErrorCodes429Warning'))
-  }
-  if (code === 529) {
-    return confirm(t('admin.accounts.customErrorCodes529Warning'))
-  }
-  return true
+  appendPresetModelMapping(antigravityModelMappings.value, from, to, (model) => {
+    appStore.showInfo(t('admin.accounts.mappingExists', { model }))
+  })
 }
 
 // Error code toggle helper
 const toggleErrorCode = (code: number) => {
   const index = selectedErrorCodes.value.indexOf(code)
   if (index === -1) {
-    if (!confirmCustomErrorCodeSelection(code)) {
+    if (!confirmCustomErrorCodeSelection(code, confirm, t)) {
       return
     }
     selectedErrorCodes.value.push(code)
@@ -3189,7 +3172,7 @@ const addCustomErrorCode = () => {
     appStore.showInfo(t('admin.accounts.errorCodeExists'))
     return
   }
-  if (!confirmCustomErrorCodeSelection(code)) {
+  if (!confirmCustomErrorCodeSelection(code, confirm, t)) {
     return
   }
   selectedErrorCodes.value.push(code)
@@ -3418,18 +3401,7 @@ async function syncGeminiAIStudioOAuthAvailability(
 // Methods
 const resetForm = () => {
   step.value = 1
-  form.name = ''
-  form.notes = ''
-  form.platform = 'anthropic'
-  form.type = 'oauth'
-  form.credentials = {}
-  form.proxy_id = null
-  form.concurrency = 10
-  form.load_factor = null
-  form.priority = 1
-  form.rate_multiplier = 1
-  form.group_ids = []
-  form.expires_at = null
+  resetCreateAccountForm(form)
   accountCategory.value = 'oauth-based'
   addMethod.value = 'oauth'
   apiKeyBaseUrl.value = getDefaultBaseURL('anthropic')
@@ -3599,114 +3571,56 @@ const handleBatchCreateOutcome = (options: {
   }
 }
 
-const createOpenAIOAuthAccount = async (options: {
+const resolveBatchCreateUnexpectedError = (error: any) =>
+  error?.response?.data?.detail || error?.message || 'Unknown error'
+
+const createOAuthAccount = async (options: {
   commonPayload: ReturnType<typeof buildCurrentCreateSharedPayload>
   name: string
+  platform: AccountPlatform
+  type: AccountType
   credentials: Record<string, unknown>
   extra?: Record<string, unknown>
 }) =>
   adminAPI.accounts.create(
-    buildCreateOAuthAccountPayload({
+    buildCreateAccountRequest({
       common: options.commonPayload,
       name: options.name,
-      platform: 'openai',
-      type: 'oauth',
+      platform: options.platform,
+      type: options.type,
       credentials: options.credentials,
       extra: options.extra
     })
   )
 
-const createSoraOAuthAccount = async (options: {
-  commonPayload: ReturnType<typeof buildCurrentCreateSharedPayload>
-  name: string
-  credentials: Record<string, unknown>
-  extra?: Record<string, unknown>
-}) =>
-  adminAPI.accounts.create(
-    buildCreateOAuthAccountPayload({
-      common: options.commonPayload,
-      name: options.name,
-      platform: 'sora',
-      type: 'oauth',
-      credentials: options.credentials,
-      extra: options.extra
-    })
-  )
-
-const parseBatchTokenInput = (value: string) =>
-  value
-    .split('\n')
-    .map((item) => item.trim())
-    .filter((item) => item)
-
-const runBatchCreateFlow = async (options: {
-  rawInput: string
-  emptyInputMessage: string
-  loadingRef: { value: boolean }
-  errorRef: { value: string }
-  onComplete?: (result: {
-    failedCount: number
-    successCount: number
-    errors: string[]
-  }) => void
-  processEntry: (entry: string, index: number, entries: string[]) => Promise<string | null>
+const createBatchCompletionHandler = (errorRef: { value: string }) => (result: {
+  failedCount: number
+  successCount: number
+  errors: string[]
 }) => {
-  if (!options.rawInput.trim()) return
-
-  const entries = parseBatchTokenInput(options.rawInput)
-  if (entries.length === 0) {
-    options.errorRef.value = options.emptyInputMessage
-    return
-  }
-
-  options.loadingRef.value = true
-  options.errorRef.value = ''
-
-  let successCount = 0
-  let failedCount = 0
-  const errors: string[] = []
-
-  try {
-    for (let index = 0; index < entries.length; index++) {
-      try {
-        const entryError = await options.processEntry(entries[index], index, entries)
-        if (entryError) {
-          failedCount++
-          errors.push(`#${index + 1}: ${entryError}`)
-          continue
-        }
-        successCount++
-      } catch (error: any) {
-        failedCount++
-        errors.push(`#${index + 1}: ${error.response?.data?.detail || error.message || 'Unknown error'}`)
-      }
+  handleBatchCreateOutcome({
+    failedCount: result.failedCount,
+    successCount: result.successCount,
+    errors: result.errors,
+    setError: (message) => {
+      errorRef.value = message
     }
-
-    if (options.onComplete) {
-      options.onComplete({ failedCount, successCount, errors })
-    } else {
-      handleBatchCreateOutcome({
-        failedCount,
-        successCount,
-        errors,
-        setError: (message) => {
-          options.errorRef.value = message
-        }
-      })
-    }
-  } finally {
-    options.loadingRef.value = false
-  }
+  })
 }
 
-const consumeValidationFailureMessage = (
-  errorRef: { value: string },
-  fallbackMessage = 'Validation failed'
-) => {
-  const message = errorRef.value || fallbackMessage
-  errorRef.value = ''
-  return message
-}
+const resolveCurrentOAuthState = (
+  fallbackState: string | undefined,
+  errorRef: { value: string }
+) =>
+  resolveOAuthExchangeState({
+    fallbackState,
+    inputState: oauthFlowRef.value?.oauthState,
+    onMissingState: (message) => {
+      errorRef.value = message
+      appStore.showError(message)
+    },
+    authFailedMessage: t('admin.accounts.oauth.authFailed')
+  })
 
 const ensureCreateAccountName = () => {
   if (form.name.trim()) {
@@ -3717,121 +3631,81 @@ const ensureCreateAccountName = () => {
 }
 
 const buildBedrockCreateCredentials = () => {
-  const credentials: Record<string, unknown> = {
-    auth_mode: bedrockAuthMode.value,
-    aws_region: bedrockRegion.value.trim() || 'us-east-1',
+  const result = buildCreateBedrockCredentials({
+    accessKeyId: bedrockAccessKeyId.value,
+    allowedModels: allowedModels.value,
+    apiKey: bedrockApiKeyValue.value,
+    authMode: bedrockAuthMode.value,
+    forceGlobal: bedrockForceGlobal.value,
+    interceptWarmupRequests: interceptWarmupRequests.value,
+    mode: modelRestrictionMode.value,
+    modelMappings: modelMappings.value,
+    poolModeEnabled: poolModeEnabled.value,
+    poolModeRetryCount: poolModeRetryCount.value,
+    region: bedrockRegion.value,
+    secretAccessKey: bedrockSecretAccessKey.value,
+    sessionToken: bedrockSessionToken.value
+  })
+
+  if (result.errorMessageKey) {
+    appStore.showError(t(result.errorMessageKey))
+    return null
   }
 
-  if (bedrockAuthMode.value === 'sigv4') {
-    if (!bedrockAccessKeyId.value.trim()) {
-      appStore.showError(t('admin.accounts.bedrockAccessKeyIdRequired'))
-      return null
-    }
-    if (!bedrockSecretAccessKey.value.trim()) {
-      appStore.showError(t('admin.accounts.bedrockSecretAccessKeyRequired'))
-      return null
-    }
-    credentials.aws_access_key_id = bedrockAccessKeyId.value.trim()
-    credentials.aws_secret_access_key = bedrockSecretAccessKey.value.trim()
-    if (bedrockSessionToken.value.trim()) {
-      credentials.aws_session_token = bedrockSessionToken.value.trim()
-    }
-  } else {
-    if (!bedrockApiKeyValue.value.trim()) {
-      appStore.showError(t('admin.accounts.bedrockApiKeyRequired'))
-      return null
-    }
-    credentials.api_key = bedrockApiKeyValue.value.trim()
-  }
-
-  if (bedrockForceGlobal.value) {
-    credentials.aws_force_global = 'true'
-  }
-
-  assignBuiltModelMapping(
-    credentials,
-    modelRestrictionMode.value,
-    allowedModels.value,
-    modelMappings.value
-  )
-
-  if (poolModeEnabled.value) {
-    credentials.pool_mode = true
-    credentials.pool_mode_retry_count = normalizePoolModeRetryCount(poolModeRetryCount.value)
-  }
-
-  applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
-  return credentials
+  return result.credentials || null
 }
 
 const buildAntigravityUpstreamCreateCredentials = () => {
-  if (!upstreamBaseUrl.value.trim()) {
-    appStore.showError(t('admin.accounts.upstream.pleaseEnterBaseUrl'))
-    return null
-  }
-  if (!upstreamApiKey.value.trim()) {
-    appStore.showError(t('admin.accounts.upstream.pleaseEnterApiKey'))
+  const result = buildCreateAntigravityUpstreamCredentials({
+    apiKey: upstreamApiKey.value,
+    baseUrl: upstreamBaseUrl.value,
+    interceptWarmupRequests: interceptWarmupRequests.value,
+    modelMappings: antigravityModelMappings.value
+  })
+
+  if (result.errorMessageKey) {
+    appStore.showError(t(result.errorMessageKey))
     return null
   }
 
-  const credentials: Record<string, unknown> = {
-    base_url: upstreamBaseUrl.value.trim(),
-    api_key: upstreamApiKey.value.trim()
-  }
-
-  replaceAntigravityModelMapping(credentials, antigravityModelMappings.value)
-  applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
-  return credentials
+  return result.credentials || null
 }
 
 const buildApiKeyCreateCredentials = () => {
-  if (!apiKeyValue.value.trim()) {
-    appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
+  const result = buildCreateApiKeyCredentials({
+    allowedModels: allowedModels.value,
+    apiKey: apiKeyValue.value,
+    baseUrl: apiKeyBaseUrl.value,
+    customErrorCodesEnabled: customErrorCodesEnabled.value,
+    geminiTierId: geminiTierAIStudio.value,
+    interceptWarmupRequests: interceptWarmupRequests.value,
+    isOpenAIModelRestrictionDisabled: isOpenAIModelRestrictionDisabled.value,
+    mode: modelRestrictionMode.value,
+    modelMappings: modelMappings.value,
+    platform: form.platform,
+    poolModeEnabled: poolModeEnabled.value,
+    poolModeRetryCount: poolModeRetryCount.value,
+    selectedErrorCodes: selectedErrorCodes.value
+  })
+
+  if (result.errorMessageKey) {
+    appStore.showError(t(result.errorMessageKey))
     return null
   }
 
-  if (form.platform === 'sora') {
-    const soraBaseUrl = apiKeyBaseUrl.value.trim()
-    if (!soraBaseUrl) {
-      appStore.showError(t('admin.accounts.soraBaseUrlRequired'))
-      return null
-    }
-    if (!soraBaseUrl.startsWith('http://') && !soraBaseUrl.startsWith('https://')) {
-      appStore.showError(t('admin.accounts.soraBaseUrlInvalidScheme'))
-      return null
-    }
+  const credentials = result.credentials
+  if (!credentials) {
+    return null
   }
 
-  const credentials: Record<string, unknown> = {
-    base_url: apiKeyBaseUrl.value.trim() || getDefaultBaseURL(form.platform),
-    api_key: apiKeyValue.value.trim()
-  }
-
-  if (form.platform === 'gemini') {
-    credentials.tier_id = geminiTierAIStudio.value
-  }
-
-  if (!isOpenAIModelRestrictionDisabled.value) {
-    assignBuiltModelMapping(
-      credentials,
-      modelRestrictionMode.value,
-      allowedModels.value,
-      modelMappings.value
-    )
-  }
-
-  if (poolModeEnabled.value) {
-    credentials.pool_mode = true
-    credentials.pool_mode_retry_count = normalizePoolModeRetryCount(poolModeRetryCount.value)
-  }
-
-  if (customErrorCodesEnabled.value) {
-    credentials.custom_error_codes_enabled = true
-    credentials.custom_error_codes = [...selectedErrorCodes.value]
-  }
-
-  applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
-  if (!applyCurrentTempUnschedConfig(credentials)) {
+  if (
+    !applyTempUnschedCredentialsState(credentials, {
+      tempUnschedEnabled: tempUnschedEnabled.value,
+      tempUnschedRules: tempUnschedRules.value,
+      showError: appStore.showError,
+      t
+    })
+  ) {
     return null
   }
 
@@ -3897,12 +3771,16 @@ const handleSubmit = async () => {
     platform: form.platform
   })
 
-  await doCreateAccount({
-    ...form,
-    group_ids: form.group_ids,
-    extra,
-    auto_pause_on_expired: autoPauseOnExpired.value
-  })
+  await doCreateAccount(
+    buildCreateAccountRequest({
+      common: buildCurrentCreateSharedPayload(),
+      name: form.name,
+      platform: form.platform,
+      type: form.type,
+      credentials,
+      extra
+    })
+  )
 }
 
 const goBackToBasicInfo = () => {
@@ -3969,19 +3847,23 @@ const handleImportAccessToken = async (accessTokenInput: string) => {
     emptyInputMessage: 'Please enter at least one Access Token',
     loadingRef: oauthClient.loading,
     errorRef: oauthClient.error,
+    onComplete: createBatchCompletionHandler(oauthClient.error),
     processEntry: async (accessToken, index, accessTokens) => {
       const credentials: Record<string, unknown> = {
         access_token: accessToken,
       }
       const accountName = buildCreateBatchAccountName(form.name, index, accessTokens.length)
-      await createSoraOAuthAccount({
+      await createOAuthAccount({
         commonPayload,
         name: accountName,
+        platform: 'sora',
+        type: 'oauth',
         credentials,
         extra: buildCreateSoraExtra()
       })
       return null
-    }
+    },
+    resolveUnexpectedError: resolveBatchCreateUnexpectedError
   })
 }
 
@@ -3995,7 +3877,14 @@ const createAccountAndFinish = async (
   credentials: Record<string, unknown>,
   extra?: Record<string, unknown>
 ) => {
-  if (!applyCurrentTempUnschedConfig(credentials)) {
+  if (
+    !applyTempUnschedCredentialsState(credentials, {
+      tempUnschedEnabled: tempUnschedEnabled.value,
+      tempUnschedRules: tempUnschedRules.value,
+      showError: appStore.showError,
+      t
+    })
+  ) {
     return
   }
   const finalExtra =
@@ -4016,91 +3905,20 @@ const createAccountAndFinish = async (
         })()
       : extra
 
-  await doCreateAccount({
-    name: form.name,
-    notes: form.notes,
-    platform,
-    type,
-    credentials,
-    extra: finalExtra,
-    proxy_id: form.proxy_id,
-    concurrency: form.concurrency,
-    load_factor: form.load_factor ?? undefined,
-    priority: form.priority,
-    rate_multiplier: form.rate_multiplier,
-    group_ids: form.group_ids,
-    expires_at: form.expires_at,
-    auto_pause_on_expired: autoPauseOnExpired.value
-  })
-}
-
-const applyCurrentTempUnschedConfig = (credentials: Record<string, unknown>) => {
-  if (applyTempUnschedConfig(credentials, tempUnschedEnabled.value, tempUnschedRules.value)) {
-    return true
-  }
-
-  appStore.showError(t('admin.accounts.tempUnschedulable.rulesInvalid'))
-  return false
-}
-
-const resolveOAuthExchangeState = (fallbackState: string | undefined, setError: (message: string) => void) => {
-  const stateToUse = (oauthFlowRef.value?.oauthState || fallbackState || '').trim()
-  if (stateToUse) {
-    return stateToUse
-  }
-
-  const message = t('admin.accounts.oauth.authFailed')
-  setError(message)
-  appStore.showError(message)
-  return null
-}
-
-const runOAuthExchangeFlow = async (
-  stateRefs: { loading: { value: boolean }; error: { value: string } },
-  action: () => Promise<void>
-) => {
-  stateRefs.loading.value = true
-  stateRefs.error.value = ''
-
-  try {
-    await action()
-  } catch (error: any) {
-    stateRefs.error.value = resolveOAuthAuthErrorMessage(error)
-    appStore.showError(stateRefs.error.value)
-  } finally {
-    stateRefs.loading.value = false
-  }
-}
-
-const resolveAnthropicExchangeEndpoint = (mode: 'code' | 'cookie') => {
-  if (mode === 'cookie') {
-    return addMethod.value === 'oauth'
-      ? '/admin/accounts/cookie-auth'
-      : '/admin/accounts/setup-token-cookie-auth'
-  }
-
-  return addMethod.value === 'oauth'
-    ? '/admin/accounts/exchange-code'
-    : '/admin/accounts/exchange-setup-token-code'
+  await doCreateAccount(
+    buildCreateAccountRequest({
+      common: buildCurrentCreateSharedPayload(),
+      name: form.name,
+      platform,
+      type,
+      credentials,
+      extra: finalExtra
+    })
+  )
 }
 
 const buildAnthropicOAuthExtra = (tokenInfo: Record<string, unknown>) =>
   buildCurrentAnthropicQuotaExtra(oauth.buildExtraInfo(tokenInfo) || {})
-
-const buildAnthropicOAuthCredentials = (options: {
-  tempUnschedPayload?: ReturnType<typeof buildTempUnschedRules>
-  tokenInfo: Record<string, unknown>
-}) => {
-  const credentials: Record<string, unknown> = { ...options.tokenInfo }
-  applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
-
-  if (options.tempUnschedPayload && options.tempUnschedPayload.length > 0) {
-    credentials.temp_unschedulable_enabled = true
-    credentials.temp_unschedulable_rules = options.tempUnschedPayload
-  }
-
-  return credentials
-}
 
 const createAnthropicOAuthAccountFromTokenInfo = async (options: {
   commonPayload: ReturnType<typeof buildCurrentCreateSharedPayload>
@@ -4110,15 +3928,14 @@ const createAnthropicOAuthAccountFromTokenInfo = async (options: {
   total?: number
 }) => {
   await adminAPI.accounts.create(
-    buildCreateOAuthAccountPayload({
+    buildCreateAnthropicOAuthAccountPayload({
       common: options.commonPayload,
       name: buildCreateBatchAccountName(form.name, options.index ?? 0, options.total ?? 1),
       platform: form.platform,
       type: addMethod.value as AccountType,
-      credentials: buildAnthropicOAuthCredentials({
-        tokenInfo: options.tokenInfo,
-        tempUnschedPayload: options.tempUnschedPayload
-      }),
+      interceptWarmupRequests: interceptWarmupRequests.value,
+      tempUnschedPayload: options.tempUnschedPayload,
+      tokenInfo: options.tokenInfo,
       extra: buildAnthropicOAuthExtra(options.tokenInfo)
     })
   )
@@ -4129,70 +3946,62 @@ const handleOpenAIExchange = async (authCode: string) => {
   const oauthClient = activeOpenAIOAuth.value
   if (!authCode.trim() || !oauthClient.sessionId.value) return
 
-  await runOAuthExchangeFlow(oauthClient, async () => {
-    const stateToUse = resolveOAuthExchangeState(oauthClient.oauthState.value, (message) => {
-      oauthClient.error.value = message
-    })
-    if (!stateToUse) {
-      return
-    }
+  await runOAuthExchangeFlow(
+    oauthClient,
+    async () => {
+      const stateToUse = resolveCurrentOAuthState(oauthClient.oauthState.value, oauthClient.error)
+      if (!stateToUse) {
+        return
+      }
 
-    const tokenInfo = await oauthClient.exchangeAuthCode(
-      authCode.trim(),
-      oauthClient.sessionId.value,
-      stateToUse,
-      form.proxy_id
-    )
-    if (!tokenInfo) return
-
-    const credentials = oauthClient.buildCredentials(tokenInfo)
-    const oauthExtra = oauthClient.buildExtraInfo(tokenInfo) as Record<string, unknown> | undefined
-    const extra = buildCurrentOpenAIExtra(oauthExtra)
-    const shouldCreateOpenAI = form.platform === 'openai'
-    const shouldCreateSora = form.platform === 'sora'
-
-    applyOpenAIModelRestrictionIfNeeded(
-      credentials,
-      shouldCreateOpenAI && !isOpenAIModelRestrictionDisabled.value
-    )
-
-    // 应用临时不可调度配置
-    if (!applyCurrentTempUnschedConfig(credentials)) {
-      return
-    }
-
-    const commonPayload = buildCurrentCreateSharedPayload()
-    let openaiAccountId: string | number | undefined
-
-    if (shouldCreateOpenAI) {
-      const openaiAccount = await createOpenAIOAuthAccount({
-        commonPayload,
-        name: form.name,
-        credentials,
-        extra
-      })
-      openaiAccountId = openaiAccount.id
-      notifyAccountCreated()
-    }
-
-    if (shouldCreateSora) {
-      const soraCredentials = buildCreateSoraOAuthCredentials(credentials)
-      const soraName = shouldCreateOpenAI ? `${form.name} (Sora)` : form.name
-      const soraExtra = buildCreateSoraExtra(
-        shouldCreateOpenAI ? extra : oauthExtra,
-        openaiAccountId
+      const tokenInfo = await oauthClient.exchangeAuthCode(
+        authCode.trim(),
+        oauthClient.sessionId.value,
+        stateToUse,
+        form.proxy_id
       )
-      await createSoraOAuthAccount({
+      if (!tokenInfo) return
+
+      const credentials = oauthClient.buildCredentials(tokenInfo)
+      const oauthExtra = oauthClient.buildExtraInfo(tokenInfo) as Record<string, unknown> | undefined
+      const extra = buildCurrentOpenAIExtra(oauthExtra)
+
+      applyOpenAIModelRestrictionIfNeeded(
+        credentials,
+        form.platform === 'openai' && !isOpenAIModelRestrictionDisabled.value
+      )
+
+      // 应用临时不可调度配置
+      if (
+        !applyTempUnschedCredentialsState(credentials, {
+          tempUnschedEnabled: tempUnschedEnabled.value,
+          tempUnschedRules: tempUnschedRules.value,
+          showError: appStore.showError,
+          t
+        })
+      ) {
+        return
+      }
+
+      const commonPayload = buildCurrentCreateSharedPayload()
+      const target = buildCreateOpenAICompatOAuthTarget({
+        baseName: form.name,
+        credentials,
+        extra: form.platform === 'openai' ? extra : oauthExtra,
+        platform: form.platform as 'openai' | 'sora'
+      })
+
+      await createOAuthAccount({
         commonPayload,
-        name: soraName,
-        credentials: soraCredentials,
-        extra: soraExtra
+        ...target
       })
       notifyAccountCreated()
-    }
 
-    finalizeCreatedAndClose()
-  })
+      finalizeCreatedAndClose()
+    },
+    resolveOAuthAuthErrorMessage,
+    appStore.showError
+  )
 }
 
 // OpenAI 手动 RT 批量验证和创建
@@ -4202,14 +4011,13 @@ const OPENAI_MOBILE_RT_CLIENT_ID = 'app_LlGpXReQgckcGGUo2JrYvtJK'
 // OpenAI/Sora RT 批量验证和创建（共享逻辑）
 const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string) => {
   const oauthClient = activeOpenAIOAuth.value
-  const shouldCreateOpenAI = form.platform === 'openai'
-  const shouldCreateSora = form.platform === 'sora'
   const commonPayload = buildCurrentCreateSharedPayload()
   await runBatchCreateFlow({
     rawInput: refreshTokenInput,
     emptyInputMessage: t('admin.accounts.oauth.openai.pleaseEnterRefreshToken'),
     loadingRef: oauthClient.loading,
     errorRef: oauthClient.error,
+    onComplete: createBatchCompletionHandler(oauthClient.error),
     processEntry: async (refreshToken, index, refreshTokens) => {
       const tokenInfo = await oauthClient.validateRefreshToken(
         refreshToken,
@@ -4229,49 +4037,27 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
 
       applyOpenAIModelRestrictionIfNeeded(
         credentials,
-        shouldCreateOpenAI && !isOpenAIModelRestrictionDisabled.value
+        form.platform === 'openai' && !isOpenAIModelRestrictionDisabled.value
       )
 
-      const accountName = buildCreateBatchAccountName(
-        form.name,
+      const target = buildCreateOpenAICompatOAuthTarget({
+        baseName: form.name,
+        credentials,
+        extra: form.platform === 'openai' ? extra : oauthExtra,
+        fallbackBaseName: tokenInfo.email || 'OpenAI OAuth Account',
         index,
-        refreshTokens.length,
-        tokenInfo.email || 'OpenAI OAuth Account'
-      )
+        platform: form.platform as 'openai' | 'sora',
+        total: refreshTokens.length
+      })
 
-      let openaiAccountId: string | number | undefined
-
-      if (shouldCreateOpenAI) {
-        const openaiAccount = await createOpenAIOAuthAccount({
-          commonPayload,
-          name: accountName,
-          credentials,
-          extra
-        })
-        openaiAccountId = openaiAccount.id
-      }
-
-      if (shouldCreateSora) {
-        const soraCredentials = buildCreateSoraOAuthCredentials(credentials)
-        const soraName = shouldCreateOpenAI
-          ? buildCreateBatchAccountName(
-              form.name,
-              index,
-              refreshTokens.length,
-              tokenInfo.email || 'OpenAI OAuth Account',
-              '(Sora)'
-            )
-          : accountName
-        await createSoraOAuthAccount({
-          commonPayload,
-          name: soraName,
-          credentials: soraCredentials,
-          extra: buildCreateSoraExtra(shouldCreateOpenAI ? extra : oauthExtra, openaiAccountId)
-        })
-      }
+      await createOAuthAccount({
+        commonPayload,
+        ...target
+      })
 
       return null
-    }
+    },
+    resolveUnexpectedError: resolveBatchCreateUnexpectedError
   })
 }
 
@@ -4290,6 +4076,7 @@ const handleSoraValidateST = async (sessionTokenInput: string) => {
     emptyInputMessage: t('admin.accounts.oauth.openai.pleaseEnterSessionToken'),
     loadingRef: oauthClient.loading,
     errorRef: oauthClient.error,
+    onComplete: createBatchCompletionHandler(oauthClient.error),
     processEntry: async (sessionToken, index, sessionTokens) => {
       const tokenInfo = await oauthClient.validateSessionToken(sessionToken, form.proxy_id)
       if (!tokenInfo) {
@@ -4298,16 +4085,19 @@ const handleSoraValidateST = async (sessionTokenInput: string) => {
 
       const credentials = oauthClient.buildCredentials(tokenInfo)
       credentials.session_token = sessionToken
-      await createSoraOAuthAccount({
+      await createOAuthAccount({
         commonPayload,
         name: buildCreateBatchAccountName(form.name, index, sessionTokens.length),
+        platform: 'sora',
+        type: 'oauth',
         credentials,
         extra: buildCreateSoraExtra(
           oauthClient.buildExtraInfo(tokenInfo) as Record<string, unknown> | undefined
         )
       })
       return null
-    }
+    },
+    resolveUnexpectedError: resolveBatchCreateUnexpectedError
   })
 }
 
@@ -4319,6 +4109,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
     emptyInputMessage: t('admin.accounts.oauth.antigravity.pleaseEnterRefreshToken'),
     loadingRef: antigravityOAuth.loading,
     errorRef: antigravityOAuth.error,
+    onComplete: createBatchCompletionHandler(antigravityOAuth.error),
     processEntry: async (refreshToken, index, refreshTokens) => {
       const tokenInfo = await antigravityOAuth.validateRefreshToken(refreshToken, form.proxy_id)
       if (!tokenInfo) {
@@ -4327,7 +4118,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
 
       const credentials = antigravityOAuth.buildCredentials(tokenInfo)
       const createPayload = withAntigravityConfirmFlag(
-        buildCreateOAuthAccountPayload({
+        buildCreateAccountRequest({
           common: commonPayload,
           name: buildCreateBatchAccountName(form.name, index, refreshTokens.length),
           platform: 'antigravity',
@@ -4338,7 +4129,8 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
       )
       await adminAPI.accounts.create(createPayload)
       return null
-    }
+    },
+    resolveUnexpectedError: resolveBatchCreateUnexpectedError
   })
 }
 
@@ -4346,77 +4138,97 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
 const handleGeminiExchange = async (authCode: string) => {
   if (!authCode.trim() || !geminiOAuth.sessionId.value) return
 
-  await runOAuthExchangeFlow(geminiOAuth, async () => {
-    const stateToUse = resolveOAuthExchangeState(geminiOAuth.state.value, (message) => {
-      geminiOAuth.error.value = message
-    })
-    if (!stateToUse) {
-      return
-    }
+  await runOAuthExchangeFlow(
+    geminiOAuth,
+    async () => {
+      const stateToUse = resolveCurrentOAuthState(geminiOAuth.state.value, geminiOAuth.error)
+      if (!stateToUse) {
+        return
+      }
 
-    const tokenInfo = await geminiOAuth.exchangeAuthCode({
-      code: authCode.trim(),
-      sessionId: geminiOAuth.sessionId.value,
-      state: stateToUse,
-      proxyId: form.proxy_id,
-      oauthType: geminiOAuthType.value,
-      tierId: geminiSelectedTier.value
-    })
-    if (!tokenInfo) return
+      const tokenInfo = await geminiOAuth.exchangeAuthCode({
+        code: authCode.trim(),
+        sessionId: geminiOAuth.sessionId.value,
+        state: stateToUse,
+        proxyId: form.proxy_id,
+        oauthType: geminiOAuthType.value,
+        tierId: geminiSelectedTier.value
+      })
+      if (!tokenInfo) return
 
-    const credentials = geminiOAuth.buildCredentials(tokenInfo)
-    const extra = geminiOAuth.buildExtraInfo(tokenInfo)
-    await createAccountAndFinish('gemini', 'oauth', credentials, extra)
-  })
+      const credentials = geminiOAuth.buildCredentials(tokenInfo)
+      const extra = geminiOAuth.buildExtraInfo(tokenInfo)
+      await createAccountAndFinish('gemini', 'oauth', credentials, extra)
+    },
+    resolveOAuthAuthErrorMessage,
+    appStore.showError
+  )
 }
 
 // Antigravity OAuth 授权码兑换
 const handleAntigravityExchange = async (authCode: string) => {
   if (!authCode.trim() || !antigravityOAuth.sessionId.value) return
 
-  await runOAuthExchangeFlow(antigravityOAuth, async () => {
-    const stateToUse = resolveOAuthExchangeState(antigravityOAuth.state.value, (message) => {
-      antigravityOAuth.error.value = message
-    })
-    if (!stateToUse) {
-      return
-    }
+  await runOAuthExchangeFlow(
+    antigravityOAuth,
+    async () => {
+      const stateToUse = resolveCurrentOAuthState(antigravityOAuth.state.value, antigravityOAuth.error)
+      if (!stateToUse) {
+        return
+      }
 
-    const tokenInfo = await antigravityOAuth.exchangeAuthCode({
-      code: authCode.trim(),
-      sessionId: antigravityOAuth.sessionId.value,
-      state: stateToUse,
-      proxyId: form.proxy_id
-    })
-    if (!tokenInfo) return
+      const tokenInfo = await antigravityOAuth.exchangeAuthCode({
+        code: authCode.trim(),
+        sessionId: antigravityOAuth.sessionId.value,
+        state: stateToUse,
+        proxyId: form.proxy_id
+      })
+      if (!tokenInfo) return
 
-    const credentials = antigravityOAuth.buildCredentials(tokenInfo)
-    applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
-    // Antigravity 只使用映射模式
-    replaceAntigravityModelMapping(credentials, antigravityModelMappings.value)
-    const extra = buildCurrentAntigravityExtra()
-    await createAccountAndFinish('antigravity', 'oauth', credentials, extra)
-  })
+      const credentials = buildCreateAntigravityOAuthCredentials({
+        interceptWarmupRequests: interceptWarmupRequests.value,
+        modelMappings: antigravityModelMappings.value,
+        tokenInfo: antigravityOAuth.buildCredentials(tokenInfo)
+      })
+      const extra = buildCurrentAntigravityExtra()
+      await createAccountAndFinish('antigravity', 'oauth', credentials, extra)
+    },
+    resolveOAuthAuthErrorMessage,
+    appStore.showError
+  )
 }
 
 // Anthropic OAuth 授权码兑换
 const handleAnthropicExchange = async (authCode: string) => {
   if (!authCode.trim() || !oauth.sessionId.value) return
 
-  await runOAuthExchangeFlow(oauth, async () => {
-    const tokenInfo = await adminAPI.accounts.exchangeCode(resolveAnthropicExchangeEndpoint('code'), {
-      session_id: oauth.sessionId.value,
-      code: authCode.trim(),
-      ...getCurrentProxyConfig()
-    })
+  await runOAuthExchangeFlow(
+    oauth,
+    async () => {
+      const tokenInfo = await adminAPI.accounts.exchangeCode(
+        resolveAnthropicExchangeEndpoint(addMethod.value as 'oauth' | 'setup-token', 'code'),
+        {
+          session_id: oauth.sessionId.value,
+          code: authCode.trim(),
+          ...getCurrentProxyConfig()
+        }
+      )
 
-    await createAccountAndFinish(
-      form.platform,
-      addMethod.value as AccountType,
-      buildAnthropicOAuthCredentials({ tokenInfo }),
-      buildAnthropicOAuthExtra(tokenInfo)
-    )
-  })
+      await doCreateAccount(
+        buildCreateAnthropicOAuthAccountPayload({
+          common: buildCurrentCreateSharedPayload(),
+          name: form.name,
+          platform: form.platform,
+          type: addMethod.value as AccountType,
+          interceptWarmupRequests: interceptWarmupRequests.value,
+          tokenInfo,
+          extra: buildAnthropicOAuthExtra(tokenInfo)
+        })
+      )
+    },
+    resolveOAuthAuthErrorMessage,
+    appStore.showError
+  )
 }
 
 // 主入口：根据平台路由到对应处理函数
@@ -4454,50 +4266,58 @@ const handleCookieAuth = async (sessionKey: string) => {
 
     const commonPayload = buildCurrentCreateSharedPayload()
 
-    await runOAuthExchangeFlow(oauth, async () => {
-      await runBatchCreateFlow({
-        rawInput: keys.join('\n'),
-        emptyInputMessage: t('admin.accounts.oauth.pleaseEnterSessionKey'),
-        loadingRef: oauth.loading,
-        errorRef: oauth.error,
-        onComplete: ({ successCount, failedCount, errors }) => {
-          if (successCount > 0) {
-            appStore.showSuccess(t('admin.accounts.oauth.successCreated', { count: successCount }))
-            emit('created')
-            if (failedCount === 0) {
-              handleClose()
+    await runOAuthExchangeFlow(
+      oauth,
+      async () => {
+        await runBatchCreateFlow({
+          rawInput: keys.join('\n'),
+          emptyInputMessage: t('admin.accounts.oauth.pleaseEnterSessionKey'),
+          loadingRef: oauth.loading,
+          errorRef: oauth.error,
+          onComplete: ({ successCount, failedCount, errors }) => {
+            if (successCount > 0) {
+              appStore.showSuccess(t('admin.accounts.oauth.successCreated', { count: successCount }))
+              emit('created')
+              if (failedCount === 0) {
+                handleClose()
+              }
+            }
+
+            if (failedCount > 0) {
+              oauth.error.value = errors.join('\n')
+            }
+          },
+          processEntry: async (key, index, allKeys) => {
+            try {
+              const tokenInfo = await adminAPI.accounts.exchangeCode(
+                resolveAnthropicExchangeEndpoint(addMethod.value as 'oauth' | 'setup-token', 'cookie'),
+                {
+                  session_id: '',
+                  code: key,
+                  ...getCurrentProxyConfig()
+                }
+              )
+
+              await createAnthropicOAuthAccountFromTokenInfo({
+                commonPayload,
+                index,
+                tempUnschedPayload,
+                tokenInfo,
+                total: allKeys.length
+              })
+              return null
+            } catch (error: any) {
+              return t('admin.accounts.oauth.keyAuthFailed', {
+                index: index + 1,
+                error: resolveOAuthAuthErrorMessage(error)
+              })
             }
           }
-
-          if (failedCount > 0) {
-            oauth.error.value = errors.join('\n')
-          }
-        },
-        processEntry: async (key, index, allKeys) => {
-          try {
-            const tokenInfo = await adminAPI.accounts.exchangeCode(resolveAnthropicExchangeEndpoint('cookie'), {
-              session_id: '',
-              code: key,
-              ...getCurrentProxyConfig()
-            })
-
-            await createAnthropicOAuthAccountFromTokenInfo({
-              commonPayload,
-              index,
-              tempUnschedPayload,
-              tokenInfo,
-              total: allKeys.length
-            })
-            return null
-          } catch (error: any) {
-            return t('admin.accounts.oauth.keyAuthFailed', {
-              index: index + 1,
-              error: resolveOAuthAuthErrorMessage(error)
-            })
-          }
-        }
-      })
-    })
+        })
+      },
+      resolveOAuthAuthErrorMessage,
+      appStore.showError
+    )
   } catch (error: any) {
     oauth.error.value = error.response?.data?.detail || t('admin.accounts.oauth.cookieAuthFailed')
   }

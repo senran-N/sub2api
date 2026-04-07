@@ -9,7 +9,7 @@ import {
   normalizeBulkSchedulableResult,
   patchAccountList,
   shouldReplaceAutoRefreshAccountRow
-} from '../accountsList'
+} from '../accounts/accountsList'
 
 function createAccount(overrides: Partial<Account> = {}): Account {
   return {
@@ -171,6 +171,8 @@ describe('accountsList helpers', () => {
       name: 'Primary OpenAI',
       status: 'error',
       rate_limit_reset_at: '2026-01-03T00:00:00Z',
+      extra: { privacy_mode: 'training_off' },
+      group_ids: [12],
       current_concurrency: 4,
       current_window_cost: 8,
       active_sessions: 2
@@ -183,11 +185,25 @@ describe('accountsList helpers', () => {
           platform: 'openai',
           type: 'oauth',
           status: 'rate_limited',
+          privacy_mode: 'training_off',
+          group: '12',
           search: 'openai'
         },
         new Date('2026-01-02T00:00:00Z').getTime()
       )
     ).toBe(true)
+
+    expect(
+      accountMatchesCurrentFilters(rateLimited, {
+        privacy_mode: '__unset__'
+      })
+    ).toBe(false)
+
+    expect(
+      accountMatchesCurrentFilters(rateLimited, {
+        group: 'ungrouped'
+      })
+    ).toBe(false)
 
     expect(
       mergeAccountRuntimeFields(

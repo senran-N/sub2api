@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed } from 'vue'
-import { useUsageViewColumns } from '../useUsageViewColumns'
+import { useUsageViewColumns } from '../usage/useUsageViewColumns'
 
 function createStorage() {
   const store = new Map<string, string>()

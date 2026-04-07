@@ -2,6 +2,7 @@ import { reactive, ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import type { RedeemCode } from '@/types'
+import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
 import { buildRedeemExportFilters, buildRedeemListFilters, createDefaultRedeemFilters } from './redeemForm'
 
 interface RedeemViewDataOptions {
@@ -70,16 +71,12 @@ export function useRedeemViewData(options: RedeemViewDataOptions) {
       pagination.pages = response.pages
       pagination.page = response.page
       pagination.page_size = response.page_size
-    } catch (error: any) {
-      if (
-        requestController.signal.aborted ||
-        error?.name === 'AbortError' ||
-        error?.code === 'ERR_CANCELED'
-      ) {
+    } catch (error) {
+      if (requestController.signal.aborted || isAbortError(error)) {
         return
       }
 
-      options.showError(options.t('admin.redeem.failedToLoad'))
+      options.showError(resolveRequestErrorMessage(error, options.t('admin.redeem.failedToLoad')))
       console.error('Error loading redeem codes:', error)
     } finally {
       if (abortController === requestController) {
@@ -117,8 +114,8 @@ export function useRedeemViewData(options: RedeemViewDataOptions) {
       const date = new Date().toISOString().split('T')[0]
       downloadBlob(blob, `redeem-codes-${date}.csv`)
       options.showSuccess(options.t('admin.redeem.codesExported'))
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.redeem.failedToExport'))
+    } catch (error) {
+      options.showError(resolveRequestErrorMessage(error, options.t('admin.redeem.failedToExport')))
       console.error('Error exporting codes:', error)
     }
   }
@@ -154,8 +151,8 @@ export function useRedeemViewData(options: RedeemViewDataOptions) {
       showDeleteDialog.value = false
       deletingCode.value = null
       await loadCodes()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.redeem.failedToDelete'))
+    } catch (error) {
+      options.showError(resolveRequestErrorMessage(error, options.t('admin.redeem.failedToDelete')))
       console.error('Error deleting code:', error)
     }
   }
@@ -175,9 +172,9 @@ export function useRedeemViewData(options: RedeemViewDataOptions) {
       options.showSuccess(options.t('admin.redeem.codesDeleted', { count: result.deleted }))
       showDeleteUnusedDialog.value = false
       await loadCodes()
-    } catch (error: any) {
+    } catch (error) {
       options.showError(
-        error.response?.data?.detail || options.t('admin.redeem.failedToDeleteUnused')
+        resolveRequestErrorMessage(error, options.t('admin.redeem.failedToDeleteUnused'))
       )
       console.error('Error deleting unused codes:', error)
     }

@@ -11,7 +11,7 @@ import {
   getPromoCodeStatusLabelKey,
   hydratePromoCodeEditForm,
   resetPromoCodeCreateForm
-} from '../promoCodeForm'
+} from '../promocodes/promoCodeForm'
 
 function createPromoCode(overrides: Partial<PromoCode> = {}): PromoCode {
   return {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSettingsViewPolicies } from '../useSettingsViewPolicies'
+import { useSettingsViewPolicies } from '../settings/useSettingsViewPolicies'
 
 const {
   getAdminApiKey,

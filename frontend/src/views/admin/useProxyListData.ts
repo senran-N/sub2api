@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Proxy } from '@/types'
+import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   applyProxyPageChange,
   applyProxyPageSizeChange,
@@ -18,15 +19,6 @@ interface ProxyListDataOptions {
   pagination: ProxyPaginationState
   t: (key: string, params?: Record<string, unknown>) => string
   showError: (message: string) => void
-}
-
-function isAbortError(error: unknown) {
-  if (!error || typeof error !== 'object') {
-    return false
-  }
-
-  const maybeError = error as { name?: string; code?: string }
-  return maybeError.name === 'AbortError' || maybeError.code === 'ERR_CANCELED'
 }
 
 export function useProxyListData(options: ProxyListDataOptions) {
@@ -60,7 +52,7 @@ export function useProxyListData(options: ProxyListDataOptions) {
         return
       }
 
-      options.showError(options.t('admin.proxies.failedToLoad'))
+      options.showError(resolveRequestErrorMessage(error, options.t('admin.proxies.failedToLoad')))
       console.error('Error loading proxies:', error)
     } finally {
       if (abortController === currentAbortController) {

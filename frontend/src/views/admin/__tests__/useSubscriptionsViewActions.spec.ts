@@ -4,8 +4,8 @@ import type { UserSubscription } from '@/types'
 import {
   createDefaultAssignSubscriptionForm,
   createDefaultExtendSubscriptionForm
-} from '../subscriptionForm'
-import { useSubscriptionsViewActions } from '../useSubscriptionsViewActions'
+} from '../subscriptions/subscriptionForm'
+import { useSubscriptionsViewActions } from '../subscriptions/useSubscriptionsViewActions'
 
 const { assignSubscription, extendSubscription, revokeSubscription, resetQuota } = vi.hoisted(
   () => ({

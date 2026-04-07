@@ -210,7 +210,7 @@ import {
   buildFallbackGroupOptions,
   buildInvalidRequestFallbackOptions,
   removeCopyAccountsGroupSelection
-} from './groupsForm'
+} from './groups/groupsForm'
 import GroupAccountCountCell from './groups/GroupAccountCountCell.vue'
 import GroupActionsCell from './groups/GroupActionsCell.vue'
 import GroupActionToolbar from './groups/GroupActionToolbar.vue'
@@ -223,7 +223,7 @@ import GroupRateMultiplierCell from './groups/GroupRateMultiplierCell.vue'
 import GroupStatusBadge from './groups/GroupStatusBadge.vue'
 import GroupUsageCell from './groups/GroupUsageCell.vue'
 import { useGroupsViewData } from './useGroupsViewData'
-import { useGroupsViewManagement } from './useGroupsViewManagement'
+import { useGroupsViewManagement } from './groups/useGroupsViewManagement'
 
 const { t } = useI18n()
 const appStore = useAppStore()

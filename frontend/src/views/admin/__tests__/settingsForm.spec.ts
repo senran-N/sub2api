@@ -5,6 +5,8 @@ import {
   addCustomEndpoint,
   addCustomMenuItem,
   addNextDefaultSubscription,
+  buildSendTestEmailRequest,
+  buildSmtpTestConnectionRequest,
   buildSettingsUpdatePayload,
   hydrateSettingsForm,
   moveCustomMenuItem,
@@ -12,7 +14,7 @@ import {
   removeCustomMenuItem,
   removeDefaultSubscription,
   type SettingsForm
-} from '../settingsForm'
+} from '../settings/settingsForm'
 
 function createSettingsForm(overrides: Partial<SettingsForm> = {}): SettingsForm {
   return {
@@ -196,7 +198,7 @@ describe('hydrateSettingsForm', () => {
 })
 
 describe('buildSettingsUpdatePayload', () => {
-  it('normalizes urls, clamps subscriptions, prefixes whitelist tags, and omits empty secrets', () => {
+  it('normalizes urls without mutating form, clamps subscriptions, prefixes whitelist tags, and omits empty secrets', () => {
     const form = createSettingsForm({
       frontend_url: 'not-a-url',
       doc_url: 'https://docs.example.com',
@@ -217,12 +219,15 @@ describe('buildSettingsUpdatePayload', () => {
       return
     }
 
-    expect(form.frontend_url).toBe('')
-    expect(form.purchase_subscription_url).toBe('')
+    expect(form.frontend_url).toBe('not-a-url')
+    expect(form.purchase_subscription_url).toBe('still-not-a-url')
     expect(result.payload.registration_email_suffix_whitelist).toEqual([
       '@example.com',
       '@foo.bar'
     ])
+    expect(result.payload.frontend_url).toBe('')
+    expect(result.payload.doc_url).toBe('https://docs.example.com')
+    expect(result.payload.purchase_subscription_url).toBe('')
     expect(result.payload.default_subscriptions).toEqual([
       {
         group_id: 5,
@@ -272,6 +277,56 @@ describe('buildSettingsUpdatePayload', () => {
       error: {
         code: 'purchase_url_invalid'
       }
+    })
+  })
+})
+
+describe('smtp request helpers', () => {
+  it('builds smtp test request and test email request with manual password policy', () => {
+    const form = createSettingsForm({
+      smtp_host: 'smtp.example.com',
+      smtp_port: 465,
+      smtp_username: 'mailer',
+      smtp_password: 'manual-secret',
+      smtp_from_email: 'noreply@example.com',
+      smtp_from_name: 'Sub2API',
+      smtp_use_tls: true
+    })
+
+    expect(buildSmtpTestConnectionRequest(form, false)).toEqual({
+      smtp_host: 'smtp.example.com',
+      smtp_port: 465,
+      smtp_username: 'mailer',
+      smtp_password: '',
+      smtp_use_tls: true
+    })
+    expect(buildSmtpTestConnectionRequest(form, true)).toEqual({
+      smtp_host: 'smtp.example.com',
+      smtp_port: 465,
+      smtp_username: 'mailer',
+      smtp_password: 'manual-secret',
+      smtp_use_tls: true
+    })
+
+    expect(buildSendTestEmailRequest(form, 'ops@example.com', false)).toEqual({
+      email: 'ops@example.com',
+      smtp_host: 'smtp.example.com',
+      smtp_port: 465,
+      smtp_username: 'mailer',
+      smtp_password: '',
+      smtp_from_email: 'noreply@example.com',
+      smtp_from_name: 'Sub2API',
+      smtp_use_tls: true
+    })
+    expect(buildSendTestEmailRequest(form, 'ops@example.com', true)).toEqual({
+      email: 'ops@example.com',
+      smtp_host: 'smtp.example.com',
+      smtp_port: 465,
+      smtp_username: 'mailer',
+      smtp_password: 'manual-secret',
+      smtp_from_email: 'noreply@example.com',
+      smtp_from_name: 'Sub2API',
+      smtp_use_tls: true
     })
   })
 })

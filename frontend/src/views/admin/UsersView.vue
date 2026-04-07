@@ -178,10 +178,10 @@ import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import UserConcurrencyCell from '@/components/user/UserConcurrencyCell.vue'
-import { useUsersViewAdminActions } from './useUsersViewAdminActions'
-import { useUsersViewData } from './useUsersViewData'
-import { useUsersViewDialogs } from './useUsersViewDialogs'
-import { useUsersViewState } from './useUsersViewState'
+import { useUsersViewAdminActions } from './users/useUsersViewAdminActions'
+import { useUsersViewData } from './users/useUsersViewData'
+import { useUsersViewDialogs } from './users/useUsersViewDialogs'
+import { useUsersViewState } from './users/useUsersViewState'
 import UserActionMenu from './users/UserActionMenu.vue'
 import UserActionsCell from './users/UserActionsCell.vue'
 import UserBalanceCell from './users/UserBalanceCell.vue'
@@ -206,7 +206,7 @@ import {
   formatUserAttributeValue,
   getAttributeDefinitionName as getUserAttributeDefinitionName,
   getUserGroupsSummary
-} from './usersTable'
+} from './users/usersTable'
 
 const UserAttributesConfigModal = defineAsyncComponent(() => import('@/components/user/UserAttributesConfigModal.vue'))
 const UserCreateModal = defineAsyncComponent(() => import('@/components/admin/user/UserCreateModal.vue'))

@@ -75,10 +75,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import Toggle from '@/components/common/Toggle.vue'
-import type { SettingsForm } from '../settingsForm'
+import type { SettingsPurchaseFields } from './settingsForm'
 
 defineProps<{
-  form: SettingsForm
+  form: SettingsPurchaseFields
 }>()
 
 const { t } = useI18n()

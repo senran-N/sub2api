@@ -1,6 +1,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { useAccountsViewBootstrap } from '../useAccountsViewBootstrap'
+import { useAccountsViewBootstrap } from '../accounts/useAccountsViewBootstrap'
 
 describe('useAccountsViewBootstrap', () => {
   it('loads reference data, registers listeners, and disposes cleanly', async () => {

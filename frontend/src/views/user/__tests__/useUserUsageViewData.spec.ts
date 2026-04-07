@@ -174,4 +174,22 @@ describe('useUserUsageViewData', () => {
 
     expect(setup.showWarning).toHaveBeenCalledWith('usage.noDataToExport')
   })
+
+  it('surfaces request details and ignores abort failures', async () => {
+    const setup = createComposable()
+
+    query.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'usage-load-failed'
+        }
+      }
+    })
+    await setup.composable.loadUsageLogs()
+    expect(setup.showError).toHaveBeenCalledWith('usage-load-failed')
+
+    query.mockRejectedValueOnce({ name: 'AbortError' })
+    await setup.composable.loadUsageLogs()
+    expect(setup.showError).toHaveBeenCalledTimes(1)
+  })
 })

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackupRecord } from '@/api/admin/backup'
-import { useBackupViewOperations } from '../useBackupViewOperations'
+import { useBackupViewOperations } from '../backup/useBackupViewOperations'
 
 const {
   listBackups,
@@ -121,5 +121,29 @@ describe('useBackupViewOperations', () => {
     await operations.removeBackup('b_1')
     expect(deleteBackup).toHaveBeenCalledWith('b_1')
     expect(showSuccess).toHaveBeenCalledWith('admin.backup.actions.deleted')
+  })
+
+  it('routes conflict and detail errors through shared request helpers', async () => {
+    const showError = vi.fn()
+    const showWarning = vi.fn()
+    const operations = useBackupViewOperations({
+      t: (key: string) => key,
+      showSuccess: vi.fn(),
+      showError,
+      showWarning,
+      confirm: vi.fn(() => true),
+      prompt: vi.fn(() => 'secret'),
+      openUrl: vi.fn()
+    })
+
+    createBackupRequest.mockRejectedValueOnce({ response: { status: 409 } })
+    await operations.createBackup()
+    expect(showWarning).toHaveBeenCalledWith('admin.backup.operations.alreadyInProgress')
+
+    getDownloadURL.mockRejectedValueOnce({
+      response: { data: { detail: 'download-failed' } }
+    })
+    await operations.downloadBackup('b_1')
+    expect(showError).toHaveBeenCalledWith('download-failed')
   })
 })

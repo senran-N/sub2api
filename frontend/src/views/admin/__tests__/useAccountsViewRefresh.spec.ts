@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, reactive, ref } from 'vue'
 import type { Account } from '@/types'
-import { useAccountsViewRefresh } from '../useAccountsViewRefresh'
+import { useAccountsViewRefresh } from '../accounts/useAccountsViewRefresh'
 
 function createAccount(overrides: Partial<Account> = {}): Account {
   return {

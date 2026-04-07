@@ -247,5 +247,35 @@ describe('useTableLoader', () => {
       // 不应抛出
       await load()
     })
+
+    it('配置 onError 时吞掉非取消错误并回调', async () => {
+      const onError = vi.fn()
+      const fetchFn = vi.fn().mockRejectedValue(new Error('Server error'))
+      const { load } = useTableLoader({ fetchFn, onError })
+
+      await expect(load()).resolves.toBeUndefined()
+      expect(onError).toHaveBeenCalled()
+    })
+  })
+
+  describe('响应同步', () => {
+    it('可选同步服务端返回的分页信息', async () => {
+      const fetchFn = vi.fn().mockResolvedValue({
+        items: [],
+        total: 30,
+        pages: 3,
+        page: 2,
+        page_size: 50,
+      })
+      const { load, pagination } = useTableLoader({
+        fetchFn,
+        syncPaginationFromResponse: true,
+      })
+
+      await load()
+
+      expect(pagination.page).toBe(2)
+      expect(pagination.page_size).toBe(50)
+    })
   })
 })

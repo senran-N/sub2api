@@ -1,12 +1,13 @@
 import { ref } from 'vue'
 import type { SimpleUser } from '@/api/admin/usage'
-import type { AssignSubscriptionForm, SubscriptionFiltersState } from './subscriptionForm'
 
 interface SubscriptionsViewUserSearchesOptions {
-  filters: SubscriptionFiltersState
-  assignForm: AssignSubscriptionForm
   applyFilters: () => void
   searchUsers: (keyword: string) => Promise<SimpleUser[]>
+  selectFilterUser: (userId: number) => void
+  clearFilterUser: () => void
+  selectAssignUser: (userId: number) => void
+  clearAssignUser: () => void
 }
 
 export function useSubscriptionsViewUserSearches(
@@ -32,7 +33,7 @@ export function useSubscriptionsViewUserSearches(
 
     if (selectedFilterUser.value && keyword !== selectedFilterUser.value.email) {
       selectedFilterUser.value = null
-      options.filters.user_id = null
+      options.clearFilterUser()
       options.applyFilters()
     }
 
@@ -64,7 +65,7 @@ export function useSubscriptionsViewUserSearches(
     selectedFilterUser.value = user
     filterUserKeyword.value = user.email
     showFilterUserDropdown.value = false
-    options.filters.user_id = user.id
+    options.selectFilterUser(user.id)
     options.applyFilters()
   }
 
@@ -73,7 +74,7 @@ export function useSubscriptionsViewUserSearches(
     filterUserKeyword.value = ''
     filterUserResults.value = []
     showFilterUserDropdown.value = false
-    options.filters.user_id = null
+    options.clearFilterUser()
     options.applyFilters()
   }
 
@@ -82,7 +83,7 @@ export function useSubscriptionsViewUserSearches(
 
     if (selectedUser.value && keyword !== selectedUser.value.email) {
       selectedUser.value = null
-      options.assignForm.user_id = null
+      options.clearAssignUser()
     }
 
     if (!keyword) {
@@ -113,14 +114,14 @@ export function useSubscriptionsViewUserSearches(
     selectedUser.value = user
     userSearchKeyword.value = user.email
     showUserDropdown.value = false
-    options.assignForm.user_id = user.id
+    options.selectAssignUser(user.id)
   }
 
   const clearUserSelection = () => {
     selectedUser.value = null
     userSearchKeyword.value = ''
     userSearchResults.value = []
-    options.assignForm.user_id = null
+    options.clearAssignUser()
   }
 
   const resetAssignSearch = () => {
@@ -128,7 +129,7 @@ export function useSubscriptionsViewUserSearches(
     userSearchKeyword.value = ''
     userSearchResults.value = []
     showUserDropdown.value = false
-    options.assignForm.user_id = null
+    options.clearAssignUser()
   }
 
   const handleClickOutside = (event: MouseEvent) => {

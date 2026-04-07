@@ -113,7 +113,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-import type { RedeemGenerationForm, RedeemGroupOption } from '../redeemForm'
+import type { RedeemGenerationForm, RedeemGroupOption } from './redeemForm'
 
 defineProps<{
   show: boolean

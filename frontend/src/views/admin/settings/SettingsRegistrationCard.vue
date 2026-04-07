@@ -175,10 +175,10 @@
 import { useI18n } from 'vue-i18n'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
-import type { SettingsForm } from '../settingsForm'
+import type { SettingsRegistrationFields } from './settingsForm'
 
 defineProps<{
-  form: SettingsForm
+  form: SettingsRegistrationFields
   tags: string[]
   draft: string
 }>()

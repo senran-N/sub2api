@@ -15,9 +15,15 @@ describe('subscriptionsView helpers', () => {
   it('builds progress widths and colors from usage ratios', () => {
     expect(buildSubscriptionProgressWidth(5, 10)).toBe('50%')
     expect(buildSubscriptionProgressWidth(5, 0)).toBe('0%')
-    expect(buildSubscriptionProgressBarClass(95, 100)).toBe('bg-red-500')
-    expect(buildSubscriptionProgressBarClass(75, 100)).toBe('bg-orange-500')
-    expect(buildSubscriptionProgressBarClass(20, 100)).toBe('bg-green-500')
+    expect(buildSubscriptionProgressBarClass(95, 100)).toContain(
+      'subscription-usage-card__progress-bar--danger'
+    )
+    expect(buildSubscriptionProgressBarClass(75, 100)).toContain(
+      'subscription-usage-card__progress-bar--warning'
+    )
+    expect(buildSubscriptionProgressBarClass(20, 100)).toContain(
+      'subscription-usage-card__progress-bar--success'
+    )
   })
 
   it('formats expiration labels and styles from remaining time', () => {
@@ -30,7 +36,9 @@ describe('subscriptionsView helpers', () => {
     expect(formatSubscriptionExpirationDate('2026-04-10T12:00:00Z', now, t)).toContain(
       'userSubscriptions.daysRemaining'
     )
-    expect(resolveSubscriptionExpirationClass('2026-04-05T12:00:00Z', now)).toContain('text-red-600')
+    expect(resolveSubscriptionExpirationClass('2026-04-05T12:00:00Z', now)).toContain(
+      'subscription-usage-card__expiration--expired'
+    )
   })
 
   it('formats reset windows and detects unlimited subscriptions', () => {

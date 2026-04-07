@@ -1,7 +1,8 @@
-import { ref, reactive, onUnmounted, toRaw } from 'vue'
+import { ref, reactive, getCurrentScope, onScopeDispose, toRaw } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import type { BasePaginationResponse, FetchOptions } from '@/types'
 import { getPersistedPageSize, setPersistedPageSize } from './usePersistedPageSize'
+import { isAbortError } from '@/utils/requestError'
 
 interface PaginationState {
   page: number
@@ -15,6 +16,9 @@ interface TableLoaderOptions<T, P> {
   initialParams?: P
   pageSize?: number
   debounceMs?: number
+  onError?: (error: unknown) => void
+  syncPaginationFromResponse?: boolean
+  clampPageChange?: boolean
 }
 
 /**
@@ -23,6 +27,7 @@ interface TableLoaderOptions<T, P> {
  */
 export function useTableLoader<T, P extends Record<string, any>>(options: TableLoaderOptions<T, P>) {
   const { fetchFn, initialParams, pageSize, debounceMs = 300 } = options
+  const shouldClampPageChange = options.clampPageChange ?? true
 
   const items = ref<T[]>([])
   const loading = ref(false)
@@ -35,10 +40,6 @@ export function useTableLoader<T, P extends Record<string, any>>(options: TableL
   })
 
   let abortController: AbortController | null = null
-
-  const isAbortError = (error: any) => {
-    return error?.name === 'AbortError' || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
-  }
 
   const load = async () => {
     if (abortController) {
@@ -59,14 +60,23 @@ export function useTableLoader<T, P extends Record<string, any>>(options: TableL
       items.value = response.items || []
       pagination.total = response.total || 0
       pagination.pages = response.pages || 0
+      if (options.syncPaginationFromResponse) {
+        pagination.page = response.page || pagination.page
+        pagination.page_size = response.page_size || pagination.page_size
+      }
     } catch (error) {
       if (!isAbortError(error)) {
         console.error('Table load error:', error)
+        if (options.onError) {
+          options.onError(error)
+          return
+        }
         throw error
       }
     } finally {
       if (abortController === currentController) {
         loading.value = false
+        abortController = null
       }
     }
   }
@@ -79,22 +89,38 @@ export function useTableLoader<T, P extends Record<string, any>>(options: TableL
   const debouncedReload = useDebounceFn(reload, debounceMs)
 
   const handlePageChange = (page: number) => {
-    // 确保页码在有效范围内
-    const validPage = Math.max(1, Math.min(page, pagination.pages || 1))
-    pagination.page = validPage
-    load()
+    pagination.page = shouldClampPageChange
+      ? Math.max(1, Math.min(page, pagination.pages || 1))
+      : Math.max(1, page)
+    return load()
   }
 
   const handlePageSizeChange = (size: number) => {
     pagination.page_size = size
     pagination.page = 1
     setPersistedPageSize(size)
-    load()
+    return load()
   }
 
-  onUnmounted(() => {
+  const cancelDebouncedReload = () => {
+    const cancelableDebouncedReload = debouncedReload as typeof debouncedReload & {
+      cancel?: () => void
+    }
+    cancelableDebouncedReload.cancel?.()
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      abortController?.abort()
+      cancelDebouncedReload()
+    })
+  }
+
+  const dispose = () => {
     abortController?.abort()
-  })
+    abortController = null
+    cancelDebouncedReload()
+  }
 
   return {
     items,
@@ -105,6 +131,7 @@ export function useTableLoader<T, P extends Record<string, any>>(options: TableL
     reload,
     debouncedReload,
     handlePageChange,
-    handlePageSizeChange
+    handlePageSizeChange,
+    dispose
   }
 }

@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { adminAPI } from '@/api'
 import type { SoraS3Profile } from '@/api/admin/settings'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   buildCreateSoraS3ProfileRequest,
   buildTestSoraS3ConnectionRequest,
@@ -16,10 +17,6 @@ interface DataManagementSoraProfilesOptions {
   showError: (message: string) => void
   showSuccess: (message: string) => void
   confirm: (message: string) => boolean
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return (error as { message?: string })?.message || fallback
 }
 
 export function useDataManagementSoraProfiles(options: DataManagementSoraProfilesOptions) {
@@ -57,7 +54,7 @@ export function useDataManagementSoraProfiles(options: DataManagementSoraProfile
         syncSoraProfileFormWithSelection()
       }
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       loadingSoraProfiles.value = false
     }
@@ -117,7 +114,7 @@ export function useDataManagementSoraProfiles(options: DataManagementSoraProfile
 
       await loadSoraS3Profiles()
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       savingSoraProfile.value = false
     }
@@ -134,7 +131,7 @@ export function useDataManagementSoraProfiles(options: DataManagementSoraProfile
       )
       options.showSuccess(result.message || options.t('admin.settings.soraS3.testSuccess'))
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       testingSoraProfile.value = false
     }
@@ -147,7 +144,7 @@ export function useDataManagementSoraProfiles(options: DataManagementSoraProfile
       options.showSuccess(options.t('admin.settings.soraS3.profileActivated'))
       await loadSoraS3Profiles()
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       activatingSoraProfile.value = false
     }
@@ -167,7 +164,7 @@ export function useDataManagementSoraProfiles(options: DataManagementSoraProfile
       options.showSuccess(options.t('admin.settings.soraS3.profileDeleted'))
       await loadSoraS3Profiles()
     } catch (error) {
-      options.showError(getErrorMessage(error, options.t('errors.networkError')))
+      options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
       deletingSoraProfile.value = false
     }

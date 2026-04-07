@@ -1,5 +1,14 @@
 import type { AccountPlatform, CreateAccountRequest } from '@/types'
 import { isOpenAIWSModeEnabled, type OpenAIWSMode } from '@/utils/openaiWsMode'
+import {
+  applyInterceptWarmup,
+  assignBuiltModelMapping,
+  getDefaultBaseURL,
+  normalizePoolModeRetryCount,
+  replaceAntigravityModelMapping,
+  type ModelMapping,
+  type TempUnschedRulePayload
+} from './credentialsBuilder'
 
 export type CreateAccountCategory = 'oauth-based' | 'apikey' | 'bedrock'
 export type AntigravityAccountType = 'oauth' | 'upstream'
@@ -84,10 +93,90 @@ interface BuildCreateOAuthAccountPayloadOptions {
   type: CreateAccountRequest['type']
 }
 
+interface BuildCreateAnthropicOAuthAccountPayloadOptions {
+  common: Omit<
+    CreateAccountRequest,
+    'credentials' | 'extra' | 'name' | 'platform' | 'type'
+  >
+  extra?: Record<string, unknown>
+  interceptWarmupRequests: boolean
+  name: string
+  platform: AccountPlatform
+  tempUnschedPayload?: TempUnschedRulePayload[]
+  tokenInfo: Record<string, unknown>
+  type: CreateAccountRequest['type']
+}
+
+interface BuildCreateOpenAICompatOAuthTargetOptions {
+  baseName: string
+  credentials: Record<string, unknown>
+  fallbackBaseName?: string
+  extra?: Record<string, unknown>
+  index?: number
+  platform: 'openai' | 'sora'
+  total?: number
+}
+
 interface ResolveBatchCreateOutcomeOptions {
   failedCount: number
   successCount: number
   t: (key: string, values?: Record<string, unknown>) => string
+}
+
+interface BuildCreateCredentialResult {
+  credentials?: Record<string, unknown>
+  errorMessageKey?: string
+}
+
+interface ModelRestrictionOptions {
+  allowedModels: string[]
+  modelMappings: ModelMapping[]
+  mode: 'whitelist' | 'mapping'
+}
+
+interface BuildCreateBedrockCredentialsOptions extends ModelRestrictionOptions {
+  accessKeyId: string
+  apiKey: string
+  authMode: 'sigv4' | 'apikey'
+  forceGlobal: boolean
+  interceptWarmupRequests: boolean
+  poolModeEnabled: boolean
+  poolModeRetryCount: number
+  region: string
+  secretAccessKey: string
+  sessionToken: string
+}
+
+interface BuildCreateAntigravityUpstreamCredentialsOptions {
+  apiKey: string
+  baseUrl: string
+  interceptWarmupRequests: boolean
+  modelMappings: ModelMapping[]
+}
+
+interface BuildCreateAnthropicOAuthCredentialsOptions {
+  interceptWarmupRequests: boolean
+  tempUnschedPayload?: TempUnschedRulePayload[]
+  tokenInfo: Record<string, unknown>
+}
+
+interface BuildCreateAntigravityOAuthCredentialsOptions {
+  interceptWarmupRequests: boolean
+  modelMappings: ModelMapping[]
+  tokenInfo: Record<string, unknown>
+}
+
+interface BuildCreateApiKeyCredentialsOptions extends ModelRestrictionOptions {
+  apiKey: string
+  baseUrl: string
+  customErrorCodesEnabled: boolean
+  geminiTierId: string
+  interceptWarmupRequests: boolean
+  isOpenAIModelRestrictionDisabled: boolean
+  platform: AccountPlatform
+  poolModeEnabled: boolean
+  poolModeRetryCount: number
+  selectedErrorCodes: number[]
 }
 
 export function resolveCreateAccountOAuthFlow(
@@ -256,7 +345,7 @@ export function buildCreateAccountSharedPayload(
   }
 }
 
-export function buildCreateOAuthAccountPayload(
+export function buildCreateAccountRequest(
   options: BuildCreateOAuthAccountPayloadOptions
 ): CreateAccountRequest {
   return {
@@ -266,6 +355,64 @@ export function buildCreateOAuthAccountPayload(
     type: options.type,
     credentials: options.credentials,
     extra: options.extra
+  }
+}
+
+export function buildCreateAccountPayload(
+  options: BuildCreateOAuthAccountPayloadOptions
+): CreateAccountRequest {
+  return buildCreateAccountRequest(options)
+}
+
+export function buildCreateOAuthAccountPayload(
+  options: BuildCreateOAuthAccountPayloadOptions
+): CreateAccountRequest {
+  return buildCreateAccountRequest(options)
+}
+
+export function buildCreateAnthropicOAuthAccountPayload(
+  options: BuildCreateAnthropicOAuthAccountPayloadOptions
+): CreateAccountRequest {
+  return buildCreateAccountRequest({
+    common: options.common,
+    name: options.name,
+    platform: options.platform,
+    type: options.type,
+    credentials: buildCreateAnthropicOAuthCredentials({
+      interceptWarmupRequests: options.interceptWarmupRequests,
+      tempUnschedPayload: options.tempUnschedPayload,
+      tokenInfo: options.tokenInfo
+    }),
+    extra: options.extra
+  })
+}
+
+export function buildCreateOpenAICompatOAuthTarget(
+  options: BuildCreateOpenAICompatOAuthTargetOptions
+) {
+  const name = buildCreateBatchAccountName(
+    options.baseName,
+    options.index ?? 0,
+    options.total ?? 1,
+    options.fallbackBaseName
+  )
+
+  if (options.platform === 'openai') {
+    return {
+      name,
+      platform: 'openai' as const,
+      type: 'oauth' as const,
+      credentials: options.credentials,
+      extra: options.extra
+    }
+  }
+
+  return {
+    name,
+    platform: 'sora' as const,
+    type: 'oauth' as const,
+    credentials: buildCreateSoraOAuthCredentials(options.credentials),
+    extra: buildCreateSoraExtra(options.extra)
   }
 }
 
@@ -330,6 +477,149 @@ export function resolveBatchCreateOutcome(options: ResolveBatchCreateOutcomeOpti
     shouldClose: false,
     shouldEmitCreated: false
   }
+}
+
+export function buildCreateBedrockCredentials(
+  options: BuildCreateBedrockCredentialsOptions
+): BuildCreateCredentialResult {
+  const credentials: Record<string, unknown> = {
+    auth_mode: options.authMode,
+    aws_region: options.region.trim() || 'us-east-1'
+  }
+
+  if (options.authMode === 'sigv4') {
+    if (!options.accessKeyId.trim()) {
+      return { errorMessageKey: 'admin.accounts.bedrockAccessKeyIdRequired' }
+    }
+    if (!options.secretAccessKey.trim()) {
+      return { errorMessageKey: 'admin.accounts.bedrockSecretAccessKeyRequired' }
+    }
+
+    credentials.aws_access_key_id = options.accessKeyId.trim()
+    credentials.aws_secret_access_key = options.secretAccessKey.trim()
+    if (options.sessionToken.trim()) {
+      credentials.aws_session_token = options.sessionToken.trim()
+    }
+  } else {
+    if (!options.apiKey.trim()) {
+      return { errorMessageKey: 'admin.accounts.bedrockApiKeyRequired' }
+    }
+    credentials.api_key = options.apiKey.trim()
+  }
+
+  if (options.forceGlobal) {
+    credentials.aws_force_global = 'true'
+  }
+
+  assignBuiltModelMapping(
+    credentials,
+    options.mode,
+    options.allowedModels,
+    options.modelMappings
+  )
+
+  if (options.poolModeEnabled) {
+    credentials.pool_mode = true
+    credentials.pool_mode_retry_count = normalizePoolModeRetryCount(options.poolModeRetryCount)
+  }
+
+  applyInterceptWarmup(credentials, options.interceptWarmupRequests, 'create')
+
+  return { credentials }
+}
+
+export function buildCreateAntigravityUpstreamCredentials(
+  options: BuildCreateAntigravityUpstreamCredentialsOptions
+): BuildCreateCredentialResult {
+  if (!options.baseUrl.trim()) {
+    return { errorMessageKey: 'admin.accounts.upstream.pleaseEnterBaseUrl' }
+  }
+  if (!options.apiKey.trim()) {
+    return { errorMessageKey: 'admin.accounts.upstream.pleaseEnterApiKey' }
+  }
+
+  const credentials: Record<string, unknown> = {
+    base_url: options.baseUrl.trim(),
+    api_key: options.apiKey.trim()
+  }
+
+  replaceAntigravityModelMapping(credentials, options.modelMappings)
+  applyInterceptWarmup(credentials, options.interceptWarmupRequests, 'create')
+
+  return { credentials }
+}
+
+export function buildCreateAnthropicOAuthCredentials(
+  options: BuildCreateAnthropicOAuthCredentialsOptions
+): Record<string, unknown> {
+  const credentials: Record<string, unknown> = { ...options.tokenInfo }
+  applyInterceptWarmup(credentials, options.interceptWarmupRequests, 'create')
+
+  if (options.tempUnschedPayload && options.tempUnschedPayload.length > 0) {
+    credentials.temp_unschedulable_enabled = true
+    credentials.temp_unschedulable_rules = options.tempUnschedPayload
+  }
+
+  return credentials
+}
+
+export function buildCreateAntigravityOAuthCredentials(
+  options: BuildCreateAntigravityOAuthCredentialsOptions
+): Record<string, unknown> {
+  const credentials: Record<string, unknown> = { ...options.tokenInfo }
+  applyInterceptWarmup(credentials, options.interceptWarmupRequests, 'create')
+  replaceAntigravityModelMapping(credentials, options.modelMappings)
+  return credentials
+}
+
+export function buildCreateApiKeyCredentials(
+  options: BuildCreateApiKeyCredentialsOptions
+): BuildCreateCredentialResult {
+  if (!options.apiKey.trim()) {
+    return { errorMessageKey: 'admin.accounts.pleaseEnterApiKey' }
+  }
+
+  const trimmedBaseUrl = options.baseUrl.trim()
+  if (options.platform === 'sora') {
+    if (!trimmedBaseUrl) {
+      return { errorMessageKey: 'admin.accounts.soraBaseUrlRequired' }
+    }
+    if (!trimmedBaseUrl.startsWith('http://') && !trimmedBaseUrl.startsWith('https://')) {
+      return { errorMessageKey: 'admin.accounts.soraBaseUrlInvalidScheme' }
+    }
+  }
+
+  const credentials: Record<string, unknown> = {
+    base_url: trimmedBaseUrl || getDefaultBaseURL(options.platform),
+    api_key: options.apiKey.trim()
+  }
+
+  if (options.platform === 'gemini') {
+    credentials.tier_id = options.geminiTierId
+  }
+
+  if (!options.isOpenAIModelRestrictionDisabled) {
+    assignBuiltModelMapping(
+      credentials,
+      options.mode,
+      options.allowedModels,
+      options.modelMappings
+    )
+  }
+
+  if (options.poolModeEnabled) {
+    credentials.pool_mode = true
+    credentials.pool_mode_retry_count = normalizePoolModeRetryCount(options.poolModeRetryCount)
+  }
+
+  if (options.customErrorCodesEnabled) {
+    credentials.custom_error_codes_enabled = true
+    credentials.custom_error_codes = [...options.selectedErrorCodes]
+  }
+
+  applyInterceptWarmup(credentials, options.interceptWarmupRequests, 'create')
+
+  return { credentials }
 }
 
 export function buildCreateSoraExtra(

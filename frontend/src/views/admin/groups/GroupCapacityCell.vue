@@ -13,7 +13,7 @@
 
 <script setup lang="ts">
 import GroupCapacityBadge from '@/components/common/GroupCapacityBadge.vue'
-import type { GroupCapacitySnapshot } from '../groupsTable'
+import type { GroupCapacitySnapshot } from './groupDisplay'
 
 defineProps<{
   capacity?: GroupCapacitySnapshot

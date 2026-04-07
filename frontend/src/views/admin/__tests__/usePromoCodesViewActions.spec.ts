@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PromoCode, PromoCodeUsage } from '@/types'
-import { usePromoCodesViewActions } from '../usePromoCodesViewActions'
+import { usePromoCodesViewActions } from '../promocodes/usePromoCodesViewActions'
 
 const { createPromoCode, updatePromoCode, deletePromoCode, getPromoUsages } = vi.hoisted(() => ({
   createPromoCode: vi.fn(),

@@ -41,8 +41,8 @@ import { useAppStore } from '@/stores'
 import BackupOperationsCard from './backup/BackupOperationsCard.vue'
 import BackupS3ConfigCard from './backup/BackupS3ConfigCard.vue'
 import BackupScheduleCard from './backup/BackupScheduleCard.vue'
-import { useBackupViewConfig } from './useBackupViewConfig'
-import { useBackupViewOperations } from './useBackupViewOperations'
+import { useBackupViewConfig } from './backup/useBackupViewConfig'
+import { useBackupViewOperations } from './backup/useBackupViewOperations'
 
 const BackupR2GuideModal = defineAsyncComponent(() => import('./backup/BackupR2GuideModal.vue'))
 

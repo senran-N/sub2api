@@ -17,7 +17,7 @@ import {
   resetCreateGroupForm,
   resetEditGroupForm,
   toggleModelScope
-} from '../groupsForm'
+} from '../groups/groupsForm'
 
 function createAdminGroup(overrides: Partial<AdminGroup> = {}): AdminGroup {
   return {

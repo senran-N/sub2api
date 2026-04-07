@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { Announcement } from '@/types'
-import { getAnnouncementTargetingSummary } from '../announcementsForm'
+import { getAnnouncementTargetingSummary } from './announcementsForm'
 
 defineProps<{
   targeting: Announcement['targeting']

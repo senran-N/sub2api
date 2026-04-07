@@ -4,6 +4,7 @@ import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import type { Column } from '@/components/common/types'
 import type { ApiKey, Group, PublicSettings } from '@/types'
+import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   buildUserKeyGroupOptions,
   type UserKeyGroupOption
@@ -14,12 +15,6 @@ interface KeysViewDataOptions {
   showError: (message: string) => void
   fetchPublicSettings: () => Promise<PublicSettings | null>
   publicSettings: ComputedRef<PublicSettings | null>
-}
-
-function isAbortError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-  const { name, code } = error as { name?: string; code?: string }
-  return name === 'AbortError' || code === 'ERR_CANCELED'
 }
 
 export function useKeysViewData(options: KeysViewDataOptions) {
@@ -117,7 +112,7 @@ export function useKeysViewData(options: KeysViewDataOptions) {
         return
       }
 
-      options.showError(options.t('keys.failedToLoad'))
+      options.showError(resolveRequestErrorMessage(error, options.t('keys.failedToLoad')))
     } finally {
       if (abortController === controller) {
         loading.value = false

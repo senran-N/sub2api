@@ -15,8 +15,10 @@ import {
   isSubscriptionExpiringSoon,
   resetAssignSubscriptionForm,
   resetExtendSubscriptionForm,
+  validateAssignSubscriptionForm,
+  validateExtendSubscriptionAdjustment,
   willSubscriptionAdjustmentRemainActive
-} from '../subscriptionForm'
+} from '../subscriptions/subscriptionForm'
 
 function createGroup(overrides: Partial<Group> = {}): Group {
   return {
@@ -163,5 +165,47 @@ describe('subscriptionForm helpers', () => {
       key: 'admin.subscriptions.resetInMinutes',
       params: { minutes: 15 }
     })
+  })
+
+  it('validates assign payloads and extend adjustments before actions run', () => {
+    expect(validateAssignSubscriptionForm(createDefaultAssignSubscriptionForm())).toBe(
+      'admin.subscriptions.pleaseSelectUser'
+    )
+    expect(
+      validateAssignSubscriptionForm({
+        user_id: 2,
+        group_id: null,
+        validity_days: 30
+      })
+    ).toBe('admin.subscriptions.pleaseSelectGroup')
+    expect(
+      validateAssignSubscriptionForm({
+        user_id: 2,
+        group_id: 3,
+        validity_days: 0
+      })
+    ).toBe('admin.subscriptions.validityDaysRequired')
+    expect(
+      validateAssignSubscriptionForm({
+        user_id: 2,
+        group_id: 3,
+        validity_days: 30
+      })
+    ).toBeNull()
+
+    expect(
+      validateExtendSubscriptionAdjustment(
+        createSubscription({ expires_at: '2026-04-01T00:00:00Z' }),
+        { days: -10 },
+        new Date('2026-04-10T00:00:00Z')
+      )
+    ).toBe('admin.subscriptions.adjustWouldExpire')
+    expect(
+      validateExtendSubscriptionAdjustment(
+        createSubscription({ expires_at: '2026-04-20T00:00:00Z' }),
+        { days: 5 },
+        new Date('2026-04-10T00:00:00Z')
+      )
+    ).toBeNull()
   })
 })

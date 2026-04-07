@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { UserSubscription } from '@/types'
-import { useSubscriptionsViewDialogs } from '../useSubscriptionsViewDialogs'
+import { useSubscriptionsViewDialogs } from '../subscriptions/useSubscriptionsViewDialogs'
 
 function createSubscription(overrides: Partial<UserSubscription> = {}): UserSubscription {
   return {

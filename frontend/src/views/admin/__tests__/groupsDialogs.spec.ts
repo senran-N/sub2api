@@ -17,15 +17,10 @@ const BaseDialogStub = {
     '<div><button class="dialog-close" @click="$emit(\'close\')">close</button><slot /><slot name="footer" /></div>'
 }
 
-const GroupBaseFieldsSectionStub = {
-  emits: ['add-group', 'remove-group'],
+const GroupFormSectionsStub = {
+  emits: ['add-copy-group', 'remove-copy-group', 'toggle-scope'],
   template:
-    '<div><button class="add-group" @click="$emit(\'add-group\', 7)">add</button><button class="remove-group" @click="$emit(\'remove-group\', 7)">remove</button></div>'
-}
-
-const GroupSupportedScopesSectionStub = {
-  emits: ['toggle-scope'],
-  template: '<button class="toggle-scope" @click="$emit(\'toggle-scope\', \'claude\')">scope</button>'
+    '<div><button class="add-group" @click="$emit(\'add-copy-group\', 7)">add</button><button class="remove-group" @click="$emit(\'remove-copy-group\', 7)">remove</button><button class="toggle-scope" @click="$emit(\'toggle-scope\', \'claude\')">scope</button></div>'
 }
 
 const GroupDialogFooterStub = {
@@ -61,18 +56,7 @@ function createCommonProps() {
 function createGlobalStubs() {
   return {
     BaseDialog: BaseDialogStub,
-    GroupBaseFieldsSection: GroupBaseFieldsSectionStub,
-    GroupExclusiveSection: true,
-    GroupSubscriptionSection: true,
-    GroupImagePricingSection: true,
-    GroupSoraPricingSection: true,
-    GroupSupportedScopesSection: GroupSupportedScopesSectionStub,
-    GroupMcpXmlSection: true,
-    GroupClaudeCodeSection: true,
-    GroupOpenAIMessagesSection: true,
-    GroupAccountFilterSection: true,
-    GroupInvalidRequestFallbackSection: true,
-    GroupModelRoutingSection: true,
+    GroupFormSections: GroupFormSectionsStub,
     GroupDialogFooter: GroupDialogFooterStub,
     GroupEditStatusField: true
   }

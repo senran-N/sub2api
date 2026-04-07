@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import type { Account } from '@/types'
-import { useAccountsViewActions } from '../useAccountsViewActions'
+import { useAccountsViewActions } from '../accounts/useAccountsViewActions'
 
 const {
   deleteAccount,

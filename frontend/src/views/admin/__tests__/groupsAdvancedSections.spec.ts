@@ -182,10 +182,10 @@ describe('group advanced sections', () => {
     await inputs[1].trigger('input')
     await inputs[1].trigger('focus')
 
-    await wrapper.find('.rounded-full button').trigger('click')
+    await wrapper.get('.group-model-routing-rule-card__account-chip-remove').trigger('click')
     await wrapper.get('button[title="admin.groups.modelRouting.removeRule"]').trigger('click')
     await wrapper.findAll('button').find((button) => button.text().includes('admin.groups.modelRouting.addRule'))!.trigger('click')
-    await wrapper.findAll('button').find((button) => button.text().includes('Account Two'))!.trigger('click')
+    await wrapper.get('.group-model-routing-rule-card__dropdown-option:not(:disabled)').trigger('click')
 
     expect(form.model_routing_enabled).toBe(true)
     expect(rule.pattern).toBe('claude-*')

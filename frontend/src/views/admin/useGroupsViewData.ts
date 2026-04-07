@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   applyGroupPageChange,
   applyGroupPageReset,
@@ -93,18 +94,11 @@ export function useGroupsViewData(options: GroupsViewDataOptions) {
       void loadUsageSummary()
       void loadCapacitySummary()
     } catch (error) {
-      if (
-        currentController.signal.aborted ||
-        (typeof error === 'object' &&
-          error !== null &&
-          ('name' in error || 'code' in error) &&
-          ((error as { name?: string }).name === 'AbortError' ||
-            (error as { code?: string }).code === 'ERR_CANCELED'))
-      ) {
+      if (currentController.signal.aborted || isAbortError(error)) {
         return
       }
 
-      options.showError(options.t('admin.groups.failedToLoad'))
+      options.showError(resolveRequestErrorMessage(error, options.t('admin.groups.failedToLoad')))
       console.error('Error loading groups:', error)
     } finally {
       if (abortController === currentController && !currentController.signal.aborted) {
@@ -138,7 +132,7 @@ export function useGroupsViewData(options: GroupsViewDataOptions) {
       sortableGroups.value = sortGroupsBySortOrder(await adminAPI.groups.getAll())
       showSortModal.value = true
     } catch (error) {
-      options.showError(options.t('admin.groups.failedToLoad'))
+      options.showError(resolveRequestErrorMessage(error, options.t('admin.groups.failedToLoad')))
       console.error('Error loading groups for sorting:', error)
     }
   }
@@ -156,16 +150,9 @@ export function useGroupsViewData(options: GroupsViewDataOptions) {
       closeSortModal()
       await loadGroups()
     } catch (error) {
-      const detail: string =
-        typeof error === 'object' &&
-        error !== null &&
-        'response' in error &&
-        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail ===
-          'string'
-          ? (error as { response?: { data?: { detail?: string } } }).response!.data!.detail ??
-            options.t('admin.groups.failedToUpdateSortOrder')
-          : options.t('admin.groups.failedToUpdateSortOrder')
-      options.showError(detail)
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.groups.failedToUpdateSortOrder'))
+      )
       console.error('Error updating sort order:', error)
     } finally {
       sortSubmitting.value = false

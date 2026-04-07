@@ -59,7 +59,7 @@
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
-import type { CreateGroupForm, EditGroupForm, NumberSelectOption } from '../groupsForm'
+import type { CreateGroupForm, EditGroupForm, NumberSelectOption } from './groupsForm'
 import GroupCopyAccountsField from './GroupCopyAccountsField.vue'
 
 const props = withDefaults(

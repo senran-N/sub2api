@@ -40,7 +40,7 @@
 <script setup lang="ts">
 import Icon from '@/components/icons/Icon.vue'
 import type { UserAttributeDefinition } from '@/types'
-import type { BuiltInUserFilterKey } from '../usersTable'
+import type { BuiltInUserFilterKey } from './usersTable'
 
 defineProps<{
   visibleFilters: Set<string>

@@ -66,7 +66,7 @@ import type { AdminGroup, AnnouncementNotifyMode, AnnouncementStatus } from '@/t
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import AnnouncementTargetingEditor from '@/components/admin/announcements/AnnouncementTargetingEditor.vue'
-import type { AnnouncementFormState } from '../announcementsForm'
+import type { AnnouncementFormState } from './announcementsForm'
 
 defineProps<{
   show: boolean

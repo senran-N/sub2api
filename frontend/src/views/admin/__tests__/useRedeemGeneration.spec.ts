@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import type { Group, RedeemCode } from '@/types'
-import { useRedeemGeneration } from '../useRedeemGeneration'
+import { useRedeemGeneration } from '../redeem/useRedeemGeneration'
 
 const { getAllGroups, generateCodes } = vi.hoisted(() => ({
   getAllGroups: vi.fn(),

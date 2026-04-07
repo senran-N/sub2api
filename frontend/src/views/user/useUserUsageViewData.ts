@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { keysAPI, usageAPI } from '@/api'
 import { formatReasoningEffort } from '@/utils/format'
+import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
 import { getUsageRequestTypeExportText } from '@/utils/usagePresentation'
 import type {
   ApiKey,
@@ -121,16 +122,12 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
       usageLogs.value = response.items
       options.pagination.total = response.total
       options.pagination.pages = response.pages
-    } catch (error: any) {
-      if (
-        controller.signal.aborted ||
-        error?.name === 'AbortError' ||
-        error?.code === 'ERR_CANCELED'
-      ) {
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) {
         return
       }
 
-      options.showError(options.t('usage.failedToLoad'))
+      options.showError(resolveRequestErrorMessage(error, options.t('usage.failedToLoad')))
     } finally {
       if (usageAbortController === controller) {
         loading.value = false
@@ -225,7 +222,7 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
 
       options.showSuccess(options.t('usage.exportSuccess'))
     } catch (error) {
-      options.showError(options.t('usage.exportFailed'))
+      options.showError(resolveRequestErrorMessage(error, options.t('usage.exportFailed')))
       console.error('CSV Export failed:', error)
     } finally {
       exporting.value = false

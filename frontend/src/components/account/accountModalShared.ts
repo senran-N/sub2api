@@ -1,4 +1,9 @@
-import type { AccountPlatform, CheckMixedChannelResponse } from '@/types'
+import type {
+  Account,
+  AccountPlatform,
+  AccountType,
+  CheckMixedChannelResponse
+} from '@/types'
 import type { TempUnschedRuleForm } from './credentialsBuilder'
 import {
   OPENAI_WS_MODE_OFF,
@@ -6,7 +11,7 @@ import {
   type OpenAIWSMode
 } from '@/utils/openaiWsMode'
 
-type Translate = (key: string, values?: Record<string, unknown>) => string
+export type Translate = (key: string, values?: Record<string, unknown>) => string
 type QuotaResetMode = 'rolling' | 'fixed' | null
 
 interface AccountQuotaExtraOptions {
@@ -19,6 +24,118 @@ interface AccountQuotaExtraOptions {
   weeklyResetDay: number | null
   weeklyResetHour: number | null
   weeklyResetMode: QuotaResetMode
+}
+
+type EditableAccountStatus = Extract<Account['status'], 'active' | 'inactive' | 'error'>
+
+export interface AccountBaseFormFields {
+  name: string
+  notes: string
+  proxy_id: number | null
+  concurrency: number
+  load_factor: number | null
+  priority: number
+  rate_multiplier: number
+  group_ids: number[]
+  expires_at: number | null
+}
+
+export interface CreateAccountForm extends AccountBaseFormFields {
+  platform: AccountPlatform
+  type: AccountType
+  credentials: Record<string, unknown>
+}
+
+export interface EditAccountForm extends AccountBaseFormFields {
+  status: EditableAccountStatus
+}
+
+export function createDefaultCreateAccountForm(): CreateAccountForm {
+  return {
+    name: '',
+    notes: '',
+    platform: 'anthropic',
+    type: 'oauth',
+    credentials: {},
+    proxy_id: null,
+    concurrency: 10,
+    load_factor: null,
+    priority: 1,
+    rate_multiplier: 1,
+    group_ids: [],
+    expires_at: null
+  }
+}
+
+export function resetCreateAccountForm(form: CreateAccountForm): void {
+  Object.assign(form, createDefaultCreateAccountForm())
+}
+
+export function createDefaultEditAccountForm(): EditAccountForm {
+  return {
+    name: '',
+    notes: '',
+    proxy_id: null,
+    concurrency: 1,
+    load_factor: null,
+    priority: 1,
+    rate_multiplier: 1,
+    status: 'active',
+    group_ids: [],
+    expires_at: null
+  }
+}
+
+export function hydrateEditAccountForm(
+  form: EditAccountForm,
+  account: Pick<
+    Account,
+    | 'name'
+    | 'notes'
+    | 'proxy_id'
+    | 'concurrency'
+    | 'load_factor'
+    | 'priority'
+    | 'rate_multiplier'
+    | 'status'
+    | 'group_ids'
+    | 'expires_at'
+  >
+): void {
+  Object.assign(form, createDefaultEditAccountForm(), {
+    name: account.name,
+    notes: account.notes || '',
+    proxy_id: account.proxy_id,
+    concurrency: account.concurrency,
+    load_factor: account.load_factor ?? null,
+    priority: account.priority,
+    rate_multiplier: account.rate_multiplier ?? 1,
+    status: normalizeEditableAccountStatus(account.status),
+    group_ids: account.group_ids || [],
+    expires_at: account.expires_at ?? null
+  })
+}
+
+export function buildEditAccountBasePayload(
+  form: EditAccountForm,
+  autoPauseOnExpired: boolean
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    ...form,
+    proxy_id: form.proxy_id ?? 0,
+    expires_at: form.expires_at ?? 0,
+    auto_pause_on_expired: autoPauseOnExpired
+  }
+
+  if (
+    form.load_factor == null ||
+    Number.isNaN(form.load_factor) ||
+    form.load_factor <= 0
+  ) {
+    payload.load_factor = 0
+  }
+
+  return payload
 }
 
 export function resolveAccountBaseUrlHint(platform: AccountPlatform | null | undefined, t: Translate) {
@@ -198,4 +315,12 @@ export const geminiHelpLinks = {
   geminiWebActivation: 'https://gemini.google.com/gems/create?hl=en-US&pli=1',
   countryCheck: 'https://policies.google.com/terms',
   countryChange: 'https://policies.google.com/country-association-form'
+}
+
+function normalizeEditableAccountStatus(status: Account['status']): EditableAccountStatus {
+  if (status === 'inactive' || status === 'error') {
+    return status
+  }
+
+  return 'active'
 }

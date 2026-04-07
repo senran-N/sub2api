@@ -82,7 +82,7 @@
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
-import type { PromoCodeEditForm } from '../promoCodeForm'
+import type { PromoCodeEditForm } from './promoCodeForm'
 
 defineProps<{
   show: boolean

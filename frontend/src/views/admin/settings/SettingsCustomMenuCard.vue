@@ -126,10 +126,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import ImageUpload from '@/components/common/ImageUpload.vue'
-import type { SettingsForm } from '../settingsForm'
+import type { SettingsCustomMenuFields } from './settingsForm'
 
 defineProps<{
-  form: SettingsForm
+  form: SettingsCustomMenuFields
 }>()
 
 defineEmits<{

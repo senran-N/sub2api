@@ -7,7 +7,7 @@ import {
   pushRoutingRule,
   removeRoutingRuleAccount,
   removeRoutingRuleByReference
-} from '../useGroupRoutingRules'
+} from '../groups/useGroupRoutingRules'
 
 describe('group routing rule helpers', () => {
   it('creates, appends, and removes rules by reference', () => {

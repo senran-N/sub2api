@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AdminUser } from '@/types'
-import { useUsageViewDialogs } from '../useUsageViewDialogs'
+import { useUsageViewDialogs } from '../usage/useUsageViewDialogs'
 
 function createUser(overrides: Partial<AdminUser> = {}): AdminUser {
   return {

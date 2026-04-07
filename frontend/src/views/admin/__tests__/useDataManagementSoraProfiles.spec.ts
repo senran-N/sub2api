@@ -154,4 +154,21 @@ describe('useDataManagementSoraProfiles', () => {
     expect(composable.soraProfileDrawerOpen.value).toBe(false)
     expect(composable.soraProfileForm.value.profile_id).toBe('main')
   })
+
+  it('uses shared request error details for failed profile loads', async () => {
+    const showError = vi.fn()
+    const composable = useDataManagementSoraProfiles({
+      t: (key: string) => key,
+      showError,
+      showSuccess: vi.fn(),
+      confirm: vi.fn(() => true)
+    })
+    listSoraS3Profiles.mockRejectedValueOnce({
+      response: { data: { detail: 'profile-load-failed' } }
+    })
+
+    await composable.loadSoraS3Profiles()
+
+    expect(showError).toHaveBeenCalledWith('profile-load-failed')
+  })
 })

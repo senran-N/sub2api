@@ -131,8 +131,8 @@ import PromoCodeStatusBadge from './promocodes/PromoCodeStatusBadge.vue'
 import PromoCodeUsageCell from './promocodes/PromoCodeUsageCell.vue'
 import PromoCodeUsagesDialog from './promocodes/PromoCodeUsagesDialog.vue'
 import PromoCodesToolbar from './promocodes/PromoCodesToolbar.vue'
-import { usePromoCodesViewActions } from './usePromoCodesViewActions'
-import { usePromoCodesViewData } from './usePromoCodesViewData'
+import { usePromoCodesViewActions } from './promocodes/usePromoCodesViewActions'
+import { usePromoCodesViewData } from './promocodes/usePromoCodesViewData'
 
 const { t } = useI18n()
 const appStore = useAppStore()

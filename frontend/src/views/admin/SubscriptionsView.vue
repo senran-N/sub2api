@@ -23,9 +23,9 @@
           @show-filter-user-dropdown="showFilterUserDropdown = true"
           @select-filter-user="selectFilterUser"
           @clear-filter-user="clearFilterUser"
-          @update:status="filters.status = $event"
-          @update:group-id="filters.group_id = $event"
-          @update:platform="filters.platform = $event"
+          @update:status="setFilterStatus"
+          @update:group-id="setFilterGroupId"
+          @update:platform="setFilterPlatform"
           @apply-filters="applyFilters"
           @refresh="loadSubscriptions"
           @set-user-mode="setUserColumnMode"
@@ -157,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -170,12 +170,8 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import {
-  buildSubscriptionGroupOptions,
-  createDefaultAssignSubscriptionForm,
-  createDefaultExtendSubscriptionForm,
-  resetAssignSubscriptionForm,
-  resetExtendSubscriptionForm
-} from './subscriptionForm'
+  buildSubscriptionGroupOptions
+} from './subscriptions/subscriptionForm'
 import SubscriptionActionsCell from './subscriptions/SubscriptionActionsCell.vue'
 import SubscriptionAssignDialog from './subscriptions/SubscriptionAssignDialog.vue'
 import SubscriptionExpirationCell from './subscriptions/SubscriptionExpirationCell.vue'
@@ -185,11 +181,12 @@ import SubscriptionGuideModal from './subscriptions/SubscriptionGuideModal.vue'
 import SubscriptionStatusBadge from './subscriptions/SubscriptionStatusBadge.vue'
 import SubscriptionUsageCell from './subscriptions/SubscriptionUsageCell.vue'
 import SubscriptionUserCell from './subscriptions/SubscriptionUserCell.vue'
-import { useSubscriptionsViewColumns } from './useSubscriptionsViewColumns'
-import { useSubscriptionsViewActions } from './useSubscriptionsViewActions'
-import { useSubscriptionsViewData } from './useSubscriptionsViewData'
-import { useSubscriptionsViewDialogs } from './useSubscriptionsViewDialogs'
-import { useSubscriptionsViewUserSearches } from './useSubscriptionsViewUserSearches'
+import { useSubscriptionsViewFormState } from './subscriptions/useSubscriptionsViewFormState'
+import { useSubscriptionsViewColumns } from './subscriptions/useSubscriptionsViewColumns'
+import { useSubscriptionsViewActions } from './subscriptions/useSubscriptionsViewActions'
+import { useSubscriptionsViewData } from './subscriptions/useSubscriptionsViewData'
+import { useSubscriptionsViewDialogs } from './subscriptions/useSubscriptionsViewDialogs'
+import { useSubscriptionsViewUserSearches } from './subscriptions/useSubscriptionsViewUserSearches'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -229,10 +226,23 @@ const statusOptions = computed(() => [
 ])
 
 const {
+  filters,
+  assignForm,
+  extendForm,
+  setFilterStatus,
+  setFilterGroupId,
+  setFilterPlatform,
+  selectFilterUser: applySelectedFilterUser,
+  clearFilterUser: clearSelectedFilterUser,
+  selectAssignUser: applySelectedAssignUser,
+  clearAssignUser: clearSelectedAssignUser,
+  resetAssignFormState,
+  resetExtendFormState
+} = useSubscriptionsViewFormState()
+const {
   subscriptions,
   groups,
   loading,
-  filters,
   pagination,
   loadSubscriptions,
   applyFilters,
@@ -242,19 +252,16 @@ const {
   loadInitialData,
   dispose: disposeDataState
 } = useSubscriptionsViewData({
-  showLoadError: () => appStore.showError(t('admin.subscriptions.failedToLoad'))
+  showLoadError: (message) => appStore.showError(message)
 })
 
-const assignForm = reactive(createDefaultAssignSubscriptionForm())
-
-const extendForm = reactive(createDefaultExtendSubscriptionForm())
 const resetAssignModalState = () => {
-  resetAssignSubscriptionForm(assignForm)
+  resetAssignFormState()
   resetAssignSearch()
 }
 
 const resetExtendModalState = () => {
-  resetExtendSubscriptionForm(extendForm)
+  resetExtendFormState()
 }
 
 const {
@@ -301,10 +308,12 @@ const {
   initialize: initializeUserSearches,
   dispose: disposeUserSearches
 } = useSubscriptionsViewUserSearches({
-  filters,
-  assignForm,
   applyFilters,
-  searchUsers: (keyword) => adminAPI.usage.searchUsers(keyword)
+  searchUsers: (keyword) => adminAPI.usage.searchUsers(keyword),
+  selectFilterUser: applySelectedFilterUser,
+  clearFilterUser: clearSelectedFilterUser,
+  selectAssignUser: applySelectedAssignUser,
+  clearAssignUser: clearSelectedAssignUser
 })
 
 // Group options for filter (all groups)

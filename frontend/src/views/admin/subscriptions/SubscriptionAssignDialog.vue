@@ -133,7 +133,7 @@ import Select from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import Icon from '@/components/icons/Icon.vue'
-import type { AssignSubscriptionForm, SubscriptionGroupOption } from '../subscriptionForm'
+import type { AssignSubscriptionForm, SubscriptionGroupOption } from './subscriptionForm'
 
 defineProps<{
   show: boolean

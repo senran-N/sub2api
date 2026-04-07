@@ -61,7 +61,7 @@ import { useI18n } from 'vue-i18n'
 import type { SimpleUser } from '@/api/admin/usage'
 import Select from '@/components/common/Select.vue'
 import type { Column } from '@/components/common/types'
-import type { SubscriptionStatusFilter } from '../subscriptionForm'
+import type { SubscriptionStatusFilter } from './subscriptionForm'
 import SubscriptionFilterUserSearch from './SubscriptionFilterUserSearch.vue'
 import SubscriptionToolbarActions from './SubscriptionToolbarActions.vue'
 

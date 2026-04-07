@@ -69,7 +69,7 @@ import { useI18n } from 'vue-i18n'
 import type { Column } from '@/components/common/types'
 import Icon from '@/components/icons/Icon.vue'
 import type { UserAttributeDefinition } from '@/types'
-import type { BuiltInUserFilterKey } from '../usersTable'
+import type { BuiltInUserFilterKey } from './usersTable'
 import UserColumnSettingsMenu from './UserColumnSettingsMenu.vue'
 import UserFilterSettingsMenu from './UserFilterSettingsMenu.vue'
 

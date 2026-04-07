@@ -12,7 +12,7 @@ import {
   getAnnouncementTargetingSummary,
   resetAnnouncementForm,
   validateAnnouncementTargeting
-} from '../announcementsForm'
+} from '../announcements/announcementsForm'
 
 function createGroup(overrides: Partial<AdminGroup> = {}): AdminGroup {
   return {

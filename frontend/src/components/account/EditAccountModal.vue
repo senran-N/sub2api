@@ -1599,14 +1599,26 @@ import {
   buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
   buildAccountUmqModeOptions,
+  buildEditAccountBasePayload,
   buildMixedChannelDetails,
+  createDefaultEditAccountForm,
+  hydrateEditAccountForm,
   needsMixedChannelCheck,
   resolveAccountBaseUrlHint,
-  resolveMixedChannelWarningMessage
+  resolveMixedChannelWarningMessage,
+  type EditAccountForm
 } from '@/components/account/accountModalShared'
 import {
-  applyInterceptWarmup,
-  applyTempUnschedConfig,
+  buildUpdatedAnthropicAPIKeyExtra,
+  buildUpdatedAnthropicQuotaControlExtra,
+  buildUpdatedAntigravityExtra,
+  buildUpdatedOpenAIExtra,
+  createEmptyModelRestrictionState,
+  deriveAntigravityModelMappings,
+  deriveModelRestrictionStateFromMapping,
+  deriveOpenAIExtraState
+} from '@/components/account/editAccountModalHelpers'
+import {
   createTempUnschedRule,
   DEFAULT_POOL_MODE_RETRY_COUNT,
   getDefaultBaseURL,
@@ -1619,15 +1631,20 @@ import {
   type ModelMapping,
   type TempUnschedRuleForm
 } from '@/components/account/credentialsBuilder'
+import {
+  appendEmptyModelMapping,
+  appendPresetModelMapping,
+  applySharedAccountCredentialsState,
+  confirmCustomErrorCodeSelection,
+  removeModelMappingAt
+} from '@/components/account/accountModalInteractions'
 import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import {
   // OPENAI_WS_MODE_CTX_POOL,
   OPENAI_WS_MODE_OFF,
-  isOpenAIWSModeEnabled,
   resolveOpenAIWSModeConcurrencyHintKey,
-  type OpenAIWSMode,
-  resolveOpenAIWSModeFromExtra
+  type OpenAIWSMode
 } from '@/utils/openaiWsMode'
 import {
   getPresetMappingChipClasses,
@@ -1828,89 +1845,6 @@ function getToneNoticeClasses(tone: EditAccountTone) {
   ])
 }
 
-const resetModelRestrictionState = () => {
-  modelRestrictionMode.value = 'whitelist'
-  allowedModels.value = []
-  modelMappings.value = []
-}
-
-const syncModelRestrictionStateFromMapping = (rawMapping: unknown) => {
-  if (!rawMapping || typeof rawMapping !== 'object') {
-    resetModelRestrictionState()
-    return
-  }
-
-  const entries = Object.entries(rawMapping as Record<string, string>)
-  if (entries.length === 0) {
-    resetModelRestrictionState()
-    return
-  }
-
-  const isWhitelistMode = entries.every(([from, to]) => from === to)
-  if (isWhitelistMode) {
-    modelRestrictionMode.value = 'whitelist'
-    allowedModels.value = entries.map(([from]) => from)
-    modelMappings.value = []
-    return
-  }
-
-  modelRestrictionMode.value = 'mapping'
-  modelMappings.value = entries.map(([from, to]) => ({ from, to }))
-  allowedModels.value = []
-}
-
-const syncAntigravityModelRestrictionState = (
-  credentials: Record<string, unknown> | undefined
-) => {
-  antigravityModelRestrictionMode.value = 'mapping'
-  antigravityWhitelistModels.value = []
-
-  const rawMapping = credentials?.model_mapping
-  if (rawMapping && typeof rawMapping === 'object') {
-    antigravityModelMappings.value = Object.entries(rawMapping as Record<string, string>).map(
-      ([from, to]) => ({ from, to })
-    )
-    return
-  }
-
-  const rawWhitelist = credentials?.model_whitelist
-  if (Array.isArray(rawWhitelist) && rawWhitelist.length > 0) {
-    antigravityModelMappings.value = rawWhitelist
-      .map((value) => String(value).trim())
-      .filter((value) => value.length > 0)
-      .map((model) => ({ from: model, to: model }))
-    return
-  }
-
-  antigravityModelMappings.value = []
-}
-
-const appendEmptyModelMapping = (target: ModelMapping[]) => {
-  target.push({ from: '', to: '' })
-}
-
-const removeModelMappingAt = (target: ModelMapping[], index: number) => {
-  target.splice(index, 1)
-}
-
-const appendPresetModelMapping = (target: ModelMapping[], from: string, to: string) => {
-  if (target.some((mapping) => mapping.from === from)) {
-    appStore.showInfo(t('admin.accounts.mappingExists', { model: from }))
-    return
-  }
-  target.push({ from, to })
-}
-
-const confirmCustomErrorCodeSelection = (code: number) => {
-  if (code === 429) {
-    return confirm(t('admin.accounts.customErrorCodes429Warning'))
-  }
-  if (code === 529) {
-    return confirm(t('admin.accounts.customErrorCodes529Warning'))
-  }
-  return true
-}
-
 const resetMixedChannelDialogState = () => {
   showMixedChannelWarning.value = false
   mixedChannelWarningDetails.value = null
@@ -1919,185 +1853,13 @@ const resetMixedChannelDialogState = () => {
 }
 
 const applySharedEditCredentialsState = (credentials: Record<string, unknown>) => {
-  applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'edit')
-  if (!applyTempUnschedConfig(credentials, tempUnschedEnabled.value, tempUnschedRules.value)) {
-    appStore.showError(t('admin.accounts.tempUnschedulable.rulesInvalid'))
-    return false
-  }
-  return true
-}
-
-const syncOpenAIExtraState = (
-  accountType: AccountType,
-  extra: Record<string, unknown> | undefined
-) => {
-  openaiPassthroughEnabled.value =
-    extra?.openai_passthrough === true || extra?.openai_oauth_passthrough === true
-  openaiOAuthResponsesWebSocketV2Mode.value = resolveOpenAIWSModeFromExtra(extra, {
-    modeKey: 'openai_oauth_responses_websockets_v2_mode',
-    enabledKey: 'openai_oauth_responses_websockets_v2_enabled',
-    fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
-    defaultMode: OPENAI_WS_MODE_OFF
+  return applySharedAccountCredentialsState(credentials, {
+    interceptWarmupRequests: interceptWarmupRequests.value,
+    tempUnschedEnabled: tempUnschedEnabled.value,
+    tempUnschedRules: tempUnschedRules.value,
+    showError: appStore.showError,
+    t
   })
-  openaiAPIKeyResponsesWebSocketV2Mode.value = resolveOpenAIWSModeFromExtra(extra, {
-    modeKey: 'openai_apikey_responses_websockets_v2_mode',
-    enabledKey: 'openai_apikey_responses_websockets_v2_enabled',
-    fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
-    defaultMode: OPENAI_WS_MODE_OFF
-  })
-  codexCLIOnlyEnabled.value = accountType === 'oauth' && extra?.codex_cli_only === true
-}
-
-const buildUpdatedOpenAIExtra = (
-  accountType: AccountType,
-  currentExtra: Record<string, unknown>
-) => {
-  const nextExtra: Record<string, unknown> = { ...currentExtra }
-  const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
-
-  if (accountType === 'oauth') {
-    nextExtra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
-    nextExtra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
-      openaiOAuthResponsesWebSocketV2Mode.value
-    )
-  } else if (accountType === 'apikey') {
-    nextExtra.openai_apikey_responses_websockets_v2_mode = openaiAPIKeyResponsesWebSocketV2Mode.value
-    nextExtra.openai_apikey_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
-      openaiAPIKeyResponsesWebSocketV2Mode.value
-    )
-  }
-
-  delete nextExtra.responses_websockets_v2_enabled
-  delete nextExtra.openai_ws_enabled
-
-  if (openaiPassthroughEnabled.value) {
-    nextExtra.openai_passthrough = true
-  } else {
-    delete nextExtra.openai_passthrough
-    delete nextExtra.openai_oauth_passthrough
-  }
-
-  if (accountType === 'oauth') {
-    if (codexCLIOnlyEnabled.value) {
-      nextExtra.codex_cli_only = true
-    } else if (hadCodexCLIOnlyEnabled) {
-      // 关闭时显式写 false，避免 extra 为空被后端忽略导致旧值无法清除
-      nextExtra.codex_cli_only = false
-    } else {
-      delete nextExtra.codex_cli_only
-    }
-  }
-
-  return nextExtra
-}
-
-const buildUpdatedAntigravityExtra = (currentExtra: Record<string, unknown>) => {
-  const nextExtra: Record<string, unknown> = { ...currentExtra }
-
-  if (mixedScheduling.value) {
-    nextExtra.mixed_scheduling = true
-  } else {
-    delete nextExtra.mixed_scheduling
-  }
-
-  if (allowOverages.value) {
-    nextExtra.allow_overages = true
-  } else {
-    delete nextExtra.allow_overages
-  }
-
-  return nextExtra
-}
-
-const buildUpdatedAnthropicQuotaControlExtra = (currentExtra: Record<string, unknown>) => {
-  const nextExtra: Record<string, unknown> = { ...currentExtra }
-
-  if (windowCostEnabled.value && windowCostLimit.value != null && windowCostLimit.value > 0) {
-    nextExtra.window_cost_limit = windowCostLimit.value
-    nextExtra.window_cost_sticky_reserve = windowCostStickyReserve.value ?? 10
-  } else {
-    delete nextExtra.window_cost_limit
-    delete nextExtra.window_cost_sticky_reserve
-  }
-
-  if (sessionLimitEnabled.value && maxSessions.value != null && maxSessions.value > 0) {
-    nextExtra.max_sessions = maxSessions.value
-    nextExtra.session_idle_timeout_minutes = sessionIdleTimeout.value ?? 5
-  } else {
-    delete nextExtra.max_sessions
-    delete nextExtra.session_idle_timeout_minutes
-  }
-
-  if (rpmLimitEnabled.value) {
-    const DEFAULT_BASE_RPM = 15
-    nextExtra.base_rpm =
-      baseRpm.value != null && baseRpm.value > 0 ? baseRpm.value : DEFAULT_BASE_RPM
-    nextExtra.rpm_strategy = rpmStrategy.value
-    if (rpmStickyBuffer.value != null && rpmStickyBuffer.value > 0) {
-      nextExtra.rpm_sticky_buffer = rpmStickyBuffer.value
-    } else {
-      delete nextExtra.rpm_sticky_buffer
-    }
-  } else {
-    delete nextExtra.base_rpm
-    delete nextExtra.rpm_strategy
-    delete nextExtra.rpm_sticky_buffer
-  }
-
-  if (userMsgQueueMode.value) {
-    nextExtra.user_msg_queue_mode = userMsgQueueMode.value
-  } else {
-    delete nextExtra.user_msg_queue_mode
-  }
-  delete nextExtra.user_msg_queue_enabled
-
-  if (tlsFingerprintEnabled.value) {
-    nextExtra.enable_tls_fingerprint = true
-    if (tlsFingerprintProfileId.value) {
-      nextExtra.tls_fingerprint_profile_id = tlsFingerprintProfileId.value
-    } else {
-      delete nextExtra.tls_fingerprint_profile_id
-    }
-  } else {
-    delete nextExtra.enable_tls_fingerprint
-    delete nextExtra.tls_fingerprint_profile_id
-  }
-
-  if (sessionIdMaskingEnabled.value) {
-    nextExtra.session_id_masking_enabled = true
-  } else {
-    delete nextExtra.session_id_masking_enabled
-  }
-
-  if (cacheTTLOverrideEnabled.value) {
-    nextExtra.cache_ttl_override_enabled = true
-    nextExtra.cache_ttl_override_target = cacheTTLOverrideTarget.value
-  } else {
-    delete nextExtra.cache_ttl_override_enabled
-    delete nextExtra.cache_ttl_override_target
-  }
-
-  if (customBaseUrlEnabled.value && customBaseUrl.value.trim()) {
-    nextExtra.custom_base_url_enabled = true
-    nextExtra.custom_base_url = customBaseUrl.value.trim()
-  } else {
-    delete nextExtra.custom_base_url_enabled
-    delete nextExtra.custom_base_url
-  }
-
-  return nextExtra
-}
-
-const buildUpdatedAnthropicApiKeyExtra = (currentExtra: Record<string, unknown>) => {
-  const nextExtra: Record<string, unknown> = { ...currentExtra }
-
-  if (anthropicPassthroughEnabled.value) {
-    nextExtra.anthropic_passthrough = true
-  } else {
-    delete nextExtra.anthropic_passthrough
-  }
-
-  return nextExtra
 }
 
 const getAccountCredentials = () => (props.account?.credentials as Record<string, unknown>) || {}
@@ -2110,18 +1872,40 @@ const getPendingCredentials = (updatePayload: Record<string, unknown>) =>
 const getPendingExtra = (updatePayload: Record<string, unknown>) =>
   (updatePayload.extra as Record<string, unknown>) || getAccountExtra()
 
-const form = reactive({
-  name: '',
-  notes: '',
-  proxy_id: null as number | null,
-  concurrency: 1,
-  load_factor: null as number | null,
-  priority: 1,
-  rate_multiplier: 1,
-  status: 'active' as 'active' | 'inactive' | 'error',
-  group_ids: [] as number[],
-  expires_at: null as number | null
-})
+const applyModelRestrictionState = (rawMapping: unknown) => {
+  const nextState = deriveModelRestrictionStateFromMapping(rawMapping)
+  modelRestrictionMode.value = nextState.mode
+  allowedModels.value = nextState.allowedModels
+  modelMappings.value = nextState.modelMappings
+}
+
+const resetModelRestrictionState = () => {
+  const nextState = createEmptyModelRestrictionState()
+  modelRestrictionMode.value = nextState.mode
+  allowedModels.value = nextState.allowedModels
+  modelMappings.value = nextState.modelMappings
+}
+
+const syncAntigravityModelRestrictionState = (
+  credentials: Record<string, unknown> | undefined
+) => {
+  antigravityModelRestrictionMode.value = 'mapping'
+  antigravityWhitelistModels.value = []
+  antigravityModelMappings.value = deriveAntigravityModelMappings(credentials)
+}
+
+const syncOpenAIExtraState = (
+  accountType: AccountType,
+  extra: Record<string, unknown> | undefined
+) => {
+  const nextState = deriveOpenAIExtraState(accountType, extra)
+  openaiPassthroughEnabled.value = nextState.openaiPassthroughEnabled
+  openaiOAuthResponsesWebSocketV2Mode.value = nextState.openaiOAuthResponsesWebSocketV2Mode
+  openaiAPIKeyResponsesWebSocketV2Mode.value = nextState.openaiAPIKeyResponsesWebSocketV2Mode
+  codexCLIOnlyEnabled.value = nextState.codexCLIOnlyEnabled
+}
+
+const form = reactive<EditAccountForm>(createDefaultEditAccountForm())
 
 const statusOptions = computed(() => {
   const options = [
@@ -2148,18 +1932,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   }
   antigravityMixedChannelConfirmed.value = false
   resetMixedChannelDialogState()
-  form.name = newAccount.name
-  form.notes = newAccount.notes || ''
-  form.proxy_id = newAccount.proxy_id
-  form.concurrency = newAccount.concurrency
-  form.load_factor = newAccount.load_factor ?? null
-  form.priority = newAccount.priority
-  form.rate_multiplier = newAccount.rate_multiplier ?? 1
-  form.status = (newAccount.status === 'active' || newAccount.status === 'inactive' || newAccount.status === 'error')
-    ? newAccount.status
-    : 'active'
-  form.group_ids = newAccount.group_ids || []
-  form.expires_at = newAccount.expires_at ?? null
+  hydrateEditAccountForm(form, newAccount)
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
@@ -2235,7 +2008,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     const platformDefaultUrl = getDefaultBaseURL(newAccount.platform)
     editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
 
-    syncModelRestrictionStateFromMapping(credentials.model_mapping)
+    applyModelRestrictionState(credentials.model_mapping)
 
     // Load pool mode
     poolModeEnabled.value = credentials.pool_mode === true
@@ -2276,7 +2049,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     editQuotaDailyLimit.value = typeof bedrockExtra.quota_daily_limit === 'number' ? bedrockExtra.quota_daily_limit : null
     editQuotaWeeklyLimit.value = typeof bedrockExtra.quota_weekly_limit === 'number' ? bedrockExtra.quota_weekly_limit : null
 
-    syncModelRestrictionStateFromMapping(bedrockCreds.model_mapping)
+    applyModelRestrictionState(bedrockCreds.model_mapping)
   } else if (newAccount.type === 'upstream' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
     editBaseUrl.value = (credentials.base_url as string) || ''
@@ -2287,7 +2060,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     // Load model mappings for OpenAI OAuth accounts
     if (newAccount.platform === 'openai' && newAccount.credentials) {
       const oauthCredentials = newAccount.credentials as Record<string, unknown>
-      syncModelRestrictionStateFromMapping(oauthCredentials.model_mapping)
+      applyModelRestrictionState(oauthCredentials.model_mapping)
     } else {
       resetModelRestrictionState()
     }
@@ -2332,7 +2105,9 @@ const removeModelMapping = (index: number) => {
 }
 
 const addPresetMapping = (from: string, to: string) => {
-  appendPresetModelMapping(modelMappings.value, from, to)
+  appendPresetModelMapping(modelMappings.value, from, to, (model) => {
+    appStore.showInfo(t('admin.accounts.mappingExists', { model }))
+  })
 }
 
 const addAntigravityModelMapping = () => {
@@ -2344,14 +2119,16 @@ const removeAntigravityModelMapping = (index: number) => {
 }
 
 const addAntigravityPresetMapping = (from: string, to: string) => {
-  appendPresetModelMapping(antigravityModelMappings.value, from, to)
+  appendPresetModelMapping(antigravityModelMappings.value, from, to, (model) => {
+    appStore.showInfo(t('admin.accounts.mappingExists', { model }))
+  })
 }
 
 // Error code toggle helper
 const toggleErrorCode = (code: number) => {
   const index = selectedErrorCodes.value.indexOf(code)
   if (index === -1) {
-    if (!confirmCustomErrorCodeSelection(code)) {
+    if (!confirmCustomErrorCodeSelection(code, confirm, t)) {
       return
     }
     selectedErrorCodes.value.push(code)
@@ -2371,7 +2148,7 @@ const addCustomErrorCode = () => {
     appStore.showInfo(t('admin.accounts.errorCodeExists'))
     return
   }
-  if (!confirmCustomErrorCodeSelection(code)) {
+  if (!confirmCustomErrorCodeSelection(code, confirm, t)) {
     return
   }
   selectedErrorCodes.value.push(code)
@@ -2587,22 +2364,11 @@ const handleSubmit = async () => {
     return
   }
 
-  const updatePayload: Record<string, unknown> = { ...form }
+  const updatePayload = buildEditAccountBasePayload(
+    form,
+    autoPauseOnExpired.value
+  )
   try {
-    // 后端期望 proxy_id: 0 表示清除代理，而不是 null
-    if (updatePayload.proxy_id === null) {
-      updatePayload.proxy_id = 0
-    }
-    if (form.expires_at === null) {
-      updatePayload.expires_at = 0
-    }
-    // load_factor: 空值/NaN/0/负数 时发送 0（后端约定 <= 0 = 清除）
-    const lf = form.load_factor
-    if (lf == null || Number.isNaN(lf) || lf <= 0) {
-      updatePayload.load_factor = 0
-    }
-    updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
-
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
       const currentCredentials = getAccountCredentials()
@@ -2760,25 +2526,55 @@ const handleSubmit = async () => {
     // For antigravity accounts, handle mixed_scheduling and allow_overages in extra
     if (props.account.platform === 'antigravity') {
       const currentExtra = getAccountExtra()
-      updatePayload.extra = buildUpdatedAntigravityExtra(currentExtra)
+      updatePayload.extra = buildUpdatedAntigravityExtra(currentExtra, {
+        mixedScheduling: mixedScheduling.value,
+        allowOverages: allowOverages.value
+      })
     }
 
     // For Anthropic OAuth/SetupToken accounts, handle quota control settings in extra
     if (props.account.platform === 'anthropic' && (props.account.type === 'oauth' || props.account.type === 'setup-token')) {
       const currentExtra = getAccountExtra()
-      updatePayload.extra = buildUpdatedAnthropicQuotaControlExtra(currentExtra)
+      updatePayload.extra = buildUpdatedAnthropicQuotaControlExtra(currentExtra, {
+        baseRpm: baseRpm.value,
+        cacheTTLOverrideEnabled: cacheTTLOverrideEnabled.value,
+        cacheTTLOverrideTarget: cacheTTLOverrideTarget.value,
+        customBaseUrl: customBaseUrl.value,
+        customBaseUrlEnabled: customBaseUrlEnabled.value,
+        maxSessions: maxSessions.value,
+        rpmLimitEnabled: rpmLimitEnabled.value,
+        rpmStickyBuffer: rpmStickyBuffer.value,
+        rpmStrategy: rpmStrategy.value,
+        sessionIdMaskingEnabled: sessionIdMaskingEnabled.value,
+        sessionIdleTimeout: sessionIdleTimeout.value,
+        sessionLimitEnabled: sessionLimitEnabled.value,
+        tlsFingerprintEnabled: tlsFingerprintEnabled.value,
+        tlsFingerprintProfileId: tlsFingerprintProfileId.value,
+        userMsgQueueMode: userMsgQueueMode.value,
+        windowCostEnabled: windowCostEnabled.value,
+        windowCostLimit: windowCostLimit.value,
+        windowCostStickyReserve: windowCostStickyReserve.value
+      })
     }
 
     // For Anthropic API Key accounts, handle passthrough mode in extra
     if (props.account.platform === 'anthropic' && props.account.type === 'apikey') {
       const currentExtra = getAccountExtra()
-      updatePayload.extra = buildUpdatedAnthropicApiKeyExtra(currentExtra)
+      updatePayload.extra = buildUpdatedAnthropicAPIKeyExtra(currentExtra, {
+        anthropicPassthroughEnabled: anthropicPassthroughEnabled.value
+      })
     }
 
     // For OpenAI OAuth/API Key accounts, handle passthrough mode in extra
     if (props.account.platform === 'openai' && (props.account.type === 'oauth' || props.account.type === 'apikey')) {
       const currentExtra = getAccountExtra()
-      updatePayload.extra = buildUpdatedOpenAIExtra(props.account.type, currentExtra)
+      updatePayload.extra = buildUpdatedOpenAIExtra(currentExtra, {
+        accountType: props.account.type,
+        codexCLIOnlyEnabled: codexCLIOnlyEnabled.value,
+        openaiAPIKeyResponsesWebSocketV2Mode: openaiAPIKeyResponsesWebSocketV2Mode.value,
+        openaiOAuthResponsesWebSocketV2Mode: openaiOAuthResponsesWebSocketV2Mode.value,
+        openaiPassthroughEnabled: openaiPassthroughEnabled.value
+      })
     }
 
     // For apikey/bedrock accounts, handle quota_limit in extra

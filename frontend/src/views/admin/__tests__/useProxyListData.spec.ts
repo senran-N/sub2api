@@ -141,4 +141,22 @@ describe('useProxyListData', () => {
     expect(setup.pagination.page_size).toBe(50)
     expect(listProxies).toHaveBeenCalledTimes(2)
   })
+
+  it('surfaces request details and ignores abort failures', async () => {
+    const setup = createComposable()
+
+    listProxies.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'proxy-load-failed'
+        }
+      }
+    })
+    await setup.composable.loadProxies()
+    expect(setup.showError).toHaveBeenCalledWith('proxy-load-failed')
+
+    listProxies.mockRejectedValueOnce({ name: 'AbortError' })
+    await setup.composable.loadProxies()
+    expect(setup.showError).toHaveBeenCalledTimes(1)
+  })
 })

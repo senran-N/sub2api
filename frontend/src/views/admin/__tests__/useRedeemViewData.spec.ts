@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import type { RedeemCode } from '@/types'
-import { useRedeemViewData } from '../useRedeemViewData'
+import { useRedeemViewData } from '../redeem/useRedeemViewData'
 
 const { listCodes, exportCodes, deleteCode, batchDelete } = vi.hoisted(() => ({
   listCodes: vi.fn(),
@@ -211,5 +211,23 @@ describe('useRedeemViewData', () => {
     await setup.composable.confirmDeleteUnused()
     expect(batchDelete).toHaveBeenCalledWith([7, 9])
     expect(setup.showSuccess).toHaveBeenCalledWith('admin.redeem.codesDeleted')
+  })
+
+  it('surfaces request details and ignores aborted loads', async () => {
+    const setup = createComposable()
+
+    listCodes.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'redeem-load-failed'
+        }
+      }
+    })
+    await setup.composable.loadCodes()
+    expect(setup.showError).toHaveBeenCalledWith('redeem-load-failed')
+
+    listCodes.mockRejectedValueOnce({ code: 'ERR_CANCELED' })
+    await setup.composable.loadCodes()
+    expect(setup.showError).toHaveBeenCalledTimes(1)
   })
 })

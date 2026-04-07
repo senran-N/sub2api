@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildCreateAccountRequest,
   buildCreateAccountSharedPayload,
+  buildCreateApiKeyCredentials,
+  buildCreateAnthropicOAuthAccountPayload,
+  buildCreateAnthropicOAuthCredentials,
   buildCreateBatchAccountName,
+  buildCreateOpenAICompatOAuthTarget,
   buildCreateAnthropicExtra,
   buildCreateAnthropicQuotaControlExtra,
+  buildCreateAntigravityOAuthCredentials,
+  buildCreateAntigravityUpstreamCredentials,
   buildCreateAntigravityExtra,
+  buildCreateBedrockCredentials,
   buildCreateOpenAIExtra,
   buildCreateOAuthAccountPayload,
   buildCreateSoraOAuthCredentials,
@@ -128,6 +136,192 @@ describe('createAccountModalHelpers', () => {
     })
   })
 
+  it('builds credential payloads for bedrock, antigravity upstream, and api key flows', () => {
+    expect(
+      buildCreateBedrockCredentials({
+        accessKeyId: 'AKIA123',
+        allowedModels: ['claude-3-5-sonnet'],
+        apiKey: '',
+        authMode: 'sigv4',
+        forceGlobal: true,
+        interceptWarmupRequests: true,
+        mode: 'whitelist',
+        modelMappings: [],
+        poolModeEnabled: true,
+        poolModeRetryCount: 4.8,
+        region: 'us-west-2',
+        secretAccessKey: 'secret',
+        sessionToken: 'session'
+      })
+    ).toEqual({
+      credentials: {
+        auth_mode: 'sigv4',
+        aws_region: 'us-west-2',
+        aws_access_key_id: 'AKIA123',
+        aws_secret_access_key: 'secret',
+        aws_session_token: 'session',
+        aws_force_global: 'true',
+        model_mapping: {
+          'claude-3-5-sonnet': 'claude-3-5-sonnet'
+        },
+        pool_mode: true,
+        pool_mode_retry_count: 4,
+        intercept_warmup_requests: true
+      }
+    })
+
+    expect(
+      buildCreateAntigravityUpstreamCredentials({
+        apiKey: 'upstream-key',
+        baseUrl: 'https://upstream.example.com',
+        interceptWarmupRequests: true,
+        modelMappings: [{ from: 'claude-3-7-sonnet', to: 'upstream-claude' }]
+      })
+    ).toEqual({
+      credentials: {
+        base_url: 'https://upstream.example.com',
+        api_key: 'upstream-key',
+        model_mapping: {
+          'claude-3-7-sonnet': 'upstream-claude'
+        },
+        intercept_warmup_requests: true
+      }
+    })
+
+    expect(
+      buildCreateApiKeyCredentials({
+        allowedModels: ['gpt-4o-mini'],
+        apiKey: 'sk-demo',
+        baseUrl: '',
+        customErrorCodesEnabled: true,
+        geminiTierId: 'tier-free',
+        interceptWarmupRequests: true,
+        isOpenAIModelRestrictionDisabled: false,
+        mode: 'whitelist',
+        modelMappings: [],
+        platform: 'gemini',
+        poolModeEnabled: true,
+        poolModeRetryCount: 2.2,
+        selectedErrorCodes: [429, 529]
+      })
+    ).toEqual({
+      credentials: {
+        base_url: 'https://generativelanguage.googleapis.com',
+        api_key: 'sk-demo',
+        tier_id: 'tier-free',
+        model_mapping: {
+          'gpt-4o-mini': 'gpt-4o-mini'
+        },
+        pool_mode: true,
+        pool_mode_retry_count: 2,
+        custom_error_codes_enabled: true,
+        custom_error_codes: [429, 529],
+        intercept_warmup_requests: true
+      }
+    })
+
+    expect(
+      buildCreateAnthropicOAuthCredentials({
+        interceptWarmupRequests: true,
+        tempUnschedPayload: [
+          {
+            error_code: 429,
+            keywords: ['quota'],
+            duration_minutes: 30,
+            description: 'protect upstream'
+          }
+        ],
+        tokenInfo: {
+          access_token: 'anthropic-token',
+          refresh_token: 'anthropic-refresh'
+        }
+      })
+    ).toEqual({
+      access_token: 'anthropic-token',
+      refresh_token: 'anthropic-refresh',
+      intercept_warmup_requests: true,
+      temp_unschedulable_enabled: true,
+      temp_unschedulable_rules: [
+        {
+          error_code: 429,
+          keywords: ['quota'],
+          duration_minutes: 30,
+          description: 'protect upstream'
+        }
+      ]
+    })
+
+    expect(
+      buildCreateAntigravityOAuthCredentials({
+        interceptWarmupRequests: true,
+        modelMappings: [{ from: 'claude-*', to: 'claude-sonnet-4-5' }],
+        tokenInfo: {
+          refresh_token: 'ag-refresh',
+          model_whitelist: ['legacy']
+        }
+      })
+    ).toEqual({
+      refresh_token: 'ag-refresh',
+      intercept_warmup_requests: true,
+      model_mapping: {
+        'claude-*': 'claude-sonnet-4-5'
+      }
+    })
+  })
+
+  it('returns validation keys for invalid credential inputs', () => {
+    expect(
+      buildCreateBedrockCredentials({
+        accessKeyId: '',
+        allowedModels: [],
+        apiKey: '',
+        authMode: 'sigv4',
+        forceGlobal: false,
+        interceptWarmupRequests: false,
+        mode: 'mapping',
+        modelMappings: [],
+        poolModeEnabled: false,
+        poolModeRetryCount: 0,
+        region: '',
+        secretAccessKey: 'secret',
+        sessionToken: ''
+      })
+    ).toEqual({
+      errorMessageKey: 'admin.accounts.bedrockAccessKeyIdRequired'
+    })
+
+    expect(
+      buildCreateAntigravityUpstreamCredentials({
+        apiKey: '',
+        baseUrl: 'https://upstream.example.com',
+        interceptWarmupRequests: false,
+        modelMappings: []
+      })
+    ).toEqual({
+      errorMessageKey: 'admin.accounts.upstream.pleaseEnterApiKey'
+    })
+
+    expect(
+      buildCreateApiKeyCredentials({
+        allowedModels: [],
+        apiKey: 'sk-demo',
+        baseUrl: 'ftp://invalid',
+        customErrorCodesEnabled: false,
+        geminiTierId: '',
+        interceptWarmupRequests: false,
+        isOpenAIModelRestrictionDisabled: true,
+        mode: 'mapping',
+        modelMappings: [],
+        platform: 'sora',
+        poolModeEnabled: false,
+        poolModeRetryCount: 0,
+        selectedErrorCodes: []
+      })
+    ).toEqual({
+      errorMessageKey: 'admin.accounts.soraBaseUrlInvalidScheme'
+    })
+  })
+
   it('removes openai-only flags from sora extra', () => {
     expect(
       buildCreateSoraExtra(
@@ -204,6 +398,150 @@ describe('createAccountModalHelpers', () => {
       credentials: { token: 'x' },
       extra: { foo: 'bar' },
       notes: 'note'
+    })
+
+    expect(
+      buildCreateAccountRequest({
+        common,
+        name: 'Direct',
+        platform: 'anthropic',
+        type: 'apikey',
+        credentials: { api_key: 'sk-live' },
+        extra: { anthropic_passthrough: true }
+      })
+    ).toEqual({
+      auto_pause_on_expired: true,
+      concurrency: 5,
+      expires_at: 123,
+      group_ids: [1, 2],
+      load_factor: 2,
+      name: 'Direct',
+      notes: 'note',
+      platform: 'anthropic',
+      type: 'apikey',
+      credentials: { api_key: 'sk-live' },
+      extra: { anthropic_passthrough: true },
+      priority: 9,
+      proxy_id: 3,
+      rate_multiplier: 1.5
+    })
+
+    expect(
+      buildCreateAnthropicOAuthAccountPayload({
+        common,
+        name: 'Claude OAuth',
+        platform: 'anthropic',
+        type: 'oauth',
+        interceptWarmupRequests: true,
+        tempUnschedPayload: [
+          {
+            error_code: 529,
+            keywords: ['overloaded'],
+            duration_minutes: 15,
+            description: 'retry later'
+          }
+        ],
+        tokenInfo: {
+          access_token: 'at',
+          refresh_token: 'rt'
+        },
+        extra: { quota_limit: 100 }
+      })
+    ).toEqual({
+      auto_pause_on_expired: true,
+      concurrency: 5,
+      expires_at: 123,
+      group_ids: [1, 2],
+      load_factor: 2,
+      name: 'Claude OAuth',
+      notes: 'note',
+      platform: 'anthropic',
+      type: 'oauth',
+      credentials: {
+        access_token: 'at',
+        refresh_token: 'rt',
+        intercept_warmup_requests: true,
+        temp_unschedulable_enabled: true,
+        temp_unschedulable_rules: [
+          {
+            error_code: 529,
+            keywords: ['overloaded'],
+            duration_minutes: 15,
+            description: 'retry later'
+          }
+        ]
+      },
+      extra: { quota_limit: 100 },
+      priority: 9,
+      proxy_id: 3,
+      rate_multiplier: 1.5
+    })
+
+    expect(
+      buildCreateOpenAICompatOAuthTarget({
+        baseName: 'Main',
+        credentials: {
+          access_token: 'at',
+          refresh_token: 'rt',
+          client_id: 'cid',
+          expires_at: 99
+        },
+        extra: {
+          openai_passthrough: true,
+          custom: 'value'
+        },
+        fallbackBaseName: 'Fallback',
+        index: 0,
+        platform: 'openai',
+        total: 2
+      })
+    ).toEqual({
+      name: 'Main #1',
+      platform: 'openai',
+      type: 'oauth',
+      credentials: {
+        access_token: 'at',
+        refresh_token: 'rt',
+        client_id: 'cid',
+        expires_at: 99
+      },
+      extra: {
+        openai_passthrough: true,
+        custom: 'value'
+      }
+    })
+
+    expect(
+      buildCreateOpenAICompatOAuthTarget({
+        baseName: '',
+        credentials: {
+          access_token: 'at',
+          refresh_token: 'rt',
+          client_id: 'cid',
+          expires_at: 99
+        },
+        extra: {
+          openai_passthrough: true,
+          custom: 'value'
+        },
+        fallbackBaseName: 'fallback@example.com',
+        index: 1,
+        platform: 'sora',
+        total: 2
+      })
+    ).toEqual({
+      name: 'fallback@example.com #2',
+      platform: 'sora',
+      type: 'oauth',
+      credentials: {
+        access_token: 'at',
+        refresh_token: 'rt',
+        client_id: 'cid',
+        expires_at: 99
+      },
+      extra: {
+        custom: 'value'
+      }
     })
 
     expect(resolveBatchCreateOutcome({ failedCount: 0, successCount: 2, t })).toEqual({

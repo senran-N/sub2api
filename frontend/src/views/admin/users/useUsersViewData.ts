@@ -2,6 +2,7 @@ import { ref, type ComputedRef, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { AdminGroup, AdminUser, UserAttributeDefinition } from '@/types'
 import type { BatchUserUsageStats } from '@/api/admin/dashboard'
+import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
 import { buildUserListFilters, type UsersFilterState, type UsersPaginationState } from './usersTable'
 
 interface UsersViewDataOptions {
@@ -32,14 +33,6 @@ export function useUsersViewData(options: UsersViewDataOptions) {
   const resetSecondaryData = () => {
     usageStats.value = {}
     userAttributeValues.value = {}
-  }
-
-  const isAbortError = (error: unknown) => {
-    if (!error || typeof error !== 'object') {
-      return false
-    }
-    const maybeError = error as { name?: string; code?: string }
-    return maybeError.name === 'AbortError' || maybeError.name === 'CanceledError' || maybeError.code === 'ERR_CANCELED'
   }
 
   async function loadAllGroups() {
@@ -142,11 +135,11 @@ export function useUsersViewData(options: UsersViewDataOptions) {
       if (response.items.length > 0) {
         options.scheduleUsersSecondaryDataLoad(signal)
       }
-    } catch (error: any) {
+    } catch (error) {
       if (isAbortError(error)) {
         return
       }
-      const message = error.response?.data?.detail || error.message || options.t('admin.users.failedToLoad')
+      const message = resolveRequestErrorMessage(error, options.t('admin.users.failedToLoad'))
       options.showError(message)
       console.error('Error loading users:', error)
     } finally {

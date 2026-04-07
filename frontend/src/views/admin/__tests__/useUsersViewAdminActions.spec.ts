@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminUser } from '@/types'
-import { useUsersViewAdminActions } from '../useUsersViewAdminActions'
+import { useUsersViewAdminActions } from '../users/useUsersViewAdminActions'
 
 const { toggleStatus, deleteUser } = vi.hoisted(() => ({
   toggleStatus: vi.fn(),

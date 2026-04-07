@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
-import { useUsageViewData, type ModelDistributionSource } from '../useUsageViewData'
+import { useUsageViewData, type ModelDistributionSource } from '../usage/useUsageViewData'
 
 const { usageList, usageStats, modelStats, snapshot, exportList } = vi.hoisted(() => ({
   usageList: vi.fn(),

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { useAnnouncementsViewData } from '../useAnnouncementsViewData'
+import { useAnnouncementsViewData } from '../announcements/useAnnouncementsViewData'
 
 const { listAnnouncements } = vi.hoisted(() => ({
   listAnnouncements: vi.fn()
@@ -103,9 +103,11 @@ describe('useAnnouncementsViewData', () => {
       showError
     })
 
-    listAnnouncements.mockRejectedValueOnce(new Error('boom'))
+    listAnnouncements.mockRejectedValueOnce({
+      response: { data: { detail: 'detail-message' } }
+    })
     await state.loadAnnouncements()
-    expect(showError).toHaveBeenCalledWith('admin.announcements.failedToLoad')
+    expect(showError).toHaveBeenCalledWith('detail-message')
 
     listAnnouncements.mockRejectedValueOnce({ name: 'AbortError' })
     await state.loadAnnouncements()

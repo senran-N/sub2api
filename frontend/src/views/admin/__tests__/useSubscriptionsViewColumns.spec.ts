@@ -4,7 +4,7 @@ import {
   SUBSCRIPTION_HIDDEN_COLUMNS_KEY,
   SUBSCRIPTION_USER_COLUMN_MODE_KEY,
   useSubscriptionsViewColumns
-} from '../useSubscriptionsViewColumns'
+} from '../subscriptions/useSubscriptionsViewColumns'
 
 function createStorage() {
   const store = new Map<string, string>()
