@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/pkg/tlsfingerprint"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -46,6 +46,22 @@ func (u *httpUpstreamRecorder) Do(req *http.Request, proxyURL string, accountID 
 
 func (u *httpUpstreamRecorder) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
 	return u.Do(req, proxyURL, accountID, accountConcurrency)
+}
+
+type passthroughTempUnschedRepoStub struct {
+	stubOpenAIAccountRepo
+	tempCalls   int
+	setErrCalls int
+}
+
+func (r *passthroughTempUnschedRepoStub) SetTempUnschedulable(ctx context.Context, id int64, until time.Time, reason string) error {
+	r.tempCalls++
+	return nil
+}
+
+func (r *passthroughTempUnschedRepoStub) SetError(ctx context.Context, id int64, errorMsg string) error {
+	r.setErrCalls++
+	return nil
 }
 
 var structuredLogCaptureMu sync.Mutex
@@ -584,6 +600,75 @@ func TestOpenAIGatewayService_OAuthPassthrough_429PersistsRateLimit(t *testing.T
 	require.Contains(t, rec.Body.String(), "usage_limit_reached")
 	require.Len(t, repo.rateLimitCalls, 1)
 	require.WithinDuration(t, time.Unix(resetAt, 0), repo.rateLimitCalls[0], 2*time.Second)
+}
+
+func TestOpenAIGatewayService_OAuthPassthrough_TempUnschedulableRuleReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+
+	originalBody := []byte(`{"model":"gpt-5.2","stream":false,"instructions":"local-test-instructions","input":[{"type":"text","text":"hi"}]}`)
+	resp := &http.Response{
+		StatusCode: http.StatusPaymentRequired,
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+			"x-request-id": []string{"rid-temp-unsched"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"detail":{"code":"deactivated_workspace"}}`)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+	repo := &passthroughTempUnschedRepoStub{}
+	rateSvc := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+
+	svc := &OpenAIGatewayService{
+		cfg:              &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream:     upstream,
+		rateLimitService: rateSvc,
+	}
+
+	account := &Account{
+		ID:          123,
+		Name:        "acc",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token":               "oauth-token",
+			"chatgpt_account_id":         "chatgpt-acc",
+			"temp_unschedulable_enabled": true,
+			"temp_unschedulable_rules": []any{
+				map[string]any{
+					"error_code":       float64(http.StatusPaymentRequired),
+					"keywords":         []any{"deactivated_workspace"},
+					"duration_minutes": float64(30),
+				},
+			},
+		},
+		Extra:          map[string]any{"openai_passthrough": true},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusPaymentRequired, failoverErr.StatusCode)
+	require.Equal(t, `{"detail":{"code":"deactivated_workspace"}}`, strings.TrimSpace(string(failoverErr.ResponseBody)))
+	require.Equal(t, 1, repo.tempCalls)
+	require.Equal(t, 0, repo.setErrCalls)
+	require.Empty(t, rec.Body.String(), "service layer should return failover without writing passthrough body")
+
+	v, ok := c.Get(OpsUpstreamErrorsKey)
+	require.True(t, ok)
+	arr, ok := v.([]*OpsUpstreamErrorEvent)
+	require.True(t, ok)
+	require.NotEmpty(t, arr)
+	require.Equal(t, "failover", arr[len(arr)-1].Kind)
+	require.True(t, arr[len(arr)-1].Passthrough)
 }
 
 func TestOpenAIGatewayService_OAuthPassthrough_NonCodexUAFallbackToCodexUA(t *testing.T) {

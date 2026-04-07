@@ -331,8 +331,13 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
+	shouldDisable := false
 	if s.rateLimitService != nil {
-		_ = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
+		shouldDisable = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
+	}
+	kind := "http_error"
+	if shouldDisable {
+		kind = "failover"
 	}
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 		Platform:             account.Platform,
@@ -341,11 +346,18 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 		UpstreamStatusCode:   resp.StatusCode,
 		UpstreamRequestID:    resp.Header.Get("x-request-id"),
 		Passthrough:          true,
-		Kind:                 "http_error",
+		Kind:                 kind,
 		Message:              upstreamMsg,
 		Detail:               upstreamDetail,
 		UpstreamResponseBody: upstreamDetail,
 	})
+	if shouldDisable {
+		return &UpstreamFailoverError{
+			StatusCode:      resp.StatusCode,
+			ResponseBody:    body,
+			ResponseHeaders: resp.Header.Clone(),
+		}
+	}
 
 	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := resp.Header.Get("Content-Type")
