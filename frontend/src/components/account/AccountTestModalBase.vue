@@ -190,6 +190,7 @@ import { Icon } from '@/components/icons'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
 import type { Account, ClaudeModel } from '@/types'
+import { AUTH_TOKEN_KEY } from '@/utils/authStorage'
 
 type AccountTestStatus = 'idle' | 'connecting' | 'success' | 'error'
 type LogTone = 'default' | 'muted' | 'info' | 'success' | 'danger' | 'accent' | 'warning' | 'highlight' | 'streaming'
@@ -341,7 +342,12 @@ watch(
     }
 
     cancelActiveRequest()
-  }
+  },
+  // immediate: true is required because the parent renders this component with
+  // v-if="showTest", so it is only ever mounted when show is already true.
+  // Without immediate, the watcher never fires (show never "changes") and
+  // loadAvailableModels() is never called, leaving availableModels empty.
+  { immediate: true }
 )
 
 watch(selectedModelId, () => {
@@ -440,7 +446,7 @@ const startTest = async () => {
     const response = await fetch(`/api/v1/admin/accounts/${props.account.id}/test`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(
