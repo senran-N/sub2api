@@ -37,7 +37,10 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 	selected := s.selectBestAccount(ctx, accounts, requestedModel, excludedIDs)
 	if selected == nil {
 		if requestedModel != "" {
-			return nil, fmt.Errorf("no available OpenAI accounts supporting model: %s", requestedModel)
+			if !openAIRequestedModelAvailable(accounts, requestedModel) {
+				return nil, newOpenAIRequestedModelUnavailableError(requestedModel)
+			}
+			return nil, ErrNoAvailableAccounts
 		}
 		return nil, errors.New("no available OpenAI accounts")
 	}
@@ -133,6 +136,9 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	candidates, err := s.selectOpenAILoadAwareCandidates(accounts, requestedModel, excludedIDs)
 	if err != nil {
 		return nil, err
+	}
+	if len(candidates) == 0 && requestedModel != "" && !openAIRequestedModelAvailable(accounts, requestedModel) {
+		return nil, newOpenAIRequestedModelUnavailableError(requestedModel)
 	}
 
 	loadMap, err := s.concurrencyService.GetAccountsLoadBatch(ctx, buildAccountLoadRequests(candidates))

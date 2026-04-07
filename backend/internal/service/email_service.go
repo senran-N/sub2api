@@ -7,8 +7,10 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
+	"net"
 	"net/smtp"
 	"net/url"
 	"strconv"
@@ -26,6 +28,41 @@ var (
 
 	// Password reset errors
 	ErrInvalidResetToken = infraerrors.BadRequest("INVALID_RESET_TOKEN", "invalid or expired password reset token")
+)
+
+type smtpClient interface {
+	Extension(ext string) (bool, string)
+	StartTLS(config *tls.Config) error
+	Auth(auth smtp.Auth) error
+	Mail(from string) error
+	Rcpt(to string) error
+	Data() (io.WriteCloser, error)
+	Close() error
+	Quit() error
+}
+
+type smtpClientAdapter struct {
+	*smtp.Client
+}
+
+var (
+	smtpDialFunc = func(addr string) (smtpClient, error) {
+		client, err := smtp.Dial(addr)
+		if err != nil {
+			return nil, err
+		}
+		return smtpClientAdapter{Client: client}, nil
+	}
+	smtpNewClientFunc = func(conn net.Conn, host string) (smtpClient, error) {
+		client, err := smtp.NewClient(conn, host)
+		if err != nil {
+			return nil, err
+		}
+		return smtpClientAdapter{Client: client}, nil
+	}
+	smtpTLSDialFunc = func(network, addr string, config *tls.Config) (net.Conn, error) {
+		return tls.Dial(network, addr, config)
+	}
 )
 
 // EmailCache defines cache operations for email service
@@ -160,31 +197,63 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
 
 	if config.UseTLS {
-		return s.sendMailTLS(addr, auth, config.From, to, []byte(msg), config.Host)
+		return s.sendMailSecure(config, addr, auth, config.From, to, []byte(msg))
 	}
 
 	return smtp.SendMail(addr, auth, config.From, []string{to}, []byte(msg))
 }
 
-// sendMailTLS 使用TLS发送邮件
-func (s *EmailService) sendMailTLS(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
-	tlsConfig := &tls.Config{
+func buildSMTPTLSConfig(host string) *tls.Config {
+	return &tls.Config{
 		ServerName: host,
 		// 强制 TLS 1.2+，避免协议降级导致的弱加密风险。
 		MinVersion: tls.VersionTLS12,
 	}
+}
 
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
-	if err != nil {
-		return fmt.Errorf("tls dial: %w", err)
-	}
-	defer func() { _ = conn.Close() }()
+func shouldUseImplicitSMTPTLS(port int) bool {
+	return port == 465
+}
 
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return fmt.Errorf("new smtp client: %w", err)
+func (s *EmailService) newSecureSMTPClient(config *SMTPConfig, addr string) (smtpClient, func(), error) {
+	if shouldUseImplicitSMTPTLS(config.Port) {
+		conn, err := smtpTLSDialFunc("tcp", addr, buildSMTPTLSConfig(config.Host))
+		if err != nil {
+			return nil, nil, fmt.Errorf("tls dial: %w", err)
+		}
+
+		client, err := smtpNewClientFunc(conn, config.Host)
+		if err != nil {
+			_ = conn.Close()
+			return nil, nil, fmt.Errorf("new smtp client: %w", err)
+		}
+		return client, func() {
+			_ = client.Close()
+			_ = conn.Close()
+		}, nil
 	}
-	defer func() { _ = client.Close() }()
+
+	client, err := smtpDialFunc(addr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("smtp dial: %w", err)
+	}
+	if ok, _ := client.Extension("STARTTLS"); !ok {
+		_ = client.Close()
+		return nil, nil, fmt.Errorf("smtp starttls: server does not advertise STARTTLS")
+	}
+	if err := client.StartTLS(buildSMTPTLSConfig(config.Host)); err != nil {
+		_ = client.Close()
+		return nil, nil, fmt.Errorf("smtp starttls: %w", err)
+	}
+	return client, func() { _ = client.Close() }, nil
+}
+
+func (s *EmailService) sendMailSecure(config *SMTPConfig, addr string, auth smtp.Auth, from, to string, msg []byte) error {
+	client, cleanup, err := s.newSecureSMTPClient(config, addr)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 
 	if err = client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
@@ -203,18 +272,14 @@ func (s *EmailService) sendMailTLS(addr string, auth smtp.Auth, from, to string,
 		return fmt.Errorf("smtp data: %w", err)
 	}
 
-	_, err = w.Write(msg)
-	if err != nil {
+	if _, err = w.Write(msg); err != nil {
 		return fmt.Errorf("write msg: %w", err)
 	}
-
-	err = w.Close()
-	if err != nil {
+	if err = w.Close(); err != nil {
 		return fmt.Errorf("close writer: %w", err)
 	}
 
-	// Email is sent successfully after w.Close(), ignore Quit errors
-	// Some SMTP servers return non-standard responses on QUIT
+	// Email is sent successfully after w.Close(), ignore Quit errors.
 	_ = client.Quit()
 	return nil
 }
@@ -347,22 +412,11 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 
 	if config.UseTLS {
-		tlsConfig := &tls.Config{
-			ServerName: config.Host,
-			// 与发送逻辑一致，显式要求 TLS 1.2+。
-			MinVersion: tls.VersionTLS12,
-		}
-		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		client, cleanup, err := s.newSecureSMTPClient(config, addr)
 		if err != nil {
-			return fmt.Errorf("tls connection failed: %w", err)
+			return fmt.Errorf("secure smtp connection failed: %w", err)
 		}
-		defer func() { _ = conn.Close() }()
-
-		client, err := smtp.NewClient(conn, config.Host)
-		if err != nil {
-			return fmt.Errorf("smtp client creation failed: %w", err)
-		}
-		defer func() { _ = client.Close() }()
+		defer cleanup()
 
 		auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
 		if err = client.Auth(auth); err != nil {

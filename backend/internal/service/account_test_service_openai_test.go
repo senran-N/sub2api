@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -130,4 +131,39 @@ func TestAccountTestService_OpenAI401MarksAccountAsAuthFailed(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, int64(87), repo.setErrorID)
 	require.Equal(t, `Authentication failed (401): {"detail":"Unauthorized"}`, repo.setErrorMsg)
+}
+
+func TestAccountTestService_OpenAIAzureAPIKeyUsesResponsesEndpointAndAPIKeyHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newSoraTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: [DONE]\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          86,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "azure-key",
+			"base_url": "https://demo.cognitiveservices.azure.com/openai?api-version=2025-04-01-preview",
+		},
+	}
+
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://demo.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview", upstream.requests[0].URL.String())
+	require.Equal(t, "azure-key", upstream.requests[0].Header.Get("Api-Key"))
+	require.Empty(t, upstream.requests[0].Header.Get("Authorization"))
 }

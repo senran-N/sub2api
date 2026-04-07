@@ -284,8 +284,12 @@ export function accountMatchesCurrentFilters(
   }
 
   const search = String(filters.search || '').trim().toLowerCase()
-  if (search && !account.name.toLowerCase().includes(search)) {
-    return false
+  if (search) {
+    const matchesName = account.name.toLowerCase().includes(search)
+    const matchesID = String(account.id) === search
+    if (!matchesName && !matchesID) {
+      return false
+    }
   }
 
   return true

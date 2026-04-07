@@ -245,7 +245,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
 			if len(failedAccountIDs) == 0 {
-				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable", streamStarted)
+				status, code, message := openAISelectionErrorResponse(err)
+				h.handleStreamingAwareError(c, status, code, message, streamStarted)
 				return
 			}
 			if lastFailoverErr != nil {
@@ -1165,6 +1166,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	)
 	if err != nil {
 		reqLog.Warn("openai.websocket_account_select_failed", zap.Error(err))
+		if service.IsOpenAIRequestedModelUnavailableError(err) {
+			model := service.ExtractOpenAIRequestedModelUnavailable(err)
+			reason := "requested model is not configured for any available OpenAI account"
+			if model != "" {
+				reason += ": " + model
+			}
+			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, reason)
+			return
+		}
 		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
 		return
 	}

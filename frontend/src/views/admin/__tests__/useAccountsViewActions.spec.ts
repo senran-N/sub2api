@@ -184,6 +184,23 @@ describe('useAccountsViewActions', () => {
     expect(setup.reload).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps failed accounts selected after bulk refresh partial failure', async () => {
+    const setup = createComposable([11, 12, 13])
+    batchRefresh.mockResolvedValue({
+      total: 3,
+      success: 2,
+      failed: 1,
+      errors: [{ account_id: 12, error: 'refresh failed' }]
+    })
+
+    await setup.composable.handleBulkRefreshToken()
+
+    expect(batchRefresh).toHaveBeenCalledWith([11, 12, 13])
+    expect(setup.setSelectedIds).toHaveBeenCalledWith([12])
+    expect(setup.showError).toHaveBeenCalledWith('admin.accounts.bulkActions.partialSuccess')
+    expect(setup.reload).toHaveBeenCalledTimes(1)
+  })
+
   it('handles unknown bulk schedulable results by reloading and restoring selection', async () => {
     const setup = createComposable([7, 8])
     bulkUpdate.mockResolvedValue({})

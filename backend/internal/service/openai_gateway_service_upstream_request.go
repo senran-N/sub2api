@@ -22,6 +22,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 	_ = isStream
 
 	var targetURL string
+	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
 	switch account.Type {
 	case AccountTypeOAuth:
 		targetURL = chatgptCodexURL
@@ -34,7 +35,8 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 			if err != nil {
 				return nil, err
 			}
-			targetURL = buildOpenAIResponsesURL(validatedURL)
+			upstreamTarget = newOpenAIResponsesUpstreamTarget(validatedURL)
+			targetURL = upstreamTarget.URL
 		}
 	default:
 		targetURL = openaiPlatformAPIURL
@@ -46,7 +48,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 		return nil, err
 	}
 
-	req.Header.Set("authorization", "Bearer "+token)
+	upstreamTarget.ApplyAuthHeader(req.Header, token)
 
 	if account.Type == AccountTypeOAuth {
 		req.Host = "chatgpt.com"

@@ -195,6 +195,12 @@ describe('accountsList helpers', () => {
 
     expect(
       accountMatchesCurrentFilters(rateLimited, {
+        search: '9'
+      })
+    ).toBe(true)
+
+    expect(
+      accountMatchesCurrentFilters(rateLimited, {
         privacy_mode: '__unset__'
       })
     ).toBe(false)

@@ -351,6 +351,9 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 
 	filtered, loadReq := s.prepareLoadBalanceCandidates(ctx, req, accounts, schedGroup)
 	if len(filtered) == 0 {
+		if req.RequestedModel != "" && !openAIRequestedModelAvailable(accounts, req.RequestedModel) {
+			return nil, 0, 0, 0, newOpenAIRequestedModelUnavailableError(req.RequestedModel)
+		}
 		return nil, 0, 0, 0, errors.New("no available OpenAI accounts")
 	}
 

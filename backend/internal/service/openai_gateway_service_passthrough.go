@@ -214,6 +214,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	token string,
 ) (*http.Request, error) {
 	targetURL := openaiPlatformAPIURL
+	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
 	switch account.Type {
 	case AccountTypeOAuth:
 		targetURL = chatgptCodexURL
@@ -224,7 +225,8 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 			if err != nil {
 				return nil, err
 			}
-			targetURL = buildOpenAIResponsesURL(validatedURL)
+			upstreamTarget = newOpenAIResponsesUpstreamTarget(validatedURL)
+			targetURL = upstreamTarget.URL
 		}
 	}
 	targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
@@ -248,9 +250,10 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	}
 
 	req.Header.Del("authorization")
+	req.Header.Del("api-key")
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
-	req.Header.Set("authorization", "Bearer "+token)
+	upstreamTarget.ApplyAuthHeader(req.Header, token)
 
 	if account.Type == AccountTypeOAuth {
 		promptCacheKey := strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())

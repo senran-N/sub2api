@@ -88,8 +88,19 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
     }
 
     try {
-      const result = await adminAPI.accounts.batchRefresh(options.getSelectedIds())
+      const selectedIds = options.getSelectedIds()
+      const result = await adminAPI.accounts.batchRefresh(selectedIds)
       if (result.failed > 0) {
+        const failedIDs = Array.isArray(result.errors)
+          ? result.errors
+              .map((entry) => entry.account_id)
+              .filter((accountID) => Number.isInteger(accountID) && accountID > 0)
+          : []
+        if (failedIDs.length > 0) {
+          options.setSelectedIds(failedIDs)
+        } else {
+          options.setSelectedIds(selectedIds)
+        }
         options.showError(
           options.t('admin.accounts.bulkActions.partialSuccess', {
             success: result.success,

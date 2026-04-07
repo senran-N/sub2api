@@ -17,6 +17,7 @@ func (s *OpenAIGatewayService) buildOpenAIResponsesWSURL(account *Account) (stri
 		return "", errors.New("account is nil")
 	}
 	var targetURL string
+	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
 	switch account.Type {
 	case AccountTypeOAuth:
 		targetURL = chatgptCodexURL
@@ -29,7 +30,8 @@ func (s *OpenAIGatewayService) buildOpenAIResponsesWSURL(account *Account) (stri
 			if err != nil {
 				return "", err
 			}
-			targetURL = buildOpenAIResponsesURL(validatedURL)
+			upstreamTarget = newOpenAIResponsesUpstreamTarget(validatedURL)
+			targetURL = upstreamTarget.URL
 		}
 	default:
 		targetURL = openaiPlatformAPIURL
@@ -62,7 +64,11 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	promptCacheKey string,
 ) (http.Header, openAIWSSessionHeaderResolution) {
 	headers := make(http.Header)
-	headers.Set("authorization", "Bearer "+token)
+	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
+	if account != nil && account.Type == AccountTypeAPIKey {
+		upstreamTarget = newOpenAIResponsesUpstreamTarget(account.GetOpenAIBaseURL())
+	}
+	upstreamTarget.ApplyAuthHeader(headers, token)
 
 	sessionResolution := resolveOpenAIWSSessionHeaders(c, promptCacheKey)
 	if c != nil && c.Request != nil {

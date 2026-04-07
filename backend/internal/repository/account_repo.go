@@ -483,7 +483,13 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 		}
 	}
 	if search != "" {
-		q = q.Where(dbaccount.NameContainsFold(search))
+		searchPredicates := []dbpredicate.Account{
+			dbaccount.NameContainsFold(search),
+		}
+		if accountID, err := strconv.ParseInt(search, 10, 64); err == nil && accountID > 0 {
+			searchPredicates = append(searchPredicates, dbaccount.IDEQ(accountID))
+		}
+		q = q.Where(dbaccount.Or(searchPredicates...))
 	}
 	if groupID == service.AccountListGroupUngrouped {
 		q = q.Where(dbaccount.Not(dbaccount.HasAccountGroups()))

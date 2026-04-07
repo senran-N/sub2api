@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
-	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/stretchr/testify/require"
 )
 
@@ -466,6 +466,9 @@ func TestOpenAISelectAccountForModelWithExclusions_NoModelSupport(t *testing.T) 
 	}
 	if acc != nil {
 		t.Fatalf("expected nil account for unsupported model")
+	}
+	if !errors.Is(err, ErrOpenAIRequestedModelUnavailable) {
+		t.Fatalf("expected model unavailable error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "supporting model") {
 		t.Fatalf("unexpected error: %v", err)
@@ -1555,6 +1558,36 @@ func TestOpenAIBuildUpstreamRequestPreservesCompactPathForAPIKeyBaseURL(t *testi
 	req, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte(`{"model":"gpt-5"}`), "token", false, "", false)
 	require.NoError(t, err)
 	require.Equal(t, "https://example.com/v1/responses/compact", req.URL.String())
+}
+
+func TestBuildOpenAIResponsesURLSupportsAzureResponsesEndpoint(t *testing.T) {
+	target := newOpenAIResponsesUpstreamTarget("https://demo.cognitiveservices.azure.com/openai?api-version=2025-04-01-preview")
+	require.Equal(t, "https://demo.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview", target.URL)
+	require.Equal(t, openAIUpstreamAuthHeaderAPIKey, target.AuthHeader)
+}
+
+func TestOpenAIBuildUpstreamRequestUsesAzureAPIKeyHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader([]byte(`{"model":"gpt-5"}`)))
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+		},
+	}}
+	account := &Account{
+		Type:        AccountTypeAPIKey,
+		Platform:    PlatformOpenAI,
+		Credentials: map[string]any{"base_url": "https://demo.cognitiveservices.azure.com/openai?api-version=2025-04-01-preview"},
+	}
+
+	req, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte(`{"model":"gpt-5"}`), "azure-api-key", false, "", false)
+	require.NoError(t, err)
+	require.Equal(t, "https://demo.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview", req.URL.String())
+	require.Equal(t, "azure-api-key", req.Header.Get("Api-Key"))
+	require.Empty(t, req.Header.Get("Authorization"))
 }
 
 func TestOpenAIBuildUpstreamRequestOAuthOfficialClientOriginatorCompatibility(t *testing.T) {
