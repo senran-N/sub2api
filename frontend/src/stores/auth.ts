@@ -8,11 +8,13 @@ import { ref, computed, readonly } from 'vue'
 import type { LoginResponse } from '@/api/auth'
 import type { User, LoginRequest, RegisterRequest, AuthResponse, TotpLoginResponse } from '@/types'
 import { setAuthTokenRefreshHandler, type AuthTokenRefreshedDetail } from './authSync'
+import {
+  AUTH_TOKEN_KEY,
+  AUTH_USER_KEY,
+  REFRESH_TOKEN_KEY,
+  TOKEN_EXPIRES_AT_KEY
+} from '@/utils/authStorage'
 
-const AUTH_TOKEN_KEY = 'auth_token'
-const AUTH_USER_KEY = 'auth_user'
-const REFRESH_TOKEN_KEY = 'refresh_token'
-const TOKEN_EXPIRES_AT_KEY = 'token_expires_at' // 存储过期时间戳而非有效期
 const AUTO_REFRESH_INTERVAL = 60 * 1000 // 60 seconds for user data refresh
 const TOKEN_REFRESH_BUFFER = 120 * 1000 // 120 seconds before expiry to refresh token
 

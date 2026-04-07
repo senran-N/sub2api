@@ -7,6 +7,12 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResp
 import type { ApiResponse } from '@/types'
 import { getLocale } from '@/i18n'
 import { emitAuthTokenRefreshed } from '@/stores/authSync'
+import {
+  AUTH_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+  TOKEN_EXPIRES_AT_KEY,
+  AUTH_USER_KEY
+} from '@/utils/authStorage'
 
 // ==================== Axios Instance Configuration ====================
 
@@ -56,7 +62,7 @@ const getUserTimezone = (): string => {
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // Attach token from localStorage
-    const token = localStorage.getItem('auth_token')
+    const token = localStorage.getItem(AUTH_TOKEN_KEY)
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -148,7 +154,7 @@ apiClient.interceptors.response.use(
       // 401: Try to refresh the token if we have a refresh token
       // This handles TOKEN_EXPIRED, INVALID_TOKEN, TOKEN_REVOKED, etc.
       if (status === 401 && !originalRequest._retry) {
-        const refreshToken = localStorage.getItem('refresh_token')
+        const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
         const isAuthEndpoint =
           url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh')
 
@@ -199,9 +205,9 @@ apiClient.interceptors.response.use(
               const expiresAt = Date.now() + expires_in * 1000
 
               // Update tokens in localStorage (convert expires_in to timestamp)
-              localStorage.setItem('auth_token', access_token)
-              localStorage.setItem('refresh_token', newRefreshToken)
-              localStorage.setItem('token_expires_at', String(expiresAt))
+              localStorage.setItem(AUTH_TOKEN_KEY, access_token)
+              localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken)
+              localStorage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAt))
               emitAuthTokenRefreshed({
                 access_token,
                 refresh_token: newRefreshToken,
@@ -228,10 +234,10 @@ apiClient.interceptors.response.use(
             isRefreshing = false
 
             // Clear tokens and redirect to login
-            localStorage.removeItem('auth_token')
-            localStorage.removeItem('refresh_token')
-            localStorage.removeItem('auth_user')
-            localStorage.removeItem('token_expires_at')
+            localStorage.removeItem(AUTH_TOKEN_KEY)
+            localStorage.removeItem(REFRESH_TOKEN_KEY)
+            localStorage.removeItem(AUTH_USER_KEY)
+            localStorage.removeItem(TOKEN_EXPIRES_AT_KEY)
             sessionStorage.setItem('auth_expired', '1')
 
             if (!window.location.pathname.includes('/login')) {
@@ -247,7 +253,7 @@ apiClient.interceptors.response.use(
         }
 
         // No refresh token or is auth endpoint - clear auth and redirect
-        const hasToken = !!localStorage.getItem('auth_token')
+        const hasToken = !!localStorage.getItem(AUTH_TOKEN_KEY)
         const headers = error.config?.headers as Record<string, unknown> | undefined
         const authHeader = headers?.Authorization ?? headers?.authorization
         const sentAuth =
@@ -257,10 +263,10 @@ apiClient.interceptors.response.use(
               ? authHeader.length > 0
               : !!authHeader
 
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('refresh_token')
-        localStorage.removeItem('auth_user')
-        localStorage.removeItem('token_expires_at')
+        localStorage.removeItem(AUTH_TOKEN_KEY)
+        localStorage.removeItem(REFRESH_TOKEN_KEY)
+        localStorage.removeItem(AUTH_USER_KEY)
+        localStorage.removeItem(TOKEN_EXPIRES_AT_KEY)
         if ((hasToken || sentAuth) && !isAuthEndpoint) {
           sessionStorage.setItem('auth_expired', '1')
         }

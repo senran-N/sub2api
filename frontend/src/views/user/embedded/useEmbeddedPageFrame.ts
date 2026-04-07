@@ -2,7 +2,7 @@ import { computed, onMounted, onUnmounted, ref, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
-import { buildEmbeddedUrl, detectTheme } from '@/utils/embedded-url'
+import { buildEmbeddedUrl, detectTheme } from '@/utils/embeddedUrl'
 import { isEmbeddedPageUrl, loadEmbeddedPageSettings, type EmbeddedPageTheme } from './embeddedPageFrame'
 
 export function createEmbeddedPageThemeObserver(

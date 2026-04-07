@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildEmbeddedUrl, detectTheme } from '../embedded-url'
+import { buildEmbeddedUrl, detectTheme } from '../embeddedUrl'
 
 describe('embedded-url', () => {
   const originalLocation = window.location

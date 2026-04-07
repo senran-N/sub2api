@@ -129,6 +129,7 @@ onMounted(async () => {
 </script>
 
 <template>
+  <div class="scanlines"></div>
   <NavigationProgress />
   <RouterView />
   <Toast />

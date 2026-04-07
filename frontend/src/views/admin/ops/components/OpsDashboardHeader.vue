@@ -1374,7 +1374,8 @@ function handleToolbarRefresh() {
 }
 
 .ops-dashboard-header__label {
-  color: var(--theme-page-muted);
+  color: color-mix(in srgb, var(--theme-page-muted) 64%, transparent);
+  font-weight: 500;
 }
 
 .ops-dashboard-header__value {
@@ -1481,6 +1482,9 @@ function handleToolbarRefresh() {
 
 .ops-dashboard-header__system-card {
   padding: calc(var(--theme-ops-panel-padding) * 0.75);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .ops-dashboard-header__system-section {
@@ -1500,7 +1504,7 @@ function handleToolbarRefresh() {
 }
 
 .ops-dashboard-header__progress-track {
-  background: color-mix(in srgb, var(--theme-page-border) 88%, var(--theme-surface));
+  display: none;
 }
 
 .ops-dashboard-header__pulse-line {
@@ -1618,20 +1622,23 @@ function handleToolbarRefresh() {
 
 .ops-dashboard-header__indicator--healthy,
 .ops-dashboard-header__tone--healthy {
-  background: rgb(var(--theme-success-rgb));
+  background: transparent;
   color: rgb(var(--theme-success-rgb));
+  border: none;
 }
 
 .ops-dashboard-header__indicator--warning,
 .ops-dashboard-header__tone--warning {
-  background: rgb(var(--theme-warning-rgb));
+  background: transparent;
   color: rgb(var(--theme-warning-rgb));
+  border: none;
 }
 
 .ops-dashboard-header__indicator--critical,
 .ops-dashboard-header__tone--critical {
-  background: rgb(var(--theme-danger-rgb));
+  background: transparent;
   color: rgb(var(--theme-danger-rgb));
+  border: none;
 }
 
 .ops-dashboard-header__tone--default {
