@@ -11,7 +11,7 @@ import {
   mapGroupCapacitySummary,
   mapGroupUsageSummary,
   sortGroupsBySortOrder
-} from '../groupsTable'
+} from '../groups/groupsTable'
 
 function createAdminGroup(overrides: Partial<AdminGroup> = {}): AdminGroup {
   return {

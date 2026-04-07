@@ -4,7 +4,6 @@ import (
 	"container/heap"
 	"context"
 	"errors"
-	"fmt"
 	"hash/fnv"
 	"math"
 	"sort"
@@ -345,157 +344,27 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		schedGroup, _ = s.service.schedulerSnapshot.GetGroupByID(ctx, *req.GroupID)
 	}
 
-	filtered := make([]*Account, 0, len(accounts))
-	loadReq := make([]AccountWithConcurrency, 0, len(accounts))
-	for i := range accounts {
-		account := &accounts[i]
-		if req.ExcludedIDs != nil {
-			if _, excluded := req.ExcludedIDs[account.ID]; excluded {
-				continue
-			}
-		}
-		if !account.IsSchedulable() || !account.IsOpenAI() {
-			continue
-		}
-		if schedGroup != nil && schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
-			_ = s.service.accountRepo.SetError(ctx, account.ID,
-				fmt.Sprintf("Privacy not set, required by group [%s]", schedGroup.Name))
-			continue
-		}
-		if req.RequestedModel != "" && !account.IsModelSupported(req.RequestedModel) {
-			continue
-		}
-		if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
-			continue
-		}
-		filtered = append(filtered, account)
-		loadReq = append(loadReq, AccountWithConcurrency{
-			ID:             account.ID,
-			MaxConcurrency: account.EffectiveLoadFactor(),
-		})
-	}
+	filtered, loadReq := s.prepareLoadBalanceCandidates(ctx, req, accounts, schedGroup)
 	if len(filtered) == 0 {
 		return nil, 0, 0, 0, errors.New("no available OpenAI accounts")
 	}
 
-	loadMap := map[int64]*AccountLoadInfo{}
-	if s.service.concurrencyService != nil {
-		if batchLoad, loadErr := s.service.concurrencyService.GetAccountsLoadBatch(ctx, loadReq); loadErr == nil {
-			loadMap = batchLoad
-		}
-	}
+	loadMap := s.loadSchedulerAccountLoads(ctx, loadReq)
 
-	minPriority, maxPriority := filtered[0].Priority, filtered[0].Priority
-	maxWaiting := 1
-	loadRateSum := 0.0
-	loadRateSumSquares := 0.0
-	minTTFT, maxTTFT := 0.0, 0.0
-	hasTTFTSample := false
-	candidates := make([]openAIAccountCandidateScore, 0, len(filtered))
-	for _, account := range filtered {
-		loadInfo := loadMap[account.ID]
-		if loadInfo == nil {
-			loadInfo = &AccountLoadInfo{AccountID: account.ID}
-		}
-		if account.Priority < minPriority {
-			minPriority = account.Priority
-		}
-		if account.Priority > maxPriority {
-			maxPriority = account.Priority
-		}
-		if loadInfo.WaitingCount > maxWaiting {
-			maxWaiting = loadInfo.WaitingCount
-		}
-		errorRate, ttft, hasTTFT := s.stats.snapshot(account.ID)
-		if hasTTFT && ttft > 0 {
-			if !hasTTFTSample {
-				minTTFT, maxTTFT = ttft, ttft
-				hasTTFTSample = true
-			} else {
-				if ttft < minTTFT {
-					minTTFT = ttft
-				}
-				if ttft > maxTTFT {
-					maxTTFT = ttft
-				}
-			}
-		}
-		loadRate := float64(loadInfo.LoadRate)
-		loadRateSum += loadRate
-		loadRateSumSquares += loadRate * loadRate
-		candidates = append(candidates, openAIAccountCandidateScore{
-			account:   account,
-			loadInfo:  loadInfo,
-			errorRate: errorRate,
-			ttft:      ttft,
-			hasTTFT:   hasTTFT,
-		})
-	}
-	loadSkew := calcLoadSkewByMoments(loadRateSum, loadRateSumSquares, len(candidates))
+	candidates, loadSkew := s.buildOpenAILoadBalancedCandidates(filtered, loadMap)
 
-	weights := s.service.openAIWSSchedulerWeights()
-	for i := range candidates {
-		item := &candidates[i]
-		priorityFactor := 1.0
-		if maxPriority > minPriority {
-			priorityFactor = 1 - float64(item.account.Priority-minPriority)/float64(maxPriority-minPriority)
-		}
-		loadFactor := 1 - clamp01(float64(item.loadInfo.LoadRate)/100.0)
-		queueFactor := 1 - clamp01(float64(item.loadInfo.WaitingCount)/float64(maxWaiting))
-		errorFactor := 1 - clamp01(item.errorRate)
-		ttftFactor := 0.5
-		if item.hasTTFT && hasTTFTSample && maxTTFT > minTTFT {
-			ttftFactor = 1 - clamp01((item.ttft-minTTFT)/(maxTTFT-minTTFT))
-		}
-
-		item.score = weights.Priority*priorityFactor +
-			weights.Load*loadFactor +
-			weights.Queue*queueFactor +
-			weights.ErrorRate*errorFactor +
-			weights.TTFT*ttftFactor
-	}
-
-	topK := s.service.openAIWSLBTopK()
-	if topK > len(candidates) {
-		topK = len(candidates)
-	}
-	if topK <= 0 {
-		topK = 1
-	}
+	topK := normalizeOpenAISchedulerTopK(s.service.openAIWSLBTopK(), len(candidates))
 	selectionOrder := buildOpenAIImmediateSelectionOrder(candidates, topK, req)
 
-	for i := 0; i < len(selectionOrder); i++ {
-		candidate := selectionOrder[i]
-		fresh := s.service.resolveFreshSchedulableOpenAIAccount(ctx, candidate.account, req.RequestedModel)
-		if fresh == nil || !s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
-			continue
-		}
-		result, acquireErr := s.service.tryAcquireAccountSlot(ctx, fresh.ID, fresh.Concurrency)
+	if result, acquireErr, ok := s.trySelectImmediateScheduledCandidate(ctx, req, selectionOrder); ok {
 		if acquireErr != nil {
 			return nil, len(candidates), topK, loadSkew, acquireErr
 		}
-		if result != nil && result.Acquired {
-			verified := s.service.recheckSelectedOpenAIAccountFromDB(ctx, fresh, req.RequestedModel)
-			if verified == nil || !s.isAccountTransportCompatible(verified, req.RequiredTransport) {
-				if result.ReleaseFunc != nil {
-					result.ReleaseFunc()
-				}
-				continue
-			}
-			if req.SessionHash != "" {
-				_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, verified.ID)
-			}
-			return newAcquiredAccountSelection(verified, result.ReleaseFunc), len(candidates), topK, loadSkew, nil
-		}
+		return result, len(candidates), topK, loadSkew, nil
 	}
 
-	cfg := s.service.schedulingConfig()
-	waitCandidate := chooseOpenAIWaitCandidate(candidates)
-	if waitCandidate != nil {
-		fresh := s.service.resolveFreshSchedulableOpenAIAccount(ctx, waitCandidate.account, req.RequestedModel)
-		if fresh != nil && s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
-			return newWaitPlanAccountSelection(fresh, cfg.FallbackWaitTimeout, cfg.FallbackMaxWaiting), len(candidates), topK, loadSkew, nil
-		}
+	if waitPlan, ok := s.tryBuildScheduledWaitPlan(ctx, req, candidates); ok {
+		return waitPlan, len(candidates), topK, loadSkew, nil
 	}
 
 	return nil, len(candidates), topK, loadSkew, ErrNoAvailableAccounts

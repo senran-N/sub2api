@@ -56,12 +56,5 @@ func (s *GatewayService) buildNonLoadBatchWaitPlan(
 	stickyAccountID int64,
 	cfg config.GatewaySchedulingConfig,
 ) *AccountSelectionResult {
-	if stickyAccountID > 0 && stickyAccountID == account.ID && s.concurrencyService != nil {
-		waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, account.ID)
-		if waitingCount < cfg.StickySessionMaxWaiting {
-			return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting)
-		}
-	}
-
-	return newWaitPlanAccountSelection(account, cfg.FallbackWaitTimeout, cfg.FallbackMaxWaiting)
+	return buildStickyAwareFallbackWaitPlan(ctx, account, stickyAccountID, cfg, s.concurrencyService)
 }

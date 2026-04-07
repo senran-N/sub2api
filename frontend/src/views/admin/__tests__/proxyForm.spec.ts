@@ -11,7 +11,7 @@ import {
   resetProxyBatchParseState,
   resetProxyCreateForm,
   resetProxyEditForm
-} from '../proxyForm'
+} from '../proxies/proxyForm'
 
 function createProxy(overrides: Partial<Proxy> = {}): Proxy {
   return {

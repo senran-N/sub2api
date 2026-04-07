@@ -5,7 +5,7 @@ import {
   buildProxyUrl,
   parseBatchProxyInput,
   parseProxyUrl
-} from '../proxyUtils'
+} from '../proxies/proxyUtils'
 
 describe('proxyUtils', () => {
   it('parses proxy urls with optional credentials', () => {

@@ -142,7 +142,7 @@ import {
   getQualityStatusClass,
   getQualityStatusLabel,
   getQualityTargetLabel
-} from '../proxyPresentation'
+} from './proxyPresentation'
 
 const props = defineProps<{
   show: boolean

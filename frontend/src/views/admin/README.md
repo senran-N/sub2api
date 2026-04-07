@@ -16,6 +16,13 @@ Do not place feature-private form builders, view-model helpers, or section-only 
 
 Feature-specific logic should live with the feature UI:
 
+- `dashboard/`
+  - stats and chart sections
+  - dashboard-only data helpers
+- `dataManagement/`
+  - Sora profile cards and drawers
+  - data-management-only form helpers
+  - data-management-only composables
 - `settings/`
   - cards and tabs
   - settings form helpers
@@ -23,7 +30,11 @@ Feature-specific logic should live with the feature UI:
 - `groups/`
   - dialogs and sections
   - group form helpers
+  - group list and table helpers
   - routing rule state helpers
+- `proxies/`
+  - proxy form, list, quality, and clipboard helpers
+  - proxy-only composables and table fragments
 - `accounts/`
   - table cells and toolbar fragments
   - account list and page helpers

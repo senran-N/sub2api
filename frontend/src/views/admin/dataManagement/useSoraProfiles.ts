@@ -10,7 +10,7 @@ import {
   getPreferredSoraProfileID,
   validateSoraS3ProfileForm,
   type SoraS3ProfileForm
-} from './dataManagementView'
+} from './dataManagementHelpers'
 
 interface DataManagementSoraProfilesOptions {
   t: (key: string, params?: Record<string, unknown>) => string

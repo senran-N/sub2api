@@ -4,7 +4,7 @@ import {
   applyProxyPageSizeChange,
   buildProxyListFilters,
   resetProxyListPage
-} from '../proxyList'
+} from '../proxies/proxyList'
 
 describe('proxyList helpers', () => {
   it('normalizes list filters', () => {

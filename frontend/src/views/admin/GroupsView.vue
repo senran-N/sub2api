@@ -222,7 +222,7 @@ import GroupPlatformBadge from './groups/GroupPlatformBadge.vue'
 import GroupRateMultiplierCell from './groups/GroupRateMultiplierCell.vue'
 import GroupStatusBadge from './groups/GroupStatusBadge.vue'
 import GroupUsageCell from './groups/GroupUsageCell.vue'
-import { useGroupsViewData } from './useGroupsViewData'
+import { useGroupsViewData } from './groups/useGroupsViewData'
 import { useGroupsViewManagement } from './groups/useGroupsViewManagement'
 
 const { t } = useI18n()

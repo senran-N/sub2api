@@ -14,7 +14,7 @@ import {
   getQualityStatusClass,
   getQualityStatusLabel,
   getQualityTargetLabel
-} from '../proxyPresentation'
+} from '../proxies/proxyPresentation'
 
 const t = (key: string) => key
 

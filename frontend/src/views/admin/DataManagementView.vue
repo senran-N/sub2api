@@ -29,9 +29,9 @@
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
-import SoraProfileDrawer from './datamanagement/SoraProfileDrawer.vue'
-import SoraProfilesCard from './datamanagement/SoraProfilesCard.vue'
-import { useDataManagementSoraProfiles } from './useDataManagementSoraProfiles'
+import SoraProfileDrawer from './dataManagement/SoraProfileDrawer.vue'
+import SoraProfilesCard from './dataManagement/SoraProfilesCard.vue'
+import { useDataManagementSoraProfiles } from './dataManagement/useSoraProfiles'
 
 const { t } = useI18n()
 const appStore = useAppStore()

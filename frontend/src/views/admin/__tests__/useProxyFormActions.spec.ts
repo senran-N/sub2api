@@ -5,8 +5,8 @@ import {
   createDefaultProxyBatchParseState,
   createDefaultProxyCreateForm,
   createDefaultProxyEditForm
-} from '../proxyForm'
-import { useProxyFormActions } from '../useProxyFormActions'
+} from '../proxies/proxyForm'
+import { useProxyFormActions } from '../proxies/useProxyFormActions'
 
 const { batchCreate, createProxy, updateProxy } = vi.hoisted(() => ({
   batchCreate: vi.fn(),

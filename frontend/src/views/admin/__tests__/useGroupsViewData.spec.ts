@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useGroupsViewData } from '../useGroupsViewData'
+import { useGroupsViewData } from '../groups/useGroupsViewData'
 import type { AdminGroup } from '@/types'
 
 const {

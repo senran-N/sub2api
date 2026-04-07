@@ -99,7 +99,7 @@ import type { SoraS3Profile } from '@/api/admin/settings'
 import {
   formatDataManagementDate,
   formatStorageQuotaGB
-} from '../dataManagementView'
+} from '../dataManagement/dataManagementHelpers'
 
 defineProps<{
   profiles: SoraS3Profile[]

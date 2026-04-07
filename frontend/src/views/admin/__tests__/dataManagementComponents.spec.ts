@@ -1,9 +1,9 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import type { SoraS3Profile } from '@/api/admin/settings'
-import { createDefaultSoraS3ProfileForm } from '../dataManagementView'
-import SoraProfileDrawer from '../datamanagement/SoraProfileDrawer.vue'
-import SoraProfilesCard from '../datamanagement/SoraProfilesCard.vue'
+import { createDefaultSoraS3ProfileForm } from '../dataManagement/dataManagementHelpers'
+import SoraProfileDrawer from '../dataManagement/SoraProfileDrawer.vue'
+import SoraProfilesCard from '../dataManagement/SoraProfilesCard.vue'
 
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()

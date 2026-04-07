@@ -7,7 +7,7 @@ import {
   createProxyBatchQualitySummary,
   recordProxyBatchQualityResult,
   summarizeProxyQualityStatus
-} from '../proxyQuality'
+} from '../proxies/proxyQuality'
 
 function createProxy(overrides: Partial<Proxy> = {}): Proxy {
   return {

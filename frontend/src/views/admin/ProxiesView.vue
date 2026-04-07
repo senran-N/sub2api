@@ -281,14 +281,14 @@ import { useClipboard } from '@/composables/useClipboard'
 import { useSwipeSelect } from '@/composables/useSwipeSelect'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
-import { buildProxyCopyFormats } from './proxyUtils'
+import { buildProxyCopyFormats } from './proxies/proxyUtils'
 import {
   createDefaultProxyBatchParseState,
   createDefaultProxyCreateForm,
   createDefaultProxyEditForm
-} from './proxyForm'
-import { useProxyFormActions } from './useProxyFormActions'
-import { useProxyListData } from './useProxyListData'
+} from './proxies/proxyForm'
+import { useProxyFormActions } from './proxies/useProxyFormActions'
+import { useProxyListData } from './proxies/useProxyListData'
 import ProxyAccountCountCell from './proxies/ProxyAccountCountCell.vue'
 import ProxyAccountsDialog from './proxies/ProxyAccountsDialog.vue'
 import ProxyActionToolbar from './proxies/ProxyActionToolbar.vue'
@@ -308,8 +308,8 @@ import ProxyProtocolBadge from './proxies/ProxyProtocolBadge.vue'
 import ProxyQualityReportDialog from './proxies/ProxyQualityReportDialog.vue'
 import ProxySelectionCheckbox from './proxies/ProxySelectionCheckbox.vue'
 import ProxyStatusBadge from './proxies/ProxyStatusBadge.vue'
-import { useProxyTestingActions } from './useProxyTestingActions'
-import { useProxyViewInteractions } from './useProxyViewInteractions'
+import { useProxyTestingActions } from './proxies/useProxyTestingActions'
+import { useProxyViewInteractions } from './proxies/useProxyViewInteractions'
 
 const { t } = useI18n()
 const appStore = useAppStore()

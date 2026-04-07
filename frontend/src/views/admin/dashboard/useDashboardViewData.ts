@@ -10,7 +10,7 @@ import type {
 import {
   getDashboardGranularityForRange,
   getDashboardLast24HoursRangeDates
-} from './dashboardView'
+} from './dashboardHelpers'
 
 const DASHBOARD_RANKING_LIMIT = 12
 

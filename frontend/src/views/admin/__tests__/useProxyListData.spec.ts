@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import type { Proxy } from '@/types'
-import { useProxyListData } from '../useProxyListData'
+import { useProxyListData } from '../proxies/useProxyListData'
 
 const { listProxies } = vi.hoisted(() => ({
   listProxies: vi.fn()

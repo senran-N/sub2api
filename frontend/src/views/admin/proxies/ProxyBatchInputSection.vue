@@ -20,7 +20,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { ProxyBatchParseState } from '../proxyForm'
+import type { ProxyBatchParseState } from './proxyForm'
 import ProxyBatchParseSummary from './ProxyBatchParseSummary.vue'
 
 defineProps<{

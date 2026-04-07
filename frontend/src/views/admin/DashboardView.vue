@@ -79,8 +79,8 @@ import {
   formatDashboardDuration,
   formatDashboardNumber,
   formatDashboardTokens
-} from './dashboardView'
-import { useDashboardViewData } from './useDashboardViewData'
+} from './dashboard/dashboardHelpers'
+import { useDashboardViewData } from './dashboard/useDashboardViewData'
 
 import {
   Chart as ChartJS,

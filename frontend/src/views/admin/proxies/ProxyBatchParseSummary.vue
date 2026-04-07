@@ -57,7 +57,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
-import type { ProxyBatchParseState } from '../proxyForm'
+import type { ProxyBatchParseState } from './proxyForm'
 
 defineProps<{
   summary: ProxyBatchParseState

@@ -16,7 +16,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Proxy } from '@/types'
-import { buildProxyFlagUrl, formatProxyLocation } from '../proxyPresentation'
+import { buildProxyFlagUrl, formatProxyLocation } from './proxyPresentation'
 
 const props = defineProps<{
   proxy: Proxy

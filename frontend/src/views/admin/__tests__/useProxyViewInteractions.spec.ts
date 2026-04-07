@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import type { Proxy, ProxyAccountSummary } from '@/types'
-import { useProxyViewInteractions } from '../useProxyViewInteractions'
+import { useProxyViewInteractions } from '../proxies/useProxyViewInteractions'
 
 const { batchDelete, deleteProxy, exportData, getProxyAccounts } = vi.hoisted(() => ({
   batchDelete: vi.fn(),

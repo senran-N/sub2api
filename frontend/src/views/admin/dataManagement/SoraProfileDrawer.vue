@@ -105,7 +105,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { SoraS3ProfileForm } from '../dataManagementView'
+import type { SoraS3ProfileForm } from '../dataManagement/dataManagementHelpers'
 
 defineProps<{
   open: boolean

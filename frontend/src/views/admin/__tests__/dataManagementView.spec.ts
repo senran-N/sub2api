@@ -9,7 +9,7 @@ import {
   formatStorageQuotaGB,
   getPreferredSoraProfileID,
   validateSoraS3ProfileForm
-} from '../dataManagementView'
+} from '../dataManagement/dataManagementHelpers'
 
 function createProfile(overrides: Partial<SoraS3Profile> = {}): SoraS3Profile {
   return {

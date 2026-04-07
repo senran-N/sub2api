@@ -225,14 +225,7 @@ func (s *OpenAIGatewayService) buildOpenAINonLoadBatchWaitPlan(
 	stickyAccountID int64,
 	cfg config.GatewaySchedulingConfig,
 ) *AccountSelectionResult {
-	if stickyAccountID > 0 && stickyAccountID == account.ID && s.concurrencyService != nil {
-		waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, account.ID)
-		if waitingCount < cfg.StickySessionMaxWaiting {
-			return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting)
-		}
-	}
-
-	return newWaitPlanAccountSelection(account, cfg.FallbackWaitTimeout, cfg.FallbackMaxWaiting)
+	return buildStickyAwareFallbackWaitPlan(ctx, account, stickyAccountID, cfg, s.concurrencyService)
 }
 
 func (s *OpenAIGatewayService) trySelectOpenAIStickyLoadAwareAccount(
@@ -280,9 +273,8 @@ func (s *OpenAIGatewayService) trySelectOpenAIStickyLoadAwareAccount(
 		}
 	}
 
-	waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, accountID)
-	if waitingCount < cfg.StickySessionMaxWaiting {
-		return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), true
+	if waitPlan, ok := tryBuildStickySessionWaitPlan(ctx, account, cfg, s.concurrencyService); ok {
+		return waitPlan, true
 	}
 
 	return nil, false

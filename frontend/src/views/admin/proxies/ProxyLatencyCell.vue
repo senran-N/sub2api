@@ -31,7 +31,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Proxy } from '@/types'
-import { getQualityOverallClass, getQualityOverallLabel } from '../proxyPresentation'
+import { getQualityOverallClass, getQualityOverallLabel } from './proxyPresentation'
 
 const props = defineProps<{
   proxy: Proxy
