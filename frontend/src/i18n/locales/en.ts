@@ -1846,6 +1846,8 @@ export default {
     },
 
     channels: {
+      title: 'Channel Management',
+      description: 'Manage channel routing, pricing rules, and model mappings',
       searchChannels: 'Search channels...',
       allStatus: 'All Status',
       createChannel: 'Create Channel',

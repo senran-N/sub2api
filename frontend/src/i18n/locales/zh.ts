@@ -1817,6 +1817,8 @@ export default {
     },
 
     channels: {
+      title: '渠道管理',
+      description: '管理渠道路由、定价规则和模型映射',
       searchChannels: '搜索渠道...',
       allStatus: '全部状态',
       createChannel: '创建渠道',

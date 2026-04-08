@@ -688,21 +688,6 @@ const lineChartOptions = computed<ChartOptions<'line'>>(() => {
   }
 })
 
-watch(
-  () => [props.show, props.account?.id] as const,
-  async ([isVisible, accountId]) => {
-    if (!isVisible || accountId == null) {
-      activeLoadToken += 1
-      loading.value = false
-      stats.value = null
-      return
-    }
-
-    await loadStats(accountId)
-  },
-  { immediate: true }
-)
-
 const loadStats = async (accountId: Account['id']) => {
   const requestToken = ++activeLoadToken
   loading.value = true
@@ -728,6 +713,21 @@ const loadStats = async (accountId: Account['id']) => {
     }
   }
 }
+
+watch(
+  () => [props.show, props.account?.id] as const,
+  async ([isVisible, accountId]) => {
+    if (!isVisible || accountId == null) {
+      activeLoadToken += 1
+      loading.value = false
+      stats.value = null
+      return
+    }
+
+    await loadStats(accountId)
+  },
+  { immediate: true }
+)
 
 const handleClose = () => {
   emit('close')
