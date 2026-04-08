@@ -87,8 +87,8 @@ const {
   showSuccess: appStore.showSuccess,
   showError: appStore.showError,
   showWarning: appStore.showWarning,
-  confirm: window.confirm,
-  prompt: window.prompt,
+  confirm: (message: string) => window.confirm(message),
+  prompt: (message: string) => window.prompt(message),
   openUrl: (url: string) => {
     window.open(url, '_blank')
   }

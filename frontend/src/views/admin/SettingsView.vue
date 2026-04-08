@@ -301,7 +301,7 @@ const {
   t,
   showError: appStore.showError,
   showSuccess: appStore.showSuccess,
-  confirm: window.confirm,
+  confirm: (message?: string) => window.confirm(message),
   copyToClipboard
 })
 

@@ -125,25 +125,27 @@ describe('useSettingsViewPolicies', () => {
     expect(showError).not.toHaveBeenCalled()
   })
 
-  it('binds confirm to window for regenerate and delete actions', async () => {
-    let confirmThis: unknown = null
+  it('uses the provided confirm handler for regenerate and delete actions', async () => {
+    const confirm = vi.fn(() => true)
     const state = useSettingsViewPolicies({
       t: (key: string) => key,
       showError: vi.fn(),
       showSuccess: vi.fn(),
-      confirm(this: unknown) {
-        confirmThis = this
-        return true
-      },
+      confirm,
       copyToClipboard: vi.fn().mockResolvedValue(true)
     })
 
     await state.regenerateAdminApiKey()
-    expect(confirmThis).toBe(window)
+    expect(confirm).toHaveBeenNthCalledWith(
+      1,
+      'admin.settings.adminApiKey.regenerateConfirm'
+    )
 
-    confirmThis = null
     await state.deleteAdminApiKey()
-    expect(confirmThis).toBe(window)
+    expect(confirm).toHaveBeenNthCalledWith(
+      2,
+      'admin.settings.adminApiKey.deleteConfirm'
+    )
   })
 
   it('loads and saves overload, stream timeout, rectifier, and beta policy settings', async () => {

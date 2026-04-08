@@ -65,7 +65,7 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
   }
 
   function confirmAction(message: string): boolean {
-    return options.confirm.call(window, message)
+    return options.confirm(message)
   }
 
   async function loadAdminApiKey() {
