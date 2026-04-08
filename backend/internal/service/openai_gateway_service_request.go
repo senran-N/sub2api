@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/senran-N/sub2api/internal/util/urlvalidator"
@@ -24,6 +25,11 @@ type openAIRequestMeta struct {
 	PreviousResponseID string
 	ReasoningPresent   bool
 	ReasoningEffort    string
+}
+
+type openAIRequestMetaCache struct {
+	BodyBound bool
+	BodyHash  uint64
 }
 
 func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, error) {
@@ -338,6 +344,7 @@ func buildOpenAIRequestMetaFromMap(reqBody map[string]any) openAIRequestMeta {
 func cacheOpenAIRequestMeta(c *gin.Context, meta openAIRequestMeta) openAIRequestMeta {
 	if c != nil {
 		c.Set(OpenAIParsedRequestMetaKey, meta)
+		c.Set(OpenAIParsedRequestMetaCacheKey, openAIRequestMetaCache{})
 	}
 	return meta
 }
@@ -346,15 +353,34 @@ func cacheOpenAIRequestMetaFromMap(c *gin.Context, reqBody map[string]any) openA
 	return cacheOpenAIRequestMeta(c, buildOpenAIRequestMetaFromMap(reqBody))
 }
 
+func cacheOpenAIRequestMetaFromBody(c *gin.Context, body []byte, meta openAIRequestMeta) openAIRequestMeta {
+	if c != nil {
+		c.Set(OpenAIParsedRequestMetaKey, meta)
+		c.Set(OpenAIParsedRequestMetaCacheKey, openAIRequestMetaCache{
+			BodyBound: true,
+			BodyHash:  xxhash.Sum64(body),
+		})
+	}
+	return meta
+}
+
 func getOpenAIRequestMeta(c *gin.Context, body []byte) openAIRequestMeta {
 	if c != nil {
 		if cached, ok := c.Get(OpenAIParsedRequestMetaKey); ok {
 			if meta, ok := cached.(openAIRequestMeta); ok {
-				return meta
+				cacheState, hasCacheState := c.Get(OpenAIParsedRequestMetaCacheKey)
+				if !hasCacheState {
+					return meta
+				}
+				if cacheTag, ok := cacheState.(openAIRequestMetaCache); ok {
+					if !cacheTag.BodyBound || len(body) == 0 || cacheTag.BodyHash == xxhash.Sum64(body) {
+						return meta
+					}
+				}
 			}
 		}
 	}
-	return cacheOpenAIRequestMeta(c, buildOpenAIRequestMeta(body))
+	return cacheOpenAIRequestMetaFromBody(c, body, buildOpenAIRequestMeta(body))
 }
 
 // GetOpenAIRequestMeta returns lightweight request metadata and caches it on gin.Context.

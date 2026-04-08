@@ -28,6 +28,8 @@ const (
 	OpenAIParsedRequestBodyKey = "openai_parsed_request_body"
 	// OpenAIParsedRequestMetaKey 缓存请求热路径的轻量元信息，避免 handler/service 重复扫描 JSON。
 	OpenAIParsedRequestMetaKey = "openai_parsed_request_meta"
+	// OpenAIParsedRequestMetaCacheKey 记录 meta 缓存是否与特定 body 绑定。
+	OpenAIParsedRequestMetaCacheKey = "openai_parsed_request_meta_cache"
 	// OpenAI WS Mode 失败后的重连次数上限（不含首次尝试）。
 	// 与 Codex 客户端保持一致：失败后最多重连 5 次。
 	openAIWSReconnectRetryLimit = 5

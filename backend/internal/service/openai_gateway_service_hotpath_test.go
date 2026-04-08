@@ -192,6 +192,21 @@ func TestCacheOpenAIRequestMetaFromBodyMap(t *testing.T) {
 	require.Equal(t, "medium", meta.ReasoningEffort)
 }
 
+func TestGetOpenAIRequestMeta_InvalidatesBodyBoundCacheWhenBodyChanges(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	first := []byte(`{"model":"gpt-5","prompt_cache_key":"seed-1"}`)
+	second := []byte(`{"model":"gpt-5"}`)
+
+	meta1 := GetOpenAIRequestMeta(c, first)
+	require.Equal(t, "seed-1", meta1.PromptCacheKey)
+
+	meta2 := GetOpenAIRequestMeta(c, second)
+	require.Empty(t, meta2.PromptCacheKey)
+}
+
 func BenchmarkBuildOpenAIRequestMeta(b *testing.B) {
 	body := []byte(`{"model":"gpt-5","stream":true,"prompt_cache_key":"ses-1","previous_response_id":"resp_123","reasoning":{"effort":"medium"}}`)
 

@@ -259,6 +259,10 @@ func openAIWSExtractNormalizedInputSequence(payload []byte) ([]json.RawMessage, 
 	if len(payload) == 0 {
 		return nil, false, nil
 	}
+	if !gjson.ValidBytes(payload) {
+		hasInputKey := bytes.Contains(payload, []byte(`"input"`))
+		return nil, hasInputKey, errors.New("invalid websocket payload json")
+	}
 	inputValue := gjson.GetBytes(payload, "input")
 	if !inputValue.Exists() {
 		return nil, false, nil
