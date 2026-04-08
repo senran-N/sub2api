@@ -5,6 +5,7 @@ import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import i18n from '@/i18n'
 import { resolveRouteDocumentTitle } from '@/router/title'
+import { scheduleDeferredTask } from '@/utils/deferredTask'
 import {
   useAdminSettingsStore,
   useAppStore,
@@ -23,6 +24,8 @@ const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const AnnouncementPopup = defineAsyncComponent(() => import('@/components/common/AnnouncementPopup.vue'))
 const shouldRenderAnnouncementPopup = computed(() => authStore.isAuthenticated)
+let cancelAuthenticatedWarmup: (() => void) | null = null
+let delayedAnnouncementTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
  * Update favicon dynamically
@@ -69,28 +72,54 @@ function onVisibilityChange() {
   }
 }
 
+function clearAuthenticatedWarmup(): void {
+  if (cancelAuthenticatedWarmup) {
+    cancelAuthenticatedWarmup()
+    cancelAuthenticatedWarmup = null
+  }
+
+  if (delayedAnnouncementTimer) {
+    clearTimeout(delayedAnnouncementTimer)
+    delayedAnnouncementTimer = null
+  }
+}
+
+function scheduleAuthenticatedWarmup(isNewLogin: boolean): void {
+  clearAuthenticatedWarmup()
+  subscriptionStore.startPolling()
+
+  cancelAuthenticatedWarmup = scheduleDeferredTask(() => {
+    cancelAuthenticatedWarmup = null
+
+    subscriptionStore.fetchActiveSubscriptions().catch((error) => {
+      console.error('Failed to preload subscriptions:', error)
+    })
+
+    if (isNewLogin) {
+      delayedAnnouncementTimer = setTimeout(() => {
+        delayedAnnouncementTimer = null
+        void announcementStore.fetchAnnouncements(true)
+      }, 3000)
+      return
+    }
+
+    void announcementStore.fetchAnnouncements()
+  }, { timeout: 2000 })
+}
+
 watch(
   () => authStore.isAuthenticated,
   (isAuthenticated, oldValue) => {
     if (isAuthenticated) {
-      // User logged in: preload subscriptions and start polling
-      subscriptionStore.fetchActiveSubscriptions().catch((error) => {
-        console.error('Failed to preload subscriptions:', error)
-      })
-      subscriptionStore.startPolling()
-
-      // Announcements: new login vs page refresh restore
-      if (oldValue === false) {
-        // New login: delay 3s then force fetch
-        setTimeout(() => announcementStore.fetchAnnouncements(true), 3000)
-      } else {
-        // Page refresh restore (oldValue was undefined)
-        announcementStore.fetchAnnouncements()
-      }
+      // Warm up authenticated-only data after the first paint to keep
+      // initial rendering responsive.
+      scheduleAuthenticatedWarmup(oldValue === false)
 
       // Register visibility change listener
       document.addEventListener('visibilitychange', onVisibilityChange)
     } else {
+      clearAuthenticatedWarmup()
+
       // User logged out: clear data and stop polling
       subscriptionStore.clear()
       announcementStore.reset()
@@ -108,6 +137,7 @@ router.afterEach(() => {
 })
 
 onBeforeUnmount(() => {
+  clearAuthenticatedWarmup()
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 

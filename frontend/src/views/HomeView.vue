@@ -143,7 +143,6 @@ const providers = computed(() => buildHomeProviders(t))
 
 onMounted(() => {
   initTheme()
-  authStore.checkAuth()
   ensurePublicSettingsLoaded()
 })
 </script>
