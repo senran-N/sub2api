@@ -11,10 +11,12 @@ import (
 )
 
 type concurrencyCacheMock struct {
-	acquireUserSlotFn    func(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error)
-	acquireAccountSlotFn func(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error)
-	releaseUserCalled    int32
-	releaseAccountCalled int32
+	acquireUserSlotFn           func(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error)
+	acquireUserSlotOrQueueFn    func(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error)
+	acquireAccountSlotFn        func(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error)
+	acquireAccountSlotOrQueueFn func(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error)
+	releaseUserCalled           int32
+	releaseAccountCalled        int32
 }
 
 func (m *concurrencyCacheMock) AcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error) {
@@ -22,6 +24,14 @@ func (m *concurrencyCacheMock) AcquireAccountSlot(ctx context.Context, accountID
 		return m.acquireAccountSlotFn(ctx, accountID, maxConcurrency, requestID)
 	}
 	return false, nil
+}
+
+func (m *concurrencyCacheMock) AcquireAccountSlotOrEnqueueWait(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	if m.acquireAccountSlotOrQueueFn != nil {
+		return m.acquireAccountSlotOrQueueFn(ctx, accountID, maxConcurrency, maxWait, requestID)
+	}
+	acquired, err := m.AcquireAccountSlot(ctx, accountID, maxConcurrency, requestID)
+	return acquired, !acquired, err
 }
 
 func (m *concurrencyCacheMock) ReleaseAccountSlot(ctx context.Context, accountID int64, requestID string) error {
@@ -58,6 +68,14 @@ func (m *concurrencyCacheMock) AcquireUserSlot(ctx context.Context, userID int64
 		return m.acquireUserSlotFn(ctx, userID, maxConcurrency, requestID)
 	}
 	return false, nil
+}
+
+func (m *concurrencyCacheMock) AcquireUserSlotOrEnqueueWait(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	if m.acquireUserSlotOrQueueFn != nil {
+		return m.acquireUserSlotOrQueueFn(ctx, userID, maxConcurrency, maxWait, requestID)
+	}
+	acquired, err := m.AcquireUserSlot(ctx, userID, maxConcurrency, requestID)
+	return acquired, !acquired, err
 }
 
 func (m *concurrencyCacheMock) ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error {

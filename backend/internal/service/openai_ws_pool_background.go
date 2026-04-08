@@ -153,7 +153,7 @@ func (p *openAIWSConnPool) runBackgroundCleanupSweep(now time.Time) {
 		}
 		maxConns := p.maxConnsHardCap()
 		ap.mu.Lock()
-		if ap.lastAcquire != nil && ap.lastAcquire.Account != nil {
+		if ap.hasLastAcquire && ap.lastAcquire.Account != nil {
 			maxConns = p.effectiveMaxConnsByAccount(ap.lastAcquire.Account)
 		}
 		evicted := p.cleanupAccountLocked(ap, now, maxConns)
@@ -175,6 +175,7 @@ func (p *openAIWSConnPool) cleanupAccountLocked(ap *openAIWSAccountPool, now tim
 		return nil
 	}
 	maxAge := p.maxConnAge()
+	nowUnixNano := now.UnixNano()
 
 	evicted := make([]*openAIWSConn, 0)
 	for id, conn := range ap.conns {
@@ -198,7 +199,7 @@ func (p *openAIWSConnPool) cleanupAccountLocked(ap *openAIWSAccountPool, now tim
 		if p.isConnPinnedLocked(ap, id) {
 			continue
 		}
-		if maxAge > 0 && !conn.isLeased() && conn.age(now) > maxAge {
+		if maxAge > 0 && !conn.isLeased() && openAIWSConnAgeExceeds(conn, nowUnixNano, maxAge) {
 			delete(ap.conns, id)
 			if len(ap.pinnedConns) > 0 {
 				delete(ap.pinnedConns, id)
@@ -230,7 +231,7 @@ func (p *openAIWSConnPool) cleanupAccountLocked(ap *openAIWSAccountPool, now tim
 			idleConns = append(idleConns, conn)
 		}
 		sort.SliceStable(idleConns, func(i, j int) bool {
-			return idleConns[i].lastUsedAt().Before(idleConns[j].lastUsedAt())
+			return idleConns[i].lastUsedUnixNano() < idleConns[j].lastUsedUnixNano()
 		})
 		redundant := len(ap.conns) - maxIdle
 		if redundant > len(idleConns) {
@@ -250,4 +251,15 @@ func (p *openAIWSConnPool) cleanupAccountLocked(ap *openAIWSAccountPool, now tim
 	}
 
 	return evicted
+}
+
+func openAIWSConnAgeExceeds(conn *openAIWSConn, nowUnixNano int64, maxAge time.Duration) bool {
+	if conn == nil || maxAge <= 0 || nowUnixNano <= 0 {
+		return false
+	}
+	createdAtNano := conn.createdAtUnixNano()
+	if createdAtNano <= 0 {
+		return false
+	}
+	return nowUnixNano-createdAtNano > int64(maxAge)
 }

@@ -1898,6 +1898,11 @@ func (m *mockConcurrencyCache) AcquireAccountSlot(ctx context.Context, accountID
 	return true, nil
 }
 
+func (m *mockConcurrencyCache) AcquireAccountSlotOrEnqueueWait(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	acquired, err := m.AcquireAccountSlot(ctx, accountID, maxConcurrency, requestID)
+	return acquired, !acquired, err
+}
+
 func (m *mockConcurrencyCache) ReleaseAccountSlot(ctx context.Context, accountID int64, requestID string) error {
 	return nil
 }
@@ -1933,6 +1938,11 @@ func (m *mockConcurrencyCache) GetAccountWaitingCount(ctx context.Context, accou
 
 func (m *mockConcurrencyCache) AcquireUserSlot(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error) {
 	return true, nil
+}
+
+func (m *mockConcurrencyCache) AcquireUserSlotOrEnqueueWait(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	acquired, err := m.AcquireUserSlot(ctx, userID, maxConcurrency, requestID)
+	return acquired, !acquired, err
 }
 
 func (m *mockConcurrencyCache) ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error {

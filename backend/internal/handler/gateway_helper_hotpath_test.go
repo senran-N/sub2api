@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,6 +36,11 @@ func (s *helperConcurrencyCacheStub) AcquireAccountSlot(ctx context.Context, acc
 	v := s.accountSeq[0]
 	s.accountSeq = s.accountSeq[1:]
 	return v, nil
+}
+
+func (s *helperConcurrencyCacheStub) AcquireAccountSlotOrEnqueueWait(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	acquired, err := s.AcquireAccountSlot(ctx, accountID, maxConcurrency, requestID)
+	return acquired, !acquired, err
 }
 
 func (s *helperConcurrencyCacheStub) ReleaseAccountSlot(ctx context.Context, accountID int64, requestID string) error {
@@ -79,6 +84,11 @@ func (s *helperConcurrencyCacheStub) AcquireUserSlot(ctx context.Context, userID
 	v := s.userSeq[0]
 	s.userSeq = s.userSeq[1:]
 	return v, nil
+}
+
+func (s *helperConcurrencyCacheStub) AcquireUserSlotOrEnqueueWait(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	acquired, err := s.AcquireUserSlot(ctx, userID, maxConcurrency, requestID)
+	return acquired, !acquired, err
 }
 
 func (s *helperConcurrencyCacheStub) ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error {

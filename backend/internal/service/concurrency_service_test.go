@@ -25,6 +25,7 @@ type stubConcurrencyCacheForTest struct {
 	waitCountErr   error
 	loadBatch      map[int64]*AccountLoadInfo
 	loadBatchErr   error
+	loadBatchCalls int
 	usersLoadBatch map[int64]*UserLoadInfo
 	usersLoadErr   error
 	cleanupErr     error
@@ -82,6 +83,7 @@ func (c *stubConcurrencyCacheForTest) DecrementWaitCount(_ context.Context, _ in
 	return nil
 }
 func (c *stubConcurrencyCacheForTest) GetAccountsLoadBatch(_ context.Context, _ []AccountWithConcurrency) (map[int64]*AccountLoadInfo, error) {
+	c.loadBatchCalls++
 	return c.loadBatch, c.loadBatchErr
 }
 func (c *stubConcurrencyCacheForTest) GetUsersLoadBatch(_ context.Context, _ []UserWithConcurrency) (map[int64]*UserLoadInfo, error) {
@@ -227,6 +229,35 @@ func TestGetAccountsLoadBatch_ReturnsCorrectData(t *testing.T) {
 	result, err := svc.GetAccountsLoadBatch(context.Background(), accounts)
 	require.NoError(t, err)
 	require.Equal(t, expected, result)
+}
+
+func TestGetAccountsLoadBatch_RequestScopedCacheReusesSnapshot(t *testing.T) {
+	cache := &stubConcurrencyCacheForTest{
+		loadBatch: map[int64]*AccountLoadInfo{
+			1: {AccountID: 1, CurrentConcurrency: 3, WaitingCount: 1, LoadRate: 0},
+			2: {AccountID: 2, CurrentConcurrency: 2, WaitingCount: 0, LoadRate: 0},
+		},
+	}
+	svc := NewConcurrencyService(cache)
+	ctx := WithRequestAccountLoadCache(context.Background())
+
+	first, err := svc.GetAccountsLoadBatch(ctx, []AccountWithConcurrency{
+		{ID: 1, MaxConcurrency: 5},
+		{ID: 2, MaxConcurrency: 4},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, cache.loadBatchCalls)
+	require.Equal(t, 80, first[1].LoadRate)
+	require.Equal(t, 50, first[2].LoadRate)
+
+	second, err := svc.GetAccountsLoadBatch(ctx, []AccountWithConcurrency{
+		{ID: 1, MaxConcurrency: 10},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, cache.loadBatchCalls)
+	require.Equal(t, 40, second[1].LoadRate)
+	require.Equal(t, 3, second[1].CurrentConcurrency)
+	require.Equal(t, 1, second[1].WaitingCount)
 }
 
 func TestGetAccountsLoadBatch_NilCache(t *testing.T) {

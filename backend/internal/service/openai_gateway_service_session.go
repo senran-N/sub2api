@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tidwall/gjson"
 )
 
 // ExtractSessionID extracts the raw session ID from headers or body without hashing.
@@ -64,7 +63,7 @@ func resolveOpenAIRequestSessionID(c *gin.Context, body []byte) string {
 		sessionID = strings.TrimSpace(c.GetHeader("conversation_id"))
 	}
 	if sessionID == "" && len(body) > 0 {
-		sessionID = strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
+		sessionID = getOpenAIRequestMeta(c, body).PromptCacheKey
 	}
 	return sessionID
 }

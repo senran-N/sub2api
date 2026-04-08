@@ -8,8 +8,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/senran-N/sub2api/internal/config"
 	coderws "github.com/coder/websocket"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -220,6 +220,46 @@ func TestSetPreviousResponseIDToRawPayload(t *testing.T) {
 	t.Run("overwrite_existing_previous_response_id", func(t *testing.T) {
 		payload := []byte(`{"type":"response.create","model":"gpt-5.1","previous_response_id":"resp_old"}`)
 		updated, err := setPreviousResponseIDToRawPayload(payload, "resp_new")
+		require.NoError(t, err)
+		require.Equal(t, "resp_new", gjson.GetBytes(updated, "previous_response_id").String())
+	})
+
+	t.Run("keep_payload_when_previous_response_id_is_unchanged", func(t *testing.T) {
+		payload := []byte(`{"type":"response.create","model":"gpt-5.1","previous_response_id":"resp_same"}`)
+		updated, err := setPreviousResponseIDToRawPayload(payload, "resp_same")
+		require.NoError(t, err)
+		require.Equal(t, string(payload), string(updated))
+	})
+}
+
+func TestRewriteOpenAIWSPayload(t *testing.T) {
+	t.Parallel()
+
+	t.Run("drop_previous_and_set_input", func(t *testing.T) {
+		original := []byte(`{"type":"response.create","previous_response_id":"resp_old","input":[{"type":"input_text","text":"stale"}]}`)
+		items := []json.RawMessage{
+			json.RawMessage(`{"type":"input_text","text":"hello"}`),
+			json.RawMessage(`{"type":"input_text","text":"world"}`),
+		}
+
+		updated, err := rewriteOpenAIWSPayload(original, openAIWSPayloadRewriteOptions{
+			dropPreviousResponseID: true,
+			setInput:               true,
+			input:                  items,
+		})
+		require.NoError(t, err)
+		require.False(t, gjson.GetBytes(updated, "previous_response_id").Exists())
+		require.Equal(t, "hello", gjson.GetBytes(updated, "input.0.text").String())
+		require.Equal(t, "world", gjson.GetBytes(updated, "input.1.text").String())
+	})
+
+	t.Run("replace_previous_response_id", func(t *testing.T) {
+		original := []byte(`{"type":"response.create","previous_response_id":"resp_old"}`)
+
+		updated, err := rewriteOpenAIWSPayload(original, openAIWSPayloadRewriteOptions{
+			dropPreviousResponseID: true,
+			setPreviousResponseID:  "resp_new",
+		})
 		require.NoError(t, err)
 		require.Equal(t, "resp_new", gjson.GetBytes(updated, "previous_response_id").String())
 	})
@@ -617,6 +657,42 @@ func TestShouldKeepIngressPreviousResponseID(t *testing.T) {
 
 	t.Run("current_payload_compare_error", func(t *testing.T) {
 		keep, reason, err := shouldKeepIngressPreviousResponseID(previousPayload, []byte(`{"previous_response_id":"resp_turn_1","input":[}`), "resp_turn_1", false)
+		require.Error(t, err)
+		require.False(t, keep)
+		require.Equal(t, "non_input_compare_error", reason)
+	})
+}
+
+func TestShouldKeepIngressPreviousResponseIDWithStrictState(t *testing.T) {
+	t.Parallel()
+
+	currentStrictPayload := []byte(`{
+		"type":"response.create",
+		"model":"gpt-5.1",
+		"store":false,
+		"tools":[{"name":"tool_a","type":"function"}],
+		"previous_response_id":"resp_turn_1",
+		"input":[{"text":"hello","type":"input_text"},{"type":"input_text","text":"world"}]
+	}`)
+	previousState, err := buildOpenAIWSIngressPreviousTurnStrictState([]byte(`{
+		"type":"response.create",
+		"model":"gpt-5.1",
+		"store":false,
+		"tools":[{"type":"function","name":"tool_a"}],
+		"input":[{"type":"input_text","text":"hello"}]
+	}`))
+	require.NoError(t, err)
+
+	t.Run("strict_incremental_keep_with_cached_comparable", func(t *testing.T) {
+		currentComparable, currentComparableErr := normalizeOpenAIWSPayloadWithoutInputAndPreviousResponseID(currentStrictPayload)
+		keep, reason, err := shouldKeepIngressPreviousResponseIDWithStrictState(previousState, currentStrictPayload, currentComparable, currentComparableErr, "resp_turn_1", false)
+		require.NoError(t, err)
+		require.True(t, keep)
+		require.Equal(t, "strict_incremental_ok", reason)
+	})
+
+	t.Run("cached_compare_error", func(t *testing.T) {
+		keep, reason, err := shouldKeepIngressPreviousResponseIDWithStrictState(previousState, currentStrictPayload, nil, errors.New("boom"), "resp_turn_1", false)
 		require.Error(t, err)
 		require.False(t, keep)
 		require.Equal(t, "non_input_compare_error", reason)

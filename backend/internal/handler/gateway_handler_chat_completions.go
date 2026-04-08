@@ -42,6 +42,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+	attachRequestAccountLoadCache(c)
 
 	// Read request body
 	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
@@ -100,28 +101,33 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 	// 1. Acquire user concurrency slot
 	maxWait := service.CalculateMaxWait(subject.Concurrency)
-	canWait, err := h.concurrencyHelper.IncrementWaitCount(c.Request.Context(), subject.UserID, maxWait)
-	waitCounted := false
+	queueResult, err := h.concurrencyHelper.AcquireUserSlotOrQueue(c.Request.Context(), subject.UserID, subject.Concurrency, maxWait)
 	if err != nil {
-		reqLog.Warn("gateway.cc.user_wait_counter_increment_failed", zap.Error(err))
-	} else if !canWait {
+		reqLog.Warn("gateway.cc.user_slot_acquire_failed", zap.Error(err))
+		h.handleConcurrencyError(c, err, "user", streamStarted)
+		return
+	}
+	if !queueResult.Acquired && !queueResult.QueueAllowed {
 		h.chatCompletionsErrorResponse(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later")
 		return
 	}
-	if err == nil && canWait {
-		waitCounted = true
-	}
+	waitCounted := queueResult.WaitCounted
 	defer func() {
 		if waitCounted {
 			h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID)
 		}
 	}()
 
-	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted)
-	if err != nil {
-		reqLog.Warn("gateway.cc.user_slot_acquire_failed", zap.Error(err))
-		h.handleConcurrencyError(c, err, "user", streamStarted)
-		return
+	var userReleaseFunc func()
+	if queueResult.Acquired {
+		userReleaseFunc = queueResult.ReleaseFunc
+	} else {
+		userReleaseFunc, err = h.concurrencyHelper.AcquireUserSlotAfterQueueing(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted)
+		if err != nil {
+			reqLog.Warn("gateway.cc.user_slot_acquire_failed_after_wait", zap.Error(err))
+			h.handleConcurrencyError(c, err, "user", streamStarted)
+			return
+		}
 	}
 	if waitCounted {
 		h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID)
@@ -187,18 +193,51 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				h.chatCompletionsErrorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts")
 				return
 			}
-			accountReleaseFunc, err = h.concurrencyHelper.AcquireAccountSlotWithWaitTimeout(
-				c,
+			queueResult, err := h.concurrencyHelper.AcquireAccountSlotOrQueue(
+				c.Request.Context(),
 				account.ID,
 				selection.WaitPlan.MaxConcurrency,
-				selection.WaitPlan.Timeout,
-				reqStream,
-				&streamStarted,
+				selection.WaitPlan.MaxWaiting,
 			)
 			if err != nil {
 				reqLog.Warn("gateway.cc.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 				h.handleConcurrencyError(c, err, "account", streamStarted)
 				return
+			}
+			if queueResult.Acquired {
+				accountReleaseFunc = queueResult.ReleaseFunc
+			} else if !queueResult.QueueAllowed {
+				reqLog.Info("gateway.cc.account_wait_queue_full",
+					zap.Int64("account_id", account.ID),
+					zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
+				)
+				h.chatCompletionsErrorResponse(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later")
+				return
+			} else {
+				accountWaitCounted := queueResult.WaitCounted
+				defer func() {
+					if accountWaitCounted {
+						h.concurrencyHelper.DecrementAccountWaitCount(c.Request.Context(), account.ID)
+					}
+				}()
+
+				accountReleaseFunc, err = h.concurrencyHelper.AcquireAccountSlotAfterQueueingWithWaitTimeout(
+					c,
+					account.ID,
+					selection.WaitPlan.MaxConcurrency,
+					selection.WaitPlan.Timeout,
+					reqStream,
+					&streamStarted,
+				)
+				if err != nil {
+					reqLog.Warn("gateway.cc.account_slot_acquire_failed_after_wait", zap.Int64("account_id", account.ID), zap.Error(err))
+					h.handleConcurrencyError(c, err, "account", streamStarted)
+					return
+				}
+				if accountWaitCounted {
+					h.concurrencyHelper.DecrementAccountWaitCount(c.Request.Context(), account.ID)
+					accountWaitCounted = false
+				}
 			}
 		}
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)

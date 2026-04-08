@@ -10,7 +10,6 @@ import (
 	"time"
 
 	coderws "github.com/coder/websocket"
-	"github.com/tidwall/gjson"
 )
 
 func (s *OpenAIGatewayService) writeOpenAIWSIngressClientMessage(ctx context.Context, clientConn *coderws.Conn, message []byte) error {
@@ -48,6 +47,7 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 	turn int,
 	payload []byte,
 	payloadBytes int,
+	payloadMeta openAIWSIngressPayloadMeta,
 	originalModel string,
 	debugEnabled bool,
 ) (*OpenAIForwardResult, error) {
@@ -80,12 +80,11 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 	responseID := ""
 	usage := OpenAIUsage{}
 	var firstTokenMs *int
-	reqStream := openAIWSPayloadBoolFromRaw(payload, "stream", true)
-	turnPreviousResponseID := openAIWSPayloadStringFromRaw(payload, "previous_response_id")
-	turnPreviousResponseIDKind := ClassifyOpenAIPreviousResponseIDKind(turnPreviousResponseID)
-	turnPromptCacheKey := openAIWSPayloadStringFromRaw(payload, "prompt_cache_key")
-	turnStoreDisabled := s.isOpenAIWSStoreDisabledInRequestRaw(payload, account)
-	turnHasFunctionCallOutput := gjson.GetBytes(payload, `input.#(type=="function_call_output")`).Exists()
+	reqStream := payloadMeta.stream
+	turnPreviousResponseID := payloadMeta.previousResponseID
+	turnPreviousResponseIDKind := payloadMeta.previousResponseIDKind
+	turnStoreDisabled := payloadMeta.storeDisabled
+	turnHasFunctionCallOutput := payloadMeta.hasFunctionCallOutput
 	eventCount := 0
 	tokenEventCount := 0
 	terminalEventCount := 0
@@ -153,7 +152,7 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 					normalizeOpenAIWSLogValue(turnPreviousResponseIDKind),
 					truncateOpenAIWSLogValue(responseID, openAIWSIDValueMaxLen),
 					turnStoreDisabled,
-					turnPromptCacheKey != "",
+					payloadMeta.hasPromptCacheKey,
 				)
 			} else {
 				logOpenAIWSModeInfo(
@@ -170,7 +169,7 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 					normalizeOpenAIWSLogValue(turnPreviousResponseIDKind),
 					truncateOpenAIWSLogValue(responseID, openAIWSIDValueMaxLen),
 					turnStoreDisabled,
-					turnPromptCacheKey != "",
+					payloadMeta.hasPromptCacheKey,
 				)
 			}
 			if recoverablePrevNotFound {

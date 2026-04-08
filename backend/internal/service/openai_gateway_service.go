@@ -26,6 +26,8 @@ const (
 
 	// OpenAIParsedRequestBodyKey 缓存 handler 侧已解析的请求体，避免重复解析。
 	OpenAIParsedRequestBodyKey = "openai_parsed_request_body"
+	// OpenAIParsedRequestMetaKey 缓存请求热路径的轻量元信息，避免 handler/service 重复扫描 JSON。
+	OpenAIParsedRequestMetaKey = "openai_parsed_request_meta"
 	// OpenAI WS Mode 失败后的重连次数上限（不含首次尝试）。
 	// 与 Codex 客户端保持一致：失败后最多重连 5 次。
 	openAIWSReconnectRetryLimit = 5
@@ -369,7 +371,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	originalBody := body
-	reqModel, reqStream, promptCacheKey := extractOpenAIRequestMetaFromBody(body)
+	reqMeta := getOpenAIRequestMeta(c, body)
+	reqModel, reqStream, promptCacheKey := reqMeta.Model, reqMeta.Stream, reqMeta.PromptCacheKey
 
 	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator")) || (s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
@@ -406,7 +409,20 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
 	if passthroughEnabled {
 		// 透传分支只需要轻量提取字段，避免热路径全量 Unmarshal。
-		reasoningEffort := extractOpenAIReasoningEffortFromBody(body, reqModel)
+		var reasoningEffort *string
+		if reqMeta.ReasoningPresent {
+			if reqMeta.ReasoningEffort == "" {
+				reasoningEffort = nil
+			} else {
+				value := reqMeta.ReasoningEffort
+				reasoningEffort = &value
+			}
+		} else if reqMeta.ReasoningEffort != "" {
+			value := reqMeta.ReasoningEffort
+			reasoningEffort = &value
+		} else {
+			reasoningEffort = extractOpenAIReasoningEffortFromBody(body, reqModel)
+		}
 		return s.forwardOpenAIPassthrough(ctx, c, account, originalBody, reqModel, reasoningEffort, reqStream, startTime)
 	}
 

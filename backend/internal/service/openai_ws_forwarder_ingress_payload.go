@@ -10,6 +10,87 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+type openAIWSPayloadRewriteOptions struct {
+	dropPreviousResponseID bool
+	setPreviousResponseID  string
+	setInput               bool
+	input                  []json.RawMessage
+}
+
+func rewriteOpenAIWSPayload(payload []byte, opts openAIWSPayloadRewriteOptions) ([]byte, error) {
+	if len(payload) == 0 {
+		return payload, nil
+	}
+	normalizedPrevID := strings.TrimSpace(opts.setPreviousResponseID)
+	if !opts.dropPreviousResponseID && normalizedPrevID == "" && !opts.setInput {
+		return payload, nil
+	}
+	if updated, ok, err := tryRewriteOpenAIWSPayloadFastPath(payload, opts, normalizedPrevID); ok {
+		return updated, err
+	}
+
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return nil, err
+	}
+	if decoded == nil {
+		decoded = make(map[string]json.RawMessage)
+	}
+
+	if opts.dropPreviousResponseID {
+		delete(decoded, "previous_response_id")
+	}
+	if normalizedPrevID != "" {
+		prevRaw, err := json.Marshal(normalizedPrevID)
+		if err != nil {
+			return nil, err
+		}
+		decoded["previous_response_id"] = prevRaw
+	}
+	if opts.setInput {
+		inputForMarshal := opts.input
+		if inputForMarshal == nil {
+			inputForMarshal = []json.RawMessage{}
+		}
+		inputRaw, err := json.Marshal(inputForMarshal)
+		if err != nil {
+			return nil, err
+		}
+		decoded["input"] = inputRaw
+	}
+	return json.Marshal(decoded)
+}
+
+func tryRewriteOpenAIWSPayloadFastPath(
+	payload []byte,
+	opts openAIWSPayloadRewriteOptions,
+	normalizedPrevID string,
+) ([]byte, bool, error) {
+	updated := payload
+	if opts.dropPreviousResponseID {
+		next, _, err := dropPreviousResponseIDFromRawPayload(updated)
+		if err != nil {
+			return nil, false, nil
+		}
+		updated = next
+	}
+	if normalizedPrevID != "" {
+		next, err := setPreviousResponseIDToRawPayload(updated, normalizedPrevID)
+		if err != nil {
+			return nil, false, nil
+		}
+		updated = next
+	}
+	if opts.setInput {
+		next, err := setOpenAIWSPayloadInputSequence(updated, opts.input, true)
+		if err != nil {
+			return nil, false, nil
+		}
+		updated = next
+	}
+	return updated, true, nil
+}
+
 func dropPreviousResponseIDFromRawPayload(payload []byte) ([]byte, bool, error) {
 	return dropPreviousResponseIDFromRawPayloadWithDeleteFn(payload, sjson.DeleteBytes)
 }
@@ -44,6 +125,12 @@ func setPreviousResponseIDToRawPayload(payload []byte, previousResponseID string
 	normalizedPrevID := strings.TrimSpace(previousResponseID)
 	if len(payload) == 0 || normalizedPrevID == "" {
 		return payload, nil
+	}
+	if bytes.Contains(payload, openAIWSIngressPayloadPreviousResponseIDKey) {
+		currentPrevID := strings.TrimSpace(gjson.GetBytes(payload, "previous_response_id").String())
+		if currentPrevID == normalizedPrevID {
+			return payload, nil
+		}
 	}
 	updated, err := sjson.SetBytes(payload, "previous_response_id", normalizedPrevID)
 	if err == nil {
@@ -93,17 +180,12 @@ func alignStoreDisabledPreviousResponseID(
 	if current == "" || current == expected {
 		return payload, false, nil
 	}
-
-	withoutPrev, removed, dropErr := dropPreviousResponseIDFromRawPayload(payload)
-	if dropErr != nil {
-		return payload, false, dropErr
-	}
-	if !removed {
-		return payload, false, nil
-	}
-	updated, setErr := setPreviousResponseIDToRawPayload(withoutPrev, expected)
-	if setErr != nil {
-		return payload, false, setErr
+	updated, err := rewriteOpenAIWSPayload(payload, openAIWSPayloadRewriteOptions{
+		dropPreviousResponseID: true,
+		setPreviousResponseID:  expected,
+	})
+	if err != nil {
+		return payload, false, err
 	}
 	return updated, true, nil
 }
@@ -148,6 +230,18 @@ func normalizeOpenAIWSJSONForCompareOrRaw(raw []byte) []byte {
 	return normalized
 }
 
+func openAIWSRawJSONMessagesEqual(a, b json.RawMessage) bool {
+	aTrimmed := bytes.TrimSpace(a)
+	bTrimmed := bytes.TrimSpace(b)
+	if bytes.Equal(aTrimmed, bTrimmed) {
+		return true
+	}
+	return bytes.Equal(
+		normalizeOpenAIWSJSONForCompareOrRaw(aTrimmed),
+		normalizeOpenAIWSJSONForCompareOrRaw(bTrimmed),
+	)
+}
+
 func normalizeOpenAIWSPayloadWithoutInputAndPreviousResponseID(payload []byte) ([]byte, error) {
 	if len(payload) == 0 {
 		return nil, errors.New("payload is empty")
@@ -172,19 +266,51 @@ func openAIWSExtractNormalizedInputSequence(payload []byte) ([]json.RawMessage, 
 	if inputValue.Type == gjson.JSON {
 		raw := strings.TrimSpace(inputValue.Raw)
 		if strings.HasPrefix(raw, "[") {
-			var items []json.RawMessage
-			if err := json.Unmarshal([]byte(raw), &items); err != nil {
-				return nil, true, err
-			}
-			return items, true, nil
+			return openAIWSExtractJSONArrayItems(inputValue, raw)
 		}
-		return []json.RawMessage{json.RawMessage(raw)}, true, nil
+		return []json.RawMessage{cloneOpenAIWSRawString(raw)}, true, nil
 	}
 	if inputValue.Type == gjson.String {
 		encoded, _ := json.Marshal(inputValue.String())
 		return []json.RawMessage{encoded}, true, nil
 	}
-	return []json.RawMessage{json.RawMessage(inputValue.Raw)}, true, nil
+	return []json.RawMessage{cloneOpenAIWSRawString(inputValue.Raw)}, true, nil
+}
+
+func openAIWSExtractJSONArrayItems(inputValue gjson.Result, raw string) ([]json.RawMessage, bool, error) {
+	items := make([]json.RawMessage, 0, 4)
+	itemCount := 0
+	inputValue.ForEach(func(_, item gjson.Result) bool {
+		itemCount++
+		itemRaw := strings.TrimSpace(item.Raw)
+		if itemRaw == "" {
+			items = nil
+			itemCount = -1
+			return false
+		}
+		items = append(items, cloneOpenAIWSRawString(itemRaw))
+		return true
+	})
+	if itemCount == 0 {
+		return []json.RawMessage{}, true, nil
+	}
+	if itemCount < 0 {
+		var fallback []json.RawMessage
+		if err := json.Unmarshal([]byte(raw), &fallback); err != nil {
+			return nil, true, err
+		}
+		return fallback, true, nil
+	}
+	return items, true, nil
+}
+
+func cloneOpenAIWSRawString(raw string) json.RawMessage {
+	if raw == "" {
+		return json.RawMessage{}
+	}
+	cloned := make([]byte, len(raw))
+	copy(cloned, raw)
+	return json.RawMessage(cloned)
 }
 
 func openAIWSInputIsPrefixExtended(previousPayload, currentPayload []byte) (bool, error) {
@@ -210,9 +336,7 @@ func openAIWSInputIsPrefixExtended(previousPayload, currentPayload []byte) (bool
 	}
 
 	for idx := range previousItems {
-		previousNormalized := normalizeOpenAIWSJSONForCompareOrRaw(previousItems[idx])
-		currentNormalized := normalizeOpenAIWSJSONForCompareOrRaw(currentItems[idx])
-		if !bytes.Equal(previousNormalized, currentNormalized) {
+		if !openAIWSRawJSONMessagesEqual(previousItems[idx], currentItems[idx]) {
 			return false, nil
 		}
 	}
@@ -227,9 +351,7 @@ func openAIWSRawItemsHasPrefix(items []json.RawMessage, prefix []json.RawMessage
 		return false
 	}
 	for idx := range prefix {
-		previousNormalized := normalizeOpenAIWSJSONForCompareOrRaw(prefix[idx])
-		currentNormalized := normalizeOpenAIWSJSONForCompareOrRaw(items[idx])
-		if !bytes.Equal(previousNormalized, currentNormalized) {
+		if !openAIWSRawJSONMessagesEqual(prefix[idx], items[idx]) {
 			return false
 		}
 	}
@@ -247,20 +369,22 @@ func buildOpenAIWSReplayInputSequence(
 		return nil, false, currentErr
 	}
 	if !hasPreviousResponseID {
-		return cloneOpenAIWSRawMessages(currentItems), currentExists, nil
+		return currentItems, currentExists, nil
 	}
 	if !previousFullInputExists {
-		return cloneOpenAIWSRawMessages(currentItems), currentExists, nil
+		return currentItems, currentExists, nil
 	}
 	if !currentExists || len(currentItems) == 0 {
-		return cloneOpenAIWSRawMessages(previousFullInput), true, nil
+		return previousFullInput, true, nil
 	}
 	if openAIWSRawItemsHasPrefix(currentItems, previousFullInput) {
-		return cloneOpenAIWSRawMessages(currentItems), true, nil
+		return currentItems, true, nil
 	}
+	// json.RawMessage values are treated as immutable after extraction, so merged
+	// sequences can safely reference existing entries without deep-copying bytes.
 	merged := make([]json.RawMessage, 0, len(previousFullInput)+len(currentItems))
-	merged = append(merged, cloneOpenAIWSRawMessages(previousFullInput)...)
-	merged = append(merged, cloneOpenAIWSRawMessages(currentItems)...)
+	merged = append(merged, previousFullInput...)
+	merged = append(merged, currentItems...)
 	return merged, true, nil
 }
 
@@ -277,11 +401,36 @@ func setOpenAIWSPayloadInputSequence(
 	if inputForMarshal == nil {
 		inputForMarshal = []json.RawMessage{}
 	}
-	inputRaw, marshalErr := json.Marshal(inputForMarshal)
-	if marshalErr != nil {
-		return nil, marshalErr
-	}
+	inputRaw := buildOpenAIWSRawJSONArray(inputForMarshal)
 	return sjson.SetRawBytes(payload, "input", inputRaw)
+}
+
+func buildOpenAIWSRawJSONArray(items []json.RawMessage) []byte {
+	if len(items) == 0 {
+		return []byte("[]")
+	}
+	total := 2 + len(items) - 1
+	for idx := range items {
+		if len(items[idx]) == 0 {
+			total += len("null")
+			continue
+		}
+		total += len(items[idx])
+	}
+	out := make([]byte, 0, total)
+	out = append(out, '[')
+	for idx := range items {
+		if idx > 0 {
+			out = append(out, ',')
+		}
+		if len(items[idx]) == 0 {
+			out = append(out, "null"...)
+			continue
+		}
+		out = append(out, items[idx]...)
+	}
+	out = append(out, ']')
+	return out
 }
 
 func shouldKeepIngressPreviousResponseID(
@@ -326,22 +475,34 @@ type openAIWSIngressPreviousTurnStrictState struct {
 	nonInputComparable []byte
 }
 
-func buildOpenAIWSIngressPreviousTurnStrictState(payload []byte) (*openAIWSIngressPreviousTurnStrictState, error) {
-	if len(payload) == 0 {
-		return nil, nil
-	}
-	nonInputComparable, nonInputErr := normalizeOpenAIWSPayloadWithoutInputAndPreviousResponseID(payload)
+func buildOpenAIWSIngressPreviousTurnStrictStateFromComparable(
+	nonInputComparable []byte,
+	nonInputErr error,
+) (*openAIWSIngressPreviousTurnStrictState, error) {
 	if nonInputErr != nil {
 		return nil, nonInputErr
+	}
+	if len(nonInputComparable) == 0 {
+		return nil, nil
 	}
 	return &openAIWSIngressPreviousTurnStrictState{
 		nonInputComparable: nonInputComparable,
 	}, nil
 }
 
+func buildOpenAIWSIngressPreviousTurnStrictState(payload []byte) (*openAIWSIngressPreviousTurnStrictState, error) {
+	if len(payload) == 0 {
+		return nil, nil
+	}
+	nonInputComparable, nonInputErr := normalizeOpenAIWSPayloadWithoutInputAndPreviousResponseID(payload)
+	return buildOpenAIWSIngressPreviousTurnStrictStateFromComparable(nonInputComparable, nonInputErr)
+}
+
 func shouldKeepIngressPreviousResponseIDWithStrictState(
 	previousState *openAIWSIngressPreviousTurnStrictState,
 	currentPayload []byte,
+	currentComparable []byte,
+	currentComparableErr error,
 	lastTurnResponseID string,
 	hasFunctionCallOutput bool,
 ) (bool, string, error) {
@@ -363,7 +524,6 @@ func shouldKeepIngressPreviousResponseIDWithStrictState(
 		return false, "missing_previous_turn_payload", nil
 	}
 
-	currentComparable, currentComparableErr := normalizeOpenAIWSPayloadWithoutInputAndPreviousResponseID(currentPayload)
 	if currentComparableErr != nil {
 		return false, "non_input_compare_error", currentComparableErr
 	}

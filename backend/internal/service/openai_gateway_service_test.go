@@ -115,7 +115,25 @@ func (c stubConcurrencyCache) AcquireAccountSlot(ctx context.Context, accountID 
 	return true, nil
 }
 
+func (c stubConcurrencyCache) AcquireAccountSlotOrEnqueueWait(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	acquired, err := c.AcquireAccountSlot(ctx, accountID, maxConcurrency, requestID)
+	return acquired, !acquired, err
+}
+
 func (c stubConcurrencyCache) ReleaseAccountSlot(ctx context.Context, accountID int64, requestID string) error {
+	return nil
+}
+
+func (c stubConcurrencyCache) AcquireUserSlot(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error) {
+	return true, nil
+}
+
+func (c stubConcurrencyCache) AcquireUserSlotOrEnqueueWait(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	acquired, err := c.AcquireUserSlot(ctx, userID, maxConcurrency, requestID)
+	return acquired, !acquired, err
+}
+
+func (c stubConcurrencyCache) ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error {
 	return nil
 }
 

@@ -13,6 +13,19 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+type openAIRequestMeta struct {
+	Model              string
+	ModelExists        bool
+	ModelType          gjson.Type
+	Stream             bool
+	StreamExists       bool
+	StreamType         gjson.Type
+	PromptCacheKey     string
+	PreviousResponseID string
+	ReasoningPresent   bool
+	ReasoningEffort    string
+}
+
 func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, error) {
 	if s.cfg != nil && !s.cfg.Security.URLAllowlist.Enabled {
 		normalized, err := urlvalidator.ValidateURLFormat(raw, s.cfg.Security.URLAllowlist.AllowInsecureHTTP)
@@ -249,14 +262,114 @@ func deriveOpenAIReasoningEffortFromModel(model string) string {
 	return normalizeOpenAIReasoningEffort(parts[len(parts)-1])
 }
 
-func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, promptCacheKey string) {
+func buildOpenAIRequestMeta(body []byte) openAIRequestMeta {
 	if len(body) == 0 {
-		return "", false, ""
+		return openAIRequestMeta{}
 	}
-	model = strings.TrimSpace(gjson.GetBytes(body, "model").String())
-	stream = gjson.GetBytes(body, "stream").Bool()
-	promptCacheKey = strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
-	return model, stream, promptCacheKey
+
+	values := gjson.GetManyBytes(
+		body,
+		"model",
+		"stream",
+		"prompt_cache_key",
+		"previous_response_id",
+		"reasoning.effort",
+		"reasoning_effort",
+	)
+	meta := openAIRequestMeta{
+		ModelExists:        values[0].Exists(),
+		ModelType:          values[0].Type,
+		Model:              strings.TrimSpace(values[0].String()),
+		StreamExists:       values[1].Exists(),
+		StreamType:         values[1].Type,
+		Stream:             values[1].Bool(),
+		PromptCacheKey:     strings.TrimSpace(values[2].String()),
+		PreviousResponseID: strings.TrimSpace(values[3].String()),
+	}
+
+	reasoningEffort := strings.TrimSpace(values[4].String())
+	meta.ReasoningPresent = values[4].Exists()
+	if reasoningEffort == "" {
+		reasoningEffort = strings.TrimSpace(values[5].String())
+		if reasoningEffort != "" || values[5].Exists() {
+			meta.ReasoningPresent = true
+		}
+	}
+	meta.ReasoningEffort = normalizeOpenAIReasoningEffort(reasoningEffort)
+	return meta
+}
+
+func buildOpenAIRequestMetaFromMap(reqBody map[string]any) openAIRequestMeta {
+	meta := openAIRequestMeta{}
+	if reqBody == nil {
+		return meta
+	}
+
+	if model, ok := reqBody["model"].(string); ok {
+		meta.ModelExists = true
+		meta.ModelType = gjson.String
+		meta.Model = strings.TrimSpace(model)
+	} else if _, exists := reqBody["model"]; exists {
+		meta.ModelExists = true
+	}
+	if stream, ok := reqBody["stream"].(bool); ok {
+		meta.StreamExists = true
+		meta.StreamType = gjson.True
+		if !stream {
+			meta.StreamType = gjson.False
+		}
+		meta.Stream = stream
+	} else if _, exists := reqBody["stream"]; exists {
+		meta.StreamExists = true
+	}
+	if promptCacheKey, ok := reqBody["prompt_cache_key"].(string); ok {
+		meta.PromptCacheKey = strings.TrimSpace(promptCacheKey)
+	}
+	if previousResponseID, ok := reqBody["previous_response_id"].(string); ok {
+		meta.PreviousResponseID = strings.TrimSpace(previousResponseID)
+	}
+	if reasoningEffort, present := getOpenAIReasoningEffortFromReqBody(reqBody); present {
+		meta.ReasoningPresent = true
+		meta.ReasoningEffort = reasoningEffort
+	}
+	return meta
+}
+
+func cacheOpenAIRequestMeta(c *gin.Context, meta openAIRequestMeta) openAIRequestMeta {
+	if c != nil {
+		c.Set(OpenAIParsedRequestMetaKey, meta)
+	}
+	return meta
+}
+
+func cacheOpenAIRequestMetaFromMap(c *gin.Context, reqBody map[string]any) openAIRequestMeta {
+	return cacheOpenAIRequestMeta(c, buildOpenAIRequestMetaFromMap(reqBody))
+}
+
+func getOpenAIRequestMeta(c *gin.Context, body []byte) openAIRequestMeta {
+	if c != nil {
+		if cached, ok := c.Get(OpenAIParsedRequestMetaKey); ok {
+			if meta, ok := cached.(openAIRequestMeta); ok {
+				return meta
+			}
+		}
+	}
+	return cacheOpenAIRequestMeta(c, buildOpenAIRequestMeta(body))
+}
+
+// GetOpenAIRequestMeta returns lightweight request metadata and caches it on gin.Context.
+func GetOpenAIRequestMeta(c *gin.Context, body []byte) openAIRequestMeta {
+	return getOpenAIRequestMeta(c, body)
+}
+
+// CacheOpenAIRequestMetaFromBodyMap caches request metadata derived from a decoded request body map.
+func CacheOpenAIRequestMetaFromBodyMap(c *gin.Context, reqBody map[string]any) {
+	cacheOpenAIRequestMetaFromMap(c, reqBody)
+}
+
+func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, promptCacheKey string) {
+	meta := buildOpenAIRequestMeta(body)
+	return meta.Model, meta.Stream, meta.PromptCacheKey
 }
 
 // normalizeOpenAIPassthroughOAuthBody 将透传 OAuth 请求体收敛为旧链路关键行为。
@@ -324,16 +437,17 @@ func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byt
 }
 
 func extractOpenAIReasoningEffortFromBody(body []byte, requestedModel string) *string {
-	reasoningEffort := strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String())
-	if reasoningEffort == "" {
-		reasoningEffort = strings.TrimSpace(gjson.GetBytes(body, "reasoning_effort").String())
-	}
-	if reasoningEffort != "" {
-		normalized := normalizeOpenAIReasoningEffort(reasoningEffort)
-		if normalized == "" {
+	meta := buildOpenAIRequestMeta(body)
+	if meta.ReasoningPresent {
+		if meta.ReasoningEffort == "" {
 			return nil
 		}
-		return &normalized
+		value := meta.ReasoningEffort
+		return &value
+	}
+	if meta.ReasoningEffort != "" {
+		value := meta.ReasoningEffort
+		return &value
 	}
 
 	value := deriveOpenAIReasoningEffortFromModel(requestedModel)
@@ -381,6 +495,7 @@ func getOpenAIRequestBodyMap(c *gin.Context, body []byte) (map[string]any, error
 	if c != nil {
 		if cached, ok := c.Get(OpenAIParsedRequestBodyKey); ok {
 			if reqBody, ok := cached.(map[string]any); ok && reqBody != nil {
+				cacheOpenAIRequestMetaFromMap(c, reqBody)
 				return reqBody, nil
 			}
 		}
@@ -392,6 +507,7 @@ func getOpenAIRequestBodyMap(c *gin.Context, body []byte) (map[string]any, error
 	}
 	if c != nil {
 		c.Set(OpenAIParsedRequestBodyKey, reqBody)
+		cacheOpenAIRequestMetaFromMap(c, reqBody)
 	}
 	return reqBody, nil
 }

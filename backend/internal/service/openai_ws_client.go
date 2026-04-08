@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	openaiwsv2 "github.com/senran-N/sub2api/internal/service/openai_ws_v2"
 	coderws "github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	openaiwsv2 "github.com/senran-N/sub2api/internal/service/openai_ws_v2"
 )
 
 const openAIWSMessageReadLimitBytes int64 = 16 * 1024 * 1024
@@ -117,11 +117,21 @@ func (d *coderOpenAIWSClientDialer) proxyHTTPClient(proxy string) (*http.Client,
 	if normalizedProxy == "" {
 		return nil, errors.New("proxy url is empty")
 	}
+	now := time.Now().UnixNano()
+
+	d.proxyMu.Lock()
+	if entry, ok := d.proxyClients[normalizedProxy]; ok && entry != nil && entry.client != nil {
+		entry.lastUsedUnixNano = now
+		d.proxyMu.Unlock()
+		d.proxyHits.Add(1)
+		return entry.client, nil
+	}
+	d.proxyMu.Unlock()
+
 	parsedProxyURL, err := url.Parse(normalizedProxy)
 	if err != nil {
 		return nil, fmt.Errorf("invalid proxy url: %w", err)
 	}
-	now := time.Now().UnixNano()
 
 	d.proxyMu.Lock()
 	defer d.proxyMu.Unlock()

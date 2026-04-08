@@ -168,19 +168,15 @@ func (s *GatewayService) selectLoadAwareAvailableAccount(
 	sessionHash string,
 	preferOAuth bool,
 ) (*AccountSelectionResult, bool) {
-	for len(available) > 0 {
-		candidates := filterByMinPriority(available)
-		candidates = filterByMinLoadRate(candidates)
-		selected := selectByLRU(candidates, preferOAuth)
-		if selected == nil {
-			return nil, false
-		}
+	if len(available) == 0 {
+		return nil, false
+	}
 
-		if result, ok := s.tryAcquireAndMaybeBindSelection(ctx, groupID, sessionHash, selected.account, true); ok {
+	sortAccountsByPriorityLoadAndLastUsed(available, preferOAuth)
+	for _, item := range available {
+		if result, ok := s.tryAcquireAndMaybeBindSelection(ctx, groupID, sessionHash, item.account, true); ok {
 			return result, true
 		}
-
-		available = removeAccountWithLoadByID(available, selected.account.ID)
 	}
 
 	return nil, false

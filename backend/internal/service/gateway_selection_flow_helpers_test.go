@@ -117,7 +117,7 @@ func TestSortAccountsByPriorityLoadAndLastUsed_OrdersByPriorityThenLoadThenLRU(t
 		{account: &Account{ID: 3, Priority: 1, LastUsedAt: &earlier}, loadInfo: &AccountLoadInfo{AccountID: 3, LoadRate: 10}},
 	}
 
-	sortAccountsByPriorityLoadAndLastUsed(accounts)
+	sortAccountsByPriorityLoadAndLastUsed(accounts, false)
 
 	require.Equal(t, int64(3), accounts[0].account.ID)
 	require.Equal(t, int64(2), accounts[1].account.ID)

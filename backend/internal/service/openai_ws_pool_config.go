@@ -33,7 +33,11 @@ func (p *openAIWSConnPool) shouldHealthCheckConn(conn *openAIWSConn) bool {
 	if conn == nil {
 		return false
 	}
-	return conn.idleDuration(time.Now()) >= openAIWSConnHealthCheckIdle
+	lastUsedNano := conn.lastUsedUnixNano()
+	if lastUsedNano <= 0 {
+		return false
+	}
+	return time.Now().UnixNano()-lastUsedNano >= int64(openAIWSConnHealthCheckIdle)
 }
 
 func (p *openAIWSConnPool) maxConnsHardCap() int {
@@ -177,8 +181,14 @@ func (p *openAIWSConnPool) dialTimeout() time.Duration {
 }
 
 func cloneOpenAIWSAcquireRequest(req openAIWSAcquireRequest) openAIWSAcquireRequest {
+	req = normalizeOpenAIWSAcquireRequest(req)
 	copied := req
 	copied.Headers = cloneHeader(req.Headers)
+	return copied
+}
+
+func normalizeOpenAIWSAcquireRequest(req openAIWSAcquireRequest) openAIWSAcquireRequest {
+	copied := req
 	copied.WSURL = stringsTrim(req.WSURL)
 	copied.ProxyURL = stringsTrim(req.ProxyURL)
 	copied.PreferredConnID = stringsTrim(req.PreferredConnID)

@@ -91,7 +91,8 @@ func appendCodexCLIOnlyRejectedRequestFields(fields []zap.Field, c *gin.Context,
 	}
 
 	req := c.Request
-	requestModel, requestStream, promptCacheKey := extractOpenAIRequestMetaFromBody(body)
+	reqMeta := getOpenAIRequestMeta(c, body)
+	requestModel, requestStream, promptCacheKey := reqMeta.Model, reqMeta.Stream, reqMeta.PromptCacheKey
 	fields = append(
 		fields,
 		zap.String("request_method", strings.TrimSpace(req.Method)),

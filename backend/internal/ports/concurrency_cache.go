@@ -9,6 +9,7 @@ import (
 // ConcurrencyCache stores runtime slot and queue state used by schedulers.
 type ConcurrencyCache interface {
 	AcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error)
+	AcquireAccountSlotOrEnqueueWait(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string) (acquired bool, enqueued bool, err error)
 	ReleaseAccountSlot(ctx context.Context, accountID int64, requestID string) error
 	GetAccountConcurrency(ctx context.Context, accountID int64) (int, error)
 	GetAccountConcurrencyBatch(ctx context.Context, accountIDs []int64) (map[int64]int, error)
@@ -18,6 +19,7 @@ type ConcurrencyCache interface {
 	GetAccountWaitingCount(ctx context.Context, accountID int64) (int, error)
 
 	AcquireUserSlot(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error)
+	AcquireUserSlotOrEnqueueWait(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string) (acquired bool, enqueued bool, err error)
 	ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error
 	GetUserConcurrency(ctx context.Context, userID int64) (int, error)
 

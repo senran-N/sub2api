@@ -332,7 +332,7 @@ func (s *OpenAIGatewayService) trySelectOpenAILoadAwareAvailableAccount(
 		return nil, false
 	}
 
-	sortAccountsByPriorityLoadAndLastUsed(available)
+	sortAccountsByPriorityLoadAndLastUsed(available, false)
 	for _, item := range available {
 		if result, ok := s.tryAcquireFreshOpenAIAccountSelection(
 			ctx,

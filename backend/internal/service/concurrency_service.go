@@ -63,6 +63,13 @@ type AcquireResult struct {
 	ReleaseFunc func() // Must be called when done (typically via defer)
 }
 
+type AcquireOrQueueResult struct {
+	Acquired     bool
+	QueueAllowed bool
+	WaitCounted  bool
+	ReleaseFunc  func()
+}
+
 // AcquireAccountSlot attempts to acquire a concurrency slot for an account.
 // If the account is at max concurrency, it waits until a slot is available or timeout.
 // Returns a release function that MUST be called when the request completes.
@@ -138,6 +145,150 @@ func (s *ConcurrencyService) AcquireUserSlot(ctx context.Context, userID int64, 
 	return &AcquireResult{
 		Acquired:    false,
 		ReleaseFunc: nil,
+	}, nil
+}
+
+func (s *ConcurrencyService) AcquireUserSlotOrQueue(ctx context.Context, userID int64, maxConcurrency int, maxWait int) (*AcquireOrQueueResult, error) {
+	if maxConcurrency <= 0 {
+		return &AcquireOrQueueResult{
+			Acquired:     true,
+			QueueAllowed: true,
+			ReleaseFunc:  func() {},
+		}, nil
+	}
+	if s.cache == nil {
+		return &AcquireOrQueueResult{
+			Acquired:     true,
+			QueueAllowed: true,
+			ReleaseFunc:  func() {},
+		}, nil
+	}
+
+	requestID := generateRequestID()
+	acquired, enqueued, err := s.cache.AcquireUserSlotOrEnqueueWait(ctx, userID, maxConcurrency, maxWait, requestID)
+	if err != nil {
+		return s.acquireUserSlotOrQueueFallback(ctx, userID, maxConcurrency, maxWait, requestID, err)
+	}
+	if acquired {
+		return &AcquireOrQueueResult{
+			Acquired:     true,
+			QueueAllowed: true,
+			ReleaseFunc: func() {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := s.cache.ReleaseUserSlot(bgCtx, userID, requestID); err != nil {
+					logger.LegacyPrintf("service.concurrency", "Warning: failed to release user slot for %d (req=%s): %v", userID, requestID, err)
+				}
+			},
+		}, nil
+	}
+	return &AcquireOrQueueResult{
+		QueueAllowed: enqueued,
+		WaitCounted:  enqueued,
+	}, nil
+}
+
+func (s *ConcurrencyService) acquireUserSlotOrQueueFallback(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string, combinedErr error) (*AcquireOrQueueResult, error) {
+	logger.LegacyPrintf("service.concurrency", "Warning: acquire-or-queue user script failed for %d: %v", userID, combinedErr)
+
+	acquired, err := s.cache.AcquireUserSlot(ctx, userID, maxConcurrency, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if acquired {
+		return &AcquireOrQueueResult{
+			Acquired:     true,
+			QueueAllowed: true,
+			ReleaseFunc: func() {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := s.cache.ReleaseUserSlot(bgCtx, userID, requestID); err != nil {
+					logger.LegacyPrintf("service.concurrency", "Warning: failed to release user slot for %d (req=%s): %v", userID, requestID, err)
+				}
+			},
+		}, nil
+	}
+
+	enqueued, err := s.cache.IncrementWaitCount(ctx, userID, maxWait)
+	if err != nil {
+		logger.LegacyPrintf("service.concurrency", "Warning: increment wait count fallback failed for user %d: %v", userID, err)
+		return &AcquireOrQueueResult{QueueAllowed: true}, nil
+	}
+	return &AcquireOrQueueResult{
+		QueueAllowed: enqueued,
+		WaitCounted:  enqueued,
+	}, nil
+}
+
+func (s *ConcurrencyService) AcquireAccountSlotOrQueue(ctx context.Context, accountID int64, maxConcurrency int, maxWait int) (*AcquireOrQueueResult, error) {
+	if maxConcurrency <= 0 {
+		return &AcquireOrQueueResult{
+			Acquired:     true,
+			QueueAllowed: true,
+			ReleaseFunc:  func() {},
+		}, nil
+	}
+	if s.cache == nil {
+		return &AcquireOrQueueResult{
+			Acquired:     true,
+			QueueAllowed: true,
+			ReleaseFunc:  func() {},
+		}, nil
+	}
+
+	requestID := generateRequestID()
+	acquired, enqueued, err := s.cache.AcquireAccountSlotOrEnqueueWait(ctx, accountID, maxConcurrency, maxWait, requestID)
+	if err != nil {
+		return s.acquireAccountSlotOrQueueFallback(ctx, accountID, maxConcurrency, maxWait, requestID, err)
+	}
+	if acquired {
+		return &AcquireOrQueueResult{
+			Acquired:     true,
+			QueueAllowed: true,
+			ReleaseFunc: func() {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := s.cache.ReleaseAccountSlot(bgCtx, accountID, requestID); err != nil {
+					logger.LegacyPrintf("service.concurrency", "Warning: failed to release account slot for %d (req=%s): %v", accountID, requestID, err)
+				}
+			},
+		}, nil
+	}
+	return &AcquireOrQueueResult{
+		QueueAllowed: enqueued,
+		WaitCounted:  enqueued,
+	}, nil
+}
+
+func (s *ConcurrencyService) acquireAccountSlotOrQueueFallback(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string, combinedErr error) (*AcquireOrQueueResult, error) {
+	logger.LegacyPrintf("service.concurrency", "Warning: acquire-or-queue account script failed for %d: %v", accountID, combinedErr)
+
+	acquired, err := s.cache.AcquireAccountSlot(ctx, accountID, maxConcurrency, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if acquired {
+		return &AcquireOrQueueResult{
+			Acquired:     true,
+			QueueAllowed: true,
+			ReleaseFunc: func() {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := s.cache.ReleaseAccountSlot(bgCtx, accountID, requestID); err != nil {
+					logger.LegacyPrintf("service.concurrency", "Warning: failed to release account slot for %d (req=%s): %v", accountID, requestID, err)
+				}
+			},
+		}, nil
+	}
+
+	enqueued, err := s.cache.IncrementAccountWaitCount(ctx, accountID, maxWait)
+	if err != nil {
+		logger.LegacyPrintf("service.concurrency", "Warning: increment wait count fallback failed for account %d: %v", accountID, err)
+		return &AcquireOrQueueResult{QueueAllowed: true}, nil
+	}
+	return &AcquireOrQueueResult{
+		QueueAllowed: enqueued,
+		WaitCounted:  enqueued,
 	}, nil
 }
 
@@ -229,7 +380,40 @@ func (s *ConcurrencyService) GetAccountsLoadBatch(ctx context.Context, accounts 
 	if s.cache == nil {
 		return map[int64]*AccountLoadInfo{}, nil
 	}
-	return s.cache.GetAccountsLoadBatch(ctx, accounts)
+	if len(accounts) == 0 {
+		return map[int64]*AccountLoadInfo{}, nil
+	}
+
+	requestCache := requestAccountLoadCacheFromContext(ctx)
+	now := time.Now()
+	if requestCache == nil {
+		return s.cache.GetAccountsLoadBatch(ctx, accounts)
+	}
+
+	cachedLoadMap, missing := requestCache.get(accounts, now)
+	if len(missing) == 0 {
+		return cachedLoadMap, nil
+	}
+
+	freshLoadMap, err := s.cache.GetAccountsLoadBatch(ctx, missing)
+	if err != nil {
+		return nil, err
+	}
+	requestCache.store(freshLoadMap, now)
+
+	result := make(map[int64]*AccountLoadInfo, len(accounts))
+	for accountID, info := range cachedLoadMap {
+		result[accountID] = info
+	}
+	for _, account := range missing {
+		if info, ok := freshLoadMap[account.ID]; ok && info != nil {
+			result[account.ID] = buildAccountLoadInfo(account, info.CurrentConcurrency, info.WaitingCount)
+			continue
+		}
+		result[account.ID] = &AccountLoadInfo{AccountID: account.ID}
+	}
+
+	return result, nil
 }
 
 // GetUsersLoadBatch returns load info for multiple users.

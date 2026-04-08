@@ -12,7 +12,6 @@ import (
 
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
-	"github.com/tidwall/gjson"
 )
 
 const (
@@ -462,11 +461,30 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	currentPayload := ingressSession.firstPayload.payloadRaw
 	currentOriginalModel := ingressSession.firstPayload.originalModel
 	currentPayloadBytes := ingressSession.firstPayload.payloadBytes
-	isStrictAffinityTurn := func(payload []byte) bool {
-		if !storeDisabled {
-			return false
+	currentPayloadMeta := ingressSession.firstPayload.payloadMeta
+	currentPayloadComparable := []byte(nil)
+	var currentPayloadComparableErr error
+	updateCurrentPayload := func(nextPayload []byte, nextPayloadBytes int, nextStoreDisabled bool) {
+		currentPayload = nextPayload
+		if nextPayloadBytes >= 0 {
+			currentPayloadBytes = nextPayloadBytes
+		} else {
+			currentPayloadBytes = len(nextPayload)
 		}
-		return strings.TrimSpace(openAIWSPayloadStringFromRaw(payload, "previous_response_id")) != ""
+		storeDisabled = nextStoreDisabled
+		currentPayloadMeta = s.buildOpenAIWSIngressPayloadMeta(currentPayload, account, storeDisabled)
+		currentPayloadComparable = nil
+		currentPayloadComparableErr = nil
+	}
+	ensureCurrentPayloadComparable := func() ([]byte, error) {
+		if !storeDisabled {
+			return nil, nil
+		}
+		if currentPayloadComparable != nil || currentPayloadComparableErr != nil {
+			return currentPayloadComparable, currentPayloadComparableErr
+		}
+		currentPayloadComparable, currentPayloadComparableErr = normalizeOpenAIWSPayloadWithoutInputAndPreviousResponseID(currentPayload)
+		return currentPayloadComparable, currentPayloadComparableErr
 	}
 	var sessionLease *openAIWSConnLease
 	sessionConnID := ""
@@ -549,7 +567,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if turnPrevRecoveryTried || !s.openAIWSIngressPreviousResponseRecoveryEnabled() {
 			return false
 		}
-		if isStrictAffinityTurn(currentPayload) {
+		if currentPayloadMeta.strictAffinityTurn {
 			// Layer 2：严格亲和链路命中 previous_response_not_found 时，降级为“去掉 previous_response_id 后重放一次”。
 			// 该错误说明续链锚点已失效，继续 strict fail-close 只会直接中断本轮请求。
 			logOpenAIWSModeInfo(
@@ -561,33 +579,18 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 		}
 		turnPrevRecoveryTried = true
-		updatedPayload, removed, dropErr := dropPreviousResponseIDFromRawPayload(currentPayload)
-		if dropErr != nil || !removed {
-			reason := "not_removed"
-			if dropErr != nil {
-				reason = "drop_error"
-			}
+		updatedPayload, rewriteErr := rewriteOpenAIWSPayload(currentPayload, openAIWSPayloadRewriteOptions{
+			dropPreviousResponseID: true,
+			setInput:               currentTurnReplayInputExists,
+			input:                  currentTurnReplayInput,
+		})
+		if rewriteErr != nil {
 			logOpenAIWSModeInfo(
-				"ingress_ws_prev_response_recovery_skip account_id=%d turn=%d conn_id=%s reason=%s",
+				"ingress_ws_prev_response_recovery_skip account_id=%d turn=%d conn_id=%s reason=set_full_create_error cause=%s",
 				account.ID,
 				turn,
 				truncateOpenAIWSLogValue(connID, openAIWSIDValueMaxLen),
-				normalizeOpenAIWSLogValue(reason),
-			)
-			return false
-		}
-		updatedWithInput, setInputErr := setOpenAIWSPayloadInputSequence(
-			updatedPayload,
-			currentTurnReplayInput,
-			currentTurnReplayInputExists,
-		)
-		if setInputErr != nil {
-			logOpenAIWSModeInfo(
-				"ingress_ws_prev_response_recovery_skip account_id=%d turn=%d conn_id=%s reason=set_full_input_error cause=%s",
-				account.ID,
-				turn,
-				truncateOpenAIWSLogValue(connID, openAIWSIDValueMaxLen),
-				truncateOpenAIWSLogValue(setInputErr.Error(), openAIWSLogValueMaxLen),
+				truncateOpenAIWSLogValue(rewriteErr.Error(), openAIWSLogValueMaxLen),
 			)
 			return false
 		}
@@ -597,8 +600,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			turn,
 			truncateOpenAIWSLogValue(connID, openAIWSIDValueMaxLen),
 		)
-		currentPayload = updatedWithInput
-		currentPayloadBytes = len(updatedWithInput)
+		updateCurrentPayload(updatedPayload, -1, storeDisabled)
 		resetSessionLease(true)
 		skipBeforeTurn = true
 		return true
@@ -607,7 +609,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if !isOpenAIWSIngressTurnRetryable(relayErr) || turnRetry >= 1 {
 			return false
 		}
-		if isStrictAffinityTurn(currentPayload) {
+		if currentPayloadMeta.strictAffinityTurn {
 			logOpenAIWSModeInfo(
 				"ingress_ws_turn_retry_skip account_id=%d turn=%d conn_id=%s reason=strict_affinity",
 				account.ID,
@@ -636,9 +638,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 		}
 		skipBeforeTurn = false
-		currentPreviousResponseID := openAIWSPayloadStringFromRaw(currentPayload, "previous_response_id")
+		currentPreviousResponseID := currentPayloadMeta.previousResponseID
 		expectedPrev := strings.TrimSpace(lastTurnResponseID)
-		hasFunctionCallOutput := gjson.GetBytes(currentPayload, `input.#(type=="function_call_output")`).Exists()
+		hasFunctionCallOutput := currentPayloadMeta.hasFunctionCallOutput
 		// store=false + function_call_output 场景必须有续链锚点。
 		// 若客户端未传 previous_response_id，优先回填上一轮响应 ID，避免上游报 call_id 无法关联。
 		if shouldInferIngressFunctionCallOutputPreviousResponseID(
@@ -659,8 +661,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					truncateOpenAIWSLogValue(expectedPrev, openAIWSIDValueMaxLen),
 				)
 			} else {
-				currentPayload = updatedPayload
-				currentPayloadBytes = len(updatedPayload)
+				updateCurrentPayload(updatedPayload, -1, storeDisabled)
 				currentPreviousResponseID = expectedPrev
 				logOpenAIWSModeInfo(
 					"ingress_ws_function_call_output_prev_infer account_id=%d turn=%d conn_id=%s action=set_previous_response_id previous_response_id=%s",
@@ -696,9 +697,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			strictReason := ""
 			var strictErr error
 			if lastTurnStrictState != nil {
+				currentComparable, currentComparableErr := ensureCurrentPayloadComparable()
 				shouldKeepPreviousResponseID, strictReason, strictErr = shouldKeepIngressPreviousResponseIDWithStrictState(
 					lastTurnStrictState,
 					currentPayload,
+					currentComparable,
+					currentComparableErr,
 					lastTurnResponseID,
 					hasFunctionCallOutput,
 				)
@@ -723,60 +727,41 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					hasFunctionCallOutput,
 				)
 			} else if !shouldKeepPreviousResponseID {
-				updatedPayload, removed, dropErr := dropPreviousResponseIDFromRawPayload(currentPayload)
-				if dropErr != nil || !removed {
-					dropReason := "not_removed"
-					if dropErr != nil {
-						dropReason = "drop_error"
-					}
+				updatedPayload, rewriteErr := rewriteOpenAIWSPayload(currentPayload, openAIWSPayloadRewriteOptions{
+					dropPreviousResponseID: true,
+					setInput:               currentTurnReplayInputExists,
+					input:                  currentTurnReplayInput,
+				})
+				if rewriteErr != nil {
 					logOpenAIWSModeInfo(
-						"ingress_ws_prev_response_strict_eval account_id=%d turn=%d conn_id=%s action=keep_previous_response_id reason=%s drop_reason=%s previous_response_id=%s expected_previous_response_id=%s has_function_call_output=%v",
+						"ingress_ws_prev_response_strict_eval account_id=%d turn=%d conn_id=%s action=keep_previous_response_id reason=%s drop_reason=set_full_create_error previous_response_id=%s expected_previous_response_id=%s cause=%s has_function_call_output=%v",
 						account.ID,
 						turn,
 						truncateOpenAIWSLogValue(sessionConnID, openAIWSIDValueMaxLen),
 						normalizeOpenAIWSLogValue(strictReason),
-						normalizeOpenAIWSLogValue(dropReason),
+						truncateOpenAIWSLogValue(currentPreviousResponseID, openAIWSIDValueMaxLen),
+						truncateOpenAIWSLogValue(expectedPrev, openAIWSIDValueMaxLen),
+						truncateOpenAIWSLogValue(rewriteErr.Error(), openAIWSLogValueMaxLen),
+						hasFunctionCallOutput,
+					)
+				} else {
+					updateCurrentPayload(updatedPayload, -1, storeDisabled)
+					currentPreviousResponseID = currentPayloadMeta.previousResponseID
+					logOpenAIWSModeInfo(
+						"ingress_ws_prev_response_strict_eval account_id=%d turn=%d conn_id=%s action=drop_previous_response_id_full_create reason=%s previous_response_id=%s expected_previous_response_id=%s has_function_call_output=%v",
+						account.ID,
+						turn,
+						truncateOpenAIWSLogValue(sessionConnID, openAIWSIDValueMaxLen),
+						normalizeOpenAIWSLogValue(strictReason),
 						truncateOpenAIWSLogValue(currentPreviousResponseID, openAIWSIDValueMaxLen),
 						truncateOpenAIWSLogValue(expectedPrev, openAIWSIDValueMaxLen),
 						hasFunctionCallOutput,
 					)
-				} else {
-					updatedWithInput, setInputErr := setOpenAIWSPayloadInputSequence(
-						updatedPayload,
-						currentTurnReplayInput,
-						currentTurnReplayInputExists,
-					)
-					if setInputErr != nil {
-						logOpenAIWSModeInfo(
-							"ingress_ws_prev_response_strict_eval account_id=%d turn=%d conn_id=%s action=keep_previous_response_id reason=%s drop_reason=set_full_input_error previous_response_id=%s expected_previous_response_id=%s cause=%s has_function_call_output=%v",
-							account.ID,
-							turn,
-							truncateOpenAIWSLogValue(sessionConnID, openAIWSIDValueMaxLen),
-							normalizeOpenAIWSLogValue(strictReason),
-							truncateOpenAIWSLogValue(currentPreviousResponseID, openAIWSIDValueMaxLen),
-							truncateOpenAIWSLogValue(expectedPrev, openAIWSIDValueMaxLen),
-							truncateOpenAIWSLogValue(setInputErr.Error(), openAIWSLogValueMaxLen),
-							hasFunctionCallOutput,
-						)
-					} else {
-						currentPayload = updatedWithInput
-						currentPayloadBytes = len(updatedWithInput)
-						logOpenAIWSModeInfo(
-							"ingress_ws_prev_response_strict_eval account_id=%d turn=%d conn_id=%s action=drop_previous_response_id_full_create reason=%s previous_response_id=%s expected_previous_response_id=%s has_function_call_output=%v",
-							account.ID,
-							turn,
-							truncateOpenAIWSLogValue(sessionConnID, openAIWSIDValueMaxLen),
-							normalizeOpenAIWSLogValue(strictReason),
-							truncateOpenAIWSLogValue(currentPreviousResponseID, openAIWSIDValueMaxLen),
-							truncateOpenAIWSLogValue(expectedPrev, openAIWSIDValueMaxLen),
-							hasFunctionCallOutput,
-						)
-						currentPreviousResponseID = ""
-					}
+					currentPreviousResponseID = ""
 				}
 			}
 		}
-		forcePreferredConn := isStrictAffinityTurn(currentPayload)
+		forcePreferredConn := currentPayloadMeta.strictAffinityTurn
 		if sessionLease == nil {
 			acquiredLease, acquireErr := s.acquireOpenAIWSIngressTurnLease(ctx, ingressSession, turn, preferredConnID, forcePreferredConn)
 			if acquireErr != nil {
@@ -807,50 +792,33 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				)
 				if forcePreferredConn {
 					if !turnPrevRecoveryTried && currentPreviousResponseID != "" {
-						updatedPayload, removed, dropErr := dropPreviousResponseIDFromRawPayload(currentPayload)
-						if dropErr != nil || !removed {
-							reason := "not_removed"
-							if dropErr != nil {
-								reason = "drop_error"
-							}
+						updatedPayload, rewriteErr := rewriteOpenAIWSPayload(currentPayload, openAIWSPayloadRewriteOptions{
+							dropPreviousResponseID: true,
+							setInput:               currentTurnReplayInputExists,
+							input:                  currentTurnReplayInput,
+						})
+						if rewriteErr != nil {
 							logOpenAIWSModeInfo(
-								"ingress_ws_preflight_ping_recovery_skip account_id=%d turn=%d conn_id=%s reason=%s previous_response_id=%s",
+								"ingress_ws_preflight_ping_recovery_skip account_id=%d turn=%d conn_id=%s reason=set_full_create_error previous_response_id=%s cause=%s",
 								account.ID,
 								turn,
 								truncateOpenAIWSLogValue(sessionConnID, openAIWSIDValueMaxLen),
-								normalizeOpenAIWSLogValue(reason),
 								truncateOpenAIWSLogValue(currentPreviousResponseID, openAIWSIDValueMaxLen),
+								truncateOpenAIWSLogValue(rewriteErr.Error(), openAIWSLogValueMaxLen),
 							)
 						} else {
-							updatedWithInput, setInputErr := setOpenAIWSPayloadInputSequence(
-								updatedPayload,
-								currentTurnReplayInput,
-								currentTurnReplayInputExists,
+							logOpenAIWSModeInfo(
+								"ingress_ws_preflight_ping_recovery account_id=%d turn=%d conn_id=%s action=drop_previous_response_id_retry previous_response_id=%s",
+								account.ID,
+								turn,
+								truncateOpenAIWSLogValue(sessionConnID, openAIWSIDValueMaxLen),
+								truncateOpenAIWSLogValue(currentPreviousResponseID, openAIWSIDValueMaxLen),
 							)
-							if setInputErr != nil {
-								logOpenAIWSModeInfo(
-									"ingress_ws_preflight_ping_recovery_skip account_id=%d turn=%d conn_id=%s reason=set_full_input_error previous_response_id=%s cause=%s",
-									account.ID,
-									turn,
-									truncateOpenAIWSLogValue(sessionConnID, openAIWSIDValueMaxLen),
-									truncateOpenAIWSLogValue(currentPreviousResponseID, openAIWSIDValueMaxLen),
-									truncateOpenAIWSLogValue(setInputErr.Error(), openAIWSLogValueMaxLen),
-								)
-							} else {
-								logOpenAIWSModeInfo(
-									"ingress_ws_preflight_ping_recovery account_id=%d turn=%d conn_id=%s action=drop_previous_response_id_retry previous_response_id=%s",
-									account.ID,
-									turn,
-									truncateOpenAIWSLogValue(sessionConnID, openAIWSIDValueMaxLen),
-									truncateOpenAIWSLogValue(currentPreviousResponseID, openAIWSIDValueMaxLen),
-								)
-								turnPrevRecoveryTried = true
-								currentPayload = updatedWithInput
-								currentPayloadBytes = len(updatedWithInput)
-								resetSessionLease(true)
-								skipBeforeTurn = true
-								continue
-							}
+							turnPrevRecoveryTried = true
+							updateCurrentPayload(updatedPayload, -1, storeDisabled)
+							resetSessionLease(true)
+							skipBeforeTurn = true
+							continue
 						}
 					}
 					resetSessionLease(true)
@@ -891,12 +859,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				openAIWSHeaderValueForLog(ingressSession.baseAcquireReq.Headers, "conversation_id"),
 				ingressSession.turnState != "",
 				len(ingressSession.turnState),
-				openAIWSPayloadStringFromRaw(currentPayload, "prompt_cache_key") != "",
+				currentPayloadMeta.hasPromptCacheKey,
 				storeDisabled,
 			)
 		}
 
-		result, relayErr := s.relayOpenAIWSIngressTurn(ctx, clientConn, account, sessionLease, turn, currentPayload, currentPayloadBytes, currentOriginalModel, debugEnabled)
+		result, relayErr := s.relayOpenAIWSIngressTurn(ctx, clientConn, account, sessionLease, turn, currentPayload, currentPayloadBytes, currentPayloadMeta, currentOriginalModel, debugEnabled)
 		if relayErr != nil {
 			lastTurnClean = false
 			if recoverIngressPrevResponseNotFound(relayErr, turn, connID) {
@@ -928,9 +896,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		responseID := strings.TrimSpace(result.RequestID)
 		lastTurnResponseID = responseID
 		lastTurnPayload = cloneOpenAIWSPayloadBytes(currentPayload)
-		lastTurnReplayInput = cloneOpenAIWSRawMessages(currentTurnReplayInput)
+		lastTurnReplayInput = currentTurnReplayInput
 		lastTurnReplayInputExists = currentTurnReplayInputExists
-		nextStrictState, strictStateErr := buildOpenAIWSIngressPreviousTurnStrictState(currentPayload)
+		currentComparable, currentComparableErr := ensureCurrentPayloadComparable()
+		nextStrictState, strictStateErr := buildOpenAIWSIngressPreviousTurnStrictStateFromComparable(currentComparable, currentComparableErr)
 		if strictStateErr != nil {
 			lastTurnStrictState = nil
 			logOpenAIWSModeInfo(
@@ -976,6 +945,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if parseErr != nil {
 			return parseErr
 		}
+		nextPayload = s.prepareOpenAIWSClientPayload(account, nextPayload)
 		if nextPayload.promptCacheKey != "" {
 			// ingress 会话在整个客户端 WS 生命周期内复用同一上游连接；
 			// prompt_cache_key 对握手头的更新仅在未来需要重新建连时生效。
@@ -1016,10 +986,13 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				}
 			}
 		}
-		currentPayload = nextPayload.payloadRaw
 		currentOriginalModel = nextPayload.originalModel
+		currentPayload = nextPayload.payloadRaw
 		currentPayloadBytes = nextPayload.payloadBytes
-		storeDisabled = s.isOpenAIWSStoreDisabledInRequestRaw(currentPayload, account)
+		storeDisabled = nextPayload.storeDisabled
+		currentPayloadMeta = nextPayload.payloadMeta
+		currentPayloadComparable = nil
+		currentPayloadComparableErr = nil
 		if !storeDisabled {
 			unpinSessionConn(sessionConnID)
 		}

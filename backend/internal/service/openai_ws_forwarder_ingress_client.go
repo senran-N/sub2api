@@ -20,6 +20,8 @@ type openAIWSClientPayload struct {
 	previousResponseID string
 	originalModel      string
 	payloadBytes       int
+	storeDisabled      bool
+	payloadMeta        openAIWSIngressPayloadMeta
 }
 
 func applyOpenAIWSIngressPayloadMutation(current []byte, path string, value any) ([]byte, error) {
@@ -128,4 +130,16 @@ func parseOpenAIWSIngressClientPayload(c *gin.Context, account *Account, raw []b
 		originalModel:      originalModel,
 		payloadBytes:       len(normalized),
 	}, nil
+}
+
+func (s *OpenAIGatewayService) prepareOpenAIWSClientPayload(
+	account *Account,
+	payload openAIWSClientPayload,
+) openAIWSClientPayload {
+	if s == nil || len(payload.payloadRaw) == 0 {
+		return payload
+	}
+	payload.storeDisabled = s.isOpenAIWSStoreDisabledInRequestRaw(payload.payloadRaw, account)
+	payload.payloadMeta = s.buildOpenAIWSIngressPayloadMeta(payload.payloadRaw, account, payload.storeDisabled)
+	return payload
 }

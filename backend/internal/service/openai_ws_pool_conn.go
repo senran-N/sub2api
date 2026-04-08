@@ -424,33 +424,47 @@ func (c *openAIWSConn) lastUsedAt() time.Time {
 	if c == nil {
 		return time.Time{}
 	}
-	nano := c.lastUsedNano.Load()
+	nano := c.lastUsedUnixNano()
 	if nano <= 0 {
 		return time.Time{}
 	}
 	return time.Unix(0, nano)
 }
 
+func (c *openAIWSConn) lastUsedUnixNano() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.lastUsedNano.Load()
+}
+
+func (c *openAIWSConn) createdAtUnixNano() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.createdAtNano.Load()
+}
+
 func (c *openAIWSConn) idleDuration(now time.Time) time.Duration {
 	if c == nil {
 		return 0
 	}
-	lastUsedAt := c.lastUsedAt()
-	if lastUsedAt.IsZero() {
+	lastUsedNano := c.lastUsedUnixNano()
+	if lastUsedNano <= 0 {
 		return 0
 	}
-	return now.Sub(lastUsedAt)
+	return now.Sub(time.Unix(0, lastUsedNano))
 }
 
 func (c *openAIWSConn) age(now time.Time) time.Duration {
 	if c == nil {
 		return 0
 	}
-	createdAt := c.createdAt()
-	if createdAt.IsZero() {
+	createdAtNano := c.createdAtUnixNano()
+	if createdAtNano <= 0 {
 		return 0
 	}
-	return now.Sub(createdAt)
+	return now.Sub(time.Unix(0, createdAtNano))
 }
 
 func (c *openAIWSConn) isLeased() bool {

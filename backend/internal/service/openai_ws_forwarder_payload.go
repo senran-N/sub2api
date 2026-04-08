@@ -10,6 +10,70 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+type openAIWSIngressPayloadMeta struct {
+	previousResponseID     string
+	previousResponseIDKind string
+	promptCacheKey         string
+	stream                 bool
+	storeDisabled          bool
+	hasFunctionCallOutput  bool
+	hasPromptCacheKey      bool
+	strictAffinityTurn     bool
+}
+
+var (
+	openAIWSIngressPayloadPreviousResponseIDKey = []byte(`"previous_response_id"`)
+	openAIWSIngressPayloadPromptCacheKeyKey     = []byte(`"prompt_cache_key"`)
+	openAIWSIngressPayloadStreamKey             = []byte(`"stream"`)
+	openAIWSIngressPayloadStoreKey              = []byte(`"store"`)
+	openAIWSIngressPayloadFunctionCallOutput    = []byte(`function_call_output`)
+)
+
+func (s *OpenAIGatewayService) buildOpenAIWSIngressPayloadMeta(
+	payload []byte,
+	account *Account,
+	storeDisabledDefault bool,
+) openAIWSIngressPayloadMeta {
+	meta := openAIWSIngressPayloadMeta{
+		previousResponseIDKind: OpenAIPreviousResponseIDKindEmpty,
+		stream:                 true,
+		storeDisabled:          storeDisabledDefault,
+	}
+	if len(payload) == 0 {
+		return meta
+	}
+
+	if bytes.Contains(payload, openAIWSIngressPayloadPreviousResponseIDKey) {
+		meta.previousResponseID = strings.TrimSpace(gjson.GetBytes(payload, "previous_response_id").String())
+		if meta.previousResponseID != "" {
+			meta.previousResponseIDKind = ClassifyOpenAIPreviousResponseIDKind(meta.previousResponseID)
+		}
+	}
+	if bytes.Contains(payload, openAIWSIngressPayloadPromptCacheKeyKey) {
+		meta.promptCacheKey = strings.TrimSpace(gjson.GetBytes(payload, "prompt_cache_key").String())
+		meta.hasPromptCacheKey = meta.promptCacheKey != ""
+	}
+	if bytes.Contains(payload, openAIWSIngressPayloadStreamKey) {
+		streamValue := gjson.GetBytes(payload, "stream")
+		if streamValue.Exists() && (streamValue.Type == gjson.True || streamValue.Type == gjson.False) {
+			meta.stream = streamValue.Bool()
+		}
+	}
+	if bytes.Contains(payload, openAIWSIngressPayloadFunctionCallOutput) {
+		meta.hasFunctionCallOutput = gjson.GetBytes(payload, `input.#(type=="function_call_output")`).Exists()
+	}
+
+	if !(account != nil && account.Type == AccountTypeOAuth && !s.isOpenAIWSStoreRecoveryAllowed(account)) &&
+		bytes.Contains(payload, openAIWSIngressPayloadStoreKey) {
+		storeValue := gjson.GetBytes(payload, "store")
+		if storeValue.Exists() && (storeValue.Type == gjson.True || storeValue.Type == gjson.False) {
+			meta.storeDisabled = !storeValue.Bool()
+		}
+	}
+	meta.strictAffinityTurn = meta.storeDisabled && meta.previousResponseID != ""
+	return meta
+}
+
 func openAIWSEventMayContainModel(eventType string) bool {
 	switch eventType {
 	case "response.created",

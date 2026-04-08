@@ -110,3 +110,25 @@ func TestCoderOpenAIWSClientDialer_ProxyTransportTLSHandshakeTimeout(t *testing.
 	require.NotNil(t, transport)
 	require.Equal(t, 10*time.Second, transport.TLSHandshakeTimeout)
 }
+
+func BenchmarkCoderOpenAIWSClientDialer_ProxyHTTPClientCacheHit(b *testing.B) {
+	dialer := newDefaultOpenAIWSClientDialer()
+	impl, ok := dialer.(*coderOpenAIWSClientDialer)
+	require.True(b, ok)
+
+	_, err := impl.proxyHTTPClient("http://127.0.0.1:48080")
+	require.NoError(b, err)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		client, err := impl.proxyHTTPClient("http://127.0.0.1:48080")
+		if err != nil {
+			b.Fatal(err)
+		}
+		if client == nil {
+			b.Fatal("expected cached client")
+		}
+	}
+}

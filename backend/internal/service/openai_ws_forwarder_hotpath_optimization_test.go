@@ -71,3 +71,22 @@ func TestReplaceOpenAIWSMessageModel_OptimizedStillCorrect(t *testing.T) {
 	both := []byte(`{"model":"gpt-5.1","response":{"model":"gpt-5.1"}}`)
 	require.Equal(t, `{"model":"custom-model","response":{"model":"custom-model"}}`, string(replaceOpenAIWSMessageModel(both, "gpt-5.1", "custom-model")))
 }
+
+func TestBuildOpenAIWSIngressPayloadMeta(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	account := &Account{Type: AccountTypeAPIKey}
+	meta := svc.buildOpenAIWSIngressPayloadMeta(
+		[]byte(`{"stream":false,"previous_response_id":"resp_123","prompt_cache_key":"pc_1","input":[{"type":"function_call_output"}],"store":false}`),
+		account,
+		false,
+	)
+
+	require.False(t, meta.stream)
+	require.Equal(t, "resp_123", meta.previousResponseID)
+	require.Equal(t, OpenAIPreviousResponseIDKindResponseID, meta.previousResponseIDKind)
+	require.Equal(t, "pc_1", meta.promptCacheKey)
+	require.True(t, meta.hasPromptCacheKey)
+	require.True(t, meta.hasFunctionCallOutput)
+	require.True(t, meta.storeDisabled)
+	require.True(t, meta.strictAffinityTurn)
+}

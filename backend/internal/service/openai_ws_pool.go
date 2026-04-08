@@ -38,16 +38,17 @@ type openAIWSAcquireRequest struct {
 }
 
 type openAIWSAccountPool struct {
-	mu            sync.Mutex
-	conns         map[string]*openAIWSConn
-	pinnedConns   map[string]int
-	creating      int
-	lastCleanupAt time.Time
-	lastAcquire   *openAIWSAcquireRequest
-	prewarmActive bool
-	prewarmUntil  time.Time
-	prewarmFails  int
-	prewarmFailAt time.Time
+	mu             sync.Mutex
+	conns          map[string]*openAIWSConn
+	pinnedConns    map[string]int
+	creating       int
+	lastCleanupAt  time.Time
+	lastAcquire    openAIWSAcquireRequest
+	hasLastAcquire bool
+	prewarmActive  bool
+	prewarmUntil   time.Time
+	prewarmFails   int
+	prewarmFailAt  time.Time
 }
 
 type OpenAIWSPoolMetricsSnapshot struct {
@@ -137,7 +138,7 @@ func (p *openAIWSConnPool) Acquire(ctx context.Context, req openAIWSAcquireReque
 	if p != nil {
 		p.metrics.acquireTotal.Add(1)
 	}
-	return p.acquire(ctx, cloneOpenAIWSAcquireRequest(req), 0)
+	return p.acquire(ctx, normalizeOpenAIWSAcquireRequest(req), 0)
 }
 
 func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireRequest, retry int) (*openAIWSConnLease, error) {
@@ -156,7 +157,8 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 	var evicted []*openAIWSConn
 	ap := p.getOrCreateAccountPool(accountID)
 	ap.mu.Lock()
-	ap.lastAcquire = cloneOpenAIWSAcquireRequestPtr(&req)
+	ap.lastAcquire = cloneOpenAIWSAcquireRequest(req)
+	ap.hasLastAcquire = true
 	now := time.Now()
 	if ap.lastCleanupAt.IsZero() || now.Sub(ap.lastCleanupAt) >= openAIWSAcquireCleanupInterval {
 		evicted = p.cleanupAccountLocked(ap, now, effectiveMaxConns)
@@ -429,12 +431,15 @@ func (p *openAIWSConnPool) pickOldestIdleConnLocked(ap *openAIWSAccountPool) *op
 		return nil
 	}
 	var oldest *openAIWSConn
+	var oldestLastUsedNano int64
 	for _, conn := range ap.conns {
 		if conn == nil || conn.isLeased() || conn.waiters.Load() > 0 || p.isConnPinnedLocked(ap, conn.id) {
 			continue
 		}
-		if oldest == nil || conn.lastUsedAt().Before(oldest.lastUsedAt()) {
+		lastUsedNano := conn.lastUsedUnixNano()
+		if oldest == nil || lastUsedNano < oldestLastUsedNano {
 			oldest = conn
+			oldestLastUsedNano = lastUsedNano
 		}
 	}
 	return oldest
@@ -496,19 +501,19 @@ func (p *openAIWSConnPool) pickLeastBusyConnLocked(ap *openAIWSAccountPool, pref
 	}
 	var best *openAIWSConn
 	var bestWaiters int32
-	var bestLastUsed time.Time
+	var bestLastUsedNano int64
 	for _, conn := range ap.conns {
 		if conn == nil {
 			continue
 		}
 		waiters := conn.waiters.Load()
-		lastUsed := conn.lastUsedAt()
+		lastUsedNano := conn.lastUsedUnixNano()
 		if best == nil ||
 			waiters < bestWaiters ||
-			(waiters == bestWaiters && lastUsed.Before(bestLastUsed)) {
+			(waiters == bestWaiters && lastUsedNano < bestLastUsedNano) {
 			best = conn
 			bestWaiters = waiters
-			bestLastUsed = lastUsed
+			bestLastUsedNano = lastUsedNano
 		}
 	}
 	return best
@@ -558,7 +563,7 @@ func (p *openAIWSConnPool) ensureTargetIdleAsync(accountID int64) {
 	}
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
-	if ap.lastAcquire == nil {
+	if !ap.hasLastAcquire {
 		return
 	}
 	if ap.prewarmActive {
@@ -572,7 +577,7 @@ func (p *openAIWSConnPool) ensureTargetIdleAsync(accountID int64) {
 		return
 	}
 	effectiveMaxConns := p.maxConnsHardCap()
-	if ap.lastAcquire != nil && ap.lastAcquire.Account != nil {
+	if ap.lastAcquire.Account != nil {
 		effectiveMaxConns = p.effectiveMaxConnsByAccount(ap.lastAcquire.Account)
 	}
 	target := p.targetConnCountLocked(ap, effectiveMaxConns)
@@ -584,7 +589,7 @@ func (p *openAIWSConnPool) ensureTargetIdleAsync(accountID int64) {
 	if need <= 0 {
 		return
 	}
-	req = cloneOpenAIWSAcquireRequest(*ap.lastAcquire)
+	req = cloneOpenAIWSAcquireRequest(ap.lastAcquire)
 	ap.prewarmActive = true
 	if cooldown := p.prewarmCooldown(); cooldown > 0 {
 		ap.prewarmUntil = now.Add(cooldown)

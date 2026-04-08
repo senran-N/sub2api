@@ -69,6 +69,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 	if err != nil {
 		return nil, err
 	}
+	firstPayload = s.prepareOpenAIWSClientPayload(account, firstPayload)
 
 	turnState := strings.TrimSpace(c.GetHeader(openAIWSTurnStateHeader))
 	stateStore := s.getOpenAIWSStateStore()
@@ -87,7 +88,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 		}
 	}
 
-	storeDisabled := s.isOpenAIWSStoreDisabledInRequestRaw(firstPayload.payloadRaw, account)
+	storeDisabled := firstPayload.storeDisabled
 	storeDisabledConnMode := s.openAIWSStoreDisabledConnMode()
 	if stateStore != nil && storeDisabled && firstPayload.previousResponseID == "" && sessionHash != "" {
 		if connID, ok := stateStore.GetSessionConn(groupID, sessionHash); ok {
@@ -217,7 +218,7 @@ func (s *OpenAIGatewayService) acquireOpenAIWSIngressTurnLease(
 		acquireTimeout = 30 * time.Second
 	}
 
-	req := cloneOpenAIWSAcquireRequest(session.baseAcquireReq)
+	req := normalizeOpenAIWSAcquireRequest(session.baseAcquireReq)
 	req.PreferredConnID = strings.TrimSpace(preferredConnID)
 	req.ForcePreferredConn = forcePreferredConn
 	req.ForceNewConn = session.dedicatedMode

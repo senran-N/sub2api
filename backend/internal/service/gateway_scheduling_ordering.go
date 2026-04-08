@@ -177,7 +177,7 @@ func sortAccountsByPriorityAndLastUsed(accounts []*Account, preferOAuth bool) {
 
 // shuffleWithinSortGroups 对排序后的 accountWithLoad 切片，按 (Priority, LoadRate, LastUsedAt) 分组后组内随机打乱。
 // 防止并发请求读取同一快照时，确定性排序导致所有请求命中相同账号。
-func shuffleWithinSortGroups(accounts []accountWithLoad) {
+func shuffleWithinSortGroups(accounts []accountWithLoad, preferOAuth bool) {
 	if len(accounts) <= 1 {
 		return
 	}
@@ -188,15 +188,35 @@ func shuffleWithinSortGroups(accounts []accountWithLoad) {
 			j++
 		}
 		if j-i > 1 {
-			mathrand.Shuffle(j-i, func(a, b int) {
-				accounts[i+a], accounts[i+b] = accounts[i+b], accounts[i+a]
-			})
+			if preferOAuth {
+				oauth := make([]accountWithLoad, 0, j-i)
+				others := make([]accountWithLoad, 0, j-i)
+				for _, account := range accounts[i:j] {
+					if account.account.Type == AccountTypeOAuth {
+						oauth = append(oauth, account)
+						continue
+					}
+					others = append(others, account)
+				}
+				if len(oauth) > 1 {
+					mathrand.Shuffle(len(oauth), func(a, b int) { oauth[a], oauth[b] = oauth[b], oauth[a] })
+				}
+				if len(others) > 1 {
+					mathrand.Shuffle(len(others), func(a, b int) { others[a], others[b] = others[b], others[a] })
+				}
+				copy(accounts[i:], oauth)
+				copy(accounts[i+len(oauth):], others)
+			} else {
+				mathrand.Shuffle(j-i, func(a, b int) {
+					accounts[i+a], accounts[i+b] = accounts[i+b], accounts[i+a]
+				})
+			}
 		}
 		i = j
 	}
 }
 
-func sortAccountsByPriorityLoadAndLastUsed(accounts []accountWithLoad) {
+func sortAccountsByPriorityLoadAndLastUsed(accounts []accountWithLoad, preferOAuth bool) {
 	sort.SliceStable(accounts, func(i, j int) bool {
 		a, b := accounts[i], accounts[j]
 		if a.account.Priority != b.account.Priority {
@@ -211,12 +231,18 @@ func sortAccountsByPriorityLoadAndLastUsed(accounts []accountWithLoad) {
 		case a.account.LastUsedAt != nil && b.account.LastUsedAt == nil:
 			return false
 		case a.account.LastUsedAt == nil && b.account.LastUsedAt == nil:
+			if preferOAuth && a.account.Type != b.account.Type {
+				return a.account.Type == AccountTypeOAuth
+			}
 			return false
 		default:
+			if a.account.LastUsedAt.Equal(*b.account.LastUsedAt) && preferOAuth && a.account.Type != b.account.Type {
+				return a.account.Type == AccountTypeOAuth
+			}
 			return a.account.LastUsedAt.Before(*b.account.LastUsedAt)
 		}
 	})
-	shuffleWithinSortGroups(accounts)
+	shuffleWithinSortGroups(accounts, preferOAuth)
 }
 
 // sameAccountWithLoadGroup 判断两个 accountWithLoad 是否属于同一排序组

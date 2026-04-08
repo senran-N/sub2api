@@ -138,10 +138,11 @@ func TestOpenAIWSConnPool_EnsureTargetIdleAsync(t *testing.T) {
 	account := &Account{ID: accountID, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
 	ap := pool.getOrCreateAccountPool(accountID)
 	ap.mu.Lock()
-	ap.lastAcquire = &openAIWSAcquireRequest{
+	ap.lastAcquire = openAIWSAcquireRequest{
 		Account: account,
 		WSURL:   "wss://example.com/v1/responses",
 	}
+	ap.hasLastAcquire = true
 	ap.mu.Unlock()
 
 	pool.ensureTargetIdleAsync(accountID)
@@ -176,10 +177,11 @@ func TestOpenAIWSConnPool_EnsureTargetIdleAsyncCooldown(t *testing.T) {
 	account := &Account{ID: accountID, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
 	ap := pool.getOrCreateAccountPool(accountID)
 	ap.mu.Lock()
-	ap.lastAcquire = &openAIWSAcquireRequest{
+	ap.lastAcquire = openAIWSAcquireRequest{
 		Account: account,
 		WSURL:   "wss://example.com/v1/responses",
 	}
+	ap.hasLastAcquire = true
 	ap.mu.Unlock()
 
 	pool.ensureTargetIdleAsync(accountID)
@@ -233,10 +235,11 @@ func TestOpenAIWSConnPool_EnsureTargetIdleAsyncFailureSuppress(t *testing.T) {
 	account := &Account{ID: accountID, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
 	ap := pool.getOrCreateAccountPool(accountID)
 	ap.mu.Lock()
-	ap.lastAcquire = &openAIWSAcquireRequest{
+	ap.lastAcquire = openAIWSAcquireRequest{
 		Account: account,
 		WSURL:   "wss://example.com/v1/responses",
 	}
+	ap.hasLastAcquire = true
 	ap.mu.Unlock()
 
 	pool.ensureTargetIdleAsync(accountID)
@@ -283,10 +286,11 @@ func TestOpenAIWSConnPool_AcquireQueueWaitMetrics(t *testing.T) {
 	ap := pool.ensureAccountPoolLocked(accountID)
 	ap.mu.Lock()
 	ap.conns[conn.id] = conn
-	ap.lastAcquire = &openAIWSAcquireRequest{
+	ap.lastAcquire = openAIWSAcquireRequest{
 		Account: account,
 		WSURL:   "wss://example.com/v1/responses",
 	}
+	ap.hasLastAcquire = true
 	ap.mu.Unlock()
 
 	go func() {
@@ -805,7 +809,7 @@ func TestOpenAIWSConnPool_RunBackgroundCleanupSweep_SkipsInvalidAndUsesAccountCa
 	stale.createdAtNano.Store(time.Now().Add(-2 * time.Hour).UnixNano())
 	stale.lastUsedNano.Store(time.Now().Add(-2 * time.Hour).UnixNano())
 	ap.conns[stale.id] = stale
-	ap.lastAcquire = &openAIWSAcquireRequest{
+	ap.lastAcquire = openAIWSAcquireRequest{
 		Account: &Account{
 			ID:          accountID,
 			Platform:    PlatformOpenAI,
@@ -813,6 +817,7 @@ func TestOpenAIWSConnPool_RunBackgroundCleanupSweep_SkipsInvalidAndUsesAccountCa
 			Concurrency: 1,
 		},
 	}
+	ap.hasLastAcquire = true
 	pool.accounts.Store(accountID, ap)
 
 	now := time.Now()

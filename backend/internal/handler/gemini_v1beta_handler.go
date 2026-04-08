@@ -149,6 +149,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+	attachRequestAccountLoadCache(c)
 
 	// 检查平台：优先使用强制平台（/antigravity 路由，中间件已设置 request.Context），否则要求 gemini 分组
 	if !middleware.HasForcePlatform(c) {
@@ -198,18 +199,18 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	// 0) wait queue check
 	maxWait := service.CalculateMaxWait(authSubject.Concurrency)
-	canWait, err := geminiConcurrency.IncrementWaitCount(c.Request.Context(), authSubject.UserID, maxWait)
-	waitCounted := false
+	queueResult, err := geminiConcurrency.AcquireUserSlotOrQueue(c.Request.Context(), authSubject.UserID, authSubject.Concurrency, maxWait)
 	if err != nil {
-		reqLog.Warn("gemini.user_wait_counter_increment_failed", zap.Error(err))
-	} else if !canWait {
+		reqLog.Warn("gemini.user_slot_acquire_failed", zap.Error(err))
+		googleError(c, http.StatusTooManyRequests, err.Error())
+		return
+	}
+	if !queueResult.Acquired && !queueResult.QueueAllowed {
 		reqLog.Info("gemini.user_wait_queue_full", zap.Int("max_wait", maxWait))
 		googleError(c, http.StatusTooManyRequests, "Too many pending requests, please retry later")
 		return
 	}
-	if err == nil && canWait {
-		waitCounted = true
-	}
+	waitCounted := queueResult.WaitCounted
 	defer func() {
 		if waitCounted {
 			geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID)
@@ -221,11 +222,16 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	if h.errorPassthroughService != nil {
 		service.BindErrorPassthroughService(c, h.errorPassthroughService)
 	}
-	userReleaseFunc, err := geminiConcurrency.AcquireUserSlotWithWait(c, authSubject.UserID, authSubject.Concurrency, stream, &streamStarted)
-	if err != nil {
-		reqLog.Warn("gemini.user_slot_acquire_failed", zap.Error(err))
-		googleError(c, http.StatusTooManyRequests, err.Error())
-		return
+	var userReleaseFunc func()
+	if queueResult.Acquired {
+		userReleaseFunc = queueResult.ReleaseFunc
+	} else {
+		userReleaseFunc, err = geminiConcurrency.AcquireUserSlotAfterQueueing(c, authSubject.UserID, authSubject.Concurrency, stream, &streamStarted)
+		if err != nil {
+			reqLog.Warn("gemini.user_slot_acquire_failed_after_wait", zap.Error(err))
+			googleError(c, http.StatusTooManyRequests, err.Error())
+			return
+		}
 	}
 	if waitCounted {
 		geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID)
@@ -412,43 +418,51 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts")
 				return
 			}
-			accountWaitCounted := false
-			canWait, err := geminiConcurrency.IncrementAccountWaitCount(c.Request.Context(), account.ID, selection.WaitPlan.MaxWaiting)
-			if err != nil {
-				reqLog.Warn("gemini.account_wait_counter_increment_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-			} else if !canWait {
-				reqLog.Info("gemini.account_wait_queue_full",
-					zap.Int64("account_id", account.ID),
-					zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
-				)
-				googleError(c, http.StatusTooManyRequests, "Too many pending requests, please retry later")
-				return
-			}
-			if err == nil && canWait {
-				accountWaitCounted = true
-			}
-			defer func() {
-				if accountWaitCounted {
-					geminiConcurrency.DecrementAccountWaitCount(c.Request.Context(), account.ID)
-				}
-			}()
-
-			accountReleaseFunc, err = geminiConcurrency.AcquireAccountSlotWithWaitTimeout(
-				c,
+			queueResult, err := geminiConcurrency.AcquireAccountSlotOrQueue(
+				c.Request.Context(),
 				account.ID,
 				selection.WaitPlan.MaxConcurrency,
-				selection.WaitPlan.Timeout,
-				stream,
-				&streamStarted,
+				selection.WaitPlan.MaxWaiting,
 			)
 			if err != nil {
 				reqLog.Warn("gemini.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 				googleError(c, http.StatusTooManyRequests, err.Error())
 				return
 			}
-			if accountWaitCounted {
-				geminiConcurrency.DecrementAccountWaitCount(c.Request.Context(), account.ID)
-				accountWaitCounted = false
+			if queueResult.Acquired {
+				accountReleaseFunc = queueResult.ReleaseFunc
+			} else if !queueResult.QueueAllowed {
+				reqLog.Info("gemini.account_wait_queue_full",
+					zap.Int64("account_id", account.ID),
+					zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
+				)
+				googleError(c, http.StatusTooManyRequests, "Too many pending requests, please retry later")
+				return
+			} else {
+				accountWaitCounted := queueResult.WaitCounted
+				defer func() {
+					if accountWaitCounted {
+						geminiConcurrency.DecrementAccountWaitCount(c.Request.Context(), account.ID)
+					}
+				}()
+
+				accountReleaseFunc, err = geminiConcurrency.AcquireAccountSlotAfterQueueingWithWaitTimeout(
+					c,
+					account.ID,
+					selection.WaitPlan.MaxConcurrency,
+					selection.WaitPlan.Timeout,
+					stream,
+					&streamStarted,
+				)
+				if err != nil {
+					reqLog.Warn("gemini.account_slot_acquire_failed_after_wait", zap.Int64("account_id", account.ID), zap.Error(err))
+					googleError(c, http.StatusTooManyRequests, err.Error())
+					return
+				}
+				if accountWaitCounted {
+					geminiConcurrency.DecrementAccountWaitCount(c.Request.Context(), account.ID)
+					accountWaitCounted = false
+				}
 			}
 			if err := h.gatewayService.BindStickySession(c.Request.Context(), apiKey.GroupID, sessionKey, account.ID); err != nil {
 				reqLog.Warn("gemini.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))

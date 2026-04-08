@@ -77,6 +77,61 @@ var (
 		return 0
 	`)
 
+	// acquireOrEnqueueWaitScript atomically acquires a slot when available, otherwise
+	// increments the wait queue if capacity remains.
+	// KEYS[1] = slot zset key
+	// KEYS[2] = wait counter key
+	// ARGV[1] = maxConcurrency
+	// ARGV[2] = slot TTL in seconds
+	// ARGV[3] = requestID
+	// ARGV[4] = maxWait
+	// ARGV[5] = wait TTL in seconds
+	// returns: 2=acquired, 1=enqueued, 0=queue full
+	acquireOrEnqueueWaitScript = redis.NewScript(`
+		local slotKey = KEYS[1]
+		local waitKey = KEYS[2]
+		local maxConcurrency = tonumber(ARGV[1])
+		local slotTTL = tonumber(ARGV[2])
+		local requestID = ARGV[3]
+		local maxWait = tonumber(ARGV[4])
+		local waitTTL = tonumber(ARGV[5])
+
+		local timeResult = redis.call('TIME')
+		local now = tonumber(timeResult[1])
+		local expireBefore = now - slotTTL
+
+		redis.call('ZREMRANGEBYSCORE', slotKey, '-inf', expireBefore)
+
+		local exists = redis.call('ZSCORE', slotKey, requestID)
+		if exists ~= false then
+			redis.call('ZADD', slotKey, now, requestID)
+			redis.call('EXPIRE', slotKey, slotTTL)
+			return 2
+		end
+
+		local count = redis.call('ZCARD', slotKey)
+		if count < maxConcurrency then
+			redis.call('ZADD', slotKey, now, requestID)
+			redis.call('EXPIRE', slotKey, slotTTL)
+			return 2
+		end
+
+		local currentWait = redis.call('GET', waitKey)
+		if currentWait == false then
+			currentWait = 0
+		else
+			currentWait = tonumber(currentWait)
+		end
+
+		if currentWait >= maxWait then
+			return 0
+		end
+
+		redis.call('INCR', waitKey)
+		redis.call('EXPIRE', waitKey, waitTTL)
+		return 1
+	`)
+
 	// getCountScript 统计有序集合中的槽位数量并清理过期条目
 	// 使用 Redis TIME 命令获取服务器时间
 	// KEYS[1] = 有序集合键
@@ -243,6 +298,25 @@ func (c *concurrencyCache) AcquireAccountSlot(ctx context.Context, accountID int
 	return result == 1, nil
 }
 
+func (c *concurrencyCache) AcquireAccountSlotOrEnqueueWait(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	slotKey := accountSlotKey(accountID)
+	waitKey := accountWaitKey(accountID)
+	result, err := acquireOrEnqueueWaitScript.Run(
+		ctx,
+		c.rdb,
+		[]string{slotKey, waitKey},
+		maxConcurrency,
+		c.slotTTLSeconds,
+		requestID,
+		maxWait,
+		c.waitQueueTTLSeconds,
+	).Int()
+	if err != nil {
+		return false, false, err
+	}
+	return result == 2, result == 1, nil
+}
+
 func (c *concurrencyCache) ReleaseAccountSlot(ctx context.Context, accountID int64, requestID string) error {
 	key := accountSlotKey(accountID)
 	return c.rdb.ZRem(ctx, key, requestID).Err()
@@ -305,6 +379,25 @@ func (c *concurrencyCache) AcquireUserSlot(ctx context.Context, userID int64, ma
 		return false, err
 	}
 	return result == 1, nil
+}
+
+func (c *concurrencyCache) AcquireUserSlotOrEnqueueWait(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	slotKey := userSlotKey(userID)
+	waitKey := waitQueueKey(userID)
+	result, err := acquireOrEnqueueWaitScript.Run(
+		ctx,
+		c.rdb,
+		[]string{slotKey, waitKey},
+		maxConcurrency,
+		c.slotTTLSeconds,
+		requestID,
+		maxWait,
+		c.waitQueueTTLSeconds,
+	).Int()
+	if err != nil {
+		return false, false, err
+	}
+	return result == 2, result == 1, nil
 }
 
 func (c *concurrencyCache) ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error {

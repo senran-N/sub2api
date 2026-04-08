@@ -108,6 +108,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+	attachRequestAccountLoadCache(c)
 	if !h.ensureResponsesDependencies(c, reqLog) {
 		return
 	}
@@ -150,22 +151,20 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
-	// 使用 gjson 只读提取字段做校验，避免完整 Unmarshal
-	modelResult := gjson.GetBytes(body, "model")
-	if !modelResult.Exists() || modelResult.Type != gjson.String || modelResult.String() == "" {
+	reqMeta := service.GetOpenAIRequestMeta(c, body)
+	if !reqMeta.ModelExists || reqMeta.ModelType != gjson.String || reqMeta.Model == "" {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
-	reqModel := modelResult.String()
+	reqModel := reqMeta.Model
 
-	streamResult := gjson.GetBytes(body, "stream")
-	if streamResult.Exists() && streamResult.Type != gjson.True && streamResult.Type != gjson.False {
+	if reqMeta.StreamExists && reqMeta.StreamType != gjson.True && reqMeta.StreamType != gjson.False {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "invalid stream field type")
 		return
 	}
-	reqStream := streamResult.Bool()
+	reqStream := reqMeta.Stream
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
-	previousResponseID := strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String())
+	previousResponseID := reqMeta.PreviousResponseID
 	if previousResponseID != "" {
 		previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
 		reqLog = reqLog.With(
@@ -505,6 +504,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+	attachRequestAccountLoadCache(c)
 
 	// 检查分组是否允许 /v1/messages 调度
 	if apiKey.Group != nil && !apiKey.Group.AllowMessagesDispatch {
@@ -536,14 +536,14 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 
-	modelResult := gjson.GetBytes(body, "model")
-	if !modelResult.Exists() || modelResult.Type != gjson.String || modelResult.String() == "" {
+	reqMeta := service.GetOpenAIRequestMeta(c, body)
+	if !reqMeta.ModelExists || reqMeta.ModelType != gjson.String || reqMeta.Model == "" {
 		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
-	reqModel := modelResult.String()
+	reqModel := reqMeta.Model
 	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
-	reqStream := gjson.GetBytes(body, "stream").Bool()
+	reqStream := reqMeta.Stream
 	channelMapping, restricted := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
 	if restricted {
 		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Requested model is not allowed for this channel")
@@ -852,6 +852,7 @@ func (h *OpenAIGatewayHandler) validateFunctionCallOutputRequest(c *gin.Context,
 	}
 
 	c.Set(service.OpenAIParsedRequestBodyKey, reqBody)
+	service.CacheOpenAIRequestMetaFromBodyMap(c, reqBody)
 	validation := service.ValidateFunctionCallOutputContext(reqBody)
 	if !validation.HasFunctionCallOutput {
 		return true
@@ -889,35 +890,30 @@ func (h *OpenAIGatewayHandler) acquireResponsesUserSlot(
 	reqLog *zap.Logger,
 ) (func(), bool) {
 	ctx := c.Request.Context()
-	userReleaseFunc, userAcquired, err := h.concurrencyHelper.TryAcquireUserSlot(ctx, userID, userConcurrency)
+	maxWait := service.CalculateMaxWait(userConcurrency)
+	queueResult, err := h.concurrencyHelper.AcquireUserSlotOrQueue(ctx, userID, userConcurrency, maxWait)
 	if err != nil {
 		reqLog.Warn("openai.user_slot_acquire_failed", zap.Error(err))
 		h.handleConcurrencyError(c, err, "user", *streamStarted)
 		return nil, false
 	}
-	if userAcquired {
-		return wrapReleaseOnDone(ctx, userReleaseFunc), true
+	if queueResult.Acquired {
+		return wrapReleaseOnDone(ctx, queueResult.ReleaseFunc), true
 	}
-
-	maxWait := service.CalculateMaxWait(userConcurrency)
-	canWait, waitErr := h.concurrencyHelper.IncrementWaitCount(ctx, userID, maxWait)
-	if waitErr != nil {
-		reqLog.Warn("openai.user_wait_counter_increment_failed", zap.Error(waitErr))
-		// 按现有降级语义：等待计数异常时放行后续抢槽流程
-	} else if !canWait {
+	if !queueResult.QueueAllowed {
 		reqLog.Info("openai.user_wait_queue_full", zap.Int("max_wait", maxWait))
 		h.errorResponse(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later")
 		return nil, false
 	}
 
-	waitCounted := waitErr == nil && canWait
+	waitCounted := queueResult.WaitCounted
 	defer func() {
 		if waitCounted {
 			h.concurrencyHelper.DecrementWaitCount(ctx, userID)
 		}
 	}()
 
-	userReleaseFunc, err = h.concurrencyHelper.AcquireUserSlotAfterQueueing(c, userID, userConcurrency, reqStream, streamStarted)
+	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotAfterQueueing(c, userID, userConcurrency, reqStream, streamStarted)
 	if err != nil {
 		reqLog.Warn("openai.user_slot_acquire_failed_after_wait", zap.Error(err))
 		h.handleConcurrencyError(c, err, "user", *streamStarted)
@@ -956,27 +952,24 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 		return nil, false
 	}
 
-	fastReleaseFunc, fastAcquired, err := h.concurrencyHelper.TryAcquireAccountSlot(
+	queueResult, err := h.concurrencyHelper.AcquireAccountSlotOrQueue(
 		ctx,
 		account.ID,
 		selection.WaitPlan.MaxConcurrency,
+		selection.WaitPlan.MaxWaiting,
 	)
 	if err != nil {
 		reqLog.Warn("openai.account_slot_quick_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		h.handleConcurrencyError(c, err, "account", *streamStarted)
 		return nil, false
 	}
-	if fastAcquired {
+	if queueResult.Acquired {
 		if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
 			reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		}
-		return wrapReleaseOnDone(ctx, fastReleaseFunc), true
+		return wrapReleaseOnDone(ctx, queueResult.ReleaseFunc), true
 	}
-
-	canWait, waitErr := h.concurrencyHelper.IncrementAccountWaitCount(ctx, account.ID, selection.WaitPlan.MaxWaiting)
-	if waitErr != nil {
-		reqLog.Warn("openai.account_wait_counter_increment_failed", zap.Int64("account_id", account.ID), zap.Error(waitErr))
-	} else if !canWait {
+	if !queueResult.QueueAllowed {
 		reqLog.Info("openai.account_wait_queue_full",
 			zap.Int64("account_id", account.ID),
 			zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
@@ -985,7 +978,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 		return nil, false
 	}
 
-	accountWaitCounted := waitErr == nil && canWait
+	accountWaitCounted := queueResult.WaitCounted
 	releaseWait := func() {
 		if accountWaitCounted {
 			h.concurrencyHelper.DecrementAccountWaitCount(ctx, account.ID)
@@ -1047,6 +1040,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	if !h.ensureResponsesDependencies(c, reqLog) {
 		return
 	}
+	attachRequestAccountLoadCache(c)
 	reqLog.Info("openai.websocket_ingress_started")
 	clientIP := ip.GetClientIP(c)
 	userAgent := strings.TrimSpace(c.GetHeader("User-Agent"))

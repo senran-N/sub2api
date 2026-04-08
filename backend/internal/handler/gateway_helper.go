@@ -103,6 +103,13 @@ func claudeCodeBodyMapFromContextCache(c *gin.Context) map[string]any {
 	return nil
 }
 
+func attachRequestAccountLoadCache(c *gin.Context) {
+	if c == nil || c.Request == nil {
+		return
+	}
+	c.Request = c.Request.WithContext(service.WithRequestAccountLoadCache(c.Request.Context()))
+}
+
 // 并发槽位等待相关常量
 //
 // 性能优化说明：
@@ -241,6 +248,14 @@ func (h *ConcurrencyHelper) TryAcquireAccountSlot(ctx context.Context, accountID
 	return result.ReleaseFunc, true, nil
 }
 
+func (h *ConcurrencyHelper) AcquireUserSlotOrQueue(ctx context.Context, userID int64, maxConcurrency int, maxWait int) (*service.AcquireOrQueueResult, error) {
+	return h.concurrencyService.AcquireUserSlotOrQueue(ctx, userID, maxConcurrency, maxWait)
+}
+
+func (h *ConcurrencyHelper) AcquireAccountSlotOrQueue(ctx context.Context, accountID int64, maxConcurrency int, maxWait int) (*service.AcquireOrQueueResult, error) {
+	return h.concurrencyService.AcquireAccountSlotOrQueue(ctx, accountID, maxConcurrency, maxWait)
+}
+
 // AcquireUserSlotWithWait acquires a user concurrency slot, waiting if necessary.
 // For streaming requests, sends ping events during the wait.
 // streamStarted is updated if streaming response has begun.
@@ -336,8 +351,28 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 	}
 
 	backoff := initialBackoff
-	timer := time.NewTimer(backoff)
-	defer timer.Stop()
+	var (
+		timer   *time.Timer
+		timerCh <-chan time.Time
+	)
+	scheduleAcquire := func(delay time.Duration) {
+		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= delay {
+			timerCh = nil
+			return
+		}
+		if timer == nil {
+			timer = time.NewTimer(delay)
+		} else {
+			timer.Reset(delay)
+		}
+		timerCh = timer.C
+	}
+	scheduleAcquire(backoff)
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 
 	for {
 		select {
@@ -361,7 +396,7 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 			}
 			flusher.Flush()
 
-		case <-timer.C:
+		case <-timerCh:
 			// Try to acquire slot
 			result, err := acquireSlot()
 			if err != nil {
@@ -372,7 +407,7 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 				return result.ReleaseFunc, nil
 			}
 			backoff = nextBackoff(backoff)
-			timer.Reset(backoff)
+			scheduleAcquire(backoff)
 		}
 	}
 }
