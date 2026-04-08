@@ -145,4 +145,44 @@ describe('OpsRequestDetailsModal', () => {
     )
     expect(wrapper.text()).toContain('range:')
   })
+
+  it('hides empty status and actions columns for success-only rows without those fields', async () => {
+    mockListRequestDetails.mockResolvedValueOnce({
+      items: [
+        {
+          kind: 'success' as const,
+          created_at: '2026-04-08T10:00:00.000Z',
+          request_id: 'req_success_only',
+          platform: 'openai',
+          model: 'gpt-5.4',
+          duration_ms: 456,
+          status_code: null,
+          error_id: null,
+        },
+      ],
+      total: 1,
+    })
+
+    const wrapper = mount(OpsRequestDetailsModal, {
+      props: {
+        modelValue: true,
+        timeRange: '1h',
+        preset: {
+          title: '请求明细',
+        },
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          Pagination: PaginationStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('admin.ops.requestDetails.table.status')
+    expect(wrapper.text()).not.toContain('admin.ops.requestDetails.table.actions')
+    expect(wrapper.text()).toContain('req_success_only')
+  })
 })

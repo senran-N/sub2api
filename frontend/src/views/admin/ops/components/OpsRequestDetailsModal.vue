@@ -58,6 +58,14 @@ const rangeLabel = computed(() => {
   return t('admin.ops.requestDetails.rangeMinutes', { n: minutes })
 })
 
+const showStatusColumn = computed(() =>
+  items.value.some((row) => typeof row.status_code === 'number')
+)
+
+const showActionsColumn = computed(() =>
+  items.value.some((row) => row.kind === 'error' && typeof row.error_id === 'number' && row.error_id > 0)
+)
+
 function buildTimeParams(): Pick<OpsRequestDetailsParams, 'start_time' | 'end_time'> {
   if (
     props.timeRange === 'custom' &&
@@ -213,59 +221,84 @@ const kindBadgeClass = (kind: string) => {
           <div v-else class="ops-request-details-modal__table-shell flex min-h-0 flex-1 flex-col overflow-hidden">
             <div class="min-h-0 flex-1 overflow-auto">
               <table class="ops-request-details-modal__table min-w-full">
+                <colgroup>
+                  <col class="ops-request-details-modal__col ops-request-details-modal__col--time" />
+                  <col class="ops-request-details-modal__col ops-request-details-modal__col--kind" />
+                  <col class="ops-request-details-modal__col ops-request-details-modal__col--platform" />
+                  <col class="ops-request-details-modal__col ops-request-details-modal__col--model" />
+                  <col class="ops-request-details-modal__col ops-request-details-modal__col--duration" />
+                  <col
+                    v-if="showStatusColumn"
+                    class="ops-request-details-modal__col ops-request-details-modal__col--status"
+                  />
+                  <col class="ops-request-details-modal__col ops-request-details-modal__col--request-id" />
+                  <col
+                    v-if="showActionsColumn"
+                    class="ops-request-details-modal__col ops-request-details-modal__col--actions"
+                  />
+                </colgroup>
                 <thead class="ops-request-details-modal__table-head sticky top-0 z-10">
                 <tr>
-                  <th class="ops-request-details-modal__table-header text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--time text-left">
                     {{ t('admin.ops.requestDetails.table.time') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--kind text-left">
                     {{ t('admin.ops.requestDetails.table.kind') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--platform text-left">
                     {{ t('admin.ops.requestDetails.table.platform') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--model text-left">
                     {{ t('admin.ops.requestDetails.table.model') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--duration text-left">
                     {{ t('admin.ops.requestDetails.table.duration') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header text-left">
+                  <th
+                    v-if="showStatusColumn"
+                    class="ops-request-details-modal__table-header ops-request-details-modal__table-header--status text-left"
+                  >
                     {{ t('admin.ops.requestDetails.table.status') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--request-id text-left">
                     {{ t('admin.ops.requestDetails.table.requestId') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--actions text-right">
+                  <th
+                    v-if="showActionsColumn"
+                    class="ops-request-details-modal__table-header ops-request-details-modal__table-header--actions text-right"
+                  >
                     {{ t('admin.ops.requestDetails.table.actions') }}
                   </th>
                 </tr>
               </thead>
               <tbody class="ops-request-details-modal__table-body">
                 <tr v-for="(row, idx) in items" :key="idx" class="ops-request-details-modal__table-row">
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__text-body whitespace-nowrap text-xs">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--time ops-request-details-modal__text-body whitespace-nowrap text-xs">
                     {{ formatDateTime(row.created_at) }}
                   </td>
-                  <td class="ops-request-details-modal__table-cell whitespace-nowrap">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--kind whitespace-nowrap">
                     <span :class="kindBadgeClass(row.kind)">
                       {{ row.kind === 'error' ? t('admin.ops.requestDetails.kind.error') : t('admin.ops.requestDetails.kind.success') }}
                     </span>
                   </td>
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__text-strong whitespace-nowrap text-xs font-medium">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--platform ops-request-details-modal__text-strong whitespace-nowrap text-xs font-medium">
                     {{ (row.platform || 'unknown').toUpperCase() }}
                   </td>
                   <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--model ops-request-details-modal__text-body truncate text-xs" :title="row.model || ''">
                     {{ row.model || '-' }}
                   </td>
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__text-body whitespace-nowrap text-xs">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--duration ops-request-details-modal__text-body whitespace-nowrap text-xs">
                     {{ typeof row.duration_ms === 'number' ? `${row.duration_ms} ms` : '-' }}
                   </td>
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__text-body whitespace-nowrap text-xs">
+                  <td
+                    v-if="showStatusColumn"
+                    class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--status ops-request-details-modal__text-body whitespace-nowrap text-xs"
+                  >
                     {{ row.status_code ?? '-' }}
                   </td>
-                  <td class="ops-request-details-modal__table-cell">
-                    <div v-if="row.request_id" class="flex items-center gap-2">
-                      <span class="ops-request-details-modal__request-id ops-request-details-modal__text-strong truncate font-mono text-[11px]" :title="row.request_id">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--request-id">
+                    <div v-if="row.request_id" class="flex min-w-0 items-center gap-2">
+                      <span class="ops-request-details-modal__request-id ops-request-details-modal__text-strong min-w-0 flex-1 truncate font-mono text-[11px]" :title="row.request_id">
                         {{ row.request_id }}
                       </span>
                       <button
@@ -277,7 +310,10 @@ const kindBadgeClass = (kind: string) => {
                     </div>
                     <span v-else class="ops-request-details-modal__text-soft text-xs">-</span>
                   </td>
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--actions whitespace-nowrap text-right">
+                  <td
+                    v-if="showActionsColumn"
+                    class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--actions whitespace-nowrap text-right"
+                  >
                     <button
                       v-if="row.kind === 'error' && row.error_id"
                       class="ops-request-details-modal__error-button text-xs font-bold"
@@ -343,7 +379,9 @@ const kindBadgeClass = (kind: string) => {
 }
 
 .ops-request-details-modal__table {
-  min-width: var(--theme-ops-table-min-width);
+  width: 100%;
+  min-width: 44rem;
+  table-layout: fixed;
 }
 
 .ops-request-details-modal__table-shell {
@@ -374,17 +412,49 @@ const kindBadgeClass = (kind: string) => {
 }
 
 .ops-request-details-modal__table-cell--model {
-  max-width: calc(var(--theme-ops-table-min-width) * 0.3);
+  overflow: hidden;
 }
 
 .ops-request-details-modal__table-cell--actions,
 .ops-request-details-modal__table-header--actions {
-  min-width: fit-content;
+  white-space: nowrap;
 }
 
 .ops-request-details-modal__request-id {
   display: inline-block;
-  max-width: calc(var(--theme-ops-table-min-width) * 0.275);
+  width: 100%;
+}
+
+.ops-request-details-modal__col--time {
+  width: 7.6rem;
+}
+
+.ops-request-details-modal__col--kind {
+  width: 4.5rem;
+}
+
+.ops-request-details-modal__col--platform {
+  width: 5rem;
+}
+
+.ops-request-details-modal__col--model {
+  width: 4.8rem;
+}
+
+.ops-request-details-modal__col--duration {
+  width: 5.8rem;
+}
+
+.ops-request-details-modal__col--status {
+  width: 4.6rem;
+}
+
+.ops-request-details-modal__col--request-id {
+  width: auto;
+}
+
+.ops-request-details-modal__col--actions {
+  width: 5.5rem;
 }
 
 .ops-request-details-modal__table-row td {
