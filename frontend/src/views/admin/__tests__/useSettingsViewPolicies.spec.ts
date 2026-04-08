@@ -125,6 +125,27 @@ describe('useSettingsViewPolicies', () => {
     expect(showError).not.toHaveBeenCalled()
   })
 
+  it('binds confirm to window for regenerate and delete actions', async () => {
+    let confirmThis: unknown = null
+    const state = useSettingsViewPolicies({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess: vi.fn(),
+      confirm(this: unknown) {
+        confirmThis = this
+        return true
+      },
+      copyToClipboard: vi.fn().mockResolvedValue(true)
+    })
+
+    await state.regenerateAdminApiKey()
+    expect(confirmThis).toBe(window)
+
+    confirmThis = null
+    await state.deleteAdminApiKey()
+    expect(confirmThis).toBe(window)
+  })
+
   it('loads and saves overload, stream timeout, rectifier, and beta policy settings', async () => {
     const showSuccess = vi.fn()
     const state = useSettingsViewPolicies({

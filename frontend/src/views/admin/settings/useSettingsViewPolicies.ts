@@ -64,6 +64,10 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
     return getSettingsBetaDisplayName(token)
   }
 
+  function confirmAction(message: string): boolean {
+    return options.confirm.call(window, message)
+  }
+
   async function loadAdminApiKey() {
     adminApiKeyLoading.value = true
     try {
@@ -93,14 +97,14 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
   }
 
   async function regenerateAdminApiKey() {
-    if (!options.confirm(options.t('admin.settings.adminApiKey.regenerateConfirm'))) {
+    if (!confirmAction(options.t('admin.settings.adminApiKey.regenerateConfirm'))) {
       return
     }
     await createAdminApiKey()
   }
 
   async function deleteAdminApiKey() {
-    if (!options.confirm(options.t('admin.settings.adminApiKey.deleteConfirm'))) {
+    if (!confirmAction(options.t('admin.settings.adminApiKey.deleteConfirm'))) {
       return
     }
 
