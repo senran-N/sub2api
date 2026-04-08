@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -118,4 +119,59 @@ func TestPrepareOpenAIForwardRequest_StripsUnsupportedUserField(t *testing.T) {
 	require.NotNil(t, prepared)
 	require.NotContains(t, string(prepared.body), `"user":"user_123"`)
 	require.NotContains(t, prepared.reqBody, "user")
+}
+
+func TestPrepareOpenAIForwardRequest_APIKeyPreservesMappedCustomModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	account := &Account{
+		Name:     "test-openai-api-key",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"custom-original-model": "custom/upstream-model",
+			},
+		},
+	}
+	body := []byte(`{"model":"custom-original-model","input":"hello"}`)
+
+	svc := &OpenAIGatewayService{}
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "custom-original-model", false, "", false, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+	require.Equal(t, "custom/upstream-model", gjson.GetBytes(prepared.body, "model").String())
+}
+
+func TestParseOpenAIWSIngressClientPayload_APIKeyPreservesMappedCustomModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	account := &Account{
+		Type: AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"custom-original-model": "custom/upstream-model",
+			},
+		},
+	}
+
+	parsed, err := parseOpenAIWSIngressClientPayload(c, account, []byte(`{"model":"custom-original-model","stream":false}`))
+	require.NoError(t, err)
+	require.Equal(t, "custom/upstream-model", gjson.GetBytes(parsed.payloadRaw, "model").String())
+}
+
+func TestSanitizeEmptyBase64InputImagesInOpenAIBody_DropsEmptyParts(t *testing.T) {
+	body := []byte(`{"input":[{"type":"message","content":[{"type":"input_text","text":"hi"},{"type":"input_image","image_url":"data:image/png;base64,   "}]}]}`)
+
+	sanitizedBody, sanitized, err := sanitizeEmptyBase64InputImagesInOpenAIBody(body)
+	require.NoError(t, err)
+	require.True(t, sanitized)
+	require.False(t, bytes.Contains(sanitizedBody, []byte(`"input_image"`)))
+	require.Equal(t, "hi", gjson.GetBytes(sanitizedBody, "input.0.content.0.text").String())
 }

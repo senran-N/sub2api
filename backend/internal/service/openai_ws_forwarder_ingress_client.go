@@ -111,7 +111,7 @@ func parseOpenAIWSIngressClientPayload(c *gin.Context, account *Account, raw []b
 		normalized = next
 	}
 	mappedModel := account.GetMappedModel(originalModel)
-	if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
+	if normalizedModel := normalizeOpenAIModelForUpstream(account, mappedModel); normalizedModel != "" {
 		mappedModel = normalizedModel
 	}
 	if mappedModel != originalModel {

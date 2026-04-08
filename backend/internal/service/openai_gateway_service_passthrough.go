@@ -64,6 +64,14 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		reqStream = gjson.GetBytes(body, "stream").Bool()
 	}
 
+	sanitizedBody, sanitized, err := sanitizeEmptyBase64InputImagesInOpenAIBody(body)
+	if err != nil {
+		return nil, err
+	}
+	if sanitized {
+		body = sanitizedBody
+	}
+
 	logger.LegacyPrintf("service.openai_gateway",
 		"[OpenAI 自动透传] 命中自动透传分支: account=%d name=%s type=%s model=%s stream=%v",
 		account.ID,
@@ -544,6 +552,10 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 		return nil, err
 	}
 
+	if isEventStreamResponse(resp.Header) {
+		return s.handlePassthroughSSEToJSON(resp, c, body)
+	}
+
 	usage := &OpenAIUsage{}
 	usageParsed := false
 	if len(body) > 0 {
@@ -562,6 +574,45 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	if contentType == "" {
 		contentType = "application/json"
 	}
+	c.Data(resp.StatusCode, contentType, body)
+	return usage, nil
+}
+
+func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(
+	resp *http.Response,
+	c *gin.Context,
+	body []byte,
+) (*OpenAIUsage, error) {
+	bodyText := string(body)
+	finalResponse, ok := extractCodexFinalResponse(bodyText)
+
+	usage := &OpenAIUsage{}
+	if ok {
+		if parsedUsage, parsed := extractOpenAIUsageFromJSONBytes(finalResponse); parsed {
+			*usage = parsedUsage
+		}
+		body = s.correctToolCallsInResponseBody(finalResponse)
+	} else {
+		terminalType, terminalPayload, terminalOK := extractOpenAISSETerminalEvent(bodyText)
+		if terminalOK && terminalType == "response.failed" {
+			message := extractOpenAISSEErrorMessage(terminalPayload)
+			if message == "" {
+				message = "Upstream compact response failed"
+			}
+			return nil, s.writeOpenAINonStreamingProtocolError(resp, c, message)
+		}
+		usage = s.parseSSEUsageFromBody(bodyText)
+	}
+
+	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	contentType := "application/json; charset=utf-8"
+	if !ok {
+		contentType = resp.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "text/event-stream"
+		}
+	}
+	c.Writer.Header().Set("Content-Type", contentType)
 	c.Data(resp.StatusCode, contentType, body)
 	return usage, nil
 }

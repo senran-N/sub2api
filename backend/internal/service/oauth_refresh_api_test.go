@@ -237,6 +237,47 @@ func TestRefreshIfNeeded_RefreshError(t *testing.T) {
 	require.Equal(t, 1, cache.releaseCalls) // lock still released via defer
 }
 
+func TestRefreshIfNeeded_InvalidGrantRecoveredByRefreshTokenRotation(t *testing.T) {
+	account := &Account{
+		ID:          66,
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeOAuth,
+		Credentials: map[string]any{"refresh_token": "stale-token"},
+	}
+	repo := &refreshAPIAccountRepo{
+		account: &Account{
+			ID:          66,
+			Platform:    PlatformAnthropic,
+			Type:        AccountTypeOAuth,
+			Credentials: map[string]any{"refresh_token": "rotated-token"},
+		},
+	}
+	cache := &refreshAPICacheStub{lockResult: true}
+	executor := &refreshAPIExecutorStub{
+		needsRefresh: true,
+		err:          errors.New("invalid_grant: token revoked"),
+	}
+
+	api := NewOAuthRefreshAPI(repo, cache)
+	result, err := api.RefreshIfNeeded(context.Background(), account, executor, 3*time.Minute)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.Refreshed)
+	require.NotNil(t, result.Account)
+	require.Equal(t, "rotated-token", result.Account.GetCredential("refresh_token"))
+	require.Equal(t, 1, executor.refreshCalls)
+	require.Equal(t, 0, repo.updateCalls)
+}
+
+func TestNewOAuthRefreshAPI_DefaultAndCustomLockTTL(t *testing.T) {
+	apiDefault := NewOAuthRefreshAPI(nil, nil)
+	require.Equal(t, defaultRefreshLockTTL, apiDefault.lockTTL)
+
+	apiCustom := NewOAuthRefreshAPI(nil, nil, 15*time.Second)
+	require.Equal(t, 15*time.Second, apiCustom.lockTTL)
+}
+
 func TestRefreshIfNeeded_DBUpdateError(t *testing.T) {
 	account := &Account{ID: 7, Platform: PlatformGemini, Type: AccountTypeOAuth}
 	repo := &refreshAPIAccountRepo{

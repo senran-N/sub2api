@@ -109,6 +109,11 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 		markPatchSet("instructions", "You are a helpful coding assistant.")
 	}
 
+	if sanitizeEmptyBase64InputImagesInOpenAIRequestBodyMap(reqBody) {
+		bodyModified = true
+		disablePatch()
+	}
+
 	mappedModel := account.GetMappedModel(reqModel)
 	if mappedModel != reqModel {
 		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Model mapping applied: %s -> %s (account: %s, isCodexCLI: %v)", reqModel, mappedModel, account.Name, isCodexCLI)
@@ -118,7 +123,7 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 	}
 
 	if model, ok := reqBody["model"].(string); ok {
-		normalizedModel := normalizeCodexModel(model)
+		normalizedModel := normalizeOpenAIModelForUpstream(account, model)
 		if normalizedModel != "" && normalizedModel != model {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex model normalization: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
 				model, normalizedModel, account.Name, account.Type, isCodexCLI)

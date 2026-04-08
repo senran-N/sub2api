@@ -106,3 +106,19 @@ func TestNormalizeCodexModel_UpstreamAlignment(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
+	t.Run("oauth accounts normalize codex aliases", func(t *testing.T) {
+		account := &Account{Type: AccountTypeOAuth}
+		if got := normalizeOpenAIModelForUpstream(account, "gpt 5.4"); got != "gpt-5.4" {
+			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gpt-5.4")
+		}
+	})
+
+	t.Run("api key accounts preserve mapped custom model", func(t *testing.T) {
+		account := &Account{Type: AccountTypeAPIKey}
+		if got := normalizeOpenAIModelForUpstream(account, " custom/upstream-model "); got != "custom/upstream-model" {
+			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "custom/upstream-model")
+		}
+	})
+}

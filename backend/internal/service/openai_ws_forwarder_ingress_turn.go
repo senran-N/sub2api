@@ -96,7 +96,7 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 	var mappedModelBytes []byte
 	if originalModel != "" {
 		mappedModel = account.GetMappedModel(originalModel)
-		if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
+		if normalizedModel := normalizeOpenAIModelForUpstream(account, mappedModel); normalizedModel != "" {
 			mappedModel = normalizedModel
 		}
 		needModelReplace = mappedModel != "" && mappedModel != originalModel
