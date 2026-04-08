@@ -457,6 +457,7 @@ import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import type { Account, AccountUsageStatsResponse } from '@/types'
 import {
   getThemeChartTooltipColors,
+  getThemeLineChartConfig,
   readThemeCssVariable,
   readThemeRgb,
   readThemeRgbAlpha
@@ -490,6 +491,12 @@ const loading = ref(false)
 const stats = ref<AccountUsageStatsResponse | null>(null)
 const themeVersion = useDocumentThemeVersion()
 let activeLoadToken = 0
+
+const lineConfig = computed(() => {
+  void themeVersion.value
+  return getThemeLineChartConfig()
+})
+
 const chartPalette = computed(() => {
   void themeVersion.value
 
@@ -543,6 +550,8 @@ const trendChartData = computed<ChartData<'line'> | null>(() => {
         backgroundColor: chartPalette.value.accountCostFill,
         fill: true,
         tension: 0.3,
+        pointRadius: lineConfig.value.pointRadius,
+        pointHoverRadius: lineConfig.value.pointHoverRadius,
         yAxisID: 'y'
       },
       {
@@ -553,6 +562,8 @@ const trendChartData = computed<ChartData<'line'> | null>(() => {
         fill: false,
         tension: 0.3,
         borderDash: [5, 5],
+        pointRadius: lineConfig.value.pointRadius,
+        pointHoverRadius: lineConfig.value.pointHoverRadius,
         yAxisID: 'y'
       },
       {
@@ -562,6 +573,8 @@ const trendChartData = computed<ChartData<'line'> | null>(() => {
         backgroundColor: chartPalette.value.requestsFill,
         fill: false,
         tension: 0.3,
+        pointRadius: lineConfig.value.pointRadius,
+        pointHoverRadius: lineConfig.value.pointHoverRadius,
         yAxisID: 'y1'
       }
     ]

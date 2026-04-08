@@ -227,6 +227,7 @@ import { getUserBreakdown } from '@/api/admin/dashboard'
 import {
   getThemeChartSequence,
   getThemeChartTooltipColors,
+  getThemeDoughnutChartConfig,
   readThemeCssVariable
 } from '@/utils/themeStyles'
 
@@ -335,6 +336,11 @@ const displayModelStats = computed(() => {
   return [...sourceStats].sort((a, b) => b[metricKey] - a[metricKey])
 })
 
+const doughnutConfig = computed(() => {
+  void themeVersion.value
+  return getThemeDoughnutChartConfig()
+})
+
 const chartData = computed(() => {
   void themeVersion.value
   if (!displayModelStats.value.length) return null
@@ -345,7 +351,10 @@ const chartData = computed(() => {
       {
         data: displayModelStats.value.map((m) => props.metric === 'actual_cost' ? m.actual_cost : m.total_tokens),
         backgroundColor: chartColors.value.slice(0, displayModelStats.value.length),
-        borderWidth: 0
+        borderWidth: 0,
+        borderRadius: doughnutConfig.value.borderRadius,
+        spacing: doughnutConfig.value.spacing,
+        hoverOffset: doughnutConfig.value.hoverOffset
       }
     ]
   }
@@ -371,7 +380,10 @@ const rankingChartData = computed(() => {
       {
         data,
         backgroundColor,
-        borderWidth: 0
+        borderWidth: 0,
+        borderRadius: doughnutConfig.value.borderRadius,
+        spacing: doughnutConfig.value.spacing,
+        hoverOffset: doughnutConfig.value.hoverOffset
       }
     ]
   }
@@ -414,6 +426,7 @@ const doughnutOptions = computed(() => {
   return {
     responsive: true,
     maintainAspectRatio: false,
+    cutout: doughnutConfig.value.cutout,
     plugins: {
       legend: {
         display: false
@@ -445,6 +458,7 @@ const rankingDoughnutOptions = computed(() => {
   return {
     responsive: true,
     maintainAspectRatio: false,
+    cutout: doughnutConfig.value.cutout,
     plugins: {
       legend: {
         display: false

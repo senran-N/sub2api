@@ -108,7 +108,7 @@ import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import UserBreakdownSubTable from './UserBreakdownSubTable.vue'
 import type { GroupStat, UserBreakdownItem } from '@/types'
 import { getUserBreakdown } from '@/api/admin/dashboard'
-import { getThemeChartSequence, getThemeChartTooltipColors } from '@/utils/themeStyles'
+import { getThemeChartSequence, getThemeChartTooltipColors, getThemeDoughnutChartConfig } from '@/utils/themeStyles'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -166,6 +166,11 @@ const chartColors = computed(() => {
   return getThemeChartSequence()
 })
 
+const doughnutConfig = computed(() => {
+  void themeVersion.value
+  return getThemeDoughnutChartConfig()
+})
+
 const displayGroupStats = computed(() => {
   if (!props.groupStats?.length) return []
 
@@ -182,7 +187,10 @@ const chartData = computed(() => {
       {
         data: displayGroupStats.value.map((g) => props.metric === 'actual_cost' ? g.actual_cost : g.total_tokens),
         backgroundColor: chartColors.value.slice(0, displayGroupStats.value.length),
-        borderWidth: 0
+        borderWidth: 0,
+        borderRadius: doughnutConfig.value.borderRadius,
+        spacing: doughnutConfig.value.spacing,
+        hoverOffset: doughnutConfig.value.hoverOffset
       }
     ]
   }
@@ -195,6 +203,7 @@ const doughnutOptions = computed(() => {
   return {
     responsive: true,
     maintainAspectRatio: false,
+    cutout: doughnutConfig.value.cutout,
     plugins: {
       legend: {
         display: false

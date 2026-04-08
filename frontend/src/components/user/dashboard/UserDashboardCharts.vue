@@ -75,7 +75,7 @@ import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import type { TrendDataPoint, ModelStat } from '@/types'
 import { formatCostFixed as formatCost, formatNumberLocaleString as formatNumber, formatTokensK as formatTokens } from '@/utils/format'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js'
-import { getThemeChartSequence, getThemeChartTooltipColors } from '@/utils/themeStyles'
+import { getThemeChartSequence, getThemeChartTooltipColors, getThemeDoughnutChartConfig } from '@/utils/themeStyles'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, Filler)
 
 const props = defineProps<{ loading: boolean, startDate: string, endDate: string, granularity: string, trend: TrendDataPoint[], models: ModelStat[] }>()
@@ -93,17 +93,27 @@ const tooltipColors = computed(() => {
   return getThemeChartTooltipColors()
 })
 
+const doughnutConfig = computed(() => {
+  void themeVersion.value
+  return getThemeDoughnutChartConfig()
+})
+
 const modelData = computed(() => !props.models?.length ? null : {
   labels: props.models.map((m: ModelStat) => m.model),
   datasets: [{
     data: props.models.map((m: ModelStat) => m.total_tokens),
-    backgroundColor: chartPalette.value
+    backgroundColor: chartPalette.value,
+    borderWidth: 0,
+    borderRadius: doughnutConfig.value.borderRadius,
+    spacing: doughnutConfig.value.spacing,
+    hoverOffset: doughnutConfig.value.hoverOffset
   }]
 })
 
 const doughnutOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  cutout: doughnutConfig.value.cutout,
   plugins: {
     legend: { display: false },
     tooltip: {

@@ -15,22 +15,39 @@ const THEME_DEFAULTS: Record<string, string> = {
   '--theme-info-rgb': '37 99 235',
   '--theme-brand-orange-rgb': '234 88 12',
   '--theme-brand-purple-rgb': '147 51 234',
-  '--theme-brand-rose-rgb': '225 29 72'
+  '--theme-brand-rose-rgb': '225 29 72',
+  '--theme-chart-seq-1-rgb': '37 99 235',
+  '--theme-chart-seq-2-rgb': '58 115 82',
+  '--theme-chart-seq-3-rgb': '204 122 0',
+  '--theme-chart-seq-4-rgb': '147 51 234',
+  '--theme-chart-seq-5-rgb': '225 29 72',
+  '--theme-chart-seq-6-rgb': '217 83 30',
+  '--theme-chart-seq-7-rgb': '178 59 59',
+  '--theme-chart-seq-8-rgb': '14 116 144',
+  '--theme-chart-seq-9-rgb': '100 116 139',
+  '--theme-chart-seq-10-rgb': '77 124 15',
+  '--theme-chart-seq-11-rgb': '180 83 9',
+  '--theme-chart-seq-12-rgb': '109 40 217',
+  '--theme-chart-donut-cutout': '65',
+  '--theme-chart-donut-border-radius': '3',
+  '--theme-chart-donut-spacing': '3',
+  '--theme-chart-point-radius': '0',
+  '--theme-chart-point-hover-radius': '5'
 }
 
 const THEME_CHART_SEQUENCE = [
-  '--theme-info-rgb',
-  '--theme-success-rgb',
-  '--theme-warning-rgb',
-  '--theme-danger-rgb',
-  '--theme-brand-purple-rgb',
-  '--theme-brand-rose-rgb',
-  '--theme-accent-rgb',
-  '--theme-brand-orange-rgb',
-  '--theme-info-rgb',
-  '--theme-success-rgb',
-  '--theme-warning-rgb',
-  '--theme-brand-purple-rgb'
+  '--theme-chart-seq-1-rgb',
+  '--theme-chart-seq-2-rgb',
+  '--theme-chart-seq-3-rgb',
+  '--theme-chart-seq-4-rgb',
+  '--theme-chart-seq-5-rgb',
+  '--theme-chart-seq-6-rgb',
+  '--theme-chart-seq-7-rgb',
+  '--theme-chart-seq-8-rgb',
+  '--theme-chart-seq-9-rgb',
+  '--theme-chart-seq-10-rgb',
+  '--theme-chart-seq-11-rgb',
+  '--theme-chart-seq-12-rgb'
 ] as const
 
 function resolveThemeFallback(variableName: string, fallback?: string): string {
@@ -83,5 +100,35 @@ export function getThemeChartTooltipColors(): { background: string; text: string
   return {
     background: readThemeCssVariable('--theme-surface-contrast'),
     text: readThemeCssVariable('--theme-surface-contrast-text')
+  }
+}
+
+export function readThemeCssVariableNumber(variableName: string, fallback = 0): number {
+  const value = readThemeCssVariable(variableName)
+  const parsed = parseFloat(value)
+  return isNaN(parsed) ? fallback : parsed
+}
+
+export function getThemeDoughnutChartConfig(): {
+  cutout: string
+  borderRadius: number
+  spacing: number
+  hoverOffset: number
+} {
+  return {
+    cutout: readThemeCssVariableNumber('--theme-chart-donut-cutout', 65) + '%',
+    borderRadius: readThemeCssVariableNumber('--theme-chart-donut-border-radius', 3),
+    spacing: readThemeCssVariableNumber('--theme-chart-donut-spacing', 3),
+    hoverOffset: 8
+  }
+}
+
+export function getThemeLineChartConfig(): {
+  pointRadius: number
+  pointHoverRadius: number
+} {
+  return {
+    pointRadius: readThemeCssVariableNumber('--theme-chart-point-radius', 0),
+    pointHoverRadius: readThemeCssVariableNumber('--theme-chart-point-hover-radius', 5)
   }
 }

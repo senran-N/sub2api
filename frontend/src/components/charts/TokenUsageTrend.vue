@@ -36,7 +36,7 @@ import { Line } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { TrendDataPoint } from '@/types'
 import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
-import { getThemeChartTooltipColors, readThemeCssVariable, readThemeRgb, readThemeRgbAlpha } from '@/utils/themeStyles'
+import { getThemeChartTooltipColors, getThemeLineChartConfig, readThemeCssVariable, readThemeRgb, readThemeRgbAlpha } from '@/utils/themeStyles'
 
 ChartJS.register(
   CategoryScale,
@@ -57,6 +57,11 @@ const props = defineProps<{
 }>()
 
 const themeVersion = useDocumentThemeVersion()
+
+const lineConfig = computed(() => {
+  void themeVersion.value
+  return getThemeLineChartConfig()
+})
 
 const chartColors = computed(() => {
   void themeVersion.value
@@ -92,7 +97,9 @@ const chartData = computed(() => {
         borderColor: chartColors.value.input,
         backgroundColor: chartColors.value.inputSoft,
         fill: true,
-        tension: 0.3
+        tension: 0.3,
+        pointRadius: lineConfig.value.pointRadius,
+        pointHoverRadius: lineConfig.value.pointHoverRadius
       },
       {
         label: 'Output',
@@ -100,7 +107,9 @@ const chartData = computed(() => {
         borderColor: chartColors.value.output,
         backgroundColor: chartColors.value.outputSoft,
         fill: true,
-        tension: 0.3
+        tension: 0.3,
+        pointRadius: lineConfig.value.pointRadius,
+        pointHoverRadius: lineConfig.value.pointHoverRadius
       },
       {
         label: 'Cache Creation',
@@ -108,7 +117,9 @@ const chartData = computed(() => {
         borderColor: chartColors.value.cacheCreation,
         backgroundColor: chartColors.value.cacheCreationSoft,
         fill: true,
-        tension: 0.3
+        tension: 0.3,
+        pointRadius: lineConfig.value.pointRadius,
+        pointHoverRadius: lineConfig.value.pointHoverRadius
       },
       {
         label: 'Cache Read',
@@ -116,7 +127,9 @@ const chartData = computed(() => {
         borderColor: chartColors.value.cacheRead,
         backgroundColor: chartColors.value.cacheReadSoft,
         fill: true,
-        tension: 0.3
+        tension: 0.3,
+        pointRadius: lineConfig.value.pointRadius,
+        pointHoverRadius: lineConfig.value.pointHoverRadius
       },
       {
         label: 'Cache Hit Rate',
@@ -129,6 +142,8 @@ const chartData = computed(() => {
         borderDash: [5, 5],
         fill: false,
         tension: 0.3,
+        pointRadius: lineConfig.value.pointRadius,
+        pointHoverRadius: lineConfig.value.pointHoverRadius,
         yAxisID: 'yPercent'
       }
     ]

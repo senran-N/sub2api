@@ -833,6 +833,24 @@
   --theme-table-head-bg: #f7f6f2;
   --theme-table-head-text: #666661;
   --theme-table-row-hover: rgba(255, 90, 31, 0.045);
+
+  --theme-chart-seq-1-rgb: 37 99 235;
+  --theme-chart-seq-2-rgb: 58 115 82;
+  --theme-chart-seq-3-rgb: 204 122 0;
+  --theme-chart-seq-4-rgb: 147 51 234;
+  --theme-chart-seq-5-rgb: 225 29 72;
+  --theme-chart-seq-6-rgb: 217 83 30;
+  --theme-chart-seq-7-rgb: 178 59 59;
+  --theme-chart-seq-8-rgb: 14 116 144;
+  --theme-chart-seq-9-rgb: 100 116 139;
+  --theme-chart-seq-10-rgb: 77 124 15;
+  --theme-chart-seq-11-rgb: 180 83 9;
+  --theme-chart-seq-12-rgb: 109 40 217;
+  --theme-chart-donut-cutout: 65;
+  --theme-chart-donut-border-radius: 3;
+  --theme-chart-donut-spacing: 3;
+  --theme-chart-point-radius: 0;
+  --theme-chart-point-hover-radius: 5;
 }
 
 :root[data-brand-theme='claude'] {
@@ -1639,6 +1657,24 @@
   --theme-table-head-bg: #f0eee6;
   --theme-table-head-text: #4f4a43;
   --theme-table-row-hover: rgba(217, 83, 30, 0.04);
+
+  --theme-chart-seq-1-rgb: 211 92 62;
+  --theme-chart-seq-2-rgb: 87 141 123;
+  --theme-chart-seq-3-rgb: 211 154 62;
+  --theme-chart-seq-4-rgb: 92 130 168;
+  --theme-chart-seq-5-rgb: 148 106 79;
+  --theme-chart-seq-6-rgb: 112 148 140;
+  --theme-chart-seq-7-rgb: 155 104 140;
+  --theme-chart-seq-8-rgb: 180 130 55;
+  --theme-chart-seq-9-rgb: 100 140 110;
+  --theme-chart-seq-10-rgb: 140 100 88;
+  --theme-chart-seq-11-rgb: 80 120 160;
+  --theme-chart-seq-12-rgb: 135 95 135;
+  --theme-chart-donut-cutout: 70;
+  --theme-chart-donut-border-radius: 8;
+  --theme-chart-donut-spacing: 4;
+  --theme-chart-point-radius: 0;
+  --theme-chart-point-hover-radius: 5;
 }
 
 .dark[data-brand-theme='factory'] {

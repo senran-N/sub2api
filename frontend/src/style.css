@@ -1846,6 +1846,7 @@
     font-weight: 700;
     letter-spacing: var(--theme-brand-badge-letter-spacing);
     text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .app-sidebar__nav {

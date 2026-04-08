@@ -133,3 +133,9 @@ frontend/coverage/
 aicodex
 output/
 
+# 本地开发数据库 / 缓存运行时数据
+deploy/postgres_data_local/
+deploy/redis_data_local/
+
+# 主题预览文件
+*-theme-preview.html
