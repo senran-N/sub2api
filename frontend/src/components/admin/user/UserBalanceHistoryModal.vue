@@ -204,9 +204,9 @@ watch(() => props.show, (v) => {
     typeFilter.value = ''
     loadHistory(1)
   }
-})
+}, { immediate: true })
 
-const loadHistory = async (page: number) => {
+async function loadHistory(page: number) {
   if (!props.user) return
   loading.value = true
   currentPage.value = page

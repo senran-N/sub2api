@@ -168,9 +168,9 @@ watch(() => props.show, (v) => {
   } else {
     closeGroupSelector()
   }
-})
+}, { immediate: true })
 
-const load = async () => {
+async function load() {
   if (!props.user) return
   loading.value = true
   groupButtonRefs.value.clear()
@@ -184,7 +184,7 @@ const load = async () => {
   }
 }
 
-const loadGroups = async () => {
+async function loadGroups() {
   try {
     const groups = await adminAPI.groups.getAll()
     allGroups.value = groups

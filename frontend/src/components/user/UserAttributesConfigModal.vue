@@ -291,7 +291,7 @@ const getErrorMessage = (error: unknown, fallbackMessage: string) => {
   return fallbackMessage
 }
 
-const loadAttributes = async () => {
+async function loadAttributes() {
   loading.value = true
   try {
     attributes.value = await adminAPI.userAttributes.listDefinitions()
@@ -410,7 +410,7 @@ watch(() => props.show, (isShow) => {
   if (isShow) {
     loadAttributes()
   }
-})
+}, { immediate: true })
 </script>
 
 <style scoped>

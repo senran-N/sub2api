@@ -7,6 +7,7 @@ import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore } from '@/stores'
 import { opsAPI, type OpsRequestDetailsParams, type OpsRequestDetail } from '@/api/admin/ops'
 import { parseTimeRangeMinutes, formatDateTime } from '../utils/opsFormatters'
+import { formatCustomTimeRangeLabel } from './opsDashboardHeaderHelpers'
 
 export interface OpsRequestDetailsPreset {
   title: string
@@ -19,6 +20,8 @@ export interface OpsRequestDetailsPreset {
 interface Props {
   modelValue: boolean
   timeRange: string
+  customStartTime?: string | null
+  customEndTime?: string | null
   preset: OpsRequestDetailsPreset
   platform?: string
   groupId?: number | null
@@ -43,12 +46,29 @@ const pageSize = ref(10)
 const close = () => emit('update:modelValue', false)
 
 const rangeLabel = computed(() => {
+  if (
+    props.timeRange === 'custom' &&
+    props.customStartTime &&
+    props.customEndTime
+  ) {
+    return formatCustomTimeRangeLabel(props.customStartTime, props.customEndTime)
+  }
   const minutes = parseTimeRangeMinutes(props.timeRange)
   if (minutes >= 60) return t('admin.ops.requestDetails.rangeHours', { n: Math.round(minutes / 60) })
   return t('admin.ops.requestDetails.rangeMinutes', { n: minutes })
 })
 
 function buildTimeParams(): Pick<OpsRequestDetailsParams, 'start_time' | 'end_time'> {
+  if (
+    props.timeRange === 'custom' &&
+    props.customStartTime &&
+    props.customEndTime
+  ) {
+    return {
+      start_time: props.customStartTime,
+      end_time: props.customEndTime
+    }
+  }
   const minutes = parseTimeRangeMinutes(props.timeRange)
   const endTime = new Date()
   const startTime = new Date(endTime.getTime() - minutes * 60 * 1000)
@@ -96,14 +116,17 @@ watch(
     if (open) {
       page.value = 1
       pageSize.value = 10
-      fetchData()
+      void fetchData()
     }
-  }
+  },
+  { immediate: true }
 )
 
 watch(
   () => [
     props.timeRange,
+    props.customStartTime,
+    props.customEndTime,
     props.platform,
     props.groupId,
     props.preset.kind,
@@ -114,7 +137,7 @@ watch(
   () => {
     if (!props.modelValue) return
     page.value = 1
-    fetchData()
+    void fetchData()
   }
 )
 

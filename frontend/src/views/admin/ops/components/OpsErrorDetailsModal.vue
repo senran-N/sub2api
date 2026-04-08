@@ -161,7 +161,8 @@ watch(
     page.value = 1
     pageSize.value = 10
     resetFilters()
-  }
+  },
+  { immediate: true }
 )
 
 watch(

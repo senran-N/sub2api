@@ -333,7 +333,7 @@ const cloneEntries = (entries: GroupRateMultiplierEntry[]): LocalEntry[] => {
   return entries.map(e => ({ ...e }))
 }
 
-const loadEntries = async () => {
+async function loadEntries() {
   if (!props.group) return
   loading.value = true
   try {
@@ -365,7 +365,7 @@ watch(() => props.show, (val) => {
     newRate.value = null
     loadEntries()
   }
-})
+}, { immediate: true })
 
 const handlePageSizeChange = (newSize: number) => {
   pageSize.value = newSize
