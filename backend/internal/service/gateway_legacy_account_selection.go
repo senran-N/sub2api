@@ -59,7 +59,7 @@ func (s *GatewayService) selectAccountWithLegacyScheduling(input *legacyAccountS
 		return nil, err
 	}
 	if selected != nil {
-		return selected, nil
+		return s.hydrateSelectedAccount(ctx, selected)
 	}
 
 	if account, ok := s.tryStickySessionAccount(ctx, input.groupID, input.sessionHash, input.requestedModel, input.excludedIDs, input.stickyPlatformCheck); ok {
@@ -82,7 +82,7 @@ func (s *GatewayService) selectAccountWithLegacyScheduling(input *legacyAccountS
 		platformFilter: input.platformFilter,
 	}, input.oauthTieBreaker)
 	if selected != nil {
-		return selected, nil
+		return s.hydrateSelectedAccount(ctx, selected)
 	}
 
 	stats := s.logDetailedSelectionFailure(ctx, input.groupID, input.sessionHash, input.requestedModel, input.platform, accounts, input.excludedIDs, input.failureUseMixed)

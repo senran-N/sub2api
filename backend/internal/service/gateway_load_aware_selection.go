@@ -130,14 +130,21 @@ func (s *GatewayService) tryAcquireAndMaybeBindSelection(
 	if err != nil || !result.Acquired {
 		return nil, false
 	}
-	if !s.checkAndRegisterSession(ctx, account, sessionHash) {
+	hydrated := s.hydrateSelectedAccountOrNil(ctx, account)
+	if hydrated == nil {
+		if result.ReleaseFunc != nil {
+			result.ReleaseFunc()
+		}
+		return nil, false
+	}
+	if !s.checkAndRegisterSession(ctx, hydrated, sessionHash) {
 		result.ReleaseFunc()
 		return nil, false
 	}
 	if bindSticky {
-		s.bindStickySelection(ctx, groupID, sessionHash, account.ID)
+		s.bindStickySelection(ctx, groupID, sessionHash, hydrated.ID)
 	}
-	return newAcquiredAccountSelection(account, result.ReleaseFunc), true
+	return newAcquiredAccountSelection(hydrated, result.ReleaseFunc), true
 }
 
 func (s *GatewayService) tryBuildAccountWaitPlan(
@@ -158,7 +165,12 @@ func (s *GatewayService) tryBuildAccountWaitPlan(
 		return nil, "session_limit", false
 	}
 
-	return newWaitPlanAccountSelection(account, timeout, maxWaiting), "", true
+	hydrated := s.hydrateSelectedAccountOrNil(ctx, account)
+	if hydrated == nil {
+		return nil, "hydrate_miss", false
+	}
+
+	return newWaitPlanAccountSelection(hydrated, timeout, maxWaiting), "", true
 }
 
 func (s *GatewayService) selectLoadAwareAvailableAccount(

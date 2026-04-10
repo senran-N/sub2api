@@ -48,7 +48,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 	if sessionHash != "" {
 		_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), cacheKey, selected.ID, geminiStickySessionTTL)
 	}
-	return selected, nil
+	return s.hydrateSelectedAccount(ctx, selected)
 }
 
 func (s *GeminiMessagesCompatService) resolvePlatformAndSchedulingMode(ctx context.Context, groupID *int64) (string, bool, bool, error) {
@@ -250,6 +250,20 @@ func (s *GeminiMessagesCompatService) getSchedulableAccount(ctx context.Context,
 	return s.accountRepo.GetByID(ctx, accountID)
 }
 
+func (s *GeminiMessagesCompatService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
+	if account == nil || s.schedulerSnapshot == nil {
+		return account, nil
+	}
+	hydrated, err := s.schedulerSnapshot.GetAccount(ctx, account.ID)
+	if err != nil {
+		return nil, err
+	}
+	if hydrated == nil {
+		return nil, fmt.Errorf("selected gemini account %d not found during hydration", account.ID)
+	}
+	return hydrated, nil
+}
+
 func (s *GeminiMessagesCompatService) listSchedulableAccountsOnce(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, error) {
 	if s.schedulerSnapshot != nil {
 		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
@@ -350,5 +364,5 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 	if selected == nil {
 		return nil, errors.New("no available Gemini accounts")
 	}
-	return selected, nil
+	return s.hydrateSelectedAccount(ctx, selected)
 }
