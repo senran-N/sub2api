@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
@@ -100,4 +102,41 @@ func TestGatewayService_SelectAccountWithLoadAwareness_HydratesSnapshotSelection
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
+}
+
+func TestGatewayService_SelectAccountForModelWithExclusions_IndexedFailureReturnsDetailedStats(t *testing.T) {
+	ctx := context.Background()
+	model := "claude-sonnet-4-5"
+	resetAt := time.Now().Add(2 * time.Minute).UTC().Format(time.RFC3339)
+	snapshot := &Account{
+		ID:          9103,
+		Name:        "rate-limited-indexed",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+		Extra: map[string]any{
+			modelRateLimitsKey: map[string]any{
+				model: map[string]any{
+					"rate_limit_reset_at": resetAt,
+				},
+			},
+		},
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		snapshotAccounts: []*Account{snapshot},
+		accountsByID:     map[int64]*Account{snapshot.ID: snapshot},
+	}
+	svc := &GatewayService{
+		cfg:               &config.Config{RunMode: config.RunModeStandard},
+		schedulerSnapshot: &SchedulerSnapshotService{cache: snapshotCache},
+	}
+
+	account, err := svc.SelectAccountForModelWithExclusions(ctx, nil, "", model, nil)
+	require.Nil(t, account)
+	require.ErrorIs(t, err, ErrNoAvailableAccounts)
+	require.True(t, strings.Contains(err.Error(), "model_rate_limited=1"), err.Error())
+	require.True(t, strings.Contains(err.Error(), "supporting model: "+model), err.Error())
 }

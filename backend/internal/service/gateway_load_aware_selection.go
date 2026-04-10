@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"time"
-
-	"github.com/senran-N/sub2api/internal/config"
 )
 
 // accountWithLoad 账号与负载信息的组合，用于负载感知调度
@@ -85,38 +83,14 @@ func newWaitPlanAccountSelection(account *Account, timeout time.Duration, maxWai
 	}
 }
 
-func (s *GatewayService) tryAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {
-	if s.concurrencyService == nil {
-		return &AcquireResult{Acquired: true, ReleaseFunc: func() {}}, nil
-	}
-	return s.concurrencyService.AcquireAccountSlot(ctx, accountID, maxConcurrency)
-}
-
 func (s *GatewayService) tryAcquireByLegacyOrder(ctx context.Context, candidates []*Account, groupID *int64, sessionHash string, preferOAuth bool) (*AccountSelectionResult, bool) {
 	ordered := append([]*Account(nil), candidates...)
 	sortAccountsByPriorityAndLastUsed(ordered, preferOAuth)
-
-	for _, acc := range ordered {
-		if result, ok := s.tryAcquireAndMaybeBindSelection(ctx, groupID, sessionHash, acc, true); ok {
-			return result, true
-		}
-	}
-
-	return nil, false
-}
-
-func (s *GatewayService) schedulingConfig() config.GatewaySchedulingConfig {
-	if s.cfg != nil {
-		return s.cfg.Gateway.Scheduling
-	}
-	return config.GatewaySchedulingConfig{
-		StickySessionMaxWaiting:  3,
-		StickySessionWaitTimeout: 45 * time.Second,
-		FallbackWaitTimeout:      30 * time.Second,
-		FallbackMaxWaiting:       100,
-		LoadBatchEnabled:         true,
-		SlotCleanupInterval:      30 * time.Second,
-	}
+	result, _, ok := selectFirstOrderedRuntimeSelection(ordered, func(account *Account) (*AccountSelectionResult, error, bool) {
+		result, ok := s.tryAcquireAndMaybeBindSelection(ctx, groupID, sessionHash, account, true)
+		return result, nil, ok
+	})
+	return result, ok
 }
 
 func (s *GatewayService) tryAcquireAndMaybeBindSelection(
@@ -126,25 +100,19 @@ func (s *GatewayService) tryAcquireAndMaybeBindSelection(
 	account *Account,
 	bindSticky bool,
 ) (*AccountSelectionResult, bool) {
-	result, err := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
-	if err != nil || !result.Acquired {
+	result, err, ok := tryAcquireRuntimeSelection(ctx, s.buildGatewayRuntimeAcquireSpec(
+		ctx,
+		account,
+		sessionHash,
+		func(account *Account) *Account {
+			return s.hydrateSelectedAccountOrNil(ctx, account)
+		},
+		s.buildGatewayStickyBindAdapter(ctx, groupID, sessionHash, bindSticky),
+	))
+	if err != nil || !ok {
 		return nil, false
 	}
-	hydrated := s.hydrateSelectedAccountOrNil(ctx, account)
-	if hydrated == nil {
-		if result.ReleaseFunc != nil {
-			result.ReleaseFunc()
-		}
-		return nil, false
-	}
-	if !s.checkAndRegisterSession(ctx, hydrated, sessionHash) {
-		result.ReleaseFunc()
-		return nil, false
-	}
-	if bindSticky {
-		s.bindStickySelection(ctx, groupID, sessionHash, hydrated.ID)
-	}
-	return newAcquiredAccountSelection(hydrated, result.ReleaseFunc), true
+	return result, true
 }
 
 func (s *GatewayService) tryBuildAccountWaitPlan(
@@ -154,23 +122,16 @@ func (s *GatewayService) tryBuildAccountWaitPlan(
 	timeout time.Duration,
 	maxWaiting int,
 ) (*AccountSelectionResult, string, bool) {
-	if s.concurrencyService != nil {
-		waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, account.ID)
-		if waitingCount >= maxWaiting {
-			return nil, "wait_queue_full", false
-		}
-	}
-
-	if !s.checkAndRegisterSession(ctx, account, sessionHash) {
-		return nil, "session_limit", false
-	}
-
-	hydrated := s.hydrateSelectedAccountOrNil(ctx, account)
-	if hydrated == nil {
-		return nil, "hydrate_miss", false
-	}
-
-	return newWaitPlanAccountSelection(hydrated, timeout, maxWaiting), "", true
+	return tryBuildRuntimeWaitPlan(ctx, s.buildGatewayRuntimeWaitPlanSpec(
+		ctx,
+		account,
+		sessionHash,
+		func(account *Account) *Account {
+			return s.hydrateSelectedAccountOrNil(ctx, account)
+		},
+		timeout,
+		maxWaiting,
+	))
 }
 
 func (s *GatewayService) selectLoadAwareAvailableAccount(
@@ -185,13 +146,15 @@ func (s *GatewayService) selectLoadAwareAvailableAccount(
 	}
 
 	sortAccountsByPriorityLoadAndLastUsed(available, preferOAuth)
+	ordered := make([]*Account, 0, len(available))
 	for _, item := range available {
-		if result, ok := s.tryAcquireAndMaybeBindSelection(ctx, groupID, sessionHash, item.account, true); ok {
-			return result, true
-		}
+		ordered = append(ordered, item.account)
 	}
-
-	return nil, false
+	result, _, ok := selectFirstOrderedRuntimeSelection(ordered, func(account *Account) (*AccountSelectionResult, error, bool) {
+		result, ok := s.tryAcquireAndMaybeBindSelection(ctx, groupID, sessionHash, account, true)
+		return result, nil, ok
+	})
+	return result, ok
 }
 
 func (s *GatewayService) selectFallbackWaitPlan(
@@ -205,12 +168,7 @@ func (s *GatewayService) selectFallbackWaitPlan(
 ) (*AccountSelectionResult, bool) {
 	ordered := append([]*Account(nil), candidates...)
 	s.sortCandidatesForFallback(ordered, preferOAuth, mode)
-
-	for _, acc := range ordered {
-		if result, _, ok := s.tryBuildAccountWaitPlan(ctx, acc, sessionHash, timeout, maxWaiting); ok {
-			return result, true
-		}
-	}
-
-	return nil, false
+	return selectFirstOrderedWaitPlan(ordered, func(account *Account) (*AccountSelectionResult, string, bool) {
+		return s.tryBuildAccountWaitPlan(ctx, account, sessionHash, timeout, maxWaiting)
+	})
 }

@@ -112,21 +112,141 @@ func (s *GatewayService) tryStickySessionAccount(
 	return account, true
 }
 
-func (s *GatewayService) selectBestCandidateAndBindSession(
+func (s *GatewayService) forEachIndexedSelectionBatch(
+	ctx context.Context,
+	groupID *int64,
+	pager *schedulerIndexedAccountPager,
+	schedGroup *Group,
+	pageSize int,
+	visit func(pageCtx context.Context, batch []Account) (bool, error),
+) (bool, error) {
+	if pager == nil || visit == nil {
+		return false, nil
+	}
+	if pageSize <= 0 {
+		pageSize = 1
+	}
+
+	scopedFound := false
+	for {
+		batch, hasMore, err := pager.Next(ctx, pageSize)
+		if err != nil {
+			return scopedFound, err
+		}
+		if len(batch) == 0 {
+			if !hasMore {
+				return scopedFound, nil
+			}
+			continue
+		}
+
+		scopedFound = true
+		batch = s.filterSelectionBatchByIndexedCapabilities(ctx, groupID, pager.platform, pager.hasForcePlatform, batch, schedGroup)
+		if len(batch) > 0 {
+			pageCtx := s.prefetchSelectionSignals(ctx, batch)
+			stop, err := visit(pageCtx, batch)
+			if err != nil {
+				return scopedFound, err
+			}
+			if stop {
+				return scopedFound, nil
+			}
+		}
+
+		if !hasMore {
+			return scopedFound, nil
+		}
+	}
+}
+
+func (s *GatewayService) selectBestCandidateFromPagerWithStickyPolicy(
+	ctx context.Context,
+	groupID *int64,
+	sessionHash string,
+	pager *schedulerIndexedAccountPager,
+	filterParams *candidateFilterParams,
+	oauthTieBreaker func(a, b *Account) bool,
+	pageSize int,
+	bindSticky bool,
+) (*Account, bool, error) {
+	if pager == nil || filterParams == nil {
+		return nil, false, nil
+	}
+	selected, scopedFound, err := s.selectBestCandidateFromPager(ctx, groupID, pager, filterParams, oauthTieBreaker, pageSize)
+	if err != nil {
+		return nil, false, err
+	}
+	return s.finalizeSelectedGatewayCandidate(ctx, groupID, sessionHash, selected, bindSticky), scopedFound, nil
+}
+
+func (s *GatewayService) selectBestCandidateFromPager(
+	ctx context.Context,
+	groupID *int64,
+	pager *schedulerIndexedAccountPager,
+	filterParams *candidateFilterParams,
+	oauthTieBreaker func(a, b *Account) bool,
+	pageSize int,
+) (*Account, bool, error) {
+	if pager == nil || filterParams == nil {
+		return nil, false, nil
+	}
+	if pageSize <= 0 {
+		pageSize = 1
+	}
+
+	var selected *Account
+	scopedFound, err := s.forEachIndexedSelectionBatch(ctx, groupID, pager, filterParams.schedGroup, pageSize, func(scopedCtx context.Context, batch []Account) (bool, error) {
+		params := *filterParams
+		params.ctx = scopedCtx
+		candidates := s.filterCandidates(batch, &params)
+		pageBest := selectBestByPriorityAndLastUsed(candidates, oauthTieBreaker)
+		if s.isBetterSelectionCandidate(pageBest, selected, oauthTieBreaker) {
+			selected = pageBest
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return selected, scopedFound, nil
+}
+
+func (s *GatewayService) selectBestCandidateWithStickyPolicy(
 	ctx context.Context,
 	groupID *int64,
 	sessionHash string,
 	accounts []Account,
 	filterParams *candidateFilterParams,
 	oauthTieBreaker func(a, b *Account) bool,
+	bindSticky bool,
+) *Account {
+	selected := s.selectBestCandidate(accounts, filterParams, oauthTieBreaker)
+	return s.finalizeSelectedGatewayCandidate(ctx, groupID, sessionHash, selected, bindSticky)
+}
+
+func (s *GatewayService) selectBestCandidate(
+	accounts []Account,
+	filterParams *candidateFilterParams,
+	oauthTieBreaker func(a, b *Account) bool,
 ) *Account {
 	candidates := s.filterCandidates(accounts, filterParams)
 	shuffleCandidatesByPriority(candidates)
-	selected := selectBestByPriorityAndLastUsed(candidates, oauthTieBreaker)
+	return selectBestByPriorityAndLastUsed(candidates, oauthTieBreaker)
+}
+
+func (s *GatewayService) finalizeSelectedGatewayCandidate(
+	ctx context.Context,
+	groupID *int64,
+	sessionHash string,
+	selected *Account,
+	bindSticky bool,
+) *Account {
 	if selected == nil {
 		return nil
 	}
-	s.bindStickySelection(ctx, groupID, sessionHash, selected.ID)
+	if bindSticky {
+		s.bindStickySelection(ctx, groupID, sessionHash, selected.ID)
+	}
 	return selected
 }
 
@@ -134,7 +254,7 @@ func (s *GatewayService) bindStickySelection(ctx context.Context, groupID *int64
 	if sessionHash == "" || s.cache == nil || accountID <= 0 {
 		return
 	}
-	if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, accountID, stickySessionTTL); err != nil {
+	if err := s.BindStickySession(ctx, groupID, sessionHash, accountID); err != nil {
 		logger.LegacyPrintf("service.gateway", "set session account failed: session=%s account_id=%d err=%v", sessionHash, accountID, err)
 	}
 }

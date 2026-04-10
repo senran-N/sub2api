@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/senran-N/sub2api/internal/config"
@@ -13,10 +14,10 @@ func TestCalculateGatewayUsageCost_PromptMediaReturnsZeroCost(t *testing.T) {
 		billingService: NewBillingService(&config.Config{}, nil),
 	}
 
-	cost := svc.calculateGatewayUsageCost(&ForwardResult{
+	cost := svc.calculateGatewayUsageCost(context.Background(), &ForwardResult{
 		Model:     "sora-prompt",
 		MediaType: "prompt",
-	}, &APIKey{}, 1.2)
+	}, &APIKey{}, "", 1.2)
 
 	if cost == nil {
 		t.Fatalf("cost should not be nil")
@@ -38,7 +39,7 @@ func TestCalculateGatewayLongContextUsageCost_UsesLongContextPricing(t *testing.
 		},
 	}
 
-	got := svc.calculateGatewayLongContextUsageCost(result, &APIKey{}, 1.0, 200000, 2.0)
+	got := svc.calculateGatewayLongContextUsageCost(context.Background(), result, &APIKey{}, "", 1.0, 200000, 2.0)
 	want, err := svc.billingService.CalculateCostWithLongContext("claude-sonnet-4", usageTokensFromClaudeUsage(result.Usage), 1.0, 200000, 2.0)
 	if err != nil {
 		t.Fatalf("unexpected pricing error: %v", err)

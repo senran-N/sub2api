@@ -8,16 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type schedulerSelectionHelperRepo struct {
-	stubOpenAIAccountRepo
-	setErrorCalls []int64
-}
-
-func (r *schedulerSelectionHelperRepo) SetError(ctx context.Context, id int64, message string) error {
-	r.setErrorCalls = append(r.setErrorCalls, id)
-	return nil
-}
-
 func TestNormalizeOpenAISchedulerTopK(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -74,14 +64,8 @@ func TestPrepareLoadBalanceCandidates_FiltersByExclusionAndModelAndTransport(t *
 	require.Equal(t, 5, loadReq[0].MaxConcurrency)
 }
 
-func TestPrepareLoadBalanceCandidates_PrivacyRequiredMarksErrorAndSkips(t *testing.T) {
-	repo := &schedulerSelectionHelperRepo{
-		stubOpenAIAccountRepo: stubOpenAIAccountRepo{},
-	}
-	svc := &OpenAIGatewayService{
-		accountRepo: repo,
-	}
-	scheduler := &defaultOpenAIAccountScheduler{service: svc}
+func TestPrepareLoadBalanceCandidates_PrivacyRequiredSkipsWithoutSideEffects(t *testing.T) {
+	scheduler := &defaultOpenAIAccountScheduler{service: &OpenAIGatewayService{}}
 
 	req := OpenAIAccountScheduleRequest{
 		RequiredTransport: OpenAIUpstreamTransportAny,
@@ -95,7 +79,6 @@ func TestPrepareLoadBalanceCandidates_PrivacyRequiredMarksErrorAndSkips(t *testi
 
 	require.Empty(t, filtered)
 	require.Empty(t, loadReq)
-	require.Equal(t, []int64{100}, repo.setErrorCalls)
 }
 
 func TestLoadSchedulerAccountLoads(t *testing.T) {

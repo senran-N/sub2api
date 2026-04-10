@@ -26,6 +26,48 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 		return account, nil
 	}
 
+	if s.schedulerSnapshot != nil {
+		selected, supported, err := s.selectBestGeminiAccountFromIndexedSnapshot(
+			ctx,
+			groupID,
+			requestedModel,
+			excludedIDs,
+			platform,
+			useMixedScheduling,
+			hasForcePlatform,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("query accounts failed: %w", err)
+		}
+		if selected == nil && groupID != nil && hasForcePlatform {
+			selected, supported, err = s.selectBestGeminiAccountFromIndexedSnapshot(
+				ctx,
+				nil,
+				requestedModel,
+				excludedIDs,
+				platform,
+				useMixedScheduling,
+				hasForcePlatform,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("query accounts failed: %w", err)
+			}
+		}
+		if selected != nil {
+			if sessionHash != "" {
+				_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), cacheKey, selected.ID, geminiStickySessionTTL)
+			}
+			return s.hydrateSelectedAccount(ctx, selected)
+		}
+		if requestedModel != "" && !supported {
+			return nil, fmt.Errorf("no available Gemini accounts supporting model: %s", requestedModel)
+		}
+		if requestedModel == "" {
+			return nil, errors.New("no available Gemini accounts")
+		}
+		return nil, fmt.Errorf("no available Gemini accounts supporting model: %s", requestedModel)
+	}
+
 	accounts, err := s.listSchedulableAccountsOnce(ctx, groupID, platform, hasForcePlatform)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
@@ -37,7 +79,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 		}
 	}
 
-	selected := s.selectBestGeminiAccount(ctx, accounts, requestedModel, excludedIDs, platform, useMixedScheduling)
+	selected := s.selectBestGeminiAccountFromBatch(ctx, accounts, requestedModel, excludedIDs, platform, useMixedScheduling)
 	if selected == nil {
 		if requestedModel != "" {
 			return nil, fmt.Errorf("no available Gemini accounts supporting model: %s", requestedModel)
@@ -49,6 +91,80 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 		_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), cacheKey, selected.ID, geminiStickySessionTTL)
 	}
 	return s.hydrateSelectedAccount(ctx, selected)
+}
+
+func (s *GeminiMessagesCompatService) selectBestGeminiAccountFromIndexedSnapshot(
+	ctx context.Context,
+	groupID *int64,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	platform string,
+	useMixedScheduling bool,
+	hasForcePlatform bool,
+) (*Account, bool, error) {
+	if s == nil || s.schedulerSnapshot == nil {
+		return nil, false, nil
+	}
+
+	sources, err := buildRequestedModelCapabilitySources(ctx, s.schedulerSnapshot, groupID, platform, hasForcePlatform, requestedModel)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(sources) == 0 {
+		sources = []SchedulerCapabilityIndex{{Kind: SchedulerCapabilityIndexAll}}
+	}
+
+	pager := newSchedulerIndexedAccountPager(s.schedulerSnapshot, groupID, platform, hasForcePlatform, sources)
+	if pager == nil {
+		return nil, false, nil
+	}
+
+	supported := strings.TrimSpace(requestedModel) == ""
+	selected, supported, err := selectBestAccountFromIndexedSnapshotPager(
+		ctx,
+		pager,
+		snapshotPageSizeOrDefault(s.cfg),
+		supported,
+		func(batch []Account) (*Account, error) {
+			return s.selectBestGeminiAccountFromBatch(ctx, batch, requestedModel, excludedIDs, platform, useMixedScheduling), nil
+		},
+		s.isBetterGeminiAccount,
+	)
+	if err != nil {
+		return nil, supported, err
+	}
+	return selected, supported, nil
+}
+
+func (s *GeminiMessagesCompatService) selectBestGeminiAIStudioAccountFromIndexedSnapshot(
+	ctx context.Context,
+	groupID *int64,
+) (*Account, error) {
+	if s == nil || s.schedulerSnapshot == nil {
+		return nil, nil
+	}
+
+	pager := newSchedulerIndexedAccountPager(s.schedulerSnapshot, groupID, PlatformGemini, true, []SchedulerCapabilityIndex{
+		{Kind: SchedulerCapabilityIndexAll},
+	})
+	if pager == nil {
+		return nil, nil
+	}
+
+	selected, _, err := selectBestAccountFromIndexedSnapshotPager(
+		ctx,
+		pager,
+		snapshotPageSizeOrDefault(s.cfg),
+		true,
+		func(batch []Account) (*Account, error) {
+			return s.selectBestGeminiAIStudioAccountFromBatch(batch), nil
+		},
+		s.isBetterGeminiAIStudioAccount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return selected, nil
 }
 
 func (s *GeminiMessagesCompatService) resolvePlatformAndSchedulingMode(ctx context.Context, groupID *int64) (string, bool, bool, error) {
@@ -165,7 +281,7 @@ func (s *GeminiMessagesCompatService) passesRateLimitPreCheckWithCache(ctx conte
 	return ok
 }
 
-func (s *GeminiMessagesCompatService) selectBestGeminiAccount(
+func (s *GeminiMessagesCompatService) selectBestGeminiAccountFromBatch(
 	ctx context.Context,
 	accounts []Account,
 	requestedModel string,
@@ -173,22 +289,28 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAccount(
 	platform string,
 	useMixedScheduling bool,
 ) *Account {
-	var selected *Account
-	precheckResult := s.buildPreCheckUsageResultMap(ctx, accounts, requestedModel)
+	candidates := s.filterSchedulableGeminiCandidates(
+		ctx,
+		accounts,
+		requestedModel,
+		excludedIDs,
+		platform,
+		useMixedScheduling,
+	)
+	return selectBestByPriorityAndLastUsed(candidates, preferOAuthAccountTieBreaker)
+}
 
+func (s *GeminiMessagesCompatService) selectBestGeminiAIStudioAccountFromBatch(accounts []Account) *Account {
+	var selected *Account
 	for i := range accounts {
 		acc := &accounts[i]
-		if _, excluded := excludedIDs[acc.ID]; excluded {
+		if !acc.IsSchedulable() || acc.Platform != PlatformGemini {
 			continue
 		}
-		if !s.isAccountUsableForRequestWithPrecheck(ctx, acc, requestedModel, platform, useMixedScheduling, precheckResult) {
-			continue
-		}
-		if selected == nil || s.isBetterGeminiAccount(acc, selected) {
+		if s.isBetterGeminiAIStudioAccount(acc, selected) {
 			selected = acc
 		}
 	}
-
 	return selected
 }
 
@@ -209,7 +331,40 @@ func (s *GeminiMessagesCompatService) buildPreCheckUsageResultMap(ctx context.Co
 	return result
 }
 
+func (s *GeminiMessagesCompatService) filterSchedulableGeminiCandidates(
+	ctx context.Context,
+	accounts []Account,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	platform string,
+	useMixedScheduling bool,
+) []*Account {
+	precheckResult := s.buildPreCheckUsageResultMap(ctx, accounts, requestedModel)
+	candidates := make([]*Account, 0, len(accounts))
+	for i := range accounts {
+		account := &accounts[i]
+		if _, excluded := excludedIDs[account.ID]; excluded {
+			continue
+		}
+		if !s.isAccountUsableForRequestWithPrecheck(ctx, account, requestedModel, platform, useMixedScheduling, precheckResult) {
+			continue
+		}
+		candidates = append(candidates, account)
+	}
+	return candidates
+}
+
+func preferOAuthAccountTieBreaker(candidate, current *Account) bool {
+	return candidate != nil && current != nil && candidate.Type == AccountTypeOAuth && current.Type != AccountTypeOAuth
+}
+
 func (s *GeminiMessagesCompatService) isBetterGeminiAccount(candidate, current *Account) bool {
+	if candidate == nil {
+		return false
+	}
+	if current == nil {
+		return true
+	}
 	if candidate.Priority < current.Priority {
 		return true
 	}
@@ -226,6 +381,45 @@ func (s *GeminiMessagesCompatService) isBetterGeminiAccount(candidate, current *
 		return candidate.Type == AccountTypeOAuth && current.Type != AccountTypeOAuth
 	default:
 		return candidate.LastUsedAt.Before(*current.LastUsedAt)
+	}
+}
+
+func (s *GeminiMessagesCompatService) isBetterGeminiAIStudioAccount(candidate, current *Account) bool {
+	if candidate == nil {
+		return false
+	}
+	if current == nil {
+		return true
+	}
+
+	candidateRank := s.geminiAIStudioAccountRank(candidate)
+	currentRank := s.geminiAIStudioAccountRank(current)
+	if candidateRank != currentRank {
+		return candidateRank < currentRank
+	}
+	return s.isBetterGeminiAccount(candidate, current)
+}
+
+func (s *GeminiMessagesCompatService) geminiAIStudioAccountRank(account *Account) int {
+	if account == nil {
+		return 999
+	}
+	switch account.Type {
+	case AccountTypeAPIKey:
+		if strings.TrimSpace(account.GetCredential("api_key")) != "" {
+			return 0
+		}
+		return 9
+	case AccountTypeOAuth:
+		if strings.TrimSpace(account.GetCredential("project_id")) == "" {
+			return 1
+		}
+		if strings.TrimSpace(account.GetCredential("oauth_type")) == "ai_studio" {
+			return 2
+		}
+		return 3
+	default:
+		return 10
 	}
 }
 
@@ -294,6 +488,17 @@ func (s *GeminiMessagesCompatService) HasAntigravityAccounts(ctx context.Context
 }
 
 func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx context.Context, groupID *int64) (*Account, error) {
+	if s.schedulerSnapshot != nil {
+		selected, err := s.selectBestGeminiAIStudioAccountFromIndexedSnapshot(ctx, groupID)
+		if err != nil {
+			return nil, fmt.Errorf("query accounts failed: %w", err)
+		}
+		if selected == nil {
+			return nil, errors.New("no available Gemini accounts")
+		}
+		return s.hydrateSelectedAccount(ctx, selected)
+	}
+
 	accounts, err := s.listSchedulableAccountsOnce(ctx, groupID, PlatformGemini, true)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
@@ -301,66 +506,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 	if len(accounts) == 0 {
 		return nil, errors.New("no available Gemini accounts")
 	}
-
-	rank := func(account *Account) int {
-		if account == nil {
-			return 999
-		}
-		switch account.Type {
-		case AccountTypeAPIKey:
-			if strings.TrimSpace(account.GetCredential("api_key")) != "" {
-				return 0
-			}
-			return 9
-		case AccountTypeOAuth:
-			if strings.TrimSpace(account.GetCredential("project_id")) == "" {
-				return 1
-			}
-			if strings.TrimSpace(account.GetCredential("oauth_type")) == "ai_studio" {
-				return 2
-			}
-			return 3
-		default:
-			return 10
-		}
-	}
-
-	var selected *Account
-	for i := range accounts {
-		acc := &accounts[i]
-		if selected == nil {
-			selected = acc
-			continue
-		}
-
-		r1, r2 := rank(acc), rank(selected)
-		if r1 < r2 {
-			selected = acc
-			continue
-		}
-		if r1 > r2 {
-			continue
-		}
-
-		if acc.Priority < selected.Priority {
-			selected = acc
-		} else if acc.Priority == selected.Priority {
-			switch {
-			case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
-				selected = acc
-			case acc.LastUsedAt != nil && selected.LastUsedAt == nil:
-			case acc.LastUsedAt == nil && selected.LastUsedAt == nil:
-				if acc.Type == AccountTypeOAuth && selected.Type != AccountTypeOAuth {
-					selected = acc
-				}
-			default:
-				if acc.LastUsedAt.Before(*selected.LastUsedAt) {
-					selected = acc
-				}
-			}
-		}
-	}
-
+	selected := s.selectBestGeminiAIStudioAccountFromBatch(accounts)
 	if selected == nil {
 		return nil, errors.New("no available Gemini accounts")
 	}

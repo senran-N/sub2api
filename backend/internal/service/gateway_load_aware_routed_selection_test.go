@@ -18,18 +18,8 @@ func TestTrySelectLoadAwareRoutedAccount_SelectsBestRoutedCandidate(t *testing.T
 			2: {AccountID: 2, LoadRate: 20},
 		},
 	}
-	svc := &GatewayService{
-		cache:              cache,
-		cfg:                testConfig(),
-		concurrencyService: NewConcurrencyService(concurrencyCache),
-	}
-
-	result, ok := svc.trySelectLoadAwareRoutedAccount(&loadAwareRoutedSelectionInput{
-		ctx:            context.Background(),
-		sessionHash:    "route-session",
-		requestedModel: "claude-3-5-sonnet-20241022",
-		excludedIDs:    map[int64]struct{}{},
-		accountByID: map[int64]*Account{
+	repo := &mockAccountRepoForPlatform{
+		accountsByID: map[int64]*Account{
 			1: {
 				ID:          1,
 				Platform:    PlatformAnthropic,
@@ -49,11 +39,27 @@ func TestTrySelectLoadAwareRoutedAccount_SelectsBestRoutedCandidate(t *testing.T
 				Priority:    1,
 			},
 		},
-		platform:          PlatformAnthropic,
-		useMixed:          false,
-		routingAccountIDs: []int64{1, 2},
-		waitTimeout:       time.Second,
-		maxWaiting:        1,
+	}
+	svc := &GatewayService{
+		accountRepo:        repo,
+		cache:              cache,
+		cfg:                testConfig(),
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	result, ok := svc.trySelectLoadAwareRoutedAccount(&loadAwareRoutedSelectionInput{
+		ctx:            context.Background(),
+		sessionHash:    "route-session",
+		requestedModel: "claude-3-5-sonnet-20241022",
+		excludedIDs:    map[int64]struct{}{},
+		accountByID:    map[int64]*Account{},
+		plan: &gatewaySelectionPlan{
+			platform:          PlatformAnthropic,
+			useMixed:          false,
+			routingAccountIDs: []int64{1, 2},
+		},
+		waitTimeout: time.Second,
+		maxWaiting:  1,
 	})
 
 	require.True(t, ok)
@@ -62,6 +68,50 @@ func TestTrySelectLoadAwareRoutedAccount_SelectsBestRoutedCandidate(t *testing.T
 	require.Equal(t, int64(2), result.Account.ID)
 	require.Equal(t, int64(2), cache.sessionBindings["route-session"])
 	require.Equal(t, 1, concurrencyCache.loadBatchCalls)
+	require.Equal(t, 2, repo.getByIDCalls)
+}
+
+func TestTrySelectLoadAwareRoutedAccount_UsesStickyAccountWithoutPreloadedMap(t *testing.T) {
+	repo := &mockAccountRepoForPlatform{
+		accountsByID: map[int64]*Account{
+			7: {
+				ID:          7,
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 5,
+				Priority:    1,
+			},
+		},
+	}
+	svc := &GatewayService{
+		accountRepo:        repo,
+		cfg:                testConfig(),
+		concurrencyService: NewConcurrencyService(&mockConcurrencyCache{}),
+	}
+
+	result, ok := svc.trySelectLoadAwareRoutedAccount(&loadAwareRoutedSelectionInput{
+		ctx:             context.Background(),
+		sessionHash:     "sticky-route",
+		requestedModel:  "claude-3-5-sonnet-20241022",
+		stickyAccountID: 7,
+		excludedIDs:     map[int64]struct{}{},
+		accountByID:     map[int64]*Account{},
+		plan: &gatewaySelectionPlan{
+			platform:          PlatformAnthropic,
+			useMixed:          false,
+			routingAccountIDs: []int64{7},
+		},
+		waitTimeout: time.Second,
+		maxWaiting:  1,
+	})
+
+	require.True(t, ok)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Account)
+	require.Equal(t, int64(7), result.Account.ID)
+	require.Equal(t, 1, repo.getByIDCalls)
 }
 
 func TestTrySelectLoadAwareRoutedAccount_ReturnsFalseWithoutRoutingIDs(t *testing.T) {
@@ -70,8 +120,8 @@ func TestTrySelectLoadAwareRoutedAccount_ReturnsFalseWithoutRoutingIDs(t *testin
 	}
 
 	result, ok := svc.trySelectLoadAwareRoutedAccount(&loadAwareRoutedSelectionInput{
-		ctx:               context.Background(),
-		routingAccountIDs: nil,
+		ctx:  context.Background(),
+		plan: &gatewaySelectionPlan{},
 	})
 
 	require.False(t, ok)

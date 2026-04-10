@@ -42,19 +42,19 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, nil
 	}
 
-	cfg := s.service.schedulingConfig()
-	if selection, ok := tryAcquireOrBuildStickyWaitPlan(
-		ctx,
-		account,
-		accountID,
-		cfg,
-		s.service.concurrencyService,
-		s.service.tryAcquireAccountSlot,
-		func(result *AcquireResult) *AccountSelectionResult {
-			_ = s.service.refreshStickySessionTTL(ctx, req.GroupID, sessionHash, s.service.openAIWSSessionStickyTTL())
-			return newAcquiredAccountSelection(account, result.ReleaseFunc)
-		},
-	); ok {
+	cfg := gatewaySchedulingConfigOrDefault(s.service.cfg)
+	if selection, ok := s.service.trySelectResolvedOpenAIStickyAccount(ctx, openAIStickyResolvedSelectionSpec{
+		account:        account,
+		accountID:      accountID,
+		cfg:            cfg,
+		stickyWaitPlan: s.service.buildOpenAIStickyWaitPlanAdapter(cfg),
+		onSelected: s.service.buildOpenAIStickyTTLSelectionAdapter(
+			ctx,
+			req.GroupID,
+			sessionHash,
+			s.service.openAIWSSessionStickyTTL(),
+		),
+	}); ok {
 		return selection, nil
 	}
 	return nil, nil
@@ -336,6 +336,16 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	ctx context.Context,
 	req OpenAIAccountScheduleRequest,
 ) (*AccountSelectionResult, int, int, float64, error) {
+	if s != nil && s.service != nil && s.service.schedulerSnapshot != nil {
+		return s.selectByLoadBalancePagedSnapshot(ctx, req)
+	}
+	return s.selectByLoadBalanceFullScan(ctx, req)
+}
+
+func (s *defaultOpenAIAccountScheduler) selectByLoadBalanceFullScan(
+	ctx context.Context,
+	req OpenAIAccountScheduleRequest,
+) (*AccountSelectionResult, int, int, float64, error) {
 	accounts, err := s.service.listSchedulableAccounts(ctx, req.GroupID)
 	if err != nil {
 		return nil, 0, 0, 0, err
@@ -376,6 +386,96 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	}
 
 	return nil, len(candidates), topK, loadSkew, ErrNoAvailableAccounts
+}
+
+func (s *defaultOpenAIAccountScheduler) selectByLoadBalancePagedSnapshot(
+	ctx context.Context,
+	req OpenAIAccountScheduleRequest,
+) (*AccountSelectionResult, int, int, float64, error) {
+	if s == nil || s.service == nil || s.service.schedulerSnapshot == nil {
+		return s.selectByLoadBalanceFullScan(ctx, req)
+	}
+
+	var schedGroup *Group
+	if req.GroupID != nil {
+		schedGroup, _ = s.service.schedulerSnapshot.GetGroupByID(ctx, *req.GroupID)
+	}
+
+	pageSize := s.service.openAISchedulerSnapshotPageSize()
+	configuredTopK := s.service.openAIWSLBTopK()
+	requestedModelAvailable := req.RequestedModel == ""
+	candidateCount := 0
+	loadRateSum := 0.0
+	loadRateSumSq := 0.0
+	var selectedResult *AccountSelectionResult
+	pager, err := s.buildIndexedSnapshotPager(ctx, req, schedGroup)
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+	if pager == nil {
+		return s.selectByLoadBalanceFullScan(ctx, req)
+	}
+
+	modelScopedFound, bestWaitCandidate, err := executeIndexedRuntimeSelection(
+		ctx,
+		pager,
+		pageSize,
+		func(accounts []Account) (bool, *openAIAccountCandidateScore, error) {
+			accounts = s.filterBatchByIndexedCapabilities(ctx, req, accounts, schedGroup)
+			prepared := s.prepareLoadBalanceCandidatePage(req, accounts, schedGroup)
+			requestedModelAvailable = requestedModelAvailable || prepared.requestedModelAvailable
+			if len(prepared.filtered) == 0 {
+				return false, nil, nil
+			}
+
+			loadMap := s.loadSchedulerAccountLoads(ctx, prepared.loadReq)
+			candidates, _ := s.buildOpenAILoadBalancedCandidates(prepared.filtered, loadMap)
+			candidateCount += len(candidates)
+			for i := range candidates {
+				loadRate := float64(candidates[i].loadInfo.LoadRate)
+				loadRateSum += loadRate
+				loadRateSumSq += loadRate * loadRate
+			}
+
+			pageTopK := normalizeOpenAISchedulerTopK(configuredTopK, len(candidates))
+			selectionOrder := buildOpenAIImmediateSelectionOrder(candidates, pageTopK, req)
+			if result, acquireErr, ok := s.trySelectImmediateScheduledCandidate(ctx, req, selectionOrder); ok {
+				if acquireErr != nil {
+					return false, nil, acquireErr
+				}
+				selectedResult = result
+				return true, nil, nil
+			}
+			if len(candidates) == 0 {
+				return false, nil, nil
+			}
+			return false, chooseOpenAIWaitCandidate(candidates), nil
+		},
+		isBetterOpenAIWaitCandidate,
+	)
+	if selectedResult != nil {
+		loadSkew := calcLoadSkewByMoments(loadRateSum, loadRateSumSq, candidateCount)
+		return selectedResult, candidateCount, selectionDecisionTopK(configuredTopK, candidateCount), loadSkew, nil
+	}
+	if err != nil {
+		return nil, candidateCount, selectionDecisionTopK(configuredTopK, candidateCount), calcLoadSkewByMoments(loadRateSum, loadRateSumSq, candidateCount), err
+	}
+
+	if candidateCount == 0 {
+		if req.RequestedModel != "" && !requestedModelAvailable && !modelScopedFound {
+			return nil, 0, 0, 0, newOpenAIRequestedModelUnavailableError(req.RequestedModel)
+		}
+		return nil, 0, 0, 0, errors.New("no available OpenAI accounts")
+	}
+
+	loadSkew := calcLoadSkewByMoments(loadRateSum, loadRateSumSq, candidateCount)
+	if bestWaitCandidate != nil {
+		if waitPlan, ok := s.tryBuildScheduledWaitPlan(ctx, req, []openAIAccountCandidateScore{*bestWaitCandidate}); ok {
+			return waitPlan, candidateCount, selectionDecisionTopK(configuredTopK, candidateCount), loadSkew, nil
+		}
+	}
+
+	return nil, candidateCount, selectionDecisionTopK(configuredTopK, candidateCount), loadSkew, ErrNoAvailableAccounts
 }
 
 func (s *defaultOpenAIAccountScheduler) isAccountTransportCompatible(account *Account, requiredTransport OpenAIUpstreamTransport) bool {

@@ -93,6 +93,18 @@ func (s *OpenAIGatewayService) openAIWSLBTopK() int {
 	return 7
 }
 
+func (s *OpenAIGatewayService) openAISchedulerSnapshotPageSize() int {
+	pageSize := snapshotPageSizeOrDefault(nil)
+	if s != nil {
+		pageSize = snapshotPageSizeOrDefault(s.cfg)
+	}
+	topK := s.openAIWSLBTopK()
+	if pageSize < topK {
+		return topK
+	}
+	return pageSize
+}
+
 func (s *OpenAIGatewayService) openAIWSSchedulerWeights() GatewayOpenAIWSSchedulerScoreWeightsView {
 	if s != nil && s.cfg != nil {
 		return GatewayOpenAIWSSchedulerScoreWeightsView{

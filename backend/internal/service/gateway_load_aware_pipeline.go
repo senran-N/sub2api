@@ -65,37 +65,36 @@ func (s *GatewayService) logLoadAwareSelectionEntry(
 
 func (s *GatewayService) selectAccountWithLoadBatch(input *loadAwareBatchSelectionInput) (*AccountSelectionResult, error) {
 	state := input.schedulingState
+	if state == nil || state.plan == nil {
+		return nil, ErrNoAvailableAccounts
+	}
+	plan := state.plan
 
 	if result, ok := s.trySelectLoadAwareRoutedAccount(&loadAwareRoutedSelectionInput{
-		ctx:               input.ctx,
-		groupID:           input.groupID,
-		sessionHash:       input.sessionHash,
-		requestedModel:    input.requestedModel,
-		stickyAccountID:   input.stickyAccountID,
-		excludedIDs:       input.excludedIDs,
-		accountByID:       state.accountByID,
-		platform:          state.platform,
-		useMixed:          state.useMixed,
-		routingAccountIDs: state.routingAccountIDs,
-		waitTimeout:       input.schedulingConfig.StickySessionWaitTimeout,
-		maxWaiting:        input.schedulingConfig.StickySessionMaxWaiting,
+		ctx:             input.ctx,
+		groupID:         input.groupID,
+		sessionHash:     input.sessionHash,
+		requestedModel:  input.requestedModel,
+		stickyAccountID: input.stickyAccountID,
+		excludedIDs:     input.excludedIDs,
+		accountByID:     state.accountByID,
+		plan:            plan,
+		waitTimeout:     input.schedulingConfig.StickySessionWaitTimeout,
+		maxWaiting:      input.schedulingConfig.StickySessionMaxWaiting,
 	}); ok {
 		return result, nil
 	}
 
 	return s.selectLoadAwareFallbackFlow(&loadAwareFallbackSelectionInput{
-		ctx:               input.ctx,
-		groupID:           input.groupID,
-		sessionHash:       input.sessionHash,
-		requestedModel:    input.requestedModel,
-		stickyAccountID:   input.stickyAccountID,
-		excludedIDs:       input.excludedIDs,
-		accountByID:       state.accountByID,
-		platform:          state.platform,
-		useMixed:          state.useMixed,
-		accounts:          state.accounts,
-		preferOAuth:       state.preferOAuth,
-		routingAccountIDs: state.routingAccountIDs,
-		schedulingConfig:  input.schedulingConfig,
+		ctx:              input.ctx,
+		groupID:          input.groupID,
+		sessionHash:      input.sessionHash,
+		requestedModel:   input.requestedModel,
+		stickyAccountID:  input.stickyAccountID,
+		excludedIDs:      input.excludedIDs,
+		accountByID:      state.accountByID,
+		accounts:         state.accounts,
+		plan:             plan,
+		schedulingConfig: input.schedulingConfig,
 	})
 }

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
@@ -12,15 +11,11 @@ type legacyRoutedSelectionInput struct {
 	sessionHash         string
 	requestedModel      string
 	excludedIDs         map[int64]struct{}
-	routingAccountIDs   []int64
-	platform            string
-	allowForcePlatform  bool
+	plan                *gatewaySelectionPlan
 	debugBeginLabel     string
 	debugStickyHitLabel string
 	debugSelectLabel    string
-	stickyPlatformCheck func(*Account) bool
-	filterParams        *candidateFilterParams
-	oauthTieBreaker     func(a, b *Account) bool
+	bindSticky          bool
 }
 
 func (s *GatewayService) loadSchedulingGroup(ctx context.Context, groupID *int64) *Group {
@@ -40,24 +35,25 @@ func (s *GatewayService) tryLegacyRoutedSelection(
 	ctx context.Context,
 	input *legacyRoutedSelectionInput,
 ) (context.Context, []Account, bool, *Account, error) {
-	if input == nil || len(input.routingAccountIDs) == 0 {
+	if input == nil || input.plan == nil || !input.plan.routingEnabled() {
 		return ctx, nil, false, nil, nil
 	}
+	routingAccountIDs := input.plan.routingAccountIDs
 
 	if s.debugModelRoutingEnabled() {
 		logger.LegacyPrintf("service.gateway", input.debugBeginLabel,
 			derefGroupID(input.groupID),
 			input.requestedModel,
-			input.platform,
+			input.plan.platform,
 			shortSessionHash(input.sessionHash),
-			input.routingAccountIDs,
+			routingAccountIDs,
 		)
 	}
 
 	if input.sessionHash != "" && s.cache != nil {
 		accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(input.groupID), input.sessionHash)
-		if err == nil && accountID > 0 && containsInt64(input.routingAccountIDs, accountID) {
-			if account, ok := s.tryStickySessionAccount(ctx, input.groupID, input.sessionHash, input.requestedModel, input.excludedIDs, input.stickyPlatformCheck); ok {
+		if err == nil && accountID > 0 && containsInt64(routingAccountIDs, accountID) {
+			if account, ok := s.tryStickySessionAccount(ctx, input.groupID, input.sessionHash, input.requestedModel, input.excludedIDs, input.plan.stickyPlatformCheck); ok {
 				if s.debugModelRoutingEnabled() {
 					logger.LegacyPrintf("service.gateway", input.debugStickyHitLabel,
 						derefGroupID(input.groupID),
@@ -71,16 +67,20 @@ func (s *GatewayService) tryLegacyRoutedSelection(
 		}
 	}
 
-	accounts, err := s.listAccountsForSelection(ctx, input.groupID, input.platform, input.allowForcePlatform)
-	if err != nil {
-		return ctx, nil, false, nil, fmt.Errorf("query accounts failed: %w", err)
-	}
-
+	accounts := s.loadSelectionAccountsByID(ctx, routingAccountIDs)
 	ctx = s.prefetchSelectionSignals(ctx, accounts)
-	filterParams := *input.filterParams
+	filterParams := *input.plan.newCandidateFilterParams(ctx, input.requestedModel, input.excludedIDs, true)
 	filterParams.ctx = ctx
 
-	selected := s.selectBestCandidateAndBindSession(ctx, input.groupID, input.sessionHash, accounts, &filterParams, input.oauthTieBreaker)
+	selected := s.selectBestCandidateWithStickyPolicy(
+		ctx,
+		input.groupID,
+		input.sessionHash,
+		accounts,
+		&filterParams,
+		input.plan.oauthTieBreaker,
+		input.bindSticky,
+	)
 	if selected != nil {
 		if s.debugModelRoutingEnabled() {
 			logger.LegacyPrintf("service.gateway", input.debugSelectLabel,
@@ -90,9 +90,9 @@ func (s *GatewayService) tryLegacyRoutedSelection(
 				selected.ID,
 			)
 		}
-		return ctx, accounts, true, selected, nil
+		return ctx, nil, false, selected, nil
 	}
 
 	logger.LegacyPrintf("service.gateway", "[ModelRouting] No routed accounts available for model=%s, falling back to normal selection", input.requestedModel)
-	return ctx, accounts, true, nil, nil
+	return ctx, nil, false, nil, nil
 }

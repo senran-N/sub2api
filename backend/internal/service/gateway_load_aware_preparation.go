@@ -4,38 +4,69 @@ import (
 	"context"
 	"sort"
 
+	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
-type loadAwareSelectionScope struct {
-	ctx             context.Context
-	group           *Group
-	groupID         *int64
-	stickyAccountID int64
+type gatewaySelectionScope struct {
+	ctx              context.Context
+	group            *Group
+	groupID          *int64
+	platform         string
+	hasForcePlatform bool
+	useMixed         bool
+	preferOAuth      bool
+	stickyAccountID  int64
 }
 
 type loadAwareSchedulingState struct {
-	ctx               context.Context
-	platform          string
-	preferOAuth       bool
-	accounts          []Account
-	useMixed          bool
-	accountByID       map[int64]*Account
-	routingAccountIDs []int64
+	ctx         context.Context
+	accounts    []Account
+	accountByID map[int64]*Account
+	plan        *gatewaySelectionPlan
 }
 
-func (s *GatewayService) prepareLoadAwareSelectionScope(ctx context.Context, groupID *int64, sessionHash string) (*loadAwareSelectionScope, error) {
-	group, resolvedGroupID, err := s.checkClaudeCodeRestriction(ctx, groupID)
-	if err != nil {
-		return nil, err
+func (s *GatewayService) prepareGatewaySelectionScope(ctx context.Context, groupID *int64, sessionHash string) (*gatewaySelectionScope, error) {
+	scopedCtx := ctx
+	resolvedGroupID := groupID
+
+	forcePlatform, hasForcePlatform := ctx.Value(ctxkey.ForcePlatform).(string)
+	if !hasForcePlatform || forcePlatform == "" {
+		hasForcePlatform = false
+		forcePlatform = ""
 	}
 
-	scopedCtx := s.withGroupContext(ctx, group)
-	return &loadAwareSelectionScope{
-		ctx:             scopedCtx,
-		group:           group,
-		groupID:         resolvedGroupID,
-		stickyAccountID: s.resolveStickyAccountID(scopedCtx, resolvedGroupID, sessionHash),
+	var group *Group
+	var err error
+	if hasForcePlatform {
+		resolvedGroupID = groupID
+	} else if groupID != nil {
+		group, resolvedGroupID, err = s.resolveGatewayGroup(ctx, groupID)
+		if err != nil {
+			return nil, err
+		}
+		scopedCtx = s.withGroupContext(ctx, group)
+	}
+
+	platform := forcePlatform
+	if platform == "" {
+		switch {
+		case group != nil:
+			platform = group.Platform
+		default:
+			platform = PlatformAnthropic
+		}
+	}
+
+	return &gatewaySelectionScope{
+		ctx:              scopedCtx,
+		group:            group,
+		groupID:          resolvedGroupID,
+		platform:         platform,
+		hasForcePlatform: hasForcePlatform,
+		useMixed:         (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform,
+		preferOAuth:      platform == PlatformGemini,
+		stickyAccountID:  s.resolveStickyAccountID(scopedCtx, resolvedGroupID, sessionHash),
 	}, nil
 }
 
@@ -62,16 +93,58 @@ func (s *GatewayService) prepareLoadAwareSchedulingState(
 	sessionHash string,
 	stickyAccountID int64,
 ) (*loadAwareSchedulingState, error) {
+	scope := &gatewaySelectionScope{
+		ctx:             ctx,
+		group:           group,
+		groupID:         groupID,
+		stickyAccountID: stickyAccountID,
+	}
 	platform, hasForcePlatform, err := s.resolvePlatform(ctx, groupID, group)
 	if err != nil {
 		return nil, err
 	}
+	scope.platform = platform
+	scope.hasForcePlatform = hasForcePlatform
+	scope.useMixed = (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
+	scope.preferOAuth = platform == PlatformGemini
+	return s.buildLoadAwareSchedulingState(scope, s.buildGatewaySelectionPlan(scope, requestedModel), requestedModel, sessionHash)
+}
 
-	if s.debugModelRoutingEnabled() && platform == PlatformAnthropic && requestedModel != "" {
-		logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] load-aware enabled: group_id=%v model=%s session=%s platform=%s", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), platform)
+func (s *GatewayService) buildLoadAwareSchedulingState(
+	scope *gatewaySelectionScope,
+	plan *gatewaySelectionPlan,
+	requestedModel string,
+	sessionHash string,
+) (*loadAwareSchedulingState, error) {
+	if scope == nil {
+		return nil, ErrNoAvailableAccounts
+	}
+	if plan == nil {
+		return nil, ErrNoAvailableAccounts
+	}
+	ctx := scope.ctx
+	groupID := scope.groupID
+	stickyAccountID := scope.stickyAccountID
+
+	if s.debugModelRoutingEnabled() && plan.platform == PlatformAnthropic && requestedModel != "" {
+		logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] load-aware enabled: group_id=%v model=%s session=%s platform=%s", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), plan.platform)
 	}
 
-	accounts, useMixed, err := s.listSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
+	if s.shouldUseIndexedCandidateSource() {
+		var prefetchIDs []int64
+		if stickyAccountID > 0 {
+			prefetchIDs = append(prefetchIDs, stickyAccountID)
+		}
+		accounts := s.loadSelectionAccountsByID(ctx, prefetchIDs)
+		return &loadAwareSchedulingState{
+			ctx:         s.prefetchSelectionSignals(ctx, accounts),
+			accounts:    nil,
+			accountByID: buildAccountIndexByID(accounts),
+			plan:        plan,
+		}, nil
+	}
+
+	accounts, _, err := s.listSchedulableAccounts(ctx, groupID, plan.platform, plan.hasForcePlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -80,13 +153,10 @@ func (s *GatewayService) prepareLoadAwareSchedulingState(
 	}
 
 	return &loadAwareSchedulingState{
-		ctx:               s.prefetchSelectionSignals(ctx, accounts),
-		platform:          platform,
-		preferOAuth:       platform == PlatformGemini,
-		accounts:          accounts,
-		useMixed:          useMixed,
-		accountByID:       buildAccountIndexByID(accounts),
-		routingAccountIDs: s.resolveLoadAwareRoutingAccountIDs(group, requestedModel, sessionHash, stickyAccountID),
+		ctx:         s.prefetchSelectionSignals(ctx, accounts),
+		accounts:    accounts,
+		accountByID: buildAccountIndexByID(accounts),
+		plan:        plan,
 	}, nil
 }
 
@@ -98,7 +168,7 @@ func buildAccountIndexByID(accounts []Account) map[int64]*Account {
 	return accountByID
 }
 
-func (s *GatewayService) resolveLoadAwareRoutingAccountIDs(group *Group, requestedModel string, sessionHash string, stickyAccountID int64) []int64 {
+func (s *GatewayService) resolveSelectionRoutingAccountIDs(group *Group, requestedModel string, stickyAccountID int64) []int64 {
 	if group == nil || requestedModel == "" || group.Platform != PlatformAnthropic {
 		return nil
 	}
@@ -106,7 +176,7 @@ func (s *GatewayService) resolveLoadAwareRoutingAccountIDs(group *Group, request
 	routingAccountIDs := group.GetRoutingAccountIDs(requestedModel)
 	if s.debugModelRoutingEnabled() {
 		logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] context group routing: group_id=%d model=%s enabled=%v rules=%d matched_ids=%v session=%s sticky_account=%d",
-			group.ID, requestedModel, group.ModelRoutingEnabled, len(group.ModelRouting), routingAccountIDs, shortSessionHash(sessionHash), stickyAccountID)
+			group.ID, requestedModel, group.ModelRoutingEnabled, len(group.ModelRouting), routingAccountIDs, "-", stickyAccountID)
 		if len(routingAccountIDs) == 0 && group.ModelRoutingEnabled && len(group.ModelRouting) > 0 {
 			logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] context group routing miss: group_id=%d model=%s patterns(sample)=%v", group.ID, requestedModel, sampleSortedRoutingPatterns(group.ModelRouting))
 		}

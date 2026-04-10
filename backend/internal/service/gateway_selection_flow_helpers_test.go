@@ -82,7 +82,7 @@ func TestTryStickySessionAccount_ClearsUnschedulableBinding(t *testing.T) {
 	require.Equal(t, 1, cache.deletedSessions["session-1"])
 }
 
-func TestSelectBestCandidateAndBindSession_BindsSelectedAccount(t *testing.T) {
+func TestSelectBestCandidateWithStickyPolicy_BindsSelectedAccount(t *testing.T) {
 	ctx := context.Background()
 	cache := &mockGatewayCacheForPlatform{}
 
@@ -96,10 +96,10 @@ func TestSelectBestCandidateAndBindSession_BindsSelectedAccount(t *testing.T) {
 		{ID: 2, Platform: PlatformOpenAI, Priority: 1, Status: StatusActive, Schedulable: true},
 	}
 
-	selected := svc.selectBestCandidateAndBindSession(ctx, nil, "session-1", accounts, &candidateFilterParams{
+	selected := svc.selectBestCandidateWithStickyPolicy(ctx, nil, "session-1", accounts, &candidateFilterParams{
 		ctx:         ctx,
 		excludedIDs: map[int64]struct{}{},
-	}, nil)
+	}, nil, true)
 
 	require.NotNil(t, selected)
 	require.Equal(t, int64(2), selected.ID)

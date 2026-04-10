@@ -41,6 +41,7 @@ const sortedRules = computed(() => {
 
 const showEditor = ref(false)
 const saving = ref(false)
+const creatingPresets = ref(false)
 const editingId = ref<number | null>(null)
 const draft = ref<AlertRule | null>(null)
 
@@ -56,6 +57,21 @@ interface MetricDefinition {
   unit?: string
 }
 
+interface AlertRulePreset {
+  key: string
+  name: string
+  description: string
+  draft: AlertRule
+}
+
+interface PresetCreationResult {
+  succeeded: AlertRulePreset[]
+  failed: Array<{
+    preset: AlertRulePreset
+    detail: string
+  }>
+}
+
 const groupMetricTypes = new Set<MetricType>([
   'group_available_accounts',
   'group_available_ratio',
@@ -67,6 +83,28 @@ function parsePositiveInt(value: unknown): number | null {
   if (typeof value === 'boolean') return null
   const n = typeof value === 'number' ? value : Number.parseInt(String(value), 10)
   return Number.isFinite(n) && n > 0 ? n : null
+}
+
+function normalizeRuleScopeValue(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value.trim().toLowerCase()
+}
+
+function normalizeRuleThreshold(value: unknown): string {
+  if (!(typeof value === 'number' && Number.isFinite(value))) return ''
+  return String(value)
+}
+
+function buildRuleSemanticKey(rule: Pick<AlertRule, 'metric_type' | 'operator' | 'threshold' | 'window_minutes' | 'sustained_minutes' | 'filters'>): string {
+  return [
+    rule.metric_type,
+    rule.operator,
+    normalizeRuleThreshold(rule.threshold),
+    String(rule.window_minutes ?? ''),
+    String(rule.sustained_minutes ?? ''),
+    normalizeRuleScopeValue(rule.filters?.platform),
+    String(parsePositiveInt(rule.filters?.group_id) ?? '')
+  ].join('|')
 }
 
 const groupOptionsBase = ref<SelectOption[]>([])
@@ -165,6 +203,41 @@ const metricDefinitions = computed(() => {
       description: t('admin.ops.alertRules.metricDescriptions.queueDepth'),
       recommendedOperator: '>',
       recommendedThreshold: 10
+    },
+    {
+      type: 'scheduler_acquire_success_rate',
+      group: 'system',
+      label: t('admin.ops.alertRules.metrics.schedulerAcquireSuccessRate'),
+      description: t('admin.ops.alertRules.metricDescriptions.schedulerAcquireSuccessRate'),
+      recommendedOperator: '<',
+      recommendedThreshold: 75,
+      unit: '%'
+    },
+    {
+      type: 'scheduler_wait_plan_success_rate',
+      group: 'system',
+      label: t('admin.ops.alertRules.metrics.schedulerWaitPlanSuccessRate'),
+      description: t('admin.ops.alertRules.metricDescriptions.schedulerWaitPlanSuccessRate'),
+      recommendedOperator: '<',
+      recommendedThreshold: 60,
+      unit: '%'
+    },
+    {
+      type: 'scheduler_index_page_density',
+      group: 'system',
+      label: t('admin.ops.alertRules.metrics.schedulerIndexPageDensity'),
+      description: t('admin.ops.alertRules.metricDescriptions.schedulerIndexPageDensity'),
+      recommendedOperator: '<',
+      recommendedThreshold: 8
+    },
+    {
+      type: 'idempotency_processing_avg_ms',
+      group: 'system',
+      label: t('admin.ops.alertRules.metrics.idempotencyProcessingAvgMs'),
+      description: t('admin.ops.alertRules.metricDescriptions.idempotencyProcessingAvgMs'),
+      recommendedOperator: '>',
+      recommendedThreshold: 80,
+      unit: 'ms'
     },
 
     // Group-level metrics (requires group_id filter)
@@ -272,6 +345,99 @@ const windowOptions = computed(() => {
   return windows.map((m) => ({ value: m, label: `${m}m` }))
 })
 
+const runtimeAlertPresets = computed<AlertRulePreset[]>(() => [
+  {
+    key: 'acquire_success',
+    name: t('admin.ops.alertRules.presets.acquireSuccess.name'),
+    description: t('admin.ops.alertRules.presets.acquireSuccess.description'),
+    draft: {
+      name: t('admin.ops.alertRules.presets.acquireSuccess.name'),
+      description: t('admin.ops.alertRules.presets.acquireSuccess.description'),
+      enabled: true,
+      metric_type: 'scheduler_acquire_success_rate',
+      operator: '<',
+      threshold: 75,
+      window_minutes: 5,
+      sustained_minutes: 3,
+      severity: 'P1',
+      cooldown_minutes: 15,
+      notify_email: true
+    }
+  },
+  {
+    key: 'wait_plan_success',
+    name: t('admin.ops.alertRules.presets.waitPlanSuccess.name'),
+    description: t('admin.ops.alertRules.presets.waitPlanSuccess.description'),
+    draft: {
+      name: t('admin.ops.alertRules.presets.waitPlanSuccess.name'),
+      description: t('admin.ops.alertRules.presets.waitPlanSuccess.description'),
+      enabled: true,
+      metric_type: 'scheduler_wait_plan_success_rate',
+      operator: '<',
+      threshold: 60,
+      window_minutes: 5,
+      sustained_minutes: 3,
+      severity: 'P1',
+      cooldown_minutes: 15,
+      notify_email: true
+    }
+  },
+  {
+    key: 'page_density',
+    name: t('admin.ops.alertRules.presets.pageDensity.name'),
+    description: t('admin.ops.alertRules.presets.pageDensity.description'),
+    draft: {
+      name: t('admin.ops.alertRules.presets.pageDensity.name'),
+      description: t('admin.ops.alertRules.presets.pageDensity.description'),
+      enabled: true,
+      metric_type: 'scheduler_index_page_density',
+      operator: '<',
+      threshold: 8,
+      window_minutes: 1,
+      sustained_minutes: 2,
+      severity: 'P2',
+      cooldown_minutes: 10,
+      notify_email: true
+    }
+  },
+  {
+    key: 'idempotency_latency',
+    name: t('admin.ops.alertRules.presets.idempotencyLatency.name'),
+    description: t('admin.ops.alertRules.presets.idempotencyLatency.description'),
+    draft: {
+      name: t('admin.ops.alertRules.presets.idempotencyLatency.name'),
+      description: t('admin.ops.alertRules.presets.idempotencyLatency.description'),
+      enabled: true,
+      metric_type: 'idempotency_processing_avg_ms',
+      operator: '>',
+      threshold: 80,
+      window_minutes: 1,
+      sustained_minutes: 3,
+      severity: 'P2',
+      cooldown_minutes: 15,
+      notify_email: true
+    }
+  }
+])
+
+const existingRuleSemanticKeys = computed(() => {
+  return new Set(rules.value.map((rule) => buildRuleSemanticKey(rule)))
+})
+
+const existingRuntimePresetKeys = computed(() => {
+  const existing = existingRuleSemanticKeys.value
+  return new Set(
+    runtimeAlertPresets.value
+      .filter((preset) => existing.has(buildRuleSemanticKey(preset.draft)))
+      .map((preset) => preset.key)
+  )
+})
+
+const missingRuntimeAlertPresets = computed(() => {
+  const existing = existingRuleSemanticKeys.value
+  return runtimeAlertPresets.value.filter((preset) => !existing.has(buildRuleSemanticKey(preset.draft)))
+})
+
 function newRuleDraft(): AlertRule {
   return {
     name: '',
@@ -292,6 +458,69 @@ function openCreate() {
   editingId.value = null
   draft.value = newRuleDraft()
   showEditor.value = true
+}
+
+function openPreset(preset: AlertRulePreset) {
+  editingId.value = null
+  draft.value = JSON.parse(JSON.stringify(preset.draft))
+  showEditor.value = true
+}
+
+async function createRecommendedPresets() {
+  if (creatingPresets.value) return
+  const missing = missingRuntimeAlertPresets.value
+  if (missing.length === 0) {
+    appStore.showInfo(t('admin.ops.alertRules.presets.allCreated'))
+    return
+  }
+
+  creatingPresets.value = true
+  try {
+    const settled = await Promise.allSettled(
+      missing.map(async (preset) => {
+        await opsAPI.createAlertRule(JSON.parse(JSON.stringify(preset.draft)))
+        return preset
+      })
+    )
+
+    const result: PresetCreationResult = {
+      succeeded: [],
+      failed: []
+    }
+
+    for (let index = 0; index < settled.length; index++) {
+      const outcome = settled[index]
+      const preset = missing[index]
+      if (outcome.status === 'fulfilled') {
+        result.succeeded.push(outcome.value)
+        continue
+      }
+      const detail = outcome.reason?.response?.data?.detail || outcome.reason?.message || t('admin.ops.alertRules.presets.createFailed')
+      result.failed.push({ preset, detail })
+    }
+
+    await load()
+
+    if (result.failed.length === 0) {
+      appStore.showSuccess(t('admin.ops.alertRules.presets.createSuccess', { count: result.succeeded.length }))
+      return
+    }
+
+    console.error('[OpsAlertRulesCard] Failed to create some recommended presets', result.failed)
+    if (result.succeeded.length === 0) {
+      appStore.showError(result.failed[0]?.detail || t('admin.ops.alertRules.presets.createFailed'))
+      return
+    }
+
+    appStore.showWarning(
+      t('admin.ops.alertRules.presets.createPartial', {
+        success: result.succeeded.length,
+        failed: result.failed.length
+      })
+    )
+  } finally {
+    creatingPresets.value = false
+  }
 }
 
 function openEdit(rule: AlertRule) {
@@ -403,12 +632,67 @@ function cancelDelete() {
       </div>
     </div>
 
+    <div class="ops-alert-rules-card__presets mb-4">
+      <div class="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <div class="ops-alert-rules-card__text-strong text-xs font-bold">{{ t('admin.ops.alertRules.presets.title') }}</div>
+          <div class="ops-alert-rules-card__description mt-0.5 text-[11px]">
+            {{ t('admin.ops.alertRules.presets.description') }}
+          </div>
+        </div>
+        <button
+          class="btn btn-sm btn-secondary"
+          :disabled="creatingPresets || missingRuntimeAlertPresets.length === 0"
+          @click="createRecommendedPresets"
+        >
+          {{ t('admin.ops.alertRules.presets.createAll') }}
+        </button>
+      </div>
+      <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+        <button
+          v-for="preset in runtimeAlertPresets"
+          :key="preset.key"
+          type="button"
+          class="ops-alert-rules-card__preset text-left"
+          @click="openPreset(preset)"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <div class="ops-alert-rules-card__text-strong text-xs font-bold">{{ preset.name }}</div>
+            <span
+              v-if="existingRuntimePresetKeys.has(preset.key)"
+              class="ops-alert-rules-card__preset-badge text-[10px] font-bold"
+            >
+              {{ t('admin.ops.alertRules.presets.created') }}
+            </span>
+          </div>
+          <div class="ops-alert-rules-card__description mt-1 text-[11px]">{{ preset.description }}</div>
+        </button>
+      </div>
+    </div>
+
     <div v-if="loading" class="ops-alert-rules-card__loading ops-alert-rules-card__description text-center text-sm">
       {{ t('admin.ops.alertRules.loading') }}
     </div>
 
     <div v-else-if="sortedRules.length === 0" class="ops-alert-rules-card__empty text-center text-sm">
-      {{ t('admin.ops.alertRules.empty') }}
+      <div class="ops-alert-rules-card__text-strong text-sm font-bold">
+        {{ t('admin.ops.alertRules.emptyState.title') }}
+      </div>
+      <p class="ops-alert-rules-card__description mx-auto mt-2 max-w-2xl text-xs">
+        {{ t('admin.ops.alertRules.emptyState.description') }}
+      </p>
+      <div class="mt-4 flex flex-wrap justify-center gap-2">
+        <button
+          class="btn btn-sm btn-primary"
+          :disabled="creatingPresets || missingRuntimeAlertPresets.length === 0"
+          @click="createRecommendedPresets"
+        >
+          {{ t('admin.ops.alertRules.presets.createAll') }}
+        </button>
+        <button class="btn btn-sm btn-secondary" @click="openCreate">
+          {{ t('admin.ops.alertRules.create') }}
+        </button>
+      </div>
     </div>
 
     <div v-else class="ops-alert-rules-card__table-shell overflow-hidden">
@@ -622,6 +906,34 @@ function cancelDelete() {
 
 .ops-alert-rules-card__refresh {
   box-shadow: var(--theme-card-shadow);
+}
+
+.ops-alert-rules-card__presets {
+  padding: var(--theme-ops-panel-padding);
+  border-radius: var(--theme-select-panel-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 70%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 90%, var(--theme-surface));
+}
+
+.ops-alert-rules-card__preset {
+  padding: calc(var(--theme-ops-panel-padding) * 0.8);
+  border-radius: var(--theme-button-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 64%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 78%, var(--theme-surface));
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.ops-alert-rules-card__preset:hover {
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 8%, var(--theme-surface));
+  border-color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 28%, transparent);
+  transform: translateY(-1px);
+}
+
+.ops-alert-rules-card__preset-badge {
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 16%, var(--theme-surface));
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 86%, var(--theme-page-text));
 }
 
 .ops-alert-rules-card__empty {

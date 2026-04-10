@@ -57,24 +57,14 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 		return nil, nil
 	}
 
-	cfg := s.schedulingConfig()
-	if selection, ok := tryAcquireOrBuildStickyWaitPlan(
-		ctx,
-		account,
-		accountID,
-		cfg,
-		s.concurrencyService,
-		s.tryAcquireAccountSlot,
-		func(result *AcquireResult) *AccountSelectionResult {
-			logOpenAIWSBindResponseAccountWarn(
-				derefGroupID(groupID),
-				accountID,
-				responseID,
-				store.BindResponseAccount(ctx, derefGroupID(groupID), responseID, accountID, s.openAIWSResponseStickyTTL()),
-			)
-			return newAcquiredAccountSelection(account, result.ReleaseFunc)
-		},
-	); ok {
+	cfg := gatewaySchedulingConfigOrDefault(s.cfg)
+	if selection, ok := s.trySelectResolvedOpenAIStickyAccount(ctx, openAIStickyResolvedSelectionSpec{
+		account:        account,
+		accountID:      accountID,
+		cfg:            cfg,
+		stickyWaitPlan: s.buildOpenAIStickyWaitPlanAdapter(cfg),
+		onSelected:     s.buildOpenAIResponseBindingSelectionAdapter(ctx, groupID, responseID, accountID, store),
+	}); ok {
 		return selection, nil
 	}
 	return nil, nil

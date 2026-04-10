@@ -25,7 +25,7 @@ func (s *GatewayService) trySelectStickyAccountWithoutRouting(
 		return nil, false
 	}
 
-	account, ok := accountByID[stickyAccountID]
+	account, ok := s.resolveSelectionAccountByID(ctx, accountByID, stickyAccountID)
 	if !ok {
 		return nil, false
 	}
@@ -43,11 +43,7 @@ func (s *GatewayService) trySelectStickyAccountWithoutRouting(
 		return nil, false
 	}
 
-	if result, ok := s.tryAcquireAndMaybeBindSelection(ctx, nil, sessionHash, account, false); ok {
-		return result, true
-	}
-
-	if result, _, ok := s.tryBuildAccountWaitPlan(ctx, account, sessionHash, waitTimeout, maxWaiting); ok {
+	if result, _, ok := s.trySelectResolvedStickyAccount(ctx, nil, sessionHash, account, false, waitTimeout, maxWaiting); ok {
 		return result, true
 	}
 

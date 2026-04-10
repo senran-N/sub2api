@@ -37,10 +37,15 @@ func TestSelectLoadAwareFallbackFlow_StickyHitWithoutRouting(t *testing.T) {
 		accountByID: map[int64]*Account{
 			account.ID: &account,
 		},
-		platform:         PlatformAnthropic,
-		useMixed:         false,
-		accounts:         []Account{account},
-		preferOAuth:      false,
+		accounts: []Account{account},
+		plan: &gatewaySelectionPlan{
+			platform:       PlatformAnthropic,
+			useMixed:       false,
+			preferOAuth:    false,
+			schedGroup:     nil,
+			routingSet:     nil,
+			platformFilter: func(a *Account) bool { return a.Platform == PlatformAnthropic },
+		},
 		schedulingConfig: config.GatewaySchedulingConfig{StickySessionWaitTimeout: time.Second, StickySessionMaxWaiting: 1},
 	})
 
@@ -79,10 +84,13 @@ func TestSelectLoadAwareFallbackFlow_LoadBatchErrorFallsBackToLegacyOrder(t *tes
 		requestedModel: "claude-3-5-sonnet-20241022",
 		excludedIDs:    map[int64]struct{}{},
 		accountByID:    map[int64]*Account{account.ID: &account},
-		platform:       PlatformAnthropic,
-		useMixed:       false,
 		accounts:       []Account{account},
-		preferOAuth:    false,
+		plan: &gatewaySelectionPlan{
+			platform:       PlatformAnthropic,
+			useMixed:       false,
+			preferOAuth:    false,
+			platformFilter: func(a *Account) bool { return a.Platform == PlatformAnthropic },
+		},
 		schedulingConfig: config.GatewaySchedulingConfig{
 			FallbackWaitTimeout: time.Second,
 			FallbackMaxWaiting:  10,
@@ -115,9 +123,12 @@ func TestSelectLoadAwareFallbackFlow_NoCandidatesReturnsError(t *testing.T) {
 		requestedModel: "claude-3-5-sonnet-20241022",
 		excludedIDs:    map[int64]struct{}{},
 		accountByID:    map[int64]*Account{account.ID: &account},
-		platform:       PlatformAnthropic,
-		useMixed:       false,
 		accounts:       []Account{account},
+		plan: &gatewaySelectionPlan{
+			platform:       PlatformAnthropic,
+			useMixed:       false,
+			platformFilter: func(a *Account) bool { return a.Platform == PlatformAnthropic },
+		},
 		schedulingConfig: config.GatewaySchedulingConfig{
 			FallbackWaitTimeout: time.Second,
 			FallbackMaxWaiting:  10,

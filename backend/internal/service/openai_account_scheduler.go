@@ -94,17 +94,12 @@ func (s *defaultOpenAIAccountScheduler) Select(
 		if err != nil {
 			return nil, decision, err
 		}
-		if selection != nil && selection.Account != nil && !s.isAccountTransportCompatible(selection.Account, req.RequiredTransport) {
-			selection = nil
-		}
-		if selection != nil && selection.Account != nil {
-			decision.Layer = openAIAccountScheduleLayerPreviousResponse
-			decision.StickyPreviousHit = true
-			decision.SelectedAccountID = selection.Account.ID
-			decision.SelectedAccountType = selection.Account.Type
-			if req.SessionHash != "" {
-				_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, selection.Account.ID)
-			}
+		selection = s.filterSchedulerSelectionByTransport(selection, req.RequiredTransport)
+		if s.applySchedulerSelectionDecision(ctx, req, selection, openAISelectionDecisionSpec{
+			layer:             openAIAccountScheduleLayerPreviousResponse,
+			stickyPreviousHit: true,
+			bindSession:       true,
+		}, &decision) {
 			return selection, decision, nil
 		}
 	}
@@ -113,11 +108,10 @@ func (s *defaultOpenAIAccountScheduler) Select(
 	if err != nil {
 		return nil, decision, err
 	}
-	if selection != nil && selection.Account != nil {
-		decision.Layer = openAIAccountScheduleLayerSessionSticky
-		decision.StickySessionHit = true
-		decision.SelectedAccountID = selection.Account.ID
-		decision.SelectedAccountType = selection.Account.Type
+	if s.applySchedulerSelectionDecision(ctx, req, selection, openAISelectionDecisionSpec{
+		layer:            openAIAccountScheduleLayerSessionSticky,
+		stickySessionHit: true,
+	}, &decision) {
 		return selection, decision, nil
 	}
 
@@ -129,9 +123,8 @@ func (s *defaultOpenAIAccountScheduler) Select(
 	if err != nil {
 		return nil, decision, err
 	}
-	if selection != nil && selection.Account != nil {
-		decision.SelectedAccountID = selection.Account.ID
-		decision.SelectedAccountType = selection.Account.Type
-	}
+	s.applySchedulerSelectionDecision(ctx, req, selection, openAISelectionDecisionSpec{
+		layer: openAIAccountScheduleLayerLoadBalance,
+	}, &decision)
 	return selection, decision, nil
 }

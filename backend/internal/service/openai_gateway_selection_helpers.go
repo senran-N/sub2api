@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
@@ -123,6 +124,37 @@ type openAIStickySessionResolvePolicy struct {
 	recheckOnResolve   bool
 }
 
+type openAIIndexedCandidateScope struct {
+	groupID           *int64
+	requestedModel    string
+	requiredTransport OpenAIUpstreamTransport
+	requirePrivacy    bool
+}
+
+type openAIImmediateSelectionRequest struct {
+	groupID             *int64
+	sessionHash         string
+	requestedModel      string
+	requiredTransport   OpenAIUpstreamTransport
+	bindSticky          bool
+	recheckAfterAcquire bool
+}
+
+type openAIWaitCandidate struct {
+	account  *Account
+	loadInfo *AccountLoadInfo
+}
+
+type openAIStickyResolvedSelectionSpec struct {
+	account        *Account
+	accountID      int64
+	cfg            config.GatewaySchedulingConfig
+	finalize       func(account *Account) *Account
+	onSelected     func(account *Account, acquired *AcquireResult) *AccountSelectionResult
+	onFinalizeMiss func()
+	stickyWaitPlan func(account *Account) (*AccountSelectionResult, bool)
+}
+
 func (s *OpenAIGatewayService) resolveOpenAIStickySessionAccount(
 	ctx context.Context,
 	groupID *int64,
@@ -182,23 +214,282 @@ func (s *OpenAIGatewayService) resolveOpenAIStickySessionAccount(
 	return account, accountID
 }
 
-func (s *OpenAIGatewayService) lookupOpenAIStickyAccountID(ctx context.Context, groupID *int64, sessionHash string) int64 {
-	if sessionHash == "" || s.cache == nil {
-		return 0
+func (s *OpenAIGatewayService) buildOpenAIIndexedCandidatePager(
+	ctx context.Context,
+	scope openAIIndexedCandidateScope,
+) (*schedulerIndexedAccountPager, error) {
+	if s == nil || s.schedulerSnapshot == nil {
+		return nil, nil
 	}
 
-	accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash)
+	sources, err := buildRequestedModelCapabilitySources(
+		ctx,
+		s.schedulerSnapshot,
+		scope.groupID,
+		PlatformOpenAI,
+		false,
+		scope.requestedModel,
+	)
 	if err != nil {
-		return 0
+		return nil, err
 	}
-	return accountID
+	if len(sources) == 0 {
+		sources = []SchedulerCapabilityIndex{{Kind: SchedulerCapabilityIndexAll}}
+		if scope.requiredTransport != OpenAIUpstreamTransportAny && scope.requiredTransport != OpenAIUpstreamTransportHTTPSSE {
+			sources = []SchedulerCapabilityIndex{{Kind: SchedulerCapabilityIndexOpenAIWS}}
+		} else if scope.requirePrivacy {
+			sources = []SchedulerCapabilityIndex{{Kind: SchedulerCapabilityIndexPrivacySet}}
+		}
+	}
+	return newSchedulerIndexedAccountPager(s.schedulerSnapshot, scope.groupID, PlatformOpenAI, false, sources), nil
 }
 
-func shouldUseOpenAILoadAwareSelection(
-	concurrencyService *ConcurrencyService,
+func (s *OpenAIGatewayService) filterOpenAIBatchByIndexedCapabilities(
+	ctx context.Context,
+	accounts []Account,
+	scope openAIIndexedCandidateScope,
+) []Account {
+	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil {
+		return accounts
+	}
+
+	filtered := accounts
+	if scope.requirePrivacy {
+		filtered = s.filterOpenAIBatchBySnapshotMembership(ctx, scope.groupID, filtered, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexPrivacySet})
+	}
+	if scope.requiredTransport != OpenAIUpstreamTransportAny && scope.requiredTransport != OpenAIUpstreamTransportHTTPSSE {
+		filtered = s.filterOpenAIBatchBySnapshotMembership(ctx, scope.groupID, filtered, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexOpenAIWS})
+	}
+	return filtered
+}
+
+func (s *OpenAIGatewayService) filterOpenAIBatchBySnapshotMembership(
+	ctx context.Context,
+	groupID *int64,
+	accounts []Account,
+	index SchedulerCapabilityIndex,
+) []Account {
+	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil {
+		return accounts
+	}
+	accountIDs := make([]int64, 0, len(accounts))
+	for i := range accounts {
+		accountIDs = append(accountIDs, accounts[i].ID)
+	}
+	matches, _, err := s.schedulerSnapshot.MatchSchedulableAccountsCapability(ctx, groupID, PlatformOpenAI, false, index, accountIDs)
+	if err != nil {
+		return accounts
+	}
+	filtered := make([]Account, 0, len(accounts))
+	for i := range accounts {
+		if matches[accounts[i].ID] {
+			filtered = append(filtered, accounts[i])
+		}
+	}
+	return filtered
+}
+
+func (s *OpenAIGatewayService) selectBestAccountFromIndexedSnapshot(
+	ctx context.Context,
+	groupID *int64,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+) (*Account, bool, error) {
+	pager, err := s.buildOpenAIIndexedCandidatePager(ctx, openAIIndexedCandidateScope{
+		groupID:           groupID,
+		requestedModel:    requestedModel,
+		requiredTransport: OpenAIUpstreamTransportAny,
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if pager == nil {
+		return nil, false, nil
+	}
+
+	supported := strings.TrimSpace(requestedModel) == ""
+	selected, supported, err := selectBestAccountFromIndexedSnapshotPager(
+		ctx,
+		pager,
+		snapshotPageSizeOrDefault(s.cfg),
+		supported,
+		func(batch []Account) (*Account, error) {
+			candidates := filterSchedulableOpenAICandidates(batch, requestedModel, excludedIDs)
+			if len(candidates) == 0 {
+				return nil, nil
+			}
+
+			ordered := append([]*Account(nil), candidates...)
+			sortAccountsByPriorityAndLastUsed(ordered, false)
+			for _, candidate := range ordered {
+				fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, candidate, requestedModel)
+				if fresh == nil {
+					continue
+				}
+				fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel)
+				if fresh == nil {
+					continue
+				}
+				return fresh, nil
+			}
+			return nil, nil
+		},
+		isOpenAISelectionCandidateBetter,
+	)
+	if err != nil {
+		return nil, supported, err
+	}
+	return selected, supported, nil
+}
+
+func isOpenAISelectionCandidateBetter(candidate *Account, current *Account) bool {
+	if candidate == nil {
+		return false
+	}
+	if current == nil {
+		return true
+	}
+	if candidate.Priority != current.Priority {
+		return candidate.Priority < current.Priority
+	}
+	switch {
+	case candidate.LastUsedAt == nil && current.LastUsedAt != nil:
+		return true
+	case candidate.LastUsedAt != nil && current.LastUsedAt == nil:
+		return false
+	case candidate.LastUsedAt == nil && current.LastUsedAt == nil:
+		return false
+	default:
+		return candidate.LastUsedAt.Before(*current.LastUsedAt)
+	}
+}
+
+func (s *OpenAIGatewayService) isAccountTransportCompatible(account *Account, requiredTransport OpenAIUpstreamTransport) bool {
+	if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
+		return true
+	}
+	if s == nil || account == nil {
+		return false
+	}
+	return s.getOpenAIWSProtocolResolver().Resolve(account).Transport == requiredTransport
+}
+
+func (s *OpenAIGatewayService) tryAcquireImmediateOpenAISelection(
+	ctx context.Context,
+	account *Account,
+	req openAIImmediateSelectionRequest,
+) (*AccountSelectionResult, error, bool) {
+	return tryAcquireRuntimeSelection(ctx, runtimeAcquireSelectionSpec{
+		account: account,
+		prepare: func(account *Account) *Account {
+			fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, account, req.requestedModel)
+			if fresh == nil || !s.isAccountTransportCompatible(fresh, req.requiredTransport) {
+				return nil
+			}
+			return fresh
+		},
+		acquire: func(account *Account) (*AcquireResult, error) {
+			return acquireAccountSlotWithConcurrencyService(ctx, s.concurrencyService, account.ID, account.Concurrency)
+		},
+		finalize: func(account *Account) *Account {
+			verified := account
+			if req.recheckAfterAcquire {
+				verified = s.recheckSelectedOpenAIAccountFromDB(ctx, account, req.requestedModel)
+			}
+			if verified == nil || !s.isAccountTransportCompatible(verified, req.requiredTransport) {
+				return nil
+			}
+			return verified
+		},
+		bind: func(account *Account) {
+			if req.bindSticky && req.sessionHash != "" {
+				_ = s.BindStickySession(ctx, req.groupID, req.sessionHash, account.ID)
+			}
+		},
+	})
+}
+
+func (s *OpenAIGatewayService) trySelectResolvedOpenAIStickyAccount(
+	ctx context.Context,
+	spec openAIStickyResolvedSelectionSpec,
+) (*AccountSelectionResult, bool) {
+	if s == nil || spec.account == nil {
+		return nil, false
+	}
+
+	result, _, ok := trySelectStickyRuntimeSelection(stickyRuntimeSelectionSpec{
+		tryAcquire: func() (*AccountSelectionResult, string, bool) {
+			result, acquireErr, missReason, ok := tryAcquireRuntimeSelectionDetailed(ctx, runtimeAcquireSelectionSpec{
+				account: spec.account,
+				acquire: func(account *Account) (*AcquireResult, error) {
+					return acquireAccountSlotWithConcurrencyService(ctx, s.concurrencyService, spec.accountID, account.Concurrency)
+				},
+				finalize: spec.finalize,
+				onAcquired: func(account *Account, acquired *AcquireResult) *AccountSelectionResult {
+					if spec.onSelected != nil {
+						return spec.onSelected(account, acquired)
+					}
+					return newOpenAIAcquiredSelection(account, acquired)
+				},
+			})
+			if acquireErr != nil {
+				return nil, missReason, false
+			}
+			return result, missReason, ok
+		},
+		onAcquireMiss: func(reason string) {
+			if reason == runtimeAcquireMissFinalize && spec.onFinalizeMiss != nil {
+				spec.onFinalizeMiss()
+			}
+		},
+		buildWaitPlan: func() (*AccountSelectionResult, string, bool) {
+			waitBuilder := spec.stickyWaitPlan
+			if waitBuilder == nil {
+				waitBuilder = func(account *Account) (*AccountSelectionResult, bool) {
+					return tryBuildStickySessionWaitPlan(ctx, account, spec.cfg, s.concurrencyService)
+				}
+			}
+			result, ok := waitBuilder(spec.account)
+			return result, "", ok
+		},
+	})
+	return result, ok
+}
+
+func (s *OpenAIGatewayService) tryAcquireImmediateOpenAISelectionFromOrderedAccounts(
+	ctx context.Context,
+	ordered []*Account,
+	req openAIImmediateSelectionRequest,
+) (*AccountSelectionResult, error, bool) {
+	return selectFirstOrderedRuntimeSelection(ordered, func(account *Account) (*AccountSelectionResult, error, bool) {
+		result, err, ok := s.tryAcquireImmediateOpenAISelection(ctx, account, req)
+		if err != nil {
+			return nil, err, false
+		}
+		return result, nil, ok
+	})
+}
+
+func (s *OpenAIGatewayService) tryBuildOpenAIWaitPlanSelection(
+	ctx context.Context,
+	account *Account,
+	requestedModel string,
+	requiredTransport OpenAIUpstreamTransport,
 	cfg config.GatewaySchedulingConfig,
-) bool {
-	return concurrencyService != nil && cfg.LoadBatchEnabled
+) (*AccountSelectionResult, bool) {
+	result, _, ok := tryBuildRuntimeWaitPlan(ctx, runtimeWaitPlanSpec{
+		account: account,
+		prepare: func(account *Account) *Account {
+			fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, account, requestedModel)
+			if fresh == nil || !s.isAccountTransportCompatible(fresh, requiredTransport) {
+				return nil
+			}
+			return fresh
+		},
+		timeout:    cfg.FallbackWaitTimeout,
+		maxWaiting: cfg.FallbackMaxWaiting,
+	})
+	return result, ok
 }
 
 func (s *OpenAIGatewayService) selectOpenAIAccountWithoutLoadBatch(
@@ -222,21 +513,16 @@ func (s *OpenAIGatewayService) selectOpenAIAccountWithoutLoadBatch(
 		return nil, err
 	}
 
-	result, err := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
-	if err == nil && result.Acquired {
-		return newAcquiredAccountSelection(account, result.ReleaseFunc), nil
+	if result, err, ok := tryAcquireRuntimeSelection(ctx, runtimeAcquireSelectionSpec{
+		account: account,
+		acquire: func(account *Account) (*AcquireResult, error) {
+			return acquireAccountSlotWithConcurrencyService(ctx, s.concurrencyService, account.ID, account.Concurrency)
+		},
+	}); err == nil && ok {
+		return result, nil
 	}
 
-	return s.buildOpenAINonLoadBatchWaitPlan(ctx, account, stickyAccountID, cfg), nil
-}
-
-func (s *OpenAIGatewayService) buildOpenAINonLoadBatchWaitPlan(
-	ctx context.Context,
-	account *Account,
-	stickyAccountID int64,
-	cfg config.GatewaySchedulingConfig,
-) *AccountSelectionResult {
-	return buildStickyAwareFallbackWaitPlan(ctx, account, stickyAccountID, cfg, s.concurrencyService)
+	return buildStickyAwareFallbackWaitPlan(ctx, account, stickyAccountID, cfg, s.concurrencyService), nil
 }
 
 func (s *OpenAIGatewayService) trySelectOpenAIStickyLoadAwareAccount(
@@ -270,25 +556,18 @@ func (s *OpenAIGatewayService) trySelectOpenAIStickyLoadAwareAccount(
 		return nil, false
 	}
 
-	result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
-	if err == nil && result.Acquired {
-		verified := s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
-		if verified == nil {
-			if result.ReleaseFunc != nil {
-				result.ReleaseFunc()
-			}
+	return s.trySelectResolvedOpenAIStickyAccount(ctx, openAIStickyResolvedSelectionSpec{
+		account:   account,
+		accountID: accountID,
+		cfg:       cfg,
+		finalize: func(account *Account) *Account {
+			return s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
+		},
+		onSelected: s.buildOpenAIStickyTTLSelectionAdapter(ctx, groupID, sessionHash, stickyTTL),
+		onFinalizeMiss: func() {
 			_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
-		} else {
-			_ = s.refreshStickySessionTTL(ctx, groupID, sessionHash, stickyTTL)
-			return newAcquiredAccountSelection(verified, result.ReleaseFunc), true
-		}
-	}
-
-	if waitPlan, ok := tryBuildStickySessionWaitPlan(ctx, account, cfg, s.concurrencyService); ok {
-		return waitPlan, true
-	}
-
-	return nil, false
+		},
+	})
 }
 
 func (s *OpenAIGatewayService) trySelectOpenAILegacyFallbackAccount(
@@ -296,25 +575,24 @@ func (s *OpenAIGatewayService) trySelectOpenAILegacyFallbackAccount(
 	candidates []*Account,
 	groupID *int64,
 	sessionHash string,
-	stickyTTL time.Duration,
 	requestedModel string,
 ) (*AccountSelectionResult, bool) {
 	ordered := append([]*Account(nil), candidates...)
 	sortAccountsByPriorityAndLastUsed(ordered, false)
-
-	for _, account := range ordered {
-		if result, ok := s.tryAcquireFreshOpenAIAccountSelection(
-			ctx,
-			account,
-			requestedModel,
-			groupID,
-			sessionHash,
-			stickyTTL,
-		); ok {
-			return result, true
-		}
+	result, err, ok := s.tryAcquireImmediateOpenAISelectionFromOrderedAccounts(ctx, ordered, openAIImmediateSelectionRequest{
+		groupID:             groupID,
+		sessionHash:         sessionHash,
+		requestedModel:      requestedModel,
+		requiredTransport:   OpenAIUpstreamTransportAny,
+		bindSticky:          true,
+		recheckAfterAcquire: false,
+	})
+	if err != nil {
+		return nil, false
 	}
-
+	if ok {
+		return result, true
+	}
 	return nil, false
 }
 
@@ -324,7 +602,6 @@ func (s *OpenAIGatewayService) trySelectOpenAILoadAwareAvailableAccount(
 	loadMap map[int64]*AccountLoadInfo,
 	groupID *int64,
 	sessionHash string,
-	stickyTTL time.Duration,
 	requestedModel string,
 ) (*AccountSelectionResult, bool) {
 	available := buildAvailableAccountLoads(candidates, loadMap)
@@ -333,65 +610,118 @@ func (s *OpenAIGatewayService) trySelectOpenAILoadAwareAvailableAccount(
 	}
 
 	sortAccountsByPriorityLoadAndLastUsed(available, false)
+	ordered := make([]*Account, 0, len(available))
 	for _, item := range available {
-		if result, ok := s.tryAcquireFreshOpenAIAccountSelection(
-			ctx,
-			item.account,
-			requestedModel,
-			groupID,
-			sessionHash,
-			stickyTTL,
-		); ok {
-			return result, true
-		}
+		ordered = append(ordered, item.account)
 	}
-
+	result, err, ok := s.tryAcquireImmediateOpenAISelectionFromOrderedAccounts(ctx, ordered, openAIImmediateSelectionRequest{
+		groupID:             groupID,
+		sessionHash:         sessionHash,
+		requestedModel:      requestedModel,
+		requiredTransport:   OpenAIUpstreamTransportAny,
+		bindSticky:          true,
+		recheckAfterAcquire: false,
+	})
+	if err != nil {
+		return nil, false
+	}
+	if ok {
+		return result, true
+	}
 	return nil, false
 }
 
-func (s *OpenAIGatewayService) tryAcquireFreshOpenAIAccountSelection(
+func isBetterOpenAIWaitPlanCandidate(candidate, current *openAIWaitCandidate) bool {
+	if candidate == nil || candidate.account == nil {
+		return false
+	}
+	if current == nil || current.account == nil {
+		return true
+	}
+	return shouldPreferOpenAIWaitCandidate(candidate.account, candidate.loadInfo, current.account, current.loadInfo)
+}
+
+func (s *OpenAIGatewayService) selectOpenAIAccountWithLoadAwarenessFromIndexedSnapshot(
 	ctx context.Context,
-	account *Account,
-	requestedModel string,
 	groupID *int64,
 	sessionHash string,
-	stickyTTL time.Duration,
-) (*AccountSelectionResult, bool) {
-	fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, account, requestedModel)
-	if fresh == nil {
-		return nil, false
-	}
-
-	result, err := s.tryAcquireAccountSlot(ctx, fresh.ID, fresh.Concurrency)
-	if err != nil || !result.Acquired {
-		return nil, false
-	}
-
-	if sessionHash != "" {
-		_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, stickyTTL)
-	}
-
-	return newAcquiredAccountSelection(fresh, result.ReleaseFunc), true
-}
-
-func (s *OpenAIGatewayService) selectOpenAILoadAwareCandidates(
-	accounts []Account,
 	requestedModel string,
 	excludedIDs map[int64]struct{},
-) ([]*Account, error) {
-	candidates := filterSchedulableOpenAICandidates(accounts, requestedModel, excludedIDs)
-	if len(candidates) == 0 {
-		return nil, ErrNoAvailableAccounts
+	cfg config.GatewaySchedulingConfig,
+) (*AccountSelectionResult, bool, error) {
+	pager, err := s.buildOpenAIIndexedCandidatePager(ctx, openAIIndexedCandidateScope{
+		groupID:           groupID,
+		requestedModel:    requestedModel,
+		requiredTransport: OpenAIUpstreamTransportAny,
+	})
+	if err != nil {
+		return nil, false, err
 	}
-	return candidates, nil
-}
+	if pager == nil {
+		return nil, false, nil
+	}
 
-func (s *OpenAIGatewayService) selectOpenAIWaitPlanCandidate(
-	ctx context.Context,
-	candidates []*Account,
-	loadMap map[int64]*AccountLoadInfo,
-	requestedModel string,
-) *Account {
-	waitCandidate := selectBestOpenAIWaitCandidate(candidates, normalizeOpenAIWaitLoadMap(loadMap))
-	return s.resolveFreshSchedulableOpenAIAccount(ctx, waitCandidate, requestedModel)
+	supported := strings.TrimSpace(requestedModel) == ""
+	var selected *AccountSelectionResult
+	modelScopedFound, bestWait, err := executeIndexedRuntimeSelection(
+		ctx,
+		pager,
+		snapshotPageSizeOrDefault(s.cfg),
+		func(batch []Account) (bool, *openAIWaitCandidate, error) {
+			supported = true
+			candidates := filterSchedulableOpenAICandidates(batch, requestedModel, excludedIDs)
+			if len(candidates) == 0 {
+				return false, nil, nil
+			}
+
+			loadMap, loadErr := s.concurrencyService.GetAccountsLoadBatch(ctx, buildAccountLoadRequests(candidates))
+			if loadErr != nil {
+				if result, ok := s.trySelectOpenAILegacyFallbackAccount(
+					ctx,
+					candidates,
+					groupID,
+					sessionHash,
+					requestedModel,
+				); ok {
+					selected = result
+					return true, nil, nil
+				}
+			} else {
+				if result, ok := s.trySelectOpenAILoadAwareAvailableAccount(
+					ctx,
+					candidates,
+					loadMap,
+					groupID,
+					sessionHash,
+					requestedModel,
+				); ok {
+					selected = result
+					return true, nil, nil
+				}
+			}
+
+			waitCandidate := selectBestOpenAIWaitCandidate(candidates, loadMap)
+			if waitCandidate == nil {
+				return false, nil, nil
+			}
+			return false, &openAIWaitCandidate{
+				account:  waitCandidate,
+				loadInfo: accountLoadInfoOrDefault(loadMap, waitCandidate.ID),
+			}, nil
+		},
+		isBetterOpenAIWaitPlanCandidate,
+	)
+	if err != nil {
+		return nil, supported, err
+	}
+	supported = supported || modelScopedFound
+	if selected != nil {
+		return selected, supported, nil
+	}
+	if bestWait != nil && bestWait.account != nil {
+		if waitPlan, ok := s.tryBuildOpenAIWaitPlanSelection(ctx, bestWait.account, requestedModel, OpenAIUpstreamTransportAny, cfg); ok {
+			return waitPlan, supported, nil
+		}
+	}
+	return nil, supported, nil
 }

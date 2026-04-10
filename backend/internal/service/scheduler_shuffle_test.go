@@ -12,15 +12,15 @@ import (
 // ============ shuffleWithinSortGroups 测试 ============
 
 func TestShuffleWithinSortGroups_Empty(t *testing.T) {
-	shuffleWithinSortGroups(nil)
-	shuffleWithinSortGroups([]accountWithLoad{})
+	shuffleWithinSortGroups(nil, false)
+	shuffleWithinSortGroups([]accountWithLoad{}, false)
 }
 
 func TestShuffleWithinSortGroups_SingleElement(t *testing.T) {
 	accounts := []accountWithLoad{
 		{account: &Account{ID: 1, Priority: 1}, loadInfo: &AccountLoadInfo{LoadRate: 10}},
 	}
-	shuffleWithinSortGroups(accounts)
+	shuffleWithinSortGroups(accounts, false)
 	require.Equal(t, int64(1), accounts[0].account.ID)
 }
 
@@ -38,7 +38,7 @@ func TestShuffleWithinSortGroups_DifferentGroups_OrderPreserved(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		cpy := make([]accountWithLoad, len(accounts))
 		copy(cpy, accounts)
-		shuffleWithinSortGroups(cpy)
+		shuffleWithinSortGroups(cpy, false)
 		require.Equal(t, int64(1), cpy[0].account.ID)
 		require.Equal(t, int64(2), cpy[1].account.ID)
 		require.Equal(t, int64(3), cpy[2].account.ID)
@@ -62,7 +62,7 @@ func TestShuffleWithinSortGroups_SameGroup_Shuffled(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		cpy := make([]accountWithLoad, len(accounts))
 		copy(cpy, accounts)
-		shuffleWithinSortGroups(cpy)
+		shuffleWithinSortGroups(cpy, false)
 		seen[cpy[0].account.ID] = true
 		// 无论怎么打乱，所有 ID 都应在候选中
 		ids := map[int64]bool{}
@@ -86,7 +86,7 @@ func TestShuffleWithinSortGroups_NilLastUsedAt_SameGroup(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		cpy := make([]accountWithLoad, len(accounts))
 		copy(cpy, accounts)
-		shuffleWithinSortGroups(cpy)
+		shuffleWithinSortGroups(cpy, false)
 		seen[cpy[0].account.ID] = true
 	}
 	require.GreaterOrEqual(t, len(seen), 2, "nil LastUsedAt accounts should be shuffled")
@@ -110,7 +110,7 @@ func TestShuffleWithinSortGroups_MixedGroups(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		cpy := make([]accountWithLoad, len(accounts))
 		copy(cpy, accounts)
-		shuffleWithinSortGroups(cpy)
+		shuffleWithinSortGroups(cpy, false)
 
 		// 组间顺序不变
 		require.Equal(t, int64(1), cpy[0].account.ID, "group 1 position fixed")

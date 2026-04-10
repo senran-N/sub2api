@@ -588,6 +588,10 @@ func (c *concurrencyCache) CleanupExpiredAccountSlots(ctx context.Context, accou
 	return err
 }
 
+func (c *concurrencyCache) CleanupExpiredAccountSlotsAll(ctx context.Context) error {
+	return c.cleanupExpiredSlotsByPattern(ctx, accountSlotKeyPrefix+"*")
+}
+
 func (c *concurrencyCache) CleanupStaleProcessSlots(ctx context.Context, activeRequestPrefix string) error {
 	if activeRequestPrefix == "" {
 		return nil
@@ -609,6 +613,29 @@ func (c *concurrencyCache) CleanupStaleProcessSlots(ctx context.Context, activeR
 		}
 	}
 
+	return nil
+}
+
+func (c *concurrencyCache) cleanupExpiredSlotsByPattern(ctx context.Context, pattern string) error {
+	const scanCount = 200
+	var cursor uint64
+	for {
+		keys, nextCursor, err := c.rdb.Scan(ctx, cursor, pattern, scanCount).Result()
+		if err != nil {
+			return fmt.Errorf("scan %s: %w", pattern, err)
+		}
+		if len(keys) > 0 {
+			for _, key := range keys {
+				if _, err := cleanupExpiredSlotsScript.Run(ctx, c.rdb, []string{key}, c.slotTTLSeconds).Result(); err != nil {
+					return fmt.Errorf("cleanup expired slots %s: %w", key, err)
+				}
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
 	return nil
 }
 

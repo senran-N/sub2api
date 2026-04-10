@@ -66,3 +66,39 @@ func TestSchedulerSnapshotOutboxReplay(t *testing.T) {
 		return cached.LastUsedAt.Unix() == expectedUnix
 	}, 5*time.Second, 100*time.Millisecond)
 }
+
+func TestSchedulerCache_GetSnapshotPage(t *testing.T) {
+	ctx := context.Background()
+	rdb := testRedis(t)
+
+	cache := NewSchedulerCache(rdb)
+	pager, ok := cache.(service.SchedulerCachePager)
+	require.True(t, ok)
+
+	bucket := service.SchedulerBucket{
+		GroupID:  42,
+		Platform: service.PlatformOpenAI,
+		Mode:     service.SchedulerModeSingle,
+	}
+	accounts := []service.Account{
+		{ID: 41001, Name: "page-1", Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Status: service.StatusActive, Schedulable: true, Priority: 0, Concurrency: 1},
+		{ID: 41002, Name: "page-2", Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Status: service.StatusActive, Schedulable: true, Priority: 1, Concurrency: 1},
+		{ID: 41003, Name: "page-3", Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Status: service.StatusActive, Schedulable: true, Priority: 2, Concurrency: 1},
+	}
+	require.NoError(t, cache.SetSnapshot(ctx, bucket, accounts))
+
+	firstPage, hit, hasMore, err := pager.GetSnapshotPage(ctx, bucket, 0, 2)
+	require.NoError(t, err)
+	require.True(t, hit)
+	require.True(t, hasMore)
+	require.Len(t, firstPage, 2)
+	require.Equal(t, int64(41001), firstPage[0].ID)
+	require.Equal(t, int64(41002), firstPage[1].ID)
+
+	secondPage, hit, hasMore, err := pager.GetSnapshotPage(ctx, bucket, 2, 2)
+	require.NoError(t, err)
+	require.True(t, hit)
+	require.False(t, hasMore)
+	require.Len(t, secondPage, 1)
+	require.Equal(t, int64(41003), secondPage[0].ID)
+}

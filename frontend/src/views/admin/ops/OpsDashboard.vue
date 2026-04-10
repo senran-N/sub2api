@@ -39,10 +39,29 @@
         @open-request-details="handleOpenRequestDetails"
         @open-error-details="openErrorDetails"
         @open-settings="showSettingsDialog = true"
-        @open-alert-rules="showAlertRulesCard = true"
+        @open-alert-rules="openAlertRulesDialog"
         @enter-fullscreen="enterFullscreen"
         @exit-fullscreen="exitFullscreen"
       />
+
+      <div
+        v-if="showAlertRuleBaselineBanner"
+        class="ops-dashboard__baseline-banner"
+      >
+        <div>
+          <div class="ops-dashboard__baseline-title text-sm font-bold">
+            {{ t('admin.ops.alertRules.dashboardBaseline.title') }}
+          </div>
+          <p class="ops-dashboard__baseline-description mt-1 text-xs">
+            {{ t('admin.ops.alertRules.dashboardBaseline.description') }}
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="btn btn-sm btn-primary" @click="openAlertRulesDialog">
+            {{ t('admin.ops.alertRules.dashboardBaseline.action') }}
+          </button>
+        </div>
+      </div>
 
       <!-- Row: Concurrency + Throughput -->
       <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6 lg:grid-cols-4">
@@ -390,6 +409,7 @@ const requestDetailsPreset = ref<OpsRequestDetailsPreset>({
 
 const showSettingsDialog = ref(false)
 const showAlertRulesCard = ref(false)
+const alertRuleCount = ref<number | null>(null)
 
 // Auto refresh settings
 const showAlertEvents = ref(true)
@@ -438,6 +458,49 @@ async function loadDashboardAdvancedSettings() {
     autoRefreshIntervalMs.value = 30000
     autoRefreshCountdown.value = 0
   }
+}
+
+const showAlertRuleBaselineBanner = computed(() => {
+  return opsEnabled.value && hasLoadedOnce.value && alertRuleCount.value === 0
+})
+
+async function loadAlertRuleBaselineStatus() {
+  try {
+    const rules = await opsAPI.listAlertRules()
+    alertRuleCount.value = Array.isArray(rules) ? rules.length : 0
+  } catch (err) {
+    console.warn('[OpsDashboard] Failed to load alert rule baseline status', err)
+    alertRuleCount.value = null
+  }
+}
+
+async function openAlertRulesDialog() {
+  if (!isFullscreen.value) {
+    showAlertRulesCard.value = true
+    return
+  }
+
+  const nextQuery: Record<string, any> = { ...route.query, [QUERY_KEYS.openAlertRules]: '1' }
+  delete nextQuery[QUERY_KEYS.fullscreen]
+  await router.replace({ query: nextQuery })
+  showAlertRulesCard.value = true
+}
+
+async function clearAlertRuleDialogQueryFlags() {
+  const nextQuery = { ...route.query }
+  let changed = false
+
+  if (QUERY_KEYS.openAlertRules in nextQuery) {
+    delete nextQuery[QUERY_KEYS.openAlertRules]
+    changed = true
+  }
+  if (QUERY_KEYS.alertRuleId in nextQuery) {
+    delete nextQuery[QUERY_KEYS.alertRuleId]
+    changed = true
+  }
+  if (!changed) return
+
+  await router.replace({ query: nextQuery })
 }
 
 function handleThroughputSelectPlatform(nextPlatform: string) {
@@ -795,7 +858,10 @@ onMounted(async () => {
   loadThresholds()
 
   // Load auto refresh settings
-  await loadDashboardAdvancedSettings()
+  await Promise.all([
+    loadDashboardAdvancedSettings(),
+    loadAlertRuleBaselineStatus()
+  ])
 
   if (opsEnabled.value) {
     await fetchData()
@@ -840,6 +906,13 @@ watch(showSettingsDialog, async (show) => {
     await loadDashboardAdvancedSettings()
   }
 })
+
+watch(showAlertRulesCard, async (show) => {
+  if (!show) {
+    await loadAlertRuleBaselineStatus()
+    await clearAlertRuleDialogQueryFlags()
+  }
+})
 </script>
 
 <style scoped>
@@ -870,5 +943,30 @@ watch(showSettingsDialog, async (show) => {
   padding: var(--theme-ops-dashboard-error-padding);
   background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-dashboard__baseline-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: var(--theme-ops-card-padding);
+  border-radius: var(--theme-surface-radius);
+  border: 1px solid color-mix(in srgb, rgb(var(--theme-warning-rgb)) 26%, transparent);
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 8%, var(--theme-surface));
+}
+
+.ops-dashboard__baseline-title {
+  color: var(--theme-page-text);
+}
+
+.ops-dashboard__baseline-description {
+  color: color-mix(in srgb, var(--theme-page-text) 72%, var(--theme-page-muted));
+}
+
+@media (max-width: 767px) {
+  .ops-dashboard__baseline-banner {
+    flex-direction: column;
+  }
 }
 </style>

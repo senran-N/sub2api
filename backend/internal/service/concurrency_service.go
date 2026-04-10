@@ -52,6 +52,10 @@ type ConcurrencyService struct {
 	cache ConcurrencyCache
 }
 
+type accountSlotCleanupSweeper interface {
+	CleanupExpiredAccountSlotsAll(ctx context.Context) error
+}
+
 // NewConcurrencyService creates a new ConcurrencyService
 func NewConcurrencyService(cache ConcurrencyCache) *ConcurrencyService {
 	return &ConcurrencyService{cache: cache}
@@ -434,11 +438,30 @@ func (s *ConcurrencyService) CleanupExpiredAccountSlots(ctx context.Context, acc
 
 // StartSlotCleanupWorker starts a background cleanup worker for expired account slots.
 func (s *ConcurrencyService) StartSlotCleanupWorker(accountRepo AccountRepository, interval time.Duration) {
-	if s == nil || s.cache == nil || accountRepo == nil || interval <= 0 {
+	if s == nil || s.cache == nil || interval <= 0 {
 		return
+	}
+	if accountRepo == nil {
+		if _, ok := s.cache.(accountSlotCleanupSweeper); !ok {
+			return
+		}
 	}
 
 	runCleanup := func() {
+		if sweeper, ok := s.cache.(accountSlotCleanupSweeper); ok {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			err := sweeper.CleanupExpiredAccountSlotsAll(cleanupCtx)
+			cancel()
+			if err != nil {
+				logger.LegacyPrintf("service.concurrency", "Warning: cleanup expired account slots failed: %v", err)
+			}
+			return
+		}
+
+		if accountRepo == nil {
+			return
+		}
+
 		listCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		accounts, err := accountRepo.ListSchedulable(listCtx)
 		cancel()
@@ -454,6 +477,7 @@ func (s *ConcurrencyService) StartSlotCleanupWorker(accountRepo AccountRepositor
 				logger.LegacyPrintf("service.concurrency", "Warning: cleanup expired slots failed for account %d: %v", account.ID, err)
 			}
 		}
+		return
 	}
 
 	go func() {

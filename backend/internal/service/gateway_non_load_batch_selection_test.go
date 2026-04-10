@@ -11,6 +11,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type sessionLimitPerAccountStub struct {
+	allowedByAccount map[int64]bool
+	calls            []int64
+}
+
+func (s *sessionLimitPerAccountStub) RegisterSession(ctx context.Context, accountID int64, sessionUUID string, maxSessions int, idleTimeout time.Duration) (bool, error) {
+	s.calls = append(s.calls, accountID)
+	allowed, ok := s.allowedByAccount[accountID]
+	if !ok {
+		return true, nil
+	}
+	return allowed, nil
+}
+
+func (s *sessionLimitPerAccountStub) RefreshSession(ctx context.Context, accountID int64, sessionUUID string, idleTimeout time.Duration) error {
+	return nil
+}
+
+func (s *sessionLimitPerAccountStub) GetActiveSessionCount(ctx context.Context, accountID int64) (int, error) {
+	return 0, nil
+}
+
+func (s *sessionLimitPerAccountStub) GetActiveSessionCountBatch(ctx context.Context, accountIDs []int64, idleTimeouts map[int64]time.Duration) (map[int64]int, error) {
+	return nil, nil
+}
+
+func (s *sessionLimitPerAccountStub) IsSessionActive(ctx context.Context, accountID int64, sessionUUID string) (bool, error) {
+	return false, nil
+}
+
+func (s *sessionLimitPerAccountStub) GetWindowCost(ctx context.Context, accountID int64) (float64, bool, error) {
+	return 0, false, nil
+}
+
+func (s *sessionLimitPerAccountStub) SetWindowCost(ctx context.Context, accountID int64, cost float64) error {
+	return nil
+}
+
+func (s *sessionLimitPerAccountStub) GetWindowCostBatch(ctx context.Context, accountIDs []int64) (map[int64]float64, error) {
+	return nil, nil
+}
+
 func TestCloneExcludedAccountIDs_CreatesIndependentCopy(t *testing.T) {
 	original := map[int64]struct{}{
 		1: {},
@@ -28,11 +70,9 @@ func TestCloneExcludedAccountIDs_CreatesIndependentCopy(t *testing.T) {
 	require.False(t, hasOriginalThree)
 }
 
-func TestBuildNonLoadBatchWaitPlan_UsesStickyWaitConfigForStickyAccount(t *testing.T) {
+func TestBuildStickyAwareFallbackWaitPlan_UsesStickyWaitConfigForStickyAccount(t *testing.T) {
 	cache := &stubConcurrencyCacheForTest{waitCount: 1}
-	svc := &GatewayService{
-		concurrencyService: NewConcurrencyService(cache),
-	}
+	concurrencyService := NewConcurrencyService(cache)
 	account := &Account{ID: 9, Concurrency: 4}
 	cfg := config.GatewaySchedulingConfig{
 		StickySessionWaitTimeout: 5 * time.Second,
@@ -41,7 +81,7 @@ func TestBuildNonLoadBatchWaitPlan_UsesStickyWaitConfigForStickyAccount(t *testi
 		FallbackMaxWaiting:       10,
 	}
 
-	result := svc.buildNonLoadBatchWaitPlan(context.Background(), account, account.ID, cfg)
+	result := buildStickyAwareFallbackWaitPlan(context.Background(), account, account.ID, cfg, concurrencyService)
 
 	require.NotNil(t, result)
 	require.NotNil(t, result.WaitPlan)
@@ -50,11 +90,9 @@ func TestBuildNonLoadBatchWaitPlan_UsesStickyWaitConfigForStickyAccount(t *testi
 	require.Equal(t, 3, result.WaitPlan.MaxWaiting)
 }
 
-func TestBuildNonLoadBatchWaitPlan_FallsBackWhenStickyQueueIsFull(t *testing.T) {
+func TestBuildStickyAwareFallbackWaitPlan_FallsBackWhenStickyQueueIsFull(t *testing.T) {
 	cache := &stubConcurrencyCacheForTest{waitCount: 3}
-	svc := &GatewayService{
-		concurrencyService: NewConcurrencyService(cache),
-	}
+	concurrencyService := NewConcurrencyService(cache)
 	account := &Account{ID: 9, Concurrency: 4}
 	cfg := config.GatewaySchedulingConfig{
 		StickySessionWaitTimeout: 5 * time.Second,
@@ -63,11 +101,90 @@ func TestBuildNonLoadBatchWaitPlan_FallsBackWhenStickyQueueIsFull(t *testing.T) 
 		FallbackMaxWaiting:       10,
 	}
 
-	result := svc.buildNonLoadBatchWaitPlan(context.Background(), account, account.ID, cfg)
+	result := buildStickyAwareFallbackWaitPlan(context.Background(), account, account.ID, cfg, concurrencyService)
 
 	require.NotNil(t, result)
 	require.NotNil(t, result.WaitPlan)
 	require.Equal(t, account.ID, result.WaitPlan.AccountID)
 	require.Equal(t, 2*time.Second, result.WaitPlan.Timeout)
 	require.Equal(t, 10, result.WaitPlan.MaxWaiting)
+}
+
+func TestSelectAccountWithoutLoadBatch_ClearsRejectedStickyBindingAndBindsReplacement(t *testing.T) {
+	cache := &mockGatewayCacheForPlatform{
+		sessionBindings: map[string]int64{"sticky-session": 1},
+	}
+	sessionLimit := &sessionLimitPerAccountStub{
+		allowedByAccount: map[int64]bool{
+			1: false,
+			2: true,
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+				Priority:    1,
+				Extra: map[string]any{
+					"max_sessions": 1,
+				},
+			},
+			{
+				ID:          2,
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+				Priority:    2,
+				Extra: map[string]any{
+					"max_sessions": 1,
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+	svc := &GatewayService{
+		accountRepo:       repo,
+		cache:             cache,
+		sessionLimitCache: sessionLimit,
+		cfg:               testConfig(),
+	}
+
+	result, err := svc.selectAccountWithoutLoadBatch(
+		&gatewaySelectionScope{
+			ctx:             context.Background(),
+			groupID:         nil,
+			platform:        PlatformAnthropic,
+			useMixed:        true,
+			preferOAuth:     false,
+			stickyAccountID: 1,
+		},
+		&gatewaySelectionPlan{
+			platform:            PlatformAnthropic,
+			useMixed:            true,
+			preferOAuth:         false,
+			stickyPlatformCheck: func(a *Account) bool { return a.Platform == PlatformAnthropic },
+			platformFilter:      func(a *Account) bool { return a.Platform == PlatformAnthropic },
+			oauthTieBreaker:     func(a, b *Account) bool { return false },
+		},
+		"sticky-session",
+		"claude-3-5-sonnet-20241022",
+		nil,
+		config.GatewaySchedulingConfig{},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Account)
+	require.Equal(t, int64(2), result.Account.ID)
+	require.Equal(t, []int64{1, 2}, sessionLimit.calls)
+	require.Equal(t, 1, cache.deletedSessions["sticky-session"])
+	require.Equal(t, int64(2), cache.sessionBindings["sticky-session"])
 }

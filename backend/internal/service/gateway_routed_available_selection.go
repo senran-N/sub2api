@@ -21,25 +21,32 @@ func (s *GatewayService) selectAvailableRoutedAccount(
 	}
 
 	sortAccountsByPriorityLoadAndLastUsed(available, false)
-
+	ordered := make([]*Account, 0, len(available))
 	for _, item := range available {
-		if result, ok := s.tryAcquireAndMaybeBindSelection(ctx, groupID, sessionHash, item.account, true); ok {
-			if s.debugModelRoutingEnabled() {
-				logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] routed select: group_id=%v model=%s session=%s account=%d",
-					derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), item.account.ID)
-			}
-			return result, true
-		}
+		ordered = append(ordered, item.account)
 	}
 
-	for _, item := range available {
-		if result, _, ok := s.tryBuildAccountWaitPlan(ctx, item.account, sessionHash, waitTimeout, maxWaiting); ok {
-			if s.debugModelRoutingEnabled() {
-				logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] routed wait: group_id=%v model=%s session=%s account=%d",
-					derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), item.account.ID)
-			}
-			return result, true
+	result, _, ok := selectFirstOrderedRuntimeSelection(ordered, func(account *Account) (*AccountSelectionResult, error, bool) {
+		result, ok := s.tryAcquireAndMaybeBindSelection(ctx, groupID, sessionHash, account, true)
+		return result, nil, ok
+	})
+	if ok {
+		if s.debugModelRoutingEnabled() {
+			logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] routed select: group_id=%v model=%s session=%s account=%d",
+				derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), result.Account.ID)
 		}
+		return result, true
+	}
+
+	result, ok = selectFirstOrderedWaitPlan(ordered, func(account *Account) (*AccountSelectionResult, string, bool) {
+		return s.tryBuildAccountWaitPlan(ctx, account, sessionHash, waitTimeout, maxWaiting)
+	})
+	if ok {
+		if s.debugModelRoutingEnabled() {
+			logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] routed wait: group_id=%v model=%s session=%s account=%d",
+				derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), result.Account.ID)
+		}
+		return result, true
 	}
 
 	return nil, false

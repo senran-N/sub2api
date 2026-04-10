@@ -376,6 +376,7 @@ export interface OpsConcurrencyStatsResponse {
   group: Record<string, GroupConcurrencyInfo>
   account: Record<string, AccountConcurrencyInfo>
   timestamp?: string
+  runtime_observability?: RuntimeObservabilitySnapshot
 }
 
 export interface UserConcurrencyInfo {
@@ -392,6 +393,7 @@ export interface OpsUserConcurrencyStatsResponse {
   enabled: boolean
   user: Record<string, UserConcurrencyInfo>
   timestamp?: string
+  runtime_observability?: RuntimeObservabilitySnapshot
 }
 
 export async function getConcurrencyStats(platform?: string, groupId?: number | null): Promise<OpsConcurrencyStatsResponse> {
@@ -454,6 +456,7 @@ export interface OpsAccountAvailabilityStatsResponse {
   group: Record<string, GroupAvailability>
   account: Record<string, AccountAvailability>
   timestamp?: string
+  runtime_observability?: RuntimeObservabilitySnapshot
 }
 
 export async function getAccountAvailabilityStats(platform?: string, groupId?: number | null): Promise<OpsAccountAvailabilityStatsResponse> {
@@ -474,6 +477,83 @@ export interface OpsRateSummary {
   avg: number
 }
 
+export interface SchedulingRuntimeKernelMetricsSnapshot {
+  index_page_fetches: number
+  index_fetched_accounts: number
+  index_returned_batches: number
+  index_returned_accounts: number
+  ordered_runtime_probes: number
+  ordered_wait_plan_probes: number
+  runtime_acquire_attempts: number
+  runtime_acquire_success: number
+  runtime_acquire_misses: number
+  runtime_acquire_errors: number
+  runtime_finalize_misses: number
+  runtime_session_misses: number
+  runtime_wait_plan_attempts: number
+  runtime_wait_plan_success: number
+  runtime_wait_plan_rejected: number
+  runtime_wait_plan_finalize_miss: number
+}
+
+export interface IdempotencyMetricsSnapshot {
+  claim_total: number
+  replay_total: number
+  conflict_total: number
+  retry_backoff_total: number
+  processing_duration_count: number
+  processing_duration_total_ms: number
+  store_unavailable_total: number
+}
+
+export interface OpenAICompatibilityFallbackMetricsSnapshot {
+  session_hash_legacy_read_fallback_total: number
+  session_hash_legacy_read_fallback_hit: number
+  session_hash_legacy_dual_write_total: number
+  session_hash_legacy_read_hit_rate: number
+  metadata_legacy_fallback_is_max_tokens_one_haiku_total: number
+  metadata_legacy_fallback_thinking_enabled_total: number
+  metadata_legacy_fallback_prefetched_sticky_account_total: number
+  metadata_legacy_fallback_prefetched_sticky_group_total: number
+  metadata_legacy_fallback_single_account_retry_total: number
+  metadata_legacy_fallback_account_switch_count_total: number
+  metadata_legacy_fallback_total: number
+}
+
+export interface SchedulingRuntimeKernelSummary {
+  avg_fetched_accounts_per_page: number
+  avg_returned_accounts_per_batch: number
+  acquire_success_rate: number
+  wait_plan_success_rate: number
+  finalize_miss_rate: number
+  session_miss_rate: number
+  total_runtime_probes: number
+}
+
+export interface RuntimeIdempotencySummary {
+  replay_share: number
+  conflict_share: number
+  avg_processing_duration_ms: number
+}
+
+export interface RuntimeCompatibilityFallbackSummary {
+  session_hash_legacy_read_hit_rate: number
+  metadata_legacy_fallback_total: number
+}
+
+export interface RuntimeObservabilitySummary {
+  scheduling_runtime_kernel: SchedulingRuntimeKernelSummary
+  idempotency: RuntimeIdempotencySummary
+  openai_compatibility_fallback: RuntimeCompatibilityFallbackSummary
+}
+
+export interface RuntimeObservabilitySnapshot {
+  scheduling_runtime_kernel: SchedulingRuntimeKernelMetricsSnapshot
+  idempotency: IdempotencyMetricsSnapshot
+  openai_compatibility_fallback: OpenAICompatibilityFallbackMetricsSnapshot
+  summary: RuntimeObservabilitySummary
+}
+
 export interface OpsRealtimeTrafficSummary {
   window: string
   start_time: string
@@ -488,6 +568,7 @@ export interface OpsRealtimeTrafficSummaryResponse {
   enabled: boolean
   summary: OpsRealtimeTrafficSummary | null
   timestamp?: string
+  runtime_observability?: RuntimeObservabilitySnapshot
 }
 
 export async function getRealtimeTrafficSummary(
@@ -735,6 +816,10 @@ export type MetricType =
   | 'cpu_usage_percent'
   | 'memory_usage_percent'
   | 'concurrency_queue_depth'
+  | 'scheduler_acquire_success_rate'
+  | 'scheduler_wait_plan_success_rate'
+  | 'scheduler_index_page_density'
+  | 'idempotency_processing_avg_ms'
   | 'group_available_accounts'
   | 'group_available_ratio'
   | 'group_rate_limit_ratio'

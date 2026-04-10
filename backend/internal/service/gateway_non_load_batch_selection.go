@@ -15,46 +15,70 @@ func cloneExcludedAccountIDs(excludedIDs map[int64]struct{}) map[int64]struct{} 
 }
 
 func (s *GatewayService) selectAccountWithoutLoadBatch(
-	ctx context.Context,
-	groupID *int64,
+	scope *gatewaySelectionScope,
+	plan *gatewaySelectionPlan,
 	sessionHash string,
 	requestedModel string,
 	excludedIDs map[int64]struct{},
-	stickyAccountID int64,
 	cfg config.GatewaySchedulingConfig,
 ) (*AccountSelectionResult, error) {
+	if scope == nil || plan == nil {
+		return nil, ErrNoAvailableAccounts
+	}
+
 	localExcluded := cloneExcludedAccountIDs(excludedIDs)
+	ctx := scope.ctx
+	groupID := scope.groupID
+	stickyAccountID := scope.stickyAccountID
 
 	for {
-		account, err := s.SelectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, localExcluded)
+		account, err := s.selectLoadlessAccountAttempt(scope, plan, sessionHash, requestedModel, localExcluded)
 		if err != nil {
 			return nil, err
 		}
 
-		result, err := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
-		if err == nil && result.Acquired {
-			if !s.checkAndRegisterSession(ctx, account, sessionHash) {
-				result.ReleaseFunc()
-				localExcluded[account.ID] = struct{}{}
-				continue
-			}
-			return newAcquiredAccountSelection(account, result.ReleaseFunc), nil
+		result, _, missReason, ok := tryAcquireRuntimeSelectionDetailed(ctx, s.buildGatewayRuntimeAcquireSpec(
+			ctx,
+			account,
+			sessionHash,
+			nil,
+			s.buildGatewayStickyBindAdapter(ctx, groupID, sessionHash, true),
+		))
+		if ok {
+			return result, nil
 		}
-
-		if !s.checkAndRegisterSession(ctx, account, sessionHash) {
+		if missReason == runtimeAcquireMissSession {
+			s.clearLoadlessRejectedStickyBinding(ctx, groupID, sessionHash)
 			localExcluded[account.ID] = struct{}{}
 			continue
 		}
 
-		return s.buildNonLoadBatchWaitPlan(ctx, account, stickyAccountID, cfg), nil
+		if !s.checkAndRegisterSession(ctx, account, sessionHash) {
+			s.clearLoadlessRejectedStickyBinding(ctx, groupID, sessionHash)
+			localExcluded[account.ID] = struct{}{}
+			continue
+		}
+
+		if bind := s.buildGatewayStickyBindAdapter(ctx, groupID, sessionHash, true); bind != nil {
+			bind(account)
+		}
+		return buildStickyAwareFallbackWaitPlan(ctx, account, stickyAccountID, cfg, s.concurrencyService), nil
 	}
 }
 
-func (s *GatewayService) buildNonLoadBatchWaitPlan(
-	ctx context.Context,
-	account *Account,
-	stickyAccountID int64,
-	cfg config.GatewaySchedulingConfig,
-) *AccountSelectionResult {
-	return buildStickyAwareFallbackWaitPlan(ctx, account, stickyAccountID, cfg, s.concurrencyService)
+func (s *GatewayService) selectLoadlessAccountAttempt(
+	scope *gatewaySelectionScope,
+	plan *gatewaySelectionPlan,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+) (*Account, error) {
+	return s.selectAccountWithLegacyScheduling(s.buildLegacySelectionInput(scope, sessionHash, requestedModel, excludedIDs, plan, false))
+}
+
+func (s *GatewayService) clearLoadlessRejectedStickyBinding(ctx context.Context, groupID *int64, sessionHash string) {
+	if sessionHash == "" || s.cache == nil {
+		return
+	}
+	_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 }

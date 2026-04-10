@@ -54,7 +54,7 @@ func (s *GatewayService) trySelectRoutedStickyAccount(
 		return nil, false
 	}
 
-	stickyAccount, ok := accountByID[stickyAccountID]
+	stickyAccount, ok := s.resolveSelectionAccountByID(ctx, accountByID, stickyAccountID)
 	if !ok {
 		s.clearMissingStickyBinding(ctx, groupID, sessionHash, stickyAccountID)
 		return nil, false
@@ -72,16 +72,12 @@ func (s *GatewayService) trySelectRoutedStickyAccount(
 	stickyCacheMissReason := ""
 
 	if rpmPass {
-		if result, ok := s.tryAcquireAndMaybeBindSelection(ctx, nil, sessionHash, stickyAccount, false); ok {
+		result, missReason, ok := s.trySelectResolvedStickyAccount(ctx, nil, sessionHash, stickyAccount, false, waitTimeout, maxWaiting)
+		if ok {
 			if s.debugModelRoutingEnabled() {
 				logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] routed sticky hit: group_id=%v model=%s session=%s account=%d",
 					derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), stickyAccountID)
 			}
-			return result, true
-		}
-
-		result, missReason, ok := s.tryBuildAccountWaitPlan(ctx, stickyAccount, sessionHash, waitTimeout, maxWaiting)
-		if ok {
 			return result, true
 		}
 		stickyCacheMissReason = missReason

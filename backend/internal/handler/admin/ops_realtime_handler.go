@@ -6,10 +6,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 )
+
+func appendOpsRuntimeObservability(payload gin.H) gin.H {
+	if payload == nil {
+		payload = gin.H{}
+	}
+	payload["runtime_observability"] = service.SnapshotRuntimeObservability()
+	return payload
+}
 
 // GetConcurrencyStats returns real-time concurrency usage aggregated by platform/group/account.
 // GET /api/v1/admin/ops/concurrency
@@ -24,13 +32,13 @@ func (h *OpsHandler) GetConcurrencyStats(c *gin.Context) {
 	}
 
 	if !h.opsService.IsRealtimeMonitoringEnabled(c.Request.Context()) {
-		response.Success(c, gin.H{
+		response.Success(c, appendOpsRuntimeObservability(gin.H{
 			"enabled":   false,
 			"platform":  map[string]*service.PlatformConcurrencyInfo{},
 			"group":     map[int64]*service.GroupConcurrencyInfo{},
 			"account":   map[int64]*service.AccountConcurrencyInfo{},
 			"timestamp": time.Now().UTC(),
-		})
+		}))
 		return
 	}
 
@@ -60,7 +68,7 @@ func (h *OpsHandler) GetConcurrencyStats(c *gin.Context) {
 	if collectedAt != nil {
 		payload["timestamp"] = collectedAt.UTC()
 	}
-	response.Success(c, payload)
+	response.Success(c, appendOpsRuntimeObservability(payload))
 }
 
 // GetUserConcurrencyStats returns real-time concurrency usage for all active users.
@@ -76,11 +84,11 @@ func (h *OpsHandler) GetUserConcurrencyStats(c *gin.Context) {
 	}
 
 	if !h.opsService.IsRealtimeMonitoringEnabled(c.Request.Context()) {
-		response.Success(c, gin.H{
+		response.Success(c, appendOpsRuntimeObservability(gin.H{
 			"enabled":   false,
 			"user":      map[int64]*service.UserConcurrencyInfo{},
 			"timestamp": time.Now().UTC(),
-		})
+		}))
 		return
 	}
 
@@ -97,7 +105,7 @@ func (h *OpsHandler) GetUserConcurrencyStats(c *gin.Context) {
 	if collectedAt != nil {
 		payload["timestamp"] = collectedAt.UTC()
 	}
-	response.Success(c, payload)
+	response.Success(c, appendOpsRuntimeObservability(payload))
 }
 
 // GetAccountAvailability returns account availability statistics.
@@ -117,13 +125,13 @@ func (h *OpsHandler) GetAccountAvailability(c *gin.Context) {
 	}
 
 	if !h.opsService.IsRealtimeMonitoringEnabled(c.Request.Context()) {
-		response.Success(c, gin.H{
+		response.Success(c, appendOpsRuntimeObservability(gin.H{
 			"enabled":   false,
 			"platform":  map[string]*service.PlatformAvailability{},
 			"group":     map[int64]*service.GroupAvailability{},
 			"account":   map[int64]*service.AccountAvailability{},
 			"timestamp": time.Now().UTC(),
-		})
+		}))
 		return
 	}
 
@@ -153,7 +161,7 @@ func (h *OpsHandler) GetAccountAvailability(c *gin.Context) {
 	if collectedAt != nil {
 		payload["timestamp"] = collectedAt.UTC()
 	}
-	response.Success(c, payload)
+	response.Success(c, appendOpsRuntimeObservability(payload))
 }
 
 func parseOpsRealtimeWindow(v string) (time.Duration, string, bool) {
@@ -218,11 +226,11 @@ func (h *OpsHandler) GetRealtimeTrafficSummary(c *gin.Context) {
 			QPS:       service.OpsRateSummary{},
 			TPS:       service.OpsRateSummary{},
 		}
-		response.Success(c, gin.H{
+		response.Success(c, appendOpsRuntimeObservability(gin.H{
 			"enabled":   false,
 			"summary":   disabledSummary,
 			"timestamp": endTime,
-		})
+		}))
 		return
 	}
 
@@ -242,9 +250,9 @@ func (h *OpsHandler) GetRealtimeTrafficSummary(c *gin.Context) {
 	if summary != nil {
 		summary.Window = windowLabel
 	}
-	response.Success(c, gin.H{
+	response.Success(c, appendOpsRuntimeObservability(gin.H{
 		"enabled":   true,
 		"summary":   summary,
 		"timestamp": endTime,
-	})
+	}))
 }

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -433,6 +433,37 @@ func (s *ConcurrencyCacheSuite) TestCleanupExpiredAccountSlots_NoExpired() {
 	cur, err := s.cache.GetAccountConcurrency(s.ctx, accountID)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), 2, cur)
+}
+
+func (s *ConcurrencyCacheSuite) TestCleanupExpiredAccountSlotsAll() {
+	accountA := int64(210)
+	accountB := int64(211)
+	slotKeyA := fmt.Sprintf("%s%d", accountSlotKeyPrefix, accountA)
+	slotKeyB := fmt.Sprintf("%s%d", accountSlotKeyPrefix, accountB)
+
+	now := time.Now().Unix()
+	expiredTime := now - int64(testSlotTTL.Seconds()) - 10
+
+	require.NoError(s.T(), s.rdb.ZAdd(s.ctx, slotKeyA,
+		redis.Z{Score: float64(expiredTime), Member: "expired-a"},
+		redis.Z{Score: float64(now), Member: "fresh-a"},
+	).Err())
+	require.NoError(s.T(), s.rdb.Expire(s.ctx, slotKeyA, testSlotTTL).Err())
+
+	require.NoError(s.T(), s.rdb.ZAdd(s.ctx, slotKeyB,
+		redis.Z{Score: float64(expiredTime), Member: "expired-b"},
+	).Err())
+	require.NoError(s.T(), s.rdb.Expire(s.ctx, slotKeyB, testSlotTTL).Err())
+
+	require.NoError(s.T(), s.cache.CleanupExpiredAccountSlotsAll(s.ctx))
+
+	membersA, err := s.rdb.ZRange(s.ctx, slotKeyA, 0, -1).Result()
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), []string{"fresh-a"}, membersA)
+
+	existsB, err := s.rdb.Exists(s.ctx, slotKeyB).Result()
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), int64(0), existsB)
 }
 
 func (s *ConcurrencyCacheSuite) TestCleanupStaleProcessSlots_RemovesOldPrefixesAndWaitCounters() {

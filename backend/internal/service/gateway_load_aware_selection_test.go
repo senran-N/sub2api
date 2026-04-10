@@ -44,7 +44,7 @@ func TestRemoveAccountWithLoadByID_RemovesSelectedAccount(t *testing.T) {
 func TestSchedulingConfig_ReturnsDefaultsWhenConfigNil(t *testing.T) {
 	svc := &GatewayService{}
 
-	cfg := svc.schedulingConfig()
+	cfg := gatewaySchedulingConfigOrDefault(svc.cfg)
 
 	require.Equal(t, 3, cfg.StickySessionMaxWaiting)
 	require.Equal(t, 45*time.Second, cfg.StickySessionWaitTimeout)
@@ -54,10 +54,8 @@ func TestSchedulingConfig_ReturnsDefaultsWhenConfigNil(t *testing.T) {
 	require.Equal(t, 30*time.Second, cfg.SlotCleanupInterval)
 }
 
-func TestTryAcquireAccountSlot_ReturnsImmediateAcquireWhenConcurrencyServiceMissing(t *testing.T) {
-	svc := &GatewayService{}
-
-	result, err := svc.tryAcquireAccountSlot(context.Background(), 42, 5)
+func TestAcquireAccountSlotWithConcurrencyService_ReturnsImmediateAcquireWhenServiceMissing(t *testing.T) {
+	result, err := acquireAccountSlotWithConcurrencyService(context.Background(), nil, 42, 5)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)

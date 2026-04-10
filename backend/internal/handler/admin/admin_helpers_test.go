@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
@@ -207,7 +207,9 @@ func TestOpsAlertRuleValidation(t *testing.T) {
 	require.Error(t, err)
 
 	require.True(t, isPercentOrRateMetric("error_rate"))
+	require.True(t, isPercentOrRateMetric("scheduler_acquire_success_rate"))
 	require.False(t, isPercentOrRateMetric("concurrency_queue_depth"))
+	require.False(t, isPercentOrRateMetric("scheduler_index_page_density"))
 }
 
 func TestOpsWSHelpers(t *testing.T) {

@@ -40,6 +40,10 @@ var _ ConcurrencyCache = (*stubConcurrencyCacheForTest)(nil)
 func (c *stubConcurrencyCacheForTest) AcquireAccountSlot(_ context.Context, _ int64, _ int, _ string) (bool, error) {
 	return c.acquireResult, c.acquireErr
 }
+func (c *stubConcurrencyCacheForTest) AcquireAccountSlotOrEnqueueWait(ctx context.Context, accountID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	acquired, err := c.AcquireAccountSlot(ctx, accountID, maxConcurrency, requestID)
+	return acquired, !acquired, err
+}
 func (c *stubConcurrencyCacheForTest) ReleaseAccountSlot(_ context.Context, accountID int64, requestID string) error {
 	c.releasedAccountIDs = append(c.releasedAccountIDs, accountID)
 	c.releasedRequestIDs = append(c.releasedRequestIDs, requestID)
@@ -69,6 +73,10 @@ func (c *stubConcurrencyCacheForTest) GetAccountWaitingCount(_ context.Context, 
 }
 func (c *stubConcurrencyCacheForTest) AcquireUserSlot(_ context.Context, _ int64, _ int, _ string) (bool, error) {
 	return c.acquireResult, c.acquireErr
+}
+func (c *stubConcurrencyCacheForTest) AcquireUserSlotOrEnqueueWait(ctx context.Context, userID int64, maxConcurrency int, maxWait int, requestID string) (bool, bool, error) {
+	acquired, err := c.AcquireUserSlot(ctx, userID, maxConcurrency, requestID)
+	return acquired, !acquired, err
 }
 func (c *stubConcurrencyCacheForTest) ReleaseUserSlot(_ context.Context, _ int64, _ string) error {
 	return c.releaseErr
@@ -231,7 +239,7 @@ func TestGetAccountsLoadBatch_ReturnsCorrectData(t *testing.T) {
 	require.Equal(t, expected, result)
 }
 
-func TestGetAccountsLoadBatch_RequestScopedCacheReusesSnapshot(t *testing.T) {
+func TestGetAccountsLoadBatch_RequestScopedCacheReusesSnapshot_LegacyStub(t *testing.T) {
 	cache := &stubConcurrencyCacheForTest{
 		loadBatch: map[int64]*AccountLoadInfo{
 			1: {AccountID: 1, CurrentConcurrency: 3, WaitingCount: 1, LoadRate: 0},

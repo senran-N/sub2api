@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	"github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 )
 
 var validOpsAlertMetricTypes = []string{
@@ -23,6 +23,10 @@ var validOpsAlertMetricTypes = []string{
 	"cpu_usage_percent",
 	"memory_usage_percent",
 	"concurrency_queue_depth",
+	"scheduler_acquire_success_rate",
+	"scheduler_wait_plan_success_rate",
+	"scheduler_index_page_density",
+	"idempotency_processing_avg_ms",
 	"group_available_accounts",
 	"group_available_ratio",
 	"group_rate_limit_ratio",
@@ -90,6 +94,8 @@ func isPercentOrRateMetric(metricType string) bool {
 		"upstream_error_rate",
 		"cpu_usage_percent",
 		"memory_usage_percent",
+		"scheduler_acquire_success_rate",
+		"scheduler_wait_plan_success_rate",
 		"group_available_ratio",
 		"group_rate_limit_ratio",
 		"account_error_ratio":

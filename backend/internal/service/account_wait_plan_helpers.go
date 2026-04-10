@@ -12,16 +12,22 @@ func tryBuildStickySessionWaitPlan(
 	cfg config.GatewaySchedulingConfig,
 	concurrencyService *ConcurrencyService,
 ) (*AccountSelectionResult, bool) {
-	if account == nil || concurrencyService == nil {
+	if concurrencyService == nil {
 		return nil, false
 	}
-
-	waitingCount, _ := concurrencyService.GetAccountWaitingCount(ctx, account.ID)
-	if waitingCount >= cfg.StickySessionMaxWaiting {
-		return nil, false
-	}
-
-	return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), true
+	result, _, ok := tryBuildRuntimeWaitPlan(ctx, runtimeWaitPlanSpec{
+		account: account,
+		allowWait: func(account *Account) (string, bool) {
+			waitingCount, _ := concurrencyService.GetAccountWaitingCount(ctx, account.ID)
+			if waitingCount >= cfg.StickySessionMaxWaiting {
+				return "wait_queue_full", false
+			}
+			return "", true
+		},
+		timeout:    cfg.StickySessionWaitTimeout,
+		maxWaiting: cfg.StickySessionMaxWaiting,
+	})
+	return result, ok
 }
 
 // buildStickySessionWaitPlanIfConcurrencyEnabled preserves legacy sticky behavior:
@@ -31,10 +37,15 @@ func buildStickySessionWaitPlanIfConcurrencyEnabled(
 	cfg config.GatewaySchedulingConfig,
 	concurrencyService *ConcurrencyService,
 ) (*AccountSelectionResult, bool) {
-	if account == nil || concurrencyService == nil {
+	if concurrencyService == nil {
 		return nil, false
 	}
-	return newWaitPlanAccountSelection(account, cfg.StickySessionWaitTimeout, cfg.StickySessionMaxWaiting), true
+	result, _, ok := tryBuildRuntimeWaitPlan(context.Background(), runtimeWaitPlanSpec{
+		account:    account,
+		timeout:    cfg.StickySessionWaitTimeout,
+		maxWaiting: cfg.StickySessionMaxWaiting,
+	})
+	return result, ok
 }
 
 func tryAcquireOrBuildStickyWaitPlan(
@@ -44,18 +55,32 @@ func tryAcquireOrBuildStickyWaitPlan(
 	cfg config.GatewaySchedulingConfig,
 	concurrencyService *ConcurrencyService,
 	acquireFn func(context.Context, int64, int) (*AcquireResult, error),
-	onAcquired func(*AcquireResult) *AccountSelectionResult,
+	onAcquired func(account *Account, acquired *AcquireResult) *AccountSelectionResult,
 ) (*AccountSelectionResult, bool) {
 	if account == nil || acquireFn == nil || onAcquired == nil {
 		return nil, false
 	}
 
-	result, acquireErr := acquireFn(ctx, accountID, account.Concurrency)
-	if acquireErr == nil && result.Acquired {
-		return onAcquired(result), true
-	}
-
-	return buildStickySessionWaitPlanIfConcurrencyEnabled(account, cfg, concurrencyService)
+	result, _, ok := trySelectStickyRuntimeSelection(stickyRuntimeSelectionSpec{
+		tryAcquire: func() (*AccountSelectionResult, string, bool) {
+			result, acquireErr, missReason, ok := tryAcquireRuntimeSelectionDetailed(ctx, runtimeAcquireSelectionSpec{
+				account: account,
+				acquire: func(account *Account) (*AcquireResult, error) {
+					return acquireFn(ctx, accountID, account.Concurrency)
+				},
+				onAcquired: onAcquired,
+			})
+			if acquireErr != nil {
+				return nil, missReason, false
+			}
+			return result, missReason, ok
+		},
+		buildWaitPlan: func() (*AccountSelectionResult, string, bool) {
+			result, ok := buildStickySessionWaitPlanIfConcurrencyEnabled(account, cfg, concurrencyService)
+			return result, "", ok
+		},
+	})
+	return result, ok
 }
 
 func buildStickyAwareFallbackWaitPlan(

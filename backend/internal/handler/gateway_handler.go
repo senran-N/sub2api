@@ -1751,13 +1751,39 @@ func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger
 	if gatewayCompatibilityMetricsLogCounter.Add(1)%gatewayCompatibilityMetricsLogInterval != 0 {
 		return
 	}
-	metrics := service.SnapshotOpenAICompatibilityFallbackMetrics()
+	runtimeMetrics := service.SnapshotRuntimeObservability()
+	metrics := runtimeMetrics.OpenAICompatibilityFallback
 	reqLog.Info("gateway.compatibility_fallback_metrics",
 		zap.Int64("session_hash_legacy_read_fallback_total", metrics.SessionHashLegacyReadFallbackTotal),
 		zap.Int64("session_hash_legacy_read_fallback_hit", metrics.SessionHashLegacyReadFallbackHit),
 		zap.Int64("session_hash_legacy_dual_write_total", metrics.SessionHashLegacyDualWriteTotal),
 		zap.Float64("session_hash_legacy_read_hit_rate", metrics.SessionHashLegacyReadHitRate),
 		zap.Int64("metadata_legacy_fallback_total", metrics.MetadataLegacyFallbackTotal),
+	)
+	reqLog.Info("gateway.scheduling_runtime_kernel_metrics",
+		zap.Int64("index_page_fetches", runtimeMetrics.SchedulingRuntimeKernel.IndexPageFetches),
+		zap.Int64("index_fetched_accounts", runtimeMetrics.SchedulingRuntimeKernel.IndexFetchedAccounts),
+		zap.Int64("index_returned_batches", runtimeMetrics.SchedulingRuntimeKernel.IndexReturnedBatches),
+		zap.Int64("index_returned_accounts", runtimeMetrics.SchedulingRuntimeKernel.IndexReturnedAccounts),
+		zap.Int64("ordered_runtime_probes", runtimeMetrics.SchedulingRuntimeKernel.OrderedRuntimeProbes),
+		zap.Int64("ordered_wait_plan_probes", runtimeMetrics.SchedulingRuntimeKernel.OrderedWaitPlanProbes),
+		zap.Int64("runtime_acquire_attempts", runtimeMetrics.SchedulingRuntimeKernel.RuntimeAcquireAttempts),
+		zap.Int64("runtime_acquire_success", runtimeMetrics.SchedulingRuntimeKernel.RuntimeAcquireSuccess),
+		zap.Int64("runtime_acquire_misses", runtimeMetrics.SchedulingRuntimeKernel.RuntimeAcquireMisses),
+		zap.Int64("runtime_acquire_errors", runtimeMetrics.SchedulingRuntimeKernel.RuntimeAcquireErrors),
+		zap.Int64("runtime_finalize_misses", runtimeMetrics.SchedulingRuntimeKernel.RuntimeFinalizeMisses),
+		zap.Int64("runtime_session_misses", runtimeMetrics.SchedulingRuntimeKernel.RuntimeSessionMisses),
+		zap.Int64("runtime_wait_plan_attempts", runtimeMetrics.SchedulingRuntimeKernel.RuntimeWaitPlanAttempts),
+		zap.Int64("runtime_wait_plan_success", runtimeMetrics.SchedulingRuntimeKernel.RuntimeWaitPlanSuccess),
+		zap.Int64("runtime_wait_plan_rejected", runtimeMetrics.SchedulingRuntimeKernel.RuntimeWaitPlanRejected),
+		zap.Int64("runtime_wait_plan_finalize_miss", runtimeMetrics.SchedulingRuntimeKernel.RuntimeWaitPlanFinalMiss),
+		zap.Uint64("idempotency_claim_total", runtimeMetrics.Idempotency.ClaimTotal),
+		zap.Uint64("idempotency_replay_total", runtimeMetrics.Idempotency.ReplayTotal),
+		zap.Uint64("idempotency_conflict_total", runtimeMetrics.Idempotency.ConflictTotal),
+		zap.Uint64("idempotency_retry_backoff_total", runtimeMetrics.Idempotency.RetryBackoffTotal),
+		zap.Uint64("idempotency_processing_duration_count", runtimeMetrics.Idempotency.ProcessingDurationCount),
+		zap.Float64("idempotency_processing_duration_total_ms", runtimeMetrics.Idempotency.ProcessingDurationTotalMs),
+		zap.Uint64("idempotency_store_unavailable_total", runtimeMetrics.Idempotency.StoreUnavailableTotal),
 	)
 }
 

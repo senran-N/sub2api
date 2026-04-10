@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -170,6 +172,123 @@ func derefAccounts(accounts []*Account) []Account {
 		out = append(out, *account)
 	}
 	return out
+}
+
+func (s *SchedulerSnapshotService) resolveBucket(groupID *int64, platform string, hasForcePlatform bool) (SchedulerBucket, bool) {
+	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
+	mode := s.resolveMode(platform, hasForcePlatform)
+	return s.bucketFor(groupID, platform, mode), useMixed
+}
+
+func sliceAccountPage(accounts []Account, offset int, limit int) ([]Account, bool) {
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = 1
+	}
+	if offset >= len(accounts) {
+		return []Account{}, false
+	}
+
+	end := offset + limit
+	if end > len(accounts) {
+		end = len(accounts)
+	}
+
+	page := make([]Account, end-offset)
+	copy(page, accounts[offset:end])
+	return page, end < len(accounts)
+}
+
+func filterAccountsByCapabilityIndex(accounts []Account, index SchedulerCapabilityIndex) []Account {
+	filtered := make([]Account, 0, len(accounts))
+	for i := range accounts {
+		account := accounts[i]
+		if !matchesCapabilityIndex(&account, index) {
+			continue
+		}
+		filtered = append(filtered, account)
+	}
+	return filtered
+}
+
+func matchesCapabilityIndex(account *Account, index SchedulerCapabilityIndex) bool {
+	if account == nil {
+		return false
+	}
+	switch index.Kind {
+	case SchedulerCapabilityIndexAll:
+		return true
+	case SchedulerCapabilityIndexPrivacySet:
+		return account.IsPrivacySet()
+	case SchedulerCapabilityIndexOpenAIWS:
+		return isPotentialOpenAIWSCandidate(account)
+	case SchedulerCapabilityIndexModelAny:
+		return len(account.GetModelMapping()) == 0
+	case SchedulerCapabilityIndexModelExact:
+		model := strings.TrimSpace(index.Value)
+		if model == "" {
+			return false
+		}
+		mapping := account.GetModelMapping()
+		if len(mapping) == 0 {
+			return false
+		}
+		_, ok := mapping[model]
+		return ok
+	case SchedulerCapabilityIndexModelPattern:
+		pattern := strings.TrimSpace(index.Value)
+		if pattern == "" || !strings.Contains(pattern, "*") {
+			return false
+		}
+		mapping := account.GetModelMapping()
+		if len(mapping) == 0 {
+			return false
+		}
+		_, ok := mapping[pattern]
+		return ok
+	default:
+		return false
+	}
+}
+
+func collectCapabilityIndexValues(accounts []Account, kind SchedulerCapabilityIndexKind) []string {
+	valueSet := make(map[string]struct{})
+	for i := range accounts {
+		account := &accounts[i]
+		switch kind {
+		case SchedulerCapabilityIndexModelPattern:
+			for pattern := range account.GetModelMapping() {
+				pattern = strings.TrimSpace(pattern)
+				if strings.Contains(pattern, "*") {
+					valueSet[pattern] = struct{}{}
+				}
+			}
+		}
+	}
+	values := make([]string, 0, len(valueSet))
+	for value := range valueSet {
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	return values
+}
+
+func isPotentialOpenAIWSCandidate(account *Account) bool {
+	if account == nil || !account.IsOpenAI() {
+		return false
+	}
+	if account.IsOpenAIWSForceHTTPEnabled() {
+		return false
+	}
+	if !account.IsOpenAIOAuth() && !account.IsOpenAIApiKey() {
+		return false
+	}
+	if account.Concurrency <= 0 {
+		return false
+	}
+	return account.ResolveOpenAIResponsesWebSocketV2Mode(OpenAIWSIngressModeCtxPool) != OpenAIWSIngressModeOff
 }
 
 type fallbackLimiter struct {

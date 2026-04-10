@@ -449,11 +449,6 @@ func (s *GatewayService) filterCandidates(accounts []Account, params *candidateF
 			continue
 		}
 		if params.schedGroup != nil && params.schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
-			_ = s.accountRepo.SetError(
-				params.ctx,
-				account.ID,
-				fmt.Sprintf("Privacy not set, required by group [%s]", params.schedGroup.Name),
-			)
 			continue
 		}
 		if params.platformFilter != nil && !params.platformFilter(account) {

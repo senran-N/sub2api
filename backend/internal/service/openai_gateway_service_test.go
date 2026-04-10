@@ -530,6 +530,105 @@ func TestOpenAISelectAccountWithLoadAwareness_LoadBatchErrorFallback(t *testing.
 	}
 }
 
+func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_UsesCapabilityIndexPaging(t *testing.T) {
+	ctx := context.Background()
+	first := &Account{
+		ID:          35001,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    5,
+	}
+	second := &Account{
+		ID:          35002,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		snapshotAccounts: []*Account{first, second},
+		accountsByID:     map[int64]*Account{first.ID: first, second.ID: second},
+	}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.SnapshotPageSize = 1
+	svc := &OpenAIGatewayService{
+		accountRepo:       stubOpenAIAccountRepo{accounts: []Account{*first, *second}},
+		cache:             &stubGatewayCache{},
+		schedulerSnapshot: &SchedulerSnapshotService{cache: snapshotCache},
+		cfg:               cfg,
+	}
+
+	account, err := svc.SelectAccountForModelWithExclusions(ctx, nil, "", "gpt-5.1", nil)
+	require.NoError(t, err)
+	require.NotNil(t, account)
+	require.Equal(t, second.ID, account.ID)
+	require.Equal(t, []snapshotIndexPageCall{
+		{kind: SchedulerCapabilityIndexModelAny, value: "", offset: 0, limit: 1},
+		{kind: SchedulerCapabilityIndexModelExact, value: "gpt-5.1", offset: 0, limit: 1},
+		{kind: SchedulerCapabilityIndexModelAny, value: "", offset: 1, limit: 1},
+	}, snapshotCache.indexPageCalls)
+}
+
+func TestOpenAIGatewayService_SelectAccountWithLoadAwareness_UsesCapabilityIndexPaging(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(1)
+	first := &Account{
+		ID:          35101,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    5,
+	}
+	second := &Account{
+		ID:          35102,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		snapshotAccounts: []*Account{first, second},
+		accountsByID:     map[int64]*Account{first.ID: first, second.ID: second},
+	}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.SnapshotPageSize = 1
+	cfg.Gateway.Scheduling.LoadBatchEnabled = true
+	concurrencyCache := &recordingOpenAIConcurrencyCache{
+		stubConcurrencyCache: stubConcurrencyCache{
+			loadMap:        map[int64]*AccountLoadInfo{first.ID: {AccountID: first.ID, LoadRate: 0}, second.ID: {AccountID: second.ID, LoadRate: 0}},
+			acquireResults: map[int64]bool{first.ID: false, second.ID: true},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{*first, *second}},
+		cache:              &stubGatewayCache{},
+		schedulerSnapshot:  &SchedulerSnapshotService{cache: snapshotCache},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+		cfg:                cfg,
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "openai-paged", "gpt-5.1", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, second.ID, selection.Account.ID)
+	require.Equal(t, [][]int64{{first.ID}, {second.ID}}, concurrencyCache.loadBatchIDs)
+	require.Equal(t, []snapshotIndexPageCall{
+		{kind: SchedulerCapabilityIndexModelAny, value: "", offset: 0, limit: 1},
+		{kind: SchedulerCapabilityIndexModelExact, value: "gpt-5.1", offset: 0, limit: 1},
+		{kind: SchedulerCapabilityIndexModelAny, value: "", offset: 1, limit: 1},
+	}, snapshotCache.indexPageCalls)
+}
+
 func TestOpenAISelectAccountWithLoadAwareness_NoSlotFallbackWait(t *testing.T) {
 	groupID := int64(1)
 	repo := stubOpenAIAccountRepo{

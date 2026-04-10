@@ -292,8 +292,14 @@ func (s *GatewayService) checkAndRegisterSession(ctx context.Context, account *A
 }
 
 func (s *GatewayService) getSchedulableAccount(ctx context.Context, accountID int64) (*Account, error) {
+	if s == nil {
+		return nil, nil
+	}
 	if s.schedulerSnapshot != nil {
 		return s.schedulerSnapshot.GetAccount(ctx, accountID)
+	}
+	if s.accountRepo == nil {
+		return nil, nil
 	}
 	return s.accountRepo.GetByID(ctx, accountID)
 }

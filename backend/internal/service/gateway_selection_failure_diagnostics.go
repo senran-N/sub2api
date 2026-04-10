@@ -62,6 +62,72 @@ func (s *GatewayService) logDetailedSelectionFailure(
 	return stats
 }
 
+func (s *GatewayService) logDetailedSelectionFailureFromPager(
+	ctx context.Context,
+	groupID *int64,
+	sessionHash string,
+	requestedModel string,
+	platform string,
+	excludedIDs map[int64]struct{},
+	allowMixedScheduling bool,
+	schedGroup *Group,
+	pager *schedulerIndexedAccountPager,
+	pageSize int,
+) (selectionFailureStats, error) {
+	stats, err := s.collectSelectionFailureStatsFromPager(ctx, pager, requestedModel, platform, excludedIDs, allowMixedScheduling, schedGroup, pageSize)
+	if err != nil {
+		return selectionFailureStats{}, err
+	}
+	logger.LegacyPrintf(
+		"service.gateway",
+		"[SelectAccountDetailed] group_id=%v model=%s platform=%s session=%s total=%d eligible=%d excluded=%d unschedulable=%d platform_filtered=%d model_unsupported=%d model_rate_limited=%d sample_platform_filtered=%v sample_model_unsupported=%v sample_model_rate_limited=%v",
+		derefGroupID(groupID),
+		requestedModel,
+		platform,
+		shortSessionHash(sessionHash),
+		stats.Total,
+		stats.Eligible,
+		stats.Excluded,
+		stats.Unschedulable,
+		stats.PlatformFiltered,
+		stats.ModelUnsupported,
+		stats.ModelRateLimited,
+		stats.SamplePlatformIDs,
+		stats.SampleMappingIDs,
+		stats.SampleRateLimitIDs,
+	)
+	return stats, nil
+}
+
+func (s *GatewayService) collectSelectionFailureStatsFromPager(
+	ctx context.Context,
+	pager *schedulerIndexedAccountPager,
+	requestedModel string,
+	platform string,
+	excludedIDs map[int64]struct{},
+	allowMixedScheduling bool,
+	schedGroup *Group,
+	pageSize int,
+) (selectionFailureStats, error) {
+	if pager == nil {
+		return selectionFailureStats{}, nil
+	}
+	if pageSize <= 0 {
+		pageSize = 1
+	}
+
+	var stats selectionFailureStats
+	_, err := s.forEachIndexedSelectionBatch(ctx, pager.groupID, pager, schedGroup, pageSize, func(pageCtx context.Context, batch []Account) (bool, error) {
+		pageStats := s.collectSelectionFailureStats(pageCtx, batch, requestedModel, platform, excludedIDs, allowMixedScheduling)
+		stats = mergeSelectionFailureStats(stats, pageStats)
+		return false, nil
+	})
+	if err != nil {
+		return selectionFailureStats{}, err
+	}
+	return stats, nil
+}
+
 func (s *GatewayService) collectSelectionFailureStats(
 	ctx context.Context,
 	accounts []Account,
@@ -243,4 +309,27 @@ func summarizeSelectionFailureStats(stats selectionFailureStats) string {
 		stats.ModelUnsupported,
 		stats.ModelRateLimited,
 	)
+}
+
+func mergeSelectionFailureStats(dst, src selectionFailureStats) selectionFailureStats {
+	dst.Total += src.Total
+	dst.Eligible += src.Eligible
+	dst.Excluded += src.Excluded
+	dst.Unschedulable += src.Unschedulable
+	dst.PlatformFiltered += src.PlatformFiltered
+	dst.ModelUnsupported += src.ModelUnsupported
+	dst.ModelRateLimited += src.ModelRateLimited
+	for _, id := range src.SamplePlatformIDs {
+		dst.SamplePlatformIDs = appendSelectionFailureSampleID(dst.SamplePlatformIDs, id)
+	}
+	for _, id := range src.SampleMappingIDs {
+		dst.SampleMappingIDs = appendSelectionFailureSampleID(dst.SampleMappingIDs, id)
+	}
+	for _, sample := range src.SampleRateLimitIDs {
+		if len(dst.SampleRateLimitIDs) >= 5 {
+			break
+		}
+		dst.SampleRateLimitIDs = append(dst.SampleRateLimitIDs, sample)
+	}
+	return dst
 }

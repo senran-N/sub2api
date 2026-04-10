@@ -2,6 +2,12 @@ package service
 
 import "context"
 
+type openAILoadBalancePreparation struct {
+	filtered                []*Account
+	loadReq                 []AccountWithConcurrency
+	requestedModelAvailable bool
+}
+
 func normalizeOpenAISchedulerTopK(configuredTopK int, candidateCount int) int {
 	if configuredTopK > candidateCount {
 		configuredTopK = candidateCount
@@ -12,29 +18,48 @@ func normalizeOpenAISchedulerTopK(configuredTopK int, candidateCount int) int {
 	return configuredTopK
 }
 
+func selectionDecisionTopK(configuredTopK int, candidateCount int) int {
+	if candidateCount <= 0 {
+		return 0
+	}
+	return normalizeOpenAISchedulerTopK(configuredTopK, candidateCount)
+}
+
 func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidates(
-	ctx context.Context,
+	_ context.Context,
 	req OpenAIAccountScheduleRequest,
 	accounts []Account,
 	schedGroup *Group,
 ) ([]*Account, []AccountWithConcurrency) {
-	filtered := make([]*Account, 0, len(accounts))
-	loadReq := make([]AccountWithConcurrency, 0, len(accounts))
+	prepared := s.prepareLoadBalanceCandidatePage(req, accounts, schedGroup)
+	return prepared.filtered, prepared.loadReq
+}
+
+func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
+	req OpenAIAccountScheduleRequest,
+	accounts []Account,
+	schedGroup *Group,
+) openAILoadBalancePreparation {
+	prepared := openAILoadBalancePreparation{
+		filtered: make([]*Account, 0, len(accounts)),
+		loadReq:  make([]AccountWithConcurrency, 0, len(accounts)),
+	}
 
 	for i := range accounts {
 		account := &accounts[i]
+		if !account.IsOpenAI() {
+			continue
+		}
+		if req.RequestedModel == "" || account.IsModelSupported(req.RequestedModel) {
+			prepared.requestedModelAvailable = true
+		}
 		if isOpenAIAccountExcluded(req.ExcludedIDs, account.ID) {
 			continue
 		}
-		if !account.IsSchedulable() || !account.IsOpenAI() {
+		if !account.IsSchedulable() {
 			continue
 		}
 		if schedGroup != nil && schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
-			_ = s.service.accountRepo.SetError(
-				ctx,
-				account.ID,
-				"Privacy not set, required by group ["+schedGroup.Name+"]",
-			)
 			continue
 		}
 		if req.RequestedModel != "" && !account.IsModelSupported(req.RequestedModel) {
@@ -44,14 +69,47 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidates(
 			continue
 		}
 
-		filtered = append(filtered, account)
-		loadReq = append(loadReq, AccountWithConcurrency{
+		prepared.filtered = append(prepared.filtered, account)
+		prepared.loadReq = append(prepared.loadReq, AccountWithConcurrency{
 			ID:             account.ID,
 			MaxConcurrency: account.EffectiveLoadFactor(),
 		})
 	}
 
-	return filtered, loadReq
+	return prepared
+}
+
+func (s *defaultOpenAIAccountScheduler) buildIndexedSnapshotPager(
+	ctx context.Context,
+	req OpenAIAccountScheduleRequest,
+	schedGroup *Group,
+) (*schedulerIndexedAccountPager, error) {
+	if s == nil || s.service == nil {
+		return nil, nil
+	}
+	return s.service.buildOpenAIIndexedCandidatePager(ctx, openAIIndexedCandidateScope{
+		groupID:           req.GroupID,
+		requestedModel:    req.RequestedModel,
+		requiredTransport: req.RequiredTransport,
+		requirePrivacy:    schedGroup != nil && schedGroup.RequirePrivacySet,
+	})
+}
+
+func (s *defaultOpenAIAccountScheduler) filterBatchByIndexedCapabilities(
+	ctx context.Context,
+	req OpenAIAccountScheduleRequest,
+	accounts []Account,
+	schedGroup *Group,
+) []Account {
+	if len(accounts) == 0 || s == nil || s.service == nil {
+		return accounts
+	}
+	return s.service.filterOpenAIBatchByIndexedCapabilities(ctx, accounts, openAIIndexedCandidateScope{
+		groupID:           req.GroupID,
+		requestedModel:    req.RequestedModel,
+		requiredTransport: req.RequiredTransport,
+		requirePrivacy:    schedGroup != nil && schedGroup.RequirePrivacySet,
+	})
 }
 
 func (s *defaultOpenAIAccountScheduler) loadSchedulerAccountLoads(
@@ -76,35 +134,20 @@ func (s *defaultOpenAIAccountScheduler) trySelectImmediateScheduledCandidate(
 	req OpenAIAccountScheduleRequest,
 	selectionOrder []openAIAccountCandidateScore,
 ) (*AccountSelectionResult, error, bool) {
-	for i := 0; i < len(selectionOrder); i++ {
-		candidate := selectionOrder[i]
-		fresh := s.service.resolveFreshSchedulableOpenAIAccount(ctx, candidate.account, req.RequestedModel)
-		if fresh == nil || !s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
-			continue
+	ordered := make([]*Account, 0, len(selectionOrder))
+	for i := range selectionOrder {
+		if selectionOrder[i].account != nil {
+			ordered = append(ordered, selectionOrder[i].account)
 		}
-
-		result, acquireErr := s.service.tryAcquireAccountSlot(ctx, fresh.ID, fresh.Concurrency)
-		if acquireErr != nil {
-			return nil, acquireErr, true
-		}
-		if result == nil || !result.Acquired {
-			continue
-		}
-
-		verified := s.service.recheckSelectedOpenAIAccountFromDB(ctx, fresh, req.RequestedModel)
-		if verified == nil || !s.isAccountTransportCompatible(verified, req.RequiredTransport) {
-			if result.ReleaseFunc != nil {
-				result.ReleaseFunc()
-			}
-			continue
-		}
-		if req.SessionHash != "" {
-			_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, verified.ID)
-		}
-		return newAcquiredAccountSelection(verified, result.ReleaseFunc), nil, true
 	}
-
-	return nil, nil, false
+	return s.service.tryAcquireImmediateOpenAISelectionFromOrderedAccounts(ctx, ordered, openAIImmediateSelectionRequest{
+		groupID:             req.GroupID,
+		sessionHash:         req.SessionHash,
+		requestedModel:      req.RequestedModel,
+		requiredTransport:   req.RequiredTransport,
+		bindSticky:          true,
+		recheckAfterAcquire: true,
+	})
 }
 
 func (s *defaultOpenAIAccountScheduler) tryBuildScheduledWaitPlan(
@@ -117,11 +160,38 @@ func (s *defaultOpenAIAccountScheduler) tryBuildScheduledWaitPlan(
 		return nil, false
 	}
 
-	cfg := s.service.schedulingConfig()
-	fresh := s.service.resolveFreshSchedulableOpenAIAccount(ctx, waitCandidate.account, req.RequestedModel)
-	if fresh == nil || !s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
-		return nil, false
-	}
+	return s.service.tryBuildOpenAIWaitPlanSelection(
+		ctx,
+		waitCandidate.account,
+		req.RequestedModel,
+		req.RequiredTransport,
+		gatewaySchedulingConfigOrDefault(s.service.cfg),
+	)
+}
 
-	return newWaitPlanAccountSelection(fresh, cfg.FallbackWaitTimeout, cfg.FallbackMaxWaiting), true
+func chooseBetterOpenAIWaitCandidate(
+	best *openAIAccountCandidateScore,
+	candidate *openAIAccountCandidateScore,
+) *openAIAccountCandidateScore {
+	if candidate == nil {
+		return best
+	}
+	if best == nil {
+		return candidate
+	}
+	selected := chooseOpenAIWaitCandidate([]openAIAccountCandidateScore{*best, *candidate})
+	if selected == nil {
+		return best
+	}
+	if selected.account != nil && candidate.account != nil && selected.account.ID == candidate.account.ID {
+		return candidate
+	}
+	return best
+}
+
+func isBetterOpenAIWaitCandidate(
+	candidate *openAIAccountCandidateScore,
+	current *openAIAccountCandidateScore,
+) bool {
+	return chooseBetterOpenAIWaitCandidate(current, candidate) == candidate
 }

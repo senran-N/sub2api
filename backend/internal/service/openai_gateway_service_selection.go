@@ -29,6 +29,25 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 		return account, nil
 	}
 
+	if s.schedulerSnapshot != nil {
+		selected, supported, err := s.selectBestAccountFromIndexedSnapshot(ctx, groupID, requestedModel, excludedIDs)
+		if err != nil {
+			return nil, fmt.Errorf("query accounts failed: %w", err)
+		}
+		if selected == nil {
+			if requestedModel != "" {
+				if !supported {
+					return nil, newOpenAIRequestedModelUnavailableError(requestedModel)
+				}
+				return nil, ErrNoAvailableAccounts
+			}
+			return nil, errors.New("no available OpenAI accounts")
+		}
+
+		_ = s.BindStickySession(ctx, groupID, sessionHash, selected.ID)
+		return selected, nil
+	}
+
 	accounts, err := s.listSchedulableAccounts(ctx, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
@@ -45,9 +64,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 		return nil, errors.New("no available OpenAI accounts")
 	}
 
-	if sessionHash != "" {
-		_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, selected.ID, s.openAIWSSessionStickyTTL())
-	}
+	_ = s.BindStickySession(ctx, groupID, sessionHash, selected.ID)
 
 	return selected, nil
 }
@@ -96,11 +113,16 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts [
 
 // SelectAccountWithLoadAwareness selects an account with load-awareness and wait plan.
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
-	cfg := s.schedulingConfig()
+	cfg := gatewaySchedulingConfigOrDefault(s.cfg)
 	stickyTTL := s.openAIWSSessionStickyTTL()
-	stickyAccountID := s.lookupOpenAIStickyAccountID(ctx, groupID, sessionHash)
+	stickyAccountID := int64(0)
+	if sessionHash != "" && s.cache != nil {
+		if accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash); err == nil {
+			stickyAccountID = accountID
+		}
+	}
 
-	if !shouldUseOpenAILoadAwareSelection(s.concurrencyService, cfg) {
+	if s.concurrencyService == nil || !cfg.LoadBatchEnabled {
 		return s.selectOpenAIAccountWithoutLoadBatch(
 			ctx,
 			groupID,
@@ -110,14 +132,6 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 			stickyAccountID,
 			cfg,
 		)
-	}
-
-	accounts, err := s.listSchedulableAccounts(ctx, groupID)
-	if err != nil {
-		return nil, err
-	}
-	if len(accounts) == 0 {
-		return nil, ErrNoAvailableAccounts
 	}
 
 	if result, ok := s.trySelectOpenAIStickyLoadAwareAccount(
@@ -133,12 +147,41 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		return result, nil
 	}
 
-	candidates, err := s.selectOpenAILoadAwareCandidates(accounts, requestedModel, excludedIDs)
+	if s.schedulerSnapshot != nil {
+		result, supported, err := s.selectOpenAIAccountWithLoadAwarenessFromIndexedSnapshot(
+			ctx,
+			groupID,
+			sessionHash,
+			requestedModel,
+			excludedIDs,
+			cfg,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil {
+			return result, nil
+		}
+		if requestedModel != "" && !supported {
+			return nil, newOpenAIRequestedModelUnavailableError(requestedModel)
+		}
+		return nil, ErrNoAvailableAccounts
+	}
+
+	accounts, err := s.listSchedulableAccounts(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
-	if len(candidates) == 0 && requestedModel != "" && !openAIRequestedModelAvailable(accounts, requestedModel) {
-		return nil, newOpenAIRequestedModelUnavailableError(requestedModel)
+	if len(accounts) == 0 {
+		return nil, ErrNoAvailableAccounts
+	}
+
+	candidates := filterSchedulableOpenAICandidates(accounts, requestedModel, excludedIDs)
+	if len(candidates) == 0 {
+		if requestedModel != "" && !openAIRequestedModelAvailable(accounts, requestedModel) {
+			return nil, newOpenAIRequestedModelUnavailableError(requestedModel)
+		}
+		return nil, ErrNoAvailableAccounts
 	}
 
 	loadMap, err := s.concurrencyService.GetAccountsLoadBatch(ctx, buildAccountLoadRequests(candidates))
@@ -148,7 +191,6 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 			candidates,
 			groupID,
 			sessionHash,
-			stickyTTL,
 			requestedModel,
 		); ok {
 			return result, nil
@@ -160,15 +202,16 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 			loadMap,
 			groupID,
 			sessionHash,
-			stickyTTL,
 			requestedModel,
 		); ok {
 			return result, nil
 		}
 	}
 
-	if fresh := s.selectOpenAIWaitPlanCandidate(ctx, candidates, loadMap, requestedModel); fresh != nil {
-		return newWaitPlanAccountSelection(fresh, cfg.FallbackWaitTimeout, cfg.FallbackMaxWaiting), nil
+	if waitCandidate := selectBestOpenAIWaitCandidate(candidates, loadMap); waitCandidate != nil {
+		if waitPlan, ok := s.tryBuildOpenAIWaitPlanSelection(ctx, waitCandidate, requestedModel, OpenAIUpstreamTransportAny, cfg); ok {
+			return waitPlan, nil
+		}
 	}
 
 	return nil, ErrNoAvailableAccounts
@@ -195,13 +238,6 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
 	return accounts, nil
-}
-
-func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {
-	if s.concurrencyService == nil {
-		return &AcquireResult{Acquired: true, ReleaseFunc: func() {}}, nil
-	}
-	return s.concurrencyService.AcquireAccountSlot(ctx, accountID, maxConcurrency)
 }
 
 func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccount(ctx context.Context, account *Account, requestedModel string) *Account {
@@ -263,18 +299,4 @@ func (s *OpenAIGatewayService) getSchedulableAccount(ctx context.Context, accoun
 	}
 	syncOpenAICodexRateLimitFromExtra(ctx, s.accountRepo, account, time.Now())
 	return account, nil
-}
-
-func (s *OpenAIGatewayService) schedulingConfig() config.GatewaySchedulingConfig {
-	if s.cfg != nil {
-		return s.cfg.Gateway.Scheduling
-	}
-	return config.GatewaySchedulingConfig{
-		StickySessionMaxWaiting:  3,
-		StickySessionWaitTimeout: 45 * time.Second,
-		FallbackWaitTimeout:      30 * time.Second,
-		FallbackMaxWaiting:       100,
-		LoadBatchEnabled:         true,
-		SlotCleanupInterval:      30 * time.Second,
-	}
 }

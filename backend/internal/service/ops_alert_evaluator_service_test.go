@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -207,6 +208,138 @@ func TestComputeRuleMetricNewIndicators(t *testing.T) {
 				return
 			}
 			require.InDelta(t, tt.wantValue, gotValue, 0.0001)
+		})
+	}
+}
+
+func TestComputeRuntimeObservabilityMetric(t *testing.T) {
+	t.Parallel()
+
+	snapshot := RuntimeObservabilitySnapshot{
+		Summary: RuntimeObservabilitySummary{
+			SchedulingRuntimeKernel: SchedulingRuntimeKernelSummary{
+				AcquireSuccessRate:        0.7,
+				WaitPlanSuccessRate:       0.75,
+				AvgFetchedAccountsPerPage: 50,
+			},
+			Idempotency: RuntimeIdempotencySummary{
+				AvgProcessingDurationMs: 30,
+			},
+		},
+	}
+
+	tests := []struct {
+		name       string
+		metricType string
+		wantValue  float64
+		wantOK     bool
+	}{
+		{name: "scheduler_acquire_success_rate", metricType: "scheduler_acquire_success_rate", wantValue: 70, wantOK: true},
+		{name: "scheduler_wait_plan_success_rate", metricType: "scheduler_wait_plan_success_rate", wantValue: 75, wantOK: true},
+		{name: "scheduler_index_page_density", metricType: "scheduler_index_page_density", wantValue: 50, wantOK: true},
+		{name: "idempotency_processing_avg_ms", metricType: "idempotency_processing_avg_ms", wantValue: 30, wantOK: true},
+		{name: "unknown", metricType: "nope", wantValue: 0, wantOK: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotValue, gotOK := computeRuntimeObservabilityMetric(tt.metricType, snapshot)
+			require.Equal(t, tt.wantOK, gotOK)
+			if !tt.wantOK {
+				return
+			}
+			require.InDelta(t, tt.wantValue, gotValue, 0.0001)
+		})
+	}
+}
+
+func TestBuildOpsAlertDescriptionForRuntimeMetrics(t *testing.T) {
+	t.Parallel()
+
+	groupID := int64(42)
+
+	tests := []struct {
+		name       string
+		rule       *OpsAlertRule
+		value      float64
+		wantParts  []string
+		platform   string
+		groupID    *int64
+		windowMins int
+	}{
+		{
+			name: "scheduler_acquire_success_rate",
+			rule: &OpsAlertRule{
+				MetricType: "scheduler_acquire_success_rate",
+				Operator:   "<",
+				Threshold:  75,
+			},
+			value:      63.5,
+			windowMins: 5,
+			platform:   "openai",
+			groupID:    &groupID,
+			wantParts: []string{
+				"Unified scheduling kernel acquire success fell to 63.50%",
+				"below the 75.00% threshold",
+				"platform=openai group_id=42",
+			},
+		},
+		{
+			name: "scheduler_wait_plan_success_rate",
+			rule: &OpsAlertRule{
+				MetricType: "scheduler_wait_plan_success_rate",
+				Operator:   "<",
+				Threshold:  60,
+			},
+			value:      42,
+			windowMins: 5,
+			wantParts: []string{
+				"wait-plan payoff dropped to 42.00%",
+				"below the 60.00% threshold",
+				"overall",
+			},
+		},
+		{
+			name: "scheduler_index_page_density",
+			rule: &OpsAlertRule{
+				MetricType: "scheduler_index_page_density",
+				Operator:   "<",
+				Threshold:  8,
+			},
+			value:      3.5,
+			windowMins: 1,
+			wantParts: []string{
+				"index page density is 3.50 accounts/page",
+				"below the 8.00 threshold",
+			},
+		},
+		{
+			name: "idempotency_processing_avg_ms",
+			rule: &OpsAlertRule{
+				MetricType: "idempotency_processing_avg_ms",
+				Operator:   ">",
+				Threshold:  80,
+			},
+			value:      140.25,
+			windowMins: 1,
+			wantParts: []string{
+				"Idempotency processing averaged 140.25ms",
+				"above the 80.00ms threshold",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			description := buildOpsAlertDescription(tt.rule, tt.value, tt.windowMins, tt.platform, tt.groupID)
+			for _, part := range tt.wantParts {
+				require.True(t, strings.Contains(description, part), "description=%q should contain %q", description, part)
+			}
 		})
 	}
 }

@@ -8,60 +8,60 @@ import (
 )
 
 type loadAwareRoutedSelectionInput struct {
-	ctx               context.Context
-	groupID           *int64
-	sessionHash       string
-	requestedModel    string
-	stickyAccountID   int64
-	excludedIDs       map[int64]struct{}
-	accountByID       map[int64]*Account
-	platform          string
-	useMixed          bool
-	routingAccountIDs []int64
-	waitTimeout       time.Duration
-	maxWaiting        int
+	ctx             context.Context
+	groupID         *int64
+	sessionHash     string
+	requestedModel  string
+	stickyAccountID int64
+	excludedIDs     map[int64]struct{}
+	accountByID     map[int64]*Account
+	plan            *gatewaySelectionPlan
+	waitTimeout     time.Duration
+	maxWaiting      int
 }
 
 func (s *GatewayService) trySelectLoadAwareRoutedAccount(input *loadAwareRoutedSelectionInput) (*AccountSelectionResult, bool) {
-	if input == nil || len(input.routingAccountIDs) == 0 || s.concurrencyService == nil {
+	if input == nil || input.plan == nil || !input.plan.routingEnabled() || s.concurrencyService == nil {
 		return nil, false
 	}
+	routingAccountIDs := input.plan.routingAccountIDs
 
 	routingFilter := s.filterRoutedCandidates(
 		input.ctx,
 		input.accountByID,
-		input.routingAccountIDs,
+		routingAccountIDs,
 		input.requestedModel,
-		input.platform,
-		input.useMixed,
+		input.plan.platform,
+		input.plan.useMixed,
 		input.excludedIDs,
 	)
 	routingCandidates := routingFilter.Candidates
-	s.logRoutedCandidateFilterResult(input.groupID, input.requestedModel, input.routingAccountIDs, routingFilter)
+	s.logRoutedCandidateFilterResult(input.groupID, input.requestedModel, routingAccountIDs, routingFilter)
 	if len(routingCandidates) == 0 {
 		return nil, false
 	}
+	routingCtx := routingFilter.SelectionCtx
 
 	if result, ok := s.trySelectRoutedStickyAccount(
-		input.ctx,
+		routingCtx,
 		input.groupID,
 		input.sessionHash,
 		input.requestedModel,
 		input.stickyAccountID,
-		input.routingAccountIDs,
+		routingAccountIDs,
 		input.excludedIDs,
 		input.accountByID,
-		input.platform,
-		input.useMixed,
+		input.plan.platform,
+		input.plan.useMixed,
 		input.waitTimeout,
 		input.maxWaiting,
 	); ok {
 		return result, true
 	}
 
-	routingLoadMap, _ := s.concurrencyService.GetAccountsLoadBatch(input.ctx, buildAccountLoadRequests(routingCandidates))
+	routingLoadMap, _ := s.concurrencyService.GetAccountsLoadBatch(routingCtx, buildAccountLoadRequests(routingCandidates))
 	if result, ok := s.selectAvailableRoutedAccount(
-		input.ctx,
+		routingCtx,
 		input.groupID,
 		input.sessionHash,
 		input.requestedModel,

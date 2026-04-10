@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { opsAPI, type OpsAccountAvailabilityStatsResponse, type OpsConcurrencyStatsResponse, type OpsUserConcurrencyStatsResponse } from '@/api/admin/ops'
+import {
+  opsAPI,
+  type OpsAccountAvailabilityStatsResponse,
+  type OpsConcurrencyStatsResponse,
+  type OpsUserConcurrencyStatsResponse,
+  type RuntimeObservabilitySnapshot
+} from '@/api/admin/ops'
 
 interface Props {
   platformFilter?: string
@@ -32,6 +38,145 @@ const realtimeEnabled = computed(() => {
 function safeNumber(n: unknown): number {
   return typeof n === 'number' && Number.isFinite(n) ? n : 0
 }
+
+type RuntimeTone = 'healthy' | 'warning' | 'critical'
+
+interface RuntimeHealthItem {
+  key: string
+  label: string
+  value: string
+  tone: RuntimeTone
+}
+
+interface RuntimeHeadline {
+  tone: RuntimeTone
+  title: string
+  detail: string
+}
+
+const runtimeObservability = computed<RuntimeObservabilitySnapshot | null>(() => {
+  if (showByUser.value) {
+    return userConcurrency.value?.runtime_observability ?? null
+  }
+  return concurrency.value?.runtime_observability ?? availability.value?.runtime_observability ?? null
+})
+
+function formatRuntimePercent(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : '-'
+}
+
+function formatRuntimeFixed(value: number | null | undefined, digits = 1): string {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '-'
+}
+
+function runtimeToneByRate(value: number | null | undefined, warn: number, critical: number): RuntimeTone {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'healthy'
+  if (value < critical) return 'critical'
+  if (value < warn) return 'warning'
+  return 'healthy'
+}
+
+function runtimeToneByReverseRate(value: number | null | undefined, warn: number, critical: number): RuntimeTone {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'healthy'
+  if (value > critical) return 'critical'
+  if (value > warn) return 'warning'
+  return 'healthy'
+}
+
+const runtimeHealthItems = computed<RuntimeHealthItem[]>(() => {
+  const summary = runtimeObservability.value?.summary
+  const raw = runtimeObservability.value?.scheduling_runtime_kernel
+  const idempotency = runtimeObservability.value?.summary?.idempotency
+  const hasWaitPlan = (raw?.runtime_wait_plan_attempts ?? 0) > 0
+
+  return [
+    {
+      key: 'page_density',
+      label: t('admin.ops.runtimeObservability.pageDensity'),
+      value: formatRuntimeFixed(summary?.scheduling_runtime_kernel?.avg_fetched_accounts_per_page),
+      tone: runtimeToneByRate(
+        summary?.scheduling_runtime_kernel?.avg_fetched_accounts_per_page,
+        8,
+        3
+      )
+    },
+    {
+      key: 'acquire_success',
+      label: t('admin.ops.runtimeObservability.acquireSuccess'),
+      value: formatRuntimePercent(summary?.scheduling_runtime_kernel?.acquire_success_rate),
+      tone: runtimeToneByRate(summary?.scheduling_runtime_kernel?.acquire_success_rate, 0.75, 0.5)
+    },
+    {
+      key: 'wait_plan_success',
+      label: t('admin.ops.runtimeObservability.waitPlanSuccess'),
+      value: hasWaitPlan
+        ? formatRuntimePercent(summary?.scheduling_runtime_kernel?.wait_plan_success_rate)
+        : t('admin.ops.runtimeObservability.notTriggered'),
+      tone: hasWaitPlan
+        ? runtimeToneByRate(summary?.scheduling_runtime_kernel?.wait_plan_success_rate, 0.6, 0.35)
+        : 'healthy'
+    },
+    {
+      key: 'idempotency_avg',
+      label: t('admin.ops.runtimeObservability.idempotencyAvg'),
+      value: `${formatRuntimeFixed(idempotency?.avg_processing_duration_ms)}ms`,
+      tone: runtimeToneByReverseRate(idempotency?.avg_processing_duration_ms, 80, 250)
+    }
+  ]
+})
+
+const runtimeHeadline = computed<RuntimeHeadline | null>(() => {
+  const summary = runtimeObservability.value?.summary
+  const raw = runtimeObservability.value?.scheduling_runtime_kernel
+  if (!summary || !raw) {
+    return null
+  }
+
+  const acquireTone = runtimeToneByRate(summary.scheduling_runtime_kernel.acquire_success_rate, 0.75, 0.5)
+  if (acquireTone !== 'healthy') {
+    return {
+      tone: acquireTone,
+      title: t('admin.ops.runtimeObservability.acquireRisk'),
+      detail: t('admin.ops.runtimeObservability.acquireRiskHint')
+    }
+  }
+
+  const densityTone = runtimeToneByRate(summary.scheduling_runtime_kernel.avg_fetched_accounts_per_page, 8, 3)
+  if ((raw.index_page_fetches ?? 0) > 0 && densityTone !== 'healthy') {
+    return {
+      tone: densityTone,
+      title: t('admin.ops.runtimeObservability.pageDensityRisk'),
+      detail: t('admin.ops.runtimeObservability.pageDensityRiskHint')
+    }
+  }
+
+  const hasWaitPlan = (raw.runtime_wait_plan_attempts ?? 0) > 0
+  const waitPlanTone = hasWaitPlan
+    ? runtimeToneByRate(summary.scheduling_runtime_kernel.wait_plan_success_rate, 0.6, 0.35)
+    : 'healthy'
+  if (waitPlanTone !== 'healthy') {
+    return {
+      tone: waitPlanTone,
+      title: t('admin.ops.runtimeObservability.waitPlanRisk'),
+      detail: t('admin.ops.runtimeObservability.waitPlanRiskHint')
+    }
+  }
+
+  const idempotencyTone = runtimeToneByReverseRate(summary.idempotency.avg_processing_duration_ms, 80, 250)
+  if (idempotencyTone !== 'healthy') {
+    return {
+      tone: idempotencyTone,
+      title: t('admin.ops.runtimeObservability.idempotencyRisk'),
+      detail: t('admin.ops.runtimeObservability.idempotencyRiskHint')
+    }
+  }
+
+  return {
+    tone: 'healthy',
+    title: t('admin.ops.runtimeObservability.healthyTitle'),
+    detail: t('admin.ops.runtimeObservability.healthyHint')
+  }
+})
 
 // 计算显示维度
 const displayDimension = computed<'platform' | 'group' | 'account' | 'user'>(() => {
@@ -349,6 +494,24 @@ function getViewToggleClasses(isActive: boolean): string {
   ])
 }
 
+function getRuntimeHeadlineClasses(tone: RuntimeTone): string {
+  return joinClassNames([
+    'ops-concurrency-card__runtime-headline flex items-start justify-between gap-3 rounded-xl border px-3 py-2.5',
+    tone === 'critical' && 'ops-concurrency-card__runtime-headline--critical',
+    tone === 'warning' && 'ops-concurrency-card__runtime-headline--warning',
+    tone === 'healthy' && 'ops-concurrency-card__runtime-headline--healthy'
+  ])
+}
+
+function getRuntimeMetricClasses(tone: RuntimeTone): string {
+  return joinClassNames([
+    'ops-concurrency-card__runtime-metric rounded-lg border px-2.5 py-2',
+    tone === 'critical' && 'ops-concurrency-card__runtime-metric--critical',
+    tone === 'warning' && 'ops-concurrency-card__runtime-metric--warning',
+    tone === 'healthy' && 'ops-concurrency-card__runtime-metric--healthy'
+  ])
+}
+
 function getStatusChipClasses(tone: ConcurrencyTone): string {
   return joinClassNames([
     'ops-concurrency-card__status-chip theme-chip theme-chip--compact inline-flex items-center gap-1 text-[10px] font-medium',
@@ -447,6 +610,42 @@ watch(
         <span class="ops-concurrency-card__subtitle text-[10px]">
           {{ t('admin.ops.concurrency.totalRows', { count: displayRows.length }) }}
         </span>
+      </div>
+
+      <div v-if="runtimeHeadline" class="ops-concurrency-card__runtime border-b px-3 py-3">
+        <div :class="getRuntimeHeadlineClasses(runtimeHeadline.tone)">
+          <div class="min-w-0 flex-1">
+            <div class="ops-concurrency-card__runtime-title text-[11px] font-bold">
+              {{ runtimeHeadline.title }}
+            </div>
+            <div class="ops-concurrency-card__runtime-detail mt-1 text-[10px]">
+              {{ runtimeHeadline.detail }}
+            </div>
+          </div>
+          <div class="ops-concurrency-card__runtime-probes shrink-0 text-right">
+            <div class="ops-concurrency-card__subtitle text-[9px] font-bold uppercase tracking-wider">
+              {{ t('admin.ops.runtimeObservability.runtimeProbes') }}
+            </div>
+            <div class="ops-concurrency-card__primary mt-1 text-sm font-black">
+              {{ runtimeObservability?.summary?.scheduling_runtime_kernel?.total_runtime_probes ?? 0 }}
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <div
+            v-for="item in runtimeHealthItems"
+            :key="item.key"
+            :class="getRuntimeMetricClasses(item.tone)"
+          >
+            <div class="ops-concurrency-card__subtitle text-[9px] font-bold uppercase tracking-wider">
+              {{ item.label }}
+            </div>
+            <div class="ops-concurrency-card__primary mt-1 text-[13px] font-black">
+              {{ item.value }}
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 空状态 -->
@@ -707,6 +906,37 @@ watch(
     var(--theme-ops-table-cell-padding-compact-x);
   border-color: color-mix(in srgb, var(--theme-page-border) 70%, transparent);
   background: color-mix(in srgb, var(--theme-surface-soft) 92%, var(--theme-surface));
+}
+
+.ops-concurrency-card__runtime {
+  border-color: color-mix(in srgb, var(--theme-page-border) 68%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
+}
+
+.ops-concurrency-card__runtime-title {
+  color: var(--theme-page-text);
+}
+
+.ops-concurrency-card__runtime-detail {
+  color: var(--theme-page-muted);
+}
+
+.ops-concurrency-card__runtime-headline--healthy,
+.ops-concurrency-card__runtime-metric--healthy {
+  border-color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 28%, transparent);
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 8%, var(--theme-surface));
+}
+
+.ops-concurrency-card__runtime-headline--warning,
+.ops-concurrency-card__runtime-metric--warning {
+  border-color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 32%, transparent);
+  background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
+}
+
+.ops-concurrency-card__runtime-headline--critical,
+.ops-concurrency-card__runtime-metric--critical {
+  border-color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 34%, transparent);
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
 }
 
 .ops-concurrency-card__list {

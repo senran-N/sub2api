@@ -730,6 +730,8 @@ type GatewaySchedulingConfig struct {
 	LoadBatchEnabled bool `mapstructure:"load_batch_enabled"`
 	// 快照桶读取时的 MGET 分块大小
 	SnapshotMGetChunkSize int `mapstructure:"snapshot_mget_chunk_size"`
+	// 调度快照分页读取时的单页大小
+	SnapshotPageSize int `mapstructure:"snapshot_page_size"`
 	// 快照重建时的缓存写入分块大小
 	SnapshotWriteChunkSize int `mapstructure:"snapshot_write_chunk_size"`
 
@@ -1460,6 +1462,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.scheduling.fallback_selection_mode", "last_used")
 	viper.SetDefault("gateway.scheduling.load_batch_enabled", true)
 	viper.SetDefault("gateway.scheduling.snapshot_mget_chunk_size", 128)
+	viper.SetDefault("gateway.scheduling.snapshot_page_size", 128)
 	viper.SetDefault("gateway.scheduling.snapshot_write_chunk_size", 256)
 	viper.SetDefault("gateway.scheduling.slot_cleanup_interval", 30*time.Second)
 	viper.SetDefault("gateway.scheduling.db_fallback_enabled", true)
@@ -2247,6 +2250,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.Scheduling.SnapshotMGetChunkSize <= 0 {
 		return fmt.Errorf("gateway.scheduling.snapshot_mget_chunk_size must be positive")
+	}
+	if c.Gateway.Scheduling.SnapshotPageSize <= 0 {
+		return fmt.Errorf("gateway.scheduling.snapshot_page_size must be positive")
 	}
 	if c.Gateway.Scheduling.SnapshotWriteChunkSize <= 0 {
 		return fmt.Errorf("gateway.scheduling.snapshot_write_chunk_size must be positive")

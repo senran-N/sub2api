@@ -111,7 +111,7 @@ func TestTryAcquireOrBuildStickyWaitPlan_Acquired(t *testing.T) {
 				},
 			}, nil
 		},
-		func(acquired *AcquireResult) *AccountSelectionResult {
+		func(account *Account, acquired *AcquireResult) *AccountSelectionResult {
 			onAcquireCalled = true
 			return newAcquiredAccountSelection(account, acquired.ReleaseFunc)
 		},
@@ -146,7 +146,7 @@ func TestTryAcquireOrBuildStickyWaitPlan_AcquireFailedReturnsStickyWaitPlan(t *t
 		func(context.Context, int64, int) (*AcquireResult, error) {
 			return &AcquireResult{Acquired: false}, nil
 		},
-		func(*AcquireResult) *AccountSelectionResult {
+		func(*Account, *AcquireResult) *AccountSelectionResult {
 			onAcquireCalled = true
 			return nil
 		},
@@ -177,7 +177,7 @@ func TestTryAcquireOrBuildStickyWaitPlan_AcquireFailedWithoutConcurrencyService(
 		func(context.Context, int64, int) (*AcquireResult, error) {
 			return &AcquireResult{Acquired: false}, nil
 		},
-		func(*AcquireResult) *AccountSelectionResult {
+		func(*Account, *AcquireResult) *AccountSelectionResult {
 			return nil
 		},
 	)

@@ -4057,6 +4057,41 @@ export default {
           group: '分组级别指标（需 group_id）',
           account: '账号级别指标'
         },
+        presets: {
+          title: '推荐模板',
+          description: '基于统一调度内核的常见风险预设，适合直接作为第一版告警规则。',
+          createAll: '创建推荐规则',
+          created: '已创建',
+          allCreated: '推荐规则已全部存在',
+          createSuccess: '已创建 {count} 条推荐规则',
+          createPartial: '已创建 {success} 条推荐规则，另有 {failed} 条创建失败',
+          createFailed: '创建推荐规则失败',
+          acquireSuccess: {
+            name: 'Acquire 成功率过低',
+            description: '当统一调度内核的 Acquire 成功率持续低于 75% 时告警。'
+          },
+          waitPlanSuccess: {
+            name: 'Wait-plan 收益过低',
+            description: '当 Wait-plan 成功率持续低于 60% 时告警。'
+          },
+          pageDensity: {
+            name: '索引页密度过低',
+            description: '当索引分页平均每页命中账号过少时告警，帮助发现候选裁剪过散。'
+          },
+          idempotencyLatency: {
+            name: '幂等处理变慢',
+            description: '当幂等平均处理耗时持续升高时告警，帮助发现锁竞争或存储瓶颈。'
+          }
+        },
+        emptyState: {
+          title: '还没有告警基线',
+          description: '先落一版统一调度内核的推荐规则，先把 Acquire、Wait-plan、索引密度和幂等耗时纳入默认监控，再按你的业务补充更细粒度规则。'
+        },
+        dashboardBaseline: {
+          title: '告警基线尚未初始化',
+          description: '当前 Ops 看板还没有任何告警规则。建议先落统一调度内核的推荐规则，把 Acquire、Wait-plan、索引密度与幂等耗时纳入默认运营监控。',
+          action: '初始化告警基线'
+        },
         metrics: {
           successRate: '成功率 (%)',
           errorRate: '错误率 (%)',
@@ -4066,6 +4101,10 @@ export default {
           cpu: 'CPU 使用率 (%)',
           memory: '内存使用率 (%)',
           queueDepth: '并发排队深度',
+          schedulerAcquireSuccessRate: '调度 Acquire 成功率 (%)',
+          schedulerWaitPlanSuccessRate: '调度 Wait-plan 成功率 (%)',
+          schedulerIndexPageDensity: '调度索引页密度',
+          idempotencyProcessingAvgMs: '幂等平均处理耗时 (ms)',
           groupAvailableAccounts: '分组可用账号数',
           groupAvailableRatio: '分组可用比例 (%)',
           groupRateLimitRatio: '分组限流比例 (%)',
@@ -4083,6 +4122,10 @@ export default {
           cpu: '当前实例 CPU 使用率（0~100）。',
           memory: '当前实例内存使用率（0~100）。',
           queueDepth: '统计窗口内并发队列排队深度（等待中的请求数）。',
+          schedulerAcquireSuccessRate: '统一调度内核在运行时 Acquire 阶段的成功率（0~100）。',
+          schedulerWaitPlanSuccessRate: '统一调度内核进入 Wait-plan 后最终成功的比例（0~100）。',
+          schedulerIndexPageDensity: '索引分页每页平均拉回的账号数量，反映候选裁剪是否足够集中。',
+          idempotencyProcessingAvgMs: '幂等处理中每次已记录处理的平均耗时（毫秒）。',
           groupAvailableAccounts: '指定分组中当前可用账号数量（需要 group_id 过滤）。',
           groupAvailableRatio: '指定分组中可用账号占比（0~100，需要 group_id 过滤）。',
           groupRateLimitRatio: '指定分组中账号被限流的比例（0~100，需要 group_id 过滤）。',
@@ -4332,6 +4375,30 @@ export default {
         offline: '实时离线',
         closed: '实时已关闭',
         reconnectIn: '重连 {seconds}s'
+      },
+      runtimeObservability: {
+        title: '调度内核',
+        help: '统一调度内核的运行时摘要，帮助判断索引裁剪效率、Acquire 成功率、Wait-plan 触发效果与幂等处理开销。',
+        pageDensity: '页密度',
+        pageDensityHint: '索引分页每页平均拉回的账号数量。越高说明索引裁剪后每次页抓取更集中。',
+        pageDensityRisk: '索引裁剪偏散',
+        pageDensityRiskHint: '分页抓取过于稀疏，说明候选索引过滤不够集中，热路径可能在做无效翻页。',
+        acquireSuccess: 'Acquire 成功',
+        acquireSuccessHint: '运行时 Acquire 成功率。偏低通常意味着热路径命中过多不可用/已满账号。',
+        acquireRisk: 'Acquire 命中偏低',
+        acquireRiskHint: '热路径正在探测过多不可用、已满或最终落空的候选账号，建议先看索引裁剪与账号饱和度。',
+        waitPlanSuccess: 'Wait-plan 成功',
+        waitPlanSuccessHint: '进入等待计划后的成功比例。偏低说明队列等待收益不足或最终落空较多。',
+        waitPlanRisk: 'Wait-plan 收益偏低',
+        waitPlanRiskHint: '等待计划触发后仍然频繁失败，说明排队带来的收益有限，需检查队列策略或账号供给。',
+        idempotencyAvg: '幂等均耗时',
+        idempotencyAvgHint: '幂等处理中每次已记录处理的平均耗时。持续上升时应关注幂等存储与锁竞争。',
+        idempotencyRisk: '幂等路径变慢',
+        idempotencyRiskHint: '幂等平均处理耗时升高，可能存在存储竞争、锁等待或回放热点。',
+        runtimeProbes: '运行时探测',
+        notTriggered: '未触发',
+        healthyTitle: '调度内核运行平稳',
+        healthyHint: '当前索引裁剪、Acquire 与 Wait-plan 的整体信号正常，未发现明显热点退化。'
       },
       queryMode: {
         auto: 'Auto（自动）',

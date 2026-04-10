@@ -39,18 +39,20 @@ func TestSelectAccountWithLoadBatch_PrefersRoutedSelection(t *testing.T) {
 	}
 
 	state := &loadAwareSchedulingState{
-		platform:    PlatformAnthropic,
-		preferOAuth: false,
 		accounts: []Account{
 			{ID: 1, Platform: PlatformAnthropic, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 5, Priority: 1},
 			{ID: 2, Platform: PlatformAnthropic, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 5, Priority: 1},
 		},
-		useMixed: false,
 		accountByID: map[int64]*Account{
 			1: {ID: 1, Platform: PlatformAnthropic, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 5, Priority: 1},
 			2: {ID: 2, Platform: PlatformAnthropic, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 5, Priority: 1},
 		},
-		routingAccountIDs: []int64{1, 2},
+		plan: &gatewaySelectionPlan{
+			platform:          PlatformAnthropic,
+			preferOAuth:       false,
+			useMixed:          false,
+			routingAccountIDs: []int64{1, 2},
+		},
 	}
 
 	result, err := svc.selectAccountWithLoadBatch(&loadAwareBatchSelectionInput{
@@ -91,12 +93,14 @@ func TestSelectAccountWithLoadBatch_FallsBackWhenRoutedSelectionMisses(t *testin
 		Priority:    1,
 	}
 	state := &loadAwareSchedulingState{
-		platform:          PlatformAnthropic,
-		preferOAuth:       false,
-		accounts:          []Account{account},
-		useMixed:          false,
-		accountByID:       map[int64]*Account{account.ID: &account},
-		routingAccountIDs: nil,
+		accounts:    []Account{account},
+		accountByID: map[int64]*Account{account.ID: &account},
+		plan: &gatewaySelectionPlan{
+			platform:          PlatformAnthropic,
+			preferOAuth:       false,
+			useMixed:          false,
+			routingAccountIDs: nil,
+		},
 	}
 
 	result, err := svc.selectAccountWithLoadBatch(&loadAwareBatchSelectionInput{

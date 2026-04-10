@@ -311,6 +311,11 @@ func (s *OpsAlertEvaluatorService) computeRuleMetric(
 			return float64(*systemMetrics.ConcurrencyQueueDepth), true
 		}
 		return 0, false
+	case "scheduler_acquire_success_rate",
+		"scheduler_wait_plan_success_rate",
+		"scheduler_index_page_density",
+		"idempotency_processing_avg_ms":
+		return computeRuntimeObservabilityMetric(rule.MetricType, SnapshotRuntimeObservability())
 	case "group_available_accounts":
 		if groupID == nil || *groupID <= 0 || s == nil || s.opsService == nil {
 			return 0, false
@@ -427,6 +432,21 @@ func (s *OpsAlertEvaluatorService) computeRuleMetric(
 	}
 }
 
+func computeRuntimeObservabilityMetric(metricType string, snapshot RuntimeObservabilitySnapshot) (float64, bool) {
+	switch strings.TrimSpace(metricType) {
+	case "scheduler_acquire_success_rate":
+		return snapshot.Summary.SchedulingRuntimeKernel.AcquireSuccessRate * 100, true
+	case "scheduler_wait_plan_success_rate":
+		return snapshot.Summary.SchedulingRuntimeKernel.WaitPlanSuccessRate * 100, true
+	case "scheduler_index_page_density":
+		return snapshot.Summary.SchedulingRuntimeKernel.AvgFetchedAccountsPerPage, true
+	case "idempotency_processing_avg_ms":
+		return snapshot.Summary.Idempotency.AvgProcessingDurationMs, true
+	default:
+		return 0, false
+	}
+}
+
 func compareMetric(value float64, operator string, threshold float64) bool {
 	switch strings.TrimSpace(operator) {
 	case ">":
@@ -464,16 +484,46 @@ func buildOpsAlertDescription(rule *OpsAlertRule, value float64, windowMinutes i
 	if rule == nil {
 		return ""
 	}
-	scope := "overall"
-	if strings.TrimSpace(platform) != "" {
-		scope = fmt.Sprintf("platform=%s", strings.TrimSpace(platform))
-	}
-	if groupID != nil && *groupID > 0 {
-		scope = fmt.Sprintf("%s group_id=%d", scope, *groupID)
-	}
+	scope := buildOpsAlertScope(platform, groupID)
 	if windowMinutes <= 0 {
 		windowMinutes = 1
 	}
+
+	switch strings.TrimSpace(rule.MetricType) {
+	case "scheduler_acquire_success_rate":
+		return fmt.Sprintf(
+			"Unified scheduling kernel acquire success fell to %.2f%% over the last %dm (%s), below the %.2f%% threshold. This usually means indexed candidates are being exhausted before runtime acquire can secure a schedulable account.",
+			value,
+			windowMinutes,
+			scope,
+			rule.Threshold,
+		)
+	case "scheduler_wait_plan_success_rate":
+		return fmt.Sprintf(
+			"Unified scheduling kernel wait-plan payoff dropped to %.2f%% over the last %dm (%s), below the %.2f%% threshold. This suggests queued retries are not converting into usable accounts fast enough.",
+			value,
+			windowMinutes,
+			scope,
+			rule.Threshold,
+		)
+	case "scheduler_index_page_density":
+		return fmt.Sprintf(
+			"Unified scheduling kernel index page density is %.2f accounts/page over the last %dm (%s), below the %.2f threshold. Candidate pruning is too sparse and the hot path is spending extra probes on thin pages.",
+			value,
+			windowMinutes,
+			scope,
+			rule.Threshold,
+		)
+	case "idempotency_processing_avg_ms":
+		return fmt.Sprintf(
+			"Idempotency processing averaged %.2fms over the last %dm (%s), above the %.2fms threshold. This often points to rising lock contention or backing-store pressure on the runtime path.",
+			value,
+			windowMinutes,
+			scope,
+			rule.Threshold,
+		)
+	}
+
 	return fmt.Sprintf("%s %s %.2f (current %.2f) over last %dm (%s)",
 		strings.TrimSpace(rule.MetricType),
 		strings.TrimSpace(rule.Operator),
@@ -482,6 +532,17 @@ func buildOpsAlertDescription(rule *OpsAlertRule, value float64, windowMinutes i
 		windowMinutes,
 		strings.TrimSpace(scope),
 	)
+}
+
+func buildOpsAlertScope(platform string, groupID *int64) string {
+	scope := "overall"
+	if strings.TrimSpace(platform) != "" {
+		scope = fmt.Sprintf("platform=%s", strings.TrimSpace(platform))
+	}
+	if groupID != nil && *groupID > 0 {
+		scope = fmt.Sprintf("%s group_id=%d", scope, *groupID)
+	}
+	return strings.TrimSpace(scope)
 }
 
 // computeGroupAvailableRatio returns the available percentage for a group.

@@ -18,8 +18,9 @@ type routedCandidateFilterStats struct {
 }
 
 type routedCandidateFilterResult struct {
-	Candidates []*Account
-	Stats      routedCandidateFilterStats
+	SelectionCtx context.Context
+	Candidates   []*Account
+	Stats        routedCandidateFilterStats
 }
 
 func (s *GatewayService) filterRoutedCandidates(
@@ -32,8 +33,15 @@ func (s *GatewayService) filterRoutedCandidates(
 	excludedIDs map[int64]struct{},
 ) routedCandidateFilterResult {
 	result := routedCandidateFilterResult{
-		Candidates: make([]*Account, 0, len(routingAccountIDs)),
+		SelectionCtx: ctx,
+		Candidates:   make([]*Account, 0, len(routingAccountIDs)),
 	}
+	if len(routingAccountIDs) == 0 {
+		return result
+	}
+
+	loadedByID := make(map[int64]*Account, len(routingAccountIDs))
+	prefetchAccounts := make([]Account, 0, len(routingAccountIDs))
 
 	for _, routingAccountID := range routingAccountIDs {
 		if _, excluded := excludedIDs[routingAccountID]; excluded {
@@ -41,13 +49,28 @@ func (s *GatewayService) filterRoutedCandidates(
 			continue
 		}
 
-		account, ok := accountByID[routingAccountID]
-		if !ok || !s.isAccountSchedulableForSelection(account) {
-			if !ok {
-				result.Stats.FilteredMissing++
-			} else {
-				result.Stats.FilteredUnsched++
-			}
+		account, ok := s.resolveSelectionAccountByID(ctx, accountByID, routingAccountID)
+		if !ok {
+			result.Stats.FilteredMissing++
+			continue
+		}
+		if !s.isAccountSchedulableForSelection(account) {
+			result.Stats.FilteredUnsched++
+			continue
+		}
+		loadedByID[routingAccountID] = account
+		prefetchAccounts = append(prefetchAccounts, *account)
+	}
+
+	result.SelectionCtx = s.prefetchSelectionSignals(ctx, prefetchAccounts)
+
+	for _, routingAccountID := range routingAccountIDs {
+		if _, excluded := excludedIDs[routingAccountID]; excluded {
+			continue
+		}
+
+		account, ok := loadedByID[routingAccountID]
+		if !ok {
 			continue
 		}
 
@@ -55,11 +78,11 @@ func (s *GatewayService) filterRoutedCandidates(
 			result.Stats.FilteredPlatform++
 			continue
 		}
-		if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, account, requestedModel) {
+		if requestedModel != "" && !s.isModelSupportedByAccountWithContext(result.SelectionCtx, account, requestedModel) {
 			result.Stats.FilteredModelMap++
 			continue
 		}
-		if !s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) {
+		if !s.isAccountSchedulableForModelSelection(result.SelectionCtx, account, requestedModel) {
 			result.Stats.FilteredModelScope++
 			result.Stats.ModelScopeSkippedID = append(result.Stats.ModelScopeSkippedID, account.ID)
 			continue
@@ -67,11 +90,11 @@ func (s *GatewayService) filterRoutedCandidates(
 		if !s.isAccountSchedulableForQuota(account) {
 			continue
 		}
-		if !s.isAccountSchedulableForWindowCost(ctx, account, false) {
+		if !s.isAccountSchedulableForWindowCost(result.SelectionCtx, account, false) {
 			result.Stats.FilteredWindowCost++
 			continue
 		}
-		if !s.isAccountSchedulableForRPM(ctx, account, false) {
+		if !s.isAccountSchedulableForRPM(result.SelectionCtx, account, false) {
 			continue
 		}
 

@@ -3893,6 +3893,41 @@ export default {
           group: 'Group-level Metrics (requires group_id)',
           account: 'Account-level Metrics'
         },
+        presets: {
+          title: 'Recommended Presets',
+          description: 'Common starter rules built around unified scheduling-kernel risks, suitable as the first alerting baseline.',
+          createAll: 'Create Recommended Rules',
+          created: 'Created',
+          allCreated: 'All recommended rules already exist',
+          createSuccess: 'Created {count} recommended rule(s)',
+          createPartial: 'Created {success} recommended rule(s), while {failed} failed',
+          createFailed: 'Failed to create recommended rules',
+          acquireSuccess: {
+            name: 'Low Acquire Success Rate',
+            description: 'Alert when unified scheduling-kernel acquire success stays below 75%.'
+          },
+          waitPlanSuccess: {
+            name: 'Low Wait-plan Payoff',
+            description: 'Alert when wait-plan success stays below 60%.'
+          },
+          pageDensity: {
+            name: 'Low Index Page Density',
+            description: 'Alert when indexed pages return too few candidates on average, indicating sparse pruning.'
+          },
+          idempotencyLatency: {
+            name: 'Slow Idempotency Path',
+            description: 'Alert when average idempotency processing time keeps rising, indicating contention or store pressure.'
+          }
+        },
+        emptyState: {
+          title: 'No alerting baseline yet',
+          description: 'Start with the unified scheduling-kernel presets so acquire, wait-plan payoff, index density, and idempotency latency are covered before you add finer-grained business rules.'
+        },
+        dashboardBaseline: {
+          title: 'Alerting baseline is not initialized',
+          description: 'The Ops dashboard currently has no alert rules. Start with the unified scheduling-kernel presets so acquire, wait-plan payoff, index density, and idempotency latency are covered by default.',
+          action: 'Initialize Alert Baseline'
+        },
         metrics: {
           successRate: 'Success Rate (%)',
           errorRate: 'Error Rate (%)',
@@ -3902,6 +3937,10 @@ export default {
           cpu: 'CPU Usage (%)',
           memory: 'Memory Usage (%)',
           queueDepth: 'Concurrency Queue Depth',
+          schedulerAcquireSuccessRate: 'Scheduler Acquire Success Rate (%)',
+          schedulerWaitPlanSuccessRate: 'Scheduler Wait-plan Success Rate (%)',
+          schedulerIndexPageDensity: 'Scheduler Index Page Density',
+          idempotencyProcessingAvgMs: 'Idempotency Avg Processing Time (ms)',
           groupAvailableAccounts: 'Group Available Accounts',
           groupAvailableRatio: 'Group Available Ratio (%)',
           groupRateLimitRatio: 'Group Rate Limit Ratio (%)',
@@ -3919,6 +3958,10 @@ export default {
           cpu: 'Current instance CPU usage (0-100).',
           memory: 'Current instance memory usage (0-100).',
           queueDepth: 'Concurrency queue depth within the window (queued requests).',
+          schedulerAcquireSuccessRate: 'Acquire success rate inside the unified scheduling kernel runtime path (0-100).',
+          schedulerWaitPlanSuccessRate: 'Final success rate after entering the unified scheduling wait-plan path (0-100).',
+          schedulerIndexPageDensity: 'Average accounts fetched per indexed page, indicating how concentrated candidate pruning is.',
+          idempotencyProcessingAvgMs: 'Average processing time per recorded idempotency operation (milliseconds).',
           groupAvailableAccounts: 'Number of available accounts in the selected group (requires group_id).',
           groupAvailableRatio: 'Available account ratio in the selected group (0-100, requires group_id).',
           groupRateLimitRatio: 'Rate-limited account ratio in the selected group (0-100, requires group_id).',
@@ -4167,6 +4210,30 @@ export default {
         offline: 'Realtime offline',
         closed: 'Realtime closed',
         reconnectIn: 'retry in {seconds}s'
+      },
+      runtimeObservability: {
+        title: 'Runtime Kernel',
+        help: 'Derived runtime signals from the unified scheduling kernel, showing index pruning density, acquire effectiveness, wait-plan payoff, and idempotency overhead.',
+        pageDensity: 'Page Density',
+        pageDensityHint: 'Average accounts fetched per indexed page. Higher usually means pruning is keeping page fetches concentrated.',
+        pageDensityRisk: 'Index pruning is sparse',
+        pageDensityRiskHint: 'Page fetches are too sparse, which suggests candidate pruning is not concentrated enough and the hot path may be over-paging.',
+        acquireSuccess: 'Acquire Success',
+        acquireSuccessHint: 'Runtime acquire success rate. Low values usually mean the hot path is probing too many full or unusable accounts.',
+        acquireRisk: 'Acquire hit rate is low',
+        acquireRiskHint: 'The hot path is probing too many full, unusable, or ultimately missed candidates. Check pruning quality and account saturation first.',
+        waitPlanSuccess: 'Wait-plan Success',
+        waitPlanSuccessHint: 'Success ratio after entering the wait plan. Low values suggest queue waits are paying off poorly or ending in misses.',
+        waitPlanRisk: 'Wait-plan payoff is low',
+        waitPlanRiskHint: 'Wait-plan attempts are still ending in frequent misses, which suggests queueing is not buying enough success and supply may be too thin.',
+        idempotencyAvg: 'Idempotency Avg',
+        idempotencyAvgHint: 'Average processing time per recorded idempotency operation. Sustained growth points to store contention or locking overhead.',
+        idempotencyRisk: 'Idempotency path is slow',
+        idempotencyRiskHint: 'Average idempotency processing time is rising, which may indicate store contention, lock waits, or replay hotspots.',
+        runtimeProbes: 'Runtime Probes',
+        notTriggered: 'Not triggered',
+        healthyTitle: 'Scheduling kernel is stable',
+        healthyHint: 'Index pruning, acquire, and wait-plan signals look healthy right now, with no obvious hot-path degradation.'
       },
       queryMode: {
         auto: 'Auto',

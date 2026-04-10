@@ -6,7 +6,13 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api'
-import { opsAPI, type OpsDashboardOverview, type OpsMetricThresholds, type OpsRealtimeTrafficSummary } from '@/api/admin/ops'
+import {
+  opsAPI,
+  type OpsDashboardOverview,
+  type OpsMetricThresholds,
+  type OpsRealtimeTrafficSummary,
+  type RuntimeObservabilitySnapshot
+} from '@/api/admin/ops'
 import type { OpsRequestDetailsPreset } from './OpsRequestDetailsModal.vue'
 import {
   buildDiagnosisReport,
@@ -235,6 +241,7 @@ const totalRequestsLabel = computed(() => formatNumber(overview.value?.request_c
 const totalTokensLabel = computed(() => formatNumber(overview.value?.token_consumed ?? 0))
 
 const realtimeTrafficSummary = ref<OpsRealtimeTrafficSummary | null>(null)
+const realtimeRuntimeObservability = ref<RuntimeObservabilitySnapshot | null>(null)
 const realtimeTrafficLoading = ref(false)
 
 function makeZeroRealtimeTrafficSummary(): OpsRealtimeTrafficSummary {
@@ -263,9 +270,11 @@ async function loadRealtimeTrafficSummary() {
       adminSettingsStore.setOpsRealtimeMonitoringEnabledLocal(false)
     }
     realtimeTrafficSummary.value = res?.summary ?? null
+    realtimeRuntimeObservability.value = res?.runtime_observability ?? null
   } catch (err) {
     console.error('[OpsDashboardHeader] Failed to load realtime traffic summary', err)
     realtimeTrafficSummary.value = null
+    realtimeRuntimeObservability.value = null
   } finally {
     realtimeTrafficLoading.value = false
   }
@@ -332,6 +341,41 @@ const realtimeTrafficDisplay = computed(() => {
     qpsAvgLabel: formatFixedLabel(realtimeTrafficSummary.value?.qps?.avg),
     tpsAvgLabel: formatFixedLabel(realtimeTrafficSummary.value?.tps?.avg)
   }
+})
+
+function formatRuntimePercent(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : '-'
+}
+
+const runtimeObservabilityItems = computed(() => {
+  const summary = realtimeRuntimeObservability.value?.summary
+  return [
+    {
+      key: 'page_density',
+      label: t('admin.ops.runtimeObservability.pageDensity'),
+      value: formatFixedLabel(summary?.scheduling_runtime_kernel?.avg_fetched_accounts_per_page),
+      hint: t('admin.ops.runtimeObservability.pageDensityHint')
+    },
+    {
+      key: 'acquire_success',
+      label: t('admin.ops.runtimeObservability.acquireSuccess'),
+      value: formatRuntimePercent(summary?.scheduling_runtime_kernel?.acquire_success_rate),
+      hint: t('admin.ops.runtimeObservability.acquireSuccessHint')
+    },
+    {
+      key: 'wait_plan_success',
+      label: t('admin.ops.runtimeObservability.waitPlanSuccess'),
+      value: formatRuntimePercent(summary?.scheduling_runtime_kernel?.wait_plan_success_rate),
+      hint: t('admin.ops.runtimeObservability.waitPlanSuccessHint')
+    },
+    {
+      key: 'idempotency_duration',
+      label: t('admin.ops.runtimeObservability.idempotencyAvg'),
+      value: formatFixedLabel(summary?.idempotency?.avg_processing_duration_ms),
+      suffix: 'ms',
+      hint: t('admin.ops.runtimeObservability.idempotencyAvgHint')
+    }
+  ]
 })
 
 const overviewMetricDisplay = computed(() => ({
@@ -899,6 +943,31 @@ function handleToolbarRefresh() {
                     />
                   </path>
                 </svg>
+              </div>
+
+              <div class="ops-dashboard-header__runtime-strip">
+                <div class="mb-2 flex items-center gap-2">
+                  <div :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'ops-dashboard-header__eyebrow font-bold uppercase']">
+                    {{ t('admin.ops.runtimeObservability.title') }}
+                  </div>
+                  <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.runtimeObservability.help')" />
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div
+                    v-for="item in runtimeObservabilityItems"
+                    :key="item.key"
+                    class="ops-dashboard-header__runtime-chip"
+                    :title="item.hint"
+                  >
+                    <div class="ops-dashboard-header__muted text-[10px] font-bold uppercase tracking-wider">
+                      {{ item.label }}
+                    </div>
+                    <div class="mt-1 flex items-baseline gap-1">
+                      <span class="ops-dashboard-header__value text-sm font-black">{{ item.value }}</span>
+                      <span v-if="item.suffix" class="ops-dashboard-header__label text-[10px] font-bold">{{ item.suffix }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1509,6 +1578,18 @@ function handleToolbarRefresh() {
 
 .ops-dashboard-header__pulse-line {
   stroke: rgb(var(--theme-info-rgb));
+}
+
+.ops-dashboard-header__runtime-strip {
+  border-top: 1px solid color-mix(in srgb, var(--theme-page-border) 72%, transparent);
+  padding-top: 0.75rem;
+}
+
+.ops-dashboard-header__runtime-chip {
+  border-radius: calc(var(--theme-button-radius) * 0.85);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 60%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+  padding: 0.6rem 0.7rem;
 }
 
 .ops-dashboard-header__health:hover {

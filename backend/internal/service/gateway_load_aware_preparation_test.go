@@ -56,7 +56,7 @@ func TestPrepareLoadAwareSelectionScope_UsesResolvedFallbackGroup(t *testing.T) 
 	}
 	svc := &GatewayService{groupRepo: groupRepo}
 
-	scope, err := svc.prepareLoadAwareSelectionScope(context.Background(), &groupID, "session-1")
+	scope, err := svc.prepareGatewaySelectionScope(context.Background(), &groupID, "session-1")
 
 	require.NoError(t, err)
 	require.NotNil(t, scope)
@@ -101,12 +101,49 @@ func TestPrepareLoadAwareSchedulingState_BuildsRoutingState(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, state)
-	require.Equal(t, PlatformAnthropic, state.platform)
-	require.False(t, state.preferOAuth)
-	require.True(t, state.useMixed)
+	require.NotNil(t, state.plan)
+	require.Equal(t, PlatformAnthropic, state.plan.platform)
+	require.False(t, state.plan.preferOAuth)
+	require.True(t, state.plan.useMixed)
 	require.Len(t, state.accounts, 2)
 	require.Len(t, state.accountByID, 2)
 	require.Equal(t, int64(1), state.accountByID[1].ID)
 	require.Equal(t, int64(2), state.accountByID[2].ID)
-	require.Equal(t, []int64{2}, state.routingAccountIDs)
+	require.Equal(t, []int64{2}, state.plan.routingAccountIDs)
+}
+
+func TestPrepareLoadAwareSchedulingState_IndexedPathPrefetchesStickyOnly(t *testing.T) {
+	groupID := int64(8)
+	group := &Group{
+		ID:                  groupID,
+		Platform:            PlatformAnthropic,
+		Status:              StatusActive,
+		Hydrated:            true,
+		ModelRoutingEnabled: true,
+		ModelRouting: map[string][]int64{
+			"claude-sonnet-*": {2},
+		},
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		accountsByID: map[int64]*Account{
+			2: {ID: 2, Platform: PlatformAnthropic, Status: StatusActive, Schedulable: true, Concurrency: 3},
+			9: {ID: 9, Platform: PlatformAnthropic, Status: StatusActive, Schedulable: true, Concurrency: 2},
+		},
+	}
+	svc := &GatewayService{
+		cfg:               testConfig(),
+		schedulerSnapshot: &SchedulerSnapshotService{cache: snapshotCache},
+	}
+
+	state, err := svc.prepareLoadAwareSchedulingState(context.Background(), &groupID, group, "claude-sonnet-4-20250514", "session-1", 9)
+
+	require.NoError(t, err)
+	require.NotNil(t, state)
+	require.Nil(t, state.accounts)
+	require.NotNil(t, state.plan)
+	require.Equal(t, []int64{2}, state.plan.routingAccountIDs)
+	require.Len(t, state.accountByID, 1)
+	require.Equal(t, int64(9), state.accountByID[9].ID)
+	_, exists := state.accountByID[2]
+	require.False(t, exists)
 }

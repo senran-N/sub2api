@@ -17,6 +17,20 @@ type openAISnapshotCacheStub struct {
 	SchedulerCache
 	snapshotAccounts []*Account
 	accountsByID     map[int64]*Account
+	pageCalls        []snapshotPageCall
+	indexPageCalls   []snapshotIndexPageCall
+}
+
+type snapshotPageCall struct {
+	offset int
+	limit  int
+}
+
+type snapshotIndexPageCall struct {
+	kind   SchedulerCapabilityIndexKind
+	value  string
+	offset int
+	limit  int
 }
 
 type countingOpenAIAccountRepo struct {
@@ -54,6 +68,98 @@ func (s *openAISnapshotCacheStub) GetAccount(ctx context.Context, accountID int6
 	}
 	cloned := *account
 	return &cloned, nil
+}
+
+func (s *openAISnapshotCacheStub) GetSnapshotPage(ctx context.Context, bucket SchedulerBucket, offset, limit int) ([]*Account, bool, bool, error) {
+	s.pageCalls = append(s.pageCalls, snapshotPageCall{offset: offset, limit: limit})
+	if len(s.snapshotAccounts) == 0 {
+		return nil, false, false, nil
+	}
+	if offset >= len(s.snapshotAccounts) {
+		return []*Account{}, true, false, nil
+	}
+	if limit <= 0 {
+		limit = len(s.snapshotAccounts)
+	}
+	end := offset + limit
+	if end > len(s.snapshotAccounts) {
+		end = len(s.snapshotAccounts)
+	}
+
+	out := make([]*Account, 0, end-offset)
+	for _, account := range s.snapshotAccounts[offset:end] {
+		if account == nil {
+			continue
+		}
+		cloned := *account
+		out = append(out, &cloned)
+	}
+	return out, true, end < len(s.snapshotAccounts), nil
+}
+
+func (s *openAISnapshotCacheStub) GetCapabilityIndexPage(ctx context.Context, bucket SchedulerBucket, index SchedulerCapabilityIndex, offset, limit int) ([]*Account, bool, bool, error) {
+	s.indexPageCalls = append(s.indexPageCalls, snapshotIndexPageCall{
+		kind:   index.Kind,
+		value:  index.Value,
+		offset: offset,
+		limit:  limit,
+	})
+	if len(s.snapshotAccounts) == 0 {
+		return nil, false, false, nil
+	}
+	accounts := derefAccounts(s.snapshotAccounts)
+	filtered := filterAccountsByCapabilityIndex(accounts, index)
+	if offset >= len(filtered) {
+		return []*Account{}, true, false, nil
+	}
+	if limit <= 0 {
+		limit = len(filtered)
+	}
+	end := offset + limit
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	out := make([]*Account, 0, end-offset)
+	for _, account := range filtered[offset:end] {
+		cloned := account
+		out = append(out, &cloned)
+	}
+	return out, true, end < len(filtered), nil
+}
+
+func (s *openAISnapshotCacheStub) HasCapabilityIndexMembers(ctx context.Context, bucket SchedulerBucket, index SchedulerCapabilityIndex, accountIDs []int64) (map[int64]bool, bool, error) {
+	accounts := derefAccounts(s.snapshotAccounts)
+	filtered := filterAccountsByCapabilityIndex(accounts, index)
+	allowed := make(map[int64]struct{}, len(filtered))
+	for i := range filtered {
+		allowed[filtered[i].ID] = struct{}{}
+	}
+	matches := make(map[int64]bool, len(accountIDs))
+	for _, accountID := range accountIDs {
+		if _, ok := allowed[accountID]; ok {
+			matches[accountID] = true
+		}
+	}
+	return matches, true, nil
+}
+
+func (s *openAISnapshotCacheStub) ListCapabilityIndexValues(ctx context.Context, bucket SchedulerBucket, kind SchedulerCapabilityIndexKind) ([]string, bool, error) {
+	accounts := derefAccounts(s.snapshotAccounts)
+	return collectCapabilityIndexValues(accounts, kind), true, nil
+}
+
+type recordingOpenAIConcurrencyCache struct {
+	stubConcurrencyCache
+	loadBatchIDs [][]int64
+}
+
+func (c *recordingOpenAIConcurrencyCache) GetAccountsLoadBatch(ctx context.Context, accounts []AccountWithConcurrency) (map[int64]*AccountLoadInfo, error) {
+	ids := make([]int64, 0, len(accounts))
+	for _, account := range accounts {
+		ids = append(ids, account.ID)
+	}
+	c.loadBatchIDs = append(c.loadBatchIDs, ids)
+	return c.stubConcurrencyCache.GetAccountsLoadBatch(ctx, accounts)
 }
 
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimitedAccountFallsBackToFreshCandidate(t *testing.T) {
@@ -148,6 +254,82 @@ func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_DBRuntimeReche
 	require.NoError(t, err)
 	require.NotNil(t, account)
 	require.Equal(t, int64(34002), account.ID)
+}
+
+func TestOpenAIGatewayService_SelectAccountWithScheduler_LoadBalancePagesSnapshotCandidates(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(10105)
+	accounts := []Account{
+		{ID: 35001, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0},
+		{ID: 35002, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1},
+		{ID: 35003, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 2},
+		{ID: 35004, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 3},
+	}
+
+	snapshotAccounts := make([]*Account, 0, len(accounts))
+	accountsByID := make(map[int64]*Account, len(accounts))
+	for i := range accounts {
+		account := accounts[i]
+		snapshotAccounts = append(snapshotAccounts, &account)
+		cloned := account
+		accountsByID[account.ID] = &cloned
+	}
+
+	snapshotCache := &openAISnapshotCacheStub{
+		snapshotAccounts: snapshotAccounts,
+		accountsByID:     accountsByID,
+	}
+	snapshotService := &SchedulerSnapshotService{cache: snapshotCache}
+
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.SnapshotPageSize = 2
+	cfg.Gateway.OpenAIWS.LBTopK = 1
+
+	concurrencyCache := &recordingOpenAIConcurrencyCache{
+		stubConcurrencyCache: stubConcurrencyCache{
+			acquireResults: map[int64]bool{
+				35001: false,
+				35002: false,
+				35003: true,
+			},
+			loadMap: map[int64]*AccountLoadInfo{
+				35001: {AccountID: 35001, LoadRate: 60},
+				35002: {AccountID: 35002, LoadRate: 50},
+				35003: {AccountID: 35003, LoadRate: 5},
+				35004: {AccountID: 35004, LoadRate: 15},
+			},
+		},
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: accounts},
+		cfg:                cfg,
+		schedulerSnapshot:  snapshotService,
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		ctx,
+		&groupID,
+		"",
+		"",
+		"gpt-5.1",
+		nil,
+		OpenAIUpstreamTransportAny,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(35003), selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	require.Equal(t, 4, decision.CandidateCount)
+	require.Equal(t, 1, decision.TopK)
+	require.Equal(t, []snapshotIndexPageCall{
+		{kind: SchedulerCapabilityIndexModelAny, value: "", offset: 0, limit: 2},
+		{kind: SchedulerCapabilityIndexModelExact, value: "gpt-5.1", offset: 0, limit: 2},
+		{kind: SchedulerCapabilityIndexModelAny, value: "", offset: 2, limit: 2},
+	}, snapshotCache.indexPageCalls)
+	require.Equal(t, [][]int64{{35001, 35002}, {35003, 35004}}, concurrencyCache.loadBatchIDs)
 }
 
 func TestOpenAIGatewayService_SelectAccountWithScheduler_PreviousResponseSticky(t *testing.T) {
