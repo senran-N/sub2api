@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 
 export interface OpenAITokenInfo {
   access_token?: string
@@ -82,8 +83,8 @@ export function useOpenAIOAuth(options?: UseOpenAIOAuthOptions) {
         oauthState.value = ''
       }
       return true
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || 'Failed to generate OpenAI auth URL'
+    } catch (err: unknown) {
+      error.value = resolveRequestErrorMessage(err, 'Failed to generate OpenAI auth URL')
       appStore.showError(error.value)
       return false
     } finally {
@@ -118,8 +119,8 @@ export function useOpenAIOAuth(options?: UseOpenAIOAuthOptions) {
 
       const tokenInfo = await adminAPI.accounts.exchangeCode(`${endpointPrefix}/exchange-code`, payload)
       return tokenInfo as OpenAITokenInfo
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || 'Failed to exchange OpenAI auth code'
+    } catch (err: unknown) {
+      error.value = resolveRequestErrorMessage(err, 'Failed to exchange OpenAI auth code')
       appStore.showError(error.value)
       return null
     } finally {
@@ -151,8 +152,8 @@ export function useOpenAIOAuth(options?: UseOpenAIOAuthOptions) {
         clientId
       )
       return tokenInfo as OpenAITokenInfo
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Failed to validate refresh token'
+    } catch (err: unknown) {
+      error.value = resolveRequestErrorMessage(err, 'Failed to validate refresh token')
       appStore.showError(error.value)
       return null
     } finally {
@@ -178,8 +179,8 @@ export function useOpenAIOAuth(options?: UseOpenAIOAuthOptions) {
         `${endpointPrefix}/st2at`
       )
       return tokenInfo as OpenAITokenInfo
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || 'Failed to validate session token'
+    } catch (err: unknown) {
+      error.value = resolveRequestErrorMessage(err, 'Failed to validate session token')
       appStore.showError(error.value)
       return null
     } finally {
