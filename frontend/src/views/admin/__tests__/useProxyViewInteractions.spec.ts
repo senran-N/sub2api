@@ -192,4 +192,22 @@ describe('useProxyViewInteractions', () => {
 
     createElement.mockRestore()
   })
+
+  it('shows response detail when export fails', async () => {
+    const setup = createComposable()
+    exportData.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'proxy-export-blocked'
+        }
+      }
+    })
+
+    await setup.composable.handleExportData()
+
+    expect(setup.showError).toHaveBeenCalledWith('proxy-export-blocked')
+    expect(setup.showSuccess).not.toHaveBeenCalled()
+    expect(setup.composable.exportingData.value).toBe(false)
+    expect(setup.composable.showExportDataDialog.value).toBe(false)
+  })
 })

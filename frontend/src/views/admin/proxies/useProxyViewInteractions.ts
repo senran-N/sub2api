@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Proxy, ProxyAccountSummary } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import { buildProxyUrl } from './proxyUtils'
 
 interface ProxyExportFilters {
@@ -74,8 +75,10 @@ export function useProxyViewInteractions(options: ProxyViewInteractionsOptions) 
       link.click()
       URL.revokeObjectURL(url)
       options.showSuccess(options.t('admin.proxies.dataExported'))
-    } catch (error: any) {
-      options.showError(error?.message || options.t('admin.proxies.dataExportFailed'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.proxies.dataExportFailed'))
+      )
     } finally {
       exportingData.value = false
       showExportDataDialog.value = false

@@ -1,5 +1,6 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from 'vue'
 import type { ApiKey, PublicSettings } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   applyUserKeyExpirationPreset,
   buildDefaultUserKeyFormData,
@@ -209,8 +210,8 @@ export function useKeysActionDialogs(options: KeysActionDialogsOptions) {
       options.showSuccess(options.t('keys.keyDeletedSuccess'))
       showDeleteDialog.value = false
       await options.loadApiKeys()
-    } catch (error: any) {
-      options.showError(error?.message || options.t('keys.failedToDelete'))
+    } catch (error: unknown) {
+      options.showError(resolveRequestErrorMessage(error, options.t('keys.failedToDelete')))
     }
   }
 
