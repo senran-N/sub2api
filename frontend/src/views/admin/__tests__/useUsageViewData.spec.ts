@@ -344,4 +344,39 @@ describe('useUsageViewData', () => {
     expect(setup.showSuccess).not.toHaveBeenCalled()
     expect(setup.composable.exporting.value).toBe(false)
   })
+
+  it('ignores stale usage log responses', async () => {
+    const setup = createComposable()
+    const resolvers: Array<(value: { items: ReturnType<typeof createUsageLog>[]; total: number }) => void> = []
+
+    usageList.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve as (value: { items: ReturnType<typeof createUsageLog>[]; total: number }) => void)
+        })
+    )
+    usageList.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve as (value: { items: ReturnType<typeof createUsageLog>[]; total: number }) => void)
+        })
+    )
+
+    const firstLoad = setup.composable.loadLogs()
+    const secondLoad = setup.composable.loadLogs()
+
+    resolvers[1]!({
+      items: [{ ...createUsageLog(), request_id: 'req-admin-new' }],
+      total: 1
+    })
+    await secondLoad
+    expect(setup.composable.usageLogs.value[0]?.request_id).toBe('req-admin-new')
+
+    resolvers[0]!({
+      items: [{ ...createUsageLog(), request_id: 'req-admin-old' }],
+      total: 1
+    })
+    await firstLoad
+    expect(setup.composable.usageLogs.value[0]?.request_id).toBe('req-admin-new')
+  })
 })

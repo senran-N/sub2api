@@ -253,4 +253,82 @@ describe('useUserUsageViewData', () => {
     await setup.composable.loadUsageLogs()
     expect(setup.showError).toHaveBeenCalledTimes(1)
   })
+
+  it('ignores stale usage log responses and stale stats responses', async () => {
+    const setup = createComposable()
+    const logResolvers: Array<(value: { items: ReturnType<typeof createUsageLog>[]; total: number; pages: number }) => void> = []
+    const statsResolvers: Array<(value: UsageStatsShape) => void> = []
+
+    type UsageStatsShape = {
+      total_requests: number
+      total_tokens: number
+      total_cost: number
+      total_actual_cost: number
+      average_duration_ms: number
+    }
+
+    query.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          logResolvers.push(resolve as (value: { items: ReturnType<typeof createUsageLog>[]; total: number; pages: number }) => void)
+        })
+    )
+    query.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          logResolvers.push(resolve as (value: { items: ReturnType<typeof createUsageLog>[]; total: number; pages: number }) => void)
+        })
+    )
+    getStatsByDateRange.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          statsResolvers.push(resolve as (value: UsageStatsShape) => void)
+        })
+    )
+    getStatsByDateRange.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          statsResolvers.push(resolve as (value: UsageStatsShape) => void)
+        })
+    )
+
+    const firstLogs = setup.composable.loadUsageLogs()
+    const secondLogs = setup.composable.loadUsageLogs()
+    const firstStats = setup.composable.loadUsageStats()
+    const secondStats = setup.composable.loadUsageStats()
+
+    logResolvers[1]!({
+      items: [{ ...createUsageLog(), request_id: 'req-new' }],
+      total: 1,
+      pages: 1
+    })
+    statsResolvers[1]!({
+      total_requests: 99,
+      total_tokens: 999,
+      total_cost: 9.9,
+      total_actual_cost: 8.8,
+      average_duration_ms: 456
+    })
+    await Promise.all([secondLogs, secondStats])
+
+    expect(setup.composable.usageLogs.value[0]?.request_id).toBe('req-new')
+    expect(setup.composable.usageStats.value?.total_requests).toBe(99)
+
+    logResolvers[0]!({
+      items: [{ ...createUsageLog(), request_id: 'req-old' }],
+      total: 1,
+      pages: 1
+    })
+    statsResolvers[0]!({
+      total_requests: 1,
+      total_tokens: 30,
+      total_cost: 0.1,
+      total_actual_cost: 0.1,
+      average_duration_ms: 123
+    })
+    await Promise.all([firstLogs, firstStats])
+
+    expect(setup.composable.usageLogs.value[0]?.request_id).toBe('req-new')
+    expect(setup.composable.usageStats.value?.total_requests).toBe(99)
+  })
 })

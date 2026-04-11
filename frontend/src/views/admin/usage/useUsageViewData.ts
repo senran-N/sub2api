@@ -250,13 +250,17 @@ export function useUsageViewData(options: UsageViewDataOptions) {
         { signal: controller.signal }
       )
 
-      if (controller.signal.aborted) {
+      if (usageAbortController !== controller || controller.signal.aborted) {
         return
       }
 
       usageLogs.value = response.items
       options.pagination.total = response.total
     } catch (error: any) {
+      if (usageAbortController !== controller || controller.signal.aborted) {
+        return
+      }
+
       if (error?.name !== 'AbortError') {
         console.error('Failed to load usage logs:', error)
       }

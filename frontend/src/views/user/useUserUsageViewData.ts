@@ -127,6 +127,7 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
   const exporting = ref(false)
 
   let usageAbortController: AbortController | null = null
+  let usageStatsRequestSequence = 0
 
   const loadUsageLogs = async () => {
     usageAbortController?.abort()
@@ -145,7 +146,7 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
         { signal: controller.signal }
       )
 
-      if (controller.signal.aborted) {
+      if (usageAbortController !== controller || controller.signal.aborted) {
         return
       }
 
@@ -153,7 +154,11 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
       options.pagination.total = response.total
       options.pagination.pages = response.pages
     } catch (error) {
-      if (controller.signal.aborted || isAbortError(error)) {
+      if (
+        usageAbortController !== controller ||
+        controller.signal.aborted ||
+        isAbortError(error)
+      ) {
         return
       }
 
@@ -175,18 +180,30 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
   }
 
   const loadUsageStats = async () => {
+    const requestSequence = ++usageStatsRequestSequence
+
     try {
       const range = resolveUsageDateRange(options)
       const apiKeyId = options.filters.value.api_key_id
         ? Number(options.filters.value.api_key_id)
         : undefined
 
-      usageStats.value = await usageAPI.getStatsByDateRange(
+      const stats = await usageAPI.getStatsByDateRange(
         range.startDate,
         range.endDate,
         apiKeyId
       )
+
+      if (requestSequence !== usageStatsRequestSequence) {
+        return
+      }
+
+      usageStats.value = stats
     } catch (error) {
+      if (requestSequence !== usageStatsRequestSequence) {
+        return
+      }
+
       console.error('Failed to load usage stats:', error)
     }
   }
