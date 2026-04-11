@@ -57,6 +57,10 @@ export function useTableLoader<T, P extends Record<string, any>>(options: TableL
         { signal: currentController.signal }
       )
 
+      if (abortController !== currentController || currentController.signal.aborted) {
+        return
+      }
+
       items.value = response.items || []
       pagination.total = response.total || 0
       pagination.pages = response.pages || 0
@@ -65,6 +69,9 @@ export function useTableLoader<T, P extends Record<string, any>>(options: TableL
         pagination.page_size = response.page_size || pagination.page_size
       }
     } catch (error) {
+      if (abortController !== currentController || currentController.signal.aborted) {
+        return
+      }
       if (!isAbortError(error)) {
         console.error('Table load error:', error)
         if (options.onError) {
