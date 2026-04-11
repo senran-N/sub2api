@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
+	"github.com/senran-N/sub2api/internal/config"
 )
 
 const (
@@ -613,7 +613,7 @@ func (s *OpsScheduledReportService) tryAcquireLeaderLock(ctx context.Context) (f
 		return nil, false
 	}
 	return func() {
-		_, _ = opsScheduledReportReleaseScript.Run(ctx, s.redisClient, []string{key}, s.instanceID).Result()
+		runRedisLeaderLockRelease(opsScheduledReportReleaseScript, s.redisClient, key, s.instanceID, 2*time.Second)
 	}, true
 }
 

@@ -41,9 +41,7 @@ func (s *OpsAlertEvaluatorService) tryAcquireLeaderLock(ctx context.Context, loc
 	}
 
 	return func() {
-		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer releaseCancel()
-		_, _ = opsAlertEvaluatorReleaseScript.Run(releaseCtx, s.redisClient, []string{key}, s.instanceID).Result()
+		runRedisLeaderLockRelease(opsAlertEvaluatorReleaseScript, s.redisClient, key, s.instanceID, 5*time.Second)
 	}, true
 }
 

@@ -23,6 +23,7 @@ type openAITokenCacheStub struct {
 	lockAcquired     bool
 	lockErr          error
 	releaseLockErr   error
+	releaseCtxErr    error
 	getCalled        int32
 	setCalled        int32
 	lockCalled       int32
@@ -81,6 +82,7 @@ func (s *openAITokenCacheStub) AcquireRefreshLock(ctx context.Context, cacheKey 
 
 func (s *openAITokenCacheStub) ReleaseRefreshLock(ctx context.Context, cacheKey string) error {
 	atomic.AddInt32(&s.unlockCalled, 1)
+	s.releaseCtxErr = ctx.Err()
 	return s.releaseLockErr
 }
 
@@ -865,13 +867,38 @@ func TestOpenAITokenProvider_Real_LockRace_ContextCanceled(t *testing.T) {
 	require.Less(t, time.Since(start), 50*time.Millisecond)
 }
 
+func TestOpenAITokenProvider_BackwardCompatReleaseLockWithDetachedContext(t *testing.T) {
+	cache := newOpenAITokenCacheStub()
+	expiresAt := time.Now().Add(1 * time.Minute).Format(time.RFC3339)
+	account := &Account{
+		ID:       209,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"access_token": "fallback-token",
+			"expires_at":   expiresAt,
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	provider := NewOpenAITokenProvider(nil, cache, nil)
+	token, err := provider.GetAccessToken(ctx, account)
+
+	require.NoError(t, err)
+	require.Equal(t, "fallback-token", token)
+	require.Equal(t, int32(1), atomic.LoadInt32(&cache.unlockCalled))
+	require.NoError(t, cache.releaseCtxErr)
+}
+
 func TestOpenAITokenProvider_RuntimeMetrics_LockWaitHitAndSnapshot(t *testing.T) {
 	cache := newOpenAITokenCacheStub()
 	cache.lockAcquired = false
 
 	expiresAt := time.Now().Add(1 * time.Minute).Format(time.RFC3339)
 	account := &Account{
-		ID:       209,
+		ID:       210,
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeOAuth,
 		Credentials: map[string]any{

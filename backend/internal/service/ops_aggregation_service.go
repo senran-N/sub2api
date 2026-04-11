@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
-	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
 const (
@@ -398,9 +398,7 @@ func (s *OpsAggregationService) tryAcquireLeaderLock(ctx context.Context, key st
 				return nil, false
 			}
 			release := func() {
-				ctx2, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				_, _ = opsAggReleaseScript.Run(ctx2, s.redisClient, []string{key}, s.instanceID).Result()
+				runRedisLeaderLockRelease(opsAggReleaseScript, s.redisClient, key, s.instanceID, 2*time.Second)
 			}
 			return release, true
 		}

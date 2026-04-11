@@ -94,7 +94,7 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 			return &OAuthRefreshResult{LockHeld: true}, nil
 		} else {
 			lockAcquired = true
-			defer func() { _ = api.tokenCache.ReleaseRefreshLock(ctx, cacheKey) }()
+			defer func() { releaseOAuthRefreshLock(api.tokenCache, cacheKey) }()
 		}
 	}
 

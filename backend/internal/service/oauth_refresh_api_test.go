@@ -76,9 +76,10 @@ func (e *refreshAPIExecutorStub) CacheKey(account *Account) string {
 
 // refreshAPICacheStub implements GeminiTokenCache for OAuthRefreshAPI tests.
 type refreshAPICacheStub struct {
-	lockResult   bool
-	lockErr      error
-	releaseCalls int
+	lockResult    bool
+	lockErr       error
+	releaseCalls  int
+	releaseCtxErr error
 }
 
 func (c *refreshAPICacheStub) GetAccessToken(context.Context, string) (string, error) {
@@ -95,8 +96,9 @@ func (c *refreshAPICacheStub) AcquireRefreshLock(context.Context, string, time.D
 	return c.lockResult, c.lockErr
 }
 
-func (c *refreshAPICacheStub) ReleaseRefreshLock(context.Context, string) error {
+func (c *refreshAPICacheStub) ReleaseRefreshLock(ctx context.Context, _ string) error {
 	c.releaseCalls++
+	c.releaseCtxErr = ctx.Err()
 	return nil
 }
 
@@ -216,6 +218,24 @@ func TestRefreshIfNeeded_AlreadyRefreshed(t *testing.T) {
 	require.NotNil(t, result.Account) // returns fresh account
 	require.Equal(t, 0, repo.updateCalls)
 	require.Equal(t, 0, executor.refreshCalls)
+}
+
+func TestRefreshIfNeeded_ReleasesLockWithDetachedContext(t *testing.T) {
+	account := &Account{ID: 6, Platform: PlatformAnthropic, Type: AccountTypeOAuth}
+	repo := &refreshAPIAccountRepo{account: account}
+	cache := &refreshAPICacheStub{lockResult: true}
+	executor := &refreshAPIExecutorStub{needsRefresh: false}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	api := NewOAuthRefreshAPI(repo, cache)
+	result, err := api.RefreshIfNeeded(ctx, account, executor, 3*time.Minute)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 1, cache.releaseCalls)
+	require.NoError(t, cache.releaseCtxErr)
 }
 
 func TestRefreshIfNeeded_RefreshError(t *testing.T) {

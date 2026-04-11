@@ -91,7 +91,7 @@ func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 		// Backward-compatible test path when refreshAPI is not injected.
 		locked, lockErr := p.tokenCache.AcquireRefreshLock(ctx, cacheKey, 30*time.Second)
 		if lockErr == nil && locked {
-			defer func() { _ = p.tokenCache.ReleaseRefreshLock(ctx, cacheKey) }()
+			defer func() { releaseOAuthRefreshLock(p.tokenCache, cacheKey) }()
 		} else if lockErr != nil {
 			slog.Warn("gemini_token_lock_failed", "account_id", account.ID, "error", lockErr)
 		}

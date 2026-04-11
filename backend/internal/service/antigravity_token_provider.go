@@ -123,7 +123,7 @@ func (p *AntigravityTokenProvider) GetAccessToken(ctx context.Context, account *
 		// Backward-compatible test path when refreshAPI is not injected.
 		locked, err := p.tokenCache.AcquireRefreshLock(ctx, cacheKey, 30*time.Second)
 		if err == nil && locked {
-			defer func() { _ = p.tokenCache.ReleaseRefreshLock(ctx, cacheKey) }()
+			defer func() { releaseOAuthRefreshLock(p.tokenCache, cacheKey) }()
 		}
 	}
 

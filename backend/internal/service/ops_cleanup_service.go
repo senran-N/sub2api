@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
-	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
 const (
@@ -326,7 +326,7 @@ func (s *OpsCleanupService) tryAcquireLeaderLock(ctx context.Context) (func(), b
 				return nil, false
 			}
 			return func() {
-				_, _ = opsCleanupReleaseScript.Run(ctx, s.redisClient, []string{key}, s.instanceID).Result()
+				runRedisLeaderLockRelease(opsCleanupReleaseScript, s.redisClient, key, s.instanceID, 2*time.Second)
 			}, true
 		}
 		// Redis error: fall back to DB advisory lock.
