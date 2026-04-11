@@ -276,7 +276,8 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
     await runSingleAccountUpdate(adminAPI.accounts.recoverState(account.id), {
       successMessage: options.t('admin.accounts.recoverStateSuccess'),
       errorMessage: options.t('admin.accounts.recoverStateFailed'),
-      mapErrorMessage: (error: any) => error?.message || options.t('admin.accounts.recoverStateFailed')
+      mapErrorMessage: (error: unknown) =>
+        resolveRequestErrorMessage(error, options.t('admin.accounts.recoverStateFailed'))
     })
   }
 
