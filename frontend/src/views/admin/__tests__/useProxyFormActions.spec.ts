@@ -208,4 +208,41 @@ describe('useProxyFormActions', () => {
     expect(setup.showImportData.value).toBe(false)
     expect(setup.loadProxies).toHaveBeenCalledTimes(2)
   })
+
+  it('uses resolved request messages for create, update, and batch import failures', async () => {
+    const setup = createComposable()
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    Object.assign(setup.createForm, {
+      name: 'Edge',
+      protocol: 'http',
+      host: 'proxy.local',
+      port: 80
+    })
+    createProxy.mockRejectedValueOnce(new Error('create unavailable'))
+    await setup.composable.handleCreateProxy()
+
+    const proxy = createProxyRecord({ id: 9, host: 'edge.local' })
+    setup.composable.handleEdit(proxy)
+    updateProxy.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'update blocked'
+        }
+      }
+    })
+    await setup.composable.handleUpdateProxy()
+
+    setup.batchParseResult.valid = 1
+    setup.batchParseResult.proxies = [
+      { protocol: 'http', host: 'batch.local', port: 8080, username: '', password: '' }
+    ]
+    batchCreate.mockRejectedValueOnce(new Error('batch unavailable'))
+    await setup.composable.handleBatchCreate()
+
+    expect(setup.showError).toHaveBeenNthCalledWith(1, 'create unavailable')
+    expect(setup.showError).toHaveBeenNthCalledWith(2, 'update blocked')
+    expect(setup.showError).toHaveBeenNthCalledWith(3, 'batch unavailable')
+    expect(consoleSpy).toHaveBeenCalledTimes(3)
+  })
 })

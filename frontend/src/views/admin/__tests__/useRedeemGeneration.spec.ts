@@ -163,4 +163,24 @@ describe('useRedeemGeneration', () => {
     window.URL.createObjectURL = originalCreateObjectURL
     window.URL.revokeObjectURL = originalRevokeObjectURL
   })
+
+  it('uses resolved request messages when generation fails', async () => {
+    const setup = createComposable()
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    generateCodes.mockRejectedValueOnce(new Error('generation unavailable'))
+    await setup.composable.handleGenerateCodes()
+    expect(setup.showError).toHaveBeenCalledWith('generation unavailable')
+
+    generateCodes.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'redeem generation blocked'
+        }
+      }
+    })
+    await setup.composable.handleGenerateCodes()
+    expect(setup.showError).toHaveBeenLastCalledWith('redeem generation blocked')
+    expect(consoleSpy).toHaveBeenCalledTimes(2)
+  })
 })

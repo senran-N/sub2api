@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Proxy } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   buildCreateProxyRequest,
   buildUpdateProxyRequest,
@@ -73,8 +74,10 @@ export function useProxyFormActions(options: ProxyFormActionsOptions) {
 
       closeCreateModal()
       await options.loadProxies()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.proxies.failedToImport'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.proxies.failedToImport'))
+      )
       console.error('Error batch creating proxies:', error)
     } finally {
       options.submitting.value = false
@@ -94,8 +97,10 @@ export function useProxyFormActions(options: ProxyFormActionsOptions) {
       options.showSuccess(options.t('admin.proxies.proxyCreated'))
       closeCreateModal()
       await options.loadProxies()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.proxies.failedToCreate'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.proxies.failedToCreate'))
+      )
       console.error('Error creating proxy:', error)
     } finally {
       options.submitting.value = false
@@ -137,8 +142,10 @@ export function useProxyFormActions(options: ProxyFormActionsOptions) {
       options.showSuccess(options.t('admin.proxies.proxyUpdated'))
       closeEditModal()
       await options.loadProxies()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.proxies.failedToUpdate'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.proxies.failedToUpdate'))
+      )
       console.error('Error updating proxy:', error)
     } finally {
       options.submitting.value = false

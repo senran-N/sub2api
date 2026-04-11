@@ -1,6 +1,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Group, RedeemCode } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   buildGeneratedRedeemCodesText,
   buildRedeemSubscriptionGroupOptions,
@@ -80,8 +81,10 @@ export function useRedeemGeneration(options: RedeemGenerationOptions) {
       showResultDialog.value = true
       resetRedeemGenerationSubscriptionFields(generateForm)
       await options.reloadCodes()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.redeem.failedToGenerate'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.redeem.failedToGenerate'))
+      )
       console.error('Error generating codes:', error)
     } finally {
       generating.value = false
