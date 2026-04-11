@@ -238,7 +238,10 @@ func (s *RedeemService) releaseRedeemLock(ctx context.Context, code string) {
 		return
 	}
 
-	_ = s.cache.ReleaseRedeemLock(ctx, code)
+	releaseCtx, cancel := newCacheLockReleaseContext()
+	defer cancel()
+
+	_ = s.cache.ReleaseRedeemLock(releaseCtx, code)
 }
 
 // Redeem 使用兑换码

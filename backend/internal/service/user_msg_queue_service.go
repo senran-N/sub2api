@@ -130,7 +130,10 @@ func (s *UserMessageQueueService) Release(ctx context.Context, accountID int64, 
 	if s.cache == nil || requestID == "" {
 		return nil
 	}
-	released, err := s.cache.ReleaseLock(ctx, accountID, requestID)
+	releaseCtx, cancel := newCacheLockReleaseContext()
+	defer cancel()
+
+	released, err := s.cache.ReleaseLock(releaseCtx, accountID, requestID)
 	if err != nil {
 		logger.LegacyPrintf("service.umq", "ReleaseLock failed for account %d: %v", accountID, err)
 		return err
