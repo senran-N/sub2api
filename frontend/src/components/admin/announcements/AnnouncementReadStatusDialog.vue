@@ -67,6 +67,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import { formatDateTime } from '@/utils/format'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import type { AnnouncementUserReadStatus } from '@/types'
 import type { Column } from '@/components/common/types'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -133,7 +134,7 @@ async function load() {
   } catch (error: any) {
     if (currentController.signal.aborted || error?.name === 'AbortError') return
     console.error('Failed to load read status:', error)
-    appStore.showError(error.response?.data?.detail || t('admin.announcements.failedToLoadReadStatus'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.announcements.failedToLoadReadStatus')))
   } finally {
     loading.value = false
   }
@@ -169,7 +170,8 @@ watch(
     if (!v) return
     pagination.page = 1
     load()
-  }
+  },
+  { immediate: true }
 )
 
 watch(
