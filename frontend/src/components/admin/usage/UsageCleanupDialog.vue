@@ -126,6 +126,7 @@ import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import { adminUsageAPI } from '@/api/admin/usage'
 import type { AdminUsageQueryParams, UsageCleanupTask, CreateUsageCleanupTaskRequest } from '@/api/admin/usage'
 import { requestTypeToLegacyStream } from '@/utils/usageRequestType'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 
 interface Props {
   show: boolean
@@ -235,7 +236,7 @@ const getUserTimezone = () => {
   }
 }
 
-const loadTasks = async () => {
+async function loadTasks() {
   if (!props.show) return
   tasksLoading.value = true
   try {
@@ -253,7 +254,7 @@ const loadTasks = async () => {
     }
   } catch (error) {
     console.error('Failed to load cleanup tasks:', error)
-    appStore.showError(t('admin.usage.cleanup.loadFailed'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.usage.cleanup.loadFailed')))
   } finally {
     tasksLoading.value = false
   }
@@ -341,7 +342,7 @@ const submitCleanup = async () => {
     loadTasks()
   } catch (error) {
     console.error('Failed to create cleanup task:', error)
-    appStore.showError(t('admin.usage.cleanup.submitFailed'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.usage.cleanup.submitFailed')))
   } finally {
     submitting.value = false
   }
@@ -361,7 +362,7 @@ const cancelTask = async () => {
     loadTasks()
   } catch (error) {
     console.error('Failed to cancel cleanup task:', error)
-    appStore.showError(t('admin.usage.cleanup.cancelFailed'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.usage.cleanup.cancelFailed')))
   } finally {
     canceling.value = false
     cancelTarget.value = null
@@ -378,7 +379,8 @@ watch(
     } else {
       stopPolling()
     }
-  }
+  },
+  { immediate: true }
 )
 
 onUnmounted(() => {
