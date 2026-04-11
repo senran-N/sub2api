@@ -12,8 +12,9 @@ import (
 )
 
 type geminiTokenCacheStub struct {
-	deletedKeys []string
-	deleteErr   error
+	deletedKeys  []string
+	deleteErr    error
+	deleteCtxErr error
 }
 
 func (s *geminiTokenCacheStub) GetAccessToken(ctx context.Context, cacheKey string) (string, error) {
@@ -26,6 +27,7 @@ func (s *geminiTokenCacheStub) SetAccessToken(ctx context.Context, cacheKey stri
 
 func (s *geminiTokenCacheStub) DeleteAccessToken(ctx context.Context, cacheKey string) error {
 	s.deletedKeys = append(s.deletedKeys, cacheKey)
+	s.deleteCtxErr = ctx.Err()
 	return s.deleteErr
 }
 
@@ -308,6 +310,24 @@ func TestCompositeTokenCacheInvalidator_AllPlatformsIntegration(t *testing.T) {
 	}
 
 	require.Equal(t, expectedKeys, cache.deletedKeys)
+}
+
+func TestCompositeTokenCacheInvalidator_UsesDetachedContext(t *testing.T) {
+	cache := &geminiTokenCacheStub{}
+	invalidator := NewCompositeTokenCacheInvalidator(cache)
+	account := &Account{
+		ID:       42,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := invalidator.InvalidateToken(ctx, account)
+	require.NoError(t, err)
+	require.Equal(t, []string{"openai:account:42"}, cache.deletedKeys)
+	require.NoError(t, cache.deleteCtxErr)
 }
 
 // ========== GetCredentialAsInt64 测试 ==========

@@ -50,6 +50,9 @@ func (c *CompositeTokenCacheInvalidator) InvalidateToken(ctx context.Context, ac
 		return nil
 	}
 
+	deleteCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+
 	// 删除所有可能的缓存键（去重后）
 	seen := make(map[string]bool)
 	for _, key := range keysToDelete {
@@ -57,7 +60,7 @@ func (c *CompositeTokenCacheInvalidator) InvalidateToken(ctx context.Context, ac
 			continue
 		}
 		seen[key] = true
-		if err := c.cache.DeleteAccessToken(ctx, key); err != nil {
+		if err := c.cache.DeleteAccessToken(deleteCtx, key); err != nil {
 			slog.Warn("token_cache_delete_failed", "key", key, "account_id", account.ID, "error", err)
 		}
 	}

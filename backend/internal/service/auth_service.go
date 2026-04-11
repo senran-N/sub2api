@@ -897,7 +897,7 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	// 检查Token是否过期
 	if time.Now().After(data.ExpiresAt) {
 		// 删除过期Token
-		_ = s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash)
+		s.deleteRefreshTokenDetached(tokenHash)
 		return nil, ErrRefreshTokenExpired
 	}
 
@@ -906,7 +906,7 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			// 用户已删除，撤销整个Token家族
-			_ = s.refreshTokenCache.DeleteTokenFamily(ctx, data.FamilyID)
+			s.deleteTokenFamilyDetached(data.FamilyID)
 			return nil, ErrRefreshTokenInvalid
 		}
 		logger.LegacyPrintf("service.auth", "[Auth] Database error getting user for token refresh: %v", err)
@@ -916,19 +916,19 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	// 检查用户状态
 	if !user.IsActive() {
 		// 用户被禁用，撤销整个Token家族
-		_ = s.refreshTokenCache.DeleteTokenFamily(ctx, data.FamilyID)
+		s.deleteTokenFamilyDetached(data.FamilyID)
 		return nil, ErrUserNotActive
 	}
 
 	// 检查TokenVersion（密码更改后所有Token失效）
 	if data.TokenVersion != user.TokenVersion {
 		// TokenVersion不匹配，撤销整个Token家族
-		_ = s.refreshTokenCache.DeleteTokenFamily(ctx, data.FamilyID)
+		s.deleteTokenFamilyDetached(data.FamilyID)
 		return nil, ErrTokenRevoked
 	}
 
 	// Token轮转：立即使旧Token失效
-	if err := s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash); err != nil {
+	if err := s.deleteRefreshTokenDetached(tokenHash); err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to delete old refresh token: %v", err)
 		// 继续处理，不影响主流程
 	}
@@ -954,7 +954,7 @@ func (s *AuthService) RevokeRefreshToken(ctx context.Context, refreshToken strin
 	}
 
 	tokenHash := hashToken(refreshToken)
-	return s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash)
+	return s.deleteRefreshTokenDetached(tokenHash)
 }
 
 // RevokeAllUserSessions 撤销用户的所有会话（所有Refresh Token）
@@ -963,7 +963,34 @@ func (s *AuthService) RevokeAllUserSessions(ctx context.Context, userID int64) e
 	if s.refreshTokenCache == nil {
 		return nil // No-op if cache not configured
 	}
-	return s.refreshTokenCache.DeleteUserRefreshTokens(ctx, userID)
+	return s.deleteUserRefreshTokensDetached(userID)
+}
+
+func (s *AuthService) deleteRefreshTokenDetached(tokenHash string) error {
+	if s == nil || s.refreshTokenCache == nil || tokenHash == "" {
+		return nil
+	}
+	deleteCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+	return s.refreshTokenCache.DeleteRefreshToken(deleteCtx, tokenHash)
+}
+
+func (s *AuthService) deleteTokenFamilyDetached(familyID string) error {
+	if s == nil || s.refreshTokenCache == nil || familyID == "" {
+		return nil
+	}
+	deleteCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+	return s.refreshTokenCache.DeleteTokenFamily(deleteCtx, familyID)
+}
+
+func (s *AuthService) deleteUserRefreshTokensDetached(userID int64) error {
+	if s == nil || s.refreshTokenCache == nil || userID <= 0 {
+		return nil
+	}
+	deleteCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+	return s.refreshTokenCache.DeleteUserRefreshTokens(deleteCtx, userID)
 }
 
 // hashToken 计算Token的SHA256哈希

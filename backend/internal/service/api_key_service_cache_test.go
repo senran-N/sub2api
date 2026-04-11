@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -123,6 +123,8 @@ type authCacheStub struct {
 	getAuthCache   func(ctx context.Context, key string) (*APIKeyAuthCacheEntry, error)
 	setAuthKeys    []string
 	deleteAuthKeys []string
+	deleteCtxErr   error
+	publishCtxErr  error
 }
 
 func (s *authCacheStub) GetCreateAttemptCount(ctx context.Context, userID int64) (int, error) {
@@ -159,10 +161,12 @@ func (s *authCacheStub) SetAuthCache(ctx context.Context, key string, entry *API
 
 func (s *authCacheStub) DeleteAuthCache(ctx context.Context, key string) error {
 	s.deleteAuthKeys = append(s.deleteAuthKeys, key)
+	s.deleteCtxErr = ctx.Err()
 	return nil
 }
 
 func (s *authCacheStub) PublishAuthCacheInvalidation(ctx context.Context, cacheKey string) error {
+	s.publishCtxErr = ctx.Err()
 	return nil
 }
 
@@ -376,6 +380,32 @@ func TestAPIKeyService_InvalidateAuthCacheByKey(t *testing.T) {
 
 	svc.InvalidateAuthCacheByKey(context.Background(), "k1")
 	require.Len(t, cache.deleteAuthKeys, 1)
+}
+
+func TestAPIKeyService_InvalidateAuthCacheByUserID_UsesDetachedContext(t *testing.T) {
+	cache := &authCacheStub{}
+	var listCtxErr error
+	repo := &authRepoStub{
+		listKeysByUserID: func(ctx context.Context, userID int64) ([]string, error) {
+			listCtxErr = ctx.Err()
+			return []string{"k1"}, nil
+		},
+	}
+	cfg := &config.Config{
+		APIKeyAuth: config.APIKeyAuthCacheConfig{
+			L2TTLSeconds: 60,
+		},
+	}
+	svc := NewAPIKeyService(repo, nil, nil, nil, nil, cache, cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	svc.InvalidateAuthCacheByUserID(ctx, 7)
+	require.Equal(t, []string{svc.authCacheKey("k1")}, cache.deleteAuthKeys)
+	require.NoError(t, listCtxErr)
+	require.NoError(t, cache.deleteCtxErr)
+	require.NoError(t, cache.publishCtxErr)
 }
 
 func TestAPIKeyService_GetByKey_CachesNegativeOnRepoMiss(t *testing.T) {

@@ -16,7 +16,10 @@ func (s *APIKeyService) InvalidateAuthCacheByUserID(ctx context.Context, userID 
 	if userID <= 0 {
 		return
 	}
-	keys, err := s.apiKeyRepo.ListKeysByUserID(ctx, userID)
+	listCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+
+	keys, err := s.apiKeyRepo.ListKeysByUserID(listCtx, userID)
 	if err != nil {
 		return
 	}
@@ -28,7 +31,10 @@ func (s *APIKeyService) InvalidateAuthCacheByGroupID(ctx context.Context, groupI
 	if groupID <= 0 {
 		return
 	}
-	keys, err := s.apiKeyRepo.ListKeysByGroupID(ctx, groupID)
+	listCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+
+	keys, err := s.apiKeyRepo.ListKeysByGroupID(listCtx, groupID)
 	if err != nil {
 		return
 	}

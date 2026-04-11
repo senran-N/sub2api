@@ -9,8 +9,8 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
 	"github.com/dgraph-io/ristretto"
+	"github.com/senran-N/sub2api/internal/config"
 )
 
 type apiKeyAuthCacheConfig struct {
@@ -155,9 +155,12 @@ func (s *APIKeyService) deleteAuthCache(ctx context.Context, cacheKey string) {
 	if s.cache == nil {
 		return
 	}
-	_ = s.cache.DeleteAuthCache(ctx, cacheKey)
+	deleteCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+
+	_ = s.cache.DeleteAuthCache(deleteCtx, cacheKey)
 	// Publish invalidation message to other instances
-	_ = s.cache.PublishAuthCacheInvalidation(ctx, cacheKey)
+	_ = s.cache.PublishAuthCacheInvalidation(deleteCtx, cacheKey)
 }
 
 func (s *APIKeyService) loadAuthCacheEntry(ctx context.Context, key, cacheKey string) (*APIKeyAuthCacheEntry, error) {

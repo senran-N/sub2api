@@ -7,6 +7,10 @@ import (
 
 const cacheLockReleaseTimeout = 5 * time.Second
 
-func newCacheLockReleaseContext() (context.Context, context.CancelFunc) {
+func newDetachedCacheContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), cacheLockReleaseTimeout)
+}
+
+func newCacheLockReleaseContext() (context.Context, context.CancelFunc) {
+	return newDetachedCacheContext()
 }
