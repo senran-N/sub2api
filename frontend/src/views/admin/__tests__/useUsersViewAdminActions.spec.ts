@@ -150,4 +150,26 @@ describe('useUsersViewAdminActions', () => {
     expect(showSuccess).toHaveBeenCalledWith('common.success')
     expect(reloadUsers).toHaveBeenCalledTimes(1)
   })
+
+  it('falls back to plain error messages for toggle and delete failures', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const actions = useUsersViewAdminActions({
+      reloadUsers,
+      reloadAttributeDefinitions,
+      showSuccess,
+      showError,
+      t
+    })
+
+    toggleStatus.mockRejectedValueOnce(new Error('network down'))
+    await actions.handleToggleStatus(createAdminUser({ id: 10 }))
+
+    actions.handleDelete(createAdminUser({ id: 11 }))
+    deleteUser.mockRejectedValueOnce(new Error('delete unavailable'))
+    await actions.confirmDelete()
+
+    expect(showError).toHaveBeenNthCalledWith(1, 'network down')
+    expect(showError).toHaveBeenNthCalledWith(2, 'delete unavailable')
+    expect(consoleSpy).toHaveBeenCalledTimes(2)
+  })
 })

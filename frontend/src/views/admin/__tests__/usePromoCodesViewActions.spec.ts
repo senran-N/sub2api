@@ -170,4 +170,36 @@ describe('usePromoCodesViewActions', () => {
     expect(actions.usages.value).toEqual([])
     expect(actions.usagesPageSize.value).toBe(20)
   })
+
+  it('uses resolved request messages for create, delete, and usage load failures', async () => {
+    const showError = vi.fn()
+    const actions = usePromoCodesViewActions({
+      origin: 'https://sub2api.dev',
+      t: (key: string) => key,
+      showSuccess: vi.fn(),
+      showError,
+      copyToClipboard: vi.fn().mockResolvedValue(true),
+      reloadCodes: vi.fn().mockResolvedValue(undefined)
+    })
+
+    createPromoCode.mockRejectedValueOnce(new Error('create unavailable'))
+    await actions.handleCreate()
+
+    deletePromoCode.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'delete blocked'
+        }
+      }
+    })
+    actions.handleDelete(createCode({ id: 4 }))
+    await actions.confirmDelete()
+
+    getPromoUsages.mockRejectedValueOnce(new Error('usage unavailable'))
+    await actions.handleViewUsages(createCode({ id: 5 }))
+
+    expect(showError).toHaveBeenNthCalledWith(1, 'create unavailable')
+    expect(showError).toHaveBeenNthCalledWith(2, 'delete blocked')
+    expect(showError).toHaveBeenNthCalledWith(3, 'usage unavailable')
+  })
 })

@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { PromoCode, PromoCodeUsage } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   buildCreatePromoCodeRequest,
   buildPromoRegisterLink,
@@ -58,8 +59,10 @@ export function usePromoCodesViewActions(options: PromoCodesViewActionsOptions) 
       options.showSuccess(options.t('admin.promo.codeCreated'))
       closeCreateDialog()
       await options.reloadCodes()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.promo.failedToCreate'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.promo.failedToCreate'))
+      )
     } finally {
       creating.value = false
     }
@@ -88,8 +91,10 @@ export function usePromoCodesViewActions(options: PromoCodesViewActionsOptions) 
       options.showSuccess(options.t('admin.promo.codeUpdated'))
       closeEditDialog()
       await options.reloadCodes()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.promo.failedToUpdate'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.promo.failedToUpdate'))
+      )
     } finally {
       updating.value = false
     }
@@ -116,8 +121,10 @@ export function usePromoCodesViewActions(options: PromoCodesViewActionsOptions) 
       showDeleteDialog.value = false
       deletingCode.value = null
       await options.reloadCodes()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.promo.failedToDelete'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.promo.failedToDelete'))
+      )
     }
   }
 
@@ -155,8 +162,10 @@ export function usePromoCodesViewActions(options: PromoCodesViewActionsOptions) 
       usagesTotal.value = response.total
       usagesPage.value = response.page
       usagesPageSize.value = response.page_size
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.promo.failedToLoadUsages'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.promo.failedToLoadUsages'))
+      )
     } finally {
       usagesLoading.value = false
     }

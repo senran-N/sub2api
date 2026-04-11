@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { AdminUser } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 
 interface UsersViewAdminActionsOptions {
   reloadUsers: () => void | Promise<void>
@@ -56,8 +57,10 @@ export function useUsersViewAdminActions(options: UsersViewAdminActionsOptions) 
           : options.t('admin.users.userDisabled')
       )
       await options.reloadUsers()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.users.failedToToggle'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.users.failedToToggle'))
+      )
       console.error('Error toggling user status:', error)
     }
   }
@@ -82,8 +85,10 @@ export function useUsersViewAdminActions(options: UsersViewAdminActionsOptions) 
       closeDeleteDialog()
       deletingUser.value = null
       await options.reloadUsers()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.users.failedToDelete'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.users.failedToDelete'))
+      )
       console.error('Error deleting user:', error)
     }
   }
