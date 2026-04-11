@@ -181,6 +181,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import type { AdminUser, Group, GroupPlatform } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 
@@ -233,10 +234,11 @@ watch(
     if (v && props.user) {
       load()
     }
-  }
+  },
+  { immediate: true }
 )
 
-const load = async () => {
+async function load() {
   loading.value = true
   try {
     const res = await adminAPI.groups.list(1, 1000)
@@ -263,6 +265,7 @@ const load = async () => {
     }))
   } catch (error) {
     console.error('Failed to load groups:', error)
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.users.failedToLoadGroups')))
   } finally {
     loading.value = false
   }
@@ -321,6 +324,7 @@ const handleSave = async () => {
     emit('close')
   } catch (error) {
     console.error('Failed to update user group config:', error)
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.users.failedToUpdateAllowedGroups')))
   } finally {
     submitting.value = false
   }
