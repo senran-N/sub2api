@@ -322,6 +322,7 @@ import { formatRelativeTime, formatRelativeWithDateTime } from '@/utils/format'
 import type { UserAnnouncement } from '@/types'
 import Icon from '@/components/icons/Icon.vue'
 import { lockBodyScroll as acquireBodyScrollLock, unlockBodyScroll as releaseBodyScrollLock } from '@/utils/bodyScrollLock'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -375,7 +376,7 @@ async function markAsRead(id: number) {
   try {
     await announcementStore.markAsRead(id)
   } catch (err: any) {
-    appStore.showError(err?.message || t('common.unknownError'))
+    appStore.showError(resolveRequestErrorMessage(err, t('common.unknownError')))
   }
 }
 
@@ -390,7 +391,7 @@ async function markAllAsRead() {
     await announcementStore.markAllAsRead()
     appStore.showSuccess(t('announcements.allMarkedAsRead'))
   } catch (err: any) {
-    appStore.showError(err?.message || t('common.unknownError'))
+    appStore.showError(resolveRequestErrorMessage(err, t('common.unknownError')))
   }
 }
 
