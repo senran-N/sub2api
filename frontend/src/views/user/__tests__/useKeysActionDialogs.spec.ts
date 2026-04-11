@@ -78,10 +78,13 @@ function mountComposable() {
   return {
     app,
     composable,
+    create,
     deleteKey,
     loadApiKeys,
     showError,
-    showSuccess
+    showSuccess,
+    update,
+    apiKeys
   }
 }
 
@@ -119,6 +122,37 @@ describe('useKeysActionDialogs', () => {
 
     expect(setup.showError).toHaveBeenCalledWith('network down')
     expect(setup.loadApiKeys).not.toHaveBeenCalled()
+    setup.app.unmount()
+  })
+
+  it('uses resolved request messages for save and reset failures', async () => {
+    const setup = mountComposable()
+    const key = createApiKey({ id: 21, quota_used: 9 })
+    setup.apiKeys.value = [key]
+
+    setup.composable.showCreateModal.value = true
+    setup.composable.formData.value.group_id = 2
+    setup.create.mockRejectedValueOnce(new Error('save unavailable'))
+    await setup.composable.handleSubmit()
+    expect(setup.showError).toHaveBeenNthCalledWith(1, 'save unavailable')
+
+    setup.composable.selectedKey.value = key
+    setup.composable.confirmResetQuota()
+    setup.update.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'quota reset blocked'
+        }
+      }
+    })
+    await setup.composable.resetQuotaUsed()
+    expect(setup.showError).toHaveBeenNthCalledWith(2, 'quota reset blocked')
+
+    setup.composable.confirmResetRateLimitFromTable(key)
+    setup.update.mockRejectedValueOnce(new Error('rate limit reset unavailable'))
+    await setup.composable.resetRateLimitUsage()
+    expect(setup.showError).toHaveBeenNthCalledWith(3, 'rate limit reset unavailable')
+
     setup.app.unmount()
   })
 })

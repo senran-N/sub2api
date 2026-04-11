@@ -1,6 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { AdminGroup, Announcement } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   buildCreateAnnouncementRequest,
   buildUpdateAnnouncementRequest,
@@ -80,10 +81,12 @@ export function useAnnouncementsViewEditor(options: AnnouncementsViewEditorOptio
     } catch (error: any) {
       console.error('Failed to save announcement:', error)
       options.showError(
-        error.response?.data?.detail ||
-          (editingAnnouncement.value
+        resolveRequestErrorMessage(
+          error,
+          editingAnnouncement.value
             ? options.t('admin.announcements.failedToUpdate')
-            : options.t('admin.announcements.failedToCreate'))
+            : options.t('admin.announcements.failedToCreate')
+        )
       )
     } finally {
       saving.value = false

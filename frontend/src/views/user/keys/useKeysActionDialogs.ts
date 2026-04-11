@@ -195,8 +195,8 @@ export function useKeysActionDialogs(options: KeysActionDialogsOptions) {
 
       closeModals()
       await options.loadApiKeys()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('keys.failedToSave'))
+    } catch (error: unknown) {
+      options.showError(resolveRequestErrorMessage(error, options.t('keys.failedToSave')))
     } finally {
       submitting.value = false
     }
@@ -240,8 +240,8 @@ export function useKeysActionDialogs(options: KeysActionDialogsOptions) {
       if (selectedKey.value) {
         selectedKey.value.quota_used = 0
       }
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('keys.failedToResetQuota'))
+    } catch (error: unknown) {
+      options.showError(resolveRequestErrorMessage(error, options.t('keys.failedToResetQuota')))
     }
   }
 
@@ -266,8 +266,10 @@ export function useKeysActionDialogs(options: KeysActionDialogsOptions) {
       if (refreshedKey) {
         selectedKey.value = refreshedKey
       }
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('keys.failedToResetRateLimit'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('keys.failedToResetRateLimit'))
+      )
     }
   }
 

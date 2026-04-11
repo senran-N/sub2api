@@ -152,4 +152,37 @@ describe('useAnnouncementsViewEditor', () => {
     expect(showSuccess).toHaveBeenCalledWith('common.success')
     expect(reloadAnnouncements).toHaveBeenCalledTimes(1)
   })
+
+  it('uses resolved request messages for create and update failures', async () => {
+    const reloadAnnouncements = vi.fn().mockResolvedValue(undefined)
+    const showSuccess = vi.fn()
+    const showError = vi.fn()
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const editor = useAnnouncementsViewEditor({
+      t: (key: string) => key,
+      showSuccess,
+      showError,
+      reloadAnnouncements
+    })
+
+    editor.openCreateDialog()
+    editor.form.title = 'Maintenance'
+    editor.form.content = 'Window'
+    editor.form.targeting = { any_of: [] }
+    createAnnouncement.mockRejectedValueOnce(new Error('create unavailable'))
+    await editor.handleSave()
+    expect(showError).toHaveBeenNthCalledWith(1, 'create unavailable')
+
+    editor.openEditDialog(createSourceAnnouncement())
+    updateAnnouncement.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'update blocked'
+        }
+      }
+    })
+    await editor.handleSave()
+    expect(showError).toHaveBeenNthCalledWith(2, 'update blocked')
+    expect(consoleSpy).toHaveBeenCalledTimes(2)
+  })
 })
