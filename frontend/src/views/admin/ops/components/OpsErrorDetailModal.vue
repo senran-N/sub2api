@@ -195,6 +195,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { opsAPI, type OpsErrorDetail } from '@/api/admin/ops'
 import { formatDateTime } from '@/utils/format'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import { resolvePrimaryResponseBody, resolveUpstreamPayload } from '../utils/errorDetailResponse'
 
 interface Props {
@@ -324,7 +325,7 @@ async function fetchDetail(id: number) {
     detail.value = d
   } catch (err: any) {
     detail.value = null
-    appStore.showError(err?.message || t('admin.ops.failedToLoadErrorDetail'))
+    appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadErrorDetail')))
   } finally {
     loading.value = false
   }
