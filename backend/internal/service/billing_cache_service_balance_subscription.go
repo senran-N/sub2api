@@ -95,7 +95,10 @@ func (s *BillingCacheService) InvalidateUserBalance(ctx context.Context, userID 
 	if s.cache == nil {
 		return nil
 	}
-	if err := s.cache.InvalidateUserBalance(ctx, userID); err != nil {
+	invalidateCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+
+	if err := s.cache.InvalidateUserBalance(invalidateCtx, userID); err != nil {
 		logger.LegacyPrintf("service.billing_cache", "Warning: invalidate balance cache failed for user %d: %v", userID, err)
 		return err
 	}
@@ -209,7 +212,10 @@ func (s *BillingCacheService) InvalidateSubscription(ctx context.Context, userID
 	if s.cache == nil {
 		return nil
 	}
-	if err := s.cache.InvalidateSubscriptionCache(ctx, userID, groupID); err != nil {
+	invalidateCtx, cancel := newDetachedCacheContext()
+	defer cancel()
+
+	if err := s.cache.InvalidateSubscriptionCache(invalidateCtx, userID, groupID); err != nil {
 		logger.LegacyPrintf("service.billing_cache", "Warning: invalidate subscription cache failed for user %d group %d: %v", userID, groupID, err)
 		return err
 	}
