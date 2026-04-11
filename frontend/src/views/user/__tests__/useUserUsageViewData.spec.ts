@@ -52,11 +52,12 @@ function createUsageLog() {
   }
 }
 
-function createComposable() {
+function createComposable(filterOverrides: Record<string, unknown> = {}) {
   const filters = ref({
     api_key_id: 3,
     start_date: '2026-03-29',
-    end_date: '2026-04-04'
+    end_date: '2026-04-04',
+    ...filterOverrides
   })
   const startDate = ref('2026-03-29')
   const endDate = ref('2026-04-04')
@@ -86,6 +87,8 @@ function createComposable() {
   return {
     composable,
     filters,
+    startDate,
+    endDate,
     pagination,
     showError,
     showWarning,
@@ -160,6 +163,64 @@ describe('useUserUsageViewData', () => {
     expect(clickSpy).toHaveBeenCalled()
     expect(setup.showInfo).toHaveBeenCalledWith('usage.preparingExport')
     expect(setup.showSuccess).toHaveBeenCalledWith('usage.exportSuccess')
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: 1,
+        page_size: 100,
+        start_date: '2026-03-29',
+        end_date: '2026-04-04'
+      })
+    )
+
+    window.URL.createObjectURL = originalCreateObjectURL
+    window.URL.revokeObjectURL = originalRevokeObjectURL
+    clickSpy.mockRestore()
+  })
+
+  it('reuses fallback date range when filters are temporarily unset', async () => {
+    const setup = createComposable({
+      start_date: undefined,
+      end_date: undefined
+    })
+    let exportedBlob: Blob | null = null
+    const originalCreateObjectURL = window.URL.createObjectURL
+    const originalRevokeObjectURL = window.URL.revokeObjectURL
+    window.URL.createObjectURL = vi.fn((blob: Blob | MediaSource) => {
+      exportedBlob = blob as Blob
+      return 'blob:usage-export-fallback'
+    }) as typeof window.URL.createObjectURL
+    window.URL.revokeObjectURL = vi.fn(() => {}) as typeof window.URL.revokeObjectURL
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    await setup.composable.loadUsageLogs()
+    await setup.composable.loadUsageStats()
+    await setup.composable.exportToCSV()
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        start_date: setup.startDate.value,
+        end_date: setup.endDate.value
+      }),
+      expect.any(Object)
+    )
+    expect(getStatsByDateRange).toHaveBeenCalledWith(
+      setup.startDate.value,
+      setup.endDate.value,
+      3
+    )
+    expect(query).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        page: 1,
+        page_size: 100,
+        start_date: setup.startDate.value,
+        end_date: setup.endDate.value
+      })
+    )
+    expect(exportedBlob).not.toBeNull()
+    expect(clickSpy.mock.instances[0]?.download).toBe(
+      `usage_${setup.startDate.value}_to_${setup.endDate.value}.csv`
+    )
 
     window.URL.createObjectURL = originalCreateObjectURL
     window.URL.revokeObjectURL = originalRevokeObjectURL

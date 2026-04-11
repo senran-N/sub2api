@@ -41,6 +41,7 @@ const DataTableStub = {
     <div>
       <div v-for="row in data" :key="row.request_id">
         <slot name="cell-model" :row="row" :value="row.model" />
+        <slot name="cell-tokens" :row="row" />
         <slot name="cell-cost" :row="row" />
       </div>
     </div>
@@ -94,7 +95,7 @@ describe('admin UsageTable tooltip', () => {
       },
     })
 
-    await wrapper.find('.group.relative').trigger('mouseenter')
+    await wrapper.findAll('.group.relative')[1].trigger('mouseenter')
     await nextTick()
 
     const text = wrapper.text()
@@ -188,5 +189,52 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('gpt-5→gpt-5.4→gpt-5.4-20260101')
     expect(text).toContain('Channel')
     expect(text).toContain('#77')
+  })
+
+  it('keeps cache ttl override text aligned with the billed cache tier', async () => {
+    const row = {
+      request_id: 'req-admin-token-1',
+      actual_cost: 0,
+      total_cost: 0,
+      account_rate_multiplier: 1,
+      rate_multiplier: 1,
+      input_cost: 0,
+      output_cost: 0,
+      cache_creation_cost: 0,
+      cache_read_cost: 0,
+      input_tokens: 4057,
+      output_tokens: 101,
+      cache_creation_tokens: 500,
+      cache_read_tokens: 278272,
+      cache_creation_5m_tokens: 200,
+      cache_creation_1h_tokens: 300,
+      cache_ttl_overridden: true,
+      image_count: 0,
+      image_size: null
+    }
+
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [row],
+        loading: false,
+        columns: [],
+      },
+      global: {
+        stubs: {
+          DataTable: DataTableStub,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    await wrapper.findAll('.group.relative')[0].trigger('mouseenter')
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('R-1h')
+    expect(text).toContain('usage.cacheTtlOverridden1h')
+    expect(text).toContain('282,930')
   })
 })

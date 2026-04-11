@@ -1,4 +1,10 @@
 import type { ApiKey, UsageLog } from '@/types'
+import {
+  getUsageCacheOverrideBadgeText,
+  getUsageCacheOverrideLabelKey,
+  getUsageTotalTokens,
+  hasUsageCacheCreationBreakdown
+} from '@/utils/usageTokens'
 
 export function formatUserUsageDuration(ms: number): string {
   if (ms < 1000) {
@@ -52,28 +58,17 @@ export function buildUserUsageApiKeyOptions(
 }
 
 export function hasUserUsageCacheCreationBreakdown(log: UsageLog): boolean {
-  return log.cache_creation_5m_tokens > 0 || log.cache_creation_1h_tokens > 0
+  return hasUsageCacheCreationBreakdown(log)
 }
 
 export function getUserUsageCacheOverrideBadgeText(log: UsageLog): string {
-  return `R-${log.cache_creation_1h_tokens > 0 ? '5m' : '1H'}`
+  return getUsageCacheOverrideBadgeText(log)
 }
 
 export function getUserUsageCacheOverrideLabelKey(log: UsageLog): string {
-  return log.cache_creation_1h_tokens > 0
-    ? 'usage.cacheTtlOverridden1h'
-    : 'usage.cacheTtlOverridden5m'
+  return getUsageCacheOverrideLabelKey(log)
 }
 
 export function getUserUsageTotalTokens(log: UsageLog | null): number {
-  if (log == null) {
-    return 0
-  }
-
-  return (
-    log.input_tokens +
-    log.output_tokens +
-    log.cache_creation_tokens +
-    log.cache_read_tokens
-  )
+  return getUsageTotalTokens(log)
 }

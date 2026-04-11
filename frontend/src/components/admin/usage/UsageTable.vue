@@ -309,12 +309,7 @@
               </span>
             </div>
             <div v-if="tokenTooltipData && tokenTooltipData.cache_creation_tokens > 0">
-              <template
-                v-if="
-                  tokenTooltipData.cache_creation_5m_tokens > 0 ||
-                  tokenTooltipData.cache_creation_1h_tokens > 0
-                "
-              >
+              <template v-if="hasUsageCacheCreationBreakdown(tokenTooltipData)">
                 <div
                   v-if="tokenTooltipData.cache_creation_5m_tokens > 0"
                   class="flex items-center justify-between gap-4"
@@ -358,15 +353,11 @@
               <span class="usage-table__tooltip-label flex items-center gap-1.5">
                 {{ t('usage.cacheTtlOverriddenLabel') }}
                 <span class="usage-table__tooltip-chip usage-table__tooltip-chip--rose">
-                  R-{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? '5m' : '1H' }}
+                  {{ getUsageCacheOverrideBadgeText(tokenTooltipData) }}
                 </span>
               </span>
               <span class="usage-table__tooltip-value usage-table__tooltip-value--rose font-medium">
-                {{
-                  tokenTooltipData.cache_creation_1h_tokens > 0
-                    ? t('usage.cacheTtlOverridden1h')
-                    : t('usage.cacheTtlOverridden5m')
-                }}
+                {{ t(getUsageCacheOverrideLabelKey(tokenTooltipData)) }}
               </span>
             </div>
             <div
@@ -382,14 +373,7 @@
           <div class="usage-table__tooltip-divider flex items-center justify-between gap-6 pt-1.5">
             <span class="usage-table__tooltip-label">{{ t('usage.totalTokens') }}</span>
             <span class="usage-table__tooltip-value usage-table__tooltip-value--info font-semibold">
-              {{
-                (
-                  (tokenTooltipData?.input_tokens || 0) +
-                  (tokenTooltipData?.output_tokens || 0) +
-                  (tokenTooltipData?.cache_creation_tokens || 0) +
-                  (tokenTooltipData?.cache_read_tokens || 0)
-                ).toLocaleString()
-              }}
+              {{ getUsageTotalTokens(tokenTooltipData).toLocaleString() }}
             </span>
           </div>
         </div>
@@ -534,6 +518,12 @@ import { useI18n } from 'vue-i18n'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
+import {
+  getUsageCacheOverrideBadgeText,
+  getUsageCacheOverrideLabelKey,
+  getUsageTotalTokens,
+  hasUsageCacheCreationBreakdown
+} from '@/utils/usageTokens'
 import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Icon from '@/components/icons/Icon.vue'

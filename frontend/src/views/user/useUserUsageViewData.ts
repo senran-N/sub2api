@@ -28,6 +28,11 @@ interface UserUsageViewDataOptions {
   t: (key: string) => string
 }
 
+interface ResolvedUsageDateRange {
+  startDate: string
+  endDate: string
+}
+
 function escapeCSVValue(value: unknown): string {
   if (value == null) {
     return ''
@@ -89,6 +94,31 @@ function buildUserUsageCsvContent(logs: UsageLog[]): string {
   return [headers.map(escapeCSVValue).join(','), ...rows.map((row) => row.join(','))].join('\n')
 }
 
+function resolveUsageDateRange(
+  options: UserUsageViewDataOptions
+): ResolvedUsageDateRange {
+  return {
+    startDate: options.filters.value.start_date || options.startDate.value,
+    endDate: options.filters.value.end_date || options.endDate.value
+  }
+}
+
+function buildUsageQueryParams(
+  options: UserUsageViewDataOptions,
+  page: number,
+  pageSize: number
+): UsageQueryParams & { page: number; page_size: number } {
+  const range = resolveUsageDateRange(options)
+
+  return {
+    page,
+    page_size: pageSize,
+    ...options.filters.value,
+    start_date: range.startDate,
+    end_date: range.endDate
+  }
+}
+
 export function useUserUsageViewData(options: UserUsageViewDataOptions) {
   const usageStats = ref<UsageStatsResponse | null>(null)
   const usageLogs = ref<UsageLog[]>([])
@@ -107,11 +137,11 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
 
     try {
       const response = await usageAPI.query(
-        {
-          page: options.pagination.page,
-          page_size: options.pagination.page_size,
-          ...options.filters.value
-        },
+        buildUsageQueryParams(
+          options,
+          options.pagination.page,
+          options.pagination.page_size
+        ),
         { signal: controller.signal }
       )
 
@@ -146,13 +176,14 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
 
   const loadUsageStats = async () => {
     try {
+      const range = resolveUsageDateRange(options)
       const apiKeyId = options.filters.value.api_key_id
         ? Number(options.filters.value.api_key_id)
         : undefined
 
       usageStats.value = await usageAPI.getStatsByDateRange(
-        options.filters.value.start_date || options.startDate.value,
-        options.filters.value.end_date || options.endDate.value,
+        range.startDate,
+        range.endDate,
         apiKeyId
       )
     } catch (error) {
@@ -193,16 +224,15 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
     options.showInfo(options.t('usage.preparingExport'))
 
     try {
+      const range = resolveUsageDateRange(options)
       const allLogs: UsageLog[] = []
       const pageSize = 100
       const totalRequests = Math.ceil(options.pagination.total / pageSize)
 
       for (let page = 1; page <= totalRequests; page += 1) {
-        const response = await usageAPI.query({
-          page,
-          page_size: pageSize,
-          ...options.filters.value
-        })
+        const response = await usageAPI.query(
+          buildUsageQueryParams(options, page, pageSize)
+        )
         allLogs.push(...response.items)
       }
 
@@ -216,7 +246,7 @@ export function useUserUsageViewData(options: UserUsageViewDataOptions) {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `usage_${options.filters.value.start_date}_to_${options.filters.value.end_date}.csv`
+      link.download = `usage_${range.startDate}_to_${range.endDate}.csv`
       link.click()
       window.URL.revokeObjectURL(url)
 

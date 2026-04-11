@@ -184,6 +184,7 @@ describe('user usage local components', () => {
     expect(tokenTooltip.text()).toContain('admin.usage.inputTokens')
     expect(tokenTooltip.text()).toContain('4,057')
     expect(tokenTooltip.text()).toContain('admin.usage.cacheCreation5mTokens')
+    expect(tokenTooltip.text()).toContain('R-1h')
     expect(tokenTooltip.text()).toContain('usage.cacheTtlOverridden1h')
     expect(tokenTooltip.text()).toContain('282,930')
 
