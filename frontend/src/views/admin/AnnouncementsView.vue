@@ -111,6 +111,7 @@ import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import type { Announcement } from '@/types'
 import type { Column } from '@/components/common/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -218,7 +219,7 @@ async function confirmDelete() {
     await loadAnnouncements()
   } catch (error: any) {
     console.error('Failed to delete announcement:', error)
-    appStore.showError(error.response?.data?.detail || t('admin.announcements.failedToDelete'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.announcements.failedToDelete')))
   }
 }
 
