@@ -233,6 +233,42 @@ func TestChannelServiceBuildCacheUsesShortErrorCacheOnFailure(t *testing.T) {
 	require.Equal(t, 1, callCount)
 }
 
+func TestChannelServiceInvalidateCachePreservesPreviousSnapshotOnRebuildFailure(t *testing.T) {
+	callCount := 0
+	ch := Channel{
+		ID:       1,
+		Name:     "stable-channel",
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+	}
+	repo := &channelServiceRepoStub{
+		listAllFn: func(context.Context) ([]Channel, error) {
+			callCount++
+			if callCount == 1 {
+				return []Channel{ch}, nil
+			}
+			return nil, errors.New("database down")
+		},
+		getGroupPlatformsFn: func(context.Context, []int64) (map[int64]string, error) {
+			return map[int64]string{10: PlatformAnthropic}, nil
+		},
+	}
+	svc := newTestChannelService(repo)
+
+	result, err := svc.GetChannelForGroup(context.Background(), 10)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "stable-channel", result.Name)
+
+	svc.invalidateCache()
+
+	result, err = svc.GetChannelForGroup(context.Background(), 10)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "stable-channel", result.Name)
+	require.Equal(t, 2, callCount)
+}
+
 func TestChannelServiceGetChannelModelPricingAntigravityMatchesAnthropicAndGemini(t *testing.T) {
 	ch := Channel{
 		ID:       1,

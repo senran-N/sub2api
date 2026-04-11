@@ -147,6 +147,11 @@ type ChannelService struct {
 	cacheSF singleflight.Group
 }
 
+func (s *ChannelService) currentCache() *channelCache {
+	cached, _ := s.cache.Load().(*channelCache)
+	return cached
+}
+
 // NewChannelService 创建渠道服务实例
 func NewChannelService(repo ChannelRepository, authCacheInvalidator APIKeyAuthCacheInvalidator) *ChannelService {
 	s := &ChannelService{
@@ -158,7 +163,7 @@ func NewChannelService(repo ChannelRepository, authCacheInvalidator APIKeyAuthCa
 
 // loadCache 加载或返回缓存的渠道数据
 func (s *ChannelService) loadCache(ctx context.Context) (*channelCache, error) {
-	if cached, ok := s.cache.Load().(*channelCache); ok && cached != nil {
+	if cached := s.currentCache(); cached != nil {
 		if time.Since(cached.loadedAt) < channelCacheTTL {
 			return cached, nil
 		}
@@ -166,7 +171,7 @@ func (s *ChannelService) loadCache(ctx context.Context) (*channelCache, error) {
 
 	result, err, _ := s.cacheSF.Do("channel_cache", func() (any, error) {
 		// 双重检查
-		if cached, ok := s.cache.Load().(*channelCache); ok && cached != nil {
+		if cached := s.currentCache(); cached != nil {
 			if time.Since(cached.loadedAt) < channelCacheTTL {
 				return cached, nil
 			}
@@ -257,9 +262,14 @@ func (s *ChannelService) buildCache(ctx context.Context) (*channelCache, error) 
 	// 断开请求取消链，避免客户端断连导致空值被长期缓存
 	dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), channelCacheDBTimeout)
 	defer cancel()
+	previousCache := s.currentCache()
 
 	channels, err := s.repo.ListAll(dbCtx)
 	if err != nil {
+		if previousCache != nil {
+			slog.Warn("failed to rebuild channel cache, keeping previous snapshot", "error", err)
+			return previousCache, nil
+		}
 		// error-TTL：失败时存入短 TTL 空缓存，防止紧密重试
 		slog.Warn("failed to build channel cache", "error", err)
 		errorCache := newEmptyChannelCache()
@@ -277,6 +287,10 @@ func (s *ChannelService) buildCache(ctx context.Context) (*channelCache, error) 
 	if len(allGroupIDs) > 0 {
 		groupPlatforms, err = s.repo.GetGroupPlatforms(dbCtx, allGroupIDs)
 		if err != nil {
+			if previousCache != nil {
+				slog.Warn("failed to rebuild channel cache group platforms, keeping previous snapshot", "error", err)
+				return previousCache, nil
+			}
 			slog.Warn("failed to load group platforms for channel cache", "error", err)
 			errorCache := newEmptyChannelCache()
 			errorCache.loadedAt = time.Now().Add(-(channelCacheTTL - channelErrorTTL))
@@ -331,7 +345,6 @@ func matchingPlatforms(groupPlatform string) []string {
 	return []string{groupPlatform}
 }
 func (s *ChannelService) invalidateCache() {
-	s.cache.Store((*channelCache)(nil))
 	s.cacheSF.Forget("channel_cache")
 
 	// 主动重建缓存，确保 CRUD 后立即生效
