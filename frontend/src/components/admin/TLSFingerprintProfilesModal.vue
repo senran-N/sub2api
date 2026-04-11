@@ -332,6 +332,7 @@ import type { TLSFingerprintProfile } from '@/api/admin/tlsFingerprintProfile'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 
 const props = defineProps<{
   show: boolean
@@ -410,7 +411,7 @@ async function loadProfiles() {
   try {
     profiles.value = await adminAPI.tlsFingerprintProfiles.list()
   } catch (error) {
-    appStore.showError(t('admin.tlsFingerprintProfiles.loadFailed'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.tlsFingerprintProfiles.loadFailed')))
     console.error('Error loading TLS fingerprint profiles:', error)
   } finally {
     loading.value = false
@@ -620,7 +621,7 @@ const handleSubmit = async () => {
     closeFormModal()
     loadProfiles()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.tlsFingerprintProfiles.saveFailed'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.tlsFingerprintProfiles.saveFailed')))
     console.error('Error saving TLS fingerprint profile:', error)
   } finally {
     submitting.value = false
@@ -637,7 +638,7 @@ const confirmDelete = async () => {
     deletingProfile.value = null
     loadProfiles()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.tlsFingerprintProfiles.deleteFailed'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.tlsFingerprintProfiles.deleteFailed')))
     console.error('Error deleting TLS fingerprint profile:', error)
   }
 }

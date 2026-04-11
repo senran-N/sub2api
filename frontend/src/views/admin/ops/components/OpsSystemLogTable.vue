@@ -4,6 +4,7 @@ import { opsAPI, type OpsRuntimeLogConfig, type OpsSystemLog, type OpsSystemLogS
 import Pagination from '@/components/common/Pagination.vue'
 import Select from '@/components/common/Select.vue'
 import { useAppStore } from '@/stores'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 
 const appStore = useAppStore()
 
@@ -212,7 +213,7 @@ const fetchLogs = async () => {
     total.value = res.total || 0
   } catch (err: any) {
     console.error('[OpsSystemLogTable] Failed to fetch logs', err)
-    appStore.showError(err?.response?.data?.detail || '系统日志加载失败')
+    appStore.showError(resolveRequestErrorMessage(err, '系统日志加载失败'))
   } finally {
     loading.value = false
   }
@@ -239,6 +240,7 @@ const loadRuntimeConfig = async () => {
     runtimeConfig.retention_days = cfg.retention_days
   } catch (err: any) {
     console.error('[OpsSystemLogTable] Failed to load runtime log config', err)
+    appStore.showError(resolveRequestErrorMessage(err, '加载日志配置失败'))
   } finally {
     runtimeLoading.value = false
   }
@@ -258,7 +260,7 @@ const saveRuntimeConfig = async () => {
     appStore.showSuccess('日志运行时配置已生效')
   } catch (err: any) {
     console.error('[OpsSystemLogTable] Failed to save runtime log config', err)
-    appStore.showError(err?.response?.data?.detail || '保存日志配置失败')
+    appStore.showError(resolveRequestErrorMessage(err, '保存日志配置失败'))
   } finally {
     runtimeSaving.value = false
   }
@@ -282,7 +284,7 @@ const resetRuntimeConfig = async () => {
     await fetchHealth()
   } catch (err: any) {
     console.error('[OpsSystemLogTable] Failed to reset runtime log config', err)
-    appStore.showError(err?.response?.data?.detail || '回滚日志配置失败')
+    appStore.showError(resolveRequestErrorMessage(err, '回滚日志配置失败'))
   } finally {
     runtimeSaving.value = false
   }
@@ -311,7 +313,7 @@ const cleanupCurrentFilter = async () => {
     await Promise.all([fetchLogs(), fetchHealth()])
   } catch (err: any) {
     console.error('[OpsSystemLogTable] Failed to cleanup logs', err)
-    appStore.showError(err?.response?.data?.detail || '清理系统日志失败')
+    appStore.showError(resolveRequestErrorMessage(err, '清理系统日志失败'))
   }
 }
 
