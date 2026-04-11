@@ -252,7 +252,8 @@ const {
   loadInitialData,
   dispose: disposeDataState
 } = useSubscriptionsViewData({
-  showLoadError: (message) => appStore.showError(message)
+  showLoadError: (message) => appStore.showError(message),
+  t
 })
 
 const resetAssignModalState = () => {

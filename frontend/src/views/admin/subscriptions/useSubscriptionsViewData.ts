@@ -12,6 +12,7 @@ import {
 
 interface SubscriptionsViewDataOptions {
   showLoadError: (message: string) => void
+  t: (key: string, params?: Record<string, unknown>) => string
 }
 
 export function useSubscriptionsViewData(options: SubscriptionsViewDataOptions) {
@@ -40,7 +41,7 @@ export function useSubscriptionsViewData(options: SubscriptionsViewDataOptions) 
       ),
     onError: (error) => {
       options.showLoadError(
-        resolveRequestErrorMessage(error, 'Failed to load subscriptions')
+        resolveRequestErrorMessage(error, options.t('admin.subscriptions.failedToLoad'))
       )
     },
     clampPageChange: false

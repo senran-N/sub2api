@@ -32,7 +32,10 @@ describe('useSubscriptionsViewData', () => {
 
   it('loads subscriptions and groups and applies list mutations', async () => {
     const showLoadError = vi.fn()
-    const state = useSubscriptionsViewData({ showLoadError })
+    const state = useSubscriptionsViewData({
+      showLoadError,
+      t: (key: string) => key
+    })
 
     await state.loadInitialData()
 
@@ -70,7 +73,10 @@ describe('useSubscriptionsViewData', () => {
 
   it('reports non-abort subscription load failures', async () => {
     const showLoadError = vi.fn()
-    const state = useSubscriptionsViewData({ showLoadError })
+    const state = useSubscriptionsViewData({
+      showLoadError,
+      t: (key: string) => key
+    })
     listSubscriptions.mockRejectedValueOnce({
       response: { data: { detail: 'subscription-load-failed' } }
     })
@@ -78,5 +84,18 @@ describe('useSubscriptionsViewData', () => {
     await state.loadSubscriptions()
 
     expect(showLoadError).toHaveBeenCalledWith('subscription-load-failed')
+  })
+
+  it('uses the translated fallback when no request message is available', async () => {
+    const showLoadError = vi.fn()
+    const state = useSubscriptionsViewData({
+      showLoadError,
+      t: (key: string) => key
+    })
+    listSubscriptions.mockRejectedValueOnce(null)
+
+    await state.loadSubscriptions()
+
+    expect(showLoadError).toHaveBeenCalledWith('admin.subscriptions.failedToLoad')
   })
 })
