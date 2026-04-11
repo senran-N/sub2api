@@ -105,6 +105,20 @@ describe('useForm', () => {
     expect(showErrorSpy).toHaveBeenCalledWith('自定义错误提示')
   })
 
+  it('submit 失败且无法提取错误文本时使用稳定回退消息', async () => {
+    const submitFn = vi.fn().mockRejectedValue({})
+    const showErrorSpy = vi.spyOn(appStore, 'showError')
+
+    const { submit } = useForm({
+      form: { name: 'test' },
+      submitFn,
+    })
+
+    await expect(submit()).rejects.toEqual({})
+
+    expect(showErrorSpy).toHaveBeenCalledWith('Request failed')
+  })
+
   it('loading 中不会重复提交', async () => {
     let resolveSubmit: () => void
     const submitFn = vi.fn(
