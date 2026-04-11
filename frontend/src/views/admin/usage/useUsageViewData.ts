@@ -39,6 +39,11 @@ export interface UsageViewDataOptions {
   showError: (message: string) => void
 }
 
+interface ResolvedUsageDateRange {
+  start_date: string
+  end_date: string
+}
+
 type UsageScopeParams = Pick<
   AdminUsageQueryParams,
   | 'user_id'
@@ -168,14 +173,22 @@ export function useUsageViewData(options: UsageViewDataOptions) {
   let statsRequestSequence = 0
   let modelStatsRequestSequence = 0
 
+  const resolveUsageDateRange = (): ResolvedUsageDateRange => ({
+    start_date: options.filters.value.start_date || options.startDate.value,
+    end_date: options.filters.value.end_date || options.endDate.value
+  })
+
   const buildUsageFilters = (): AdminUsageQueryParams => {
     const requestType = options.filters.value.request_type
     const legacyStream = requestType
       ? requestTypeToLegacyStream(requestType)
       : options.filters.value.stream
+    const range = resolveUsageDateRange()
 
     return {
       ...options.filters.value,
+      start_date: range.start_date,
+      end_date: range.end_date,
       stream: legacyStream === null ? undefined : legacyStream
     }
   }
@@ -184,8 +197,8 @@ export function useUsageViewData(options: UsageViewDataOptions) {
     const usageFilters = buildUsageFilters()
 
     return {
-      start_date: usageFilters.start_date || options.startDate.value,
-      end_date: usageFilters.end_date || options.endDate.value,
+      start_date: usageFilters.start_date!,
+      end_date: usageFilters.end_date!,
       user_id: usageFilters.user_id,
       api_key_id: usageFilters.api_key_id,
       account_id: usageFilters.account_id,
@@ -459,7 +472,7 @@ export function useUsageViewData(options: UsageViewDataOptions) {
       }
 
       console.error('Failed to export:', error)
-      options.showError('Export Failed')
+      options.showError(options.t('usage.exportFailed'))
     } finally {
       if (exportAbortController === controller) {
         exportAbortController = null

@@ -104,13 +104,17 @@ function createUsageLog() {
   }
 }
 
-function createComposable(source: ModelDistributionSource = 'requested') {
+function createComposable(
+  source: ModelDistributionSource = 'requested',
+  filterOverrides: Record<string, unknown> = {}
+) {
   const filters = ref({
     user_id: 7,
     start_date: '2026-04-03',
     end_date: '2026-04-04',
     request_type: 'stream' as const,
-    billing_type: null
+    billing_type: null,
+    ...filterOverrides
   })
   const startDate = ref('2026-04-03')
   const endDate = ref('2026-04-04')
@@ -139,6 +143,8 @@ function createComposable(source: ModelDistributionSource = 'requested') {
   return {
     composable,
     filters,
+    startDate,
+    endDate,
     granularity,
     modelDistributionSource,
     pagination,
@@ -251,6 +257,65 @@ describe('useUsageViewData', () => {
     expect(saveAs).toHaveBeenCalledTimes(1)
     expect(setup.showSuccess).toHaveBeenCalledWith('usage.exportSuccess')
     expect(setup.showError).not.toHaveBeenCalled()
+    expect(setup.composable.exporting.value).toBe(false)
+  })
+
+  it('reuses fallback date range when filters are temporarily unset', async () => {
+    const setup = createComposable('requested', {
+      start_date: undefined,
+      end_date: undefined
+    })
+
+    setup.composable.applyFilters()
+    await flushPromises()
+    await setup.composable.exportToExcel()
+
+    expect(usageList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        start_date: setup.startDate.value,
+        end_date: setup.endDate.value
+      }),
+      expect.any(Object)
+    )
+    expect(usageStats).toHaveBeenCalledWith(
+      expect.objectContaining({
+        start_date: setup.startDate.value,
+        end_date: setup.endDate.value
+      })
+    )
+    expect(modelStats).toHaveBeenCalledWith(
+      expect.objectContaining({
+        start_date: setup.startDate.value,
+        end_date: setup.endDate.value
+      })
+    )
+    expect(snapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        start_date: setup.startDate.value,
+        end_date: setup.endDate.value
+      })
+    )
+    expect(exportList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        start_date: setup.startDate.value,
+        end_date: setup.endDate.value
+      }),
+      expect.any(Object)
+    )
+    expect(saveAs).toHaveBeenCalledWith(
+      expect.any(Blob),
+      `usage_${setup.startDate.value}_to_${setup.endDate.value}.xlsx`
+    )
+  })
+
+  it('reports export failures through localized messaging', async () => {
+    const setup = createComposable()
+    exportList.mockRejectedValueOnce(new Error('xlsx failed'))
+
+    await setup.composable.exportToExcel()
+
+    expect(setup.showError).toHaveBeenCalledWith('usage.exportFailed')
+    expect(setup.showSuccess).not.toHaveBeenCalled()
     expect(setup.composable.exporting.value).toBe(false)
   })
 
