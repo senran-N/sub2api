@@ -184,6 +184,21 @@ describe('useAccountsViewActions', () => {
     expect(setup.reload).toHaveBeenCalledTimes(1)
   })
 
+  it('surfaces request detail for bulk reset failures instead of stringifying objects', async () => {
+    const setup = createComposable()
+    batchClearError.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'bulk-reset-failed'
+        }
+      }
+    })
+
+    await setup.composable.handleBulkResetStatus()
+
+    expect(setup.showError).toHaveBeenCalledWith('bulk-reset-failed')
+  })
+
   it('keeps failed accounts selected after bulk refresh partial failure', async () => {
     const setup = createComposable([11, 12, 13])
     batchRefresh.mockResolvedValue({
@@ -199,6 +214,15 @@ describe('useAccountsViewActions', () => {
     expect(setup.setSelectedIds).toHaveBeenCalledWith([12])
     expect(setup.showError).toHaveBeenCalledWith('admin.accounts.bulkActions.partialSuccess')
     expect(setup.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to localized error text for bulk refresh failures without detail', async () => {
+    const setup = createComposable([11, 12])
+    batchRefresh.mockRejectedValueOnce(new Error('network down'))
+
+    await setup.composable.handleBulkRefreshToken()
+
+    expect(setup.showError).toHaveBeenCalledWith('network down')
   })
 
   it('handles unknown bulk schedulable results by reloading and restoring selection', async () => {

@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Account, ClaudeModel, SelectOption } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import { normalizeBulkSchedulableResult } from './accountsList'
 
 interface AccountsViewActionsOptions {
@@ -78,7 +79,9 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
       await options.reload()
     } catch (error) {
       console.error('Failed to bulk reset status:', error)
-      options.showError(String(error))
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('common.error'))
+      )
     }
   }
 
@@ -117,7 +120,9 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
       await options.reload()
     } catch (error) {
       console.error('Failed to bulk refresh token:', error)
-      options.showError(String(error))
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('common.error'))
+      )
     }
   }
 
