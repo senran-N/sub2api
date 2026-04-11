@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import { adminAPI } from '@/api'
 import { opsAPI } from '@/api/admin/ops'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import type { AlertRule, MetricType, Operator } from '../types'
 import type { OpsSeverity } from '@/api/admin/ops'
 import { formatDateTime } from '../utils/opsFormatters'
@@ -23,7 +24,7 @@ async function load() {
     rules.value = await opsAPI.listAlertRules()
   } catch (err: any) {
     console.error('[OpsAlertRulesCard] Failed to load rules', err)
-    appStore.showError(err?.response?.data?.detail || t('admin.ops.alertRules.loadFailed'))
+    appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.loadFailed')))
     rules.value = []
   } finally {
     loading.value = false
@@ -495,7 +496,10 @@ async function createRecommendedPresets() {
         result.succeeded.push(outcome.value)
         continue
       }
-      const detail = outcome.reason?.response?.data?.detail || outcome.reason?.message || t('admin.ops.alertRules.presets.createFailed')
+      const detail = resolveRequestErrorMessage(
+        outcome.reason,
+        t('admin.ops.alertRules.presets.createFailed')
+      )
       result.failed.push({ preset, detail })
     }
 
@@ -573,7 +577,7 @@ async function save() {
     appStore.showSuccess(t('admin.ops.alertRules.saveSuccess'))
   } catch (err: any) {
     console.error('[OpsAlertRulesCard] Failed to save rule', err)
-    appStore.showError(err?.response?.data?.detail || t('admin.ops.alertRules.saveFailed'))
+    appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -597,7 +601,7 @@ async function confirmDelete() {
     appStore.showSuccess(t('admin.ops.alertRules.deleteSuccess'))
   } catch (err: any) {
     console.error('[OpsAlertRulesCard] Failed to delete rule', err)
-    appStore.showError(err?.response?.data?.detail || t('admin.ops.alertRules.deleteFailed'))
+    appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.deleteFailed')))
   }
 }
 

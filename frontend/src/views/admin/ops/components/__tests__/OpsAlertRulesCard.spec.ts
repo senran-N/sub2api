@@ -202,4 +202,23 @@ describe('OpsAlertRulesCard', () => {
     expect(mockCreateAlertRule).toHaveBeenCalledTimes(4)
     expect(showWarning).toHaveBeenCalledWith('admin.ops.alertRules.presets.createPartial:{"success":3,"failed":1}')
   })
+
+  it('加载失败时优先展示后端 detail', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockListAlertRules.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'alert rules detail error'
+        }
+      },
+      message: 'generic alert rules error'
+    })
+
+    mountComponent()
+    await flushPromises()
+
+    expect(showError).toHaveBeenCalledWith('alert rules detail error')
+    expect(consoleSpy).toHaveBeenCalledTimes(1)
+    consoleSpy.mockRestore()
+  })
 })
