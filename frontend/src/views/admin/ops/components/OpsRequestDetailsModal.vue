@@ -6,6 +6,7 @@ import Pagination from '@/components/common/Pagination.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore } from '@/stores'
 import { opsAPI, type OpsRequestDetailsParams, type OpsRequestDetail } from '@/api/admin/ops'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import { parseTimeRangeMinutes, formatDateTime } from '../utils/opsFormatters'
 import { formatCustomTimeRangeLabel } from './opsDashboardHeaderHelpers'
 
@@ -110,7 +111,7 @@ const fetchData = async () => {
     total.value = res.total || 0
   } catch (e: any) {
     console.error('[OpsRequestDetailsModal] Failed to fetch request details', e)
-    appStore.showError(e?.message || t('admin.ops.requestDetails.failedToLoad'))
+    appStore.showError(resolveRequestErrorMessage(e, t('admin.ops.requestDetails.failedToLoad')))
     items.value = []
     total.value = 0
   } finally {

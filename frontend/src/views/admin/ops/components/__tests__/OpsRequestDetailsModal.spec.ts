@@ -185,4 +185,35 @@ describe('OpsRequestDetailsModal', () => {
     expect(wrapper.text()).not.toContain('admin.ops.requestDetails.table.actions')
     expect(wrapper.text()).toContain('req_success_only')
   })
+
+  it('prefers backend detail when request details loading fails', async () => {
+    mockListRequestDetails.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'request detail error'
+        }
+      },
+      message: 'generic request error'
+    })
+
+    mount(OpsRequestDetailsModal, {
+      props: {
+        modelValue: true,
+        timeRange: '1h',
+        preset: {
+          title: '请求明细',
+        },
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          Pagination: PaginationStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(showError).toHaveBeenCalledWith('request detail error')
+  })
 })
