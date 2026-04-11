@@ -181,6 +181,7 @@ import {
   type OpsMetricThresholds
 } from '@/api/admin/ops'
 import { useAdminSettingsStore, useAppStore } from '@/stores'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import OpsDashboardHeader from './components/OpsDashboardHeader.vue'
 import OpsDashboardSkeleton from './components/OpsDashboardSkeleton.vue'
 import OpsConcurrencyCard from './components/OpsConcurrencyCard.vue'
@@ -630,7 +631,7 @@ async function refreshOverviewWithCancel(fetchSeq: number, signal: AbortSignal) 
   } catch (err: any) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     overview.value = null
-    appStore.showError(err?.message || t('admin.ops.failedToLoadOverview'))
+    appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadOverview')))
   }
 }
 
@@ -644,7 +645,7 @@ async function refreshSwitchTrendWithCancel(fetchSeq: number, signal: AbortSigna
   } catch (err: any) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     switchTrend.value = null
-    appStore.showError(err?.message || t('admin.ops.failedToLoadSwitchTrend'))
+    appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadSwitchTrend')))
   } finally {
     if (fetchSeq === dashboardFetchSeq) {
       loadingSwitchTrend.value = false
@@ -662,7 +663,9 @@ async function refreshThroughputTrendWithCancel(fetchSeq: number, signal: AbortS
   } catch (err: any) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     throughputTrend.value = null
-    appStore.showError(err?.message || t('admin.ops.failedToLoadThroughputTrend'))
+    appStore.showError(
+      resolveRequestErrorMessage(err, t('admin.ops.failedToLoadThroughputTrend'))
+    )
   } finally {
     if (fetchSeq === dashboardFetchSeq) {
       loadingTrend.value = false
@@ -706,7 +709,9 @@ async function refreshLatencyHistogramWithCancel(fetchSeq: number, signal: Abort
   } catch (err: any) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     latencyHistogram.value = null
-    appStore.showError(err?.message || t('admin.ops.failedToLoadLatencyHistogram'))
+    appStore.showError(
+      resolveRequestErrorMessage(err, t('admin.ops.failedToLoadLatencyHistogram'))
+    )
   } finally {
     if (fetchSeq === dashboardFetchSeq) {
       loadingLatency.value = false
@@ -724,7 +729,7 @@ async function refreshErrorTrendWithCancel(fetchSeq: number, signal: AbortSignal
   } catch (err: any) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     errorTrend.value = null
-    appStore.showError(err?.message || t('admin.ops.failedToLoadErrorTrend'))
+    appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadErrorTrend')))
   } finally {
     if (fetchSeq === dashboardFetchSeq) {
       loadingErrorTrend.value = false
@@ -742,7 +747,9 @@ async function refreshErrorDistributionWithCancel(fetchSeq: number, signal: Abor
   } catch (err: any) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     errorDistribution.value = null
-    appStore.showError(err?.message || t('admin.ops.failedToLoadErrorDistribution'))
+    appStore.showError(
+      resolveRequestErrorMessage(err, t('admin.ops.failedToLoadErrorDistribution'))
+    )
   } finally {
     if (fetchSeq === dashboardFetchSeq) {
       loadingErrorDistribution.value = false

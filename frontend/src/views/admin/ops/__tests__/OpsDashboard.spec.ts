@@ -241,4 +241,46 @@ describe('OpsDashboard', () => {
 
     expect(wrapper.text()).not.toContain('admin.ops.alertRules.dashboardBaseline.title')
   })
+
+  it('surfaces resolved request messages when dashboard requests fail', async () => {
+    mockListAlertRules.mockResolvedValue([])
+    mockGetDashboardSnapshotV2.mockRejectedValueOnce(new Error('snapshot unavailable'))
+    mockGetDashboardOverview.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'overview blocked',
+        },
+      },
+    })
+    mockGetThroughputTrend
+      .mockRejectedValueOnce(new Error('switch trend unavailable'))
+      .mockResolvedValueOnce({
+        bucket: '1m',
+        points: [],
+        by_platform: [],
+        top_groups: [],
+      })
+    mockGetErrorTrend.mockResolvedValue({
+      bucket: '1m',
+      points: [],
+    })
+    mockGetLatencyHistogram.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'latency blocked',
+        },
+      },
+    })
+    mockGetErrorDistribution.mockResolvedValue({
+      total: 0,
+      items: [],
+    })
+
+    mountDashboard()
+    await flushPromises()
+
+    expect(showError).toHaveBeenCalledWith('overview blocked')
+    expect(showError).toHaveBeenCalledWith('switch trend unavailable')
+    expect(showError).toHaveBeenCalledWith('latency blocked')
+  })
 })
