@@ -275,4 +275,23 @@ describe('useAccountsViewActions', () => {
     expect(setup.enterAutoRefreshSilentWindow).toHaveBeenCalledTimes(1)
     expect(setup.togglingSchedulable.value).toBeNull()
   })
+
+  it('uses resolved request messages for recover state failures', async () => {
+    const setup = createComposable()
+
+    recoverState.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'recover-state-blocked'
+        }
+      }
+    })
+    await setup.composable.handleRecoverState(createAccount({ id: 14 }))
+
+    recoverState.mockRejectedValueOnce(new Error('recover unavailable'))
+    await setup.composable.handleRecoverState(createAccount({ id: 15 }))
+
+    expect(setup.showError).toHaveBeenNthCalledWith(1, 'recover-state-blocked')
+    expect(setup.showError).toHaveBeenNthCalledWith(2, 'recover unavailable')
+  })
 })
