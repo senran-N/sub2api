@@ -370,6 +370,7 @@ import type { AdminGroup, GroupPlatform } from '@/types'
 import type { Column } from '@/components/common/types'
 import { useAppStore } from '@/stores/app'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
@@ -546,9 +547,17 @@ async function loadChannels() {
     if (ctrl.signal.aborted || abortController !== ctrl) return
     channels.value = response.items || []
     pagination.total = response.total
-  } catch (error: any) {
-    if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') return
-    appStore.showError(t('admin.channels.loadError'))
+  } catch (error: unknown) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      ('name' in error || 'code' in error) &&
+      ((error as { name?: string }).name === 'AbortError' ||
+        (error as { code?: string }).code === 'ERR_CANCELED')
+    ) {
+      return
+    }
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.channels.loadError')))
     console.error('Error loading channels:', error)
   } finally {
     if (abortController === ctrl) {
@@ -670,8 +679,9 @@ async function handleSubmit() {
     }
     closeDialog()
     loadChannels()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || (
+  } catch (error: unknown) {
+    const msg = resolveRequestErrorMessage(
+      error,
       editingChannel.value
         ? t('admin.channels.updateError')
         : t('admin.channels.createError')
@@ -692,8 +702,8 @@ async function toggleChannelStatus(channel: Channel) {
     } else {
       channel.status = newStatus
     }
-  } catch (error) {
-    appStore.showError(t('admin.channels.updateError'))
+  } catch (error: unknown) {
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.channels.updateError')))
     console.error('Error toggling channel status:', error)
   }
 }
@@ -712,8 +722,8 @@ async function confirmDelete() {
     showDeleteDialog.value = false
     deletingChannel.value = null
     loadChannels()
-  } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.channels.deleteError'))
+  } catch (error: unknown) {
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.channels.deleteError')))
     console.error('Error deleting channel:', error)
   }
 }
