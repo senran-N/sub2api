@@ -115,8 +115,10 @@ export function useProxyViewInteractions(options: ProxyViewInteractionsOptions) 
       options.removeSelectedProxies([deletingProxy.value.id])
       deletingProxy.value = null
       await options.loadProxies()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.proxies.failedToDelete'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.proxies.failedToDelete'))
+      )
       console.error('Error deleting proxy:', error)
     }
   }
@@ -142,9 +144,9 @@ export function useProxyViewInteractions(options: ProxyViewInteractionsOptions) 
       options.clearSelectedProxies()
       showBatchDeleteDialog.value = false
       await options.loadProxies()
-    } catch (error: any) {
+    } catch (error: unknown) {
       options.showError(
-        error.response?.data?.detail || options.t('admin.proxies.batchDeleteFailed')
+        resolveRequestErrorMessage(error, options.t('admin.proxies.batchDeleteFailed'))
       )
       console.error('Error batch deleting proxies:', error)
     }
@@ -158,8 +160,10 @@ export function useProxyViewInteractions(options: ProxyViewInteractionsOptions) 
 
     try {
       proxyAccounts.value = await adminAPI.proxies.getProxyAccounts(proxy.id)
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.proxies.accountsFailed'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.proxies.accountsFailed'))
+      )
       console.error('Error loading proxy accounts:', error)
     } finally {
       accountsLoading.value = false

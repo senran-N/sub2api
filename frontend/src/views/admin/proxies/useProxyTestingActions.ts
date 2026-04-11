@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Proxy, ProxyQualityCheckResult } from '@/types'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   applyProxyConnectivityFromQualityResult,
   applyProxyLatencyResult,
@@ -79,8 +80,8 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
       }
 
       return result
-    } catch (error: any) {
-      const message = error.response?.data?.detail || options.t('admin.proxies.failedToTest')
+    } catch (error: unknown) {
+      const message = resolveRequestErrorMessage(error, options.t('admin.proxies.failedToTest'))
 
       withProxy(proxyId, (proxy) => {
         applyProxyLatencyResult(proxy, { success: false, message })
@@ -122,8 +123,11 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
           grade: result.grade
         })
       )
-    } catch (error: any) {
-      const message = error.response?.data?.detail || options.t('admin.proxies.qualityCheckFailed')
+    } catch (error: unknown) {
+      const message = resolveRequestErrorMessage(
+        error,
+        options.t('admin.proxies.qualityCheckFailed')
+      )
       options.showError(message)
       console.error('Error checking proxy quality:', error)
     } finally {
@@ -237,8 +241,10 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
       await runBatchProxyTests(ids)
       options.showSuccess(options.t('admin.proxies.batchTestDone', { count: ids.length }))
       await options.loadProxies()
-    } catch (error: any) {
-      options.showError(error.response?.data?.detail || options.t('admin.proxies.batchTestFailed'))
+    } catch (error: unknown) {
+      options.showError(
+        resolveRequestErrorMessage(error, options.t('admin.proxies.batchTestFailed'))
+      )
       console.error('Error batch testing proxies:', error)
     } finally {
       batchTesting.value = false
@@ -269,9 +275,9 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
         })
       )
       await options.loadProxies()
-    } catch (error: any) {
+    } catch (error: unknown) {
       options.showError(
-        error.response?.data?.detail || options.t('admin.proxies.batchQualityFailed')
+        resolveRequestErrorMessage(error, options.t('admin.proxies.batchQualityFailed'))
       )
       console.error('Error batch checking quality:', error)
     } finally {

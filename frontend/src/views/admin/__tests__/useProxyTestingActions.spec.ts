@@ -91,6 +91,7 @@ function createComposable(options: {
     composable,
     proxies,
     loadProxies,
+    selectedCount,
     selectedProxyIds,
     showSuccess,
     showError,
@@ -189,5 +190,47 @@ describe('useProxyTestingActions', () => {
       'admin.proxies.batchQualityDone:{"count":2,"healthy":0,"warn":1,"challenge":1,"failed":0}'
     )
     expect(setup.loadProxies).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses resolved request messages for single and batch failures', async () => {
+    const setup = createComposable({ selectedIds: [1] })
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    testProxy.mockRejectedValueOnce(new Error('test unavailable'))
+    await setup.composable.handleTestConnection(setup.proxies.value[0])
+
+    checkProxyQuality.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'quality blocked'
+        }
+      }
+    })
+    await setup.composable.handleQualityCheck(setup.proxies.value[0])
+
+    const batchTest = createComposable({ selectedIds: [] })
+    const batchQuality = createComposable({ selectedIds: [] })
+
+    listProxies.mockRejectedValueOnce(new Error('batch list unavailable'))
+    batchTest.selectedProxyIds.value = new Set()
+    batchTest.selectedCount.value = 0
+    await batchTest.composable.handleBatchTest()
+
+    listProxies.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'batch quality blocked'
+        }
+      }
+    })
+    batchQuality.selectedProxyIds.value = new Set()
+    batchQuality.selectedCount.value = 0
+    await batchQuality.composable.handleBatchQualityCheck()
+
+    expect(setup.showError).toHaveBeenNthCalledWith(1, 'test unavailable')
+    expect(setup.showError).toHaveBeenNthCalledWith(2, 'quality blocked')
+    expect(batchTest.showError).toHaveBeenCalledWith('batch list unavailable')
+    expect(batchQuality.showError).toHaveBeenCalledWith('batch quality blocked')
+    expect(consoleSpy).toHaveBeenCalledTimes(4)
   })
 })

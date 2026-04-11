@@ -210,4 +210,32 @@ describe('useProxyViewInteractions', () => {
     expect(setup.composable.exportingData.value).toBe(false)
     expect(setup.composable.showExportDataDialog.value).toBe(false)
   })
+
+  it('uses resolved request messages for delete, batch delete, and account load failures', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const single = createComposable()
+    deleteProxy.mockRejectedValueOnce(new Error('delete unavailable'))
+    single.composable.handleDelete(createProxy({ id: 8 }))
+    await single.composable.confirmDelete()
+
+    const batch = createComposable([3, 4])
+    batchDelete.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'batch delete blocked'
+        }
+      }
+    })
+    await batch.composable.confirmBatchDelete()
+
+    const accounts = createComposable()
+    getProxyAccounts.mockRejectedValueOnce(new Error('accounts unavailable'))
+    await accounts.composable.openAccountsModal(createProxy({ id: 12 }))
+
+    expect(single.showError).toHaveBeenCalledWith('delete unavailable')
+    expect(batch.showError).toHaveBeenCalledWith('batch delete blocked')
+    expect(accounts.showError).toHaveBeenCalledWith('accounts unavailable')
+    expect(consoleSpy).toHaveBeenCalledTimes(3)
+  })
 })
