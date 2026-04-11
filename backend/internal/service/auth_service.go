@@ -930,7 +930,7 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	// Token轮转：立即使旧Token失效
 	if err := s.deleteRefreshTokenDetached(tokenHash); err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to delete old refresh token: %v", err)
-		// 继续处理，不影响主流程
+		return nil, ErrServiceUnavailable
 	}
 
 	// 生成新的Token对，保持同一个家族ID

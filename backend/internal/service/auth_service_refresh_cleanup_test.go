@@ -7,20 +7,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
 type refreshTokenCleanupCacheStub struct {
 	data                      *RefreshTokenData
+	deleteRefreshTokenErr     error
 	deleteRefreshTokenCtxErr  error
 	deleteTokenFamilyCtxErr   error
 	deleteUserTokensCtxErr    error
 	deletedRefreshTokenHashes []string
 	deletedFamilies           []string
 	deletedUserIDs            []int64
+	storedRefreshTokens       int
 }
 
 func (s *refreshTokenCleanupCacheStub) StoreRefreshToken(context.Context, string, *RefreshTokenData, time.Duration) error {
+	s.storedRefreshTokens++
 	return nil
 }
 
@@ -31,7 +35,7 @@ func (s *refreshTokenCleanupCacheStub) GetRefreshToken(context.Context, string) 
 func (s *refreshTokenCleanupCacheStub) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
 	s.deleteRefreshTokenCtxErr = ctx.Err()
 	s.deletedRefreshTokenHashes = append(s.deletedRefreshTokenHashes, tokenHash)
-	return nil
+	return s.deleteRefreshTokenErr
 }
 
 func (s *refreshTokenCleanupCacheStub) DeleteUserRefreshTokens(ctx context.Context, userID int64) error {
@@ -101,4 +105,46 @@ func TestAuthService_RevokeAllUserSessions_UsesDetachedContext(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []int64{42}, cache.deletedUserIDs)
 	require.NoError(t, cache.deleteUserTokensCtxErr)
+}
+
+func TestAuthService_RefreshTokenPair_DeleteOldTokenFailureFailsClosed(t *testing.T) {
+	refreshToken := refreshTokenPrefix + "rotate-token"
+	cache := &refreshTokenCleanupCacheStub{
+		data: &RefreshTokenData{
+			UserID:       1,
+			FamilyID:     "family-rotate",
+			TokenVersion: 2,
+			ExpiresAt:    time.Now().Add(time.Hour),
+		},
+		deleteRefreshTokenErr: context.DeadlineExceeded,
+	}
+	userRepo := &userRepoStub{
+		user: &User{
+			ID:           1,
+			Email:        "rotate@test.com",
+			Role:         RoleUser,
+			Status:       StatusActive,
+			TokenVersion: 2,
+		},
+	}
+	svc := NewAuthService(
+		nil,
+		userRepo,
+		nil,
+		cache,
+		&config.Config{JWT: config.JWTConfig{Secret: "test-secret", ExpireHour: 1, RefreshTokenExpireDays: 7}},
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+
+	pair, err := svc.RefreshTokenPair(context.Background(), refreshToken)
+
+	require.Nil(t, pair)
+	require.ErrorIs(t, err, ErrServiceUnavailable)
+	require.Equal(t, []string{hashToken(refreshToken)}, cache.deletedRefreshTokenHashes)
+	require.Equal(t, 0, cache.storedRefreshTokens)
 }
