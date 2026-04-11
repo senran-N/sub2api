@@ -476,6 +476,7 @@ import { Icon } from '@/components/icons'
 import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { formatDateTime } from '@/utils/format'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import type { ScheduledTestPlan, ScheduledTestResult } from '@/types'
 
 const { t } = useI18n()
@@ -585,16 +586,17 @@ watch(
       showAddForm.value = false
       showDeleteConfirm.value = false
     }
-  }
+  },
+  { immediate: true }
 )
 
-const loadPlans = async () => {
+async function loadPlans() {
   if (!props.accountId) return
   loading.value = true
   try {
     plans.value = await adminAPI.scheduledTests.listByAccount(props.accountId)
   } catch (error: any) {
-    appStore.showError(error?.message || 'Failed to load plans')
+    appStore.showError(resolveRequestErrorMessage(error, 'Failed to load plans'))
   } finally {
     loading.value = false
   }
@@ -618,7 +620,7 @@ const handleCreate = async () => {
     resetNewPlan()
     await loadPlans()
   } catch (error: any) {
-    appStore.showError(error?.message || 'Failed to create plan')
+    appStore.showError(resolveRequestErrorMessage(error, 'Failed to create plan'))
   } finally {
     creating.value = false
   }
@@ -633,7 +635,7 @@ const handleToggleEnabled = async (plan: ScheduledTestPlan, enabled: boolean) =>
     }
     appStore.showSuccess(t('admin.scheduledTests.updateSuccess'))
   } catch (error: any) {
-    appStore.showError(error?.message || 'Failed to update plan')
+    appStore.showError(resolveRequestErrorMessage(error, 'Failed to update plan'))
   }
 }
 
@@ -668,7 +670,7 @@ const handleEdit = async () => {
     appStore.showSuccess(t('admin.scheduledTests.updateSuccess'))
     editingPlanId.value = null
   } catch (error: any) {
-    appStore.showError(error?.message || 'Failed to update plan')
+    appStore.showError(resolveRequestErrorMessage(error, 'Failed to update plan'))
   } finally {
     updating.value = false
   }
@@ -690,7 +692,7 @@ const handleDelete = async () => {
       results.value = []
     }
   } catch (error: any) {
-    appStore.showError(error?.message || 'Failed to delete plan')
+    appStore.showError(resolveRequestErrorMessage(error, 'Failed to delete plan'))
   } finally {
     showDeleteConfirm.value = false
     deletingPlan.value = null
@@ -711,7 +713,7 @@ const toggleExpand = async (planId: number) => {
   try {
     results.value = await adminAPI.scheduledTests.listResults(planId, 20)
   } catch (error: any) {
-    appStore.showError(error?.message || 'Failed to load results')
+    appStore.showError(resolveRequestErrorMessage(error, 'Failed to load results'))
     results.value = []
   } finally {
     loadingResults.value = false
