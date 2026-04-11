@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 // ExportData exports proxy-only data for migration.
@@ -174,11 +174,11 @@ func (h *ProxyHandler) ImportData(c *gin.Context) {
 
 	if len(latencyProbeIDs) > 0 {
 		ids := append([]int64(nil), latencyProbeIDs...)
-		go func() {
+		runDetachedAdminTask("import_proxy_latency_probe", 2*time.Minute, func(ctx context.Context) {
 			for _, id := range ids {
-				_, _ = h.adminService.TestProxy(context.Background(), id)
+				_, _ = h.adminService.TestProxy(ctx, id)
 			}
-		}()
+		}, "count", len(ids))
 	}
 
 	response.Success(c, result)

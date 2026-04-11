@@ -15,6 +15,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var (
+	restartServiceDelay = 500 * time.Millisecond
+	restartServiceAsync = sysutil.RestartServiceAsync
+)
+
 // SystemHandler handles system-related operations
 type SystemHandler struct {
 	updateSvc *service.UpdateService
@@ -120,24 +125,25 @@ func (h *SystemHandler) RestartService(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		succeeded := false
-		defer func() {
-			release("", succeeded)
-		}()
 
-		// Schedule service restart in background after sending response
-		// This ensures the client receives the success response before the service restarts
-		go func() {
-			// Wait a moment to ensure the response is sent
-			time.Sleep(500 * time.Millisecond)
-			sysutil.RestartServiceAsync()
-		}()
-		succeeded = true
+		h.scheduleServiceRestart(release)
 		return gin.H{
 			"message":      "Service restart initiated",
 			"operation_id": lock.OperationID(),
 		}, nil
 	})
+}
+
+func (h *SystemHandler) scheduleServiceRestart(release func(string, bool)) {
+	go func() {
+		if restartServiceDelay > 0 {
+			time.Sleep(restartServiceDelay)
+		}
+		restartServiceAsync()
+		if release != nil {
+			release("", true)
+		}
+	}()
 }
 
 func (h *SystemHandler) acquireSystemLock(

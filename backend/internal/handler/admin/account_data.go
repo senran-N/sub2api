@@ -10,10 +10,10 @@ import (
 
 	"log/slog"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -337,18 +337,12 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 	// 异步设置 Antigravity 隐私，避免大量导入时阻塞请求
 	if len(privacyAccounts) > 0 {
 		adminSvc := h.adminService
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Error("import_antigravity_privacy_panic", "recover", r)
-				}
-			}()
-			bgCtx := context.Background()
+		runDetachedAdminTask("import_antigravity_privacy", 5*time.Minute, func(bgCtx context.Context) {
 			for _, acc := range privacyAccounts {
 				adminSvc.ForceAntigravityPrivacy(bgCtx, acc)
 			}
 			slog.Info("import_antigravity_privacy_done", "count", len(privacyAccounts))
-		}()
+		}, "count", len(privacyAccounts))
 	}
 
 	return result, nil

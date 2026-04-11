@@ -21,8 +21,10 @@ type BuildInfo struct {
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
 	if err := svc.Initialize(); err != nil {
-		// Pricing service initialization failure should not block startup, use fallback prices
-		println("[Service] Warning: Pricing service initialization failed:", err.Error())
+		// Fall back to BillingService's built-in static pricing instead of wiring a
+		// half-initialized PricingService that may later fail model lookups at runtime.
+		logger.LegacyPrintf("service.pricing", "[Pricing] initialization failed, using billing fallback only: %v", err)
+		return nil, nil
 	}
 	return svc, nil
 }

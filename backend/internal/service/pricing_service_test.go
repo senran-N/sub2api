@@ -2,8 +2,10 @@ package service
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"testing"
 
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -187,4 +189,19 @@ func TestParsePricingData_PreservesServiceTierPriorityFields(t *testing.T) {
 	require.InDelta(t, 0.00000025, pricing.CacheReadInputTokenCost, 1e-12)
 	require.InDelta(t, 0.0000005, pricing.CacheReadInputTokenCostPriority, 1e-12)
 	require.True(t, pricing.SupportsServiceTier)
+}
+
+func TestProvidePricingService_ReturnsNilWhenInitializationFails(t *testing.T) {
+	cfg := &config.Config{
+		Pricing: config.PricingConfig{
+			DataDir:                  t.TempDir(),
+			RemoteURL:                "",
+			FallbackFile:             filepath.Join(t.TempDir(), "missing-fallback.json"),
+			HashCheckIntervalMinutes: 10,
+		},
+	}
+
+	svc, err := ProvidePricingService(cfg, nil)
+	require.NoError(t, err)
+	require.Nil(t, svc)
 }

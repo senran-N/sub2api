@@ -28,6 +28,17 @@ const (
 	modelCacheFailedTTL = 2 * time.Minute // 上游获取失败（降级到本地）
 )
 
+var startSoraGenerationTask = func(h *SoraClientHandler, genID int64, userID int64, groupID *int64, model, prompt, mediaType, imageInput string, videoCount int) {
+	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logger.LegacyPrintf("handler.sora_client", "[SoraClient] processGeneration panic id=%d recover=%v", genID, recovered)
+			}
+		}()
+		h.processGeneration(genID, userID, groupID, model, prompt, mediaType, imageInput, videoCount)
+	}()
+}
+
 // SoraClientHandler 处理 Sora 客户端 API 请求。
 type SoraClientHandler struct {
 	genService         *service.SoraGenerationService
@@ -146,6 +157,9 @@ func (h *SoraClientHandler) Generate(c *gin.Context) {
 		if v, ok := id.(int64); ok {
 			apiKeyID = &v
 		}
+		if apiKey, ok := middleware2.GetAPIKeyFromContext(c); ok && apiKey != nil {
+			groupID = apiKey.GroupID
+		}
 	}
 
 	gen, err := h.genService.CreatePending(c.Request.Context(), userID, apiKeyID, req.Model, req.Prompt, req.MediaType)
@@ -159,7 +173,7 @@ func (h *SoraClientHandler) Generate(c *gin.Context) {
 	}
 
 	// 启动后台异步生成 goroutine
-	go h.processGeneration(gen.ID, userID, groupID, req.Model, req.Prompt, req.MediaType, req.ImageInput, req.VideoCount)
+	startSoraGenerationTask(h, gen.ID, userID, groupID, req.Model, req.Prompt, req.MediaType, req.ImageInput, req.VideoCount)
 
 	response.Success(c, gin.H{
 		"generation_id": gen.ID,

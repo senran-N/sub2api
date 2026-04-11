@@ -15,11 +15,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1291,6 +1291,41 @@ func TestGenerate_WithContextAPIKeyID_FallbackPath(t *testing.T) {
 	// 应使用 context 中的 api_key_id=99
 	require.NotNil(t, repo.gens[1].APIKeyID)
 	require.Equal(t, int64(99), *repo.gens[1].APIKeyID)
+}
+
+func TestGenerate_WithGatewayAPIKeyContext_PassesGroupIDToBackgroundTask(t *testing.T) {
+	repo := newStubSoraGenRepo()
+	genService := service.NewSoraGenerationService(repo, nil, nil)
+
+	groupID := int64(10)
+	apiKey := &service.APIKey{
+		ID:      99,
+		UserID:  1,
+		Status:  service.StatusAPIKeyActive,
+		GroupID: &groupID,
+	}
+
+	oldStart := startSoraGenerationTask
+	defer func() {
+		startSoraGenerationTask = oldStart
+	}()
+
+	called := false
+	startSoraGenerationTask = func(_ *SoraClientHandler, _ int64, _ int64, passedGroupID *int64, _ string, _ string, _ string, _ string, _ int) {
+		called = true
+		require.NotNil(t, passedGroupID)
+		require.Equal(t, groupID, *passedGroupID)
+	}
+
+	h := &SoraClientHandler{genService: genService}
+	c, rec := makeGinContext("POST", "/sora/v1/chat/completions",
+		`{"model":"sora2-landscape-10s","prompt":"test"}`, 1)
+	c.Set("api_key_id", int64(99))
+	c.Set(string(middleware2.ContextKeyAPIKey), apiKey)
+
+	h.Generate(c)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.True(t, called)
 }
 
 func TestGenerate_APIKeyID_Zero_IgnoredInJSON(t *testing.T) {

@@ -2,11 +2,90 @@ package service
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
+
+type usageBillingCacheStub struct {
+	mu                 sync.Mutex
+	deductCalls        int
+	subscriptionCalls  int
+	rateLimitCalls     int
+	lastDeductAmount   float64
+	lastRateLimitCost  float64
+	lastSubscriptionID struct {
+		userID  int64
+		groupID int64
+		costUSD float64
+	}
+}
+
+func (s *usageBillingCacheStub) GetUserBalance(context.Context, int64) (float64, error) {
+	return 0, nil
+}
+
+func (s *usageBillingCacheStub) SetUserBalance(context.Context, int64, float64) error {
+	return nil
+}
+
+func (s *usageBillingCacheStub) DeductUserBalance(_ context.Context, _ int64, amount float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deductCalls++
+	s.lastDeductAmount = amount
+	return nil
+}
+
+func (s *usageBillingCacheStub) InvalidateUserBalance(context.Context, int64) error {
+	return nil
+}
+
+func (s *usageBillingCacheStub) GetSubscriptionCache(context.Context, int64, int64) (*SubscriptionCacheData, error) {
+	return nil, nil
+}
+
+func (s *usageBillingCacheStub) SetSubscriptionCache(context.Context, int64, int64, *SubscriptionCacheData) error {
+	return nil
+}
+
+func (s *usageBillingCacheStub) UpdateSubscriptionUsage(_ context.Context, userID, groupID int64, cost float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.subscriptionCalls++
+	s.lastSubscriptionID.userID = userID
+	s.lastSubscriptionID.groupID = groupID
+	s.lastSubscriptionID.costUSD = cost
+	return nil
+}
+
+func (s *usageBillingCacheStub) InvalidateSubscriptionCache(context.Context, int64, int64) error {
+	return nil
+}
+
+func (s *usageBillingCacheStub) GetAPIKeyRateLimit(context.Context, int64) (*APIKeyRateLimitCacheData, error) {
+	return nil, nil
+}
+
+func (s *usageBillingCacheStub) SetAPIKeyRateLimit(context.Context, int64, *APIKeyRateLimitCacheData) error {
+	return nil
+}
+
+func (s *usageBillingCacheStub) UpdateAPIKeyRateLimitUsage(_ context.Context, _ int64, cost float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rateLimitCalls++
+	s.lastRateLimitCost = cost
+	return nil
+}
+
+func (s *usageBillingCacheStub) InvalidateAPIKeyRateLimit(context.Context, int64) error {
+	return nil
+}
 
 func TestResolveUsageBillingRequestID_PrefersClientRequestID(t *testing.T) {
 	ctx := context.WithValue(context.Background(), ctxkey.ClientRequestID, " client-123 ")
@@ -139,4 +218,91 @@ func TestFinalizePostUsageBilling_AllowsNilServices(t *testing.T) {
 		APIKey:  &APIKey{ID: 2},
 		Account: &Account{ID: 3},
 	}, &billingDeps{})
+}
+
+func TestPostUsageBilling_QueuesBalanceAndRateLimitCacheExactlyOnce(t *testing.T) {
+	cache := &usageBillingCacheStub{}
+	billingCache := NewBillingCacheService(cache, nil, nil, nil, &config.Config{})
+	defer billingCache.Stop()
+
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	apiKeyQuota := &openAIRecordUsageAPIKeyQuotaStub{}
+	deferred := &DeferredService{}
+
+	postUsageBilling(context.Background(), &postUsageBillingParams{
+		Cost: &CostBreakdown{
+			ActualCost: 4.5,
+			TotalCost:  4.5,
+		},
+		APIKey: &APIKey{
+			ID:          101,
+			Quota:       100,
+			RateLimit5h: 10,
+		},
+		User:          &User{ID: 202},
+		Account:       &Account{ID: 303, Type: AccountTypeOAuth},
+		APIKeyService: apiKeyQuota,
+	}, &billingDeps{
+		userRepo:            userRepo,
+		billingCacheService: billingCache,
+		deferredService:     deferred,
+	})
+
+	require.Equal(t, 1, userRepo.deductCalls)
+	require.Equal(t, 1, apiKeyQuota.quotaCalls)
+	require.Equal(t, 1, apiKeyQuota.rateLimitCalls)
+	require.Eventually(t, func() bool {
+		cache.mu.Lock()
+		defer cache.mu.Unlock()
+		return cache.deductCalls == 1 && cache.rateLimitCalls == 1
+	}, 2*time.Second, 10*time.Millisecond)
+
+	cache.mu.Lock()
+	require.Equal(t, 4.5, cache.lastDeductAmount)
+	require.Equal(t, 4.5, cache.lastRateLimitCost)
+	cache.mu.Unlock()
+
+	_, ok := deferred.lastUsedUpdates.Load(int64(303))
+	require.True(t, ok)
+}
+
+func TestPostUsageBilling_QueuesSubscriptionCacheExactlyOnce(t *testing.T) {
+	cache := &usageBillingCacheStub{}
+	billingCache := NewBillingCacheService(cache, nil, nil, nil, &config.Config{})
+	defer billingCache.Stop()
+
+	groupID := int64(7)
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	deferred := &DeferredService{}
+
+	postUsageBilling(context.Background(), &postUsageBillingParams{
+		Cost: &CostBreakdown{
+			TotalCost: 6.25,
+		},
+		IsSubscriptionBill: true,
+		Subscription:       &UserSubscription{ID: 808},
+		APIKey:             &APIKey{ID: 101, GroupID: &groupID},
+		User:               &User{ID: 202},
+		Account:            &Account{ID: 303, Type: AccountTypeOAuth},
+	}, &billingDeps{
+		userSubRepo:         subRepo,
+		billingCacheService: billingCache,
+		deferredService:     deferred,
+	})
+
+	require.Equal(t, 1, subRepo.incrementCalls)
+	require.Eventually(t, func() bool {
+		cache.mu.Lock()
+		defer cache.mu.Unlock()
+		return cache.subscriptionCalls == 1
+	}, 2*time.Second, 10*time.Millisecond)
+
+	cache.mu.Lock()
+	require.Equal(t, int64(202), cache.lastSubscriptionID.userID)
+	require.Equal(t, int64(7), cache.lastSubscriptionID.groupID)
+	require.Equal(t, 6.25, cache.lastSubscriptionID.costUSD)
+	cache.mu.Unlock()
+
+	_, ok := deferred.lastUsedUpdates.Load(int64(303))
+	require.True(t, ok)
 }
