@@ -906,6 +906,7 @@ import {
   resolveOpenAIWSModeConcurrencyHintKey
 } from '@/utils/openaiWsMode'
 import type { OpenAIWSMode } from '@/utils/openaiWsMode'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 interface Props {
   show: boolean
   accountIds: number[]
@@ -1419,7 +1420,7 @@ const preCheckMixedChannelRisk = async (built: Record<string, unknown>): Promise
     showMixedChannelWarning.value = true
     return false
   } catch (error: any) {
-    appStore.showError(error.message || t('admin.accounts.bulkEdit.failed'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.accounts.bulkEdit.failed')))
     return false
   }
 }
@@ -1480,7 +1481,7 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
       mixedChannelWarningMessage.value = error.message
       showMixedChannelWarning.value = true
     } else {
-      appStore.showError(error.message || t('admin.accounts.bulkEdit.failed'))
+      appStore.showError(resolveRequestErrorMessage(error, t('admin.accounts.bulkEdit.failed')))
       console.error('Error bulk updating accounts:', error)
     }
   } finally {

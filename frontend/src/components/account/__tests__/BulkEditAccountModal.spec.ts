@@ -4,19 +4,33 @@ import BulkEditAccountModal from '../BulkEditAccountModal.vue'
 import ModelWhitelistSelector from '../ModelWhitelistSelector.vue'
 import { adminAPI } from '@/api/admin'
 
+const {
+  showErrorMock,
+  showSuccessMock,
+  showInfoMock,
+  bulkUpdateMock,
+  checkMixedChannelRiskMock
+} = vi.hoisted(() => ({
+  showErrorMock: vi.fn(),
+  showSuccessMock: vi.fn(),
+  showInfoMock: vi.fn(),
+  bulkUpdateMock: vi.fn(),
+  checkMixedChannelRiskMock: vi.fn()
+}))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
-    showError: vi.fn(),
-    showSuccess: vi.fn(),
-    showInfo: vi.fn()
+    showError: showErrorMock,
+    showSuccess: showSuccessMock,
+    showInfo: showInfoMock
   })
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
-      bulkUpdate: vi.fn(),
-      checkMixedChannelRisk: vi.fn()
+      bulkUpdate: bulkUpdateMock,
+      checkMixedChannelRisk: checkMixedChannelRiskMock
     }
   }
 }))
@@ -66,7 +80,19 @@ function mountModal(extraProps: Record<string, unknown> = {}) {
           `
         },
         ProxySelector: true,
-        GroupSelector: true,
+        GroupSelector: {
+          props: ['modelValue', 'groups'],
+          emits: ['update:modelValue'],
+          template: `
+            <button
+              type="button"
+              data-testid="bulk-edit-group-selector"
+              @click="$emit('update:modelValue', [101])"
+            >
+              select-group
+            </button>
+          `
+        },
         Icon: true
       }
     }
@@ -75,6 +101,9 @@ function mountModal(extraProps: Record<string, unknown> = {}) {
 
 describe('BulkEditAccountModal', () => {
   beforeEach(() => {
+    showErrorMock.mockReset()
+    showSuccessMock.mockReset()
+    showInfoMock.mockReset()
     vi.mocked(adminAPI.accounts.bulkUpdate).mockReset()
     vi.mocked(adminAPI.accounts.checkMixedChannelRisk).mockReset()
 
@@ -243,5 +272,59 @@ describe('BulkEditAccountModal', () => {
       }
     })
     expect(wrapper.text()).toContain('admin.accounts.openai.modelRestrictionDisabledByPassthrough')
+  })
+
+  it('混合渠道预检查失败时优先展示后端 detail', async () => {
+    vi.mocked(adminAPI.accounts.checkMixedChannelRisk).mockRejectedValue({
+      response: {
+        data: {
+          detail: 'group detail error'
+        }
+      },
+      message: 'generic error'
+    })
+
+    const wrapper = mountModal({
+      groups: [{ id: 101, name: 'Risk Group' }]
+    })
+
+    await wrapper.get('#bulk-edit-groups-enabled').setValue(true)
+    await wrapper.get('[data-testid="bulk-edit-group-selector"]').trigger('click')
+    await wrapper.get('#bulk-edit-base-url-enabled').setValue(true)
+    await wrapper.get('#bulk-edit-base-url').setValue('https://proxy.example.com')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(adminAPI.accounts.checkMixedChannelRisk).toHaveBeenCalledWith({
+      platform: 'antigravity',
+      group_ids: [101]
+    })
+    expect(showErrorMock).toHaveBeenCalledWith('group detail error')
+    expect(adminAPI.accounts.bulkUpdate).not.toHaveBeenCalled()
+  })
+
+  it('批量更新失败时优先展示后端 detail', async () => {
+    vi.mocked(adminAPI.accounts.bulkUpdate).mockRejectedValue({
+      response: {
+        data: {
+          detail: 'bulk detail error'
+        }
+      },
+      message: 'generic error'
+    })
+
+    const wrapper = mountModal()
+
+    await wrapper.get('#bulk-edit-base-url-enabled').setValue(true)
+    await wrapper.get('#bulk-edit-base-url').setValue('https://proxy.example.com')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      credentials: {
+        base_url: 'https://proxy.example.com'
+      }
+    })
+    expect(showErrorMock).toHaveBeenCalledWith('bulk detail error')
   })
 })
