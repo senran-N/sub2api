@@ -294,4 +294,29 @@ describe('useAccountsViewActions', () => {
     expect(setup.showError).toHaveBeenNthCalledWith(1, 'recover-state-blocked')
     expect(setup.showError).toHaveBeenNthCalledWith(2, 'recover unavailable')
   })
+
+  it('uses resolved request messages for privacy failures', async () => {
+    const setup = createComposable()
+
+    setPrivacy.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'privacy-blocked'
+        }
+      }
+    })
+    await setup.composable.handleSetPrivacy(createAccount({ id: 16 }))
+
+    setPrivacy.mockRejectedValueOnce({
+      response: {
+        data: {
+          message: 'privacy message fallback'
+        }
+      }
+    })
+    await setup.composable.handleSetPrivacy(createAccount({ id: 17 }))
+
+    expect(setup.showError).toHaveBeenNthCalledWith(1, 'privacy-blocked')
+    expect(setup.showError).toHaveBeenNthCalledWith(2, 'privacy message fallback')
+  })
 })

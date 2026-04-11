@@ -295,8 +295,8 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
   const handleSetPrivacy = async (account: Account) => {
     await runSingleAccountUpdate(adminAPI.accounts.setPrivacy(account.id), {
       successMessage: options.t('common.success'),
-      mapErrorMessage: (error: any) =>
-        error?.response?.data?.message || options.t('admin.accounts.privacyFailed')
+      mapErrorMessage: (error: unknown) =>
+        resolveRequestErrorMessage(error, options.t('admin.accounts.privacyFailed'))
     })
   }
 
