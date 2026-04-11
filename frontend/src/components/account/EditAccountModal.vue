@@ -1646,6 +1646,7 @@ import {
   resolveOpenAIWSModeConcurrencyHintKey,
   type OpenAIWSMode
 } from '@/utils/openaiWsMode'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
   getPresetMappingChipClasses,
   getPresetMappingsByPlatform,
@@ -2311,7 +2312,7 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
     })
     return false
   } catch (error: any) {
-    appStore.showError(error.message || t('admin.accounts.failedToUpdate'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.accounts.failedToUpdate')))
     return false
   }
 }
@@ -2349,7 +2350,7 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
       })
       return
     }
-    appStore.showError(error.message || t('admin.accounts.failedToUpdate'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.accounts.failedToUpdate')))
   } finally {
     submitting.value = false
   }
@@ -2602,7 +2603,7 @@ const handleSubmit = async () => {
 
     await submitUpdateAccount(accountID, updatePayload)
   } catch (error: any) {
-    appStore.showError(error.message || t('admin.accounts.failedToUpdate'))
+    appStore.showError(resolveRequestErrorMessage(error, t('admin.accounts.failedToUpdate')))
   }
 }
 

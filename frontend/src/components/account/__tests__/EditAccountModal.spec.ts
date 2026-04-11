@@ -1,17 +1,20 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
-const { updateAccountMock, checkMixedChannelRiskMock } = vi.hoisted(() => ({
+const { showErrorMock, showSuccessMock, showInfoMock, updateAccountMock, checkMixedChannelRiskMock } = vi.hoisted(() => ({
+  showErrorMock: vi.fn(),
+  showSuccessMock: vi.fn(),
+  showInfoMock: vi.fn(),
   updateAccountMock: vi.fn(),
   checkMixedChannelRiskMock: vi.fn()
 }))
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
-    showError: vi.fn(),
-    showSuccess: vi.fn(),
-    showInfo: vi.fn()
+    showError: showErrorMock,
+    showSuccess: showSuccessMock,
+    showInfo: showInfoMock
   })
 }))
 
@@ -130,11 +133,17 @@ function mountModal(account = buildAccount()) {
 }
 
 describe('EditAccountModal', () => {
-  it('reopening the same account rehydrates the OpenAI whitelist from props', async () => {
-    const account = buildAccount()
+  beforeEach(() => {
+    showErrorMock.mockReset()
+    showSuccessMock.mockReset()
+    showInfoMock.mockReset()
     updateAccountMock.mockReset()
     checkMixedChannelRiskMock.mockReset()
     checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+  })
+
+  it('reopening the same account rehydrates the OpenAI whitelist from props', async () => {
+    const account = buildAccount()
     updateAccountMock.mockResolvedValue(account)
 
     const wrapper = mountModal(account)
@@ -155,5 +164,24 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.model_mapping).toEqual({
       'gpt-5.2': 'gpt-5.2'
     })
+  })
+
+  it('update failure prefers backend detail message', async () => {
+    updateAccountMock.mockRejectedValue({
+      response: {
+        data: {
+          detail: 'edit detail error'
+        }
+      },
+      message: 'generic error'
+    })
+
+    const wrapper = mountModal()
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(showErrorMock).toHaveBeenCalledWith('edit detail error')
   })
 })
