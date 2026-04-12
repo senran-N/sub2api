@@ -49,6 +49,59 @@ func TestFilterSchedulableOpenAICandidates(t *testing.T) {
 	}
 }
 
+func TestFilterSchedulableOpenAICandidates_OpenAIReasoningVariantBaseMapping(t *testing.T) {
+	accounts := []Account{
+		{
+			ID:          1,
+			Platform:    PlatformOpenAI,
+			Status:      StatusActive,
+			Schedulable: true,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gpt-5.4": "gpt-5.3-codex-spark",
+				},
+			},
+		},
+		{
+			ID:          2,
+			Platform:    PlatformOpenAI,
+			Status:      StatusActive,
+			Schedulable: true,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gpt-4.1": "gpt-4.1",
+				},
+			},
+		},
+	}
+
+	candidates := filterSchedulableOpenAICandidates(accounts, "gpt-5.4-xhigh", nil)
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(candidates))
+	}
+	if candidates[0].ID != 1 {
+		t.Fatalf("expected account 1, got %d", candidates[0].ID)
+	}
+}
+
+func TestOpenAIRequestedModelAvailable_OpenAIReasoningVariantBaseMapping(t *testing.T) {
+	accounts := []Account{
+		{
+			ID:       1,
+			Platform: PlatformOpenAI,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gpt-5.4": "gpt-5.3-codex-spark",
+				},
+			},
+		},
+	}
+
+	if !openAIRequestedModelAvailable(accounts, "gpt-5.4-xhigh") {
+		t.Fatal("expected reasoning variant to be considered available via base-model mapping")
+	}
+}
+
 func TestSelectBestOpenAIWaitCandidate(t *testing.T) {
 	now := time.Now()
 	earlier := now.Add(-1 * time.Hour)

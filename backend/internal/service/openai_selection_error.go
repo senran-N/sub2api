@@ -53,7 +53,7 @@ func openAIRequestedModelAvailable(accounts []Account, requestedModel string) bo
 		if !account.IsOpenAI() {
 			continue
 		}
-		if account.IsModelSupported(model) {
+		if isOpenAIAccountModelEligible(account, model) {
 			return true
 		}
 	}

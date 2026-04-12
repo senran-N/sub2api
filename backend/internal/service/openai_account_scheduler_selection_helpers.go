@@ -50,7 +50,7 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
 		if !account.IsOpenAI() {
 			continue
 		}
-		if req.RequestedModel == "" || account.IsModelSupported(req.RequestedModel) {
+		if req.RequestedModel == "" || isOpenAIAccountModelEligible(account, req.RequestedModel) {
 			prepared.requestedModelAvailable = true
 		}
 		if isOpenAIAccountExcluded(req.ExcludedIDs, account.ID) {
@@ -62,7 +62,7 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
 		if schedGroup != nil && schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
 			continue
 		}
-		if req.RequestedModel != "" && !account.IsModelSupported(req.RequestedModel) {
+		if req.RequestedModel != "" && !isOpenAIAccountModelEligible(account, req.RequestedModel) {
 			continue
 		}
 		if !s.isAccountTransportCompatible(account, req.RequiredTransport) {

@@ -238,3 +238,18 @@ func TestGatewayService_isModelSupportedByAccountWithContext_CustomMappingThinki
 	ctx = context.WithValue(context.Background(), ctxkey.ThinkingEnabled, true)
 	require.True(t, svc.isModelSupportedByAccountWithContext(ctx, account, "my-custom-model"))
 }
+
+func TestGatewayService_isModelSupportedByAccountWithContext_OpenAIReasoningVariantBaseMapping(t *testing.T) {
+	svc := &GatewayService{}
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.4": "gpt-5.3-codex-spark",
+			},
+		},
+	}
+
+	require.True(t, svc.isModelSupportedByAccountWithContext(context.Background(), account, "gpt-5.4-xhigh"))
+	require.False(t, svc.isModelSupportedByAccountWithContext(context.Background(), account, "gpt-4.1-high"))
+}

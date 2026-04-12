@@ -16,7 +16,14 @@ func isOpenAIAccountModelEligible(account *Account, requestedModel string) bool 
 	if requestedModel == "" {
 		return true
 	}
-	return account != nil && account.IsModelSupported(requestedModel)
+	if account == nil {
+		return false
+	}
+	if account.IsModelSupported(requestedModel) {
+		return true
+	}
+	mappedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, requestedModel)
+	return matched && strings.TrimSpace(mappedModel) != ""
 }
 
 // isOpenAIAccountExcluded reports whether the account is in exclusion set.
@@ -43,7 +50,7 @@ func filterSchedulableOpenAICandidates(
 		if !account.IsSchedulable() {
 			continue
 		}
-		if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+		if requestedModel != "" && !isOpenAIAccountModelEligible(account, requestedModel) {
 			continue
 		}
 		candidates = append(candidates, account)
