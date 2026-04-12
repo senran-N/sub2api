@@ -67,8 +67,10 @@ func (s *GatewayService) buildGatewaySelectionPlan(scope *gatewaySelectionScope,
 	}
 
 	schedGroup := scope.group
-	if schedGroup == nil && scope.groupID != nil {
-		schedGroup = s.loadSchedulingGroup(scope.ctx, scope.groupID)
+	if scope.groupID != nil {
+		if loadedGroup := s.loadSchedulingGroup(scope.ctx, scope.groupID); loadedGroup != nil {
+			schedGroup = loadedGroup
+		}
 	}
 
 	plan := &gatewaySelectionPlan{

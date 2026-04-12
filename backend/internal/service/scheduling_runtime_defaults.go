@@ -19,10 +19,34 @@ func defaultGatewaySchedulingConfig() config.GatewaySchedulingConfig {
 }
 
 func gatewaySchedulingConfigOrDefault(cfg *config.Config) config.GatewaySchedulingConfig {
-	if cfg != nil {
-		return cfg.Gateway.Scheduling
+	result := defaultGatewaySchedulingConfig()
+	if cfg == nil {
+		return result
 	}
-	return defaultGatewaySchedulingConfig()
+
+	if cfg.Gateway.Scheduling.StickySessionMaxWaiting > 0 {
+		result.StickySessionMaxWaiting = cfg.Gateway.Scheduling.StickySessionMaxWaiting
+	}
+	if cfg.Gateway.Scheduling.StickySessionWaitTimeout > 0 {
+		result.StickySessionWaitTimeout = cfg.Gateway.Scheduling.StickySessionWaitTimeout
+	}
+	if cfg.Gateway.Scheduling.FallbackWaitTimeout > 0 {
+		result.FallbackWaitTimeout = cfg.Gateway.Scheduling.FallbackWaitTimeout
+	}
+	if cfg.Gateway.Scheduling.FallbackMaxWaiting > 0 {
+		result.FallbackMaxWaiting = cfg.Gateway.Scheduling.FallbackMaxWaiting
+	}
+	if cfg.Gateway.Scheduling.SlotCleanupInterval > 0 {
+		result.SlotCleanupInterval = cfg.Gateway.Scheduling.SlotCleanupInterval
+	}
+	result.LoadBatchEnabled = cfg.Gateway.Scheduling.LoadBatchEnabled
+	if cfg.Gateway.Scheduling.FallbackSelectionMode != "" {
+		result.FallbackSelectionMode = cfg.Gateway.Scheduling.FallbackSelectionMode
+	}
+	if cfg.Gateway.Scheduling.SnapshotPageSize > 0 {
+		result.SnapshotPageSize = cfg.Gateway.Scheduling.SnapshotPageSize
+	}
+	return result
 }
 
 func snapshotPageSizeOrDefault(cfg *config.Config) int {

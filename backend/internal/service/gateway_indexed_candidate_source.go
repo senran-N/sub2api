@@ -130,6 +130,21 @@ func (s *GatewayService) resolveSelectionAccountByID(ctx context.Context, accoun
 	return account, true
 }
 
+func (s *GatewayService) resolveSelectionAccountFromCurrentMap(ctx context.Context, accountByID map[int64]*Account, accountID int64) (*Account, bool) {
+	if accountID <= 0 {
+		return nil, false
+	}
+	if accountByID != nil {
+		if account, ok := accountByID[accountID]; ok && account != nil {
+			return account, true
+		}
+		if len(accountByID) > 0 && !s.shouldUseIndexedCandidateSource() {
+			return nil, false
+		}
+	}
+	return s.resolveSelectionAccountByID(ctx, nil, accountID)
+}
+
 func (s *GatewayService) isBetterSelectionCandidate(
 	candidate *Account,
 	current *Account,

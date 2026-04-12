@@ -25,7 +25,7 @@ func (s *GatewayService) trySelectStickyAccountWithoutRouting(
 		return nil, false
 	}
 
-	account, ok := s.resolveSelectionAccountByID(ctx, accountByID, stickyAccountID)
+	account, ok := s.resolveSelectionAccountFromCurrentMap(ctx, accountByID, stickyAccountID)
 	if !ok {
 		return nil, false
 	}

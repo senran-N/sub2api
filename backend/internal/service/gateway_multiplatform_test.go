@@ -16,7 +16,9 @@ import (
 
 // testConfig 返回一个用于测试的默认配置
 func testConfig() *config.Config {
-	return &config.Config{RunMode: config.RunModeStandard}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	cfg.Gateway.Scheduling = defaultGatewaySchedulingConfig()
+	return cfg
 }
 
 // mockAccountRepoForPlatform 单平台测试用的 mock

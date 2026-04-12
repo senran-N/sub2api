@@ -54,7 +54,7 @@ func (s *GatewayService) trySelectRoutedStickyAccount(
 		return nil, false
 	}
 
-	stickyAccount, ok := s.resolveSelectionAccountByID(ctx, accountByID, stickyAccountID)
+	stickyAccount, ok := s.resolveSelectionAccountFromCurrentMap(ctx, accountByID, stickyAccountID)
 	if !ok {
 		s.clearMissingStickyBinding(ctx, groupID, sessionHash, stickyAccountID)
 		return nil, false

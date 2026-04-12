@@ -72,6 +72,10 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 	refreshWindow time.Duration,
 ) (*OAuthRefreshResult, error) {
 	cacheKey := executor.CacheKey(account)
+	originalRefreshToken := ""
+	if account != nil {
+		originalRefreshToken = account.GetCredential("refresh_token")
+	}
 
 	// 0. 获取进程内互斥锁，避免同一进程内并发刷新抢占同一个 refresh_token。
 	localMu := api.getLocalLock(cacheKey)
@@ -122,7 +126,7 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 	newCredentials, refreshErr := executor.Refresh(ctx, freshAccount)
 	if refreshErr != nil {
 		if isInvalidGrantError(refreshErr) {
-			if recoveredAccount, recovered := api.tryRecoverFromRefreshRace(ctx, freshAccount); recovered {
+			if recoveredAccount, recovered := api.tryRecoverFromRefreshRace(ctx, freshAccount, originalRefreshToken); recovered {
 				slog.Info("oauth_refresh_race_recovered",
 					"account_id", freshAccount.ID,
 					"platform", freshAccount.Platform,
@@ -160,7 +164,7 @@ func isInvalidGrantError(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "invalid_grant")
 }
 
-func (api *OAuthRefreshAPI) tryRecoverFromRefreshRace(ctx context.Context, usedAccount *Account) (*Account, bool) {
+func (api *OAuthRefreshAPI) tryRecoverFromRefreshRace(ctx context.Context, usedAccount *Account, originalRefreshToken string) (*Account, bool) {
 	if api.accountRepo == nil || usedAccount == nil {
 		return nil, false
 	}
@@ -172,10 +176,13 @@ func (api *OAuthRefreshAPI) tryRecoverFromRefreshRace(ctx context.Context, usedA
 
 	usedRefreshToken := usedAccount.GetCredential("refresh_token")
 	currentRefreshToken := reReadAccount.GetCredential("refresh_token")
-	if usedRefreshToken == "" || currentRefreshToken == "" {
+	if currentRefreshToken == "" {
 		return nil, false
 	}
-	if usedRefreshToken != currentRefreshToken {
+	if usedRefreshToken != "" && usedRefreshToken != currentRefreshToken {
+		return reReadAccount, true
+	}
+	if originalRefreshToken != "" && originalRefreshToken != currentRefreshToken {
 		return reReadAccount, true
 	}
 	return nil, false
