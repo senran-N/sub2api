@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,4 +158,22 @@ func TestRateLimitService_HandleUpstreamError_OAuth401UsesCredentialsUpdater(t *
 	require.True(t, shouldDisable)
 	require.Equal(t, 1, repo.updateCredentialsCalls)
 	require.NotEmpty(t, repo.lastCredentials["expires_at"])
+}
+
+func TestRateLimitService_HandleUpstreamError_AnthropicCreditBalance400DisablesAccount(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{}
+	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	account := &Account{
+		ID:       104,
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeAPIKey,
+	}
+
+	body := []byte(`{"error":{"message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.","type":"invalid_request_error"},"request_id":"req_test","type":"error"}`)
+	shouldDisable := service.HandleUpstreamError(context.Background(), account, http.StatusBadRequest, http.Header{}, body)
+
+	require.True(t, shouldDisable)
+	require.Equal(t, 1, repo.setErrorCalls)
+	require.Contains(t, strings.ToLower(repo.lastErrorMsg), "credit balance")
+	require.Equal(t, 0, repo.tempCalls)
 }

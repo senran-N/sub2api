@@ -61,8 +61,13 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 
 	switch statusCode {
 	case http.StatusBadRequest:
-		if strings.Contains(strings.ToLower(upstreamMessage), "organization has been disabled") {
+		lowerMessage := strings.ToLower(upstreamMessage)
+		switch {
+		case strings.Contains(lowerMessage, "organization has been disabled"):
 			s.handleAuthError(ctx, account, "Organization disabled (400): "+upstreamMessage)
+			shouldDisable = true
+		case account.Platform == PlatformAnthropic && strings.Contains(lowerMessage, "credit balance"):
+			s.handleAuthError(ctx, account, "Credit balance exhausted (400): "+upstreamMessage)
 			shouldDisable = true
 		}
 	case http.StatusUnauthorized:

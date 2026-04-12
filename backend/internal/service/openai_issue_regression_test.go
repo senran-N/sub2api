@@ -175,3 +175,24 @@ func TestSanitizeEmptyBase64InputImagesInOpenAIBody_DropsEmptyParts(t *testing.T
 	require.False(t, bytes.Contains(sanitizedBody, []byte(`"input_image"`)))
 	require.Equal(t, "hi", gjson.GetBytes(sanitizedBody, "input.0.content.0.text").String())
 }
+
+func TestPrepareOpenAIForwardRequest_HTTPPreservesPreviousResponseID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	account := &Account{
+		Name:     "test-openai-oauth",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+	}
+	body := []byte(`{"model":"gpt-5.4","stream":true,"previous_response_id":"resp_prev_http_1","input":[{"type":"input_text","text":"hello"}]}`)
+
+	svc := &OpenAIGatewayService{}
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", true, "", false, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+	require.Equal(t, "resp_prev_http_1", gjson.GetBytes(prepared.body, "previous_response_id").String())
+	require.Equal(t, "resp_prev_http_1", prepared.reqBody["previous_response_id"])
+}

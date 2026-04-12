@@ -208,14 +208,6 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 		}
 	}
 
-	if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
-		if _, has := reqBody["previous_response_id"]; has {
-			delete(reqBody, "previous_response_id")
-			bodyModified = true
-			markPatchDelete("previous_response_id")
-		}
-	}
-
 	if bodyModified {
 		serializedByPatch := false
 		if !patchDisabled && patchHasOp {
