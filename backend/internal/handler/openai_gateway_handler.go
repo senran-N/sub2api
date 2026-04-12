@@ -164,6 +164,16 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 	reqStream := reqMeta.Stream
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
+	channelMapping, restricted := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	if restricted {
+		h.handleStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", "Requested model is not allowed for this channel", streamStarted)
+		return
+	}
+	channelUsage := channelMapping.ToUsageFields(reqModel, "")
+	schedulingModel := reqModel
+	if channelMapping.MappedModel != "" {
+		schedulingModel = channelMapping.MappedModel
+	}
 	previousResponseID := reqMeta.PreviousResponseID
 	if previousResponseID != "" {
 		previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
@@ -227,6 +237,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	var lastFailoverErr *service.UpstreamFailoverError
 
 	for {
+		c.Set("openai_responses_fallback_model", "")
 		// Select account supporting the requested model
 		reqLog.Debug("openai.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
@@ -234,7 +245,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			apiKey.GroupID,
 			previousResponseID,
 			sessionHash,
-			reqModel,
+			schedulingModel,
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportAny,
 		)
@@ -244,9 +255,33 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
 			if len(failedAccountIDs) == 0 {
-				status, code, message := openAISelectionErrorResponse(err)
-				h.handleStreamingAwareError(c, status, code, message, streamStarted)
-				return
+				initialSelectionErr := err
+				defaultModel := ""
+				if apiKey.Group != nil {
+					defaultModel = apiKey.Group.DefaultMappedModel
+				}
+				if defaultModel != "" && defaultModel != schedulingModel {
+					reqLog.Info("openai.fallback_to_default_model",
+						zap.String("default_mapped_model", defaultModel),
+					)
+					selection, scheduleDecision, err = h.gatewayService.SelectAccountWithScheduler(
+						c.Request.Context(),
+						apiKey.GroupID,
+						previousResponseID,
+						sessionHash,
+						defaultModel,
+						failedAccountIDs,
+						service.OpenAIUpstreamTransportAny,
+					)
+					if err == nil && selection != nil {
+						c.Set("openai_responses_fallback_model", defaultModel)
+					}
+				}
+				if err != nil {
+					status, code, message := openAISelectionErrorResponseAfterDefaultFallback(initialSelectionErr, err)
+					h.handleStreamingAwareError(c, status, code, message, streamStarted)
+					return
+				}
 			}
 			if lastFailoverErr != nil {
 				h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
@@ -284,7 +319,12 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// Forward request
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
-		result, err := h.gatewayService.Forward(c.Request.Context(), c, account, body)
+		fallbackModel := c.GetString("openai_responses_fallback_model")
+		if fallbackModel == "" && channelUsage.ChannelMappedModel != "" {
+			fallbackModel = channelUsage.ChannelMappedModel
+		}
+		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
+		result, err := h.gatewayService.Forward(c.Request.Context(), c, account, body, defaultMappedModel)
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()

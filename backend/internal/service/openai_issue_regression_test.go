@@ -114,7 +114,7 @@ func TestPrepareOpenAIForwardRequest_StripsUnsupportedUserField(t *testing.T) {
 	body := []byte(`{"model":"gpt-5.4","input":"hello","user":"user_123"}`)
 
 	svc := &OpenAIGatewayService{}
-	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", false, "", false, openAIWSHTTPDecision("test"))
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", false, "", "", false, openAIWSHTTPDecision("test"))
 	require.NoError(t, err)
 	require.NotNil(t, prepared)
 	require.NotContains(t, string(prepared.body), `"user":"user_123"`)
@@ -140,7 +140,7 @@ func TestPrepareOpenAIForwardRequest_APIKeyPreservesMappedCustomModel(t *testing
 	body := []byte(`{"model":"custom-original-model","input":"hello"}`)
 
 	svc := &OpenAIGatewayService{}
-	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "custom-original-model", false, "", false, openAIWSHTTPDecision("test"))
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "custom-original-model", false, "", "", false, openAIWSHTTPDecision("test"))
 	require.NoError(t, err)
 	require.NotNil(t, prepared)
 	require.Equal(t, "custom/upstream-model", gjson.GetBytes(prepared.body, "model").String())
@@ -165,11 +165,32 @@ func TestPrepareOpenAIForwardRequest_PreservesReasoningVariantFallbackMapping(t 
 	body := []byte(`{"model":"gpt-5.4-xhigh","input":"hello"}`)
 
 	svc := &OpenAIGatewayService{}
-	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4-xhigh", false, "", false, openAIWSHTTPDecision("test"))
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4-xhigh", false, "", "", false, openAIWSHTTPDecision("test"))
 	require.NoError(t, err)
 	require.NotNil(t, prepared)
 	require.Equal(t, "gpt-5.3-codex-spark-xhigh", gjson.GetBytes(prepared.body, "model").String())
 	require.Equal(t, "gpt-5.3-codex-spark-xhigh", prepared.reqBody["model"])
+}
+
+func TestPrepareOpenAIForwardRequest_AppliesDefaultMappedModelForReasoningVariant(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	account := &Account{
+		Name:     "test-openai-oauth",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+	}
+	body := []byte(`{"model":"gpt-5.4-xhigh","input":"hello"}`)
+
+	svc := &OpenAIGatewayService{}
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4-xhigh", false, "", "gpt-5.2", false, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+	require.Equal(t, "gpt-5.2-xhigh", gjson.GetBytes(prepared.body, "model").String())
+	require.Equal(t, "gpt-5.2-xhigh", prepared.reqBody["model"])
 }
 
 func TestParseOpenAIWSIngressClientPayload_APIKeyPreservesMappedCustomModel(t *testing.T) {
@@ -236,7 +257,7 @@ func TestPrepareOpenAIForwardRequest_HTTPPreservesPreviousResponseID(t *testing.
 	body := []byte(`{"model":"gpt-5.4","stream":true,"previous_response_id":"resp_prev_http_1","input":[{"type":"input_text","text":"hello"}]}`)
 
 	svc := &OpenAIGatewayService{}
-	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", true, "", false, openAIWSHTTPDecision("test"))
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", true, "", "", false, openAIWSHTTPDecision("test"))
 	require.NoError(t, err)
 	require.NotNil(t, prepared)
 	require.Equal(t, "resp_prev_http_1", gjson.GetBytes(prepared.body, "previous_response_id").String())

@@ -220,7 +220,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_StreamKeepsToolNameAndBodyNormali
 	// Use the gateway method that reads token from credentials when provider is nil.
 	svc.openAITokenProvider = nil
 
-	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	result, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.True(t, result.Stream)
@@ -289,7 +289,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_CompactUsesJSONAndKeepsNonStreami
 		RateMultiplier: f64p(1),
 	}
 
-	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	result, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.False(t, result.Stream)
@@ -349,7 +349,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_CodexMissingInstructionsInjectsDe
 		RateMultiplier: f64p(1),
 	}
 
-	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	result, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.True(t, result.Stream)
@@ -396,7 +396,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_DisabledUsesLegacyTransform(t *te
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, inputBody)
+	_, err := svc.Forward(context.Background(), c, account, inputBody, "")
 	require.NoError(t, err)
 
 	// legacy path rewrites request body (not byte-equal)
@@ -441,7 +441,7 @@ func TestOpenAIGatewayService_OAuthLegacy_CompositeCodexUAUsesCodexOriginator(t 
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, inputBody)
+	_, err := svc.Forward(context.Background(), c, account, inputBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, upstream.lastReq)
 	require.Equal(t, "codex_cli_rs", upstream.lastReq.Header.Get("originator"))
@@ -499,7 +499,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_ResponseHeadersAllowXCodex(t *tes
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	_, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 
 	require.Equal(t, "12", rec.Header().Get("x-codex-primary-used-percent"))
@@ -541,7 +541,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_UpstreamErrorIncludesPassthroughF
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	_, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.Error(t, err)
 
 	// should append an upstream error event with passthrough=true
@@ -594,7 +594,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_429PersistsRateLimit(t *testing.T
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	_, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.Error(t, err)
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)
 	require.Contains(t, rec.Body.String(), "usage_limit_reached")
@@ -653,7 +653,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_TempUnschedulableRuleReturnsFailo
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	_, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	var failoverErr *UpstreamFailoverError
 	require.ErrorAs(t, err, &failoverErr)
 	require.Equal(t, http.StatusPaymentRequired, failoverErr.StatusCode)
@@ -707,7 +707,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_NonCodexUAFallbackToCodexUA(t *te
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, inputBody)
+	_, err := svc.Forward(context.Background(), c, account, inputBody, "")
 	require.NoError(t, err)
 	require.Equal(t, false, gjson.GetBytes(upstream.lastBody, "store").Bool())
 	require.Equal(t, true, gjson.GetBytes(upstream.lastBody, "stream").Bool())
@@ -741,7 +741,7 @@ func TestOpenAIGatewayService_CodexCLIOnly_RejectsNonCodexClient(t *testing.T) {
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, inputBody)
+	_, err := svc.Forward(context.Background(), c, account, inputBody, "")
 	require.Error(t, err)
 	require.Equal(t, http.StatusForbidden, rec.Code)
 	require.Contains(t, rec.Body.String(), "Codex official clients")
@@ -798,7 +798,7 @@ func TestOpenAIGatewayService_CodexCLIOnly_AllowOfficialClientFamilies(t *testin
 				RateMultiplier: f64p(1),
 			}
 
-			_, err := svc.Forward(context.Background(), c, account, inputBody)
+			_, err := svc.Forward(context.Background(), c, account, inputBody, "")
 			require.NoError(t, err)
 			require.NotNil(t, upstream.lastReq)
 		})
@@ -847,7 +847,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_StreamingSetsFirstTokenMs(t *test
 	}
 
 	start := time.Now()
-	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	result, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	// sanity: duration after start
 	require.GreaterOrEqual(t, time.Since(start), time.Duration(0))
@@ -902,7 +902,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_StreamClientDisconnectStillCollec
 		RateMultiplier: f64p(1),
 	}
 
-	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	result, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.True(t, result.Stream)
@@ -947,7 +947,7 @@ func TestOpenAIGatewayService_APIKeyPassthrough_PreservesBodyAndUsesResponsesEnd
 		RateMultiplier: f64p(1),
 	}
 
-	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	result, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.ServiceTier)
@@ -998,7 +998,7 @@ func TestOpenAIGatewayService_APIKeyPassthrough_UsesAzureResponsesEndpointAndAPI
 		RateMultiplier: f64p(1),
 	}
 
-	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	result, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, upstream.lastReq)
@@ -1046,7 +1046,7 @@ func TestOpenAIGatewayService_APIKeyPassthrough_ConvertsNonStreamingSSEToJSON(t 
 		Schedulable: true,
 	}
 
-	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	result, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, 3, result.Usage.InputTokens)
@@ -1091,7 +1091,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_WarnOnTimeoutHeadersForStream(t *
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	_, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.True(t, logSink.ContainsMessage("检测到超时相关请求头，将按配置过滤以降低断流风险"))
 	require.True(t, logSink.ContainsFieldValue("timeout_headers", "x-stainless-timeout=10000"))
@@ -1132,7 +1132,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_InfoWhenStreamEndsWithoutDone(t *
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	_, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.EqualError(t, err, "stream usage incomplete: missing terminal event")
 	require.True(t, logSink.ContainsMessage("上游流在未收到 [DONE] 时结束，疑似断流"))
 	require.True(t, logSink.ContainsMessageAtLevel("上游流在未收到 [DONE] 时结束，疑似断流", "info"))
@@ -1178,7 +1178,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_DefaultFiltersTimeoutHeaders(t *t
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	_, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, upstream.lastReq)
 	require.Empty(t, upstream.lastReq.Header.Get("x-stainless-timeout"))
@@ -1227,7 +1227,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_AllowTimeoutHeadersWhenConfigured
 		RateMultiplier: f64p(1),
 	}
 
-	_, err := svc.Forward(context.Background(), c, account, originalBody)
+	_, err := svc.Forward(context.Background(), c, account, originalBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, upstream.lastReq)
 	require.Equal(t, "120000", upstream.lastReq.Header.Get("x-stainless-timeout"))

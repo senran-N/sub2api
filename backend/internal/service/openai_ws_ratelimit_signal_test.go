@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
@@ -159,7 +159,7 @@ func TestOpenAIGatewayService_Forward_WSv2ErrorEventUsageLimitPersistsRateLimit(
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
-	result, err := svc.Forward(context.Background(), c, &account, body)
+	result, err := svc.Forward(context.Background(), c, &account, body, "")
 	require.Error(t, err)
 	require.Nil(t, result)
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)
@@ -229,7 +229,7 @@ func TestOpenAIGatewayService_Forward_WSv2Handshake429PersistsRateLimit(t *testi
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
-	result, err := svc.Forward(context.Background(), c, &account, body)
+	result, err := svc.Forward(context.Background(), c, &account, body, "")
 	require.Error(t, err)
 	require.Nil(t, result)
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)

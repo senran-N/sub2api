@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -12,6 +13,7 @@ import (
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
+	"github.com/tidwall/sjson"
 )
 
 const (
@@ -356,7 +358,7 @@ func SnapshotOpenAICompatibilityFallbackMetrics() OpenAICompatibilityFallbackMet
 }
 
 // Forward forwards request to OpenAI API
-func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte, defaultMappedModel string) (*OpenAIForwardResult, error) {
 	startTime := time.Now()
 
 	restrictionResult := s.detectCodexClientRestriction(c, account)
@@ -410,6 +412,16 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
 	if passthroughEnabled {
+		forwardBody := originalBody
+		mappedModel := resolveOpenAIForwardModel(account, reqModel, defaultMappedModel)
+		mappedModel = normalizeOpenAIModelForUpstream(account, mappedModel)
+		if mappedModel != "" && mappedModel != reqModel {
+			var patchErr error
+			forwardBody, patchErr = sjson.SetBytes(originalBody, "model", mappedModel)
+			if patchErr != nil {
+				return nil, fmt.Errorf("patch passthrough model: %w", patchErr)
+			}
+		}
 		// 透传分支只需要轻量提取字段，避免热路径全量 Unmarshal。
 		var reasoningEffort *string
 		if reqMeta.ReasoningPresent {
@@ -425,10 +437,17 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		} else {
 			reasoningEffort = extractOpenAIReasoningEffortFromBody(body, reqModel)
 		}
-		return s.forwardOpenAIPassthrough(ctx, c, account, originalBody, reqModel, reasoningEffort, reqStream, startTime)
+		result, err := s.forwardOpenAIPassthrough(ctx, c, account, forwardBody, reqModel, reasoningEffort, reqStream, startTime)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil && mappedModel != "" && mappedModel != reqModel {
+			result.UpstreamModel = mappedModel
+		}
+		return result, nil
 	}
 
-	prepared, err := s.prepareOpenAIForwardRequest(c, account, body, reqModel, reqStream, promptCacheKey, isCodexCLI, wsDecision)
+	prepared, err := s.prepareOpenAIForwardRequest(c, account, body, reqModel, reqStream, promptCacheKey, defaultMappedModel, isCodexCLI, wsDecision)
 	if err != nil {
 		return nil, err
 	}

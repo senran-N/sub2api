@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/senran-N/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -278,7 +278,7 @@ func TestOpenAIGatewayService_Forward_LogsInstructionsRequiredDetails(t *testing
 	}
 	body := []byte(`{"model":"gpt-5.1-codex","stream":false,"input":[{"type":"text","text":"hello"}],"prompt_cache_key":"pc-forward","access_token":"secret-token"}`)
 
-	_, err := svc.Forward(context.Background(), c, account, body)
+	_, err := svc.Forward(context.Background(), c, account, body, "")
 	require.Error(t, err)
 	require.Equal(t, http.StatusBadGateway, rec.Code)
 	require.Contains(t, err.Error(), "upstream error: 400")
@@ -329,7 +329,7 @@ func TestOpenAIGatewayService_Forward_TransientProcessingErrorTriggersFailover(t
 	}
 	body := []byte(`{"model":"gpt-5.1-codex","stream":false,"input":[{"type":"text","text":"hello"}]}`)
 
-	_, err := svc.Forward(context.Background(), c, account, body)
+	_, err := svc.Forward(context.Background(), c, account, body, "")
 	require.Error(t, err)
 
 	var failoverErr *UpstreamFailoverError

@@ -143,7 +143,7 @@ func TestOpenAIGatewayService_Forward_WSv2_SuccessAndBindSticky(t *testing.T) {
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"previous_response_id":"resp_prev_1","input":[{"type":"input_text","text":"hello"}]}`)
-	result, err := svc.Forward(context.Background(), c, account, body)
+	result, err := svc.Forward(context.Background(), c, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, 12, result.Usage.InputTokens)
@@ -254,7 +254,7 @@ func TestOpenAIGatewayService_Forward_WSv2_RewriteModelAndToolCallsOnCompletedEv
 	}
 
 	body := []byte(`{"model":"custom-original-model","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
-	result, err := svc.Forward(context.Background(), c, account, body)
+	result, err := svc.Forward(context.Background(), c, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "resp_model_tool_1", result.RequestID)
@@ -374,7 +374,7 @@ func TestOpenAIGatewayService_Forward_WSv2_PoolReuseNotOneToOne(t *testing.T) {
 		c.Set("api_key", &APIKey{GroupID: &groupID})
 
 		body := []byte(`{"model":"gpt-5.1","stream":false,"previous_response_id":"resp_prev_reuse","input":[{"type":"input_text","text":"hello"}]}`)
-		result, err := svc.Forward(context.Background(), c, account, body)
+		result, err := svc.Forward(context.Background(), c, account, body, "")
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.True(t, strings.HasPrefix(result.RequestID, "resp_reuse_"))
@@ -443,7 +443,7 @@ func TestOpenAIGatewayService_Forward_WSv2_OAuthStoreFalseByDefault(t *testing.T
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"store":true,"input":[{"type":"input_text","text":"hello"}]}`)
-	result, err := svc.Forward(context.Background(), c, account, body)
+	result, err := svc.Forward(context.Background(), c, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "resp_oauth_1", result.RequestID)
@@ -533,7 +533,7 @@ func TestOpenAIGatewayService_Forward_WSv2_OAuthOriginatorCompatibility(t *testi
 			}
 
 			body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
-			result, err := svc.Forward(context.Background(), c, account, body)
+			result, err := svc.Forward(context.Background(), c, account, body, "")
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Equal(t, tt.wantOriginator, captureDialer.lastHeaders.Get("originator"))
@@ -594,7 +594,7 @@ func TestOpenAIGatewayService_Forward_WSv2_HeaderSessionFallbackFromPromptCacheK
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":true,"prompt_cache_key":"pcache_123","input":[{"type":"input_text","text":"hi"}]}`)
-	result, err := svc.Forward(context.Background(), c, account, body)
+	result, err := svc.Forward(context.Background(), c, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "resp_prompt_cache_key", result.RequestID)
@@ -657,7 +657,7 @@ func TestOpenAIGatewayService_Forward_WSv1_Unsupported(t *testing.T) {
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"previous_response_id":"resp_prev_v1","input":[{"type":"input_text","text":"hello"}]}`)
-	result, err := svc.Forward(context.Background(), c, account, body)
+	result, err := svc.Forward(context.Background(), c, account, body, "")
 	require.Error(t, err)
 	require.Nil(t, result)
 	require.Contains(t, err.Error(), "ws v1")
@@ -754,7 +754,7 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnExplicitC
 	c1.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c1.Request.Header.Set("session_id", "session_turn_state")
 	c1.Request.Header.Set("x-codex-turn-metadata", "turn_meta_1")
-	result1, err := svc.Forward(context.Background(), c1, account, firstReqBody)
+	result1, err := svc.Forward(context.Background(), c1, account, firstReqBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 
@@ -775,7 +775,7 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnExplicitC
 	c2.Request.Header.Set("session_id", "session_turn_state")
 	c2.Request.Header.Set("x-codex-turn-metadata", "turn_meta_2")
 	secondReqBody := []byte(`{"model":"gpt-5.1","stream":false,"previous_response_id":"` + result1.RequestID + `","input":[{"type":"input_text","text":"hello"}]}`)
-	result2, err := svc.Forward(context.Background(), c2, account, secondReqBody)
+	result2, err := svc.Forward(context.Background(), c2, account, secondReqBody, "")
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 
@@ -842,7 +842,7 @@ func TestOpenAIGatewayService_Forward_WSv2_GeneratePrewarm(t *testing.T) {
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
-	result, err := svc.Forward(context.Background(), c, account, body)
+	result, err := svc.Forward(context.Background(), c, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "resp_main_1", result.RequestID)
@@ -961,7 +961,7 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnMetadataInPayloadOnConnReuse(t *t
 	c1.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c1.Request.Header.Set("session_id", "session-metadata-reuse")
 	c1.Request.Header.Set("x-codex-turn-metadata", "turn_meta_payload_1")
-	result1, err := svc.Forward(context.Background(), c1, account, body)
+	result1, err := svc.Forward(context.Background(), c1, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 	require.Equal(t, "resp_meta_1", result1.RequestID)
@@ -975,7 +975,7 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnMetadataInPayloadOnConnReuse(t *t
 	c2.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c2.Request.Header.Set("session_id", "session-metadata-reuse")
 	c2.Request.Header.Set("x-codex-turn-metadata", "turn_meta_payload_2")
-	result2, err := svc.Forward(context.Background(), c2, account, body)
+	result2, err := svc.Forward(context.Background(), c2, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 	require.Equal(t, "resp_meta_2", result2.RequestID)
@@ -1072,7 +1072,7 @@ func TestOpenAIGatewayService_Forward_WSv2StoreFalseFreshTurnsRespectStrictIsola
 	c1, _ := gin.CreateTestContext(rec1)
 	c1.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c1.Request.Header.Set("session_id", "session_store_false_a")
-	result1, err := svc.Forward(context.Background(), c1, account, body)
+	result1, err := svc.Forward(context.Background(), c1, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 	require.Equal(t, int64(1), upgradeCount.Load())
@@ -1081,7 +1081,7 @@ func TestOpenAIGatewayService_Forward_WSv2StoreFalseFreshTurnsRespectStrictIsola
 	c2, _ := gin.CreateTestContext(rec2)
 	c2.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c2.Request.Header.Set("session_id", "session_store_false_a")
-	result2, err := svc.Forward(context.Background(), c2, account, body)
+	result2, err := svc.Forward(context.Background(), c2, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 	require.Equal(t, int64(2), upgradeCount.Load(), "无显式续链信号时，同一 session(store=false) 也应新建连接，避免隐式续链")
@@ -1090,7 +1090,7 @@ func TestOpenAIGatewayService_Forward_WSv2StoreFalseFreshTurnsRespectStrictIsola
 	c3, _ := gin.CreateTestContext(rec3)
 	c3.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c3.Request.Header.Set("session_id", "session_store_false_b")
-	result3, err := svc.Forward(context.Background(), c3, account, body)
+	result3, err := svc.Forward(context.Background(), c3, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result3)
 	require.Equal(t, int64(3), upgradeCount.Load(), "strict 模式下，不同 fresh turn 也应保持隔离")
@@ -1179,7 +1179,7 @@ func TestOpenAIGatewayService_Forward_WSv2StoreFalseDisableForceNewConnAllowsReu
 	c1, _ := gin.CreateTestContext(rec1)
 	c1.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c1.Request.Header.Set("session_id", "session_store_false_reuse_a")
-	result1, err := svc.Forward(context.Background(), c1, account, body)
+	result1, err := svc.Forward(context.Background(), c1, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 	require.Equal(t, int64(1), upgradeCount.Load())
@@ -1188,7 +1188,7 @@ func TestOpenAIGatewayService_Forward_WSv2StoreFalseDisableForceNewConnAllowsReu
 	c2, _ := gin.CreateTestContext(rec2)
 	c2.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c2.Request.Header.Set("session_id", "session_store_false_reuse_b")
-	result2, err := svc.Forward(context.Background(), c2, account, body)
+	result2, err := svc.Forward(context.Background(), c2, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 	require.Equal(t, int64(1), upgradeCount.Load(), "关闭强制新连后，不同 session(store=false) 可复用连接")
@@ -1265,7 +1265,7 @@ func TestOpenAIGatewayService_Forward_WSv2ReadTimeoutAppliesPerRead(t *testing.T
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
-	result, err := svc.Forward(context.Background(), c, account, body)
+	result, err := svc.Forward(context.Background(), c, account, body, "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "resp_timeout_ok", result.RequestID)

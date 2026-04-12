@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/domain"
-	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
+	"github.com/senran-N/sub2api/internal/domain"
+	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 )
 
 const (
@@ -565,7 +565,7 @@ func (s *OpsService) executeWithAccount(ctx context.Context, reqType opsRetryReq
 		if s.openAIGatewayService == nil {
 			return &opsRetryExecution{status: opsRetryStatusFailed, errorMessage: "openai gateway service not available"}
 		}
-		_, err = s.openAIGatewayService.Forward(ctx, c, account, body)
+		_, err = s.openAIGatewayService.Forward(ctx, c, account, body, "")
 	case opsRetryTypeGeminiV1B:
 		if s.geminiCompatService == nil || s.antigravityGatewayService == nil {
 			return &opsRetryExecution{status: opsRetryStatusFailed, errorMessage: "gemini services not available"}
