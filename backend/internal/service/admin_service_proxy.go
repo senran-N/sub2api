@@ -11,7 +11,7 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/httpclient"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
-	"github.com/senran-N/sub2api/internal/util/soraerror"
+	"github.com/senran-N/sub2api/internal/util/cloudflareutil"
 )
 
 // ProxyExitInfoProber tests proxy connectivity and retrieves exit information.
@@ -52,14 +52,6 @@ var proxyQualityTargets = []proxyQualityTarget{
 		Method: http.MethodGet,
 		AllowedStatuses: map[int]struct{}{
 			http.StatusOK: {},
-		},
-	},
-	{
-		Target: "sora",
-		URL:    "https://sora.chatgpt.com/backend/me",
-		Method: http.MethodGet,
-		AllowedStatuses: map[int]struct{}{
-			http.StatusUnauthorized: {},
 		},
 	},
 }
@@ -437,9 +429,9 @@ func runProxyQualityTarget(ctx context.Context, client *http.Client, target prox
 		body = body[:proxyQualityMaxBodyBytes]
 	}
 
-	if soraerror.IsCloudflareChallengeResponse(resp.StatusCode, resp.Header, body) {
+	if cloudflareutil.IsCloudflareChallengeResponse(resp.StatusCode, resp.Header, body) {
 		item.Status = "challenge"
-		item.CFRay = soraerror.ExtractCloudflareRayID(resp.Header, body)
+		item.CFRay = cloudflareutil.ExtractCloudflareRayID(resp.Header, body)
 		item.Message = fmt.Sprintf("%s 命中 Cloudflare challenge", target.Target)
 		return item
 	}

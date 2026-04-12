@@ -12,7 +12,6 @@ import {
 
 export type CreateAccountCategory = 'oauth-based' | 'apikey' | 'bedrock'
 export type AntigravityAccountType = 'oauth' | 'upstream'
-export type SoraAccountType = 'oauth' | 'apikey'
 export type GeminiOAuthType = 'code_assist' | 'google_one' | 'ai_studio'
 
 interface ResolveCreateAccountOAuthFlowOptions {
@@ -113,7 +112,7 @@ interface BuildCreateOpenAICompatOAuthTargetOptions {
   fallbackBaseName?: string
   extra?: Record<string, unknown>
   index?: number
-  platform: 'openai' | 'sora'
+  platform: 'openai'
   total?: number
 }
 
@@ -390,29 +389,17 @@ export function buildCreateAnthropicOAuthAccountPayload(
 export function buildCreateOpenAICompatOAuthTarget(
   options: BuildCreateOpenAICompatOAuthTargetOptions
 ) {
-  const name = buildCreateBatchAccountName(
-    options.baseName,
-    options.index ?? 0,
-    options.total ?? 1,
-    options.fallbackBaseName
-  )
-
-  if (options.platform === 'openai') {
-    return {
-      name,
-      platform: 'openai' as const,
-      type: 'oauth' as const,
-      credentials: options.credentials,
-      extra: options.extra
-    }
-  }
-
   return {
-    name,
-    platform: 'sora' as const,
+    name: buildCreateBatchAccountName(
+      options.baseName,
+      options.index ?? 0,
+      options.total ?? 1,
+      options.fallbackBaseName
+    ),
+    platform: 'openai' as const,
     type: 'oauth' as const,
-    credentials: buildCreateSoraOAuthCredentials(options.credentials),
-    extra: buildCreateSoraExtra(options.extra)
+    credentials: options.credentials,
+    extra: options.extra
   }
 }
 
@@ -426,24 +413,6 @@ export function buildCreateBatchAccountName(
   const resolvedBaseName = baseName || fallbackBaseName || ''
   const indexedName = total > 1 ? `${resolvedBaseName} #${index + 1}` : resolvedBaseName
   return suffix ? `${indexedName} ${suffix}` : indexedName
-}
-
-export function buildCreateSoraOAuthCredentials(
-  credentials: Record<string, unknown>,
-  sessionToken?: string
-) {
-  const result: Record<string, unknown> = {
-    access_token: credentials.access_token,
-    refresh_token: credentials.refresh_token,
-    client_id: credentials.client_id,
-    expires_at: credentials.expires_at
-  }
-
-  if (sessionToken) {
-    result.session_token = sessionToken
-  }
-
-  return result
 }
 
 export function resolveBatchCreateOutcome(options: ResolveBatchCreateOutcomeOptions) {
@@ -580,15 +549,6 @@ export function buildCreateApiKeyCredentials(
   }
 
   const trimmedBaseUrl = options.baseUrl.trim()
-  if (options.platform === 'sora') {
-    if (!trimmedBaseUrl) {
-      return { errorMessageKey: 'admin.accounts.soraBaseUrlRequired' }
-    }
-    if (!trimmedBaseUrl.startsWith('http://') && !trimmedBaseUrl.startsWith('https://')) {
-      return { errorMessageKey: 'admin.accounts.soraBaseUrlInvalidScheme' }
-    }
-  }
-
   const credentials: Record<string, unknown> = {
     base_url: trimmedBaseUrl || getDefaultBaseURL(options.platform),
     api_key: options.apiKey.trim()
@@ -620,30 +580,4 @@ export function buildCreateApiKeyCredentials(
   applyInterceptWarmup(credentials, options.interceptWarmupRequests, 'create')
 
   return { credentials }
-}
-
-export function buildCreateSoraExtra(
-  base?: Record<string, unknown>,
-  linkedOpenAIAccountId?: string | number
-): Record<string, unknown> | undefined {
-  const extra: Record<string, unknown> = { ...(base || {}) }
-
-  if (linkedOpenAIAccountId !== undefined && linkedOpenAIAccountId !== null) {
-    const id = String(linkedOpenAIAccountId).trim()
-    if (id) {
-      extra.linked_openai_account_id = id
-    }
-  }
-
-  delete extra.openai_passthrough
-  delete extra.openai_oauth_passthrough
-  delete extra.codex_cli_only
-  delete extra.openai_oauth_responses_websockets_v2_mode
-  delete extra.openai_apikey_responses_websockets_v2_mode
-  delete extra.openai_oauth_responses_websockets_v2_enabled
-  delete extra.openai_apikey_responses_websockets_v2_enabled
-  delete extra.responses_websockets_v2_enabled
-  delete extra.openai_ws_enabled
-
-  return Object.keys(extra).length > 0 ? extra : undefined
 }

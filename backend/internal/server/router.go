@@ -84,7 +84,6 @@ func registerRoutes(r *gin.Engine, deps *RouteDependencies) {
 	// 注册各模块路由
 	routes.RegisterAuthRoutes(v1, deps.Handlers, deps.JWTAuth, deps.RedisClient, deps.Gateway.SettingService)
 	routes.RegisterUserRoutes(v1, deps.Handlers, deps.JWTAuth, deps.Gateway.SettingService)
-	routes.RegisterSoraClientRoutes(v1, deps.Handlers, deps.JWTAuth, deps.Gateway.SettingService)
 	routes.RegisterAdminRoutes(v1, deps.Handlers, deps.AdminAuth)
 	routes.RegisterGatewayRoutes(
 		r,

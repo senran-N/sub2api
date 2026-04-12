@@ -70,7 +70,6 @@ const platformLabel = computed(() => {
   if (props.platform === 'anthropic') return 'Anthropic'
   if (props.platform === 'openai') return 'OpenAI'
   if (props.platform === 'antigravity') return 'Antigravity'
-  if (props.platform === 'sora') return 'Sora'
   return 'Gemini'
 })
 
@@ -119,9 +118,6 @@ const platformClass = computed(() => {
   if (props.platform === 'antigravity') {
     return 'theme-chip--brand-purple'
   }
-  if (props.platform === 'sora') {
-    return 'theme-chip--brand-rose'
-  }
   return 'theme-chip--info'
 })
 
@@ -134,9 +130,6 @@ const typeClass = computed(() => {
   }
   if (props.platform === 'antigravity') {
     return 'theme-chip--brand-purple'
-  }
-  if (props.platform === 'sora') {
-    return 'theme-chip--brand-rose'
   }
   return 'theme-chip--info'
 })

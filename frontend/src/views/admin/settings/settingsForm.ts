@@ -84,8 +84,6 @@ export type SettingsSchedulingFields = Pick<
 
 export type SettingsCustomMenuFields = Pick<SettingsForm, 'custom_menu_items'>
 
-export type SettingsSoraClientFields = Pick<SettingsForm, 'sora_client_enabled'>
-
 export type SettingsGatewayForwardingFields = Pick<
   SettingsForm,
   'enable_fingerprint_unification' | 'enable_metadata_passthrough'
@@ -164,7 +162,6 @@ export function createDefaultSettingsForm(): SettingsForm {
     hide_ccs_import_button: false,
     purchase_subscription_enabled: false,
     purchase_subscription_url: '',
-    sora_client_enabled: false,
     custom_menu_items: [],
     custom_endpoints: [],
     frontend_url: '',
@@ -348,7 +345,6 @@ export function buildSettingsUpdatePayload(
       hide_ccs_import_button: form.hide_ccs_import_button,
       purchase_subscription_enabled: form.purchase_subscription_enabled,
       purchase_subscription_url: normalizedUrls.purchaseSubscriptionUrl,
-      sora_client_enabled: form.sora_client_enabled,
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: normalizedUrls.frontendUrl,

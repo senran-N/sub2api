@@ -109,9 +109,6 @@ const labelClass = computed(() => {
   if (props.platform === 'gemini') {
     return 'theme-chip--info'
   }
-  if (props.platform === 'sora') {
-    return 'theme-chip--brand-rose'
-  }
   return 'theme-chip--brand-purple'
 })
 
@@ -129,11 +126,6 @@ const badgeClass = computed(() => {
   if (props.platform === 'gemini') {
     return isSubscription.value
       ? 'theme-chip--info'
-      : 'theme-chip--accent'
-  }
-  if (props.platform === 'sora') {
-    return isSubscription.value
-      ? 'theme-chip--brand-rose'
       : 'theme-chip--accent'
   }
   return isSubscription.value

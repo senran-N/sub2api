@@ -139,7 +139,7 @@ export function buildEditAccountBasePayload(
 }
 
 export function resolveAccountBaseUrlHint(platform: AccountPlatform | null | undefined, t: Translate) {
-  if (platform === 'openai' || platform === 'sora') {
+  if (platform === 'openai') {
     return t('admin.accounts.openai.baseUrlHint')
   }
   if (platform === 'gemini') {
@@ -149,7 +149,7 @@ export function resolveAccountBaseUrlHint(platform: AccountPlatform | null | und
 }
 
 export function resolveAccountApiKeyHint(platform: AccountPlatform | null | undefined, t: Translate) {
-  if (platform === 'openai' || platform === 'sora') {
+  if (platform === 'openai') {
     return t('admin.accounts.openai.apiKeyHint')
   }
   if (platform === 'gemini') {
@@ -162,7 +162,7 @@ export function resolveCreateAccountOAuthStepTitle(
   platform: AccountPlatform,
   t: Translate
 ) {
-  if (platform === 'openai' || platform === 'sora') {
+  if (platform === 'openai') {
     return t('admin.accounts.oauth.openai.title')
   }
   if (platform === 'gemini') {

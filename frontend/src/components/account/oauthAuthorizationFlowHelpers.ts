@@ -1,7 +1,7 @@
 import type { AccountPlatform } from '@/types'
 
 export function resolveOAuthKeyPrefix(platform: AccountPlatform) {
-  if (platform === 'openai' || platform === 'sora') {
+  if (platform === 'openai') {
     return 'admin.accounts.oauth.openai'
   }
   if (platform === 'gemini') {
@@ -53,11 +53,11 @@ export function extractOAuthCallbackPayload(value: string): {
 }
 
 export function shouldExtractOAuthCallback(platform: AccountPlatform) {
-  return platform === 'openai' || platform === 'gemini' || platform === 'antigravity' || platform === 'sora'
+  return platform === 'openai' || platform === 'gemini' || platform === 'antigravity'
 }
 
 export function resolveOAuthImportantNoticeKey(platform: AccountPlatform) {
-  if (platform === 'openai' || platform === 'sora') {
+  if (platform === 'openai') {
     return 'admin.accounts.oauth.openai.importantNotice'
   }
   if (platform === 'antigravity') {

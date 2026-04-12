@@ -36,7 +36,7 @@ export function applyInterceptWarmup(
 }
 
 export function getDefaultBaseURL(platform: AccountPlatform): string {
-  if (platform === 'openai' || platform === 'sora') {
+  if (platform === 'openai') {
     return 'https://api.openai.com'
   }
   if (platform === 'gemini') {

@@ -26,7 +26,7 @@ describe('accountModalShared', () => {
     expect(resolveAccountBaseUrlHint('gemini', t)).toBe('admin.accounts.gemini.baseUrlHint')
     expect(resolveAccountBaseUrlHint('anthropic', t)).toBe('admin.accounts.baseUrlHint')
 
-    expect(resolveAccountApiKeyHint('sora', t)).toBe('admin.accounts.openai.apiKeyHint')
+    expect(resolveAccountApiKeyHint('openai', t)).toBe('admin.accounts.openai.apiKeyHint')
     expect(resolveAccountApiKeyHint('gemini', t)).toBe('admin.accounts.gemini.apiKeyHint')
     expect(resolveCreateAccountOAuthStepTitle('antigravity', t)).toBe(
       'admin.accounts.oauth.antigravity.title'

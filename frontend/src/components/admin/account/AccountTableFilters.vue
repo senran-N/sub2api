@@ -87,8 +87,7 @@ const platformOptions = computed<SelectOption[]>(() => [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' },
-  { value: 'sora', label: 'Sora' }
+  { value: 'antigravity', label: 'Antigravity' }
 ])
 
 const typeOptions = computed<SelectOption[]>(() => [

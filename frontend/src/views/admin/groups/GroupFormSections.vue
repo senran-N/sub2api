@@ -32,7 +32,6 @@
   />
 
   <GroupImagePricingSection :form="form" />
-  <GroupSoraPricingSection :form="form" />
   <GroupSupportedScopesSection :form="form" @toggle-scope="emit('toggle-scope', $event)" />
   <GroupMcpXmlSection :form="form" />
 
@@ -88,7 +87,6 @@ import GroupInvalidRequestFallbackSection from './GroupInvalidRequestFallbackSec
 import GroupMcpXmlSection from './GroupMcpXmlSection.vue'
 import GroupModelRoutingSection from './GroupModelRoutingSection.vue'
 import GroupOpenAIMessagesSection from './GroupOpenAIMessagesSection.vue'
-import GroupSoraPricingSection from './GroupSoraPricingSection.vue'
 import GroupSubscriptionSection from './GroupSubscriptionSection.vue'
 import GroupSupportedScopesSection from './GroupSupportedScopesSection.vue'
 

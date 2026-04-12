@@ -19,10 +19,6 @@ type CreateGroupInput struct {
 	ImagePrice1K                    *float64
 	ImagePrice2K                    *float64
 	ImagePrice4K                    *float64
-	SoraImagePrice360               *float64
-	SoraImagePrice540               *float64
-	SoraVideoPricePerRequest        *float64
-	SoraVideoPricePerRequestHD      *float64
 	ClaudeCodeOnly                  bool
 	FallbackGroupID                 *int64
 	FallbackGroupIDOnInvalidRequest *int64
@@ -30,7 +26,6 @@ type CreateGroupInput struct {
 	ModelRoutingEnabled             bool
 	MCPXMLInject                    *bool
 	SupportedModelScopes            []string
-	SoraStorageQuotaBytes           int64
 	AllowMessagesDispatch           bool
 	DefaultMappedModel              string
 	RequireOAuthOnly                bool
@@ -59,10 +54,6 @@ type UpdateGroupInput struct {
 	ImagePrice1K                    *float64
 	ImagePrice2K                    *float64
 	ImagePrice4K                    *float64
-	SoraImagePrice360               *float64
-	SoraImagePrice540               *float64
-	SoraVideoPricePerRequest        *float64
-	SoraVideoPricePerRequestHD      *float64
 	ClaudeCodeOnly                  *bool
 	FallbackGroupID                 *int64
 	FallbackGroupIDOnInvalidRequest *int64
@@ -70,7 +61,6 @@ type UpdateGroupInput struct {
 	ModelRoutingEnabled             *bool
 	MCPXMLInject                    *bool
 	SupportedModelScopes            *[]string
-	SoraStorageQuotaBytes           *int64
 	AllowMessagesDispatch           *bool
 	DefaultMappedModel              *string
 	RequireOAuthOnly                *bool

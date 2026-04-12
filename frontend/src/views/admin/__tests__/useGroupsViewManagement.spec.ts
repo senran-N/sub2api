@@ -39,11 +39,6 @@ function createGroup(overrides: Partial<AdminGroup> = {}): AdminGroup {
     image_price_1k: null,
     image_price_2k: null,
     image_price_4k: null,
-    sora_image_price_360: null,
-    sora_image_price_540: null,
-    sora_video_price_per_request: null,
-    sora_video_price_per_request_hd: null,
-    sora_storage_quota_bytes: 0,
     claude_code_only: false,
     fallback_group_id: null,
     fallback_group_id_on_invalid_request: null,
@@ -125,7 +120,7 @@ describe('useGroupsViewManagement', () => {
     state.createForm.require_oauth_only = true
     state.createForm.require_privacy_set = true
     state.createForm.fallback_group_id_on_invalid_request = 2
-    state.createForm.platform = 'sora'
+    state.createForm.platform = 'gemini'
     await nextTick()
     expect(state.createForm.allow_messages_dispatch).toBe(false)
     expect(state.createForm.default_mapped_model).toBe('')

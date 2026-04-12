@@ -1,27 +1,25 @@
 package domain
 
 type CreateUserInput struct {
-	Email                 string
-	Password              string
-	Username              string
-	Notes                 string
-	Balance               float64
-	Concurrency           int
-	AllowedGroups         []int64
-	SoraStorageQuotaBytes int64
+	Email         string
+	Password      string
+	Username      string
+	Notes         string
+	Balance       float64
+	Concurrency   int
+	AllowedGroups []int64
 }
 
 type UpdateUserInput struct {
-	Email                 string
-	Password              string
-	Username              *string
-	Notes                 *string
-	Balance               *float64
-	Concurrency           *int
-	Status                string
-	AllowedGroups         *[]int64
-	GroupRates            map[int64]*float64
-	SoraStorageQuotaBytes *int64
+	Email         string
+	Password      string
+	Username      *string
+	Notes         *string
+	Balance       *float64
+	Concurrency   *int
+	Status        string
+	AllowedGroups *[]int64
+	GroupRates    map[int64]*float64
 }
 
 type ReplaceUserGroupResult struct {

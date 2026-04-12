@@ -119,10 +119,7 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
 
   let activeRequestController: AbortController | null = null
 
-  const isSoraAccount = computed(() => options.account.value?.platform === 'sora')
   const supportsGeminiImageTest = computed(() => {
-    if (isSoraAccount.value) return false
-
     const modelId = selectedModelId.value.toLowerCase()
     if (!modelId.startsWith('gemini-') || !modelId.includes('-image')) return false
 
@@ -135,11 +132,9 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
   const showCustomPromptComposer = computed(
     () =>
       options.allowCustomPrompt.value &&
-      !isSoraAccount.value &&
       !supportsGeminiImageTest.value
   )
   const requestPrompt = computed(() => {
-    if (isSoraAccount.value) return ''
     if (supportsGeminiImageTest.value || options.allowCustomPrompt.value) {
       return testPrompt.value.trim()
     }
@@ -154,20 +149,15 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
   const isPrimaryActionDisabled = computed(
     () =>
       status.value === 'connecting' ||
-      (!isSoraAccount.value && !selectedModelId.value)
+      !selectedModelId.value
   )
   const primaryActionLabel = computed(() => {
     if (status.value === 'connecting') return options.t('admin.accounts.testing')
     if (status.value === 'idle') return options.t('admin.accounts.startTest')
     return options.t('admin.accounts.retry')
   })
-  const testTargetLabel = computed(() =>
-    isSoraAccount.value
-      ? options.t('admin.accounts.soraTestTarget')
-      : options.t('admin.accounts.testModel')
-  )
+  const testTargetLabel = computed(() => options.t('admin.accounts.testModel'))
   const testModeLabel = computed(() => {
-    if (isSoraAccount.value) return options.t('admin.accounts.soraTestMode')
     if (supportsGeminiImageTest.value) {
       return options.t('admin.accounts.geminiImageTestMode')
     }
@@ -204,13 +194,6 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
 
   async function loadAvailableModels() {
     if (!options.account.value) return
-
-    if (options.account.value.platform === 'sora') {
-      availableModels.value = []
-      selectedModelId.value = ''
-      loadingModels.value = false
-      return
-    }
 
     loadingModels.value = true
     selectedModelId.value = ''
@@ -251,11 +234,9 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
           addLine(options.t('admin.accounts.usingModel', { model: event.model }), 'accent')
         }
         addLine(
-          isSoraAccount.value
-            ? options.t('admin.accounts.soraTestingFlow')
-            : supportsGeminiImageTest.value
-              ? options.t('admin.accounts.sendingGeminiImageRequest')
-              : options.t('admin.accounts.sendingTestMessage'),
+          supportsGeminiImageTest.value
+            ? options.t('admin.accounts.sendingGeminiImageRequest')
+            : options.t('admin.accounts.sendingTestMessage'),
           'muted'
         )
         addLine('', 'default')
@@ -308,7 +289,7 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
   }
 
   async function startTest() {
-    if (!options.account.value || (!isSoraAccount.value && !selectedModelId.value)) return
+    if (!options.account.value || !selectedModelId.value) return
 
     resetState()
     cancelActiveRequest()
@@ -338,14 +319,10 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
             Authorization: `Bearer ${getAuthToken()}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(
-            isSoraAccount.value
-              ? {}
-              : {
-                  model_id: selectedModelId.value,
-                  prompt: requestPrompt.value
-                }
-          ),
+          body: JSON.stringify({
+            model_id: selectedModelId.value,
+            prompt: requestPrompt.value
+          }),
           signal: activeRequestController.signal
         }
       )
@@ -437,7 +414,6 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
     testPrompt,
     loadingModels,
     generatedImages,
-    isSoraAccount,
     supportsGeminiImageTest,
     showCustomPromptComposer,
     showCopyButton,

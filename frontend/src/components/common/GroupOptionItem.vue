@@ -94,8 +94,6 @@ const ratePillClass = computed(() => {
       return 'theme-chip--success'
     case 'gemini':
       return 'theme-chip--info'
-    case 'sora':
-      return 'theme-chip--brand-rose'
     default: // antigravity and others
       return 'theme-chip--brand-purple'
   }

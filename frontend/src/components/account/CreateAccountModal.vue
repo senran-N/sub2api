@@ -111,28 +111,6 @@
           </button>
           <button
             type="button"
-            @click="form.platform = 'sora'"
-            :class="[
-              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
-              form.platform === 'sora'
-                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--sora'
-                : 'create-account-modal__platform-button--idle'
-            ]"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Sora
-          </button>
-          <button
-            type="button"
             @click="form.platform = 'gemini'"
             :class="[
               'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
@@ -168,39 +146,6 @@
           >
             <Icon name="cloud" size="sm" />
             Antigravity
-          </button>
-        </div>
-      </div>
-
-      <!-- Account Type Selection (Sora) -->
-      <div v-if="form.platform === 'sora'">
-        <label class="input-label">{{ t('admin.accounts.accountType') }}</label>
-        <div class="mt-2 grid grid-cols-2 gap-3" data-tour="account-form-type">
-          <button
-            type="button"
-            @click="soraAccountType = 'oauth'; accountCategory = 'oauth-based'; addMethod = 'oauth'"
-            :class="getChoiceCardClasses(soraAccountType === 'oauth', 'rose')"
-          >
-            <div :class="getChoiceIconClasses(soraAccountType === 'oauth', 'rose')">
-              <Icon name="key" size="sm" />
-            </div>
-            <div>
-              <span class="create-account-modal__choice-title block text-sm font-medium">OAuth</span>
-              <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.chatgptOauth') }}</span>
-            </div>
-          </button>
-          <button
-            type="button"
-            @click="soraAccountType = 'apikey'; accountCategory = 'apikey'"
-            :class="getChoiceCardClasses(soraAccountType === 'apikey', 'rose')"
-          >
-            <div :class="getChoiceIconClasses(soraAccountType === 'apikey', 'rose')">
-              <Icon name="link" size="sm" />
-            </div>
-            <div>
-              <span class="create-account-modal__choice-title block text-sm font-medium">{{ t('admin.accounts.types.soraApiKey') }}</span>
-              <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.soraApiKeyHint') }}</span>
-            </div>
           </button>
         </div>
       </div>
@@ -748,14 +693,14 @@
             type="text"
             class="input"
             :placeholder="
-              form.platform === 'openai' || form.platform === 'sora'
+              form.platform === 'openai'
                 ? 'https://api.openai.com'
                 : form.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
                   : 'https://api.anthropic.com'
             "
           />
-          <p class="input-hint">{{ form.platform === 'sora' ? t('admin.accounts.soraUpstreamBaseUrlHint') : baseUrlHint }}</p>
+          <p class="input-hint">{{ baseUrlHint }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.apiKeyRequired') }}</label>
@@ -2165,21 +2110,17 @@
         :loading="currentOAuthState.loading"
         :error="currentOAuthState.error"
         :show-help="form.platform === 'anthropic'"
-        :show-proxy-warning="form.platform !== 'openai' && form.platform !== 'sora' && !!form.proxy_id"
+        :show-proxy-warning="form.platform !== 'openai' && !!form.proxy_id"
         :allow-multiple="form.platform === 'anthropic'"
         :show-cookie-option="form.platform === 'anthropic'"
-        :show-refresh-token-option="form.platform === 'openai' || form.platform === 'sora' || form.platform === 'antigravity'"
+        :show-refresh-token-option="form.platform === 'openai' || form.platform === 'antigravity'"
         :show-mobile-refresh-token-option="form.platform === 'openai'"
-        :show-session-token-option="form.platform === 'sora'"
-        :show-access-token-option="form.platform === 'sora'"
         :platform="form.platform"
         :show-project-id="geminiOAuthType === 'code_assist'"
         @generate-url="handleGenerateUrl"
         @cookie-auth="handleCookieAuth"
         @validate-refresh-token="handleValidateRefreshToken"
         @validate-mobile-refresh-token="handleOpenAIValidateMobileRT"
-        @validate-session-token="handleValidateSessionToken"
-        @import-access-token="handleImportAccessToken"
       />
 
     </div>
@@ -2566,7 +2507,6 @@ import {
   buildCreateAntigravityExtra,
   buildCreateBedrockCredentials,
   buildCreateOpenAIExtra,
-  buildCreateSoraExtra,
   resolveBatchCreateOutcome,
   resolveCreateAccountGeminiSelectedTier,
   resolveCreateAccountOAuthFlow
@@ -2651,19 +2591,17 @@ const appStore = useAppStore()
 
 // OAuth composables
 const oauth = useAccountOAuth() // For Anthropic OAuth
-const openaiOAuth = useOpenAIOAuth({ platform: 'openai' }) // For OpenAI OAuth
-const soraOAuth = useOpenAIOAuth({ platform: 'sora' }) // For Sora OAuth
+const openaiOAuth = useOpenAIOAuth() // For OpenAI OAuth
 const geminiOAuth = useGeminiOAuth() // For Gemini OAuth
 const antigravityOAuth = useAntigravityOAuth() // For Antigravity OAuth
-const activeOpenAIOAuth = computed(() => (form.platform === 'sora' ? soraOAuth : openaiOAuth))
 
 const currentOAuthState = computed(() => {
-  if (form.platform === 'openai' || form.platform === 'sora') {
+  if (form.platform === 'openai') {
     return {
-      authUrl: activeOpenAIOAuth.value.authUrl.value,
-      sessionId: activeOpenAIOAuth.value.sessionId.value,
-      loading: activeOpenAIOAuth.value.loading.value,
-      error: activeOpenAIOAuth.value.error.value
+      authUrl: openaiOAuth.authUrl.value,
+      sessionId: openaiOAuth.sessionId.value,
+      loading: openaiOAuth.loading.value,
+      error: openaiOAuth.error.value
     }
   }
   if (form.platform === 'gemini') {
@@ -2727,7 +2665,6 @@ const anthropicPassthroughEnabled = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false) // For antigravity accounts: enable AI Credits overages
 const antigravityAccountType = ref<'oauth' | 'upstream'>('oauth') // For antigravity: oauth or upstream
-const soraAccountType = ref<'oauth' | 'apikey'>('oauth') // For sora: oauth or apikey (upstream)
 const upstreamBaseUrl = ref('') // For upstream type: base URL
 const upstreamApiKey = ref('') // For upstream type: API key
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
@@ -2974,7 +2911,6 @@ const clearAntigravityModelState = () => {
 const resetOAuthClientsState = (includeFlowState = false) => {
   oauth.resetState()
   openaiOAuth.resetState()
-  soraOAuth.resetState()
   geminiOAuth.resetState()
   antigravityOAuth.resetState()
   if (includeFlowState) {
@@ -3006,15 +2942,10 @@ watch(
 
 // Sync form.type based on accountCategory, addMethod, and platform-specific type
 watch(
-  [accountCategory, addMethod, antigravityAccountType, soraAccountType],
-  ([category, method, agType, soraType]) => {
+  [accountCategory, addMethod, antigravityAccountType],
+  ([category, method, agType]) => {
     // Antigravity upstream 类型（实际创建为 apikey）
     if (form.platform === 'antigravity' && agType === 'upstream') {
-      form.type = 'apikey'
-      return
-    }
-    // Sora apikey 类型（上游透传）
-    if (form.platform === 'sora' && soraType === 'apikey') {
       form.type = 'apikey'
       return
     }
@@ -3053,13 +2984,6 @@ watch(
     // Reset Anthropic/Antigravity-specific settings when switching to other platforms
     if (newPlatform !== 'anthropic' && newPlatform !== 'antigravity') {
       interceptWarmupRequests.value = false
-    }
-    if (newPlatform === 'sora') {
-      // 默认 OAuth，但允许用户选择 API Key
-      accountCategory.value = 'oauth-based'
-      addMethod.value = 'oauth'
-      form.type = 'oauth'
-      soraAccountType.value = 'oauth'
     }
     if (newPlatform !== 'openai') {
       resetOpenAICreateState()
@@ -3791,8 +3715,7 @@ const goBackToBasicInfo = () => {
 const runPlatformOAuthGenerateUrl = async () => {
   switch (form.platform) {
     case 'openai':
-    case 'sora':
-      await activeOpenAIOAuth.value.generateAuthUrl(form.proxy_id)
+      await openaiOAuth.generateAuthUrl(form.proxy_id)
       return
     case 'gemini':
       await geminiOAuth.generateAuthUrl(
@@ -3815,7 +3738,7 @@ const handleGenerateUrl = async () => {
 }
 
 const runPlatformRefreshTokenValidation = (refreshToken: string) => {
-  if (form.platform === 'openai' || form.platform === 'sora') {
+  if (form.platform === 'openai') {
     handleOpenAIValidateRT(refreshToken)
     return
   }
@@ -3826,45 +3749,6 @@ const runPlatformRefreshTokenValidation = (refreshToken: string) => {
 
 const handleValidateRefreshToken = (rt: string) => {
   runPlatformRefreshTokenValidation(rt)
-}
-
-const runPlatformSessionTokenValidation = (sessionToken: string) => {
-  if (form.platform === 'sora') {
-    handleSoraValidateST(sessionToken)
-  }
-}
-
-const handleValidateSessionToken = (sessionToken: string) => {
-  runPlatformSessionTokenValidation(sessionToken)
-}
-
-// Sora 手动 AT 批量导入
-const handleImportAccessToken = async (accessTokenInput: string) => {
-  const oauthClient = activeOpenAIOAuth.value
-  const commonPayload = buildCurrentCreateSharedPayload()
-  await runBatchCreateFlow({
-    rawInput: accessTokenInput,
-    emptyInputMessage: 'Please enter at least one Access Token',
-    loadingRef: oauthClient.loading,
-    errorRef: oauthClient.error,
-    onComplete: createBatchCompletionHandler(oauthClient.error),
-    processEntry: async (accessToken, index, accessTokens) => {
-      const credentials: Record<string, unknown> = {
-        access_token: accessToken,
-      }
-      const accountName = buildCreateBatchAccountName(form.name, index, accessTokens.length)
-      await createOAuthAccount({
-        commonPayload,
-        name: accountName,
-        platform: 'sora',
-        type: 'oauth',
-        credentials,
-        extra: buildCreateSoraExtra()
-      })
-      return null
-    },
-    resolveUnexpectedError: resolveBatchCreateUnexpectedError
-  })
 }
 
 const formatDateTimeLocal = formatDateTimeLocalInput
@@ -3943,7 +3827,7 @@ const createAnthropicOAuthAccountFromTokenInfo = async (options: {
 
 // OpenAI OAuth 授权码兑换
 const handleOpenAIExchange = async (authCode: string) => {
-  const oauthClient = activeOpenAIOAuth.value
+  const oauthClient = openaiOAuth
   if (!authCode.trim() || !oauthClient.sessionId.value) return
 
   await runOAuthExchangeFlow(
@@ -3987,8 +3871,8 @@ const handleOpenAIExchange = async (authCode: string) => {
       const target = buildCreateOpenAICompatOAuthTarget({
         baseName: form.name,
         credentials,
-        extra: form.platform === 'openai' ? extra : oauthExtra,
-        platform: form.platform as 'openai' | 'sora'
+        extra,
+        platform: 'openai'
       })
 
       await createOAuthAccount({
@@ -4005,12 +3889,12 @@ const handleOpenAIExchange = async (authCode: string) => {
 }
 
 // OpenAI 手动 RT 批量验证和创建
-// OpenAI Mobile RT 使用的 client_id（与后端 openai.SoraClientID 一致）
+// OpenAI Mobile RT 使用的 client_id
 const OPENAI_MOBILE_RT_CLIENT_ID = 'app_LlGpXReQgckcGGUo2JrYvtJK'
 
-// OpenAI/Sora RT 批量验证和创建（共享逻辑）
+// OpenAI RT 批量验证和创建
 const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string) => {
-  const oauthClient = activeOpenAIOAuth.value
+  const oauthClient = openaiOAuth
   const commonPayload = buildCurrentCreateSharedPayload()
   await runBatchCreateFlow({
     rawInput: refreshTokenInput,
@@ -4043,10 +3927,10 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
       const target = buildCreateOpenAICompatOAuthTarget({
         baseName: form.name,
         credentials,
-        extra: form.platform === 'openai' ? extra : oauthExtra,
+        extra,
         fallbackBaseName: tokenInfo.email || 'OpenAI OAuth Account',
         index,
-        platform: form.platform as 'openai' | 'sora',
+        platform: 'openai',
         total: refreshTokens.length
       })
 
@@ -4064,42 +3948,8 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
 // 手动输入 RT（Codex CLI client_id，默认）
 const handleOpenAIValidateRT = (rt: string) => handleOpenAIBatchRT(rt)
 
-// 手动输入 Mobile RT（SoraClientID）
+// 手动输入 Mobile RT
 const handleOpenAIValidateMobileRT = (rt: string) => handleOpenAIBatchRT(rt, OPENAI_MOBILE_RT_CLIENT_ID)
-
-// Sora 手动 ST 批量验证和创建
-const handleSoraValidateST = async (sessionTokenInput: string) => {
-  const oauthClient = activeOpenAIOAuth.value
-  const commonPayload = buildCurrentCreateSharedPayload()
-  await runBatchCreateFlow({
-    rawInput: sessionTokenInput,
-    emptyInputMessage: t('admin.accounts.oauth.openai.pleaseEnterSessionToken'),
-    loadingRef: oauthClient.loading,
-    errorRef: oauthClient.error,
-    onComplete: createBatchCompletionHandler(oauthClient.error),
-    processEntry: async (sessionToken, index, sessionTokens) => {
-      const tokenInfo = await oauthClient.validateSessionToken(sessionToken, form.proxy_id)
-      if (!tokenInfo) {
-        return consumeValidationFailureMessage(oauthClient.error)
-      }
-
-      const credentials = oauthClient.buildCredentials(tokenInfo)
-      credentials.session_token = sessionToken
-      await createOAuthAccount({
-        commonPayload,
-        name: buildCreateBatchAccountName(form.name, index, sessionTokens.length),
-        platform: 'sora',
-        type: 'oauth',
-        credentials,
-        extra: buildCreateSoraExtra(
-          oauthClient.buildExtraInfo(tokenInfo) as Record<string, unknown> | undefined
-        )
-      })
-      return null
-    },
-    resolveUnexpectedError: resolveBatchCreateUnexpectedError
-  })
-}
 
 // Antigravity 手动 RT 批量验证和创建
 const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
@@ -4235,7 +4085,6 @@ const handleAnthropicExchange = async (authCode: string) => {
 const runPlatformOAuthExchange = async (authCode: string) => {
   switch (form.platform) {
     case 'openai':
-    case 'sora':
       return handleOpenAIExchange(authCode)
     case 'gemini':
       return handleGeminiExchange(authCode)
@@ -4367,10 +4216,6 @@ const handleCookieAuth = async (sessionKey: string) => {
 
 .create-account-modal__platform-button--openai {
   color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
-}
-
-.create-account-modal__platform-button--sora {
-  color: color-mix(in srgb, rgb(var(--theme-brand-rose-rgb)) 84%, var(--theme-page-text));
 }
 
 .create-account-modal__platform-button--gemini {

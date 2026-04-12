@@ -7,8 +7,6 @@ import type {
   UpdateGroupRequest
 } from '@/types'
 
-const SORA_QUOTA_BYTES_PER_GB = 1024 * 1024 * 1024
-
 export const DEFAULT_SUPPORTED_MODEL_SCOPES = ['claude', 'gemini_text', 'gemini_image'] as const
 
 export interface SimpleAccount {
@@ -42,11 +40,6 @@ interface GroupBaseForm {
   image_price_1k: number | null
   image_price_2k: number | null
   image_price_4k: number | null
-  sora_image_price_360: number | null
-  sora_image_price_540: number | null
-  sora_video_price_per_request: number | null
-  sora_video_price_per_request_hd: number | null
-  sora_storage_quota_gb: number | null
   claude_code_only: boolean
   fallback_group_id: number | null
   fallback_group_id_on_invalid_request: number | null
@@ -82,11 +75,6 @@ export function createDefaultCreateGroupForm(): CreateGroupForm {
     image_price_1k: null,
     image_price_2k: null,
     image_price_4k: null,
-    sora_image_price_360: null,
-    sora_image_price_540: null,
-    sora_video_price_per_request: null,
-    sora_video_price_per_request_hd: null,
-    sora_storage_quota_gb: null,
     claude_code_only: false,
     fallback_group_id: null,
     fallback_group_id_on_invalid_request: null,
@@ -132,11 +120,6 @@ export function hydrateEditGroupForm(form: EditGroupForm, group: AdminGroup): vo
     image_price_1k: group.image_price_1k,
     image_price_2k: group.image_price_2k,
     image_price_4k: group.image_price_4k,
-    sora_image_price_360: group.sora_image_price_360,
-    sora_image_price_540: group.sora_image_price_540,
-    sora_video_price_per_request: group.sora_video_price_per_request,
-    sora_video_price_per_request_hd: group.sora_video_price_per_request_hd,
-    sora_storage_quota_gb: quotaBytesToGb(group.sora_storage_quota_bytes),
     claude_code_only: group.claude_code_only || false,
     fallback_group_id: group.fallback_group_id,
     fallback_group_id_on_invalid_request: group.fallback_group_id_on_invalid_request,
@@ -362,11 +345,6 @@ function buildBaseGroupPayload(
     image_price_1k: form.image_price_1k,
     image_price_2k: form.image_price_2k,
     image_price_4k: form.image_price_4k,
-    sora_image_price_360: form.sora_image_price_360,
-    sora_image_price_540: form.sora_image_price_540,
-    sora_video_price_per_request: form.sora_video_price_per_request,
-    sora_video_price_per_request_hd: form.sora_video_price_per_request_hd,
-    sora_storage_quota_bytes: quotaGbToBytes(form.sora_storage_quota_gb),
     claude_code_only: form.claude_code_only,
     fallback_group_id: form.fallback_group_id,
     fallback_group_id_on_invalid_request: form.fallback_group_id_on_invalid_request,
@@ -380,18 +358,4 @@ function buildBaseGroupPayload(
     copy_accounts_from_group_ids: [...form.copy_accounts_from_group_ids],
     model_routing: buildModelRoutingPayload(routingRules)
   }
-}
-
-function quotaGbToBytes(value: number | null): number {
-  if (!value || !Number.isFinite(value) || value <= 0) {
-    return 0
-  }
-  return Math.round(value * SORA_QUOTA_BYTES_PER_GB)
-}
-
-function quotaBytesToGb(value: number): number | null {
-  if (!Number.isFinite(value) || value <= 0) {
-    return null
-  }
-  return Number((value / SORA_QUOTA_BYTES_PER_GB).toFixed(2))
 }

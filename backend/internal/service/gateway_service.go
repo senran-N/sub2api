@@ -124,7 +124,7 @@ type ForwardResult struct {
 	ImageCount int    // 生成的图片数量
 	ImageSize  string // 图片尺寸 "1K", "2K", "4K"
 
-	// Sora 媒体字段
+	// 媒体生成附加字段
 	MediaType string // image / video / prompt
 	MediaURL  string // 生成后的媒体地址（可选）
 }

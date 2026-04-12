@@ -130,7 +130,7 @@ func (UsageLog) Fields() []ent.Field {
 			MaxLen(10).
 			Optional().
 			Nillable(),
-		// 媒体类型字段（sora 使用）
+		// 媒体类型字段
 		field.String("media_type").
 			MaxLen(16).
 			Optional().

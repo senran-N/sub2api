@@ -61,17 +61,12 @@ func (s *adminServiceImpl) buildGroupForCreate(ctx context.Context, input *Creat
 		ImagePrice1K:                    normalizePrice(input.ImagePrice1K),
 		ImagePrice2K:                    normalizePrice(input.ImagePrice2K),
 		ImagePrice4K:                    normalizePrice(input.ImagePrice4K),
-		SoraImagePrice360:               normalizePrice(input.SoraImagePrice360),
-		SoraImagePrice540:               normalizePrice(input.SoraImagePrice540),
-		SoraVideoPricePerRequest:        normalizePrice(input.SoraVideoPricePerRequest),
-		SoraVideoPricePerRequestHD:      normalizePrice(input.SoraVideoPricePerRequestHD),
 		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
 		FallbackGroupID:                 input.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: fallbackOnInvalidRequest,
 		ModelRouting:                    input.ModelRouting,
 		MCPXMLInject:                    normalizeCreateGroupMCPXMLInject(input.MCPXMLInject),
 		SupportedModelScopes:            input.SupportedModelScopes,
-		SoraStorageQuotaBytes:           input.SoraStorageQuotaBytes,
 		AllowMessagesDispatch:           input.AllowMessagesDispatch,
 		RequireOAuthOnly:                input.RequireOAuthOnly,
 		RequirePrivacySet:               input.RequirePrivacySet,
@@ -115,21 +110,6 @@ func (s *adminServiceImpl) applyUpdateGroupInput(ctx context.Context, id int64, 
 	}
 	if input.ImagePrice4K != nil {
 		group.ImagePrice4K = normalizePrice(input.ImagePrice4K)
-	}
-	if input.SoraImagePrice360 != nil {
-		group.SoraImagePrice360 = normalizePrice(input.SoraImagePrice360)
-	}
-	if input.SoraImagePrice540 != nil {
-		group.SoraImagePrice540 = normalizePrice(input.SoraImagePrice540)
-	}
-	if input.SoraVideoPricePerRequest != nil {
-		group.SoraVideoPricePerRequest = normalizePrice(input.SoraVideoPricePerRequest)
-	}
-	if input.SoraVideoPricePerRequestHD != nil {
-		group.SoraVideoPricePerRequestHD = normalizePrice(input.SoraVideoPricePerRequestHD)
-	}
-	if input.SoraStorageQuotaBytes != nil {
-		group.SoraStorageQuotaBytes = *input.SoraStorageQuotaBytes
 	}
 
 	if input.ClaudeCodeOnly != nil {

@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -37,9 +36,6 @@ type AccountTestService struct {
 	httpUpstream              HTTPUpstream
 	cfg                       *config.Config
 	tlsFPProfileService       *TLSFingerprintProfileService
-	soraTestGuardMu           sync.Mutex
-	soraTestLastRun           map[int64]time.Time
-	soraTestCooldown          time.Duration
 }
 
 // NewAccountTestService creates a new AccountTestService
@@ -58,8 +54,6 @@ func NewAccountTestService(
 		httpUpstream:              httpUpstream,
 		cfg:                       cfg,
 		tlsFPProfileService:       tlsFPProfileService,
-		soraTestLastRun:           make(map[int64]time.Time),
-		soraTestCooldown:          defaultSoraTestCooldown,
 	}
 }
 
@@ -164,10 +158,6 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 
 	if account.Platform == PlatformAntigravity {
 		return s.routeAntigravityTest(c, account, modelID, prompt)
-	}
-
-	if account.Platform == PlatformSora {
-		return s.testSoraAccountConnection(c, account)
 	}
 
 	return s.testClaudeAccountConnection(c, account, modelID, prompt)

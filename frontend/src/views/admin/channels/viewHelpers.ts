@@ -12,7 +12,6 @@ export function getPlatformTextClass(platform: GroupPlatform | string): string {
     case 'openai': return 'channel-view__tone-text channel-view__tone-text--success'
     case 'gemini': return 'channel-view__tone-text channel-view__tone-text--info'
     case 'antigravity': return 'channel-view__tone-text channel-view__tone-text--brand-purple'
-    case 'sora': return 'channel-view__tone-text channel-view__tone-text--brand-rose'
     default: return 'channel-view__text-muted'
   }
 }
@@ -23,7 +22,6 @@ export function getRateBadgeClass(platform: GroupPlatform | string): string {
     case 'openai': return 'theme-chip theme-chip--compact theme-chip--success'
     case 'gemini': return 'theme-chip theme-chip--compact theme-chip--info'
     case 'antigravity': return 'theme-chip theme-chip--compact theme-chip--brand-purple'
-    case 'sora': return 'theme-chip theme-chip--compact theme-chip--brand-rose'
     default: return 'theme-chip theme-chip--compact theme-chip--neutral'
   }
 }

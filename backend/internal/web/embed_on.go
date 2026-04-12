@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/server/middleware"
 )
 
 const (
@@ -256,7 +256,6 @@ func shouldBypassEmbeddedFrontend(path string) bool {
 	return strings.HasPrefix(trimmed, "/api/") ||
 		strings.HasPrefix(trimmed, "/v1/") ||
 		strings.HasPrefix(trimmed, "/v1beta/") ||
-		strings.HasPrefix(trimmed, "/sora/") ||
 		strings.HasPrefix(trimmed, "/antigravity/") ||
 		strings.HasPrefix(trimmed, "/setup/") ||
 		trimmed == "/health" ||

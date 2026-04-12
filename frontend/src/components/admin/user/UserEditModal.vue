@@ -43,14 +43,6 @@
         <label class="input-label">{{ t('admin.users.columns.concurrency') }}</label>
         <input v-model.number="form.concurrency" type="number" class="input" />
       </div>
-      <div>
-        <label class="input-label">{{ t('admin.users.soraStorageQuota') }}</label>
-        <div class="flex items-center gap-2">
-          <input v-model.number="form.sora_storage_quota_gb" type="number" min="0" step="0.1" class="input" placeholder="0" />
-          <span class="theme-text-muted shrink-0 text-sm">GB</span>
-        </div>
-        <p class="theme-text-muted mt-1 text-xs">{{ t('admin.users.soraStorageQuotaHint') }}</p>
-      </div>
       <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
     </form>
     <template #footer>
@@ -98,7 +90,6 @@ const form = reactive({
   username: '',
   notes: '',
   concurrency: 1,
-  sora_storage_quota_gb: 0,
   customAttributes: {} as UserAttributeValuesMap
 })
 
@@ -110,9 +101,6 @@ watch(() => props.user, (user) => {
       username: user.username || '',
       notes: user.notes || '',
       concurrency: user.concurrency,
-      sora_storage_quota_gb: Number(
-        ((user.sora_storage_quota_bytes || 0) / (1024 * 1024 * 1024)).toFixed(2)
-      ),
       customAttributes: {}
     })
     passwordCopied.value = false
@@ -155,8 +143,7 @@ const handleUpdateUser = async () => {
       email: form.email,
       username: form.username,
       notes: form.notes,
-      concurrency: form.concurrency,
-      sora_storage_quota_bytes: Math.round((form.sora_storage_quota_gb || 0) * 1024 * 1024 * 1024)
+      concurrency: form.concurrency
     }
 
     if (form.password.trim()) {

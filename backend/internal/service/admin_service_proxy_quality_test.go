@@ -21,7 +21,6 @@ func TestFinalizeProxyQualityResult_ScoreAndGrade(t *testing.T) {
 			{Target: "openai", Category: "reachability", Status: "pass"},
 			{Target: "anthropic", Category: "reachability", Status: "warn"},
 			{Target: "gemini", Category: "reachability", Status: "fail"},
-			{Target: "sora", Category: "reachability", Status: "challenge"},
 		},
 	}
 
@@ -34,7 +33,7 @@ func TestFinalizeProxyQualityResult_ScoreAndGrade(t *testing.T) {
 	require.Contains(t, result.Summary, "综合评分")
 }
 
-func TestRunProxyQualityTarget_SoraChallenge(t *testing.T) {
+func TestRunProxyQualityTarget_CloudflareChallenge(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Header().Set("cf-ray", "test-ray-123")
@@ -44,7 +43,7 @@ func TestRunProxyQualityTarget_SoraChallenge(t *testing.T) {
 	defer server.Close()
 
 	target := proxyQualityTarget{
-		Target: "sora",
+		Target: "openai",
 		URL:    server.URL,
 		Method: http.MethodGet,
 		AllowedStatuses: map[int]struct{}{

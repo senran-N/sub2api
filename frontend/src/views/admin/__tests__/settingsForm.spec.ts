@@ -40,7 +40,6 @@ function createSettingsForm(overrides: Partial<SettingsForm> = {}): SettingsForm
     hide_ccs_import_button: false,
     purchase_subscription_enabled: false,
     purchase_subscription_url: '',
-    sora_client_enabled: false,
     custom_menu_items: [],
     custom_endpoints: [],
     frontend_url: '',

@@ -1,4 +1,4 @@
-package soraerror
+package cloudflareutil
 
 import (
 	"net/http"

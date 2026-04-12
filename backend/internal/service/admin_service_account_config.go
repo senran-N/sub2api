@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -32,22 +31,6 @@ func (s *adminServiceImpl) resolveCreateAccountGroupIDs(ctx context.Context, inp
 	}
 
 	return groupIDs, nil
-}
-
-func validateSoraAPIKeyBaseURL(platform, accountType string, credentials map[string]any) error {
-	if platform != PlatformSora || accountType != AccountTypeAPIKey {
-		return nil
-	}
-
-	baseURL, _ := credentials["base_url"].(string)
-	baseURL = strings.TrimSpace(baseURL)
-	if baseURL == "" {
-		return errors.New("sora apikey 账号必须设置 base_url")
-	}
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		return errors.New("base_url 必须以 http:// 或 https:// 开头")
-	}
-	return nil
 }
 
 func normalizeCreateAccountAutoPauseOnExpired(value *bool) bool {
@@ -84,9 +67,6 @@ func validateAccountRateMultiplier(value *float64) error {
 }
 
 func (s *adminServiceImpl) buildAccountForCreate(input *CreateAccountInput) (*Account, error) {
-	if err := validateSoraAPIKeyBaseURL(input.Platform, input.Type, input.Credentials); err != nil {
-		return nil, err
-	}
 	if err := validateAccountRateMultiplier(input.RateMultiplier); err != nil {
 		return nil, err
 	}
@@ -209,10 +189,6 @@ func (s *adminServiceImpl) applyAccountUpdateInput(ctx context.Context, account 
 	}
 	if input.AutoPauseOnExpired != nil {
 		account.AutoPauseOnExpired = *input.AutoPauseOnExpired
-	}
-
-	if err := validateSoraAPIKeyBaseURL(account.Platform, account.Type, account.Credentials); err != nil {
-		return err
 	}
 
 	if input.GroupIDs != nil {

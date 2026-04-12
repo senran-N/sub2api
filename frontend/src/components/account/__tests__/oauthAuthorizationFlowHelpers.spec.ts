@@ -18,7 +18,6 @@ import {
 describe('oauthAuthorizationFlowHelpers', () => {
   it('resolves platform-specific oauth key prefixes', () => {
     expect(resolveOAuthKeyPrefix('openai')).toBe('admin.accounts.oauth.openai')
-    expect(resolveOAuthKeyPrefix('sora')).toBe('admin.accounts.oauth.openai')
     expect(resolveOAuthKeyPrefix('gemini')).toBe('admin.accounts.oauth.gemini')
     expect(resolveOAuthKeyPrefix('antigravity')).toBe('admin.accounts.oauth.antigravity')
     expect(resolveOAuthKeyPrefix('anthropic')).toBe('admin.accounts.oauth')
@@ -54,7 +53,6 @@ describe('oauthAuthorizationFlowHelpers', () => {
 
   it('resolves platform-specific oauth behavior flags', () => {
     expect(shouldExtractOAuthCallback('openai')).toBe(true)
-    expect(shouldExtractOAuthCallback('sora')).toBe(true)
     expect(shouldExtractOAuthCallback('anthropic')).toBe(false)
     expect(resolveOAuthImportantNoticeKey('openai')).toBe('admin.accounts.oauth.openai.importantNotice')
     expect(resolveOAuthImportantNoticeKey('antigravity')).toBe('admin.accounts.oauth.antigravity.importantNotice')

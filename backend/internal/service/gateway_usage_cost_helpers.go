@@ -17,18 +17,6 @@ func usageTokensFromClaudeUsage(usage ClaudeUsage) UsageTokens {
 	}
 }
 
-func soraPriceConfigFromGroup(group *Group) *SoraPriceConfig {
-	if group == nil {
-		return nil
-	}
-	return &SoraPriceConfig{
-		ImagePrice360:          group.SoraImagePrice360,
-		ImagePrice540:          group.SoraImagePrice540,
-		VideoPricePerRequest:   group.SoraVideoPricePerRequest,
-		VideoPricePerRequestHD: group.SoraVideoPricePerRequestHD,
-	}
-}
-
 func imagePriceConfigFromGroup(group *Group) *ImagePriceConfig {
 	if group == nil {
 		return nil
@@ -47,9 +35,9 @@ func (s *GatewayService) calculateGatewayUsageCost(ctx context.Context, result *
 
 	switch {
 	case result.MediaType == "image":
-		return s.billingService.CalculateSoraImageCost(result.ImageSize, result.ImageCount, soraPriceConfigFromGroup(apiKey.Group), multiplier)
+		return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, imagePriceConfigFromGroup(apiKey.Group), multiplier)
 	case result.MediaType == "video":
-		return s.billingService.CalculateSoraVideoCost(billingModel, soraPriceConfigFromGroup(apiKey.Group), multiplier)
+		return &CostBreakdown{}
 	case result.MediaType == "prompt":
 		return &CostBreakdown{}
 	case result.ImageCount > 0:

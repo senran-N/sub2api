@@ -104,8 +104,6 @@
           />
           <SettingsPurchaseCard :form="form" />
 
-          <SettingsSoraClientCard :form="form" />
-
           <SettingsCustomMenuCard
             :form="form"
             @add-item="addMenuItem"
@@ -139,12 +137,8 @@
           <BackupSettings />
         </div>
 
-        <div v-if="activeTab === 'data'">
-          <DataManagementSettings />
-        </div>
-
         <SettingsSaveBar
-          v-if="activeTab !== 'backup' && activeTab !== 'data'"
+          v-if="activeTab !== 'backup'"
           :saving="saving"
           :disabled="loadFailed"
         />
@@ -177,7 +171,6 @@ import SettingsSchedulingCard from './settings/SettingsSchedulingCard.vue'
 import SettingsSaveBar from './settings/SettingsSaveBar.vue'
 import SettingsSiteCard from './settings/SettingsSiteCard.vue'
 import SettingsSmtpCard from './settings/SettingsSmtpCard.vue'
-import SettingsSoraClientCard from './settings/SettingsSoraClientCard.vue'
 import SettingsStreamTimeoutCard from './settings/SettingsStreamTimeoutCard.vue'
 import SettingsTestEmailCard from './settings/SettingsTestEmailCard.vue'
 import SettingsLoadingState from './settings/SettingsLoadingState.vue'
@@ -187,13 +180,12 @@ import { useSettingsViewForm } from './settings/useSettingsViewForm'
 import { useSettingsViewPolicies } from './settings/useSettingsViewPolicies'
 
 const BackupSettings = defineAsyncComponent(() => import('@/views/admin/BackupView.vue'))
-const DataManagementSettings = defineAsyncComponent(() => import('@/views/admin/DataManagementView.vue'))
 
 const { t } = useI18n()
 const appStore = useAppStore()
 const adminSettingsStore = useAdminSettingsStore()
 
-type SettingsTab = 'general' | 'security' | 'users' | 'gateway' | 'email' | 'backup' | 'data'
+type SettingsTab = 'general' | 'security' | 'users' | 'gateway' | 'email' | 'backup'
 
 interface DefaultSubscriptionGroupOptionView {
   label: string
@@ -211,7 +203,6 @@ const settingsTabs = [
   { key: 'gateway'  as SettingsTab, icon: 'server' as const },
   { key: 'email'    as SettingsTab, icon: 'mail'   as const },
   { key: 'backup'   as SettingsTab, icon: 'database' as const },
-  { key: 'data'     as SettingsTab, icon: 'cube'     as const },
 ]
 const { copyToClipboard } = useClipboard()
 

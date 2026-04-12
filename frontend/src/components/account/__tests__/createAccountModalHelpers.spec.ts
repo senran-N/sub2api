@@ -15,8 +15,6 @@ import {
   buildCreateBedrockCredentials,
   buildCreateOpenAIExtra,
   buildCreateOAuthAccountPayload,
-  buildCreateSoraOAuthCredentials,
-  buildCreateSoraExtra,
   resolveBatchCreateOutcome,
   resolveCreateAccountGeminiSelectedTier,
   resolveCreateAccountOAuthFlow
@@ -304,38 +302,21 @@ describe('createAccountModalHelpers', () => {
     expect(
       buildCreateApiKeyCredentials({
         allowedModels: [],
-        apiKey: 'sk-demo',
-        baseUrl: 'ftp://invalid',
+        apiKey: '',
+        baseUrl: '',
         customErrorCodesEnabled: false,
         geminiTierId: '',
         interceptWarmupRequests: false,
         isOpenAIModelRestrictionDisabled: true,
         mode: 'mapping',
         modelMappings: [],
-        platform: 'sora',
+        platform: 'openai',
         poolModeEnabled: false,
         poolModeRetryCount: 0,
         selectedErrorCodes: []
       })
     ).toEqual({
-      errorMessageKey: 'admin.accounts.soraBaseUrlInvalidScheme'
-    })
-  })
-
-  it('removes openai-only flags from sora extra', () => {
-    expect(
-      buildCreateSoraExtra(
-        {
-          openai_passthrough: true,
-          codex_cli_only: true,
-          openai_oauth_responses_websockets_v2_mode: 'passthrough',
-          custom: 'value'
-        },
-        123
-      )
-    ).toEqual({
-      custom: 'value',
-      linked_openai_account_id: '123'
+      errorMessageKey: 'admin.accounts.pleaseEnterApiKey'
     })
   })
 
@@ -366,21 +347,7 @@ describe('createAccountModalHelpers', () => {
 
     expect(buildCreateBatchAccountName('Demo', 1, 3)).toBe('Demo #2')
     expect(buildCreateBatchAccountName('', 0, 1, 'Fallback')).toBe('Fallback')
-    expect(buildCreateBatchAccountName('Demo', 0, 2, undefined, '(Sora)')).toBe('Demo #1 (Sora)')
-
-    expect(
-      buildCreateSoraOAuthCredentials({
-        access_token: 'at',
-        refresh_token: 'rt',
-        client_id: 'client',
-        expires_at: 10
-      })
-    ).toEqual({
-      access_token: 'at',
-      refresh_token: 'rt',
-      client_id: 'client',
-      expires_at: 10
-    })
+    expect(buildCreateBatchAccountName('Demo', 0, 2, undefined, '(Linked)')).toBe('Demo #1 (Linked)')
 
     expect(
       buildCreateOAuthAccountPayload({
@@ -524,26 +491,6 @@ describe('createAccountModalHelpers', () => {
           openai_passthrough: true,
           custom: 'value'
         },
-        fallbackBaseName: 'fallback@example.com',
-        index: 1,
-        platform: 'sora',
-        total: 2
-      })
-    ).toEqual({
-      name: 'fallback@example.com #2',
-      platform: 'sora',
-      type: 'oauth',
-      credentials: {
-        access_token: 'at',
-        refresh_token: 'rt',
-        client_id: 'cid',
-        expires_at: 99
-      },
-      extra: {
-        custom: 'value'
-      }
-    })
-
     expect(resolveBatchCreateOutcome({ failedCount: 0, successCount: 2, t })).toEqual({
       type: 'success',
       message: 'admin.accounts.oauth.batchSuccess:{"count":2}',

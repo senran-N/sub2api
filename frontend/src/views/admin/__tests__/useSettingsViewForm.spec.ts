@@ -51,7 +51,6 @@ function createSystemSettings(overrides: Partial<SystemSettings> = {}): SystemSe
     hide_ccs_import_button: false,
     purchase_subscription_enabled: false,
     purchase_subscription_url: '',
-    sora_client_enabled: false,
     backend_mode_enabled: false,
     custom_menu_items: [],
     custom_endpoints: [],

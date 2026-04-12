@@ -20,7 +20,7 @@ describe('channels view helpers', () => {
     expect(getPlatformTextClass('unknown')).toBe('channel-view__text-muted')
 
     expect(getRateBadgeClass('anthropic')).toContain('theme-chip--brand-orange')
-    expect(getRateBadgeClass('sora')).toContain('theme-chip--brand-rose')
+    expect(getRateBadgeClass('openai')).toContain('theme-chip--brand-rose')
     expect(getRateBadgeClass('unknown')).toContain('theme-chip--neutral')
   })
 

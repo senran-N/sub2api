@@ -4,7 +4,6 @@ import SettingsCustomMenuCard from '../settings/SettingsCustomMenuCard.vue'
 import SettingsDefaultsCard from '../settings/SettingsDefaultsCard.vue'
 import SettingsPurchaseCard from '../settings/SettingsPurchaseCard.vue'
 import SettingsSiteCard from '../settings/SettingsSiteCard.vue'
-import SettingsSoraClientCard from '../settings/SettingsSoraClientCard.vue'
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -50,7 +49,6 @@ function createForm(overrides: Record<string, unknown> = {}) {
     hide_ccs_import_button: false,
     purchase_subscription_enabled: false,
     purchase_subscription_url: '',
-    sora_client_enabled: false,
     custom_menu_items: [],
     ...overrides
   }
@@ -150,23 +148,7 @@ describe('settings general cards', () => {
     expect(wrapper.get('a').attributes('href')).toContain('ADMIN_PAYMENT_INTEGRATION_API.md')
   })
 
-  it('keeps sora toggle and custom menu item actions wired through extracted cards', async () => {
-    const soraForm = createForm() as any
-    const soraWrapper = mount(SettingsSoraClientCard, {
-      props: {
-        form: soraForm
-      },
-      global: {
-        stubs: {
-          Toggle: ToggleStub
-        }
-      }
-    })
-
-    await soraWrapper.find('.toggle').setValue(true)
-
-    expect(soraForm.sora_client_enabled).toBe(true)
-
+  it('keeps custom menu item actions wired through the extracted card', async () => {
     const menuForm = createForm({
       custom_menu_items: [
         {

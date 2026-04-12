@@ -20,7 +20,6 @@ Feature-specific logic should live with the feature UI:
   - stats and chart sections
   - dashboard-only data helpers
 - `dataManagement/`
-  - Sora profile cards and drawers
   - data-management-only form helpers
   - data-management-only composables
 - `channels/`

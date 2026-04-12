@@ -35,11 +35,6 @@ function createAdminGroup(overrides: Partial<AdminGroup> = {}): AdminGroup {
     image_price_1k: null,
     image_price_2k: null,
     image_price_4k: null,
-    sora_image_price_360: null,
-    sora_image_price_540: null,
-    sora_video_price_per_request: null,
-    sora_video_price_per_request_hd: null,
-    sora_storage_quota_bytes: 0,
     claude_code_only: false,
     fallback_group_id: null,
     fallback_group_id_on_invalid_request: null,
@@ -84,7 +79,7 @@ describe('group form defaults', () => {
 })
 
 describe('hydrateEditGroupForm', () => {
-  it('loads admin group fields and converts Sora quota bytes to GB', () => {
+  it('loads admin group fields and resets copy-account selections', () => {
     const editForm = createDefaultEditGroupForm()
     editForm.copy_accounts_from_group_ids = [5]
 
@@ -95,8 +90,7 @@ describe('hydrateEditGroupForm', () => {
         allow_messages_dispatch: true,
         default_mapped_model: 'gpt-5.4',
         model_routing_enabled: true,
-        supported_model_scopes: ['claude'],
-        sora_storage_quota_bytes: 1610612736
+        supported_model_scopes: ['claude']
       })
     )
 
@@ -105,7 +99,6 @@ describe('hydrateEditGroupForm', () => {
     expect(editForm.default_mapped_model).toBe('gpt-5.4')
     expect(editForm.model_routing_enabled).toBe(true)
     expect(editForm.supported_model_scopes).toEqual(['claude'])
-    expect(editForm.sora_storage_quota_gb).toBe(1.5)
     expect(editForm.copy_accounts_from_group_ids).toEqual([])
   })
 })
@@ -187,7 +180,7 @@ describe('create form rules', () => {
     expect(createForm.is_exclusive).toBe(true)
     expect(createForm.fallback_group_id_on_invalid_request).toBeNull()
 
-    createForm.platform = 'sora'
+    createForm.platform = 'gemini'
     createForm.allow_messages_dispatch = true
     createForm.default_mapped_model = 'gpt-5.4'
     createForm.require_oauth_only = true
@@ -203,13 +196,12 @@ describe('create form rules', () => {
 })
 
 describe('group payload builders', () => {
-  it('builds create payload with normalized limits, quota bytes, and copied routing rules', () => {
+  it('builds create payload with normalized limits and copied routing rules', () => {
     const createForm = createDefaultCreateGroupForm()
     createForm.name = 'primary'
     createForm.daily_limit_usd = '' as unknown as number
     createForm.weekly_limit_usd = 12
     createForm.monthly_limit_usd = -5
-    createForm.sora_storage_quota_gb = 1.25
     createForm.allow_messages_dispatch = true
     createForm.copy_accounts_from_group_ids = [1, 2]
 
@@ -223,7 +215,6 @@ describe('group payload builders', () => {
     expect(payload.daily_limit_usd).toBeNull()
     expect(payload.weekly_limit_usd).toBe(12)
     expect(payload.monthly_limit_usd).toBeNull()
-    expect(payload.sora_storage_quota_bytes).toBe(1342177280)
     expect(payload.allow_messages_dispatch).toBe(true)
     expect(payload.copy_accounts_from_group_ids).toEqual([1, 2])
     expect(payload.model_routing).toEqual({

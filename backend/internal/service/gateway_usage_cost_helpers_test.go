@@ -15,7 +15,7 @@ func TestCalculateGatewayUsageCost_PromptMediaReturnsZeroCost(t *testing.T) {
 	}
 
 	cost := svc.calculateGatewayUsageCost(context.Background(), &ForwardResult{
-		Model:     "sora-prompt",
+		Model:     "prompt-test",
 		MediaType: "prompt",
 	}, &APIKey{}, "", 1.2)
 

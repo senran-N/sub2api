@@ -7,8 +7,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/senran-N/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 )
 
 const (
@@ -94,7 +94,6 @@ func isAPIRoutePath(c *gin.Context) bool {
 	return strings.HasPrefix(path, "/v1/") ||
 		strings.HasPrefix(path, "/v1beta/") ||
 		strings.HasPrefix(path, "/antigravity/") ||
-		strings.HasPrefix(path, "/sora/") ||
 		strings.HasPrefix(path, "/responses")
 }
 

@@ -18,13 +18,6 @@ type OpenAIOAuthHandler struct {
 	adminService       openAIOAuthAdminService
 }
 
-func oauthPlatformFromPath(c *gin.Context) string {
-	if strings.Contains(c.FullPath(), "/admin/sora/") {
-		return service.PlatformSora
-	}
-	return service.PlatformOpenAI
-}
-
 // NewOpenAIOAuthHandler creates a new OpenAI OAuth handler
 func NewOpenAIOAuthHandler(openaiOAuthService *service.OpenAIOAuthService, adminService openAIOAuthAdminService) *OpenAIOAuthHandler {
 	return &OpenAIOAuthHandler{
@@ -52,7 +45,7 @@ func (h *OpenAIOAuthHandler) GenerateAuthURL(c *gin.Context) {
 		c.Request.Context(),
 		req.ProxyID,
 		req.RedirectURI,
-		oauthPlatformFromPath(c),
+		service.PlatformOpenAI,
 	)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -105,7 +98,6 @@ type OpenAIRefreshTokenRequest struct {
 
 // RefreshToken refreshes an OpenAI OAuth token
 // POST /api/v1/admin/openai/refresh-token
-// POST /api/v1/admin/sora/rt2at
 func (h *OpenAIOAuthHandler) RefreshToken(c *gin.Context) {
 	var req OpenAIRefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -129,11 +121,10 @@ func (h *OpenAIOAuthHandler) RefreshToken(c *gin.Context) {
 		}
 	}
 
-	// 未指定 client_id 时，根据请求路径平台自动设置默认值，避免 repository 层盲猜
+	// 未指定 client_id 时，使用 OpenAI 默认 client_id，避免 repository 层盲猜。
 	clientID := strings.TrimSpace(req.ClientID)
 	if clientID == "" {
-		platform := oauthPlatformFromPath(c)
-		clientID, _ = openai.OAuthClientConfigByPlatform(platform)
+		clientID, _ = openai.OAuthClientConfigByPlatform(service.PlatformOpenAI)
 	}
 
 	tokenInfo, err := h.openaiOAuthService.RefreshTokenWithClientID(c.Request.Context(), refreshToken, proxyURL, clientID)
@@ -145,39 +136,8 @@ func (h *OpenAIOAuthHandler) RefreshToken(c *gin.Context) {
 	response.Success(c, tokenInfo)
 }
 
-// ExchangeSoraSessionToken exchanges Sora session token to access token
-// POST /api/v1/admin/sora/st2at
-func (h *OpenAIOAuthHandler) ExchangeSoraSessionToken(c *gin.Context) {
-	var req struct {
-		SessionToken string `json:"session_token"`
-		ST           string `json:"st"`
-		ProxyID      *int64 `json:"proxy_id"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-
-	sessionToken := strings.TrimSpace(req.SessionToken)
-	if sessionToken == "" {
-		sessionToken = strings.TrimSpace(req.ST)
-	}
-	if sessionToken == "" {
-		response.BadRequest(c, "session_token is required")
-		return
-	}
-
-	tokenInfo, err := h.openaiOAuthService.ExchangeSoraSessionToken(c.Request.Context(), sessionToken, req.ProxyID)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, tokenInfo)
-}
-
-// RefreshAccountToken refreshes token for a specific OpenAI/Sora account
+// RefreshAccountToken refreshes token for a specific OpenAI account.
 // POST /api/v1/admin/openai/accounts/:id/refresh
-// POST /api/v1/admin/sora/accounts/:id/refresh
 func (h *OpenAIOAuthHandler) RefreshAccountToken(c *gin.Context) {
 	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -192,8 +152,7 @@ func (h *OpenAIOAuthHandler) RefreshAccountToken(c *gin.Context) {
 		return
 	}
 
-	platform := oauthPlatformFromPath(c)
-	if account.Platform != platform {
+	if account.Platform != service.PlatformOpenAI {
 		response.BadRequest(c, "Account platform does not match OAuth endpoint")
 		return
 	}
@@ -232,9 +191,8 @@ func (h *OpenAIOAuthHandler) RefreshAccountToken(c *gin.Context) {
 	response.Success(c, dto.AccountFromService(updatedAccount))
 }
 
-// CreateAccountFromOAuth creates a new OpenAI/Sora OAuth account from token info
+// CreateAccountFromOAuth creates a new OpenAI OAuth account from token info.
 // POST /api/v1/admin/openai/create-from-oauth
-// POST /api/v1/admin/sora/create-from-oauth
 func (h *OpenAIOAuthHandler) CreateAccountFromOAuth(c *gin.Context) {
 	var req struct {
 		SessionID   string  `json:"session_id" binding:"required"`
@@ -268,25 +226,19 @@ func (h *OpenAIOAuthHandler) CreateAccountFromOAuth(c *gin.Context) {
 	// Build credentials from token info
 	credentials := h.openaiOAuthService.BuildAccountCredentials(tokenInfo)
 
-	platform := oauthPlatformFromPath(c)
-
 	// Use email as default name if not provided
 	name := req.Name
 	if name == "" && tokenInfo.Email != "" {
 		name = tokenInfo.Email
 	}
 	if name == "" {
-		if platform == service.PlatformSora {
-			name = "Sora OAuth Account"
-		} else {
-			name = "OpenAI OAuth Account"
-		}
+		name = "OpenAI OAuth Account"
 	}
 
 	// Create account
 	account, err := h.adminService.CreateAccount(c.Request.Context(), &service.CreateAccountInput{
 		Name:        name,
-		Platform:    platform,
+		Platform:    service.PlatformOpenAI,
 		Type:        "oauth",
 		Credentials: credentials,
 		Extra:       nil,

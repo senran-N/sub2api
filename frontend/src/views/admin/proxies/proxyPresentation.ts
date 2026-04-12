@@ -90,8 +90,6 @@ export function getQualityTargetLabel(target: string, t: Translate) {
       return 'Anthropic'
     case 'gemini':
       return 'Gemini'
-    case 'sora':
-      return 'Sora'
     case 'ip_type':
       return t('admin.proxies.qualityTargetIPType')
     case 'abuse_check':

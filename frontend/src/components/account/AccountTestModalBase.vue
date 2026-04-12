@@ -29,7 +29,7 @@
         </span>
       </div>
 
-      <div v-if="!isSoraAccount" class="space-y-1.5">
+      <div class="space-y-1.5">
         <label class="input-label">{{ t('admin.accounts.selectTestModel') }}</label>
         <Select
           v-model="selectedModelId"
@@ -39,9 +39,6 @@
           label-key="display_name"
           :placeholder="loadingModels ? `${t('common.loading')}...` : t('admin.accounts.selectTestModel')"
         />
-      </div>
-      <div v-else class="account-test-modal__hint">
-        {{ t('admin.accounts.soraTestHint') }}
       </div>
 
       <div v-if="supportsGeminiImageTest" class="space-y-1.5">
@@ -275,7 +272,6 @@ const {
   testPrompt,
   loadingModels,
   generatedImages,
-  isSoraAccount,
   supportsGeminiImageTest,
   showCustomPromptComposer,
   showCopyButton,

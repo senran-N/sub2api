@@ -4,14 +4,12 @@ const {
   showError,
   generateAuthUrl,
   exchangeCode,
-  refreshOpenAIToken,
-  validateSoraSessionToken
+  refreshOpenAIToken
 } = vi.hoisted(() => ({
   showError: vi.fn(),
   generateAuthUrl: vi.fn(),
   exchangeCode: vi.fn(),
-  refreshOpenAIToken: vi.fn(),
-  validateSoraSessionToken: vi.fn()
+  refreshOpenAIToken: vi.fn()
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -25,8 +23,7 @@ vi.mock('@/api/admin', () => ({
     accounts: {
       generateAuthUrl,
       exchangeCode,
-      refreshOpenAIToken,
-      validateSoraSessionToken
+      refreshOpenAIToken
     }
   }
 }))
@@ -39,11 +36,10 @@ describe('useOpenAIOAuth', () => {
     generateAuthUrl.mockReset()
     exchangeCode.mockReset()
     refreshOpenAIToken.mockReset()
-    validateSoraSessionToken.mockReset()
   })
 
   it('should keep client_id when token response contains it', () => {
-    const oauth = useOpenAIOAuth({ platform: 'sora' })
+    const oauth = useOpenAIOAuth({ platform: 'openai' })
     const creds = oauth.buildCredentials({
       access_token: 'at',
       refresh_token: 'rt',
