@@ -4,10 +4,14 @@ package service
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,4 +60,92 @@ func TestProcessGeminiStream_EmitsImageEvent(t *testing.T) {
 	require.Contains(t, body, "\"type\":\"image\"")
 	require.Contains(t, body, "\"image_url\":\"data:image/png;base64,QUJD\"")
 	require.Contains(t, body, "\"mime_type\":\"image/png\"")
+}
+
+func TestAccountTestService_GeminiAPIKeyProbeAppliesWildcardModelMapping(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	ctx, _ := newAccountTestContext()
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: [DONE]\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          73,
+		Platform:    PlatformGemini,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "test-key",
+			"model_mapping": map[string]any{
+				"gpt-5.4*": "gemini-2.5-pro",
+			},
+		},
+	}
+
+	err := svc.testGeminiAccountConnection(ctx, account, "gpt-5.4-mini", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "gemini-2.5-pro", geminiRequestURLModel(t, upstream.requests[0]))
+}
+
+func TestAccountTestService_GeminiAPIKeyProbeUsesReasoningVariantBaseMapping(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	ctx, _ := newAccountTestContext()
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: [DONE]\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          72,
+		Platform:    PlatformGemini,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "test-key",
+			"model_mapping": map[string]any{
+				"gpt-5.4": "gemini-2.5-pro",
+			},
+		},
+	}
+
+	err := svc.testGeminiAccountConnection(ctx, account, "gpt-5.4-xhigh", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "gemini-2.5-pro", geminiRequestURLModel(t, upstream.requests[0]))
+}
+
+func geminiRequestURLModel(t *testing.T, req *http.Request) string {
+	t.Helper()
+	require.NotNil(t, req)
+	require.NotNil(t, req.URL)
+
+	path := req.URL.EscapedPath()
+	const prefix = "/v1beta/models/"
+	idx := strings.Index(path, prefix)
+	require.NotEqual(t, -1, idx)
+	path = path[idx+len(prefix):]
+
+	model, err := url.PathUnescape(strings.TrimSuffix(path, ":streamGenerateContent"))
+	require.NoError(t, err)
+	return model
 }
