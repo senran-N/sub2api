@@ -424,11 +424,17 @@ func (s *GeminiMessagesCompatService) geminiAIStudioAccountRank(account *Account
 }
 
 func (s *GeminiMessagesCompatService) isModelSupportedByAccount(account *Account, requestedModel string) bool {
+	if account == nil {
+		return false
+	}
 	if account.Platform == PlatformAntigravity {
 		if strings.TrimSpace(requestedModel) == "" {
 			return true
 		}
 		return mapAntigravityModel(account, requestedModel) != ""
+	}
+	if _, matched := resolveMappedModelWithOpenAIReasoningFallback(account, requestedModel); matched {
+		return true
 	}
 	return account.IsModelSupported(requestedModel)
 }

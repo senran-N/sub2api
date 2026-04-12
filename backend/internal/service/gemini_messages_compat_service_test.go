@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/tlsfingerprint"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -230,6 +230,43 @@ func TestGeminiMessagesCompatServiceForward_PreservesRequestedModelAndMappedUpst
 	require.Equal(t, 1, httpStub.calls)
 	require.NotNil(t, httpStub.lastReq)
 	require.Contains(t, httpStub.lastReq.URL.String(), "/models/claude-sonnet-4-20250514:")
+}
+
+func TestGeminiMessagesCompatServiceForward_UsesReasoningVariantBaseFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	httpStub := &geminiCompatHTTPUpstreamStub{
+		response: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"x-request-id": []string{"gemini-req-2"}},
+			Body:       io.NopCloser(strings.NewReader(`{"candidates":[{"content":{"parts":[{"text":"hello"}]}}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}}`)),
+		},
+	}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID:       2,
+		Platform: PlatformGemini,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key": "test-key",
+			"model_mapping": map[string]any{
+				"gpt-5.4": "gemini-2.5-pro",
+			},
+		},
+	}
+	body := []byte(`{"model":"gpt-5.4-xhigh","max_tokens":16,"messages":[{"role":"user","content":"hello"}]}`)
+
+	result, err := svc.Forward(context.Background(), c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "gpt-5.4-xhigh", result.Model)
+	require.Equal(t, "gemini-2.5-pro", result.UpstreamModel)
+	require.Equal(t, 1, httpStub.calls)
+	require.NotNil(t, httpStub.lastReq)
+	require.Contains(t, httpStub.lastReq.URL.String(), "/models/gemini-2.5-pro:")
 }
 
 func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToolUse(t *testing.T) {

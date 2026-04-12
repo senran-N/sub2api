@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
@@ -680,6 +681,61 @@ func TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_NoModel
 	require.Contains(t, err.Error(), "supporting model")
 }
 
+func TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_OpenAIReasoningVariantBaseMapping(t *testing.T) {
+	ctx := context.Background()
+
+	repo := &mockAccountRepoForGemini{
+		accounts: []Account{
+			{
+				ID:          1,
+				Name:        "reasoning-base-fallback",
+				Platform:    PlatformGemini,
+				Type:        AccountTypeAPIKey,
+				Priority:    1,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key": "key-1",
+					"model_mapping": map[string]any{
+						"gpt-5.4": "gemini-2.5-pro",
+					},
+				},
+			},
+			{
+				ID:          2,
+				Name:        "non-matching",
+				Platform:    PlatformGemini,
+				Type:        AccountTypeAPIKey,
+				Priority:    2,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key": "key-2",
+					"model_mapping": map[string]any{
+						"gemini-2.5-flash": "gemini-2.5-flash",
+					},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	svc := &GeminiMessagesCompatService{
+		accountRepo: repo,
+		groupRepo:   &mockGroupRepoForGemini{groups: map[int64]*Group{}},
+		cache:       &mockGatewayCacheForGemini{},
+		cfg:         &config.Config{},
+	}
+
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, nil, "", "gpt-5.4-xhigh", nil)
+	require.NoError(t, err)
+	require.NotNil(t, acc)
+	require.Equal(t, int64(1), acc.ID)
+}
+
 func TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_StickyMixedScheduling(t *testing.T) {
 	ctx := context.Background()
 	repo := &mockAccountRepoForGemini{
@@ -959,6 +1015,19 @@ func TestGeminiMessagesCompatService_isModelSupportedByAccount(t *testing.T) {
 			},
 			model:    "gemini-2.5-flash",
 			expected: false,
+		},
+		{
+			name: "Gemini平台-OpenAI推理变体可回退到基础映射",
+			account: &Account{
+				Platform: PlatformGemini,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-5.4": "gemini-2.5-pro",
+					},
+				},
+			},
+			model:    "gpt-5.4-xhigh",
+			expected: true,
 		},
 	}
 

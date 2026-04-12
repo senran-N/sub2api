@@ -71,6 +71,15 @@ func (s *GeminiMessagesCompatService) GetTokenProvider() *GeminiTokenProvider {
 	return s.tokenProvider
 }
 
+func resolveGeminiCompatForwardModel(account *Account, requestedModel string) string {
+	requestedModel = strings.TrimSpace(requestedModel)
+	if account == nil || requestedModel == "" || account.Type != AccountTypeAPIKey {
+		return requestedModel
+	}
+	mappedModel, _ := resolveMappedModelWithOpenAIReasoningFallback(account, requestedModel)
+	return strings.TrimSpace(mappedModel)
+}
+
 func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*ForwardResult, error) {
 	startTime := time.Now()
 
@@ -86,10 +95,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	}
 
 	originalModel := req.Model
-	mappedModel := req.Model
-	if account.Type == AccountTypeAPIKey {
-		mappedModel = account.GetMappedModel(req.Model)
-	}
+	mappedModel := resolveGeminiCompatForwardModel(account, req.Model)
 
 	geminiReq, err := convertClaudeMessagesToGeminiGenerateContent(body)
 	if err != nil {
@@ -571,10 +577,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 	body = ensureGeminiFunctionCallThoughtSignatures(body)
 
-	mappedModel := originalModel
-	if account.Type == AccountTypeAPIKey {
-		mappedModel = account.GetMappedModel(originalModel)
-	}
+	mappedModel := resolveGeminiCompatForwardModel(account, originalModel)
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
