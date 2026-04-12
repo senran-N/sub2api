@@ -114,7 +114,7 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 		disablePatch()
 	}
 
-	mappedModel := account.GetMappedModel(reqModel)
+	mappedModel := resolveOpenAIForwardModel(account, reqModel, "")
 	if mappedModel != reqModel {
 		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Model mapping applied: %s -> %s (account: %s, isCodexCLI: %v)", reqModel, mappedModel, account.Name, isCodexCLI)
 		reqBody["model"] = mappedModel

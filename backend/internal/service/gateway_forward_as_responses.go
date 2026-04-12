@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/apicompat"
 	"github.com/senran-N/sub2api/internal/pkg/claude"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
-	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
@@ -59,7 +59,9 @@ func (s *GatewayService) ForwardAsResponses(
 	mappedModel := originalModel
 	reasoningEffort := ExtractResponsesReasoningEffortFromBody(body)
 	if account.Type == AccountTypeAPIKey {
-		mappedModel = account.GetMappedModel(originalModel)
+		if resolvedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, originalModel); matched {
+			mappedModel = resolvedModel
+		}
 	}
 	if mappedModel == originalModel && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
 		normalized := claude.NormalizeModelID(originalModel)

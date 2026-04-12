@@ -45,7 +45,9 @@ func (s *GatewayService) applyCountTokensModelMapping(
 	mappedModel := requestModel
 	mappingSource := ""
 	if account.Type == AccountTypeAPIKey {
-		mappedModel = account.GetMappedModel(requestModel)
+		if resolvedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, requestModel); matched {
+			mappedModel = resolvedModel
+		}
 		if mappedModel != requestModel {
 			mappingSource = "account"
 		}

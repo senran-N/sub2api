@@ -35,7 +35,7 @@ func (s *GatewayService) resolveCountTokensPassthroughBody(account *Account, par
 
 	body := parsed.Body
 	if reqModel := parsed.Model; reqModel != "" {
-		if mappedModel := account.GetMappedModel(reqModel); mappedModel != reqModel {
+		if mappedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, reqModel); matched && mappedModel != reqModel {
 			body = s.replaceModelInBody(body, mappedModel)
 			logger.LegacyPrintf("service.gateway", "CountTokens passthrough model mapping: %s -> %s (account: %s)", reqModel, mappedModel, account.Name)
 		}

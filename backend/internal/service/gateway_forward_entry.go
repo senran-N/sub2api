@@ -34,7 +34,7 @@ func (s *GatewayService) resolveForwardPassthroughInput(
 	body := parsed.Body
 	requestModel := parsed.Model
 	if requestModel != "" {
-		if mappedModel := account.GetMappedModel(requestModel); mappedModel != requestModel {
+		if mappedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, requestModel); matched && mappedModel != requestModel {
 			body = s.replaceModelInBody(body, mappedModel)
 			logger.LegacyPrintf("service.gateway", "Passthrough model mapping: %s -> %s (account: %s)", parsed.Model, mappedModel, account.Name)
 			requestModel = mappedModel

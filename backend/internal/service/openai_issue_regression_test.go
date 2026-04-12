@@ -146,6 +146,32 @@ func TestPrepareOpenAIForwardRequest_APIKeyPreservesMappedCustomModel(t *testing
 	require.Equal(t, "custom/upstream-model", gjson.GetBytes(prepared.body, "model").String())
 }
 
+func TestPrepareOpenAIForwardRequest_PreservesReasoningVariantFallbackMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	account := &Account{
+		Name:     "test-openai-oauth",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.4": "gpt-5.3-codex-spark",
+			},
+		},
+	}
+	body := []byte(`{"model":"gpt-5.4-xhigh","input":"hello"}`)
+
+	svc := &OpenAIGatewayService{}
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4-xhigh", false, "", false, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+	require.Equal(t, "gpt-5.3-codex-spark-xhigh", gjson.GetBytes(prepared.body, "model").String())
+	require.Equal(t, "gpt-5.3-codex-spark-xhigh", prepared.reqBody["model"])
+}
+
 func TestParseOpenAIWSIngressClientPayload_APIKeyPreservesMappedCustomModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -164,6 +190,26 @@ func TestParseOpenAIWSIngressClientPayload_APIKeyPreservesMappedCustomModel(t *t
 	parsed, err := parseOpenAIWSIngressClientPayload(c, account, []byte(`{"model":"custom-original-model","stream":false}`))
 	require.NoError(t, err)
 	require.Equal(t, "custom/upstream-model", gjson.GetBytes(parsed.payloadRaw, "model").String())
+}
+
+func TestParseOpenAIWSIngressClientPayload_PreservesReasoningVariantFallbackMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	account := &Account{
+		Type: AccountTypeOAuth,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.4": "gpt-5.3-codex-spark",
+			},
+		},
+	}
+
+	parsed, err := parseOpenAIWSIngressClientPayload(c, account, []byte(`{"type":"response.create","model":"gpt-5.4-xhigh","stream":false}`))
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.3-codex-spark-xhigh", gjson.GetBytes(parsed.payloadRaw, "model").String())
 }
 
 func TestSanitizeEmptyBase64InputImagesInOpenAIBody_DropsEmptyParts(t *testing.T) {

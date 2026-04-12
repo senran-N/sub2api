@@ -2,6 +2,28 @@ package service
 
 import "strings"
 
+func resolveMappedModelWithOpenAIReasoningFallback(account *Account, requestedModel string) (mappedModel string, matched bool) {
+	if account == nil {
+		return strings.TrimSpace(requestedModel), false
+	}
+
+	mappedModel, matched = account.ResolveMappedModel(requestedModel)
+	if matched {
+		return strings.TrimSpace(mappedModel), true
+	}
+
+	_, baseModel, _, ok := splitOpenAICompatReasoningModel(requestedModel)
+	if !ok || baseModel == "" {
+		return strings.TrimSpace(mappedModel), false
+	}
+
+	baseMappedModel, baseMatched := account.ResolveMappedModel(baseModel)
+	if !baseMatched {
+		return strings.TrimSpace(mappedModel), false
+	}
+	return strings.TrimSpace(baseMappedModel), true
+}
+
 // resolveOpenAIForwardModel determines the upstream model for OpenAI-compatible
 // forwarding. Group-level default mapping only applies when the account itself
 // did not match any explicit model_mapping rule.
@@ -26,15 +48,7 @@ func resolveOpenAIForwardModel(account *Account, requestedModel, defaultMappedMo
 		return requestedModel
 	}
 
-	mappedModel, matched := account.ResolveMappedModel(requestedModel)
-	if !matched {
-		_, baseModel, _, ok := splitOpenAICompatReasoningModel(requestedModel)
-		if ok && baseModel != "" {
-			if baseMappedModel, baseMatched := account.ResolveMappedModel(baseModel); baseMatched {
-				return applyReasoningVariant(baseMappedModel)
-			}
-		}
-	}
+	mappedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, requestedModel)
 	if !matched && defaultMappedModel != "" {
 		return applyReasoningVariant(defaultMappedModel)
 	}

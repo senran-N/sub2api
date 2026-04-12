@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/claude"
 	"github.com/senran-N/sub2api/internal/pkg/tlsfingerprint"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -313,6 +313,13 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ModelMappingEdgeCases(t *test
 			endpoint:      "messages",
 		},
 		{
+			name:          "Forward: OpenAI 推理变体应继承基础模型映射",
+			model:         "gpt-5.4-xhigh",
+			modelMapping:  map[string]any{"gpt-5.4": "claude-sonnet-4-5-20241022"},
+			expectedModel: "claude-sonnet-4-5-20241022",
+			endpoint:      "messages",
+		},
+		{
 			name:          "CountTokens: 无映射配置时不改写模型",
 			model:         "claude-sonnet-4-20250514",
 			modelMapping:  nil,
@@ -337,6 +344,13 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ModelMappingEdgeCases(t *test
 			name:          "CountTokens: 通配符映射应改写模型",
 			model:         "claude-sonnet-4-20250514",
 			modelMapping:  map[string]any{"claude-sonnet-4-*": "claude-sonnet-4-5-20241022"},
+			expectedModel: "claude-sonnet-4-5-20241022",
+			endpoint:      "count_tokens",
+		},
+		{
+			name:          "CountTokens: OpenAI 推理变体应继承基础模型映射",
+			model:         "gpt-5.4-xhigh",
+			modelMapping:  map[string]any{"gpt-5.4": "claude-sonnet-4-5-20241022"},
 			expectedModel: "claude-sonnet-4-5-20241022",
 			endpoint:      "count_tokens",
 		},

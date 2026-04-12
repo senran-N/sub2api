@@ -95,7 +95,7 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 	mappedModel := ""
 	var mappedModelBytes []byte
 	if originalModel != "" {
-		mappedModel = account.GetMappedModel(originalModel)
+		mappedModel = resolveOpenAIForwardModel(account, originalModel, "")
 		if normalizedModel := normalizeOpenAIModelForUpstream(account, mappedModel); normalizedModel != "" {
 			mappedModel = normalizedModel
 		}
