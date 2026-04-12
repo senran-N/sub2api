@@ -226,7 +226,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	switch account.Type {
 	case AccountTypeOAuth:
 		targetURL = chatgptCodexURL
-	case AccountTypeAPIKey:
+	case AccountTypeAPIKey, AccountTypeUpstream:
 		baseURL := account.GetOpenAIBaseURL()
 		if baseURL == "" {
 			baseURL = openaiPlatformAPIURL
@@ -239,10 +239,16 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		if c != nil && c.Request != nil && c.Request.URL != nil {
 			rawRequestPath = c.Request.URL.Path
 		}
-		upstreamTarget = newOpenAIPassthroughUpstreamTarget(validatedURL, rawRequestPath)
+		upstreamTarget = newOpenAIPassthroughUpstreamTargetWithOptions(
+			validatedURL,
+			rawRequestPath,
+			account.GetCompatibleAuthMode(""),
+			account.GetCompatibleEndpointOverride("responses"),
+			account.GetCompatibleEndpointOverride("chat_completions"),
+		)
 		targetURL = upstreamTarget.URL
 	}
-	if account.Type != AccountTypeAPIKey {
+	if account.Type != AccountTypeAPIKey && account.Type != AccountTypeUpstream {
 		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
 	}
 

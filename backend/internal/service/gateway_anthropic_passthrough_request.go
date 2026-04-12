@@ -23,7 +23,10 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 		if err != nil {
 			return nil, err
 		}
-		targetURL = validatedURL + "/v1/messages?beta=true"
+		targetURL = resolveCompatibleEndpointURL(validatedURL, "/v1/messages", account.GetCompatibleEndpointOverride("messages"))
+		if !strings.Contains(targetURL, "?") {
+			targetURL += "?beta=true"
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
@@ -48,7 +51,7 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
-	setHeaderRaw(req.Header, "x-api-key", token)
+	applyCompatibleAuthHeaders(req.Header, token, account.GetCompatibleAuthMode(UpstreamAuthModeXAPIKey))
 
 	if getHeaderRaw(req.Header, "content-type") == "" {
 		setHeaderRaw(req.Header, "content-type", "application/json")

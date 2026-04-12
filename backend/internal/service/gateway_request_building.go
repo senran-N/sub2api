@@ -91,7 +91,10 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 		if err != nil {
 			return nil, err
 		}
-		targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+		targetURL = resolveCompatibleEndpointURL(validatedURL, "/v1/messages/count_tokens", account.GetCompatibleEndpointOverride("count_tokens"))
+		if !strings.Contains(targetURL, "?") {
+			targetURL += "?beta=true"
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
@@ -116,7 +119,7 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
-	req.Header.Set("x-api-key", token)
+	applyCompatibleAuthHeaders(req.Header, token, account.GetCompatibleAuthMode(UpstreamAuthModeXAPIKey))
 
 	if req.Header.Get("content-type") == "" {
 		req.Header.Set("content-type", "application/json")

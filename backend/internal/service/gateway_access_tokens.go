@@ -17,6 +17,12 @@ func (s *GatewayService) GetAccessToken(ctx context.Context, account *Account) (
 			return "", "", errors.New("api_key not found in credentials")
 		}
 		return apiKey, "apikey", nil
+	case AccountTypeUpstream:
+		apiKey := account.GetCredential("api_key")
+		if apiKey == "" {
+			return "", "", errors.New("api_key not found in credentials")
+		}
+		return apiKey, "apikey", nil
 	case AccountTypeBedrock:
 		return "", "bedrock", nil
 	default:

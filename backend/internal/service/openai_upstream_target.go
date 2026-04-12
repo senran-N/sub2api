@@ -17,49 +17,79 @@ type openAIResponsesUpstreamTarget struct {
 }
 
 func newOpenAIResponsesUpstreamTarget(base string) openAIResponsesUpstreamTarget {
+	return newOpenAIResponsesUpstreamTargetWithOptions(base, "", "")
+}
+
+func newOpenAIResponsesUpstreamTargetWithOptions(base, authMode, endpointOverride string) openAIResponsesUpstreamTarget {
 	normalizedBase := strings.TrimSpace(base)
 	if normalizedBase == "" {
 		normalizedBase = openaiPlatformAPIURL
 	}
+	resolvedAuthHeader := resolveOpenAIResponsesAuthHeader(normalizedBase)
+	if normalized := normalizeCompatibleAuthMode(authMode); normalized != "" {
+		switch normalized {
+		case UpstreamAuthModeXAPIKey:
+			resolvedAuthHeader = "x-api-key"
+		case UpstreamAuthModeAPIKey:
+			resolvedAuthHeader = openAIUpstreamAuthHeaderAPIKey
+		case UpstreamAuthModeDual, UpstreamAuthModeBearer:
+			resolvedAuthHeader = openAIUpstreamAuthHeaderAuthorization
+		}
+	}
+
+	targetURL := buildOpenAIResponsesURL(normalizedBase)
+	if strings.TrimSpace(endpointOverride) != "" {
+		targetURL = resolveCompatibleEndpointURL(normalizedBase, "/v1/responses", endpointOverride)
+	}
 	return openAIResponsesUpstreamTarget{
-		URL:        buildOpenAIResponsesURL(normalizedBase),
-		AuthHeader: resolveOpenAIResponsesAuthHeader(normalizedBase),
+		URL:        targetURL,
+		AuthHeader: resolvedAuthHeader,
 	}
 }
 
 func newOpenAIPassthroughUpstreamTarget(base, rawRequestPath string) openAIResponsesUpstreamTarget {
+	return newOpenAIPassthroughUpstreamTargetWithOptions(base, rawRequestPath, "", "", "")
+}
+
+func newOpenAIPassthroughUpstreamTargetWithOptions(base, rawRequestPath, authMode, responsesOverride, chatOverride string) openAIResponsesUpstreamTarget {
 	normalizedBase := strings.TrimSpace(base)
 	if normalizedBase == "" {
 		normalizedBase = openaiPlatformAPIURL
 	}
 
 	targetURL := buildOpenAIResponsesURL(normalizedBase)
+	if strings.TrimSpace(responsesOverride) != "" {
+		targetURL = resolveCompatibleEndpointURL(normalizedBase, "/v1/responses", responsesOverride)
+	}
 	if suffix := openAIResponsesRequestPathSuffixFromPath(rawRequestPath); suffix != "" {
 		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, suffix)
 	}
 	if isOpenAIChatCompletionsPath(rawRequestPath) {
 		targetURL = buildOpenAIChatCompletionsURL(normalizedBase)
+		if strings.TrimSpace(chatOverride) != "" {
+			targetURL = resolveCompatibleEndpointURL(normalizedBase, "/v1/chat/completions", chatOverride)
+		}
 	}
 
+	resolvedAuthHeader := resolveOpenAIResponsesAuthHeader(normalizedBase)
+	if normalized := normalizeCompatibleAuthMode(authMode); normalized != "" {
+		switch normalized {
+		case UpstreamAuthModeXAPIKey:
+			resolvedAuthHeader = "x-api-key"
+		case UpstreamAuthModeAPIKey:
+			resolvedAuthHeader = openAIUpstreamAuthHeaderAPIKey
+		case UpstreamAuthModeDual, UpstreamAuthModeBearer:
+			resolvedAuthHeader = openAIUpstreamAuthHeaderAuthorization
+		}
+	}
 	return openAIResponsesUpstreamTarget{
 		URL:        targetURL,
-		AuthHeader: resolveOpenAIResponsesAuthHeader(normalizedBase),
+		AuthHeader: resolvedAuthHeader,
 	}
 }
 
 func (t openAIResponsesUpstreamTarget) ApplyAuthHeader(header http.Header, token string) {
-	if header == nil {
-		return
-	}
-	header.Del(openAIUpstreamAuthHeaderAuthorization)
-	header.Del(openAIUpstreamAuthHeaderAPIKey)
-
-	switch strings.ToLower(strings.TrimSpace(t.AuthHeader)) {
-	case openAIUpstreamAuthHeaderAPIKey:
-		header.Set(openAIUpstreamAuthHeaderAPIKey, token)
-	default:
-		header.Set(openAIUpstreamAuthHeaderAuthorization, "Bearer "+token)
-	}
+	applyCompatibleAuthHeaders(header, token, t.AuthHeader)
 }
 
 func resolveOpenAIResponsesAuthHeader(base string) string {
@@ -114,6 +144,28 @@ func buildOpenAIChatCompletionsURLLegacy(base string) string {
 	return normalized + "/v1/chat/completions"
 }
 
+func buildOpenAIModelsURL(base string) string {
+	normalized := strings.TrimSpace(base)
+	parsed, err := url.Parse(normalized)
+	if err != nil {
+		return buildOpenAIModelsURLLegacy(normalized)
+	}
+
+	parsed.Path = normalizeOpenAIModelsPath(parsed.Path, isAzureOpenAIParsedBaseURL(parsed))
+	return parsed.String()
+}
+
+func buildOpenAIModelsURLLegacy(base string) string {
+	normalized := strings.TrimRight(strings.TrimSpace(base), "/")
+	if strings.HasSuffix(normalized, "/models") {
+		return normalized
+	}
+	if strings.HasSuffix(normalized, "/v1") {
+		return normalized + "/models"
+	}
+	return normalized + "/v1/models"
+}
+
 func normalizeOpenAIChatCompletionsPath(path string) string {
 	trimmed := strings.TrimRight(strings.TrimSpace(path), "/")
 	switch {
@@ -125,6 +177,29 @@ func normalizeOpenAIChatCompletionsPath(path string) string {
 		return trimmed + "/chat/completions"
 	default:
 		return trimmed + "/v1/chat/completions"
+	}
+}
+
+func normalizeOpenAIModelsPath(path string, azure bool) string {
+	trimmed := strings.TrimRight(strings.TrimSpace(path), "/")
+	switch {
+	case trimmed == "":
+		if azure {
+			return "/openai/models"
+		}
+		return "/v1/models"
+	case strings.HasSuffix(trimmed, "/models"):
+		return trimmed
+	case azure && strings.HasSuffix(trimmed, "/openai/v1"):
+		return strings.TrimSuffix(trimmed, "/v1") + "/models"
+	case azure && trimmed == "/openai":
+		return trimmed + "/models"
+	case !azure && strings.HasSuffix(trimmed, "/v1"):
+		return trimmed + "/models"
+	case azure:
+		return "/openai/models"
+	default:
+		return trimmed + "/v1/models"
 	}
 }
 

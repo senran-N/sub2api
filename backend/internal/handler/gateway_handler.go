@@ -36,21 +36,22 @@ var gatewayCompatibilityMetricsLogCounter atomic.Uint64
 
 // GatewayHandler handles API gateway requests
 type GatewayHandler struct {
-	gatewayService            *service.GatewayService
-	geminiCompatService       *service.GeminiMessagesCompatService
-	antigravityGatewayService *service.AntigravityGatewayService
-	userService               *service.UserService
-	billingCacheService       *service.BillingCacheService
-	usageService              *service.UsageService
-	apiKeyService             *service.APIKeyService
-	usageRecordWorkerPool     *service.UsageRecordWorkerPool
-	errorPassthroughService   *service.ErrorPassthroughService
-	concurrencyHelper         *ConcurrencyHelper
-	userMsgQueueHelper        *UserMsgQueueHelper
-	maxAccountSwitches        int
-	maxAccountSwitchesGemini  int
-	cfg                       *config.Config
-	settingService            *service.SettingService
+	gatewayService                  *service.GatewayService
+	geminiCompatService             *service.GeminiMessagesCompatService
+	antigravityGatewayService       *service.AntigravityGatewayService
+	compatibleUpstreamModelsService *service.CompatibleUpstreamModelsService
+	userService                     *service.UserService
+	billingCacheService             *service.BillingCacheService
+	usageService                    *service.UsageService
+	apiKeyService                   *service.APIKeyService
+	usageRecordWorkerPool           *service.UsageRecordWorkerPool
+	errorPassthroughService         *service.ErrorPassthroughService
+	concurrencyHelper               *ConcurrencyHelper
+	userMsgQueueHelper              *UserMsgQueueHelper
+	maxAccountSwitches              int
+	maxAccountSwitchesGemini        int
+	cfg                             *config.Config
+	settingService                  *service.SettingService
 }
 
 // NewGatewayHandler creates a new GatewayHandler
@@ -58,6 +59,7 @@ func NewGatewayHandler(
 	gatewayService *service.GatewayService,
 	geminiCompatService *service.GeminiMessagesCompatService,
 	antigravityGatewayService *service.AntigravityGatewayService,
+	compatibleUpstreamModelsService *service.CompatibleUpstreamModelsService,
 	userService *service.UserService,
 	concurrencyService *service.ConcurrencyService,
 	billingCacheService *service.BillingCacheService,
@@ -89,21 +91,22 @@ func NewGatewayHandler(
 	}
 
 	return &GatewayHandler{
-		gatewayService:            gatewayService,
-		geminiCompatService:       geminiCompatService,
-		antigravityGatewayService: antigravityGatewayService,
-		userService:               userService,
-		billingCacheService:       billingCacheService,
-		usageService:              usageService,
-		apiKeyService:             apiKeyService,
-		usageRecordWorkerPool:     usageRecordWorkerPool,
-		errorPassthroughService:   errorPassthroughService,
-		concurrencyHelper:         NewConcurrencyHelper(concurrencyService, SSEPingFormatClaude, pingInterval),
-		userMsgQueueHelper:        umqHelper,
-		maxAccountSwitches:        maxAccountSwitches,
-		maxAccountSwitchesGemini:  maxAccountSwitchesGemini,
-		cfg:                       cfg,
-		settingService:            settingService,
+		gatewayService:                  gatewayService,
+		geminiCompatService:             geminiCompatService,
+		antigravityGatewayService:       antigravityGatewayService,
+		compatibleUpstreamModelsService: compatibleUpstreamModelsService,
+		userService:                     userService,
+		billingCacheService:             billingCacheService,
+		usageService:                    usageService,
+		apiKeyService:                   apiKeyService,
+		usageRecordWorkerPool:           usageRecordWorkerPool,
+		errorPassthroughService:         errorPassthroughService,
+		concurrencyHelper:               NewConcurrencyHelper(concurrencyService, SSEPingFormatClaude, pingInterval),
+		userMsgQueueHelper:              umqHelper,
+		maxAccountSwitches:              maxAccountSwitches,
+		maxAccountSwitchesGemini:        maxAccountSwitchesGemini,
+		cfg:                             cfg,
+		settingService:                  settingService,
 	}
 }
 
@@ -860,10 +863,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 }
 
-// Models handles listing available models
+// Models handles listing available models.
 // GET /v1/models
-// Returns models based on account configurations (model_mapping whitelist)
-// Falls back to default models if no whitelist is configured
+// For compatible OpenAI/Anthropic upstreams, it prefers live upstream discovery.
+// Otherwise it falls back to configured model_mapping and built-in defaults.
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
 
@@ -878,29 +881,30 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		platform = forcedPlatform
 	}
 
+	if h.compatibleUpstreamModelsService != nil && (platform == service.PlatformOpenAI || platform == service.PlatformAnthropic) {
+		discoveredModels, err := h.compatibleUpstreamModelsService.DiscoverGroupModels(c.Request.Context(), groupID, platform)
+		if err == nil && len(discoveredModels) > 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"object": "list",
+				"data":   buildCompatibleGatewayModels(discoveredModels, platform),
+			})
+			return
+		}
+	}
+
 	// Get available models from account configurations (without platform filter)
 	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, "")
 
 	if len(availableModels) > 0 {
-		// Build model list from whitelist
-		models := make([]claude.Model, 0, len(availableModels))
-		for _, modelID := range availableModels {
-			models = append(models, claude.Model{
-				ID:          modelID,
-				Type:        "model",
-				DisplayName: modelID,
-				CreatedAt:   "2024-01-01T00:00:00Z",
-			})
-		}
 		c.JSON(http.StatusOK, gin.H{
 			"object": "list",
-			"data":   models,
+			"data":   buildMappedGatewayModels(availableModels, platform),
 		})
 		return
 	}
 
 	// Fallback to default models
-	if platform == "openai" {
+	if platform == service.PlatformOpenAI {
 		c.JSON(http.StatusOK, gin.H{
 			"object": "list",
 			"data":   openai.DefaultModels,
@@ -912,6 +916,60 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		"object": "list",
 		"data":   claude.DefaultModels,
 	})
+}
+
+func buildCompatibleGatewayModels(models []service.CompatibleUpstreamModel, platform string) any {
+	if platform == service.PlatformOpenAI {
+		result := make([]openai.Model, 0, len(models))
+		for _, model := range models {
+			result = append(result, openai.Model{
+				ID:          model.ID,
+				Object:      model.Object,
+				Created:     model.Created,
+				OwnedBy:     model.OwnedBy,
+				Type:        model.Type,
+				DisplayName: model.DisplayName,
+			})
+		}
+		return result
+	}
+
+	result := make([]claude.Model, 0, len(models))
+	for _, model := range models {
+		result = append(result, claude.Model{
+			ID:          model.ID,
+			Type:        model.Type,
+			DisplayName: model.DisplayName,
+			CreatedAt:   model.CreatedAt,
+		})
+	}
+	return result
+}
+
+func buildMappedGatewayModels(modelIDs []string, platform string) any {
+	if platform == service.PlatformOpenAI {
+		models := make([]openai.Model, 0, len(modelIDs))
+		for _, modelID := range modelIDs {
+			models = append(models, openai.Model{
+				ID:          modelID,
+				Object:      "model",
+				Type:        "model",
+				DisplayName: modelID,
+			})
+		}
+		return models
+	}
+
+	models := make([]claude.Model, 0, len(modelIDs))
+	for _, modelID := range modelIDs {
+		models = append(models, claude.Model{
+			ID:          modelID,
+			Type:        "model",
+			DisplayName: modelID,
+			CreatedAt:   "2024-01-01T00:00:00Z",
+		})
+	}
+	return models
 }
 
 // AntigravityModels 返回 Antigravity 支持的全部模型

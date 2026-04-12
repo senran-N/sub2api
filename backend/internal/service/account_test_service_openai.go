@@ -22,7 +22,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	if testModelID == "" {
 		testModelID = openai.DefaultTestModel
 	}
-	if account.Type == AccountTypeAPIKey {
+	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
 		mapping := account.GetModelMapping()
 		if len(mapping) > 0 {
 			if mappedModel, exists := mapping[testModelID]; exists {
@@ -45,7 +45,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		}
 		apiURL = chatgptCodexAPIURL
 		chatgptAccountID = account.GetChatGPTAccountID()
-	} else if account.Type == AccountTypeAPIKey {
+	} else if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
 		authToken = account.GetOpenAIApiKey()
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No API key available")
@@ -59,7 +59,11 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = newOpenAIResponsesUpstreamTarget(normalizedBaseURL).URL
+		apiURL = newOpenAIResponsesUpstreamTargetWithOptions(
+			normalizedBaseURL,
+			account.GetCompatibleAuthMode(""),
+			account.GetCompatibleEndpointOverride("responses"),
+		).URL
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -77,7 +81,11 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	if isOAuth {
 		req.Header.Set("Authorization", "Bearer "+authToken)
 	} else {
-		newOpenAIResponsesUpstreamTarget(account.GetOpenAIBaseURL()).ApplyAuthHeader(req.Header, authToken)
+		newOpenAIResponsesUpstreamTargetWithOptions(
+			account.GetOpenAIBaseURL(),
+			account.GetCompatibleAuthMode(""),
+			account.GetCompatibleEndpointOverride("responses"),
+		).ApplyAuthHeader(req.Header, authToken)
 	}
 	if isOAuth {
 		req.Host = "chatgpt.com"

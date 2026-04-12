@@ -41,20 +41,21 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 
 // AccountHandler handles admin account management
 type AccountHandler struct {
-	adminService            accountAdminService
-	oauthService            *service.OAuthService
-	openaiOAuthService      *service.OpenAIOAuthService
-	geminiOAuthService      *service.GeminiOAuthService
-	antigravityOAuthService *service.AntigravityOAuthService
-	rateLimitService        *service.RateLimitService
-	accountUsageService     *service.AccountUsageService
-	accountTestService      *service.AccountTestService
-	concurrencyService      *service.ConcurrencyService
-	accountRuntimeService   *service.AccountRuntimeService
-	crsSyncService          *service.CRSSyncService
-	sessionLimitCache       service.SessionLimitCache
-	rpmCache                service.RPMCache
-	tokenCacheInvalidator   service.TokenCacheInvalidator
+	adminService                    accountAdminService
+	oauthService                    *service.OAuthService
+	openaiOAuthService              *service.OpenAIOAuthService
+	geminiOAuthService              *service.GeminiOAuthService
+	antigravityOAuthService         *service.AntigravityOAuthService
+	compatibleUpstreamModelsService *service.CompatibleUpstreamModelsService
+	rateLimitService                *service.RateLimitService
+	accountUsageService             *service.AccountUsageService
+	accountTestService              *service.AccountTestService
+	concurrencyService              *service.ConcurrencyService
+	accountRuntimeService           *service.AccountRuntimeService
+	crsSyncService                  *service.CRSSyncService
+	sessionLimitCache               service.SessionLimitCache
+	rpmCache                        service.RPMCache
+	tokenCacheInvalidator           service.TokenCacheInvalidator
 }
 
 // NewAccountHandler creates a new admin account handler
@@ -64,6 +65,7 @@ func NewAccountHandler(
 	openaiOAuthService *service.OpenAIOAuthService,
 	geminiOAuthService *service.GeminiOAuthService,
 	antigravityOAuthService *service.AntigravityOAuthService,
+	compatibleUpstreamModelsService *service.CompatibleUpstreamModelsService,
 	rateLimitService *service.RateLimitService,
 	accountUsageService *service.AccountUsageService,
 	accountTestService *service.AccountTestService,
@@ -74,20 +76,21 @@ func NewAccountHandler(
 	tokenCacheInvalidator service.TokenCacheInvalidator,
 ) *AccountHandler {
 	return &AccountHandler{
-		adminService:            adminService,
-		oauthService:            oauthService,
-		openaiOAuthService:      openaiOAuthService,
-		geminiOAuthService:      geminiOAuthService,
-		antigravityOAuthService: antigravityOAuthService,
-		rateLimitService:        rateLimitService,
-		accountUsageService:     accountUsageService,
-		accountTestService:      accountTestService,
-		concurrencyService:      concurrencyService,
-		accountRuntimeService:   service.NewAccountRuntimeService(accountUsageService, concurrencyService, sessionLimitCache, rpmCache),
-		crsSyncService:          crsSyncService,
-		sessionLimitCache:       sessionLimitCache,
-		rpmCache:                rpmCache,
-		tokenCacheInvalidator:   tokenCacheInvalidator,
+		adminService:                    adminService,
+		oauthService:                    oauthService,
+		openaiOAuthService:              openaiOAuthService,
+		geminiOAuthService:              geminiOAuthService,
+		antigravityOAuthService:         antigravityOAuthService,
+		compatibleUpstreamModelsService: compatibleUpstreamModelsService,
+		rateLimitService:                rateLimitService,
+		accountUsageService:             accountUsageService,
+		accountTestService:              accountTestService,
+		concurrencyService:              concurrencyService,
+		accountRuntimeService:           service.NewAccountRuntimeService(accountUsageService, concurrencyService, sessionLimitCache, rpmCache),
+		crsSyncService:                  crsSyncService,
+		sessionLimitCache:               sessionLimitCache,
+		rpmCache:                        rpmCache,
+		tokenCacheInvalidator:           tokenCacheInvalidator,
 	}
 }
 
@@ -1631,6 +1634,15 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
+	if discovered, discoverErr, handled := h.discoverCompatibleAccountModels(c.Request.Context(), account); handled {
+		if discoverErr != nil {
+			response.ErrorFrom(c, infraerrors.ServiceUnavailable("UPSTREAM_MODELS_DISCOVERY_FAILED", discoverErr.Error()))
+			return
+		}
+		response.Success(c, discovered)
+		return
+	}
+
 	// Handle OpenAI accounts
 	if account.IsOpenAI() {
 		// OpenAI 自动透传会绕过常规模型改写，测试/模型列表也应回落到默认模型集。
@@ -1753,6 +1765,49 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 	}
 
 	response.Success(c, models)
+}
+
+func (h *AccountHandler) discoverCompatibleAccountModels(ctx context.Context, account *service.Account) (any, error, bool) {
+	if h.compatibleUpstreamModelsService == nil || account == nil || !account.SupportsCompatibleModelDiscovery() {
+		return nil, nil, false
+	}
+
+	models, err := h.compatibleUpstreamModelsService.DiscoverAccountModels(ctx, account)
+	if err != nil {
+		if errors.Is(err, service.ErrCompatibleModelDiscoveryUnsupported) {
+			return nil, nil, false
+		}
+		return nil, err, true
+	}
+	if len(models) == 0 {
+		return nil, nil, false
+	}
+
+	if account.Platform == service.PlatformOpenAI {
+		result := make([]openai.Model, 0, len(models))
+		for _, model := range models {
+			result = append(result, openai.Model{
+				ID:          model.ID,
+				Object:      model.Object,
+				Created:     model.Created,
+				OwnedBy:     model.OwnedBy,
+				Type:        model.Type,
+				DisplayName: model.DisplayName,
+			})
+		}
+		return result, nil, true
+	}
+
+	result := make([]claude.Model, 0, len(models))
+	for _, model := range models {
+		result = append(result, claude.Model{
+			ID:          model.ID,
+			Type:        model.Type,
+			DisplayName: model.DisplayName,
+			CreatedAt:   model.CreatedAt,
+		})
+	}
+	return result, nil, true
 }
 
 // SetPrivacy handles setting privacy for a single OpenAI/Antigravity OAuth account

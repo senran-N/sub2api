@@ -173,8 +173,8 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		testModelID = claude.DefaultTestModel
 	}
 
-	// API Key 账号测试连接时也需要应用通配符模型映射。
-	if account.Type == "apikey" {
+	// 兼容上游账号测试连接时也需要应用模型映射，避免测试路径与真实转发路径行为不一致。
+	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
 		testModelID = account.GetMappedModel(testModelID)
 	}
 
@@ -196,7 +196,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No access token available")
 		}
-	} else if account.Type == "apikey" {
+	} else if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
 		// API Key - use x-api-key header
 		useBearer = false
 		authToken = account.GetCredential("api_key")
@@ -212,7 +212,14 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/v1/messages?beta=true"
+		apiURL = resolveCompatibleEndpointURL(
+			normalizedBaseURL,
+			"/v1/messages",
+			account.GetCompatibleEndpointOverride("messages"),
+		)
+		if !strings.Contains(apiURL, "?") {
+			apiURL += "?beta=true"
+		}
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -249,7 +256,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		req.Header.Set("Authorization", "Bearer "+authToken)
 	} else {
 		req.Header.Set("anthropic-beta", claude.APIKeyAnthropicBetaHeader())
-		req.Header.Set("x-api-key", authToken)
+		applyCompatibleAuthHeaders(req.Header, authToken, account.GetCompatibleAuthMode(UpstreamAuthModeXAPIKey))
 	}
 
 	// Get proxy URL

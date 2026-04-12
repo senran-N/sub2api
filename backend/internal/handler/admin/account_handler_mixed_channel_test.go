@@ -7,15 +7,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
 func setupAccountMixedChannelRouter(adminSvc *stubAdminService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	accountHandler := NewAccountHandler(adminSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	accountHandler := NewAccountHandler(adminSvc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	router.POST("/api/v1/admin/accounts/check-mixed-channel", accountHandler.CheckMixedChannel)
 	router.POST("/api/v1/admin/accounts", accountHandler.Create)
 	router.PUT("/api/v1/admin/accounts/:id", accountHandler.Update)

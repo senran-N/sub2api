@@ -21,7 +21,7 @@ type anthropicRequestBuildState struct {
 }
 
 func (s *GatewayService) resolveAnthropicUpstreamURL(account *Account, defaultURL, path string) (string, error) {
-	if account.Type == AccountTypeAPIKey {
+	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
 		baseURL := account.GetBaseURL()
 		if baseURL == "" {
 			return defaultURL, nil
@@ -30,7 +30,15 @@ func (s *GatewayService) resolveAnthropicUpstreamURL(account *Account, defaultUR
 		if err != nil {
 			return "", err
 		}
-		return validatedURL + path + "?beta=true", nil
+		overrideName := "messages"
+		if strings.Contains(path, "count_tokens") {
+			overrideName = "count_tokens"
+		}
+		targetURL := resolveCompatibleEndpointURL(validatedURL, path, account.GetCompatibleEndpointOverride(overrideName))
+		if !strings.Contains(targetURL, "?") {
+			targetURL += "?beta=true"
+		}
+		return targetURL, nil
 	}
 
 	if account.IsCustomBaseURLEnabled() {
@@ -126,7 +134,7 @@ func applyAnthropicAuthHeader(dst http.Header, token, tokenType string) {
 		setHeaderRaw(dst, "authorization", "Bearer "+token)
 		return
 	}
-	setHeaderRaw(dst, "x-api-key", token)
+	applyCompatibleAuthHeaders(dst, token, UpstreamAuthModeXAPIKey)
 }
 
 func ensureAnthropicBaseHeaders(req *http.Request, tokenType string) {
