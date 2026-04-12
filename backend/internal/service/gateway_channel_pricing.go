@@ -76,11 +76,18 @@ func (s *GatewayService) isUpstreamModelRestrictedByChannel(ctx context.Context,
 	if s == nil || s.channelService == nil || account == nil {
 		return false
 	}
-	upstreamModel := resolveAccountUpstreamModel(account, requestedModel)
+	upstreamModel := resolveAccountUpstreamRestrictionModel(account, requestedModel)
 	if upstreamModel == "" {
 		return false
 	}
 	return s.channelService.IsModelRestricted(ctx, groupID, upstreamModel)
+}
+
+func resolveAccountUpstreamRestrictionModel(account *Account, requestedModel string) string {
+	if account != nil && account.Platform == PlatformAnthropic && !account.IsBedrock() {
+		return resolveAnthropicUpstreamModel(account, requestedModel)
+	}
+	return resolveAccountUpstreamModel(account, requestedModel)
 }
 
 func resolveAccountUpstreamModel(account *Account, requestedModel string) string {
@@ -104,6 +111,11 @@ func resolveAccountUpstreamModel(account *Account, requestedModel string) string
 		return mappedModel
 	}
 	return account.GetMappedModel(requestedModel)
+}
+
+func resolveAnthropicUpstreamModel(account *Account, requestedModel string) string {
+	resolvedModel, _ := resolveAnthropicCompatForwardModel(account, requestedModel)
+	return resolvedModel
 }
 
 // needsUpstreamChannelRestrictionCheck 判断是否需要在调度循环中逐账号检查上游模型的渠道限制。

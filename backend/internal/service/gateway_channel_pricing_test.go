@@ -104,6 +104,24 @@ func TestResolveAccountUpstreamModel(t *testing.T) {
 		require.Equal(t, "eu.anthropic.claude-sonnet-4-5-20250929-v1:0", resolveAccountUpstreamModel(account, "claude-sonnet-4-5"))
 	})
 
+	t.Run("anthropic oauth keeps short alias for generic upstream key", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeOAuth,
+		}
+
+		require.Equal(t, "claude-sonnet-4-5", resolveAccountUpstreamModel(account, "claude-sonnet-4-5"))
+	})
+
+	t.Run("anthropic oauth uses normalized upstream model id for channel restriction", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeOAuth,
+		}
+
+		require.Equal(t, "claude-sonnet-4-5-20250929", resolveAccountUpstreamRestrictionModel(account, "claude-sonnet-4-5"))
+	})
+
 	t.Run("antigravity uses antigravity resolver", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformAntigravity,
@@ -265,6 +283,7 @@ func TestGatewayServiceIsChannelModelRestrictedForSelectionWithGroup(t *testing.
 
 		allowedAccount := &Account{
 			Platform: PlatformAnthropic,
+			Type:     AccountTypeAPIKey,
 			Credentials: map[string]any{
 				"model_mapping": map[string]any{
 					"claude-sonnet-4": "claude-upstream-allowed",
@@ -273,6 +292,7 @@ func TestGatewayServiceIsChannelModelRestrictedForSelectionWithGroup(t *testing.
 		}
 		restrictedAccount := &Account{
 			Platform: PlatformAnthropic,
+			Type:     AccountTypeAPIKey,
 			Credentials: map[string]any{
 				"model_mapping": map[string]any{
 					"claude-sonnet-4": "claude-upstream-blocked",
@@ -298,6 +318,7 @@ func TestGatewayServiceIsChannelModelRestrictedForSelectionWithGroup(t *testing.
 
 		allowedAccount := &Account{
 			Platform: PlatformAnthropic,
+			Type:     AccountTypeAPIKey,
 			Credentials: map[string]any{
 				"model_mapping": map[string]any{
 					"gpt-5.4": "claude-upstream-allowed",
@@ -306,6 +327,7 @@ func TestGatewayServiceIsChannelModelRestrictedForSelectionWithGroup(t *testing.
 		}
 		restrictedAccount := &Account{
 			Platform: PlatformAnthropic,
+			Type:     AccountTypeAPIKey,
 			Credentials: map[string]any{
 				"model_mapping": map[string]any{
 					"gpt-5.4": "claude-upstream-blocked",
@@ -349,6 +371,26 @@ func TestGatewayServiceIsChannelModelRestrictedForSelectionWithGroup(t *testing.
 
 		require.False(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), allowedAccount, "claude-sonnet-4-5"))
 		require.True(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), restrictedAccount, "claude-sonnet-4-5"))
+	})
+
+	t.Run("upstream source uses anthropic oauth normalized model before restriction", func(t *testing.T) {
+		svc := newGatewayServiceWithChannelRepo(makeStandardChannelRepo(Channel{
+			ID:                 6,
+			Status:             StatusActive,
+			GroupIDs:           []int64{groupID},
+			RestrictModels:     true,
+			BillingModelSource: BillingModelSourceUpstream,
+			ModelPricing: []ChannelModelPricing{
+				{Platform: PlatformAnthropic, Models: []string{"claude-sonnet-4-5-20250929"}},
+			},
+		}, map[int64]string{groupID: PlatformAnthropic}))
+
+		account := &Account{
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeOAuth,
+		}
+
+		require.False(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), account, "claude-sonnet-4-5"))
 	})
 
 	t.Run("upstream source without account cannot prove restriction", func(t *testing.T) {
