@@ -8,6 +8,11 @@ import type {
 } from '@/types'
 
 export const DEFAULT_SUPPORTED_MODEL_SCOPES = ['claude', 'gemini_text', 'gemini_image'] as const
+export const ACCOUNT_FILTER_PLATFORMS: readonly GroupPlatform[] = [
+  'openai',
+  'antigravity',
+  'anthropic'
+]
 
 export interface SimpleAccount {
   id: number
@@ -258,7 +263,7 @@ export function applyCreateFormPlatformRules(
     form.allow_messages_dispatch = false
     form.default_mapped_model = ''
   }
-  if (!['openai', 'antigravity', 'anthropic', 'gemini'].includes(form.platform)) {
+  if (!ACCOUNT_FILTER_PLATFORMS.includes(form.platform)) {
     form.require_oauth_only = false
     form.require_privacy_set = false
   }

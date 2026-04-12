@@ -491,6 +491,25 @@ describe('createAccountModalHelpers', () => {
           openai_passthrough: true,
           custom: 'value'
         },
+        fallbackBaseName: 'Fallback',
+        platform: 'openai'
+      })
+    ).toEqual({
+      name: 'Fallback',
+      platform: 'openai',
+      type: 'oauth',
+      credentials: {
+        access_token: 'at',
+        refresh_token: 'rt',
+        client_id: 'cid',
+        expires_at: 99
+      },
+      extra: {
+        openai_passthrough: true,
+        custom: 'value'
+      }
+    })
+
     expect(resolveBatchCreateOutcome({ failedCount: 0, successCount: 2, t })).toEqual({
       type: 'success',
       message: 'admin.accounts.oauth.batchSuccess:{"count":2}',

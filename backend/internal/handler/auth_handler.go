@@ -76,6 +76,10 @@ type AuthResponse struct {
 	User         *dto.User `json:"user"`
 }
 
+func backendModeBlocksLogin(backendModeEnabled bool, user *service.User) bool {
+	return backendModeEnabled && user != nil && !user.IsAdmin()
+}
+
 // respondWithTokenPair 生成 Token 对并返回认证响应
 // 如果 Token 对生成失败，回退到只返回 Access Token（向后兼容）
 func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
@@ -177,6 +181,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	_ = token // token 由 authService.Login 返回但此处由 respondWithTokenPair 重新生成
 
+	// Backend mode: reject non-admin users before creating any 2FA session state.
+	if backendModeBlocksLogin(h.settingSvc.IsBackendModeEnabled(c.Request.Context()), user) {
+		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
+		return
+	}
+
 	// Check if TOTP 2FA is enabled for this user
 	if h.totpService != nil && h.settingSvc.IsTotpEnabled(c.Request.Context()) && user.TotpEnabled {
 		// Create a temporary login session for 2FA
@@ -191,12 +201,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			TempToken:       tempToken,
 			UserEmailMasked: service.MaskEmail(user.Email),
 		})
-		return
-	}
-
-	// Backend mode: only admin can login
-	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && !user.IsAdmin() {
-		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
 		return
 	}
 
@@ -264,12 +268,12 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 	}
 
 	// Backend mode: only admin can login (check BEFORE deleting session)
-	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && !user.IsAdmin() {
+	if backendModeBlocksLogin(h.settingSvc.IsBackendModeEnabled(c.Request.Context()), user) {
 		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
 		return
 	}
 
-	// Delete the login session (only after all checks pass)
+	// Delete the login session only after all checks pass and tokens will be issued.
 	_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
 
 	h.respondWithTokenPair(c, user)

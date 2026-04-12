@@ -33,7 +33,7 @@ function createSubscription(overrides: Partial<UserSubscription> = {}): UserSubs
     monthly_window_start: '2026-04-01T00:00:00Z',
     created_at: '2026-04-01T00:00:00Z',
     updated_at: '2026-04-01T00:00:00Z',
-    expires_at: '2026-04-10T00:00:00Z',
+    expires_at: '2099-04-10T00:00:00Z',
     user: {
       id: 2,
       email: 'user@example.com',
@@ -100,10 +100,10 @@ describe('subscription table cells', () => {
   it('renders expiration and status badges', () => {
     const expirationWrapper = mount(SubscriptionExpirationCell, {
       props: {
-        expiresAt: '2026-04-10T00:00:00Z'
+        expiresAt: '2099-04-10T00:00:00Z'
       }
     })
-    expect(expirationWrapper.text()).toContain('2026')
+    expect(expirationWrapper.text()).toContain('2099')
     expect(expirationWrapper.text()).toContain('admin.subscriptions.daysRemaining')
 
     const noExpirationWrapper = mount(SubscriptionExpirationCell, {

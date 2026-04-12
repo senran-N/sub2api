@@ -119,5 +119,31 @@ describe('keysView helpers', () => {
     expect(deeplink).toContain('app=gemini')
     expect(deeplink).toContain('endpoint=https%3A%2F%2Fapi.example.com%2Fantigravity')
     expect(deeplink).toContain('name=Sub2API')
+
+    const usageScript = new URLSearchParams(deeplink.split('?')[1]).get('usageScript')
+    expect(usageScript).not.toBeNull()
+    expect(atob(usageScript!)).toContain('url: "https://api.example.com/v1/usage"')
+  })
+
+  it('normalizes usage endpoint when api_base_url already contains /api/v1', () => {
+    const deeplink = buildCcsImportDeeplink(
+      {
+        key: 'sk-test',
+        group: {
+          platform: 'openai'
+        }
+      } as any,
+      {
+        api_base_url: 'https://api.example.com/api/v1',
+        site_name: 'Sub2API'
+      },
+      'codex',
+      'https://fallback.example.com'
+    )
+
+    const usageScript = new URLSearchParams(deeplink.split('?')[1]).get('usageScript')
+    expect(usageScript).not.toBeNull()
+    expect(atob(usageScript!)).toContain('url: "https://api.example.com/v1/usage"')
+    expect(atob(usageScript!)).not.toContain('/api/v1/v1/usage')
   })
 })

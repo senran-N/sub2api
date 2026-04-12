@@ -67,4 +67,23 @@ describe('group platform sections', () => {
     expect(form.require_oauth_only).toBe(true)
     expect(form.require_privacy_set).toBe(true)
   })
+
+  it('hides account filters for platforms that do not support persistent account constraints', () => {
+    const wrapper = mount(GroupAccountFilterSection, {
+      props: {
+        form: {
+          platform: 'gemini',
+          require_oauth_only: false,
+          require_privacy_set: false
+        } as any
+      },
+      global: {
+        stubs: {
+          Toggle: ToggleStub
+        }
+      }
+    })
+
+    expect(wrapper.find('.group-account-filter-section').exists()).toBe(false)
+  })
 })

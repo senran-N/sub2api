@@ -545,6 +545,8 @@ router.onError((error) => {
     error.name === 'ChunkLoadError'
 
   if (isChunkLoadError) {
+    navigationLoading.endNavigation()
+
     // Avoid infinite reload loop by checking sessionStorage
     const reloadKey = 'chunk_reload_attempted'
     const lastReload = sessionStorage.getItem(reloadKey)

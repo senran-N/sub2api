@@ -227,9 +227,10 @@ export function buildCcsImportDeeplink(
   const platform = row.group?.platform || 'anthropic'
   const { app, endpoint } = resolveCcsImportTarget(platform, clientType, baseUrl)
   const providerName = (publicSettings?.site_name || 'sub2api').trim() || 'sub2api'
+  const usageEndpoint = new URL('/v1/usage', baseUrl).toString()
   const usageScript = `({
     request: {
-      url: "{{baseUrl}}/v1/usage",
+      url: "${usageEndpoint}",
       method: "GET",
       headers: { "Authorization": "Bearer {{apiKey}}" }
     },

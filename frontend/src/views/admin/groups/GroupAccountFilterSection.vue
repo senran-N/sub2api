@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="supportedPlatforms.includes(form.platform)"
+    v-if="ACCOUNT_FILTER_PLATFORMS.includes(form.platform)"
     class="group-account-filter-section mt-4 space-y-4 pt-4"
   >
     <h4 class="group-account-filter-section__title mb-3 text-sm font-medium">
@@ -44,6 +44,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import Toggle from '@/components/common/Toggle.vue'
+import { ACCOUNT_FILTER_PLATFORMS } from './groupsForm'
 import type { CreateGroupForm, EditGroupForm } from './groupsForm'
 
 defineProps<{
@@ -51,8 +52,6 @@ defineProps<{
 }>()
 
 const { t } = useI18n()
-
-const supportedPlatforms = ['openai', 'antigravity', 'anthropic', 'gemini']
 </script>
 
 <style scoped>

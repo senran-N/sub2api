@@ -367,6 +367,63 @@ describe('Navigation Integration Tests', () => {
 
       wrapper.unmount()
     })
+
+    it('chunk 加载错误时应该清除导航加载状态', async () => {
+      const navigationLoading = useNavigationLoadingState()
+
+      const errorRouter = createRouter({
+        history: createWebHistory(),
+        routes: [
+          {
+            path: '/dashboard',
+            name: 'Dashboard',
+            component: MockDashboard
+          },
+          {
+            path: '/chunk-error',
+            name: 'ChunkError',
+            component: () => {
+              const error = new Error('Loading chunk failed')
+              error.name = 'ChunkLoadError'
+              return Promise.reject(error)
+            }
+          }
+        ]
+      })
+
+      errorRouter.beforeEach(() => {
+        navigationLoading.startNavigation()
+      })
+
+      errorRouter.onError((error) => {
+        const isChunkLoadError =
+          error.message?.includes('Loading chunk') || error.name === 'ChunkLoadError'
+        if (isChunkLoadError) {
+          navigationLoading.endNavigation()
+        }
+      })
+
+      const wrapper = mount(TestApp, {
+        global: {
+          plugins: [errorRouter]
+        }
+      })
+
+      await errorRouter.isReady()
+      await errorRouter.push('/dashboard')
+      await flushPromises()
+
+      navigationLoading.startNavigation()
+      expect(navigationLoading.isNavigating.value).toBe(true)
+
+      await errorRouter.push('/chunk-error').catch(() => {})
+      await flushPromises()
+
+      expect(navigationLoading.isNavigating.value).toBe(false)
+      expect(navigationLoading.isLoading.value).toBe(false)
+
+      wrapper.unmount()
+    })
   })
 
   describe('导航状态管理', () => {
