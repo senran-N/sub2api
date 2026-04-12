@@ -24,6 +24,9 @@ type StubConcurrencyCache struct{}
 func (c StubConcurrencyCache) AcquireAccountSlot(_ context.Context, _ int64, _ int, _ string) (bool, error) {
 	return true, nil
 }
+func (c StubConcurrencyCache) AcquireAccountSlotOrEnqueueWait(_ context.Context, _ int64, _ int, _ int, _ string) (bool, bool, error) {
+	return true, false, nil
+}
 func (c StubConcurrencyCache) ReleaseAccountSlot(_ context.Context, _ int64, _ string) error {
 	return nil
 }
@@ -41,6 +44,9 @@ func (c StubConcurrencyCache) GetAccountWaitingCount(_ context.Context, _ int64)
 }
 func (c StubConcurrencyCache) AcquireUserSlot(_ context.Context, _ int64, _ int, _ string) (bool, error) {
 	return true, nil
+}
+func (c StubConcurrencyCache) AcquireUserSlotOrEnqueueWait(_ context.Context, _ int64, _ int, _ int, _ string) (bool, bool, error) {
+	return true, false, nil
 }
 func (c StubConcurrencyCache) ReleaseUserSlot(_ context.Context, _ int64, _ string) error {
 	return nil

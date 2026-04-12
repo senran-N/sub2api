@@ -34,7 +34,12 @@ func (f *fakeSchedulerCache) GetSnapshot(_ context.Context, _ service.SchedulerB
 func (f *fakeSchedulerCache) SetSnapshot(_ context.Context, _ service.SchedulerBucket, _ []service.Account) error {
 	return nil
 }
-func (f *fakeSchedulerCache) GetAccount(_ context.Context, _ int64) (*service.Account, error) {
+func (f *fakeSchedulerCache) GetAccount(_ context.Context, accountID int64) (*service.Account, error) {
+	for _, account := range f.accounts {
+		if account != nil && account.ID == accountID {
+			return account, nil
+		}
+	}
 	return nil, nil
 }
 func (f *fakeSchedulerCache) SetAccount(_ context.Context, _ *service.Account) error { return nil }
@@ -95,6 +100,9 @@ type fakeConcurrencyCache struct{}
 func (f *fakeConcurrencyCache) AcquireAccountSlot(context.Context, int64, int, string) (bool, error) {
 	return true, nil
 }
+func (f *fakeConcurrencyCache) AcquireAccountSlotOrEnqueueWait(context.Context, int64, int, int, string) (bool, bool, error) {
+	return true, false, nil
+}
 func (f *fakeConcurrencyCache) ReleaseAccountSlot(context.Context, int64, string) error { return nil }
 func (f *fakeConcurrencyCache) GetAccountConcurrency(context.Context, int64) (int, error) {
 	return 0, nil
@@ -108,6 +116,9 @@ func (f *fakeConcurrencyCache) GetAccountWaitingCount(context.Context, int64) (i
 }
 func (f *fakeConcurrencyCache) AcquireUserSlot(context.Context, int64, int, string) (bool, error) {
 	return true, nil
+}
+func (f *fakeConcurrencyCache) AcquireUserSlotOrEnqueueWait(context.Context, int64, int, int, string) (bool, bool, error) {
+	return true, false, nil
 }
 func (f *fakeConcurrencyCache) ReleaseUserSlot(context.Context, int64, string) error   { return nil }
 func (f *fakeConcurrencyCache) GetUserConcurrency(context.Context, int64) (int, error) { return 0, nil }
