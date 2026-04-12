@@ -79,6 +79,19 @@ func TestResolveAccountUpstreamModel(t *testing.T) {
 		require.Equal(t, "gpt-5", resolveAccountUpstreamModel(account, "gpt-5"))
 	})
 
+	t.Run("openai reasoning variant keeps suffix after base fallback", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gpt-5.4": "gpt-5.3-codex-spark",
+				},
+			},
+		}
+
+		require.Equal(t, "gpt-5.3-codex-spark-xhigh", resolveAccountUpstreamModel(account, "gpt-5.4-xhigh"))
+	})
+
 	t.Run("antigravity uses antigravity resolver", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformAntigravity,
@@ -257,6 +270,39 @@ func TestGatewayServiceIsChannelModelRestrictedForSelectionWithGroup(t *testing.
 
 		require.False(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), allowedAccount, "claude-sonnet-4"))
 		require.True(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), restrictedAccount, "claude-sonnet-4"))
+	})
+
+	t.Run("upstream source uses reasoning variant fallback before restriction", func(t *testing.T) {
+		svc := newGatewayServiceWithChannelRepo(makeStandardChannelRepo(Channel{
+			ID:                 4,
+			Status:             StatusActive,
+			GroupIDs:           []int64{groupID},
+			RestrictModels:     true,
+			BillingModelSource: BillingModelSourceUpstream,
+			ModelPricing: []ChannelModelPricing{
+				{Platform: PlatformAnthropic, Models: []string{"claude-upstream-allowed"}},
+			},
+		}, map[int64]string{groupID: PlatformAnthropic}))
+
+		allowedAccount := &Account{
+			Platform: PlatformAnthropic,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gpt-5.4": "claude-upstream-allowed",
+				},
+			},
+		}
+		restrictedAccount := &Account{
+			Platform: PlatformAnthropic,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gpt-5.4": "claude-upstream-blocked",
+				},
+			},
+		}
+
+		require.False(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), allowedAccount, "gpt-5.4-xhigh"))
+		require.True(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), restrictedAccount, "gpt-5.4-xhigh"))
 	})
 
 	t.Run("upstream source without account cannot prove restriction", func(t *testing.T) {

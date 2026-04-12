@@ -90,6 +90,12 @@ func resolveAccountUpstreamModel(account *Account, requestedModel string) string
 	if account.Platform == PlatformAntigravity {
 		return mapAntigravityModel(account, requestedModel)
 	}
+	if account.Platform == PlatformOpenAI {
+		return resolveOpenAIForwardModel(account, requestedModel, "")
+	}
+	if mappedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, requestedModel); matched {
+		return mappedModel
+	}
 	return account.GetMappedModel(requestedModel)
 }
 
