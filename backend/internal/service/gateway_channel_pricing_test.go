@@ -92,6 +92,18 @@ func TestResolveAccountUpstreamModel(t *testing.T) {
 		require.Equal(t, "gpt-5.3-codex-spark-xhigh", resolveAccountUpstreamModel(account, "gpt-5.4-xhigh"))
 	})
 
+	t.Run("bedrock uses actual aws model id", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeBedrock,
+			Credentials: map[string]any{
+				"aws_region": "eu-west-1",
+			},
+		}
+
+		require.Equal(t, "eu.anthropic.claude-sonnet-4-5-20250929-v1:0", resolveAccountUpstreamModel(account, "claude-sonnet-4-5"))
+	})
+
 	t.Run("antigravity uses antigravity resolver", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformAntigravity,
@@ -303,6 +315,40 @@ func TestGatewayServiceIsChannelModelRestrictedForSelectionWithGroup(t *testing.
 
 		require.False(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), allowedAccount, "gpt-5.4-xhigh"))
 		require.True(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), restrictedAccount, "gpt-5.4-xhigh"))
+	})
+
+	t.Run("upstream source uses bedrock runtime model id before restriction", func(t *testing.T) {
+		svc := newGatewayServiceWithChannelRepo(makeStandardChannelRepo(Channel{
+			ID:                 5,
+			Status:             StatusActive,
+			GroupIDs:           []int64{groupID},
+			RestrictModels:     true,
+			BillingModelSource: BillingModelSourceUpstream,
+			ModelPricing: []ChannelModelPricing{
+				{Platform: PlatformAnthropic, Models: []string{"eu.anthropic.claude-sonnet-4-5-20250929-v1:0"}},
+			},
+		}, map[int64]string{groupID: PlatformAnthropic}))
+
+		allowedAccount := &Account{
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeBedrock,
+			Credentials: map[string]any{
+				"aws_region": "eu-west-1",
+			},
+		}
+		restrictedAccount := &Account{
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeBedrock,
+			Credentials: map[string]any{
+				"aws_region": "eu-west-1",
+				"model_mapping": map[string]any{
+					"claude-sonnet-4-5": "claude-opus-4-6",
+				},
+			},
+		}
+
+		require.False(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), allowedAccount, "claude-sonnet-4-5"))
+		require.True(t, svc.isChannelModelRestrictedForSelectionWithGroup(context.Background(), testGatewayGroupIDPtr(groupID), restrictedAccount, "claude-sonnet-4-5"))
 	})
 
 	t.Run("upstream source without account cannot prove restriction", func(t *testing.T) {

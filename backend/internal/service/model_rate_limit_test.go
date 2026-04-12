@@ -369,6 +369,61 @@ func TestGetModelRateLimitRemainingTime_OpenAIReasoningVariantUsesResolvedUpstre
 	}
 }
 
+func TestIsModelRateLimited_BedrockUsesResolvedModelIDKey(t *testing.T) {
+	now := time.Now()
+	future := now.Add(10 * time.Minute).Format(time.RFC3339)
+
+	account := &Account{
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeBedrock,
+		Credentials: map[string]any{
+			"aws_region": "eu-west-1",
+			"model_mapping": map[string]any{
+				"gpt-5.4": "claude-sonnet-4-5",
+			},
+		},
+		Extra: map[string]any{
+			modelRateLimitsKey: map[string]any{
+				"eu.anthropic.claude-sonnet-4-5-20250929-v1:0": map[string]any{
+					"rate_limit_reset_at": future,
+				},
+			},
+		},
+	}
+
+	if !account.isModelRateLimitedWithContext(context.Background(), "gpt-5.4-xhigh") {
+		t.Fatal("expected bedrock reasoning variant to hit the resolved aws model rate-limit key")
+	}
+}
+
+func TestGetModelRateLimitRemainingTime_BedrockUsesResolvedModelIDKey(t *testing.T) {
+	now := time.Now()
+	future := now.Add(5 * time.Minute).Format(time.RFC3339)
+
+	account := &Account{
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeBedrock,
+		Credentials: map[string]any{
+			"aws_region": "eu-west-1",
+			"model_mapping": map[string]any{
+				"gpt-5.4": "claude-sonnet-4-5",
+			},
+		},
+		Extra: map[string]any{
+			modelRateLimitsKey: map[string]any{
+				"eu.anthropic.claude-sonnet-4-5-20250929-v1:0": map[string]any{
+					"rate_limit_reset_at": future,
+				},
+			},
+		},
+	}
+
+	remaining := account.GetModelRateLimitRemainingTimeWithContext(context.Background(), "gpt-5.4-xhigh")
+	if remaining < 4*time.Minute || remaining > 6*time.Minute {
+		t.Fatalf("expected remaining time between 4m and 6m, got %v", remaining)
+	}
+}
+
 func TestGetRateLimitRemainingTime(t *testing.T) {
 	now := time.Now()
 	future15m := now.Add(15 * time.Minute).Format(time.RFC3339)

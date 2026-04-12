@@ -90,6 +90,13 @@ func resolveAccountUpstreamModel(account *Account, requestedModel string) string
 	if account.Platform == PlatformAntigravity {
 		return mapAntigravityModel(account, requestedModel)
 	}
+	if account.IsBedrock() {
+		modelID, ok := ResolveBedrockModelID(account, requestedModel)
+		if !ok {
+			return ""
+		}
+		return modelID
+	}
 	if account.Platform == PlatformOpenAI {
 		return resolveOpenAIForwardModel(account, requestedModel, "")
 	}
