@@ -56,8 +56,15 @@ func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedMo
 	if account.Platform == PlatformOpenAI {
 		return isOpenAIAccountModelEligible(account, requestedModel)
 	}
-	if account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-		requestedModel = claude.NormalizeModelID(requestedModel)
+	if account.Platform == PlatformAnthropic {
+		if resolvedModel, source := resolveAnthropicCompatForwardModel(account, requestedModel); source != "" {
+			if source == anthropicForwardModelSourceAccount {
+				return strings.TrimSpace(resolvedModel) != ""
+			}
+			requestedModel = resolvedModel
+		} else if account.Type != AccountTypeAPIKey && account.Type != AccountTypeUpstream {
+			requestedModel = claude.NormalizeModelID(requestedModel)
+		}
 	}
 	return account.IsModelSupported(requestedModel)
 }

@@ -173,10 +173,8 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		testModelID = claude.DefaultTestModel
 	}
 
-	// 兼容上游账号测试连接时也需要应用模型映射，避免测试路径与真实转发路径行为不一致。
-	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
-		testModelID, _ = resolveMappedModelWithOpenAIReasoningFallback(account, testModelID)
-	}
+	// 测试探活与真实转发复用同一套 Anthropic 兼容模型解析，避免 Upstream/OAuth 分叉。
+	testModelID, _ = resolveAnthropicCompatForwardModel(account, testModelID)
 
 	// Bedrock accounts use a separate test path
 	if account.IsBedrock() {

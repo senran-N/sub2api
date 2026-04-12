@@ -123,6 +123,38 @@ func TestAccountTestService_AnthropicUpstreamProbeUsesReasoningVariantBaseMappin
 	require.Contains(t, string(readAnthropicAccountTestRequestBody(t, upstream.requests[0])), `"model":"claude-sonnet-4-6"`)
 }
 
+func TestAccountTestService_AnthropicOAuthProbeUsesClaudeNormalization(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: {\"type\":\"message_stop\"}\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          74,
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token": "oauth-token",
+		},
+	}
+
+	err := svc.testClaudeAccountConnection(ctx, account, "claude-sonnet-4-5", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Contains(t, string(readAnthropicAccountTestRequestBody(t, upstream.requests[0])), `"model":"claude-sonnet-4-5-20250929"`)
+}
+
 func readAnthropicAccountTestRequestBody(t *testing.T, req *http.Request) []byte {
 	t.Helper()
 	if req == nil || req.Body == nil {

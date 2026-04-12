@@ -48,6 +48,26 @@ func TestGatewayService_ApplyForwardModelMapping_APIKeyUsesReasoningVariantFallb
 	require.Equal(t, "claude-sonnet-4-5-20250929", gjson.GetBytes(gotBody, "model").String())
 }
 
+func TestGatewayService_ApplyForwardModelMapping_UpstreamUsesReasoningVariantFallback(t *testing.T) {
+	svc := &GatewayService{}
+	account := &Account{
+		Name:     "upstream-openai-compat",
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeUpstream,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.4": "claude-sonnet-4-5-20250929",
+			},
+		},
+	}
+	body := []byte(`{"model":"gpt-5.4-xhigh","messages":[]}`)
+
+	gotBody, gotModel := svc.applyForwardModelMapping(account, "gpt-5.4-xhigh", "gpt-5.4-xhigh", body)
+
+	require.Equal(t, "claude-sonnet-4-5-20250929", gotModel)
+	require.Equal(t, "claude-sonnet-4-5-20250929", gjson.GetBytes(gotBody, "model").String())
+}
+
 func TestGatewayService_ApplyForwardModelMapping_OAuthUsesClaudeNormalization(t *testing.T) {
 	svc := &GatewayService{}
 	account := &Account{

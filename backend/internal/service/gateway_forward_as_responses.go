@@ -14,7 +14,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/apicompat"
-	"github.com/senran-N/sub2api/internal/pkg/claude"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
@@ -58,16 +57,8 @@ func (s *GatewayService) ForwardAsResponses(
 	// 4. Model mapping
 	mappedModel := originalModel
 	reasoningEffort := ExtractResponsesReasoningEffortFromBody(body)
-	if account.Type == AccountTypeAPIKey {
-		if resolvedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, originalModel); matched {
-			mappedModel = resolvedModel
-		}
-	}
-	if mappedModel == originalModel && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-		normalized := claude.NormalizeModelID(originalModel)
-		if normalized != originalModel {
-			mappedModel = normalized
-		}
+	if resolvedModel, source := resolveAnthropicCompatForwardModel(account, originalModel); source != "" {
+		mappedModel = resolvedModel
 	}
 	anthropicReq.Model = mappedModel
 

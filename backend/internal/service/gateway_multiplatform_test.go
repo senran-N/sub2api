@@ -1136,6 +1136,30 @@ func TestGatewayService_isModelSupportedByAccount(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "Anthropic平台-APIKey支持OpenAI推理变体基础映射",
+			account: &Account{
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"gpt-5.4": "claude-sonnet-4-6"},
+				},
+			},
+			model:    "gpt-5.4-xhigh",
+			expected: true,
+		},
+		{
+			name: "Anthropic平台-Upstream保留精确别名映射",
+			account: &Account{
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeUpstream,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"claude-sonnet-4-5": "claude-sonnet-4-6"},
+				},
+			},
+			model:    "claude-sonnet-4-5",
+			expected: true,
+		},
+		{
 			name:     "Gemini平台-无映射配置-支持所有模型",
 			account:  &Account{Platform: PlatformGemini, Type: AccountTypeAPIKey},
 			model:    "gemini-2.5-flash",

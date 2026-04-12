@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/pkg/tlsfingerprint"
-	"github.com/senran-N/sub2api/internal/pkg/claude"
 )
 
 type forwardRequestPreparation struct {
@@ -102,20 +101,9 @@ func (s *GatewayService) applyForwardModelMapping(
 ) ([]byte, string) {
 	mappedModel := requestModel
 	mappingSource := ""
-	if account.Type == AccountTypeAPIKey {
-		if resolvedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, requestModel); matched {
-			mappedModel = resolvedModel
-		}
-		if mappedModel != requestModel {
-			mappingSource = "account"
-		}
-	}
-	if mappingSource == "" && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-		normalized := claude.NormalizeModelID(requestModel)
-		if normalized != requestModel {
-			mappedModel = normalized
-			mappingSource = "prefix"
-		}
+	if resolvedModel, source := resolveAnthropicCompatForwardModel(account, requestModel); source != "" {
+		mappedModel = resolvedModel
+		mappingSource = source
 	}
 	if mappedModel == requestModel {
 		return body, requestModel

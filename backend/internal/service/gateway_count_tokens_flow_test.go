@@ -28,6 +28,26 @@ func TestGatewayService_ApplyCountTokensModelMapping_APIKeyUsesAccountMapping(t 
 	require.Equal(t, "claude-sonnet-4-5-20241022", gjson.GetBytes(gotBody, "model").String())
 }
 
+func TestGatewayService_ApplyCountTokensModelMapping_UpstreamUsesReasoningVariantFallback(t *testing.T) {
+	svc := &GatewayService{}
+	account := &Account{
+		Name:     "upstream-account",
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeUpstream,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.4": "claude-sonnet-4-5-20241022",
+			},
+		},
+	}
+	body := []byte(`{"model":"gpt-5.4-xhigh","messages":[]}`)
+
+	gotBody, gotModel := svc.applyCountTokensModelMapping(account, "gpt-5.4-xhigh", "gpt-5.4-xhigh", body)
+
+	require.Equal(t, "claude-sonnet-4-5-20241022", gotModel)
+	require.Equal(t, "claude-sonnet-4-5-20241022", gjson.GetBytes(gotBody, "model").String())
+}
+
 func TestGatewayService_ApplyCountTokensModelMapping_OAuthUsesClaudeNormalization(t *testing.T) {
 	svc := &GatewayService{}
 	account := &Account{
