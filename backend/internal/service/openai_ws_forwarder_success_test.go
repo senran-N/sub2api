@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -666,7 +666,7 @@ func TestOpenAIGatewayService_Forward_WSv1_Unsupported(t *testing.T) {
 	require.Nil(t, upstream.lastReq, "WSv1 不支持时不应触发 HTTP 上游请求")
 }
 
-func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnReconnect(t *testing.T) {
+func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnExplicitContinuationReconnect(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	var connIndex atomic.Int64
@@ -748,17 +748,17 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnReconnect
 		},
 	}
 
-	reqBody := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
+	firstReqBody := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
 	rec1 := httptest.NewRecorder()
 	c1, _ := gin.CreateTestContext(rec1)
 	c1.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c1.Request.Header.Set("session_id", "session_turn_state")
 	c1.Request.Header.Set("x-codex-turn-metadata", "turn_meta_1")
-	result1, err := svc.Forward(context.Background(), c1, account, reqBody)
+	result1, err := svc.Forward(context.Background(), c1, account, firstReqBody)
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 
-	sessionHash := svc.GenerateSessionHash(c1, reqBody)
+	sessionHash := svc.GenerateSessionHash(c1, firstReqBody)
 	store := svc.getOpenAIWSStateStore()
 	turnState, ok := store.GetSessionTurnState(0, sessionHash)
 	require.True(t, ok)
@@ -774,7 +774,8 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnReconnect
 	c2.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c2.Request.Header.Set("session_id", "session_turn_state")
 	c2.Request.Header.Set("x-codex-turn-metadata", "turn_meta_2")
-	result2, err := svc.Forward(context.Background(), c2, account, reqBody)
+	secondReqBody := []byte(`{"model":"gpt-5.1","stream":false,"previous_response_id":"` + result1.RequestID + `","input":[{"type":"input_text","text":"hello"}]}`)
+	result2, err := svc.Forward(context.Background(), c2, account, secondReqBody)
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 
@@ -988,7 +989,7 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnMetadataInPayloadOnConnReuse(t *t
 	require.Equal(t, "turn_meta_payload_2", gjson.Get(secondWrite, "client_metadata.x-codex-turn-metadata").String())
 }
 
-func TestOpenAIGatewayService_Forward_WSv2StoreFalseSessionConnIsolation(t *testing.T) {
+func TestOpenAIGatewayService_Forward_WSv2StoreFalseFreshTurnsRespectStrictIsolation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	var upgradeCount atomic.Int64
@@ -1083,7 +1084,7 @@ func TestOpenAIGatewayService_Forward_WSv2StoreFalseSessionConnIsolation(t *test
 	result2, err := svc.Forward(context.Background(), c2, account, body)
 	require.NoError(t, err)
 	require.NotNil(t, result2)
-	require.Equal(t, int64(1), upgradeCount.Load(), "同一 session(store=false) 应复用同一 WS 连接")
+	require.Equal(t, int64(2), upgradeCount.Load(), "无显式续链信号时，同一 session(store=false) 也应新建连接，避免隐式续链")
 
 	rec3 := httptest.NewRecorder()
 	c3, _ := gin.CreateTestContext(rec3)
@@ -1092,7 +1093,7 @@ func TestOpenAIGatewayService_Forward_WSv2StoreFalseSessionConnIsolation(t *test
 	result3, err := svc.Forward(context.Background(), c3, account, body)
 	require.NoError(t, err)
 	require.NotNil(t, result3)
-	require.Equal(t, int64(2), upgradeCount.Load(), "不同 session(store=false) 应隔离连接，避免续链状态互相覆盖")
+	require.Equal(t, int64(3), upgradeCount.Load(), "strict 模式下，不同 fresh turn 也应保持隔离")
 }
 
 func TestOpenAIGatewayService_Forward_WSv2StoreFalseDisableForceNewConnAllowsReuse(t *testing.T) {

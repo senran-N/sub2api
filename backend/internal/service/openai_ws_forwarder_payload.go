@@ -74,6 +74,20 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressPayloadMeta(
 	return meta
 }
 
+func openAIWSRequestHasFunctionCallOutput(input any) bool {
+	switch typed := input.(type) {
+	case []any:
+		for _, item := range typed {
+			if openAIWSRequestHasFunctionCallOutput(item) {
+				return true
+			}
+		}
+	case map[string]any:
+		return strings.TrimSpace(fmt.Sprintf("%v", typed["type"])) == "function_call_output"
+	}
+	return false
+}
+
 func openAIWSEventMayContainModel(eventType string) bool {
 	switch eventType {
 	case "response.created",
