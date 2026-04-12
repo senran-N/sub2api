@@ -119,7 +119,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 }
 
 // extractAPIKeyForGoogle extracts API key for Google/Gemini endpoints.
-// Priority: x-goog-api-key > Authorization: Bearer > x-api-key > query key
+// Priority: x-goog-api-key > Authorization: Bearer > x-api-key > api-key > query key
 // This allows OpenClaw and other clients using Bearer auth to work with Gemini endpoints.
 func extractAPIKeyForGoogle(c *gin.Context) string {
 	// 1) preferred: Gemini native header
@@ -143,7 +143,12 @@ func extractAPIKeyForGoogle(c *gin.Context) string {
 		return k
 	}
 
-	// 4) query parameter key (for specific paths)
+	// 4) api-key header (OpenAI/Azure compatibility)
+	if k := strings.TrimSpace(c.GetHeader("api-key")); k != "" {
+		return k
+	}
+
+	// 5) query parameter key (for specific paths)
 	if allowGoogleQueryKey(c.Request.URL.Path) {
 		if v := strings.TrimSpace(c.Query("key")); v != "" {
 			return v

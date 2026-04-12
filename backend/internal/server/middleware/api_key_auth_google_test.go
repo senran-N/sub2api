@@ -373,6 +373,39 @@ func TestApiKeyAuthWithSubscriptionGoogle_InvalidKey(t *testing.T) {
 	require.Equal(t, "UNAUTHENTICATED", resp.Error.Status)
 }
 
+func TestApiKeyAuthWithSubscriptionGoogle_AcceptsAPIKeyHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != "valid-api-key" {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			return &service.APIKey{
+				ID:     1,
+				Key:    key,
+				Status: service.StatusActive,
+				User: &service.User{
+					ID:          123,
+					Status:      service.StatusActive,
+					Concurrency: 1,
+				},
+			}, nil
+		},
+	})
+	cfg := &config.Config{RunMode: config.RunModeSimple}
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
+	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+
+	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
+	req.Header.Set("api-key", "valid-api-key")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
 func TestApiKeyAuthWithSubscriptionGoogle_RepoError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
