@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const defaultOpenAICodexInstructions = "You are a helpful coding assistant."
+
 var codexModelMap = map[string]string{
 	"gpt-5.4":                    "gpt-5.4",
 	"gpt-5.4-mini":               "gpt-5.4-mini",
@@ -496,7 +498,7 @@ func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
 	if !isInstructionsEmpty(reqBody) {
 		return false
 	}
-	reqBody["instructions"] = "You are a helpful coding assistant."
+	reqBody["instructions"] = defaultOpenAICodexInstructions
 	return true
 }
 

@@ -104,9 +104,9 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 	}
 
 	if isInstructionsEmpty(reqBody) {
-		reqBody["instructions"] = "You are a helpful coding assistant."
+		reqBody["instructions"] = defaultOpenAICodexInstructions
 		bodyModified = true
-		markPatchSet("instructions", "You are a helpful coding assistant.")
+		markPatchSet("instructions", defaultOpenAICodexInstructions)
 	}
 
 	if sanitizeEmptyBase64InputImagesInOpenAIRequestBodyMap(reqBody) {

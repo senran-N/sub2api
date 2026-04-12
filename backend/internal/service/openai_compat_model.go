@@ -12,7 +12,7 @@ func NormalizeOpenAICompatRequestedModel(model string) string {
 		return ""
 	}
 
-	normalized, _, ok := splitOpenAICompatReasoningModel(trimmed)
+	normalized, _, _, ok := splitOpenAICompatReasoningModel(trimmed)
 	if !ok || normalized == "" {
 		return trimmed
 	}
@@ -29,12 +29,15 @@ func applyOpenAICompatModelNormalization(req *apicompat.AnthropicRequest) {
 		return
 	}
 
-	normalizedModel, derivedEffort, hasReasoningSuffix := splitOpenAICompatReasoningModel(originalModel)
+	normalizedModel, baseModel, derivedEffort, hasReasoningSuffix := splitOpenAICompatReasoningModel(originalModel)
 	if hasReasoningSuffix && normalizedModel != "" {
 		req.Model = normalizedModel
 	}
 
 	if req.OutputConfig != nil && strings.TrimSpace(req.OutputConfig.Effort) != "" {
+		if hasReasoningSuffix && baseModel != "" {
+			req.Model = baseModel
+		}
 		return
 	}
 
@@ -49,10 +52,10 @@ func applyOpenAICompatModelNormalization(req *apicompat.AnthropicRequest) {
 	req.OutputConfig.Effort = claudeEffort
 }
 
-func splitOpenAICompatReasoningModel(model string) (normalizedModel string, reasoningEffort string, ok bool) {
+func splitOpenAICompatReasoningModel(model string) (normalizedModel string, baseModel string, reasoningEffort string, ok bool) {
 	trimmed := strings.TrimSpace(model)
 	if trimmed == "" {
-		return "", "", false
+		return "", "", "", false
 	}
 
 	modelID := trimmed
@@ -61,8 +64,9 @@ func splitOpenAICompatReasoningModel(model string) (normalizedModel string, reas
 		modelID = parts[len(parts)-1]
 	}
 	modelID = strings.TrimSpace(modelID)
-	if !strings.HasPrefix(strings.ToLower(modelID), "gpt-") {
-		return trimmed, "", false
+	lowerModelID := strings.ToLower(modelID)
+	if !strings.HasPrefix(lowerModelID, "gpt-") && !strings.HasPrefix(lowerModelID, "gpt ") {
+		return trimmed, "", "", false
 	}
 
 	parts := strings.FieldsFunc(strings.ToLower(modelID), func(r rune) bool {
@@ -74,7 +78,7 @@ func splitOpenAICompatReasoningModel(model string) (normalizedModel string, reas
 		}
 	})
 	if len(parts) == 0 {
-		return trimmed, "", false
+		return trimmed, "", "", false
 	}
 
 	last := strings.NewReplacer("-", "", "_", "", " ", "").Replace(parts[len(parts)-1])
@@ -85,10 +89,19 @@ func splitOpenAICompatReasoningModel(model string) (normalizedModel string, reas
 	case "xhigh", "extrahigh":
 		reasoningEffort = "xhigh"
 	default:
-		return trimmed, "", false
+		return trimmed, "", "", false
 	}
 
-	return normalizeCodexModel(modelID), reasoningEffort, true
+	baseModel = normalizeCodexModel(modelID)
+	normalizedModel = normalizeCodexUpstreamModel(modelID)
+	if normalizedModel == "" {
+		normalizedModel = baseModel
+	}
+	if normalizedModel == baseModel {
+		normalizedModel = appendOpenAICompatReasoningSuffix(baseModel, reasoningEffort)
+	}
+
+	return normalizedModel, baseModel, reasoningEffort, true
 }
 
 func openAIReasoningEffortToClaudeOutputEffort(effort string) string {
@@ -99,5 +112,27 @@ func openAIReasoningEffortToClaudeOutputEffort(effort string) string {
 		return "max"
 	default:
 		return ""
+	}
+}
+
+func appendOpenAICompatReasoningSuffix(model string, effort string) string {
+	base := strings.TrimSpace(model)
+	if base == "" {
+		return ""
+	}
+
+	switch strings.TrimSpace(effort) {
+	case "none":
+		return base + "-none"
+	case "low":
+		return base + "-low"
+	case "medium":
+		return base + "-medium"
+	case "high":
+		return base + "-high"
+	case "xhigh":
+		return base + "-xhigh"
+	default:
+		return base
 	}
 }

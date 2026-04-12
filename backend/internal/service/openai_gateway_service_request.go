@@ -445,25 +445,21 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 			changed = true
 		}
 	}
-	return normalized, changed, nil
-}
 
-func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byte) string {
-	model := strings.ToLower(strings.TrimSpace(reqModel))
-	if !strings.Contains(model, "codex") {
-		return ""
+	model := strings.ToLower(strings.TrimSpace(gjson.GetBytes(normalized, "model").String()))
+	if strings.Contains(model, "codex") {
+		instructions := gjson.GetBytes(normalized, "instructions")
+		if !instructions.Exists() || instructions.Type != gjson.String || strings.TrimSpace(instructions.String()) == "" {
+			next, err := sjson.SetBytes(normalized, "instructions", defaultOpenAICodexInstructions)
+			if err != nil {
+				return body, false, fmt.Errorf("normalize passthrough body default instructions: %w", err)
+			}
+			normalized = next
+			changed = true
+		}
 	}
-	instructions := gjson.GetBytes(body, "instructions")
-	if !instructions.Exists() {
-		return "instructions_missing"
-	}
-	if instructions.Type != gjson.String {
-		return "instructions_not_string"
-	}
-	if strings.TrimSpace(instructions.String()) == "" {
-		return "instructions_empty"
-	}
-	return ""
+
+	return normalized, changed, nil
 }
 
 func extractOpenAIReasoningEffortFromBody(body []byte, requestedModel string) *string {

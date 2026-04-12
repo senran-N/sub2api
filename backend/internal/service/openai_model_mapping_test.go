@@ -58,6 +58,39 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 			defaultMappedModel: "gpt-4o-mini",
 			expectedModel:      "gpt-5.4",
 		},
+		{
+			name: "inherits explicit reasoning suffix from base passthrough mapping",
+			account: &Account{
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-5.4": "gpt-5.4",
+					},
+				},
+			},
+			requestedModel:     "gpt-5.4-xhigh",
+			defaultMappedModel: "gpt-5.1",
+			expectedModel:      "gpt-5.4-xhigh",
+		},
+		{
+			name: "inherits explicit reasoning suffix from base remap target",
+			account: &Account{
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-5.4": "gpt-5.3-codex-spark",
+					},
+				},
+			},
+			requestedModel:     "gpt-5.4-xhigh",
+			defaultMappedModel: "gpt-5.1",
+			expectedModel:      "gpt-5.3-codex-spark-xhigh",
+		},
+		{
+			name:               "inherits explicit reasoning suffix from group default fallback",
+			account:            &Account{Credentials: map[string]any{}},
+			requestedModel:     "gpt-5.4-xhigh",
+			defaultMappedModel: "gpt-5.2",
+			expectedModel:      "gpt-5.2-xhigh",
+		},
 	}
 
 	for _, tt := range tests {
