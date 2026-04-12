@@ -16,14 +16,15 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/apicompat"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
+	"github.com/tidwall/sjson"
 	"go.uber.org/zap"
 )
 
-// ForwardAsChatCompletions accepts a Chat Completions request body, converts it
-// to OpenAI Responses API format, forwards to the OpenAI upstream, and converts
-// the response back to Chat Completions format. All account types (OAuth and API
-// Key) go through the Responses API conversion path since the upstream only
-// exposes the /v1/responses endpoint.
+// ForwardAsChatCompletions accepts a Chat Completions request body and forwards
+// it to the OpenAI upstream. OAuth traffic is converted to the Responses API
+// when required by the upstream, while API-key passthrough preserves the
+// original Chat Completions protocol for compatible providers that do not
+// implement /v1/responses.
 func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	ctx context.Context,
 	c *gin.Context,
@@ -47,6 +48,31 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	// derive a stable seed from the final upstream model family.
 	mappedModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	mappedModel = normalizeOpenAIModelForUpstream(account, mappedModel)
+
+	// API Key passthrough must preserve the original Chat Completions protocol
+	// so OpenAI-compatible upstreams that do not implement /v1/responses keep working.
+	if account != nil && account.IsOpenAIApiKey() && account.IsOpenAIPassthroughEnabled() {
+		forwardBody := body
+		if mappedModel != "" && mappedModel != originalModel {
+			var patchErr error
+			forwardBody, patchErr = sjson.SetBytes(body, "model", mappedModel)
+			if patchErr != nil {
+				return nil, fmt.Errorf("patch chat completions passthrough model: %w", patchErr)
+			}
+		}
+		var reasoningEffort *string
+		if value := normalizeOpenAIReasoningEffort(chatReq.ReasoningEffort); value != "" {
+			reasoningEffort = &value
+		}
+		result, err := s.forwardOpenAIPassthrough(ctx, c, account, forwardBody, originalModel, reasoningEffort, clientStream, startTime)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil && mappedModel != "" && mappedModel != originalModel {
+			result.UpstreamModel = mappedModel
+		}
+		return result, nil
+	}
 
 	promptCacheKey = strings.TrimSpace(promptCacheKey)
 	compatPromptCacheInjected := false

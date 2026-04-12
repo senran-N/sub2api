@@ -153,3 +153,20 @@ func TestGetUpstreamEndpoint_FullFlow(t *testing.T) {
 	got := GetUpstreamEndpoint(c, service.PlatformOpenAI)
 	require.Equal(t, "/v1/responses/compact", got)
 }
+
+func TestGetUpstreamEndpoint_OpenAIPassthroughChatCompletions(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	c.Set(ctxKeyInboundEndpoint, NormalizeInboundEndpoint(c.Request.URL.Path))
+	c.Set("openai_passthrough", true)
+
+	got := GetUpstreamEndpoint(c, service.PlatformOpenAI)
+	require.Equal(t, EndpointChatCompletions, got)
+}
+
+func TestGuessPlatformFromPath(t *testing.T) {
+	require.Equal(t, service.PlatformOpenAI, guessPlatformFromPath("/v1/chat/completions"))
+	require.Equal(t, service.PlatformOpenAI, guessPlatformFromPath("/openai/v1/responses/compact"))
+	require.Equal(t, service.PlatformGemini, guessPlatformFromPath("/v1beta/models/gemini:generateContent"))
+}

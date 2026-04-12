@@ -27,6 +27,26 @@ func newOpenAIResponsesUpstreamTarget(base string) openAIResponsesUpstreamTarget
 	}
 }
 
+func newOpenAIPassthroughUpstreamTarget(base, rawRequestPath string) openAIResponsesUpstreamTarget {
+	normalizedBase := strings.TrimSpace(base)
+	if normalizedBase == "" {
+		normalizedBase = openaiPlatformAPIURL
+	}
+
+	targetURL := buildOpenAIResponsesURL(normalizedBase)
+	if suffix := openAIResponsesRequestPathSuffixFromPath(rawRequestPath); suffix != "" {
+		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, suffix)
+	}
+	if isOpenAIChatCompletionsPath(rawRequestPath) {
+		targetURL = buildOpenAIChatCompletionsURL(normalizedBase)
+	}
+
+	return openAIResponsesUpstreamTarget{
+		URL:        targetURL,
+		AuthHeader: resolveOpenAIResponsesAuthHeader(normalizedBase),
+	}
+}
+
 func (t openAIResponsesUpstreamTarget) ApplyAuthHeader(header http.Header, token string) {
 	if header == nil {
 		return
@@ -70,6 +90,47 @@ func buildOpenAIResponsesURLLegacy(base string) string {
 		return normalized + "/responses"
 	}
 	return normalized + "/v1/responses"
+}
+
+func buildOpenAIChatCompletionsURL(base string) string {
+	normalized := strings.TrimSpace(base)
+	parsed, err := url.Parse(normalized)
+	if err != nil {
+		return buildOpenAIChatCompletionsURLLegacy(normalized)
+	}
+
+	parsed.Path = normalizeOpenAIChatCompletionsPath(parsed.Path)
+	return parsed.String()
+}
+
+func buildOpenAIChatCompletionsURLLegacy(base string) string {
+	normalized := strings.TrimRight(strings.TrimSpace(base), "/")
+	if strings.HasSuffix(normalized, "/chat/completions") {
+		return normalized
+	}
+	if strings.HasSuffix(normalized, "/v1") {
+		return normalized + "/chat/completions"
+	}
+	return normalized + "/v1/chat/completions"
+}
+
+func normalizeOpenAIChatCompletionsPath(path string) string {
+	trimmed := strings.TrimRight(strings.TrimSpace(path), "/")
+	switch {
+	case trimmed == "":
+		return "/v1/chat/completions"
+	case strings.HasSuffix(trimmed, "/chat/completions"):
+		return trimmed
+	case strings.HasSuffix(trimmed, "/v1"):
+		return trimmed + "/chat/completions"
+	default:
+		return trimmed + "/v1/chat/completions"
+	}
+}
+
+func isOpenAIChatCompletionsPath(rawPath string) bool {
+	trimmed := strings.TrimRight(strings.TrimSpace(rawPath), "/")
+	return strings.HasSuffix(trimmed, "/chat/completions")
 }
 
 func normalizeOpenAIResponsesPath(path string, azure bool) string {

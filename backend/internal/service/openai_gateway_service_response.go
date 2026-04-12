@@ -386,9 +386,11 @@ func (s *OpenAIGatewayService) parseSSEUsageBytes(data []byte, usage *OpenAIUsag
 	if usage == nil || len(data) == 0 || bytes.Equal(data, []byte("[DONE]")) {
 		return
 	}
-	if len(data) < 72 {
+	if parsedUsage, ok := extractOpenAIUsageFromJSONBytes(data); ok {
+		*usage = parsedUsage
 		return
 	}
+
 	eventType := gjson.GetBytes(data, "type").String()
 	switch eventType {
 	case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
@@ -407,13 +409,34 @@ func extractOpenAIUsageFromJSONBytes(body []byte) (OpenAIUsage, bool) {
 	values := gjson.GetManyBytes(
 		body,
 		"usage.input_tokens",
+		"usage.prompt_tokens",
 		"usage.output_tokens",
+		"usage.completion_tokens",
 		"usage.input_tokens_details.cached_tokens",
+		"usage.prompt_tokens_details.cached_tokens",
 	)
+
+	if !values[0].Exists() && !values[1].Exists() && !values[2].Exists() && !values[3].Exists() && !values[4].Exists() && !values[5].Exists() {
+		return OpenAIUsage{}, false
+	}
+
+	inputTokens := int(values[0].Int())
+	if inputTokens == 0 {
+		inputTokens = int(values[1].Int())
+	}
+	outputTokens := int(values[2].Int())
+	if outputTokens == 0 {
+		outputTokens = int(values[3].Int())
+	}
+	cacheReadTokens := int(values[4].Int())
+	if cacheReadTokens == 0 {
+		cacheReadTokens = int(values[5].Int())
+	}
+
 	return OpenAIUsage{
-		InputTokens:          int(values[0].Int()),
-		OutputTokens:         int(values[1].Int()),
-		CacheReadInputTokens: int(values[2].Int()),
+		InputTokens:          inputTokens,
+		OutputTokens:         outputTokens,
+		CacheReadInputTokens: cacheReadTokens,
 	}, true
 }
 

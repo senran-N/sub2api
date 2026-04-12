@@ -228,16 +228,23 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		targetURL = chatgptCodexURL
 	case AccountTypeAPIKey:
 		baseURL := account.GetOpenAIBaseURL()
-		if baseURL != "" {
-			validatedURL, err := s.validateUpstreamBaseURL(baseURL)
-			if err != nil {
-				return nil, err
-			}
-			upstreamTarget = newOpenAIResponsesUpstreamTarget(validatedURL)
-			targetURL = upstreamTarget.URL
+		if baseURL == "" {
+			baseURL = openaiPlatformAPIURL
 		}
+		validatedURL, err := s.validateUpstreamBaseURL(baseURL)
+		if err != nil {
+			return nil, err
+		}
+		rawRequestPath := ""
+		if c != nil && c.Request != nil && c.Request.URL != nil {
+			rawRequestPath = c.Request.URL.Path
+		}
+		upstreamTarget = newOpenAIPassthroughUpstreamTarget(validatedURL, rawRequestPath)
+		targetURL = upstreamTarget.URL
 	}
-	targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
+	if account.Type != AccountTypeAPIKey {
+		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {

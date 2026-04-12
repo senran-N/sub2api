@@ -57,8 +57,9 @@ func NormalizeInboundEndpoint(path string) string {
 // account platform and the normalized inbound endpoint.
 //
 // Platform-specific rules:
-//   - OpenAI always forwards to /v1/responses (with optional subpath
-//     such as /v1/responses/compact preserved from the raw URL).
+//   - OpenAI defaults to /v1/responses (with optional subpath such as
+//     /v1/responses/compact preserved from the raw URL). Context-aware
+//     passthrough exceptions are handled by GetUpstreamEndpoint.
 //   - Anthropic  → /v1/messages
 //   - Gemini     → /v1beta/models
 //   - Antigravity routes may target either Claude or Gemini, so the
@@ -166,5 +167,20 @@ func GetUpstreamEndpoint(c *gin.Context, platform string) string {
 	if c != nil && c.Request != nil && c.Request.URL != nil {
 		rawPath = c.Request.URL.Path
 	}
+	if platform == service.PlatformOpenAI && inbound == EndpointChatCompletions && isOpenAIPassthroughRequest(c) {
+		return EndpointChatCompletions
+	}
 	return DeriveUpstreamEndpoint(inbound, rawPath, platform)
+}
+
+func isOpenAIPassthroughRequest(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	value, ok := c.Get("openai_passthrough")
+	if !ok {
+		return false
+	}
+	passthrough, _ := value.(bool)
+	return passthrough
 }

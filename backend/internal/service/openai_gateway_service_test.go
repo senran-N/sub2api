@@ -1635,6 +1635,166 @@ func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesCompactPath(t *test
 	require.NotEmpty(t, req.Header.Get("Session_Id"))
 }
 
+func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesChatCompletionsPathForAPIKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader([]byte(`{"model":"gpt-5"}`)))
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+		},
+	}}
+	account := &Account{
+		Type:        AccountTypeAPIKey,
+		Platform:    PlatformOpenAI,
+		Credentials: map[string]any{"base_url": "https://compatible.example.com/v1"},
+	}
+
+	req, err := svc.buildUpstreamRequestOpenAIPassthrough(c.Request.Context(), c, account, []byte(`{"model":"gpt-5"}`), "token")
+	require.NoError(t, err)
+	require.Equal(t, "https://compatible.example.com/v1/chat/completions", req.URL.String())
+}
+
+func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesResponsesSuffixForAPIKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses/compact", bytes.NewReader([]byte(`{"model":"gpt-5"}`)))
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+		},
+	}}
+	account := &Account{
+		Type:        AccountTypeAPIKey,
+		Platform:    PlatformOpenAI,
+		Credentials: map[string]any{"base_url": "https://compatible.example.com/v1"},
+	}
+
+	req, err := svc.buildUpstreamRequestOpenAIPassthrough(c.Request.Context(), c, account, []byte(`{"model":"gpt-5"}`), "token")
+	require.NoError(t, err)
+	require.Equal(t, "https://compatible.example.com/v1/responses/compact", req.URL.String())
+}
+
+func TestOpenAIChatCompletionsPathDetection(t *testing.T) {
+	require.True(t, isOpenAIChatCompletionsPath("/v1/chat/completions"))
+	require.True(t, isOpenAIChatCompletionsPath("/openai/v1/chat/completions/"))
+	require.False(t, isOpenAIChatCompletionsPath("/v1/chat/completions-legacy"))
+	require.False(t, isOpenAIChatCompletionsPath("/v1/responses"))
+}
+
+func TestOpenAIForwardAsChatCompletionsAPIKeyPassthroughPreservesProtocol(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	requestBody := []byte(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(requestBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type": []string{"application/json"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{"id":"chatcmpl_123","object":"chat.completion","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`)),
+		},
+	}
+	svc := &OpenAIGatewayService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "sk-test",
+			"base_url": "https://compatible.example.com/v1",
+		},
+		Extra: map[string]any{
+			"openai_passthrough": true,
+		},
+	}
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, requestBody, "", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "https://compatible.example.com/v1/chat/completions", upstream.lastReq.URL.String())
+	require.JSONEq(t, string(requestBody), string(upstream.lastBody))
+	require.Equal(t, "Bearer sk-test", upstream.lastReq.Header.Get("Authorization"))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"object":"chat.completion"`)
+	require.Equal(t, 3, result.Usage.InputTokens)
+	require.Equal(t, 2, result.Usage.OutputTokens)
+}
+
+func TestOpenAIForwardAsChatCompletionsAPIKeyPassthroughAppliesModelMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	requestBody := []byte(`{"model":"gpt-alias","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(requestBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type": []string{"application/json"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{"id":"chatcmpl_123","object":"chat.completion","model":"gpt-5.4","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}`)),
+		},
+	}
+	svc := &OpenAIGatewayService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":       "sk-test",
+			"base_url":      "https://compatible.example.com/v1",
+			"model_mapping": map[string]any{"gpt-alias": "gpt-5.4"},
+		},
+		Extra: map[string]any{
+			"openai_passthrough": true,
+		},
+	}
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, requestBody, "", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.JSONEq(t, `{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":false}`, string(upstream.lastBody))
+	require.Equal(t, "gpt-alias", result.Model)
+	require.Equal(t, "gpt-5.4", result.UpstreamModel)
+}
+
+func TestExtractOpenAIUsageFromJSONBytesSupportsChatCompletionsUsage(t *testing.T) {
+	usage, ok := extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"prompt_tokens":12,"completion_tokens":7,"prompt_tokens_details":{"cached_tokens":3}}}`))
+	require.True(t, ok)
+	require.Equal(t, 12, usage.InputTokens)
+	require.Equal(t, 7, usage.OutputTokens)
+	require.Equal(t, 3, usage.CacheReadInputTokens)
+}
+
 func TestOpenAIBuildUpstreamRequestCompactForcesJSONAcceptForOAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

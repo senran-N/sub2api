@@ -2204,7 +2204,7 @@ export default {
       types: {
         oauth: 'OAuth',
         chatgptOauth: 'ChatGPT OAuth',
-        responsesApi: 'Responses API',
+        responsesApi: 'OpenAI API / 兼容 API',
         googleOauth: 'Google OAuth',
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
@@ -2414,7 +2414,7 @@ export default {
         apiKeyHint: '您的 OpenAI API Key',
         oauthPassthrough: '自动透传（仅替换认证）',
         oauthPassthroughDesc:
-          '开启后，该 OpenAI 账号将自动透传请求与响应，仅替换认证并保留计费/并发/审计及必要安全过滤；如遇兼容性问题可随时关闭回滚。',
+          '开启后，该 OpenAI 账号将走透传/认证替换链路，并保留计费/并发/审计及必要安全过滤。API Key 账号会在兼容时尽量保留原始上游 HTTP 协议；OAuth 账号仍按上游要求的协议转发。',
         responsesWebsocketsV2: 'Responses WebSocket v2',
         responsesWebsocketsV2Desc:
           '默认关闭。开启后可启用 responses_websockets_v2 协议能力（受网关全局开关与账号类型开关约束）。',

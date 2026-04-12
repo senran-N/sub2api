@@ -202,7 +202,11 @@ func openAIResponsesRequestPathSuffix(c *gin.Context) string {
 	if c == nil || c.Request == nil || c.Request.URL == nil {
 		return ""
 	}
-	normalizedPath := strings.TrimRight(strings.TrimSpace(c.Request.URL.Path), "/")
+	return openAIResponsesRequestPathSuffixFromPath(c.Request.URL.Path)
+}
+
+func openAIResponsesRequestPathSuffixFromPath(rawPath string) string {
+	normalizedPath := strings.TrimRight(strings.TrimSpace(rawPath), "/")
 	if normalizedPath == "" {
 		return ""
 	}

@@ -2024,7 +2024,7 @@ export default {
       types: {
         oauth: 'OAuth',
         chatgptOauth: 'ChatGPT OAuth',
-        responsesApi: 'Responses API',
+        responsesApi: 'OpenAI API / Compatible API',
         googleOauth: 'Google OAuth',
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
@@ -2264,7 +2264,7 @@ export default {
         apiKeyHint: 'Your OpenAI API Key',
         oauthPassthrough: 'Auto passthrough (auth only)',
         oauthPassthroughDesc:
-          'When enabled, this OpenAI account uses automatic passthrough: the gateway forwards request/response as-is and only swaps auth, while keeping billing/concurrency/audit and necessary safety filtering.',
+          'When enabled, this OpenAI account uses the passthrough/auth-replacement path while keeping billing/concurrency/audit and necessary safety filtering. API Key accounts preserve compatible upstream HTTP protocols when possible; OAuth accounts still follow the upstream protocol required by the provider.',
         responsesWebsocketsV2: 'Responses WebSocket v2',
         responsesWebsocketsV2Desc:
           'Disabled by default. Enable to allow responses_websockets_v2 capability (still gated by global and account-type switches).',

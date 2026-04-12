@@ -14,11 +14,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/senran-N/sub2api/internal/pkg/ip"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -1068,7 +1068,7 @@ func guessPlatformFromPath(path string) string {
 		return service.PlatformAntigravity
 	case strings.HasPrefix(p, "/v1beta/"):
 		return service.PlatformGemini
-	case strings.Contains(p, "/responses"):
+	case strings.Contains(p, "/responses"), strings.Contains(p, "/chat/completions"):
 		return service.PlatformOpenAI
 	default:
 		return ""
