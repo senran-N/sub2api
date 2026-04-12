@@ -141,7 +141,7 @@ func ResolveBedrockModelID(account *Account, requestedModel string) (string, boo
 		return "", false
 	}
 
-	mappedModel := account.GetMappedModel(requestedModel)
+	mappedModel, _ := resolveMappedModelWithOpenAIReasoningFallback(account, requestedModel)
 	modelID, shouldAdjustRegion, ok := normalizeBedrockModelID(mappedModel)
 	if !ok {
 		return "", false

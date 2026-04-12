@@ -46,3 +46,21 @@ func TestGatewayServiceIsModelSupportedByAccount_BedrockCustomMappingStillActsAs
 		t.Fatalf("expected unsupported model to still be rejected")
 	}
 }
+
+func TestGatewayServiceIsModelSupportedByAccount_BedrockOpenAIReasoningVariantBaseMapping(t *testing.T) {
+	svc := &GatewayService{}
+	account := &Account{
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeBedrock,
+		Credentials: map[string]any{
+			"aws_region": "eu-west-1",
+			"model_mapping": map[string]any{
+				"gpt-5.4": "claude-sonnet-4-5",
+			},
+		},
+	}
+
+	if !svc.isModelSupportedByAccount(account, "gpt-5.4-xhigh") {
+		t.Fatalf("expected reasoning variant base mapping to remain schedulable for Bedrock account")
+	}
+}

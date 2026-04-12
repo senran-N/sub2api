@@ -495,6 +495,23 @@ func TestResolveBedrockModelID(t *testing.T) {
 		_, ok := ResolveBedrockModelID(account, "claude-3-5-sonnet-20241022")
 		assert.False(t, ok)
 	})
+
+	t.Run("openai reasoning variant reuses base mapping", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeBedrock,
+			Credentials: map[string]any{
+				"aws_region": "eu-west-1",
+				"model_mapping": map[string]any{
+					"gpt-5.4": "claude-sonnet-4-5",
+				},
+			},
+		}
+
+		modelID, ok := ResolveBedrockModelID(account, "gpt-5.4-xhigh")
+		require.True(t, ok)
+		assert.Equal(t, "eu.anthropic.claude-sonnet-4-5-20250929-v1:0", modelID)
+	})
 }
 
 func TestAutoInjectBedrockBetaTokens(t *testing.T) {
