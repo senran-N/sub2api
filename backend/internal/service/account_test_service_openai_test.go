@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -166,4 +167,89 @@ func TestAccountTestService_OpenAIAzureAPIKeyUsesResponsesEndpointAndAPIKeyHeade
 	require.Equal(t, "https://demo.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview", upstream.requests[0].URL.String())
 	require.Equal(t, "azure-key", upstream.requests[0].Header.Get("Api-Key"))
 	require.Empty(t, upstream.requests[0].Header.Get("Authorization"))
+}
+
+func TestAccountTestService_OpenAIAPIKeyProbeAppliesWildcardModelMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: [DONE]\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          85,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "test-key",
+			"model_mapping": map[string]any{
+				"gpt-5.4*": "gpt-5.3-codex",
+			},
+		},
+	}
+
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4-mini", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "gpt-5.3-codex", requestBodyModel(t, upstream.requests[0]))
+}
+
+func TestAccountTestService_OpenAIAPIKeyProbeUsesReasoningVariantBaseMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: [DONE]\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          84,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "test-key",
+			"model_mapping": map[string]any{
+				"gpt-5.4": "gpt-5.3-codex",
+			},
+		},
+	}
+
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4-xhigh", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "gpt-5.3-codex-xhigh", requestBodyModel(t, upstream.requests[0]))
+}
+
+func requestBodyModel(t *testing.T, req *http.Request) string {
+	t.Helper()
+	require.NotNil(t, req)
+	require.NotNil(t, req.Body)
+
+	body, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+
+	var payload struct {
+		Model string `json:"model"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload))
+	return payload.Model
 }

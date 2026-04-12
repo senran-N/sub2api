@@ -23,12 +23,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		testModelID = openai.DefaultTestModel
 	}
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
-		mapping := account.GetModelMapping()
-		if len(mapping) > 0 {
-			if mappedModel, exists := mapping[testModelID]; exists {
-				testModelID = mappedModel
-			}
-		}
+		testModelID = resolveOpenAIForwardModel(account, testModelID, "")
 	}
 
 	var (
