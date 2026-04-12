@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { adminAPI } from '@/api/admin'
+import type { GroupPlatform } from '@/types'
 import { useKeyedDebouncedSearch } from '@/composables/useKeyedDebouncedSearch'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import type { ModelRoutingRule, SimpleAccount } from './groupsForm'
@@ -72,7 +73,10 @@ export async function hydrateRoutingRulesFromApi(
   return rules
 }
 
-export function useGroupRoutingRules(scope: 'create' | 'edit') {
+export function useGroupRoutingRules(
+  scope: 'create' | 'edit',
+  resolvePlatform: () => GroupPlatform
+) {
   const rules = ref<ModelRoutingRule[]>([])
   const accountSearchKeyword = ref<Record<string, string>>({})
   const accountSearchResults = ref<Record<string, SimpleAccount[]>>({})
@@ -103,7 +107,7 @@ export function useGroupRoutingRules(scope: 'create' | 'edit') {
         20,
         {
           search: keyword,
-          platform: 'anthropic'
+          platform: resolvePlatform()
         },
         { signal }
       )

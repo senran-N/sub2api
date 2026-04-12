@@ -3,8 +3,8 @@ import { adminAPI } from '@/api/admin'
 import type { AdminGroup } from '@/types'
 import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
-  applyCreateFormPlatformRules,
-  applyCreateFormSubscriptionTypeRules,
+  applyGroupFormPlatformRules,
+  applyGroupFormSubscriptionTypeRules,
   buildCreateGroupPayload,
   buildUpdateGroupPayload,
   createDefaultCreateGroupForm,
@@ -55,7 +55,7 @@ export function useGroupsViewManagement(options: GroupsViewManagementOptions) {
     removeRoutingRule: removeCreateRoutingRule,
     hideAllDropdowns: hideCreateAccountDropdowns,
     reset: resetCreateRoutingRules
-  } = useGroupRoutingRules('create')
+  } = useGroupRoutingRules('create', () => createForm.platform)
 
   const {
     rules: editModelRoutingRules,
@@ -73,7 +73,7 @@ export function useGroupsViewManagement(options: GroupsViewManagementOptions) {
     hideAllDropdowns: hideEditAccountDropdowns,
     loadRulesFromApi: loadEditRoutingRulesFromApi,
     reset: resetEditRoutingRules
-  } = useGroupRoutingRules('edit')
+  } = useGroupRoutingRules('edit', () => editForm.platform)
 
   const deleteConfirmMessage = computed(() => {
     if (!deletingGroup.value) {
@@ -138,6 +138,8 @@ export function useGroupsViewManagement(options: GroupsViewManagementOptions) {
   const handleEdit = async (group: AdminGroup) => {
     editingGroup.value = group
     hydrateEditGroupForm(editForm, group)
+    applyGroupFormSubscriptionTypeRules(editForm)
+    applyGroupFormPlatformRules(editForm)
     await loadEditRoutingRulesFromApi(group.model_routing)
     showEditModal.value = true
   }
@@ -210,14 +212,28 @@ export function useGroupsViewManagement(options: GroupsViewManagementOptions) {
   watch(
     () => createForm.subscription_type,
     () => {
-      applyCreateFormSubscriptionTypeRules(createForm)
+      applyGroupFormSubscriptionTypeRules(createForm)
     }
   )
 
   watch(
     () => createForm.platform,
     () => {
-      applyCreateFormPlatformRules(createForm)
+      applyGroupFormPlatformRules(createForm)
+    }
+  )
+
+  watch(
+    () => editForm.subscription_type,
+    () => {
+      applyGroupFormSubscriptionTypeRules(editForm)
+    }
+  )
+
+  watch(
+    () => editForm.platform,
+    () => {
+      applyGroupFormPlatformRules(editForm)
     }
   )
 

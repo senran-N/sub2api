@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { AdminGroup } from '@/types'
 import {
   addCopyAccountsGroupSelection,
-  applyCreateFormPlatformRules,
-  applyCreateFormSubscriptionTypeRules,
+  applyGroupFormPlatformRules,
+  applyGroupFormSubscriptionTypeRules,
   buildCopyAccountsGroupOptions,
   buildCreateGroupPayload,
   buildFallbackGroupOptions,
@@ -176,7 +176,7 @@ describe('create form rules', () => {
     const createForm = createDefaultCreateGroupForm()
     createForm.subscription_type = 'subscription'
     createForm.fallback_group_id_on_invalid_request = 4
-    applyCreateFormSubscriptionTypeRules(createForm)
+    applyGroupFormSubscriptionTypeRules(createForm)
     expect(createForm.is_exclusive).toBe(true)
     expect(createForm.fallback_group_id_on_invalid_request).toBeNull()
 
@@ -186,7 +186,7 @@ describe('create form rules', () => {
     createForm.require_oauth_only = true
     createForm.require_privacy_set = true
     createForm.fallback_group_id_on_invalid_request = 8
-    applyCreateFormPlatformRules(createForm)
+    applyGroupFormPlatformRules(createForm)
     expect(createForm.fallback_group_id_on_invalid_request).toBeNull()
     expect(createForm.allow_messages_dispatch).toBe(false)
     expect(createForm.default_mapped_model).toBe('')

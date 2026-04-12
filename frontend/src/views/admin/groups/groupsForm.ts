@@ -234,8 +234,8 @@ export function removeCopyAccountsGroupSelection(
   selectedGroupIds.splice(index, 1)
 }
 
-export function applyCreateFormSubscriptionTypeRules(
-  form: Pick<CreateGroupForm, 'subscription_type' | 'is_exclusive' | 'fallback_group_id_on_invalid_request'>
+export function applyGroupFormSubscriptionTypeRules(
+  form: Pick<GroupDialogForm, 'subscription_type' | 'is_exclusive' | 'fallback_group_id_on_invalid_request'>
 ): void {
   if (form.subscription_type !== 'subscription') {
     return
@@ -245,9 +245,9 @@ export function applyCreateFormSubscriptionTypeRules(
   form.fallback_group_id_on_invalid_request = null
 }
 
-export function applyCreateFormPlatformRules(
+export function applyGroupFormPlatformRules(
   form: Pick<
-    CreateGroupForm,
+    GroupDialogForm,
     | 'platform'
     | 'fallback_group_id_on_invalid_request'
     | 'allow_messages_dispatch'

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -344,14 +345,9 @@ func (h *GroupHandler) GetStats(c *gin.Context) {
 		return
 	}
 
-	// Return mock data for now
-	response.Success(c, gin.H{
-		"total_api_keys":  0,
-		"active_api_keys": 0,
-		"total_requests":  0,
-		"total_cost":      0.0,
-	})
-	_ = groupID // TODO: implement actual stats
+	_ = groupID
+	// Do not return fabricated zeros here; fail fast until real usage metrics are wired.
+	response.Error(c, http.StatusNotImplemented, "Group stats endpoint is not implemented")
 }
 
 // GetUsageSummary returns today's and cumulative cost for all groups.

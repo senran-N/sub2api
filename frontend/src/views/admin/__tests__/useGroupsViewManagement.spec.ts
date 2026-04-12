@@ -133,6 +133,19 @@ describe('useGroupsViewManagement', () => {
     expect(state.showEditModal.value).toBe(true)
     expect(state.editForm.name).toBe('Alpha')
 
+    state.editForm.allow_messages_dispatch = true
+    state.editForm.default_mapped_model = 'gpt-5.4'
+    state.editForm.require_oauth_only = true
+    state.editForm.require_privacy_set = true
+    state.editForm.fallback_group_id_on_invalid_request = 2
+    state.editForm.platform = 'gemini'
+    await nextTick()
+    expect(state.editForm.allow_messages_dispatch).toBe(false)
+    expect(state.editForm.default_mapped_model).toBe('')
+    expect(state.editForm.require_oauth_only).toBe(false)
+    expect(state.editForm.require_privacy_set).toBe(false)
+    expect(state.editForm.fallback_group_id_on_invalid_request).toBeNull()
+
     state.editForm.name = 'Updated'
     await state.handleUpdateGroup()
     expect(updateGroupRequest).toHaveBeenCalledWith(
@@ -151,6 +164,34 @@ describe('useGroupsViewManagement', () => {
     await state.confirmDelete()
     expect(deleteGroupRequest).toHaveBeenCalledWith(1)
     expect(showSuccess).toHaveBeenCalledWith('admin.groups.groupDeleted')
+  })
+
+  it('sanitizes stale edit-only platform fields when opening unsupported groups', async () => {
+    const state = useGroupsViewManagement({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess: vi.fn(),
+      loadGroups: vi.fn().mockResolvedValue(undefined),
+      isCurrentOnboardingStep: vi.fn(() => false),
+      advanceOnboarding: vi.fn()
+    })
+
+    await state.handleEdit(
+      createGroup({
+        platform: 'gemini',
+        allow_messages_dispatch: true,
+        default_mapped_model: 'gpt-5.4',
+        require_oauth_only: true,
+        require_privacy_set: true,
+        fallback_group_id_on_invalid_request: 3
+      })
+    )
+
+    expect(state.editForm.allow_messages_dispatch).toBe(false)
+    expect(state.editForm.default_mapped_model).toBe('')
+    expect(state.editForm.require_oauth_only).toBe(false)
+    expect(state.editForm.require_privacy_set).toBe(false)
+    expect(state.editForm.fallback_group_id_on_invalid_request).toBeNull()
   })
 
   it('surfaces shared request error details for create failures', async () => {

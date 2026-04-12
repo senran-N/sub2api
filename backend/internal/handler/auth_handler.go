@@ -251,6 +251,10 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		"user_id", session.UserID,
 		"email", session.Email)
 
+	deleteLoginSession := func() {
+		_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
+	}
+
 	// Verify the TOTP code
 	if err := h.totpService.VerifyCode(c.Request.Context(), session.UserID, req.TotpCode); err != nil {
 		slog.Debug("login_2fa_verify_failed",
@@ -263,18 +267,19 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 	// Get the user (before session deletion so we can check backend mode)
 	user, err := h.userService.GetByID(c.Request.Context(), session.UserID)
 	if err != nil {
+		deleteLoginSession()
 		response.ErrorFrom(c, err)
 		return
 	}
 
-	// Backend mode: only admin can login (check BEFORE deleting session)
+	// Rejecting the login must also destroy the one-time 2FA session.
 	if backendModeBlocksLogin(h.settingSvc.IsBackendModeEnabled(c.Request.Context()), user) {
+		deleteLoginSession()
 		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
 		return
 	}
 
-	// Delete the login session only after all checks pass and tokens will be issued.
-	_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
+	deleteLoginSession()
 
 	h.respondWithTokenPair(c, user)
 }

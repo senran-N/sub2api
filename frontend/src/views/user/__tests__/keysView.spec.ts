@@ -143,7 +143,7 @@ describe('keysView helpers', () => {
 
     const usageScript = new URLSearchParams(deeplink.split('?')[1]).get('usageScript')
     expect(usageScript).not.toBeNull()
-    expect(atob(usageScript!)).toContain('url: "https://api.example.com/v1/usage"')
+    expect(atob(usageScript!)).toContain('url: "https://api.example.com/api/v1/usage"')
     expect(atob(usageScript!)).not.toContain('/api/v1/v1/usage')
   })
 })

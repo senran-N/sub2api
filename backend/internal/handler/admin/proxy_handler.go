@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -264,15 +265,9 @@ func (h *ProxyHandler) GetStats(c *gin.Context) {
 		return
 	}
 
-	// Return mock data for now
 	_ = proxyID
-	response.Success(c, gin.H{
-		"total_accounts":  0,
-		"active_accounts": 0,
-		"total_requests":  0,
-		"success_rate":    100.0,
-		"average_latency": 0,
-	})
+	// Do not return fabricated zeros here; fail fast until real usage metrics are wired.
+	response.Error(c, http.StatusNotImplemented, "Proxy stats endpoint is not implemented")
 }
 
 // GetProxyAccounts handles getting accounts using a proxy

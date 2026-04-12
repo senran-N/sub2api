@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -132,4 +133,46 @@ func TestCreateAndRedeem_BalanceIgnoresSubscriptionFields(t *testing.T) {
 
 	assert.NotEqual(t, http.StatusBadRequest, code,
 		"balance type should not require group_id or validity_days")
+}
+
+func TestRedeemHandler_GetStatsAggregatesRealData(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	now := time.Now().UTC()
+	usedBy := int64(7)
+	adminSvc := newStubAdminService()
+	adminSvc.redeems = []service.RedeemCode{
+		{ID: 1, Type: service.RedeemTypeBalance, Status: service.StatusUnused, Value: 10, CreatedAt: now},
+		{ID: 2, Type: service.RedeemTypeBalance, Status: service.StatusUsed, Value: 12.5, UsedBy: &usedBy, CreatedAt: now},
+		{ID: 3, Type: service.RedeemTypeConcurrency, Status: service.StatusExpired, Value: 3, CreatedAt: now},
+		{ID: 4, Type: service.RedeemTypeSubscription, Status: service.StatusUsed, Value: 30, UsedBy: &usedBy, CreatedAt: now},
+	}
+	handler := NewRedeemHandler(adminSvc, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	req, err := http.NewRequest(http.MethodGet, "/api/v1/admin/redeem-codes/stats", nil)
+	require.NoError(t, err)
+	c.Request = req
+
+	handler.GetStats(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var payload struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &payload))
+	assert.Equal(t, float64(4), payload.Data["total_codes"])
+	assert.Equal(t, float64(1), payload.Data["active_codes"])
+	assert.Equal(t, float64(2), payload.Data["used_codes"])
+	assert.Equal(t, float64(1), payload.Data["expired_codes"])
+	assert.Equal(t, 42.5, payload.Data["total_value_distributed"])
+
+	byType, ok := payload.Data["by_type"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(2), byType[service.RedeemTypeBalance])
+	assert.Equal(t, float64(1), byType[service.RedeemTypeConcurrency])
+	assert.Equal(t, float64(1), byType[service.RedeemTypeSubscription])
+	assert.Equal(t, float64(0), byType[service.RedeemTypeInvitation])
 }

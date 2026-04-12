@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
+import type { GroupPlatform } from '@/types'
 import {
   appendRoutingRuleAccount,
   closeAllRoutingRuleDropdowns,
@@ -6,10 +8,33 @@ import {
   hydrateRoutingRulesFromApi,
   pushRoutingRule,
   removeRoutingRuleAccount,
-  removeRoutingRuleByReference
+  removeRoutingRuleByReference,
+  useGroupRoutingRules
 } from '../groups/useGroupRoutingRules'
 
+const { listAccounts } = vi.hoisted(() => ({
+  listAccounts: vi.fn()
+}))
+
+vi.mock('@/api/admin', () => ({
+  adminAPI: {
+    accounts: {
+      list: listAccounts,
+      getById: vi.fn()
+    }
+  }
+}))
+
 describe('group routing rule helpers', () => {
+  beforeEach(() => {
+    listAccounts.mockReset()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('creates, appends, and removes rules by reference', () => {
     const rules = [createEmptyRoutingRule()]
 
@@ -75,5 +100,37 @@ describe('group routing rule helpers', () => {
       b: false,
       c: false
     })
+  })
+
+  it('searches routing accounts with the current group platform', async () => {
+    listAccounts.mockResolvedValue({
+      items: [{ id: 9, name: 'OpenAI Account' }]
+    })
+
+    const platform = ref<GroupPlatform>('openai')
+    const state = useGroupRoutingRules('create', () => platform.value)
+    const rule = createEmptyRoutingRule()
+    state.rules.value = [rule]
+
+    const searchKey = state.getRuleSearchKey(rule)
+    state.accountSearchKeyword.value[searchKey] = 'openai'
+
+    state.onAccountSearchFocus(rule)
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(listAccounts).toHaveBeenCalledWith(
+      1,
+      20,
+      {
+        search: 'openai',
+        platform: 'openai'
+      },
+      expect.objectContaining({
+        signal: expect.any(AbortSignal)
+      })
+    )
+    expect(state.accountSearchResults.value[searchKey]).toEqual([
+      { id: 9, name: 'OpenAI Account' }
+    ])
   })
 })

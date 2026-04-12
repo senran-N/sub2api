@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -184,6 +184,18 @@ func TestBackendModeAuthGuard(t *testing.T) {
 			name:       "enabled_allows_login_2fa",
 			enabled:    "true",
 			path:       "/api/v1/auth/login/2fa",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "enabled_allows_login_with_trailing_slash",
+			enabled:    "true",
+			path:       "/api/v1/auth/login/",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "enabled_allows_login_with_duplicate_slashes",
+			enabled:    "true",
+			path:       "//api//v1/auth//login//",
 			wantStatus: http.StatusOK,
 		},
 		{

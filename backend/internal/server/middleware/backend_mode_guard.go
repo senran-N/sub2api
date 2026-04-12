@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	stdpath "path"
 	"strings"
 
 	"github.com/senran-N/sub2api/internal/pkg/response"
@@ -36,7 +37,7 @@ func BackendModeAuthGuard(settingService *service.SettingService) gin.HandlerFun
 			c.Next()
 			return
 		}
-		path := c.Request.URL.Path
+		path := normalizeBackendModeAuthPath(c.Request.URL.Path)
 		// Allow login, 2FA, logout, refresh, public settings
 		allowedSuffixes := []string{"/auth/login", "/auth/login/2fa", "/auth/logout", "/auth/refresh"}
 		for _, suffix := range allowedSuffixes {
@@ -48,4 +49,16 @@ func BackendModeAuthGuard(settingService *service.SettingService) gin.HandlerFun
 		response.Forbidden(c, "Backend mode is active. Registration and self-service auth flows are disabled.")
 		c.Abort()
 	}
+}
+
+func normalizeBackendModeAuthPath(path string) string {
+	if path == "" {
+		return "/"
+	}
+
+	normalized := stdpath.Clean(path)
+	if normalized == "." {
+		return "/"
+	}
+	return normalized
 }

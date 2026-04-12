@@ -227,7 +227,7 @@ export function buildCcsImportDeeplink(
   const platform = row.group?.platform || 'anthropic'
   const { app, endpoint } = resolveCcsImportTarget(platform, clientType, baseUrl)
   const providerName = (publicSettings?.site_name || 'sub2api').trim() || 'sub2api'
-  const usageEndpoint = new URL('/v1/usage', baseUrl).toString()
+  const usageEndpoint = buildUsageEndpoint(baseUrl)
   const usageScript = `({
     request: {
       url: "${usageEndpoint}",
@@ -259,4 +259,15 @@ export function buildCcsImportDeeplink(
   })
 
   return `ccswitch://v1/import?${params.toString()}`
+}
+
+function buildUsageEndpoint(baseUrl: string): string {
+  const normalizedBase = new URL(baseUrl)
+  const baseHref = `${normalizedBase.toString().replace(/\/+$/, '')}/`
+
+  if (normalizedBase.pathname.replace(/\/+$/, '').endsWith('/v1')) {
+    return new URL('usage', baseHref).toString()
+  }
+
+  return new URL('v1/usage', baseHref).toString()
 }

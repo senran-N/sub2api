@@ -23,6 +23,8 @@ type RedeemHandler struct {
 	redeemService *service.RedeemService
 }
 
+const redeemStatsPageSize = 1000
+
 // NewRedeemHandler creates a new admin redeem handler
 func NewRedeemHandler(adminService redeemCodeAdminService, redeemService *service.RedeemService) *RedeemHandler {
 	return &RedeemHandler{
@@ -280,19 +282,13 @@ func (h *RedeemHandler) Expire(c *gin.Context) {
 // GetStats handles getting redeem code statistics
 // GET /api/v1/admin/redeem-codes/stats
 func (h *RedeemHandler) GetStats(c *gin.Context) {
-	// Return mock data for now
-	response.Success(c, gin.H{
-		"total_codes":             0,
-		"active_codes":            0,
-		"used_codes":              0,
-		"expired_codes":           0,
-		"total_value_distributed": 0.0,
-		"by_type": gin.H{
-			"balance":     0,
-			"concurrency": 0,
-			"trial":       0,
-		},
-	})
+	codes, err := h.listAllRedeemCodes(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, buildRedeemCodeStats(codes))
 }
 
 // Export handles exporting redeem codes to CSV
@@ -357,4 +353,75 @@ func (h *RedeemHandler) Export(c *gin.Context) {
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", "attachment; filename=redeem_codes.csv")
 	c.Data(200, "text/csv", buf.Bytes())
+}
+
+func (h *RedeemHandler) listAllRedeemCodes(ctx context.Context) ([]service.RedeemCode, error) {
+	page := 1
+	totalLoaded := int64(0)
+	totalExpected := int64(-1)
+	codes := make([]service.RedeemCode, 0, redeemStatsPageSize)
+
+	for totalExpected == -1 || totalLoaded < totalExpected {
+		batch, total, err := h.adminService.ListRedeemCodes(ctx, page, redeemStatsPageSize, "", "", "")
+		if err != nil {
+			return nil, err
+		}
+		if totalExpected == -1 {
+			totalExpected = total
+			if totalExpected == 0 {
+				return []service.RedeemCode{}, nil
+			}
+			if totalExpected > int64(cap(codes)) {
+				codes = make([]service.RedeemCode, 0, totalExpected)
+			}
+		}
+
+		codes = append(codes, batch...)
+		totalLoaded += int64(len(batch))
+		if len(batch) == 0 {
+			break
+		}
+		page++
+	}
+
+	return codes, nil
+}
+
+func buildRedeemCodeStats(codes []service.RedeemCode) gin.H {
+	byType := gin.H{
+		service.RedeemTypeBalance:      0,
+		service.RedeemTypeConcurrency:  0,
+		service.RedeemTypeSubscription: 0,
+		service.RedeemTypeInvitation:   0,
+	}
+
+	activeCodes := 0
+	usedCodes := 0
+	expiredCodes := 0
+	totalValueDistributed := 0.0
+
+	for _, code := range codes {
+		if _, exists := byType[code.Type]; exists {
+			byType[code.Type] = byType[code.Type].(int) + 1
+		}
+
+		switch code.Status {
+		case service.StatusUsed:
+			usedCodes++
+			totalValueDistributed += code.Value
+		case service.StatusExpired:
+			expiredCodes++
+		default:
+			activeCodes++
+		}
+	}
+
+	return gin.H{
+		"total_codes":             len(codes),
+		"active_codes":            activeCodes,
+		"used_codes":              usedCodes,
+		"expired_codes":           expiredCodes,
+		"total_value_distributed": totalValueDistributed,
+		"by_type":                 byType,
+	}
 }
