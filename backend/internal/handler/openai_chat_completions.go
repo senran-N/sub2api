@@ -164,10 +164,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					}
 				}
 				if err != nil {
-					if service.IsOpenAIRequestedModelUnavailableError(initialSelectionErr) {
-						err = initialSelectionErr
-					}
-					status, code, message := openAISelectionErrorResponse(err)
+					status, code, message := openAISelectionErrorResponseAfterDefaultFallback(initialSelectionErr, err)
 					h.handleStreamingAwareError(c, status, code, message, streamStarted)
 					return
 				}

@@ -16,3 +16,11 @@ func openAISelectionErrorResponse(err error) (int, string, string) {
 	}
 	return http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable"
 }
+
+func openAISelectionErrorResponseAfterDefaultFallback(initialErr, fallbackErr error) (int, string, string) {
+	err := fallbackErr
+	if service.IsOpenAIRequestedModelUnavailableError(initialErr) {
+		err = initialErr
+	}
+	return openAISelectionErrorResponse(err)
+}

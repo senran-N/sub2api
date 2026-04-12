@@ -115,6 +115,16 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 		}
 	})
 
+	t.Run("oauth accounts preserve explicit upstream variants", func(t *testing.T) {
+		account := &Account{Type: AccountTypeOAuth}
+		if got := normalizeOpenAIModelForUpstream(account, "gpt-5.4-xhigh"); got != "gpt-5.4-xhigh" {
+			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gpt-5.4-xhigh")
+		}
+		if got := normalizeOpenAIModelForUpstream(account, "gpt-5.3-codex-spark"); got != "gpt-5.3-codex-spark" {
+			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gpt-5.3-codex-spark")
+		}
+	})
+
 	t.Run("api key accounts preserve mapped custom model", func(t *testing.T) {
 		account := &Account{Type: AccountTypeAPIKey}
 		if got := normalizeOpenAIModelForUpstream(account, " custom/upstream-model "); got != "custom/upstream-model" {

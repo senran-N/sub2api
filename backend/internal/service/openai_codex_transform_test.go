@@ -343,8 +343,19 @@ func TestApplyCodexOAuthTransform_NormalizesBareCodexSparkUpstreamModel(t *testi
 
 	result := applyCodexOAuthTransform(reqBody, false, false)
 
-	require.Equal(t, "gpt-5.3-codex", reqBody["model"])
-	require.Equal(t, "gpt-5.3-codex", result.NormalizedModel)
+	require.Equal(t, "gpt-5.3-codex-spark", reqBody["model"])
+	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
+}
+
+func TestApplyCodexOAuthTransform_PreservesExplicitReasoningVariantModel(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.4-xhigh",
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false, false)
+
+	require.Equal(t, "gpt-5.4-xhigh", reqBody["model"])
+	require.Equal(t, "gpt-5.4-xhigh", result.NormalizedModel)
 }
 
 func TestApplyCodexOAuthTransform_StringInputWithToolsField(t *testing.T) {

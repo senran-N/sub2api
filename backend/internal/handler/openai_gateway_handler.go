@@ -628,6 +628,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			)
 			// 首次调度失败 + 有默认映射模型 → 用默认模型重试
 			if len(failedAccountIDs) == 0 {
+				initialSelectionErr := err
 				defaultModel := ""
 				if apiKey.Group != nil {
 					defaultModel = apiKey.Group.DefaultMappedModel
@@ -650,7 +651,8 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					}
 				}
 				if err != nil {
-					h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable", streamStarted)
+					status, code, message := openAISelectionErrorResponseAfterDefaultFallback(initialSelectionErr, err)
+					h.anthropicStreamingAwareError(c, status, code, message, streamStarted)
 					return
 				}
 			} else {
