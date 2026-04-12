@@ -10,6 +10,7 @@ import (
 	"time"
 
 	coderws "github.com/coder/websocket"
+	"github.com/tidwall/gjson"
 )
 
 func (s *OpenAIGatewayService) writeOpenAIWSIngressClientMessage(ctx context.Context, clientConn *coderws.Conn, message []byte) error {
@@ -92,16 +93,12 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 	lastEventType := ""
 	needModelReplace := false
 	clientDisconnected := false
-	mappedModel := ""
+	forwardedModel := strings.TrimSpace(gjson.GetBytes(payload, "model").String())
 	var mappedModelBytes []byte
-	if originalModel != "" {
-		mappedModel = resolveOpenAIForwardModel(account, originalModel, "")
-		if normalizedModel := normalizeOpenAIModelForUpstream(account, mappedModel); normalizedModel != "" {
-			mappedModel = normalizedModel
-		}
-		needModelReplace = mappedModel != "" && mappedModel != originalModel
+	if originalModel != "" && forwardedModel != "" {
+		needModelReplace = forwardedModel != originalModel
 		if needModelReplace {
-			mappedModelBytes = []byte(mappedModel)
+			mappedModelBytes = []byte(forwardedModel)
 		}
 	}
 
@@ -204,7 +201,7 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 
 		if !clientDisconnected {
 			if needModelReplace && len(mappedModelBytes) > 0 && openAIWSEventMayContainModel(eventType) && bytes.Contains(upstreamMessage, mappedModelBytes) {
-				upstreamMessage = replaceOpenAIWSMessageModel(upstreamMessage, mappedModel, originalModel)
+				upstreamMessage = replaceOpenAIWSMessageModel(upstreamMessage, forwardedModel, originalModel)
 			}
 			if openAIWSEventMayContainToolCalls(eventType) && openAIWSMessageLikelyContainsToolCalls(upstreamMessage) {
 				if corrected, changed := s.toolCorrector.CorrectToolCallsInSSEBytes(upstreamMessage); changed {
@@ -260,14 +257,14 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 					clientDisconnected,
 				)
 			}
-			return &OpenAIForwardResult{
-				RequestID:       responseID,
-				Usage:           usage,
-				Model:           originalModel,
-				UpstreamModel:   mappedModel,
-				ServiceTier:     extractOpenAIServiceTierFromBody(payload),
-				ReasoningEffort: extractOpenAIReasoningEffortFromBody(payload, originalModel),
-				Stream:          reqStream,
+				return &OpenAIForwardResult{
+					RequestID:       responseID,
+					Usage:           usage,
+					Model:           originalModel,
+					UpstreamModel:   forwardedModel,
+					ServiceTier:     extractOpenAIServiceTierFromBody(payload),
+					ReasoningEffort: extractOpenAIReasoningEffortFromBody(payload, originalModel),
+					Stream:          reqStream,
 				OpenAIWSMode:    true,
 				ResponseHeaders: lease.HandshakeHeaders(),
 				Duration:        time.Since(turnStart),
