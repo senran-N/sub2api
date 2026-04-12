@@ -2,6 +2,16 @@ package service
 
 import "strings"
 
+func ResolveOpenAIForwardDefaultMappedModel(apiKey *APIKey, fallbackModel string) string {
+	if fallbackModel = strings.TrimSpace(fallbackModel); fallbackModel != "" {
+		return fallbackModel
+	}
+	if apiKey == nil || apiKey.Group == nil {
+		return ""
+	}
+	return strings.TrimSpace(apiKey.Group.DefaultMappedModel)
+}
+
 func resolveMappedModelWithOpenAIReasoningFallback(account *Account, requestedModel string) (mappedModel string, matched bool) {
 	if account == nil {
 		return strings.TrimSpace(requestedModel), false

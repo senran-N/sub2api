@@ -208,7 +208,8 @@ func TestParseOpenAIWSIngressClientPayload_APIKeyPreservesMappedCustomModel(t *t
 		},
 	}
 
-	parsed, err := parseOpenAIWSIngressClientPayload(c, account, []byte(`{"model":"custom-original-model","stream":false}`))
+	svc := &OpenAIGatewayService{}
+	parsed, err := svc.parseOpenAIWSIngressClientPayload(c, account, []byte(`{"model":"custom-original-model","stream":false}`))
 	require.NoError(t, err)
 	require.Equal(t, "custom/upstream-model", gjson.GetBytes(parsed.payloadRaw, "model").String())
 }
@@ -228,9 +229,65 @@ func TestParseOpenAIWSIngressClientPayload_PreservesReasoningVariantFallbackMapp
 		},
 	}
 
-	parsed, err := parseOpenAIWSIngressClientPayload(c, account, []byte(`{"type":"response.create","model":"gpt-5.4-xhigh","stream":false}`))
+	svc := &OpenAIGatewayService{}
+	parsed, err := svc.parseOpenAIWSIngressClientPayload(c, account, []byte(`{"type":"response.create","model":"gpt-5.4-xhigh","stream":false}`))
 	require.NoError(t, err)
 	require.Equal(t, "gpt-5.3-codex-spark-xhigh", gjson.GetBytes(parsed.payloadRaw, "model").String())
+}
+
+func TestParseOpenAIWSIngressClientPayload_AppliesGroupDefaultMappedModelFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+
+	groupID := int64(10)
+	c.Set("api_key", &APIKey{
+		GroupID: &groupID,
+		Group:   &Group{ID: groupID, DefaultMappedModel: "gpt-5.2"},
+	})
+
+	account := &Account{
+		Type: AccountTypeAPIKey,
+	}
+
+	svc := &OpenAIGatewayService{}
+	parsed, err := svc.parseOpenAIWSIngressClientPayload(c, account, []byte(`{"type":"response.create","model":"gpt-5.4-xhigh","stream":false}`))
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.2-xhigh", gjson.GetBytes(parsed.payloadRaw, "model").String())
+}
+
+func TestParseOpenAIWSIngressClientPayload_PrefersChannelMappedModelOverGroupDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+
+	groupID := int64(10)
+	c.Set("api_key", &APIKey{
+		GroupID: &groupID,
+		Group:   &Group{ID: groupID, DefaultMappedModel: "gpt-5.2"},
+	})
+
+	channelService := newTestChannelService(makeStandardChannelRepo(Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{groupID},
+		ModelMapping: map[string]map[string]string{
+			PlatformOpenAI: {
+				"gpt-5.4": "gpt-4.1",
+			},
+		},
+	}, map[int64]string{groupID: PlatformOpenAI}))
+
+	account := &Account{
+		Type: AccountTypeAPIKey,
+	}
+
+	svc := &OpenAIGatewayService{channelService: channelService}
+	parsed, err := svc.parseOpenAIWSIngressClientPayload(c, account, []byte(`{"type":"response.create","model":"gpt-5.4","stream":false}`))
+	require.NoError(t, err)
+	require.Equal(t, "gpt-4.1", gjson.GetBytes(parsed.payloadRaw, "model").String())
 }
 
 func TestSanitizeEmptyBase64InputImagesInOpenAIBody_DropsEmptyParts(t *testing.T) {

@@ -944,7 +944,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			return fmt.Errorf("read client websocket request: %w", readErr)
 		}
 
-		nextPayload, parseErr := parseOpenAIWSIngressClientPayload(c, account, nextClientMessage)
+		nextPayload, parseErr := s.parseOpenAIWSIngressClientPayload(c, account, nextClientMessage)
 		if parseErr != nil {
 			return parseErr
 		}

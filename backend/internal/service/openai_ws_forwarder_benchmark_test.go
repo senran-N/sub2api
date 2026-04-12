@@ -86,7 +86,7 @@ func BenchmarkParseAndPrepareOpenAIWSIngressClientPayload(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		parsed, err := parseOpenAIWSIngressClientPayload(ctx, account, payload)
+		parsed, err := svc.parseOpenAIWSIngressClientPayload(ctx, account, payload)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -104,13 +104,24 @@ func getOpenAIGroupIDFromContext(c *gin.Context) int64 {
 	if c == nil {
 		return 0
 	}
-	value, exists := c.Get("api_key")
-	if !exists {
-		return 0
-	}
-	apiKey, ok := value.(*APIKey)
-	if !ok || apiKey == nil || apiKey.GroupID == nil {
+	apiKey := getOpenAIAPIKeyFromContext(c)
+	if apiKey == nil || apiKey.GroupID == nil {
 		return 0
 	}
 	return *apiKey.GroupID
+}
+
+func getOpenAIAPIKeyFromContext(c *gin.Context) *APIKey {
+	if c == nil {
+		return nil
+	}
+	value, exists := c.Get("api_key")
+	if !exists {
+		return nil
+	}
+	apiKey, ok := value.(*APIKey)
+	if !ok || apiKey == nil {
+		return nil
+	}
+	return apiKey
 }

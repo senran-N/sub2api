@@ -38,13 +38,7 @@ type OpenAIGatewayHandler struct {
 }
 
 func resolveOpenAIForwardDefaultMappedModel(apiKey *service.APIKey, fallbackModel string) string {
-	if fallbackModel = strings.TrimSpace(fallbackModel); fallbackModel != "" {
-		return fallbackModel
-	}
-	if apiKey == nil || apiKey.Group == nil {
-		return ""
-	}
-	return strings.TrimSpace(apiKey.Group.DefaultMappedModel)
+	return service.ResolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
 }
 
 // NewOpenAIGatewayHandler creates a new OpenAIGatewayHandler
@@ -1149,6 +1143,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		zap.Bool("has_previous_response_id", previousResponseID != ""),
 		zap.String("previous_response_id_kind", previousResponseIDKind),
 	)
+	channelMapping, restricted := h.gatewayService.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, reqModel)
+	if restricted {
+		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "Requested model is not allowed for this channel")
+		return
+	}
+	schedulingModel := reqModel
+	if channelMapping.MappedModel != "" {
+		schedulingModel = channelMapping.MappedModel
+	}
 	setOpsRequestContext(c, reqModel, true, firstMessage)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeWSV2))
 
@@ -1191,28 +1194,49 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		firstMessage,
 		openAIWSIngressFallbackSessionSeed(subject.UserID, apiKey.ID, apiKey.GroupID),
 	)
+	initialSelectionModel := schedulingModel
 	selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
 		ctx,
 		apiKey.GroupID,
 		previousResponseID,
 		sessionHash,
-		reqModel,
+		schedulingModel,
 		nil,
 		service.OpenAIUpstreamTransportResponsesWebsocketV2,
 	)
 	if err != nil {
 		reqLog.Warn("openai.websocket_account_select_failed", zap.Error(err))
-		if service.IsOpenAIRequestedModelUnavailableError(err) {
-			model := service.ExtractOpenAIRequestedModelUnavailable(err)
-			reason := "requested model is not configured for any available OpenAI account"
-			if model != "" {
-				reason += ": " + model
+		initialSelectionErr := err
+		defaultModel := ""
+		if apiKey.Group != nil {
+			defaultModel = apiKey.Group.DefaultMappedModel
+		}
+		if defaultModel != "" && defaultModel != schedulingModel {
+			reqLog.Info("openai.websocket_fallback_to_default_model",
+				zap.String("default_mapped_model", defaultModel),
+			)
+			selection, scheduleDecision, err = h.gatewayService.SelectAccountWithScheduler(
+				ctx,
+				apiKey.GroupID,
+				previousResponseID,
+				sessionHash,
+				defaultModel,
+				nil,
+				service.OpenAIUpstreamTransportResponsesWebsocketV2,
+			)
+			if err == nil && selection != nil {
+				schedulingModel = defaultModel
 			}
-			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, reason)
+		}
+		if err != nil {
+			status, _, message := openAISelectionErrorResponseAfterDefaultFallback(initialSelectionErr, err)
+			closeCode := coderws.StatusTryAgainLater
+			if status < http.StatusInternalServerError {
+				closeCode = coderws.StatusPolicyViolation
+			}
+			closeOpenAIClientWS(wsConn, closeCode, message)
 			return
 		}
-		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
-		return
 	}
 	if selection == nil || selection.Account == nil {
 		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
@@ -1261,6 +1285,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	reqLog.Debug("openai.websocket_account_selected",
 		zap.Int64("account_id", account.ID),
 		zap.String("account_name", account.Name),
+		zap.String("scheduling_model", schedulingModel),
+		zap.String("initial_scheduling_model", initialSelectionModel),
 		zap.String("schedule_layer", scheduleDecision.Layer),
 		zap.Int("candidate_count", scheduleDecision.CandidateCount),
 	)

@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,20 @@ type openAIWSClientPayload struct {
 	payloadBytes       int
 	storeDisabled      bool
 	payloadMeta        openAIWSIngressPayloadMeta
+}
+
+func (s *OpenAIGatewayService) resolveOpenAIWSForwardDefaultMappedModel(c *gin.Context, requestedModel string) string {
+	fallbackModel := ""
+	groupID := getOpenAIGroupIDFromContext(c)
+	if s != nil && s.channelService != nil && groupID > 0 {
+		requestCtx := context.Background()
+		if c != nil && c.Request != nil {
+			requestCtx = c.Request.Context()
+		}
+		mapping := s.channelService.ResolveChannelMapping(requestCtx, groupID, requestedModel)
+		fallbackModel = strings.TrimSpace(mapping.MappedModel)
+	}
+	return ResolveOpenAIForwardDefaultMappedModel(getOpenAIAPIKeyFromContext(c), fallbackModel)
 }
 
 func applyOpenAIWSIngressPayloadMutation(current []byte, path string, value any) ([]byte, error) {
@@ -50,7 +65,7 @@ func applyOpenAIWSIngressPayloadMutation(current []byte, path string, value any)
 	return rebuilt, nil
 }
 
-func parseOpenAIWSIngressClientPayload(c *gin.Context, account *Account, raw []byte) (openAIWSClientPayload, error) {
+func (s *OpenAIGatewayService) parseOpenAIWSIngressClientPayload(c *gin.Context, account *Account, raw []byte) (openAIWSClientPayload, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
 		return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(websocket.StatusPolicyViolation, "empty websocket request payload", nil)
@@ -110,7 +125,8 @@ func parseOpenAIWSIngressClientPayload(c *gin.Context, account *Account, raw []b
 		}
 		normalized = next
 	}
-	mappedModel := resolveOpenAIForwardModel(account, originalModel, "")
+	defaultMappedModel := s.resolveOpenAIWSForwardDefaultMappedModel(c, originalModel)
+	mappedModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	if normalizedModel := normalizeOpenAIModelForUpstream(account, mappedModel); normalizedModel != "" {
 		mappedModel = normalizedModel
 	}

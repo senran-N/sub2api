@@ -65,7 +65,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 		wsPath = normalizeOpenAIWSLogValue(parsedURL.Path)
 	}
 
-	firstPayload, err := parseOpenAIWSIngressClientPayload(c, account, firstClientMessage)
+	firstPayload, err := s.parseOpenAIWSIngressClientPayload(c, account, firstClientMessage)
 	if err != nil {
 		return nil, err
 	}
