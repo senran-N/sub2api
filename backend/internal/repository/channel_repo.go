@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lib/pq"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/lib/pq"
 )
 
 type channelRepository struct {
@@ -154,27 +154,21 @@ func (r *channelRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *channelRepository) List(ctx context.Context, params pagination.PaginationParams, status, search string) ([]service.Channel, *pagination.PaginationResult, error) {
-	where := []string{"1=1"}
-	args := []any{}
-	argIdx := 1
-
-	if status != "" {
-		where = append(where, fmt.Sprintf("c.status = $%d", argIdx))
-		args = append(args, status)
-		argIdx++
-	}
+	status = strings.TrimSpace(status)
+	search = strings.TrimSpace(search)
+	searchPattern := ""
 	if search != "" {
-		where = append(where, fmt.Sprintf("(c.name ILIKE $%d OR c.description ILIKE $%d)", argIdx, argIdx))
-		args = append(args, "%"+escapeLike(search)+"%")
-		argIdx++
+		searchPattern = "%" + escapeLike(search) + "%"
 	}
-
-	whereClause := strings.Join(where, " AND ")
 
 	// 计数
 	var total int64
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM channels c WHERE %s", whereClause)
-	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, `
+SELECT COUNT(*)
+FROM channels c
+WHERE ($1 = '' OR c.status = $1)
+  AND ($2 = '' OR c.name ILIKE $2 OR c.description ILIKE $2)
+`, status, searchPattern).Scan(&total); err != nil {
 		return nil, nil, fmt.Errorf("count channels: %w", err)
 	}
 
@@ -185,15 +179,14 @@ func (r *channelRepository) List(ctx context.Context, params pagination.Paginati
 	}
 	offset := (page - 1) * pageSize
 
-	// 查询 channel 列表
-	dataQuery := fmt.Sprintf(
-		`SELECT c.id, c.name, c.description, c.status, c.model_mapping, c.billing_model_source, c.restrict_models, c.created_at, c.updated_at
-		 FROM channels c WHERE %s ORDER BY c.id ASC LIMIT $%d OFFSET $%d`,
-		whereClause, argIdx, argIdx+1,
-	)
-	args = append(args, pageSize, offset)
-
-	rows, err := r.db.QueryContext(ctx, dataQuery, args...)
+	rows, err := r.db.QueryContext(ctx, `
+SELECT c.id, c.name, c.description, c.status, c.model_mapping, c.billing_model_source, c.restrict_models, c.created_at, c.updated_at
+FROM channels c
+WHERE ($1 = '' OR c.status = $1)
+  AND ($2 = '' OR c.name ILIKE $2 OR c.description ILIKE $2)
+ORDER BY c.id ASC
+LIMIT $3 OFFSET $4
+`, status, searchPattern, pageSize, offset)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query channels: %w", err)
 	}

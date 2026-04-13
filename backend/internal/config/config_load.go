@@ -606,7 +606,11 @@ func GetServerAddress() string {
 	v.SetDefault("server.port", 8080)
 
 	// Try to read config file (ignore errors if not found)
-	_ = v.ReadInConfig()
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			slog.Debug("read lightweight config failed", "error", err)
+		}
+	}
 
 	host := v.GetString("server.host")
 	port := v.GetInt("server.port")

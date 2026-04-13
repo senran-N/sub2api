@@ -333,11 +333,33 @@ func (r *opsRepository) ListAlertEvents(ctx context.Context, filter *service.Ops
 		limit = 500
 	}
 
-	where, args := buildOpsAlertEventsWhere(filter)
-	args = append(args, limit)
-	limitArg := "$" + itoa(len(args))
+	status := strings.TrimSpace(filter.Status)
+	severity := strings.TrimSpace(filter.Severity)
+	emailSent := sql.NullBool{}
+	if filter.EmailSent != nil {
+		emailSent = sql.NullBool{Bool: *filter.EmailSent, Valid: true}
+	}
+	startTime := sql.NullTime{}
+	if filter.StartTime != nil && !filter.StartTime.IsZero() {
+		startTime = sql.NullTime{Time: filter.StartTime.UTC(), Valid: true}
+	}
+	endTime := sql.NullTime{}
+	if filter.EndTime != nil && !filter.EndTime.IsZero() {
+		endTime = sql.NullTime{Time: filter.EndTime.UTC(), Valid: true}
+	}
+	beforeFiredAt := sql.NullTime{}
+	beforeID := sql.NullInt64{}
+	if filter.BeforeFiredAt != nil && !filter.BeforeFiredAt.IsZero() && filter.BeforeID != nil && *filter.BeforeID > 0 {
+		beforeFiredAt = sql.NullTime{Time: filter.BeforeFiredAt.UTC(), Valid: true}
+		beforeID = sql.NullInt64{Int64: *filter.BeforeID, Valid: true}
+	}
+	platform := strings.TrimSpace(filter.Platform)
+	groupID := ""
+	if filter.GroupID != nil && *filter.GroupID > 0 {
+		groupID = fmt.Sprintf("%d", *filter.GroupID)
+	}
 
-	q := `
+	rows, err := r.db.QueryContext(ctx, `
 SELECT
   id,
   COALESCE(rule_id, 0),
@@ -353,11 +375,17 @@ SELECT
   email_sent,
   created_at
 FROM ops_alert_events
-` + where + `
+WHERE ($1 = '' OR status = $1)
+  AND ($2 = '' OR severity = $2)
+  AND ($3::boolean IS NULL OR email_sent = $3)
+  AND ($4::timestamptz IS NULL OR fired_at >= $4)
+  AND ($5::timestamptz IS NULL OR fired_at < $5)
+  AND (($6::timestamptz IS NULL OR $7::bigint IS NULL) OR fired_at < $6 OR (fired_at = $6 AND id < $7))
+  AND ($8 = '' OR (dimensions->>'platform') = $8)
+  AND ($9 = '' OR (dimensions->>'group_id') = $9)
 ORDER BY fired_at DESC, id DESC
-LIMIT ` + limitArg
-
-	rows, err := r.db.QueryContext(ctx, q, args...)
+LIMIT $10
+`, status, severity, emailSent, startTime, endTime, beforeFiredAt, beforeID, platform, groupID, limit)
 	if err != nil {
 		return nil, err
 	}

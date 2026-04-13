@@ -26,6 +26,7 @@ func (r *opsRepository) GetLatencyHistogram(ctx context.Context, filter *service
 	rangeExpr := latencyHistogramRangeCaseExpr("ul.duration_ms")
 	orderExpr := latencyHistogramRangeOrderCaseExpr("ul.duration_ms")
 
+	// #nosec G202 -- range/order expressions and join/where fragments come from internal helpers with fixed SQL snippets and placeholder-bound args only.
 	q := `
 SELECT
   ` + rangeExpr + ` AS range,

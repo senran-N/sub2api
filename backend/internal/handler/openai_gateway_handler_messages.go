@@ -353,15 +353,19 @@ func (h *OpenAIGatewayHandler) anthropicStreamingAwareError(c *gin.Context, stat
 	if streamStarted {
 		flusher, ok := c.Writer.(http.Flusher)
 		if ok {
-			errPayload, _ := json.Marshal(gin.H{
+			errPayload, err := json.Marshal(gin.H{
 				"type": "error",
 				"error": gin.H{
 					"type":    errType,
 					"message": message,
 				},
 			})
-			fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", errPayload) //nolint:errcheck
-			flusher.Flush()
+			if err != nil {
+				errPayload = []byte(`{"type":"error","error":{"type":"internal_error","message":"failed to encode error payload"}}`)
+			}
+			if _, writeErr := fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", errPayload); writeErr == nil {
+				flusher.Flush()
+			}
 		}
 		return
 	}

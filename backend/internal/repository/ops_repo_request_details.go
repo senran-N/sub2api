@@ -157,6 +157,7 @@ WITH combined AS (
 		}
 	}
 
+	// #nosec G201 -- cte/where/sort only contain fixed internal fragments and placeholder indexes; user values stay parameterized in listArgs.
 	listQuery := fmt.Sprintf(`
 %s
 SELECT

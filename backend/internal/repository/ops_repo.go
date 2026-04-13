@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/lib/pq"
+	"github.com/senran-N/sub2api/internal/service"
 )
 
 type opsRepository struct {
@@ -210,6 +210,7 @@ func (r *opsRepository) ListErrorLogs(ctx context.Context, filter *service.OpsEr
 
 	offset := (page - 1) * pageSize
 	argsWithLimit := append(args, pageSize, offset)
+	// #nosec G202 -- where is built from fixed repository predicates and placeholder-bound args only.
 	selectSQL := `
 SELECT
   e.id,
@@ -1146,6 +1147,7 @@ func (r *opsRepository) ListSystemLogs(ctx context.Context, filter *service.OpsS
 
 	offset := (page - 1) * pageSize
 	argsWithLimit := append(args, pageSize, offset)
+	// #nosec G202 -- where is built from fixed repository predicates and placeholder-bound args only.
 	query := `
 SELECT
   l.id,
@@ -1235,6 +1237,7 @@ func (r *opsRepository) DeleteSystemLogs(ctx context.Context, filter *service.Op
 		return 0, fmt.Errorf("cleanup requires at least one filter condition")
 	}
 
+	// #nosec G202 -- where is built from fixed repository predicates and placeholder-bound args only.
 	query := "DELETE FROM ops_system_logs l " + where
 	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {

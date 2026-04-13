@@ -31,10 +31,8 @@ func (r *opsRepository) GetOpenAITokenStats(ctx context.Context, filter *service
 		GroupID:   filter.GroupID,
 	}
 
-	join, where, baseArgs, next := buildUsageWhere(dashboardFilter, dashboardFilter.StartTime, dashboardFilter.EndTime, 1)
-	where += " AND ul.model LIKE 'gpt%'"
-
-	baseCTE := `
+	baseArgs := []any{dashboardFilter.StartTime, dashboardFilter.EndTime}
+	countSQL := `
 WITH stats AS (
   SELECT
     ul.model AS model,
@@ -53,19 +51,37 @@ WITH stats AS (
     COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
     COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
   FROM usage_logs ul
-  ` + join + `
-  ` + where + `
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.model LIKE 'gpt%'
   GROUP BY ul.model
 )
+SELECT COUNT(*) FROM stats
 `
-
-	countSQL := baseCTE + `SELECT COUNT(*) FROM stats`
-	var total int64
-	if err := r.db.QueryRowContext(ctx, countSQL, baseArgs...).Scan(&total); err != nil {
-		return nil, err
-	}
-
-	querySQL := baseCTE + `
+	topNSQL := `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
 SELECT
   model,
   request_count,
@@ -75,20 +91,389 @@ SELECT
   avg_duration_ms,
   requests_with_first_token
 FROM stats
-ORDER BY request_count DESC, model ASC`
+ORDER BY request_count DESC, model ASC
+LIMIT $3
+`
+	paginatedSQL := `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT
+  model,
+  request_count,
+  avg_tokens_per_sec,
+  avg_first_token_ms,
+  total_output_tokens,
+  avg_duration_ms,
+  requests_with_first_token
+FROM stats
+ORDER BY request_count DESC, model ASC
+LIMIT $3 OFFSET $4
+`
+	if dashboardFilter.GroupID != nil && *dashboardFilter.GroupID > 0 && dashboardFilter.Platform != "" {
+		baseArgs = []any{dashboardFilter.StartTime, dashboardFilter.EndTime, *dashboardFilter.GroupID, dashboardFilter.Platform}
+		countSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  LEFT JOIN groups g ON g.id = ul.group_id
+  LEFT JOIN accounts a ON a.id = ul.account_id
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.group_id = $3
+    AND COALESCE(NULLIF(g.platform, ''), a.platform) = $4
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT COUNT(*) FROM stats
+`
+		topNSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  LEFT JOIN groups g ON g.id = ul.group_id
+  LEFT JOIN accounts a ON a.id = ul.account_id
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.group_id = $3
+    AND COALESCE(NULLIF(g.platform, ''), a.platform) = $4
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT
+  model,
+  request_count,
+  avg_tokens_per_sec,
+  avg_first_token_ms,
+  total_output_tokens,
+  avg_duration_ms,
+  requests_with_first_token
+FROM stats
+ORDER BY request_count DESC, model ASC
+LIMIT $5
+`
+		paginatedSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  LEFT JOIN groups g ON g.id = ul.group_id
+  LEFT JOIN accounts a ON a.id = ul.account_id
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.group_id = $3
+    AND COALESCE(NULLIF(g.platform, ''), a.platform) = $4
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT
+  model,
+  request_count,
+  avg_tokens_per_sec,
+  avg_first_token_ms,
+  total_output_tokens,
+  avg_duration_ms,
+  requests_with_first_token
+FROM stats
+ORDER BY request_count DESC, model ASC
+LIMIT $5 OFFSET $6
+`
+	} else if dashboardFilter.GroupID != nil && *dashboardFilter.GroupID > 0 {
+		baseArgs = []any{dashboardFilter.StartTime, dashboardFilter.EndTime, *dashboardFilter.GroupID}
+		countSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.group_id = $3
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT COUNT(*) FROM stats
+`
+		topNSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.group_id = $3
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT
+  model,
+  request_count,
+  avg_tokens_per_sec,
+  avg_first_token_ms,
+  total_output_tokens,
+  avg_duration_ms,
+  requests_with_first_token
+FROM stats
+ORDER BY request_count DESC, model ASC
+LIMIT $4
+`
+		paginatedSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND ul.group_id = $3
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT
+  model,
+  request_count,
+  avg_tokens_per_sec,
+  avg_first_token_ms,
+  total_output_tokens,
+  avg_duration_ms,
+  requests_with_first_token
+FROM stats
+ORDER BY request_count DESC, model ASC
+LIMIT $4 OFFSET $5
+`
+	} else if dashboardFilter.Platform != "" {
+		baseArgs = []any{dashboardFilter.StartTime, dashboardFilter.EndTime, dashboardFilter.Platform}
+		countSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  LEFT JOIN groups g ON g.id = ul.group_id
+  LEFT JOIN accounts a ON a.id = ul.account_id
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND COALESCE(NULLIF(g.platform, ''), a.platform) = $3
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT COUNT(*) FROM stats
+`
+		topNSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  LEFT JOIN groups g ON g.id = ul.group_id
+  LEFT JOIN accounts a ON a.id = ul.account_id
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND COALESCE(NULLIF(g.platform, ''), a.platform) = $3
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT
+  model,
+  request_count,
+  avg_tokens_per_sec,
+  avg_first_token_ms,
+  total_output_tokens,
+  avg_duration_ms,
+  requests_with_first_token
+FROM stats
+ORDER BY request_count DESC, model ASC
+LIMIT $4
+`
+		paginatedSQL = `
+WITH stats AS (
+  SELECT
+    ul.model AS model,
+    COUNT(*)::bigint AS request_count,
+    ROUND(
+      AVG(
+        CASE
+          WHEN ul.duration_ms > 0 AND ul.output_tokens > 0
+          THEN ul.output_tokens * 1000.0 / ul.duration_ms
+        END
+      )::numeric,
+      2
+    )::float8 AS avg_tokens_per_sec,
+    ROUND(AVG(ul.first_token_ms)::numeric, 2)::float8 AS avg_first_token_ms,
+    COALESCE(SUM(ul.output_tokens), 0)::bigint AS total_output_tokens,
+    COALESCE(ROUND(AVG(ul.duration_ms)::numeric, 0), 0)::bigint AS avg_duration_ms,
+    COUNT(CASE WHEN ul.first_token_ms IS NOT NULL THEN 1 END)::bigint AS requests_with_first_token
+  FROM usage_logs ul
+  LEFT JOIN groups g ON g.id = ul.group_id
+  LEFT JOIN accounts a ON a.id = ul.account_id
+  WHERE ul.created_at >= $1
+    AND ul.created_at < $2
+    AND COALESCE(NULLIF(g.platform, ''), a.platform) = $3
+    AND ul.model LIKE 'gpt%'
+  GROUP BY ul.model
+)
+SELECT
+  model,
+  request_count,
+  avg_tokens_per_sec,
+  avg_first_token_ms,
+  total_output_tokens,
+  avg_duration_ms,
+  requests_with_first_token
+FROM stats
+ORDER BY request_count DESC, model ASC
+LIMIT $4 OFFSET $5
+`
+	}
+
+	var total int64
+	if err := r.db.QueryRowContext(ctx, countSQL, baseArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
 
 	args := make([]any, 0, len(baseArgs)+2)
 	args = append(args, baseArgs...)
-
 	if filter.IsTopNMode() {
-		querySQL += fmt.Sprintf("\nLIMIT $%d", next)
 		args = append(args, filter.TopN)
 	} else {
 		offset := (filter.Page - 1) * filter.PageSize
-		querySQL += fmt.Sprintf("\nLIMIT $%d OFFSET $%d", next, next+1)
 		args = append(args, filter.PageSize, offset)
 	}
 
+	querySQL := paginatedSQL
+	if filter.IsTopNMode() {
+		querySQL = topNSQL
+	}
 	rows, err := r.db.QueryContext(ctx, querySQL, args...)
 	if err != nil {
 		return nil, err
