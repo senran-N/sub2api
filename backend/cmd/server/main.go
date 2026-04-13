@@ -165,9 +165,10 @@ func runMainServer() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Printf("Shutting down server with timeout=%ds...", cfg.Server.ShutdownTimeout)
+	shutdownTimeout := resolveShutdownTimeout(cfg)
+	log.Printf("Shutting down server with timeout=%ds...", int(shutdownTimeout/time.Second))
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	if err := app.Server.Shutdown(ctx); err != nil {

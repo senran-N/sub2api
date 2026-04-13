@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/senran-N/sub2api/ent"
 	"github.com/senran-N/sub2api/internal/config"
@@ -96,12 +95,7 @@ func provideCleanup(
 	backupSvc *service.BackupService,
 ) func() {
 	return func() {
-		shutdownTimeout := 45 * time.Second
-		if cfg != nil && cfg.Server.ShutdownTimeout > 0 {
-			shutdownTimeout = time.Duration(cfg.Server.ShutdownTimeout) * time.Second
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), resolveShutdownTimeout(cfg))
 		defer cancel()
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。

@@ -18,7 +18,6 @@ import (
 	"github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
 	"net/http"
-	"time"
 )
 
 import (
@@ -294,12 +293,7 @@ func provideCleanup(
 	backupSvc *service.BackupService,
 ) func() {
 	return func() {
-		shutdownTimeout := 45 * time.Second
-		if cfg != nil && cfg.Server.ShutdownTimeout > 0 {
-			shutdownTimeout = time.Duration(cfg.Server.ShutdownTimeout) * time.Second
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), resolveShutdownTimeout(cfg))
 		defer cancel()
 
 		parallelSteps := []cleanupStep{
