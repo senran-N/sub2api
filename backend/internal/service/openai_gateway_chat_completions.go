@@ -138,10 +138,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
 
-	if promptCacheKey != "" {
-		apiKeyID := getAPIKeyIDFromContext(c)
-		upstreamReq.Header.Set("session_id", generateSessionUUID(isolateOpenAISessionID(apiKeyID, promptCacheKey)))
-	}
+	setOpenAICompatPromptCacheSessionID(c, upstreamReq, promptCacheKey)
 
 	// 7. Send request
 	proxyURL := ""

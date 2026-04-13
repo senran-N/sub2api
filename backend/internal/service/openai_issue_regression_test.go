@@ -193,6 +193,19 @@ func TestPrepareOpenAIForwardRequest_AppliesDefaultMappedModelForReasoningVarian
 	require.Equal(t, "gpt-5.2-xhigh", prepared.reqBody["model"])
 }
 
+func TestSetOpenAICompatPromptCacheSessionID_UsesIsolatedPromptCacheKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Set("api_key", &APIKey{ID: 101})
+
+	req := httptest.NewRequest(http.MethodPost, "https://chatgpt.com/backend-api/codex/responses", nil)
+	setOpenAICompatPromptCacheSessionID(c, req, "pc-shared")
+
+	isolatedPromptCacheKey := isolateOpenAISessionID(101, "pc-shared")
+	require.Equal(t, generateSessionUUID(isolatedPromptCacheKey), req.Header.Get("session_id"))
+}
+
 func TestForwardAsChatCompletions_OAuthPromptCacheKeyKeepsIsolatedSessionID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

@@ -107,3 +107,16 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 
 	return req, nil
 }
+
+func setOpenAICompatPromptCacheSessionID(c *gin.Context, req *http.Request, promptCacheKey string) {
+	if req == nil {
+		return
+	}
+	promptCacheKey = strings.TrimSpace(promptCacheKey)
+	if promptCacheKey == "" {
+		return
+	}
+
+	apiKeyID := getAPIKeyIDFromContext(c)
+	req.Header.Set("session_id", generateSessionUUID(isolateOpenAISessionID(apiKeyID, promptCacheKey)))
+}
