@@ -220,6 +220,7 @@ docker compose down -v
 | `SUB2API_STOP_GRACE_PERIOD` | No | `50s` | Container stop grace period; keep slightly above shutdown timeout |
 | `SUB2API_MEMORY_LIMIT` | No | `2g` | Memory ceiling for the Sub2API container |
 | `SUB2API_CPUS` | No | `1.0` | CPU quota for the Sub2API container |
+| `SECURITY_URL_ALLOWLIST_ENABLED` | No | `true` | Enforce upstream/pricing host allowlists by default in production deploys |
 | `SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP` | No | `false` | Allow `http://` upstream URLs only for trusted dev/test setups |
 | `SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS` | No | `false` | Allow private or localhost upstream targets only on trusted networks |
 | `GEMINI_OAUTH_CLIENT_ID` | No | *(builtin)* | Google OAuth client ID (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
@@ -228,6 +229,8 @@ docker compose down -v
 | `GEMINI_QUOTA_POLICY` | No | *(empty)* | JSON overrides for Gemini local quota simulation (Code Assist only). |
 
 If you increase `SERVER_SHUTDOWN_TIMEOUT_SECONDS`, raise `SUB2API_STOP_GRACE_PERIOD` as well so Docker does not SIGKILL the process before cleanup completes.
+
+Production deploy examples now keep `SECURITY_URL_ALLOWLIST_ENABLED=true` by default. If you use a custom upstream, pricing mirror, or CRS endpoint, add its host to the matching allowlist in `config.yaml` before switching traffic.
 
 See `.env.example` for all available options.
 

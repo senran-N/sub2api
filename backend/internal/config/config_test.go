@@ -231,8 +231,8 @@ func TestLoadDefaultSecurityToggles(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if cfg.Security.URLAllowlist.Enabled {
-		t.Fatalf("URLAllowlist.Enabled = true, want false")
+	if !cfg.Security.URLAllowlist.Enabled {
+		t.Fatalf("URLAllowlist.Enabled = false, want true")
 	}
 	if cfg.Security.URLAllowlist.AllowInsecureHTTP {
 		t.Fatalf("URLAllowlist.AllowInsecureHTTP = true, want false")
@@ -242,6 +242,20 @@ func TestLoadDefaultSecurityToggles(t *testing.T) {
 	}
 	if !cfg.Security.ResponseHeaders.Enabled {
 		t.Fatalf("ResponseHeaders.Enabled = false, want true")
+	}
+}
+
+func TestLoadSecurityURLAllowlistEnabledFromEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("SECURITY_URL_ALLOWLIST_ENABLED", "false")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.Security.URLAllowlist.Enabled {
+		t.Fatalf("URLAllowlist.Enabled = true, want false")
 	}
 }
 

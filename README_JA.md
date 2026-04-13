@@ -398,7 +398,7 @@ default:
 
 - `cors.allowed_origins` - CORS 許可リスト
 - `security.url_allowlist` - 上流/価格/CRS ホストの許可リスト
-- `security.url_allowlist.enabled` - URL バリデーションの無効化（注意して使用）
+- `security.url_allowlist.enabled` - ホスト許可リスト/プライベートホスト検証の無効化（注意して使用）
 - `security.url_allowlist.allow_insecure_http` - バリデーション無効時に HTTP URL を明示的に許可
 - `security.url_allowlist.allow_private_hosts` - プライベート/ローカル IP アドレスを明示的に許可
 - `security.response_headers.enabled` - 設定可能なレスポンスヘッダーフィルタリングを有効化（無効時はデフォルトの許可リストを使用）
@@ -409,6 +409,8 @@ default:
 - `turnstile.required` - リリースモードでの Turnstile 必須化
 
 **⚠️ セキュリティ警告: HTTP URL 設定**
+
+本番向けのデプロイ例では `security.url_allowlist.enabled: true` をデフォルトにしています。独自の upstream、価格ミラー、CRS エンドポイントを使う場合は、利用前に対応する allowlist にホストを追加してください。
 
 `security.url_allowlist.enabled=false` の場合、システムはデフォルトで最小限の URL バリデーションを行い、**HTTP URL を拒否**して HTTPS のみを許可します。HTTP URL を許可するには（開発環境や内部テスト用など）、以下を明示的に設定する必要があります:
 

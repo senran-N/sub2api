@@ -1122,7 +1122,7 @@ func setDefaults() {
 	viper.SetDefault("cors.allow_credentials", true)
 
 	// Security
-	viper.SetDefault("security.url_allowlist.enabled", false)
+	viper.SetDefault("security.url_allowlist.enabled", true)
 	viper.SetDefault("security.url_allowlist.upstream_hosts", []string{
 		"api.openai.com",
 		"api.anthropic.com",

@@ -399,7 +399,7 @@ Additional security-related options are available in `config.yaml`:
 
 - `cors.allowed_origins` for CORS allowlist
 - `security.url_allowlist` for upstream/pricing/CRS host allowlists
-- `security.url_allowlist.enabled` to disable URL validation (use with caution)
+- `security.url_allowlist.enabled` to disable host allowlist/private-host validation (use with caution)
 - `security.url_allowlist.allow_insecure_http` to explicitly allow HTTP URLs when validation is disabled
 - `security.url_allowlist.allow_private_hosts` to explicitly allow private/local IP addresses
 - `security.response_headers.enabled` to enable configurable response header filtering (disabled uses default allowlist)
@@ -410,6 +410,8 @@ Additional security-related options are available in `config.yaml`:
 - `turnstile.required` to require Turnstile in release mode
 
 **⚠️ Security Warning: HTTP URL Configuration**
+
+Production deploy examples now keep `security.url_allowlist.enabled: true` by default. When you need a custom upstream, pricing mirror, or CRS endpoint, add its host to the corresponding allowlist entry before using it.
 
 When `security.url_allowlist.enabled=false`, the system performs minimal URL validation by default, **rejecting HTTP URLs** and only allowing HTTPS. To allow HTTP URLs (e.g., for development or internal testing), you must explicitly set:
 
@@ -443,7 +445,7 @@ SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=true
 Invalid base URL: invalid url scheme: http
 ```
 
-If you disable URL validation or response header filtering, harden your network layer:
+If you disable host allowlist/private-host validation or response header filtering, harden your network layer:
 - Enforce an egress allowlist for upstream domains/IPs
 - Block private/loopback/link-local ranges
 - Enforce TLS-only outbound traffic

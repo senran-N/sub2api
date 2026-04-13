@@ -410,7 +410,7 @@ default:
 
 - `cors.allowed_origins` 配置 CORS 白名单
 - `security.url_allowlist` 配置上游/价格数据/CRS 主机白名单
-- `security.url_allowlist.enabled` 可关闭 URL 校验（慎用）
+- `security.url_allowlist.enabled` 可关闭主机白名单/私网主机校验（慎用）
 - `security.url_allowlist.allow_insecure_http` 显式允许 HTTP URL（默认仍拒绝）
 - `security.url_allowlist.allow_private_hosts` 显式允许私有/本地 IP 地址（默认仍拒绝）
 - `security.response_headers.enabled` 可启用可配置响应头过滤（关闭时使用默认白名单）
@@ -429,6 +429,8 @@ default:
 - 推荐将 WAF/CDN 作为第一层防护，服务端限流与响应读取上限作为第二层兜底；两层同时保留，避免旁路流量与误配置风险。
 
 **⚠️ 安全警告：HTTP URL 配置**
+
+生产部署示例现默认保持 `security.url_allowlist.enabled: true`。如果你要使用自定义 upstream、价格镜像或 CRS 地址，请先把对应主机加入 allowlist，再切流量。
 
 当 `security.url_allowlist.enabled=false` 时，系统默认执行最小 URL 校验，**拒绝 HTTP URL**，仅允许 HTTPS。要允许 HTTP URL（例如用于开发或内网测试），必须显式设置：
 
@@ -462,7 +464,7 @@ SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=true
 Invalid base URL: invalid url scheme: http
 ```
 
-如关闭 URL 校验或响应头过滤，请加强网络层防护：
+如关闭主机 allowlist / 私网主机校验或响应头过滤，请加强网络层防护：
 - 出站访问白名单限制上游域名/IP
 - 阻断私网/回环/链路本地地址
 - 强制仅允许 TLS 出站
