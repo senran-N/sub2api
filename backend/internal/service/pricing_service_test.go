@@ -201,7 +201,7 @@ func TestProvidePricingService_ReturnsNilWhenInitializationFails(t *testing.T) {
 		},
 	}
 
-	svc, err := ProvidePricingService(cfg, nil)
+	svc, err := ProvidePricingService(cfg, nil, nil)
 	require.NoError(t, err)
 	require.Nil(t, svc)
 }

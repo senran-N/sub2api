@@ -104,7 +104,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	ipRiskService := service.NewIPRiskService(configConfig)
 	adminService := service.NewAdminService(userRepository, groupRepository, accountRepository, proxyRepository, apiKeyRepository, redeemCodeRepository, userGroupRateRepository, billingCacheService, proxyExitInfoProber, proxyLatencyCache, apiKeyAuthCacheInvalidator, client, settingService, subscriptionService, userSubscriptionRepository, privacyClientFactory, ipRiskService)
 	v3 := repository.ProvideConcurrencyCache(redisClient, configConfig)
-	concurrencyService := service.ProvideConcurrencyService(v3, accountRepository, configConfig)
+	concurrencyService := service.ProvideConcurrencyService(v3, accountRepository, configConfig, lifecycleRegistry)
 	adminUserHandler := admin.NewUserHandler(adminService, concurrencyService)
 	v4 := repository.ProvideSessionLimitCache(redisClient, configConfig)
 	rpmCache := repository.NewRPMCache(redisClient)
@@ -163,7 +163,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	opsRepository := repository.NewOpsRepository(db)
 	usageBillingRepository := repository.NewUsageBillingRepository(client, db)
 	pricingRemoteClient := repository.ProvidePricingRemoteClient(configConfig)
-	pricingService, err := service.ProvidePricingService(configConfig, pricingRemoteClient)
+	pricingService, err := service.ProvidePricingService(configConfig, pricingRemoteClient, lifecycleRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	openAITokenProvider := service.ProvideOpenAITokenProvider(accountRepository, v7, openAIOAuthService, oAuthRefreshAPI)
 	openAIGatewayService := service.NewOpenAIGatewayService(accountRepository, usageLogRepository, usageBillingRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, v11, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider, modelPricingResolver, channelService)
 	geminiMessagesCompatService := service.NewGeminiMessagesCompatService(accountRepository, groupRepository, v11, schedulerSnapshotService, geminiTokenProvider, rateLimitService, httpUpstream, antigravityGatewayService, configConfig)
-	opsSystemLogSink := service.ProvideOpsSystemLogSink(opsRepository, configConfig)
+	opsSystemLogSink := service.ProvideOpsSystemLogSink(opsRepository, configConfig, lifecycleRegistry)
 	opsService := service.NewOpsService(opsRepository, settingRepository, configConfig, accountRepository, userRepository, concurrencyService, gatewayService, openAIGatewayService, geminiMessagesCompatService, antigravityGatewayService, opsSystemLogSink)
 	settingHandler := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService)
 	opsHandler := admin.NewOpsHandler(opsService)
@@ -212,7 +212,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
 	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)
-	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)
+	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig, lifecycleRegistry)
 	gatewayHandler := handler.NewGatewayHandler(gatewayService, geminiMessagesCompatService, antigravityGatewayService, compatibleUpstreamModelsService, userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, userMessageQueueService, configConfig, settingService)
 	openAIGatewayHandler := handler.NewOpenAIGatewayHandler(openAIGatewayService, concurrencyService, billingCacheService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, configConfig)
 	handlerSettingHandler := handler.ProvideSettingHandler(settingService, buildInfo)
@@ -237,7 +237,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	subscriptionExpiryService := service.ProvideSubscriptionExpiryService(userSubscriptionRepository)
 	claudeCodeProfileSyncService := service.ProvideClaudeCodeProfileSyncStarter(configConfig)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(v18, scheduledTestService, accountTestService, rateLimitService, configConfig)
-	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, opsScheduledReportService, opsSystemLogSink, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
+	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, opsScheduledReportService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v20,
@@ -269,13 +269,11 @@ func provideCleanup(
 	rdb *redis.Client,
 	lifecycleRegistry *service.LifecycleRegistry,
 	opsScheduledReport *service.OpsScheduledReportService,
-	opsSystemLogSink *service.OpsSystemLogSink,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
 	subscriptionExpiry *service.SubscriptionExpiryService,
 	usageCleanup *service.UsageCleanupService,
 	idempotencyCleanup *service.IdempotencyCleanupService,
-	pricing *service.PricingService,
 	claudeProfileSync *service.ClaudeCodeProfileSyncService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
@@ -296,7 +294,6 @@ func provideCleanup(
 		parallelSteps := lifecycleRegistrySteps(lifecycleRegistry)
 		parallelSteps = append(parallelSteps, []cleanupStep{
 			stopStep("OpsScheduledReportService", opsScheduledReport),
-			stopStep("OpsSystemLogSink", opsSystemLogSink),
 			stopStep("UsageCleanupService", usageCleanup),
 			stopStep("IdempotencyCleanupService", idempotencyCleanup),
 			stopStep("ClaudeCodeProfileSyncService", claudeProfileSync),
@@ -304,7 +301,6 @@ func provideCleanup(
 			stopStep("AccountExpiryService", accountExpiry),
 			stopStep("SubscriptionExpiryService", subscriptionExpiry),
 			stopStep("SubscriptionService", subscriptionService),
-			stopStep("PricingService", pricing),
 			stopStep("EmailQueueService", emailQueue),
 			stopStep("BillingCacheService", billingCache),
 			stopStep("UsageRecordWorkerPool", usageRecordWorkerPool),

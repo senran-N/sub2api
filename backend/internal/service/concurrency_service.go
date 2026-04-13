@@ -44,8 +44,20 @@ func (s *ConcurrencyService) CleanupStaleProcessSlots(ctx context.Context) error
 
 const (
 	// Default extra wait slots beyond concurrency limit
-	defaultExtraWaitSlots = 20
+	defaultExtraWaitSlots        = 20
+	accountSlotCleanupTimeout    = 5 * time.Second
+	accountSweeperCleanupTimeout = 15 * time.Second
+	accountSweeperListTimeout    = 5 * time.Second
+	accountSweeperPerItemTimeout = 2 * time.Second
 )
+
+func newCleanupContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	base := context.Background()
+	if ctx != nil {
+		base = context.WithoutCancel(ctx)
+	}
+	return context.WithTimeout(base, timeout)
+}
 
 // ConcurrencyService manages concurrent request limiting for accounts and users
 type ConcurrencyService struct {
@@ -98,7 +110,7 @@ func (s *ConcurrencyService) AcquireAccountSlot(ctx context.Context, accountID i
 		return &AcquireResult{
 			Acquired: true,
 			ReleaseFunc: func() {
-				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				bgCtx, cancel := newCleanupContext(ctx, accountSlotCleanupTimeout)
 				defer cancel()
 				if err := s.cache.ReleaseAccountSlot(bgCtx, accountID, requestID); err != nil {
 					logger.LegacyPrintf("service.concurrency", "Warning: failed to release account slot for %d (req=%s): %v", accountID, requestID, err)
@@ -137,7 +149,7 @@ func (s *ConcurrencyService) AcquireUserSlot(ctx context.Context, userID int64, 
 		return &AcquireResult{
 			Acquired: true,
 			ReleaseFunc: func() {
-				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				bgCtx, cancel := newCleanupContext(ctx, accountSlotCleanupTimeout)
 				defer cancel()
 				if err := s.cache.ReleaseUserSlot(bgCtx, userID, requestID); err != nil {
 					logger.LegacyPrintf("service.concurrency", "Warning: failed to release user slot for %d (req=%s): %v", userID, requestID, err)
@@ -178,7 +190,7 @@ func (s *ConcurrencyService) AcquireUserSlotOrQueue(ctx context.Context, userID 
 			Acquired:     true,
 			QueueAllowed: true,
 			ReleaseFunc: func() {
-				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				bgCtx, cancel := newCleanupContext(ctx, accountSlotCleanupTimeout)
 				defer cancel()
 				if err := s.cache.ReleaseUserSlot(bgCtx, userID, requestID); err != nil {
 					logger.LegacyPrintf("service.concurrency", "Warning: failed to release user slot for %d (req=%s): %v", userID, requestID, err)
@@ -204,7 +216,7 @@ func (s *ConcurrencyService) acquireUserSlotOrQueueFallback(ctx context.Context,
 			Acquired:     true,
 			QueueAllowed: true,
 			ReleaseFunc: func() {
-				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				bgCtx, cancel := newCleanupContext(ctx, accountSlotCleanupTimeout)
 				defer cancel()
 				if err := s.cache.ReleaseUserSlot(bgCtx, userID, requestID); err != nil {
 					logger.LegacyPrintf("service.concurrency", "Warning: failed to release user slot for %d (req=%s): %v", userID, requestID, err)
@@ -250,7 +262,7 @@ func (s *ConcurrencyService) AcquireAccountSlotOrQueue(ctx context.Context, acco
 			Acquired:     true,
 			QueueAllowed: true,
 			ReleaseFunc: func() {
-				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				bgCtx, cancel := newCleanupContext(ctx, accountSlotCleanupTimeout)
 				defer cancel()
 				if err := s.cache.ReleaseAccountSlot(bgCtx, accountID, requestID); err != nil {
 					logger.LegacyPrintf("service.concurrency", "Warning: failed to release account slot for %d (req=%s): %v", accountID, requestID, err)
@@ -276,7 +288,7 @@ func (s *ConcurrencyService) acquireAccountSlotOrQueueFallback(ctx context.Conte
 			Acquired:     true,
 			QueueAllowed: true,
 			ReleaseFunc: func() {
-				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				bgCtx, cancel := newCleanupContext(ctx, accountSlotCleanupTimeout)
 				defer cancel()
 				if err := s.cache.ReleaseAccountSlot(bgCtx, accountID, requestID); err != nil {
 					logger.LegacyPrintf("service.concurrency", "Warning: failed to release account slot for %d (req=%s): %v", accountID, requestID, err)
@@ -326,7 +338,7 @@ func (s *ConcurrencyService) DecrementWaitCount(ctx context.Context, userID int6
 	}
 
 	// Use background context to ensure decrement even if original context is cancelled
-	bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	bgCtx, cancel := newCleanupContext(ctx, accountSlotCleanupTimeout)
 	defer cancel()
 
 	if err := s.cache.DecrementWaitCount(bgCtx, userID); err != nil {
@@ -354,7 +366,7 @@ func (s *ConcurrencyService) DecrementAccountWaitCount(ctx context.Context, acco
 		return
 	}
 
-	bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	bgCtx, cancel := newCleanupContext(ctx, accountSlotCleanupTimeout)
 	defer cancel()
 
 	if err := s.cache.DecrementAccountWaitCount(bgCtx, accountID); err != nil {
@@ -447,48 +459,50 @@ func (s *ConcurrencyService) StartSlotCleanupWorker(accountRepo AccountRepositor
 		}
 	}
 
-	runCleanup := func() {
-		if sweeper, ok := s.cache.(accountSlotCleanupSweeper); ok {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			err := sweeper.CleanupExpiredAccountSlotsAll(cleanupCtx)
-			cancel()
-			if err != nil {
-				logger.LegacyPrintf("service.concurrency", "Warning: cleanup expired account slots failed: %v", err)
-			}
-			return
-		}
-
-		if accountRepo == nil {
-			return
-		}
-
-		listCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		accounts, err := accountRepo.ListSchedulable(listCtx)
-		cancel()
-		if err != nil {
-			logger.LegacyPrintf("service.concurrency", "Warning: list schedulable accounts failed: %v", err)
-			return
-		}
-		for _, account := range accounts {
-			accountCtx, accountCancel := context.WithTimeout(context.Background(), 2*time.Second)
-			err := s.cache.CleanupExpiredAccountSlots(accountCtx, account.ID)
-			accountCancel()
-			if err != nil {
-				logger.LegacyPrintf("service.concurrency", "Warning: cleanup expired slots failed for account %d: %v", account.ID, err)
-			}
-		}
-		return
-	}
-
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		runCleanup()
+		s.runSlotCleanupWorkerOnce(accountRepo)
 		for range ticker.C {
-			runCleanup()
+			s.runSlotCleanupWorkerOnce(accountRepo)
 		}
 	}()
+}
+
+func (s *ConcurrencyService) runSlotCleanupWorkerOnce(accountRepo AccountRepository) {
+	if s == nil || s.cache == nil {
+		return
+	}
+	if sweeper, ok := s.cache.(accountSlotCleanupSweeper); ok {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), accountSweeperCleanupTimeout)
+		err := sweeper.CleanupExpiredAccountSlotsAll(cleanupCtx)
+		cancel()
+		if err != nil {
+			logger.LegacyPrintf("service.concurrency", "Warning: cleanup expired account slots failed: %v", err)
+		}
+		return
+	}
+
+	if accountRepo == nil {
+		return
+	}
+
+	listCtx, cancel := context.WithTimeout(context.Background(), accountSweeperListTimeout)
+	accounts, err := accountRepo.ListSchedulable(listCtx)
+	cancel()
+	if err != nil {
+		logger.LegacyPrintf("service.concurrency", "Warning: list schedulable accounts failed: %v", err)
+		return
+	}
+	for _, account := range accounts {
+		accountCtx, accountCancel := context.WithTimeout(context.Background(), accountSweeperPerItemTimeout)
+		err := s.cache.CleanupExpiredAccountSlots(accountCtx, account.ID)
+		accountCancel()
+		if err != nil {
+			logger.LegacyPrintf("service.concurrency", "Warning: cleanup expired slots failed for account %d: %v", account.ID, err)
+		}
+	}
 }
 
 // GetAccountConcurrencyBatch gets current concurrency counts for multiple accounts

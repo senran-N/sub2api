@@ -22,7 +22,7 @@ func ProvideLifecycleRegistry() *LifecycleRegistry {
 }
 
 // ProvidePricingService creates and initializes PricingService
-func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
+func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient, lifecycle *LifecycleRegistry) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
 	if err := svc.Initialize(); err != nil {
 		// Fall back to BillingService's built-in static pricing instead of wiring a
@@ -30,6 +30,7 @@ func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient)
 		logger.LegacyPrintf("service.pricing", "[Pricing] initialization failed, using billing fallback only: %v", err)
 		return nil, nil
 	}
+	lifecycle.Register("PricingService", svc.Stop)
 	return svc, nil
 }
 
@@ -166,22 +167,30 @@ func ProvideDeferredService(accountRepo AccountRepository, timingWheel *TimingWh
 }
 
 // ProvideConcurrencyService creates ConcurrencyService and starts slot cleanup worker.
-func ProvideConcurrencyService(cache ConcurrencyCache, accountRepo AccountRepository, cfg *config.Config) *ConcurrencyService {
+func ProvideConcurrencyService(cache ConcurrencyCache, accountRepo AccountRepository, cfg *config.Config, lifecycle *LifecycleRegistry) *ConcurrencyService {
 	svc := NewConcurrencyService(cache)
 	if err := svc.CleanupStaleProcessSlots(context.Background()); err != nil {
 		logger.LegacyPrintf("service.concurrency", "Warning: startup cleanup stale process slots failed: %v", err)
 	}
 	if cfg != nil {
-		svc.StartSlotCleanupWorker(accountRepo, cfg.Gateway.Scheduling.SlotCleanupInterval)
+		worker := newConcurrencySlotCleanupLifecycle(svc, accountRepo, cfg.Gateway.Scheduling.SlotCleanupInterval)
+		manageStartStopLifecycle(lifecycle, "ConcurrencySlotCleanupWorker", worker)
 	}
 	return svc
 }
 
 // ProvideUserMessageQueueService 创建用户消息串行队列服务并启动清理 worker
-func ProvideUserMessageQueueService(cache UserMsgQueueCache, rpmCache RPMCache, cfg *config.Config) *UserMessageQueueService {
+func ProvideUserMessageQueueService(cache UserMsgQueueCache, rpmCache RPMCache, cfg *config.Config, lifecycle *LifecycleRegistry) *UserMessageQueueService {
 	svc := NewUserMessageQueueService(cache, rpmCache, &cfg.Gateway.UserMessageQueue)
 	if cfg.Gateway.UserMessageQueue.CleanupIntervalSeconds > 0 {
-		svc.StartCleanupWorker(time.Duration(cfg.Gateway.UserMessageQueue.CleanupIntervalSeconds) * time.Second)
+		interval := time.Duration(cfg.Gateway.UserMessageQueue.CleanupIntervalSeconds) * time.Second
+		manageLifecycle(
+			lifecycle,
+			"UserMessageQueueCleanupWorker",
+			svc,
+			func(service *UserMessageQueueService) { service.StartCleanupWorker(interval) },
+			func(service *UserMessageQueueService) { service.Stop() },
+		)
 	}
 	return svc
 }
@@ -270,10 +279,14 @@ func ProvideOpsCleanupService(
 	return manageStartStopLifecycle(lifecycle, "OpsCleanupService", svc)
 }
 
-func ProvideOpsSystemLogSink(opsRepo OpsRepository, cfg *config.Config) *OpsSystemLogSink {
+func ProvideOpsSystemLogSink(opsRepo OpsRepository, cfg *config.Config, lifecycle *LifecycleRegistry) *OpsSystemLogSink {
 	sink := NewOpsSystemLogSink(opsRepo, cfg)
 	sink.Start()
 	logger.SetSink(sink)
+	lifecycle.Register("OpsSystemLogSink", func() {
+		logger.SetSink(nil)
+		sink.Stop()
+	})
 	return sink
 }
 

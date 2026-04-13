@@ -46,16 +46,26 @@ func (r *LifecycleRegistry) Entries() []LifecycleCleanupEntry {
 	return out
 }
 
+func manageLifecycle[T any](registry *LifecycleRegistry, name string, svc T, start func(T), stop func(T)) T {
+	if lifecycleIsNil(svc) {
+		return svc
+	}
+	if start != nil {
+		start(svc)
+	}
+	if stop != nil {
+		registry.Register(name, func() {
+			stop(svc)
+		})
+	}
+	return svc
+}
+
 func manageStartStopLifecycle[T interface {
 	Start()
 	Stop()
 }](registry *LifecycleRegistry, name string, svc T) T {
-	if lifecycleIsNil(svc) {
-		return svc
-	}
-	svc.Start()
-	registry.Register(name, svc.Stop)
-	return svc
+	return manageLifecycle(registry, name, svc, func(s T) { s.Start() }, func(s T) { s.Stop() })
 }
 
 func lifecycleIsNil(v any) bool {
