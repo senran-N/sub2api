@@ -61,7 +61,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userGroupRateRepository := repository.NewUserGroupRateRepository(db)
 	v2 := repository.NewAPIKeyCache(redisClient)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, userGroupRateRepository, v2, configConfig)
-	apiKeyAuthCacheInvalidator := service.ProvideAPIKeyAuthCacheInvalidator(apiKeyService)
+	apiKeyAuthCacheInvalidator := service.ProvideAPIKeyAuthCacheInvalidator(apiKeyService, lifecycleRegistry)
 	promoService := service.NewPromoService(promoCodeRepository, userRepository, billingCacheService, client, apiKeyAuthCacheInvalidator)
 	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService, client, configConfig)
 	authService := service.NewAuthService(client, userRepository, redeemCodeRepository, v, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, subscriptionService)

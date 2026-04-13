@@ -48,3 +48,28 @@ func TestRunCleanup_TimeoutDoesNotPanicWhenParallelStepReturnsLateError(t *testi
 
 	require.EqualValues(t, 1, infraCalls.Load())
 }
+
+func TestRunCleanup_ParallelCancellationRunsBeforeInfraCleanup(t *testing.T) {
+	subscriberCtx, cancelSubscriber := context.WithCancel(context.Background())
+	defer cancelSubscriber()
+
+	var infraSawCanceled atomic.Bool
+
+	runCleanup(
+		context.Background(),
+		[]cleanupStep{
+			callbackStep("subscriber", cancelSubscriber),
+		},
+		[]cleanupStep{
+			{
+				name: "infra",
+				fn: func() error {
+					infraSawCanceled.Store(subscriberCtx.Err() == context.Canceled)
+					return nil
+				},
+			},
+		},
+	)
+
+	require.True(t, infraSawCanceled.Load())
+}

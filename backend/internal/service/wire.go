@@ -369,9 +369,15 @@ func ProvideOpsScheduledReportService(
 }
 
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
-func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
-	// Start Pub/Sub subscriber for L1 cache invalidation across instances
-	apiKeyService.StartAuthCacheInvalidationSubscriber(context.Background())
+func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService, lifecycle *LifecycleRegistry) APIKeyAuthCacheInvalidator {
+	if apiKeyService == nil {
+		return nil
+	}
+	if apiKeyService.cache != nil && apiKeyService.authCacheL1 != nil {
+		subscriberCtx, cancel := context.WithCancel(context.Background())
+		apiKeyService.StartAuthCacheInvalidationSubscriber(subscriberCtx)
+		lifecycle.Register("APIKeyAuthCacheInvalidationSubscriber", cancel)
+	}
 	return apiKeyService
 }
 
