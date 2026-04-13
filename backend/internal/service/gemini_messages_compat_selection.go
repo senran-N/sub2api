@@ -242,6 +242,9 @@ func (s *GeminiMessagesCompatService) isAccountUsableForRequestWithPrecheck(
 	useMixedScheduling bool,
 	precheckResult map[int64]bool,
 ) bool {
+	if !isGeminiSelectionAccountEligible(account) {
+		return false
+	}
 	if !account.IsSchedulableForModelWithContext(ctx, requestedModel) {
 		return false
 	}
@@ -304,7 +307,7 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAIStudioAccountFromBatch(a
 	var selected *Account
 	for i := range accounts {
 		acc := &accounts[i]
-		if !acc.IsSchedulable() || acc.Platform != PlatformGemini {
+		if !isGeminiSelectionAccountEligible(acc) || acc.Platform != PlatformGemini {
 			continue
 		}
 		if s.isBetterGeminiAIStudioAccount(acc, selected) {
@@ -382,6 +385,13 @@ func (s *GeminiMessagesCompatService) isBetterGeminiAccount(candidate, current *
 	default:
 		return candidate.LastUsedAt.Before(*current.LastUsedAt)
 	}
+}
+
+func isGeminiSelectionAccountEligible(account *Account) bool {
+	if account == nil || !account.IsSchedulable() {
+		return false
+	}
+	return oauthSelectionCredentialIssue(account) == ""
 }
 
 func (s *GeminiMessagesCompatService) isBetterGeminiAIStudioAccount(candidate, current *Account) bool {
