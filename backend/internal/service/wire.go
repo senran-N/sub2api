@@ -133,8 +133,13 @@ func ProvideAntigravityTokenProvider(
 }
 
 // ProvideDashboardAggregationService 创建并启动仪表盘聚合服务
-func ProvideDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, cfg *config.Config) *DashboardAggregationService {
-	return startBackgroundService(newDashboardAggregationServiceForLifecycle(repo, timingWheel, cfg))
+func ProvideDashboardAggregationService(
+	repo DashboardAggregationRepository,
+	timingWheel *TimingWheelService,
+	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
+) *DashboardAggregationService {
+	return manageStartStopLifecycle(lifecycle, "DashboardAggregationService", newDashboardAggregationServiceForLifecycle(repo, timingWheel, cfg))
 }
 
 // ProvideUsageCleanupService 创建并启动使用记录清理任务服务

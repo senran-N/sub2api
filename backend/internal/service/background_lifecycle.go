@@ -6,18 +6,6 @@ import (
 	"github.com/senran-N/sub2api/internal/config"
 )
 
-// backgroundStartable captures services that need an explicit Start phase.
-// We keep startup orchestration centralized here so providers can compose
-// "construct then start" without duplicating lifecycle glue.
-type backgroundStartable interface {
-	Start()
-}
-
-func startBackgroundService[T backgroundStartable](svc T) T {
-	svc.Start()
-	return svc
-}
-
 func newTimingWheelServiceForLifecycle() (*TimingWheelService, error) {
 	return NewTimingWheelService()
 }

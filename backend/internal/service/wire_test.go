@@ -10,26 +10,6 @@ import (
 	"github.com/zeromicro/go-zero/core/collection"
 )
 
-type lifecycleStartableStub struct {
-	startCalls int
-}
-
-func (s *lifecycleStartableStub) Start() {
-	s.startCalls++
-}
-
-func TestStartBackgroundService_StartsAndReturnsSameInstance(t *testing.T) {
-	svc := &lifecycleStartableStub{}
-	returned := startBackgroundService(svc)
-
-	if returned != svc {
-		t.Fatalf("期望返回同一个实例")
-	}
-	if svc.startCalls != 1 {
-		t.Fatalf("期望 Start 被调用 1 次，实际: %d", svc.startCalls)
-	}
-}
-
 func TestProvideTimingWheelService_ReturnsError(t *testing.T) {
 	original := newTimingWheel
 	t.Cleanup(func() { newTimingWheel = original })
@@ -60,6 +40,34 @@ func TestProvideTimingWheelService_Success(t *testing.T) {
 	if len(entries) != 1 || entries[0].Name != "TimingWheelService" {
 		t.Fatalf("unexpected lifecycle entries: %+v", entries)
 	}
+	entries[0].Stop()
+}
+
+func TestProvideDashboardAggregationService_RegistersLifecycleStop(t *testing.T) {
+	registry := NewLifecycleRegistry()
+	timingWheel, err := NewTimingWheelService()
+	if err != nil {
+		t.Fatalf("expected timing wheel, got error: %v", err)
+	}
+	defer timingWheel.Stop()
+
+	cfg := &config.Config{
+		DashboardAgg: config.DashboardAggregationConfig{
+			Enabled:         true,
+			IntervalSeconds: 60,
+		},
+	}
+
+	svc := ProvideDashboardAggregationService(&dashboardAggregationRepoTestStub{}, timingWheel, cfg, registry)
+	if svc == nil {
+		t.Fatalf("expected dashboard aggregation service")
+	}
+
+	entries := registry.Entries()
+	if len(entries) != 1 || entries[0].Name != "DashboardAggregationService" {
+		t.Fatalf("unexpected lifecycle entries: %+v", entries)
+	}
+
 	entries[0].Stop()
 }
 

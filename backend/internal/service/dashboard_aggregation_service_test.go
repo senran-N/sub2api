@@ -26,6 +26,11 @@ type dashboardAggregationRepoTestStub struct {
 	ensurePartitionErr   error
 }
 
+type dashboardAggregationBlockingRepoStub struct {
+	started chan struct{}
+	ctxErr  chan error
+}
+
 func (s *dashboardAggregationRepoTestStub) AggregateRange(ctx context.Context, start, end time.Time) error {
 	s.aggregateCalls++
 	s.lastStart = start
@@ -63,6 +68,47 @@ func (s *dashboardAggregationRepoTestStub) CleanupUsageBillingDedup(ctx context.
 func (s *dashboardAggregationRepoTestStub) EnsureUsageLogsPartitions(ctx context.Context, now time.Time) error {
 	s.ensurePartitionCalls++
 	return s.ensurePartitionErr
+}
+
+func (s *dashboardAggregationBlockingRepoStub) AggregateRange(ctx context.Context, start, end time.Time) error {
+	select {
+	case s.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	select {
+	case s.ctxErr <- ctx.Err():
+	default:
+	}
+	return ctx.Err()
+}
+
+func (s *dashboardAggregationBlockingRepoStub) RecomputeRange(ctx context.Context, start, end time.Time) error {
+	return s.AggregateRange(ctx, start, end)
+}
+
+func (s *dashboardAggregationBlockingRepoStub) GetAggregationWatermark(ctx context.Context) (time.Time, error) {
+	return time.Unix(0, 0).UTC(), nil
+}
+
+func (s *dashboardAggregationBlockingRepoStub) UpdateAggregationWatermark(ctx context.Context, aggregatedAt time.Time) error {
+	return nil
+}
+
+func (s *dashboardAggregationBlockingRepoStub) CleanupAggregates(ctx context.Context, hourlyCutoff, dailyCutoff time.Time) error {
+	return nil
+}
+
+func (s *dashboardAggregationBlockingRepoStub) CleanupUsageLogs(ctx context.Context, cutoff time.Time) error {
+	return nil
+}
+
+func (s *dashboardAggregationBlockingRepoStub) CleanupUsageBillingDedup(ctx context.Context, cutoff time.Time) error {
+	return nil
+}
+
+func (s *dashboardAggregationBlockingRepoStub) EnsureUsageLogsPartitions(ctx context.Context, now time.Time) error {
+	return nil
 }
 
 func TestDashboardAggregationService_RunScheduledAggregation_EpochUsesRetentionStart(t *testing.T) {
@@ -165,4 +211,84 @@ func TestDashboardAggregationService_TriggerBackfill_TooLarge(t *testing.T) {
 	err := svc.TriggerBackfill(start, end)
 	require.ErrorIs(t, err, ErrDashboardBackfillTooLarge)
 	require.Equal(t, 0, repo.aggregateCalls)
+}
+
+func TestDashboardAggregationService_StopCancelsBackfill(t *testing.T) {
+	repo := &dashboardAggregationBlockingRepoStub{
+		started: make(chan struct{}, 1),
+		ctxErr:  make(chan error, 1),
+	}
+	svc := NewDashboardAggregationService(repo, nil, &config.Config{
+		DashboardAgg: config.DashboardAggregationConfig{
+			BackfillEnabled: true,
+		},
+	})
+
+	err := svc.TriggerBackfill(time.Now().Add(-time.Hour), time.Now())
+	require.NoError(t, err)
+
+	select {
+	case <-repo.started:
+	case <-time.After(time.Second):
+		t.Fatal("expected backfill to start")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		svc.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("expected stop to return after canceling backfill")
+	}
+
+	select {
+	case err := <-repo.ctxErr:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("expected backfill context to be canceled")
+	}
+}
+
+func TestDashboardAggregationService_StopCancelsRecompute(t *testing.T) {
+	repo := &dashboardAggregationBlockingRepoStub{
+		started: make(chan struct{}, 1),
+		ctxErr:  make(chan error, 1),
+	}
+	svc := NewDashboardAggregationService(repo, nil, &config.Config{
+		DashboardAgg: config.DashboardAggregationConfig{
+			Enabled: true,
+		},
+	})
+
+	err := svc.TriggerRecomputeRange(time.Now().Add(-time.Hour), time.Now())
+	require.NoError(t, err)
+
+	select {
+	case <-repo.started:
+	case <-time.After(time.Second):
+		t.Fatal("expected recompute to start")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		svc.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("expected stop to return after canceling recompute")
+	}
+
+	select {
+	case err := <-repo.ctxErr:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("expected recompute context to be canceled")
+	}
 }
