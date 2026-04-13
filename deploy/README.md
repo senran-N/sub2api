@@ -239,7 +239,9 @@ docker compose -f docker-compose.standalone.yml up -d
 | `POSTGRES_PASSWORD` | **Yes** | - | PostgreSQL password for bundled Postgres in `docker-compose.yml` / `docker-compose.local.yml` |
 | `DATABASE_HOST` | Standalone only | - | External PostgreSQL host for `docker-compose.standalone.yml` |
 | `DATABASE_PASSWORD` | Standalone only | - | External PostgreSQL password for `docker-compose.standalone.yml` |
+| `DATABASE_PORT` | No | `5432` | PostgreSQL port; bundled Compose reuses it for both the app and bundled Postgres service |
 | `REDIS_HOST` | Standalone only | - | External Redis host for `docker-compose.standalone.yml` |
+| `REDIS_PORT` | No | `6379` | Redis port; bundled Compose reuses it for both the app and bundled Redis service |
 | `JWT_SECRET` | **Recommended** | *(auto-generated)* | JWT secret (fixed for persistent sessions) |
 | `TOTP_ENCRYPTION_KEY` | **Recommended** | *(auto-generated)* | TOTP encryption key (fixed for persistent 2FA) |
 | `SERVER_PORT` | No | `8080` | Server port |
@@ -267,7 +269,7 @@ Production deploy examples now keep `SECURITY_URL_ALLOWLIST_ENABLED=true` by def
 
 The maintained Compose files now also pass the full `.env` into the Sub2API container, so app-level knobs from `.env.example` such as `LOG_*`, `SERVER_MAX_REQUEST_BODY_SIZE`, `SERVER_H2C_*`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, and gateway scheduler/body-size overrides take effect without extra YAML edits.
 
-For the bundled PostgreSQL/Redis variants (`docker-compose.yml`, `docker-compose.local.yml`, `docker-compose.dev.yml`), `POSTGRES_MAX_CONNECTIONS`, `POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE`, `POSTGRES_MAINTENANCE_WORK_MEM`, and `REDIS_MAXCLIENTS` are wired into the service commands instead of being documentation-only.
+For the bundled PostgreSQL/Redis variants (`docker-compose.yml`, `docker-compose.local.yml`, `docker-compose.dev.yml`), `DATABASE_PORT`, `REDIS_PORT`, `POSTGRES_MAX_CONNECTIONS`, `POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE`, `POSTGRES_MAINTENANCE_WORK_MEM`, and `REDIS_MAXCLIENTS` are wired into the service commands instead of being documentation-only.
 
 See `.env.example` for all available options.
 
