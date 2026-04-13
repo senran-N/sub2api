@@ -89,7 +89,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	dashboardAggregationRepository := repository.NewDashboardAggregationRepository(db)
 	dashboardStatsCache := repository.NewDashboardCache(redisClient, configConfig)
 	dashboardService := service.NewDashboardService(usageLogRepository, dashboardAggregationRepository, dashboardStatsCache, configConfig)
-	timingWheelService, err := service.ProvideTimingWheelService()
+	timingWheelService, err := service.ProvideTimingWheelService(lifecycleRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	dataManagementHandler := admin.NewDataManagementHandler(dataManagementService)
 	backupObjectStoreFactory := repository.NewS3BackupStoreFactory()
 	dbDumper := repository.NewPgDumper(configConfig)
-	backupService := service.ProvideBackupService(settingRepository, configConfig, secretEncryptor, backupObjectStoreFactory, dbDumper)
+	backupService := service.ProvideBackupService(settingRepository, configConfig, secretEncryptor, backupObjectStoreFactory, dbDumper, lifecycleRegistry)
 	backupHandler := admin.NewBackupHandler(backupService, userService)
 	oAuthHandler := admin.NewOAuthHandler(oAuthService)
 	openAIOAuthHandler := admin.NewOpenAIOAuthHandler(openAIOAuthService, adminService)
@@ -169,7 +169,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	}
 	billingService := service.NewBillingService(configConfig, pricingService)
 	identityService := service.NewIdentityService(v8)
-	deferredService := service.ProvideDeferredService(accountRepository, timingWheelService)
+	deferredService := service.ProvideDeferredService(accountRepository, timingWheelService, lifecycleRegistry)
 	claudeTokenProvider := service.ProvideClaudeTokenProvider(accountRepository, v7, oAuthService, oAuthRefreshAPI)
 	digestSessionStore := service.NewDigestSessionStore()
 	channelRepository := repository.NewChannelRepository(db)
@@ -192,7 +192,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	systemHandler := handler.ProvideSystemHandler(updateService, systemOperationLockService)
 	adminSubscriptionHandler := admin.NewSubscriptionHandler(subscriptionService)
 	usageCleanupRepository := repository.NewUsageCleanupRepository(client, db)
-	usageCleanupService := service.ProvideUsageCleanupService(usageCleanupRepository, timingWheelService, dashboardAggregationService, configConfig)
+	usageCleanupService := service.ProvideUsageCleanupService(usageCleanupRepository, timingWheelService, dashboardAggregationService, configConfig, lifecycleRegistry)
 	adminUsageHandler := admin.NewUsageHandler(usageService, apiKeyService, adminService, usageCleanupService)
 	userAttributeDefinitionRepository := repository.NewUserAttributeDefinitionRepository(client)
 	userAttributeValueRepository := repository.NewUserAttributeValueRepository(client)
@@ -218,7 +218,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	handlerSettingHandler := handler.ProvideSettingHandler(settingService, buildInfo)
 	totpHandler := handler.NewTotpHandler(totpService)
 	idempotencyCoordinator := service.ProvideIdempotencyCoordinator(v15, configConfig)
-	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(v15, configConfig)
+	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(v15, configConfig, lifecycleRegistry)
 	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, idempotencyCoordinator, idempotencyCleanupService)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
@@ -231,13 +231,13 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	service.ProvideOpsAggregationService(opsRepository, settingRepository, db, redisClient, configConfig, lifecycleRegistry)
 	service.ProvideOpsAlertEvaluatorService(opsService, opsRepository, emailService, redisClient, configConfig, lifecycleRegistry)
 	service.ProvideOpsCleanupService(opsRepository, db, redisClient, configConfig, lifecycleRegistry)
-	opsScheduledReportService := service.ProvideOpsScheduledReportService(opsService, userService, emailService, redisClient, configConfig)
-	tokenRefreshService := service.ProvideTokenRefreshService(accountRepository, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, compositeTokenCacheInvalidator, schedulerCache, configConfig, v5, privacyClientFactory, proxyRepository, oAuthRefreshAPI)
-	accountExpiryService := service.ProvideAccountExpiryService(accountRepository)
-	subscriptionExpiryService := service.ProvideSubscriptionExpiryService(userSubscriptionRepository)
+	service.ProvideOpsScheduledReportService(opsService, userService, emailService, redisClient, configConfig, lifecycleRegistry)
+	service.ProvideTokenRefreshService(accountRepository, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, compositeTokenCacheInvalidator, schedulerCache, configConfig, v5, privacyClientFactory, proxyRepository, oAuthRefreshAPI, lifecycleRegistry)
+	service.ProvideAccountExpiryService(accountRepository, lifecycleRegistry)
+	service.ProvideSubscriptionExpiryService(userSubscriptionRepository, lifecycleRegistry)
 	claudeCodeProfileSyncService := service.ProvideClaudeCodeProfileSyncStarter(configConfig)
-	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(v18, scheduledTestService, accountTestService, rateLimitService, configConfig)
-	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, opsScheduledReportService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
+	service.ProvideScheduledTestRunnerService(v18, scheduledTestService, accountTestService, rateLimitService, configConfig, lifecycleRegistry)
+	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v20,
@@ -268,12 +268,6 @@ func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
 	lifecycleRegistry *service.LifecycleRegistry,
-	opsScheduledReport *service.OpsScheduledReportService,
-	tokenRefresh *service.TokenRefreshService,
-	accountExpiry *service.AccountExpiryService,
-	subscriptionExpiry *service.SubscriptionExpiryService,
-	usageCleanup *service.UsageCleanupService,
-	idempotencyCleanup *service.IdempotencyCleanupService,
 	claudeProfileSync *service.ClaudeCodeProfileSyncService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
@@ -284,8 +278,6 @@ func provideCleanup(
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
-	scheduledTestRunner *service.ScheduledTestRunnerService,
-	backupSvc *service.BackupService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), resolveShutdownTimeout(cfg))
@@ -293,13 +285,7 @@ func provideCleanup(
 
 		parallelSteps := lifecycleRegistrySteps(lifecycleRegistry)
 		parallelSteps = append(parallelSteps, []cleanupStep{
-			stopStep("OpsScheduledReportService", opsScheduledReport),
-			stopStep("UsageCleanupService", usageCleanup),
-			stopStep("IdempotencyCleanupService", idempotencyCleanup),
 			stopStep("ClaudeCodeProfileSyncService", claudeProfileSync),
-			stopStep("TokenRefreshService", tokenRefresh),
-			stopStep("AccountExpiryService", accountExpiry),
-			stopStep("SubscriptionExpiryService", subscriptionExpiry),
 			stopStep("SubscriptionService", subscriptionService),
 			stopStep("EmailQueueService", emailQueue),
 			stopStep("BillingCacheService", billingCache),
@@ -313,8 +299,6 @@ func provideCleanup(
 					openAIGateway.CloseOpenAIWSPool()
 				}
 			}),
-			stopStep("ScheduledTestRunnerService", scheduledTestRunner),
-			stopStep("BackupService", backupSvc),
 		}...)
 
 		infraSteps := []cleanupStep{

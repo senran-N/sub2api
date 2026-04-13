@@ -69,12 +69,6 @@ func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
 	lifecycleRegistry *service.LifecycleRegistry,
-	opsScheduledReport *service.OpsScheduledReportService,
-	tokenRefresh *service.TokenRefreshService,
-	accountExpiry *service.AccountExpiryService,
-	subscriptionExpiry *service.SubscriptionExpiryService,
-	usageCleanup *service.UsageCleanupService,
-	idempotencyCleanup *service.IdempotencyCleanupService,
 	claudeProfileSync *service.ClaudeCodeProfileSyncService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
@@ -85,8 +79,6 @@ func provideCleanup(
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
-	scheduledTestRunner *service.ScheduledTestRunnerService,
-	backupSvc *service.BackupService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), resolveShutdownTimeout(cfg))
@@ -95,13 +87,7 @@ func provideCleanup(
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := lifecycleRegistrySteps(lifecycleRegistry)
 		parallelSteps = append(parallelSteps, []cleanupStep{
-			stopStep("OpsScheduledReportService", opsScheduledReport),
-			stopStep("UsageCleanupService", usageCleanup),
-			stopStep("IdempotencyCleanupService", idempotencyCleanup),
 			stopStep("ClaudeCodeProfileSyncService", claudeProfileSync),
-			stopStep("TokenRefreshService", tokenRefresh),
-			stopStep("AccountExpiryService", accountExpiry),
-			stopStep("SubscriptionExpiryService", subscriptionExpiry),
 			stopStep("SubscriptionService", subscriptionService),
 			stopStep("EmailQueueService", emailQueue),
 			stopStep("BillingCacheService", billingCache),
@@ -115,8 +101,6 @@ func provideCleanup(
 					openAIGateway.CloseOpenAIWSPool()
 				}
 			}),
-			stopStep("ScheduledTestRunnerService", scheduledTestRunner),
-			stopStep("BackupService", backupSvc),
 		}...)
 
 		infraSteps := []cleanupStep{

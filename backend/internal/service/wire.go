@@ -62,6 +62,7 @@ func ProvideTokenRefreshService(
 	privacyClientFactory PrivacyClientFactory,
 	proxyRepo ProxyRepository,
 	refreshAPI *OAuthRefreshAPI,
+	lifecycle *LifecycleRegistry,
 ) *TokenRefreshService {
 	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cacheInvalidator, schedulerCache, cfg, tempUnschedCache)
 	// 注入 OpenAI privacy opt-out 依赖
@@ -70,8 +71,7 @@ func ProvideTokenRefreshService(
 	svc.SetRefreshAPI(refreshAPI)
 	// 调用侧显式注入后台刷新策略，避免策略漂移
 	svc.SetRefreshPolicy(DefaultBackgroundRefreshPolicy())
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "TokenRefreshService", svc)
 }
 
 // ProvideClaudeTokenProvider creates ClaudeTokenProvider with OAuthRefreshAPI injection
@@ -138,32 +138,38 @@ func ProvideDashboardAggregationService(repo DashboardAggregationRepository, tim
 }
 
 // ProvideUsageCleanupService 创建并启动使用记录清理任务服务
-func ProvideUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
-	return startBackgroundService(newUsageCleanupServiceForLifecycle(repo, timingWheel, dashboardAgg, cfg))
+func ProvideUsageCleanupService(
+	repo UsageCleanupRepository,
+	timingWheel *TimingWheelService,
+	dashboardAgg *DashboardAggregationService,
+	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
+) *UsageCleanupService {
+	return manageStartStopLifecycle(lifecycle, "UsageCleanupService", newUsageCleanupServiceForLifecycle(repo, timingWheel, dashboardAgg, cfg))
 }
 
 // ProvideAccountExpiryService creates and starts AccountExpiryService.
-func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpiryService {
-	return startBackgroundService(newAccountExpiryServiceForLifecycle(accountRepo))
+func ProvideAccountExpiryService(accountRepo AccountRepository, lifecycle *LifecycleRegistry) *AccountExpiryService {
+	return manageStartStopLifecycle(lifecycle, "AccountExpiryService", newAccountExpiryServiceForLifecycle(accountRepo))
 }
 
 // ProvideSubscriptionExpiryService creates and starts SubscriptionExpiryService.
-func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository) *SubscriptionExpiryService {
-	return startBackgroundService(newSubscriptionExpiryServiceForLifecycle(userSubRepo))
+func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, lifecycle *LifecycleRegistry) *SubscriptionExpiryService {
+	return manageStartStopLifecycle(lifecycle, "SubscriptionExpiryService", newSubscriptionExpiryServiceForLifecycle(userSubRepo))
 }
 
 // ProvideTimingWheelService creates and starts TimingWheelService
-func ProvideTimingWheelService() (*TimingWheelService, error) {
+func ProvideTimingWheelService(lifecycle *LifecycleRegistry) (*TimingWheelService, error) {
 	svc, err := newTimingWheelServiceForLifecycle()
 	if err != nil {
 		return nil, err
 	}
-	return startBackgroundService(svc), nil
+	return manageStartStopLifecycle(lifecycle, "TimingWheelService", svc), nil
 }
 
 // ProvideDeferredService creates and starts DeferredService
-func ProvideDeferredService(accountRepo AccountRepository, timingWheel *TimingWheelService) *DeferredService {
-	return startBackgroundService(newDeferredServiceForLifecycle(accountRepo, timingWheel))
+func ProvideDeferredService(accountRepo AccountRepository, timingWheel *TimingWheelService, lifecycle *LifecycleRegistry) *DeferredService {
+	return manageStartStopLifecycle(lifecycle, "DeferredService", newDeferredServiceForLifecycle(accountRepo, timingWheel))
 }
 
 // ProvideConcurrencyService creates ConcurrencyService and starts slot cleanup worker.
@@ -323,10 +329,9 @@ func ProvideSystemOperationLockService(repo IdempotencyRepository, cfg *config.C
 	return NewSystemOperationLockService(repo, buildIdempotencyConfig(cfg))
 }
 
-func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
+func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config, lifecycle *LifecycleRegistry) *IdempotencyCleanupService {
 	svc := NewIdempotencyCleanupService(repo, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "IdempotencyCleanupService", svc)
 }
 
 // ProvideScheduledTestService creates ScheduledTestService.
@@ -344,10 +349,10 @@ func ProvideScheduledTestRunnerService(
 	accountTestSvc *AccountTestService,
 	rateLimitSvc *RateLimitService,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *ScheduledTestRunnerService {
 	svc := NewScheduledTestRunnerService(planRepo, scheduledSvc, accountTestSvc, rateLimitSvc, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "ScheduledTestRunnerService", svc)
 }
 
 // ProvideOpsScheduledReportService creates and starts OpsScheduledReportService.
@@ -357,10 +362,10 @@ func ProvideOpsScheduledReportService(
 	emailService *EmailService,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsScheduledReportService {
 	svc := NewOpsScheduledReportService(opsService, userService, emailService, redisClient, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "OpsScheduledReportService", svc)
 }
 
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
@@ -377,10 +382,10 @@ func ProvideBackupService(
 	encryptor SecretEncryptor,
 	storeFactory BackupObjectStoreFactory,
 	dumper DBDumper,
+	lifecycle *LifecycleRegistry,
 ) *BackupService {
 	svc := NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "BackupService", svc)
 }
 
 // ProvideSettingService wires SettingService with group reader for default subscription validation.

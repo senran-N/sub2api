@@ -36,7 +36,7 @@ func TestProvideTimingWheelService_ReturnsError(t *testing.T) {
 		return nil, errors.New("boom")
 	}
 
-	svc, err := ProvideTimingWheelService()
+	svc, err := ProvideTimingWheelService(NewLifecycleRegistry())
 	if err == nil {
 		t.Fatalf("期望返回 error，但得到 nil")
 	}
@@ -46,12 +46,17 @@ func TestProvideTimingWheelService_ReturnsError(t *testing.T) {
 }
 
 func TestProvideTimingWheelService_Success(t *testing.T) {
-	svc, err := ProvideTimingWheelService()
+	registry := NewLifecycleRegistry()
+	svc, err := ProvideTimingWheelService(registry)
 	if err != nil {
 		t.Fatalf("期望 err 为 nil，但得到: %v", err)
 	}
 	if svc == nil {
 		t.Fatalf("期望 svc 非空，但得到 nil")
 	}
-	svc.Stop()
+	entries := registry.Entries()
+	if len(entries) != 1 || entries[0].Name != "TimingWheelService" {
+		t.Fatalf("unexpected lifecycle entries: %+v", entries)
+	}
+	entries[0].Stop()
 }

@@ -1,8 +1,8 @@
 package main
 
 import (
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/handler"
@@ -28,22 +28,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	geminiOAuthSvc := service.NewGeminiOAuthService(nil, nil, nil, nil, cfg)
 	antigravityOAuthSvc := service.NewAntigravityOAuthService(nil)
 
-	tokenRefreshSvc := service.NewTokenRefreshService(
-		nil,
-		oauthSvc,
-		openAIOAuthSvc,
-		geminiOAuthSvc,
-		antigravityOAuthSvc,
-		nil,
-		nil,
-		cfg,
-		nil,
-	)
-	accountExpirySvc := service.NewAccountExpiryService(nil, time.Second)
-	subscriptionExpirySvc := service.NewSubscriptionExpiryService(nil, time.Second)
 	emailQueueSvc := service.NewEmailQueueService(nil, 1)
 	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, cfg)
-	idempotencyCleanupSvc := service.NewIdempotencyCleanupService(nil, cfg)
 	lifecycleRegistry := service.NewLifecycleRegistry()
 
 	cleanup := provideCleanup(
@@ -51,12 +37,6 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // entClient
 		nil, // redis
 		lifecycleRegistry,
-		&service.OpsScheduledReportService{},
-		tokenRefreshSvc,
-		accountExpirySvc,
-		subscriptionExpirySvc,
-		&service.UsageCleanupService{},
-		idempotencyCleanupSvc,
 		nil, // claudeProfileSync
 		emailQueueSvc,
 		billingCacheSvc,
@@ -67,11 +47,40 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		geminiOAuthSvc,
 		antigravityOAuthSvc,
 		nil, // openAIGateway
-		nil, // scheduledTestRunner
-		nil, // backupSvc
 	)
 
 	require.NotPanics(t, func() {
 		cleanup()
 	})
+}
+
+func TestProvideCleanup_StopsLifecycleRegistryEntries(t *testing.T) {
+	cfg := &config.Config{}
+	lifecycleRegistry := service.NewLifecycleRegistry()
+
+	var stopped atomic.Int32
+	lifecycleRegistry.Register("probe", func() {
+		stopped.Add(1)
+	})
+
+	cleanup := provideCleanup(
+		cfg,
+		nil,
+		nil,
+		lifecycleRegistry,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+
+	cleanup()
+
+	require.EqualValues(t, 1, stopped.Load())
 }
