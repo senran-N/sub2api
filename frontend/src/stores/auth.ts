@@ -3,450 +3,389 @@
  * Manages user authentication state, login/logout, token refresh, and token persistence
  */
 
-import { defineStore } from 'pinia'
-import { ref, computed, readonly } from 'vue'
-import type { LoginResponse } from '@/api/auth'
-import type { User, LoginRequest, RegisterRequest, AuthResponse, TotpLoginResponse } from '@/types'
-import { setAuthTokenRefreshHandler, type AuthTokenRefreshedDetail } from './authSync'
+import { defineStore } from "pinia";
+import { ref, computed, readonly } from "vue";
+import type { LoginResponse } from "@/api/auth";
+import type {
+  User,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+  TotpLoginResponse,
+} from "@/types";
+import {
+  setAuthTokenRefreshHandler,
+  type AuthTokenRefreshedDetail,
+} from "./authSync";
 import {
   AUTH_TOKEN_KEY,
   AUTH_USER_KEY,
   REFRESH_TOKEN_KEY,
-  TOKEN_EXPIRES_AT_KEY
-} from '@/utils/authStorage'
+  TOKEN_EXPIRES_AT_KEY,
+} from "@/utils/authStorage";
 
-const AUTO_REFRESH_INTERVAL = 60 * 1000 // 60 seconds for user data refresh
-const TOKEN_REFRESH_BUFFER = 120 * 1000 // 120 seconds before expiry to refresh token
+const AUTO_REFRESH_INTERVAL = 60 * 1000; // 60 seconds for user data refresh
+const TOKEN_REFRESH_BUFFER = 120 * 1000; // 120 seconds before expiry to refresh token
 
-type AuthApiModule = typeof import('@/api/auth')
+type AuthApiModule = typeof import("@/api/auth");
 
-let authApiModulePromise: Promise<AuthApiModule> | null = null
+let authApiModulePromise: Promise<AuthApiModule> | null = null;
 
 function loadAuthApiModule(): Promise<AuthApiModule> {
   if (!authApiModulePromise) {
-    authApiModulePromise = import('@/api/auth')
+    authApiModulePromise = import("@/api/auth");
   }
 
-  return authApiModulePromise
+  return authApiModulePromise;
 }
 
-function requiresTotpLogin(response: LoginResponse): response is TotpLoginResponse {
-  return 'requires_2fa' in response && response.requires_2fa === true
+function requiresTotpLogin(
+  response: LoginResponse,
+): response is TotpLoginResponse {
+  return "requires_2fa" in response && response.requires_2fa === true;
 }
 
-export const useAuthStore = defineStore('auth', () => {
-  // ==================== State ====================
+export const useAuthStore = defineStore("auth", () => {
+  const user = ref<User | null>(null);
+  const token = ref<string | null>(null);
+  const refreshTokenValue = ref<string | null>(null);
+  const tokenExpiresAt = ref<number | null>(null);
+  const runMode = ref<"standard" | "simple">("standard");
+  let refreshIntervalId: ReturnType<typeof setInterval> | null = null;
+  let tokenRefreshTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let authOperationQueue: Promise<unknown> = Promise.resolve();
+  let tokenRefreshPromise: Promise<void> | null = null;
 
-  const user = ref<User | null>(null)
-  const token = ref<string | null>(null)
-  const refreshTokenValue = ref<string | null>(null)
-  const tokenExpiresAt = ref<number | null>(null) // 过期时间戳（毫秒）
-  const runMode = ref<'standard' | 'simple'>('standard')
-  let refreshIntervalId: ReturnType<typeof setInterval> | null = null
-  let tokenRefreshTimeoutId: ReturnType<typeof setTimeout> | null = null
+  function runSerializedAuthOperation<T>(
+    operation: () => Promise<T> | T,
+  ): Promise<T> {
+    const next = authOperationQueue.then(operation, operation);
+    authOperationQueue = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  function stopAutoRefresh(): void {
+    if (refreshIntervalId) {
+      clearInterval(refreshIntervalId);
+      refreshIntervalId = null;
+    }
+  }
+
+  function stopTokenRefresh(): void {
+    if (tokenRefreshTimeoutId) {
+      clearTimeout(tokenRefreshTimeoutId);
+      tokenRefreshTimeoutId = null;
+    }
+  }
+
+  function clearAuth(): void {
+    stopAutoRefresh();
+    stopTokenRefresh();
+
+    token.value = null;
+    refreshTokenValue.value = null;
+    tokenExpiresAt.value = null;
+    user.value = null;
+    runMode.value = "standard";
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
+  }
+
+  function scheduleTokenRefreshAt(expiresAtMs: number): void {
+    stopTokenRefresh();
+
+    const now = Date.now();
+    const refreshInMs = Math.max(0, expiresAtMs - now - TOKEN_REFRESH_BUFFER);
+
+    if (refreshInMs <= 0) {
+      void performTokenRefresh();
+      return;
+    }
+
+    tokenRefreshTimeoutId = setTimeout(() => {
+      void performTokenRefresh();
+    }, refreshInMs);
+  }
+
+  function applyTokenRefresh(detail: AuthTokenRefreshedDetail): void {
+    token.value = detail.access_token;
+    localStorage.setItem(AUTH_TOKEN_KEY, detail.access_token);
+
+    if (detail.refresh_token) {
+      refreshTokenValue.value = detail.refresh_token;
+      localStorage.setItem(REFRESH_TOKEN_KEY, detail.refresh_token);
+    }
+    if (
+      typeof detail.expires_at === "number" &&
+      Number.isFinite(detail.expires_at)
+    ) {
+      tokenExpiresAt.value = detail.expires_at;
+      localStorage.setItem(TOKEN_EXPIRES_AT_KEY, String(detail.expires_at));
+      scheduleTokenRefreshAt(detail.expires_at);
+    }
+  }
 
   function bindTokenRefreshListener(): void {
     setAuthTokenRefreshHandler((detail: AuthTokenRefreshedDetail) => {
       if (!detail?.access_token) {
-        return
+        return;
       }
 
-      token.value = detail.access_token
-      if (detail.refresh_token) {
-        refreshTokenValue.value = detail.refresh_token
-      }
-      if (typeof detail.expires_at === 'number' && Number.isFinite(detail.expires_at)) {
-        tokenExpiresAt.value = detail.expires_at
-        scheduleTokenRefreshAt(detail.expires_at)
-      }
-    })
+      void runSerializedAuthOperation(() => {
+        applyTokenRefresh(detail);
+      });
+    });
   }
 
-  bindTokenRefreshListener()
+  bindTokenRefreshListener();
 
-  // ==================== Computed ====================
+  const isAuthenticated = computed(() => !!token.value && !!user.value);
+  const isAdmin = computed(() => user.value?.role === "admin");
+  const isSimpleMode = computed(() => runMode.value === "simple");
 
-  const isAuthenticated = computed(() => {
-    return !!token.value && !!user.value
-  })
-
-  const isAdmin = computed(() => {
-    return user.value?.role === 'admin'
-  })
-
-  const isSimpleMode = computed(() => runMode.value === 'simple')
-
-  // ==================== Actions ====================
-
-  /**
-   * Initialize auth state from localStorage
-   * Call this on app startup to restore session
-   * Also starts auto-refresh and immediately fetches latest user data
-   */
-  function checkAuth(): void {
-    const savedToken = localStorage.getItem(AUTH_TOKEN_KEY)
-    const savedUser = localStorage.getItem(AUTH_USER_KEY)
-    const savedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-    const savedExpiresAt = localStorage.getItem(TOKEN_EXPIRES_AT_KEY)
-
-    if (savedToken && savedUser) {
-      try {
-        token.value = savedToken
-        user.value = JSON.parse(savedUser)
-        refreshTokenValue.value = savedRefreshToken
-        tokenExpiresAt.value = savedExpiresAt ? parseInt(savedExpiresAt, 10) : null
-
-        // Immediately refresh user data from backend (async, don't block)
-        refreshUser().catch((error) => {
-          console.error('Failed to refresh user on init:', error)
-        })
-
-        // Start auto-refresh interval for user data
-        startAutoRefresh()
-
-        // Start proactive token refresh if we have refresh token and expiry info
-        // Note: use !== null to handle case when tokenExpiresAt.value is 0 (expired)
-        if (savedRefreshToken && tokenExpiresAt.value !== null) {
-          scheduleTokenRefreshAt(tokenExpiresAt.value)
-        }
-      } catch (error) {
-        console.error('Failed to parse saved user data:', error)
-        clearAuth()
-      }
-    }
-  }
-
-  /**
-   * Start auto-refresh interval for user data
-   * Refreshes user data every 60 seconds
-   */
   function startAutoRefresh(): void {
-    // Clear existing interval if any
-    stopAutoRefresh()
+    stopAutoRefresh();
 
     refreshIntervalId = setInterval(() => {
       if (token.value) {
         refreshUser().catch((error) => {
-          console.error('Auto-refresh user failed:', error)
-        })
+          console.error("Auto-refresh user failed:", error);
+        });
       }
-    }, AUTO_REFRESH_INTERVAL)
+    }, AUTO_REFRESH_INTERVAL);
   }
 
-  /**
-   * Stop auto-refresh interval
-   */
-  function stopAutoRefresh(): void {
-    if (refreshIntervalId) {
-      clearInterval(refreshIntervalId)
-      refreshIntervalId = null
-    }
-  }
-
-  /**
-   * Schedule proactive token refresh before expiry (based on expiry timestamp)
-   * @param expiresAtMs - Token expiry timestamp in milliseconds
-   */
-  function scheduleTokenRefreshAt(expiresAtMs: number): void {
-    // Clear any existing timeout
-    if (tokenRefreshTimeoutId) {
-      clearTimeout(tokenRefreshTimeoutId)
-      tokenRefreshTimeoutId = null
-    }
-
-    // Calculate remaining time until refresh (buffer time before expiry)
-    const now = Date.now()
-    const refreshInMs = Math.max(0, expiresAtMs - now - TOKEN_REFRESH_BUFFER)
-
-    if (refreshInMs <= 0) {
-      // Token is about to expire or already expired, refresh immediately
-      performTokenRefresh()
-      return
-    }
-
-    tokenRefreshTimeoutId = setTimeout(() => {
-      performTokenRefresh()
-    }, refreshInMs)
-  }
-
-  /**
-   * Schedule proactive token refresh before expiry (based on expires_in seconds)
-   * @param expiresInSeconds - Token expiry time in seconds from now
-   */
   function scheduleTokenRefresh(expiresInSeconds: number): void {
-    const expiresAtMs = Date.now() + expiresInSeconds * 1000
-    tokenExpiresAt.value = expiresAtMs
-    localStorage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAtMs))
-    scheduleTokenRefreshAt(expiresAtMs)
+    const expiresAtMs = Date.now() + expiresInSeconds * 1000;
+    tokenExpiresAt.value = expiresAtMs;
+    localStorage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAtMs));
+    scheduleTokenRefreshAt(expiresAtMs);
   }
 
-  /**
-   * Perform the actual token refresh
-   */
-  async function performTokenRefresh(): Promise<void> {
-    if (!refreshTokenValue.value) {
-      return
-    }
-
-    try {
-      const { refreshToken } = await loadAuthApiModule()
-      const response = await refreshToken()
-
-      // Update state
-      token.value = response.access_token
-      refreshTokenValue.value = response.refresh_token
-
-      // Schedule next refresh (this also updates tokenExpiresAt and localStorage)
-      scheduleTokenRefresh(response.expires_in)
-    } catch (error) {
-      console.error('Token refresh failed:', error)
-      // Don't clear auth here - the interceptor will handle 401 errors
-    }
-  }
-
-  /**
-   * Stop token refresh timeout
-   */
-  function stopTokenRefresh(): void {
-    if (tokenRefreshTimeoutId) {
-      clearTimeout(tokenRefreshTimeoutId)
-      tokenRefreshTimeoutId = null
-    }
-  }
-
-  /**
-   * User login
-   * @param credentials - Login credentials (email and password)
-   * @returns Promise resolving to the login response (may require 2FA)
-   * @throws Error if login fails
-   */
-  async function login(credentials: LoginRequest): Promise<LoginResponse> {
-    try {
-      const { login } = await loadAuthApiModule()
-      const response = await login(credentials)
-
-      // If 2FA is required, return the response without setting auth state
-      if (requiresTotpLogin(response)) {
-        return response
-      }
-
-      // Set auth state from the response
-      setAuthFromResponse(response)
-
-      return response
-    } catch (error) {
-      // Clear any partial state on error
-      clearAuth()
-      throw error
-    }
-  }
-
-  /**
-   * Complete login with 2FA code
-   * @param tempToken - Temporary token from initial login
-   * @param totpCode - 6-digit TOTP code
-   * @returns Promise resolving to the authenticated user
-   * @throws Error if 2FA verification fails
-   */
-  async function login2FA(tempToken: string, totpCode: string): Promise<User> {
-    try {
-      const { login2FA } = await loadAuthApiModule()
-      const response = await login2FA({ temp_token: tempToken, totp_code: totpCode })
-      setAuthFromResponse(response)
-      return user.value!
-    } catch (error) {
-      clearAuth()
-      throw error
-    }
-  }
-
-  /**
-   * Set auth state from an AuthResponse
-   * Internal helper function
-   */
   function setAuthFromResponse(response: AuthResponse): void {
-    // Store token and user
-    token.value = response.access_token
+    token.value = response.access_token;
+    localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
 
-    // Store refresh token if present
     if (response.refresh_token) {
-      refreshTokenValue.value = response.refresh_token
-      localStorage.setItem(REFRESH_TOKEN_KEY, response.refresh_token)
+      refreshTokenValue.value = response.refresh_token;
+      localStorage.setItem(REFRESH_TOKEN_KEY, response.refresh_token);
     }
 
-    // Extract run_mode if present
     if (response.user.run_mode) {
-      runMode.value = response.user.run_mode
+      runMode.value = response.user.run_mode;
     }
-    const { run_mode: _run_mode, ...userData } = response.user
-    user.value = userData
+    const { run_mode: _runMode, ...userData } = response.user;
+    user.value = userData;
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData));
 
-    // Persist to localStorage
-    localStorage.setItem(AUTH_TOKEN_KEY, response.access_token)
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+    startAutoRefresh();
 
-    // Start auto-refresh interval for user data
-    startAutoRefresh()
-
-    // Start proactive token refresh if we have refresh token and expiry info
-    // scheduleTokenRefresh will also store the expiry timestamp
     if (response.refresh_token && response.expires_in) {
-      scheduleTokenRefresh(response.expires_in)
+      scheduleTokenRefresh(response.expires_in);
     }
   }
 
-  /**
-   * User registration
-   * @param userData - Registration data (username, email, password)
-   * @returns Promise resolving to the newly registered and authenticated user
-   * @throws Error if registration fails
-   */
-  async function register(userData: RegisterRequest): Promise<User> {
-    try {
-      const { register } = await loadAuthApiModule()
-      const response = await register(userData)
-
-      // Use the common helper to set auth state
-      setAuthFromResponse(response)
-
-      return user.value!
-    } catch (error) {
-      // Clear any partial state on error
-      clearAuth()
-      throw error
-    }
-  }
-
-  /**
-   * 直接设置 token（用于 OAuth/SSO 回调），并加载当前用户信息。
-   * 会自动读取 localStorage 中已设置的 refresh_token 和 token_expires_in
-   * @param newToken - 后端签发的 JWT access token
-   */
-  async function setToken(newToken: string): Promise<User> {
-    // Clear any previous state first (avoid mixing sessions)
-    // Note: Don't clear localStorage here as OAuth callback may have set refresh_token
-    stopAutoRefresh()
-    stopTokenRefresh()
-    token.value = null
-    user.value = null
-
-    token.value = newToken
-    localStorage.setItem(AUTH_TOKEN_KEY, newToken)
-
-    // Read refresh token and expires_at from localStorage if set by OAuth callback
-    const savedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-    const savedExpiresAt = localStorage.getItem(TOKEN_EXPIRES_AT_KEY)
-
-    if (savedRefreshToken) {
-      refreshTokenValue.value = savedRefreshToken
-    }
-    if (savedExpiresAt) {
-      tokenExpiresAt.value = parseInt(savedExpiresAt, 10)
-    }
-
-    try {
-      const userData = await refreshUser()
-      startAutoRefresh()
-
-      // Start proactive token refresh if we have refresh token and expiry info
-      // Note: use !== null to handle case when tokenExpiresAt.value is 0 (expired)
-      if (savedRefreshToken && tokenExpiresAt.value !== null) {
-        scheduleTokenRefreshAt(tokenExpiresAt.value)
-      }
-
-      return userData
-    } catch (error) {
-      clearAuth()
-      throw error
-    }
-  }
-
-  /**
-   * User logout
-   * Clears all authentication state and persisted data
-   */
-  async function logout(): Promise<void> {
-    // Call API logout (revokes refresh token on server)
-    const { logout } = await loadAuthApiModule()
-    await logout()
-
-    // Clear state
-    clearAuth()
-  }
-
-  /**
-   * Refresh current user data
-   * Fetches latest user info from the server
-   * @returns Promise resolving to the updated user
-   * @throws Error if not authenticated or request fails
-   */
-  async function refreshUser(): Promise<User> {
+  async function refreshUserInternal(): Promise<User> {
     if (!token.value) {
-      throw new Error('Not authenticated')
+      throw new Error("Not authenticated");
     }
 
     try {
-      const { getCurrentUser } = await loadAuthApiModule()
-      const response = await getCurrentUser()
+      const { getCurrentUser } = await loadAuthApiModule();
+      const response = await getCurrentUser();
       if (response.data.run_mode) {
-        runMode.value = response.data.run_mode
+        runMode.value = response.data.run_mode;
       }
-      const { run_mode: _run_mode, ...userData } = response.data
-      user.value = userData
-
-      // Update localStorage
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
-
-      return userData
+      const { run_mode: _runMode, ...userData } = response.data;
+      user.value = userData;
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData));
+      return userData;
     } catch (error) {
-      // If refresh fails with 401, clear auth state
       if ((error as { status?: number }).status === 401) {
-        clearAuth()
+        clearAuth();
       }
-      throw error
+      throw error;
     }
   }
 
-  /**
-   * Clear all authentication state
-   * Internal helper function
-   */
-  function clearAuth(): void {
-    // Stop auto-refresh
-    stopAutoRefresh()
-    // Stop token refresh
-    stopTokenRefresh()
+  function checkAuth(): void {
+    const savedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    const savedUser = localStorage.getItem(AUTH_USER_KEY);
+    const savedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    const savedExpiresAt = localStorage.getItem(TOKEN_EXPIRES_AT_KEY);
 
-    token.value = null
-    refreshTokenValue.value = null
-    tokenExpiresAt.value = null
-    user.value = null
-    localStorage.removeItem(AUTH_TOKEN_KEY)
-    localStorage.removeItem(AUTH_USER_KEY)
-    localStorage.removeItem(REFRESH_TOKEN_KEY)
-    localStorage.removeItem(TOKEN_EXPIRES_AT_KEY)
+    if (!savedToken || !savedUser) {
+      return;
+    }
+
+    try {
+      token.value = savedToken;
+      user.value = JSON.parse(savedUser);
+      refreshTokenValue.value = savedRefreshToken;
+      tokenExpiresAt.value = savedExpiresAt
+        ? parseInt(savedExpiresAt, 10)
+        : null;
+
+      refreshUser().catch((error) => {
+        console.error("Failed to refresh user on init:", error);
+      });
+
+      startAutoRefresh();
+
+      if (savedRefreshToken && tokenExpiresAt.value !== null) {
+        scheduleTokenRefreshAt(tokenExpiresAt.value);
+      }
+    } catch (error) {
+      console.error("Failed to parse saved user data:", error);
+      clearAuth();
+    }
   }
 
-  // ==================== Return Store API ====================
+  async function performTokenRefresh(): Promise<void> {
+    if (tokenRefreshPromise) {
+      return tokenRefreshPromise;
+    }
+
+    tokenRefreshPromise = runSerializedAuthOperation(async () => {
+      if (!refreshTokenValue.value) {
+        return;
+      }
+
+      try {
+        const { refreshToken } = await loadAuthApiModule();
+        const response = await refreshToken();
+
+        applyTokenRefresh({
+          access_token: response.access_token,
+          refresh_token: response.refresh_token,
+          expires_at: Date.now() + response.expires_in * 1000,
+        });
+      } catch (error) {
+        console.error("Token refresh failed:", error);
+      }
+    });
+
+    try {
+      await tokenRefreshPromise;
+    } finally {
+      tokenRefreshPromise = null;
+    }
+  }
+
+  async function login(credentials: LoginRequest): Promise<LoginResponse> {
+    return runSerializedAuthOperation(async () => {
+      try {
+        const { login } = await loadAuthApiModule();
+        const response = await login(credentials);
+
+        if (requiresTotpLogin(response)) {
+          return response;
+        }
+
+        setAuthFromResponse(response);
+        return response;
+      } catch (error) {
+        clearAuth();
+        throw error;
+      }
+    });
+  }
+
+  async function login2FA(tempToken: string, totpCode: string): Promise<User> {
+    return runSerializedAuthOperation(async () => {
+      try {
+        const { login2FA } = await loadAuthApiModule();
+        const response = await login2FA({
+          temp_token: tempToken,
+          totp_code: totpCode,
+        });
+        setAuthFromResponse(response);
+        return user.value!;
+      } catch (error) {
+        clearAuth();
+        throw error;
+      }
+    });
+  }
+
+  async function register(userData: RegisterRequest): Promise<User> {
+    return runSerializedAuthOperation(async () => {
+      try {
+        const { register } = await loadAuthApiModule();
+        const response = await register(userData);
+        setAuthFromResponse(response);
+        return user.value!;
+      } catch (error) {
+        clearAuth();
+        throw error;
+      }
+    });
+  }
+
+  async function setToken(newToken: string): Promise<User> {
+    return runSerializedAuthOperation(async () => {
+      stopAutoRefresh();
+      stopTokenRefresh();
+      token.value = null;
+      user.value = null;
+
+      token.value = newToken;
+      localStorage.setItem(AUTH_TOKEN_KEY, newToken);
+
+      const savedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      const savedExpiresAt = localStorage.getItem(TOKEN_EXPIRES_AT_KEY);
+
+      refreshTokenValue.value = savedRefreshToken;
+      tokenExpiresAt.value = savedExpiresAt
+        ? parseInt(savedExpiresAt, 10)
+        : null;
+
+      try {
+        const userData = await refreshUserInternal();
+        startAutoRefresh();
+
+        if (savedRefreshToken && tokenExpiresAt.value !== null) {
+          scheduleTokenRefreshAt(tokenExpiresAt.value);
+        }
+
+        return userData;
+      } catch (error) {
+        clearAuth();
+        throw error;
+      }
+    });
+  }
+
+  async function logout(): Promise<void> {
+    await runSerializedAuthOperation(async () => {
+      const { logout } = await loadAuthApiModule();
+      await logout();
+      clearAuth();
+    });
+  }
+
+  async function refreshUser(): Promise<User> {
+    return runSerializedAuthOperation(() => refreshUserInternal());
+  }
 
   return {
-    // State
     user,
     token,
     runMode: readonly(runMode),
-
-    // Computed
     isAuthenticated,
     isAdmin,
     isSimpleMode,
-
-    // Actions
     login,
     login2FA,
     register,
     setToken,
     logout,
     checkAuth,
-    refreshUser
-  }
-})
+    refreshUser,
+  };
+});

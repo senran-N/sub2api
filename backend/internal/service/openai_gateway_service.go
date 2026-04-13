@@ -158,6 +158,8 @@ type accountWriteThrottle struct {
 	lastByID    map[int64]time.Time
 }
 
+const accountWriteThrottleMaxEntries = 4096
+
 func newAccountWriteThrottle(minInterval time.Duration) *accountWriteThrottle {
 	return &accountWriteThrottle{
 		minInterval: minInterval,
@@ -178,7 +180,7 @@ func (t *accountWriteThrottle) Allow(id int64, now time.Time) bool {
 	}
 	t.lastByID[id] = now
 
-	if len(t.lastByID) > 4096 {
+	if len(t.lastByID) > accountWriteThrottleMaxEntries {
 		cutoff := now.Add(-4 * t.minInterval)
 		for accountID, writtenAt := range t.lastByID {
 			if writtenAt.Before(cutoff) {

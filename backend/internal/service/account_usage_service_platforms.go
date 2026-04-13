@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const antigravityQuotaFetchTimeout = 30 * time.Second
+
 func (s *AccountUsageService) getGeminiUsage(ctx context.Context, account *Account) (*UsageInfo, error) {
 	now := time.Now()
 	usage := &UsageInfo{UpdatedAt: &now}
@@ -112,7 +114,7 @@ func (s *AccountUsageService) getAntigravityUsage(ctx context.Context, account *
 			}
 		}
 
-		fetchCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		fetchCtx, cancel := context.WithTimeout(context.Background(), antigravityQuotaFetchTimeout)
 		defer cancel()
 
 		proxyURL := s.antigravityQuotaFetcher.GetProxyURL(fetchCtx, account)

@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const opsAdvisoryLockReleaseTimeout = 2 * time.Second
+
 func hashAdvisoryLockID(key string) int64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(key))
@@ -37,7 +39,7 @@ func tryAcquireDBAdvisoryLock(ctx context.Context, db *sql.DB, lockID int64) (fu
 	}
 
 	release := func() {
-		unlockCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		unlockCtx, cancel := newDetachedTimeoutContext(ctx, opsAdvisoryLockReleaseTimeout)
 		defer cancel()
 		_, _ = conn.ExecContext(unlockCtx, "SELECT pg_advisory_unlock($1)", lockID)
 		_ = conn.Close()

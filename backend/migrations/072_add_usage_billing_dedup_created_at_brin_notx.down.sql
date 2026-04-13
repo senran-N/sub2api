@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS idx_usage_billing_dedup_created_at_brin;

@@ -320,8 +320,8 @@ func (s *OpenAIGatewayService) updateCodexUsageSnapshot(ctx context.Context, acc
 		return
 	}
 
-	go func() {
-		updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	go func(parent context.Context) {
+		updateCtx, cancel := newDetachedTimeoutContext(parent, 5*time.Second)
 		defer cancel()
 		if shouldPersistUpdates {
 			_ = s.accountRepo.UpdateExtra(updateCtx, accountID, updates)
@@ -329,7 +329,7 @@ func (s *OpenAIGatewayService) updateCodexUsageSnapshot(ctx context.Context, acc
 		if resetAt != nil {
 			_ = s.accountRepo.SetRateLimited(updateCtx, accountID, *resetAt)
 		}
-	}()
+	}(ctx)
 }
 
 func (s *OpenAIGatewayService) UpdateCodexUsageSnapshotFromHeaders(ctx context.Context, accountID int64, headers http.Header) {

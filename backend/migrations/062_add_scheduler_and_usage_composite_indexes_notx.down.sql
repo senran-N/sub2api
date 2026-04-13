@@ -1,0 +1,4 @@
+DROP INDEX CONCURRENTLY IF EXISTS idx_usage_logs_group_created_at_not_null;
+DROP INDEX CONCURRENTLY IF EXISTS idx_user_subscriptions_user_status_expires_active;
+DROP INDEX CONCURRENTLY IF EXISTS idx_accounts_active_schedulable;
+DROP INDEX CONCURRENTLY IF EXISTS idx_accounts_schedulable_hot;

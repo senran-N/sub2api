@@ -13,6 +13,7 @@ import (
 const (
 	TaskTypeVerifyCode    = "verify_code"
 	TaskTypePasswordReset = "password_reset"
+	emailQueueTaskTimeout = 30 * time.Second
 )
 
 // EmailTask 邮件发送任务
@@ -77,7 +78,7 @@ func (s *EmailQueueService) worker(id int) {
 
 // processTask 处理任务
 func (s *EmailQueueService) processTask(workerID int, task EmailTask) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), emailQueueTaskTimeout)
 	defer cancel()
 
 	switch task.TaskType {

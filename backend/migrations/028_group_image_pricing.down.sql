@@ -1,0 +1,3 @@
+ALTER TABLE groups DROP COLUMN IF EXISTS image_price_4k;
+ALTER TABLE groups DROP COLUMN IF EXISTS image_price_2k;
+ALTER TABLE groups DROP COLUMN IF EXISTS image_price_1k;

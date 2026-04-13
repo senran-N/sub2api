@@ -25,7 +25,9 @@ interface TableLoaderOptions<T, P> {
  * 通用表格数据加载 Composable
  * 统一处理分页、筛选、搜索防抖和请求取消
  */
-export function useTableLoader<T, P extends Record<string, any>>(options: TableLoaderOptions<T, P>) {
+export function useTableLoader<T, P extends Record<string, unknown>>(
+  options: TableLoaderOptions<T, P>
+) {
   const { fetchFn, initialParams, pageSize, debounceMs = 300 } = options
   const shouldClampPageChange = options.clampPageChange ?? true
 

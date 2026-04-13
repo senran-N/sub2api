@@ -46,10 +46,16 @@ func TestValidatedTransport_CacheHostValidation(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "https://api.openai.com/v1/responses", nil)
 	require.NoError(t, err)
 
-	_, err = transport.RoundTrip(req)
+	resp, err := transport.RoundTrip(req)
 	require.NoError(t, err)
-	_, err = transport.RoundTrip(req)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	resp, err = transport.RoundTrip(req)
 	require.NoError(t, err)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 
 	require.Equal(t, int32(1), atomic.LoadInt32(&validateCalls))
 	require.Equal(t, int32(2), atomic.LoadInt32(&baseCalls))
@@ -80,12 +86,18 @@ func TestValidatedTransport_ExpiredCacheTriggersRevalidation(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "https://api.openai.com/v1/responses", nil)
 	require.NoError(t, err)
 
-	_, err = transport.RoundTrip(req)
+	resp, err := transport.RoundTrip(req)
 	require.NoError(t, err)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 
 	now = now.Add(validatedHostTTL + time.Second)
-	_, err = transport.RoundTrip(req)
+	resp, err = transport.RoundTrip(req)
 	require.NoError(t, err)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 
 	require.Equal(t, int32(2), atomic.LoadInt32(&validateCalls))
 }
@@ -109,7 +121,10 @@ func TestValidatedTransport_ValidationErrorStopsRoundTrip(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "https://api.openai.com/v1/responses", nil)
 	require.NoError(t, err)
 
-	_, err = transport.RoundTrip(req)
+	resp, err := transport.RoundTrip(req)
 	require.ErrorIs(t, err, expectedErr)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 	require.Equal(t, int32(0), atomic.LoadInt32(&baseCalls))
 }

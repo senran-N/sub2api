@@ -45,6 +45,8 @@ const (
 
 	opsAggHourlyLeaderLockTTL = 15 * time.Minute
 	opsAggDailyLeaderLockTTL  = 10 * time.Minute
+	opsAggHeartbeatTimeout    = 2 * time.Second
+	opsAggLockReleaseTimeout  = 2 * time.Second
 )
 
 // OpsAggregationService periodically backfills ops_metrics_hourly / ops_metrics_daily
@@ -221,7 +223,7 @@ func (s *OpsAggregationService) aggregateHourly() {
 	if aggErr != nil {
 		msg := truncateString(aggErr.Error(), 2048)
 		errAt := finishedAt
-		hbCtx, hbCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		hbCtx, hbCancel := context.WithTimeout(context.Background(), opsAggHeartbeatTimeout)
 		defer hbCancel()
 		_ = s.opsRepo.UpsertJobHeartbeat(hbCtx, &OpsUpsertJobHeartbeatInput{
 			JobName:        opsAggHourlyJobName,
@@ -234,7 +236,7 @@ func (s *OpsAggregationService) aggregateHourly() {
 	}
 
 	successAt := finishedAt
-	hbCtx, hbCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	hbCtx, hbCancel := context.WithTimeout(context.Background(), opsAggHeartbeatTimeout)
 	defer hbCancel()
 	result := truncateString(fmt.Sprintf("window=%s..%s", start.Format(time.RFC3339), end.Format(time.RFC3339)), 2048)
 	_ = s.opsRepo.UpsertJobHeartbeat(hbCtx, &OpsUpsertJobHeartbeatInput{
@@ -319,7 +321,7 @@ func (s *OpsAggregationService) aggregateDaily() {
 	if aggErr != nil {
 		msg := truncateString(aggErr.Error(), 2048)
 		errAt := finishedAt
-		hbCtx, hbCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		hbCtx, hbCancel := context.WithTimeout(context.Background(), opsAggHeartbeatTimeout)
 		defer hbCancel()
 		_ = s.opsRepo.UpsertJobHeartbeat(hbCtx, &OpsUpsertJobHeartbeatInput{
 			JobName:        opsAggDailyJobName,
@@ -332,7 +334,7 @@ func (s *OpsAggregationService) aggregateDaily() {
 	}
 
 	successAt := finishedAt
-	hbCtx, hbCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	hbCtx, hbCancel := context.WithTimeout(context.Background(), opsAggHeartbeatTimeout)
 	defer hbCancel()
 	result := truncateString(fmt.Sprintf("window=%s..%s", start.Format(time.RFC3339), end.Format(time.RFC3339)), 2048)
 	_ = s.opsRepo.UpsertJobHeartbeat(hbCtx, &OpsUpsertJobHeartbeatInput{
@@ -398,7 +400,7 @@ func (s *OpsAggregationService) tryAcquireLeaderLock(ctx context.Context, key st
 				return nil, false
 			}
 			release := func() {
-				runRedisLeaderLockRelease(opsAggReleaseScript, s.redisClient, key, s.instanceID, 2*time.Second)
+				runRedisLeaderLockRelease(opsAggReleaseScript, s.redisClient, key, s.instanceID, opsAggLockReleaseTimeout)
 			}
 			return release, true
 		}

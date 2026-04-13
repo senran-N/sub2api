@@ -288,7 +288,7 @@ func (s *OpsService) retryWithErrorLog(ctx context.Context, requestedByUserID in
 		result.ErrorMessage = execRes.errorMessage
 	}
 
-	updateCtx, updateCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	updateCtx, updateCancel := newDetachedTimeoutContext(ctx, 3*time.Second)
 	defer updateCancel()
 
 	var updateErrMsg *string

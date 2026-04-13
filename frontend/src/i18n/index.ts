@@ -1,83 +1,99 @@
-import { createI18n } from 'vue-i18n'
+import { createI18n } from "vue-i18n";
+import enMessages from "./locales/en";
 
-type LocaleCode = 'en' | 'zh'
+type LocaleCode = "en" | "zh";
 
-type LocaleMessages = Record<string, any>
-
-const LOCALE_KEY = 'sub2api_locale'
-const DEFAULT_LOCALE: LocaleCode = 'en'
-
-const localeLoaders: Record<LocaleCode, () => Promise<{ default: LocaleMessages }>> = {
-  en: () => import('./locales/en'),
-  zh: () => import('./locales/zh')
+interface LocaleMessages {
+  [key: string]: string | LocaleMessages
 }
 
+const LOCALE_KEY = "sub2api_locale";
+const DEFAULT_LOCALE: LocaleCode = "en";
+const initialMessages = {
+  [DEFAULT_LOCALE]: enMessages,
+} as Record<string, LocaleMessages>;
+
+const localeLoaders: Record<
+  LocaleCode,
+  () => Promise<{ default: LocaleMessages }>
+> = {
+  en: () => import("./locales/en"),
+  zh: () => import("./locales/zh"),
+};
+
 function isLocaleCode(value: string): value is LocaleCode {
-  return value === 'en' || value === 'zh'
+  return value === "en" || value === "zh";
 }
 
 function getDefaultLocale(): LocaleCode {
-  const saved = localStorage.getItem(LOCALE_KEY)
+  const saved = localStorage.getItem(LOCALE_KEY);
   if (saved && isLocaleCode(saved)) {
-    return saved
+    return saved;
   }
 
-  const browserLang = navigator.language.toLowerCase()
-  if (browserLang.startsWith('zh')) {
-    return 'zh'
+  const browserLang = navigator.language.toLowerCase();
+  if (browserLang.startsWith("zh")) {
+    return "zh";
   }
 
-  return DEFAULT_LOCALE
+  return DEFAULT_LOCALE;
 }
 
 export const i18n = createI18n({
   legacy: false,
   locale: getDefaultLocale(),
   fallbackLocale: DEFAULT_LOCALE,
-  messages: {},
+  messages: initialMessages,
   // 禁用 HTML 消息警告 - 引导步骤使用富文本内容（driver.js 支持 HTML）
   // 这些内容是内部定义的，不存在 XSS 风险
-  warnHtmlMessage: false
-})
+  warnHtmlMessage: false,
+});
 
-const loadedLocales = new Set<LocaleCode>()
+const loadedLocales = new Set<LocaleCode>([DEFAULT_LOCALE]);
 
 export async function loadLocaleMessages(locale: LocaleCode): Promise<void> {
   if (loadedLocales.has(locale)) {
-    return
+    return;
   }
 
-  const loader = localeLoaders[locale]
-  const module = await loader()
-  i18n.global.setLocaleMessage(locale, module.default)
-  loadedLocales.add(locale)
+  const loader = localeLoaders[locale];
+  const module = await loader();
+  i18n.global.setLocaleMessage(locale, module.default as never);
+  loadedLocales.add(locale);
 }
 
 export async function initI18n(): Promise<void> {
-  const current = getLocale()
-  await loadLocaleMessages(current)
-  document.documentElement.setAttribute('lang', current)
+  const current = getLocale();
+  await loadLocaleMessages(current);
+  document.documentElement.setAttribute("lang", current);
 }
 
 export async function setLocale(locale: string): Promise<void> {
   if (!isLocaleCode(locale)) {
-    return
+    return;
   }
 
-  await loadLocaleMessages(locale)
-  i18n.global.locale.value = locale
-  localStorage.setItem(LOCALE_KEY, locale)
-  document.documentElement.setAttribute('lang', locale)
+  await loadLocaleMessages(locale);
+  i18n.global.locale.value = locale as never;
+  localStorage.setItem(LOCALE_KEY, locale);
+  document.documentElement.setAttribute("lang", locale);
 }
 
 export function getLocale(): LocaleCode {
-  const current = i18n.global.locale.value
-  return isLocaleCode(current) ? current : DEFAULT_LOCALE
+  const current = i18n.global.locale.value as string;
+  return isLocaleCode(current) ? current : DEFAULT_LOCALE;
+}
+
+export function translateMessage(
+  key: string,
+  params?: Record<string, unknown>,
+): string {
+  return params ? String(i18n.global.t(key, params)) : String(i18n.global.t(key));
 }
 
 export const availableLocales = [
-  { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'zh', name: '中文', flag: '🇨🇳' }
-] as const
+  { code: "en", name: "English", flag: "🇺🇸" },
+  { code: "zh", name: "中文", flag: "🇨🇳" },
+] as const;
 
-export default i18n
+export default i18n;

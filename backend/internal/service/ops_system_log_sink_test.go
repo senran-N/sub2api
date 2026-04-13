@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
@@ -122,6 +123,28 @@ func TestOpsSystemLogSink_Health(t *testing.T) {
 	}
 	if health.LastError != "db timeout" {
 		t.Fatalf("last error = %q, want db timeout", health.LastError)
+	}
+}
+
+func TestOpsSystemLogSink_UsesConfigOverrides(t *testing.T) {
+	sink := NewOpsSystemLogSink(nil, &config.Config{
+		Ops: config.OpsConfig{
+			SystemLogSink: config.OpsSystemLogSinkConfig{
+				QueueSize:            16,
+				BatchSize:            8,
+				FlushIntervalSeconds: 3,
+			},
+		},
+	})
+
+	if got := cap(sink.queue); got != 16 {
+		t.Fatalf("queue capacity = %d, want 16", got)
+	}
+	if sink.batchSize != 8 {
+		t.Fatalf("batchSize = %d, want 8", sink.batchSize)
+	}
+	if sink.flushInterval != 3*time.Second {
+		t.Fatalf("flushInterval = %v, want 3s", sink.flushInterval)
 	}
 }
 

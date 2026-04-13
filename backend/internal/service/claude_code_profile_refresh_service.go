@@ -20,6 +20,8 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
+const attributionSearchWindowBytes = 4096
+
 type ClaudeCodeProfileSyncService struct {
 	cfg      *config.Config
 	client   *http.Client
@@ -442,7 +444,7 @@ func extractAttributionParams(source string) (salt string, indices []int, ok boo
 		return "", nil, false
 	}
 	// Search in a window before the anchor (up to 4KB).
-	windowStart := anchorLoc[0] - 4096
+	windowStart := anchorLoc[0] - attributionSearchWindowBytes
 	if windowStart < 0 {
 		windowStart = 0
 	}

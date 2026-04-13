@@ -10,6 +10,31 @@ permissions:
   contents: read
 
 jobs:
+  trivy-repository:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run Trivy filesystem vulnerability scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Run Trivy config scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: 'config'
+          format: 'table'
+          hide-progress: true
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          skip-setup-trivy: true
+
   backend-security:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -23,7 +48,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.26.1'
+          go version | grep -q 'go1.26.2'
       - name: Run govulncheck
         working-directory: backend
         run: |
@@ -37,7 +62,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.9
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:

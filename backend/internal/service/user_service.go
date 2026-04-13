@@ -179,13 +179,13 @@ func (s *UserService) UpdateBalance(ctx context.Context, userID int64, amount fl
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
 	if s.billingCache != nil {
-		go func() {
-			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		go func(parent context.Context) {
+			cacheCtx, cancel := newDetachedTimeoutContext(parent, 5*time.Second)
 			defer cancel()
 			if err := s.billingCache.InvalidateUserBalance(cacheCtx, userID); err != nil {
 				log.Printf("invalidate user balance cache failed: user_id=%d err=%v", userID, err)
 			}
-		}()
+		}(ctx)
 	}
 	return nil
 }

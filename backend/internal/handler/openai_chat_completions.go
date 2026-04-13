@@ -230,10 +230,8 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 							zap.Int("retry_limit", retryLimit),
 							zap.Int("retry_count", sameAccountRetryCount[account.ID]),
 						)
-						select {
-						case <-c.Request.Context().Done():
+						if !sleepWithContext(c.Request.Context(), sameAccountRetryDelay) {
 							return
-						case <-time.After(sameAccountRetryDelay):
 						}
 						continue
 					}

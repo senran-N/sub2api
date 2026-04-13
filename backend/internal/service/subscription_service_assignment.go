@@ -77,7 +77,7 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 			return nil, false, fmt.Errorf("commit transaction: %w", err)
 		}
 
-		s.invalidateSubscriptionCaches(input.UserID, input.GroupID)
+		s.invalidateSubscriptionCaches(ctx, input.UserID, input.GroupID)
 
 		sub, getErr := s.userSubRepo.GetByID(ctx, existingSub.ID)
 		return sub, true, getErr
@@ -88,7 +88,7 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 		return nil, false, err
 	}
 
-	s.invalidateSubscriptionCaches(input.UserID, input.GroupID)
+	s.invalidateSubscriptionCaches(ctx, input.UserID, input.GroupID)
 	return sub, false, nil
 }
 
@@ -201,7 +201,7 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 		return nil, false, err
 	}
 
-	s.invalidateSubscriptionCaches(input.UserID, input.GroupID)
+	s.invalidateSubscriptionCaches(ctx, input.UserID, input.GroupID)
 	return sub, false, nil
 }
 
@@ -247,7 +247,7 @@ func (s *SubscriptionService) RevokeSubscription(ctx context.Context, subscripti
 		return err
 	}
 
-	s.invalidateSubscriptionCaches(sub.UserID, sub.GroupID)
+	s.invalidateSubscriptionCaches(ctx, sub.UserID, sub.GroupID)
 	return nil
 }
 
@@ -290,6 +290,6 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 		}
 	}
 
-	s.invalidateSubscriptionCaches(sub.UserID, sub.GroupID)
+	s.invalidateSubscriptionCaches(ctx, sub.UserID, sub.GroupID)
 	return s.userSubRepo.GetByID(ctx, subscriptionID)
 }

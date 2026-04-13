@@ -5,7 +5,7 @@ import (
 	"log/slog"
 )
 
-func runDetachedTask(taskName string, fn func(context.Context), attrs ...any) <-chan struct{} {
+func runDetachedTask(taskName string, fn func(context.Context) error, attrs ...any) <-chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
@@ -18,7 +18,11 @@ func runDetachedTask(taskName string, fn func(context.Context), attrs ...any) <-
 			}
 		}()
 
-		fn(context.Background())
+		if err := fn(context.Background()); err != nil {
+			logArgs := []any{"task", taskName, "error", err}
+			logArgs = append(logArgs, attrs...)
+			slog.Error("service_async_task_failed", logArgs...)
+		}
 	}()
 
 	return done

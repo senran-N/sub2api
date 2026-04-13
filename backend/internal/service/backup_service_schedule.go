@@ -13,6 +13,14 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
+const (
+	backupScheduleLoadTimeout       = 10 * time.Second
+	backupRecoverRecordsTimeout     = 10 * time.Second
+	backupShutdownWaitTimeout       = 5 * time.Minute
+	backupShutdownCleanupTimeout    = 10 * time.Second
+	backupScheduledOperationTimeout = 30 * time.Minute
+)
+
 // Start 启动定时备份调度器并清理孤立记录
 func (s *BackupService) Start() {
 	s.cronSched = cron.New()
@@ -20,7 +28,7 @@ func (s *BackupService) Start() {
 
 	s.recoverStaleRecords()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), backupScheduleLoadTimeout)
 	defer cancel()
 	schedule, err := s.GetSchedule(ctx)
 	if err != nil {
@@ -36,7 +44,7 @@ func (s *BackupService) Start() {
 
 // recoverStaleRecords 启动时将孤立的 running 记录标记为 failed
 func (s *BackupService) recoverStaleRecords() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), backupRecoverRecordsTimeout)
 	defer cancel()
 
 	records, err := s.loadRecords(ctx)
@@ -79,7 +87,7 @@ func (s *BackupService) Stop() {
 	select {
 	case <-done:
 		logger.LegacyPrintf("service.backup", "[Backup] all active operations finished")
-	case <-time.After(5 * time.Minute):
+	case <-time.After(backupShutdownWaitTimeout):
 		logger.LegacyPrintf("service.backup", "[Backup] shutdown timeout after 5min, cancelling active operations")
 		if s.bgCancel != nil {
 			s.bgCancel()
@@ -87,7 +95,7 @@ func (s *BackupService) Stop() {
 		select {
 		case <-done:
 			logger.LegacyPrintf("service.backup", "[Backup] active operations cancelled and cleaned up")
-		case <-time.After(10 * time.Second):
+		case <-time.After(backupShutdownCleanupTimeout):
 			logger.LegacyPrintf("service.backup", "[Backup] goroutine cleanup timed out")
 		}
 	}
@@ -172,7 +180,7 @@ func (s *BackupService) runScheduledBackup() {
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	ctx, cancel := context.WithTimeout(s.bgCtx, 30*time.Minute)
+	ctx, cancel := context.WithTimeout(s.bgCtx, backupScheduledOperationTimeout)
 	defer cancel()
 
 	schedule, _ := s.GetSchedule(ctx)

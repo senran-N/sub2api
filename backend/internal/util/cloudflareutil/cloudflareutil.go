@@ -9,9 +9,11 @@ import (
 )
 
 var (
-	cfRayPattern  = regexp.MustCompile(`(?i)cf-ray[:\s=]+([a-z0-9-]+)`)
-	cRayPattern   = regexp.MustCompile(`(?i)cRay:\s*'([a-z0-9-]+)'`)
-	htmlChallenge = []string{
+	cfRayPattern              = regexp.MustCompile(`(?i)cf-ray[:\s=]+([a-z0-9-]+)`)
+	cRayPattern               = regexp.MustCompile(`(?i)cRay:\s*'([a-z0-9-]+)'`)
+	challengeBodyPreviewBytes = 4096
+	rayIDBodyPreviewBytes     = 8192
+	htmlChallenge             = []string{
 		"window._cf_chl_opt",
 		"just a moment",
 		"enable javascript and cookies to continue",
@@ -30,7 +32,7 @@ func IsCloudflareChallengeResponse(statusCode int, headers http.Header, body []b
 		return true
 	}
 
-	preview := strings.ToLower(TruncateBody(body, 4096))
+	preview := strings.ToLower(TruncateBody(body, challengeBodyPreviewBytes))
 	for _, marker := range htmlChallenge {
 		if strings.Contains(preview, marker) {
 			return true
@@ -63,7 +65,7 @@ func ExtractCloudflareRayID(headers http.Header, body []byte) string {
 		}
 	}
 
-	preview := TruncateBody(body, 8192)
+	preview := TruncateBody(body, rayIDBodyPreviewBytes)
 	if matches := cfRayPattern.FindStringSubmatch(preview); len(matches) >= 2 {
 		return strings.TrimSpace(matches[1])
 	}

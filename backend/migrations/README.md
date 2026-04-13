@@ -38,10 +38,17 @@ This project uses a custom migration runner (`internal/repository/migrations_run
 
 - Regular migrations (`*.sql`): executed in a transaction.
 - Non-transactional migrations (`*_notx.sql`): split by statement and executed without transaction (for `CONCURRENTLY`).
+- Rollback companion migrations (`*.down.sql`): executed only by `migrate-down`, never by startup auto-apply.
+- Irreversible rollback companions: add `-- sub2api:irreversible` at the top when a migration cannot be safely auto-rolled-back. `migrate status` will show `down=irreversible`, and `migrate down` will fail during preflight.
 
 ```sql
--- Forward-only migration (recommended)
+-- Forward migration
 ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS example_column VARCHAR(100);
+```
+
+```sql
+-- Matching rollback companion
+ALTER TABLE usage_logs DROP COLUMN IF EXISTS example_column;
 ```
 
 > ⚠️ Do **not** place executable "Down" SQL in the same file. The runner does not parse goose Up/Down sections and will execute all SQL statements in the file.
@@ -66,22 +73,29 @@ Why?
    touch migrations/018_your_change.sql
    ```
 
-2. **Write forward-only migration SQL**
-   - Put only the intended schema change in the file
-   - If rollback is needed, create a new migration file to revert
+2. **Write forward + down companion SQL**
+   - Put only the intended schema change in `NNN_name.sql`
+   - Add the matching rollback in `NNN_name.down.sql`
+   - Use `IF NOT EXISTS` / `IF EXISTS` so both directions are repeatable
 
 3. **Test locally**
    ```bash
    # Apply migration
    make migrate-up
 
+   # Validate migration metadata and rollback companions
+   make migrate-validate
+
+   # Preview rollback plan
+   make migrate-plan-down STEPS=1
+
    # Test rollback
-   make migrate-down
+   make migrate-down STEPS=1
    ```
 
 4. **Commit and deploy**
    ```bash
-   git add migrations/018_your_change.sql
+   git add migrations/018_your_change.sql migrations/018_your_change.down.sql
    git commit -m "feat(db): add your change"
    ```
 
@@ -125,8 +139,9 @@ touch migrations/018_your_new_change.sql
    - Easier to review and rollback
 
 2. **Write reversible migrations**
-   - Always provide a working Down migration
+   - Provide a matching `*.down.sql` whenever rollback is feasible
    - Test rollback before committing
+   - If rollback is not safe, mark the companion with `-- sub2api:irreversible` and document the manual recovery path in the PR
 
 3. **Use transactions**
    - Wrap DDL statements in transactions when possible
@@ -170,6 +185,28 @@ psql -d sub2api -c "SELECT * FROM schema_migrations ORDER BY applied_at DESC;"
 # Manually rollback if needed (use with caution)
 # Better to fix the migration and create a new one
 ```
+
+### Rollback Is Marked Irreversible
+
+If `make migrate-status` or `make migrate-plan-down` shows `down=irreversible`, the project intentionally refuses automatic rollback for that migration because the previous state cannot be reconstructed safely.
+
+Recommended procedure:
+
+1. Inspect the forward migration and determine the exact data/schema impact.
+2. Prepare a manual recovery SQL script for the target environment.
+3. Take a fresh database backup or snapshot.
+4. Apply the manual recovery SQL in staging first, then production.
+5. Remove the migration row from `schema_migrations` only after the schema/data state has been restored to the desired version.
+
+Example:
+```bash
+make migrate-status
+make migrate-plan-down STEPS=1
+psql "$DATABASE_URL" -f ./manual_recovery.sql
+psql "$DATABASE_URL" -c "DELETE FROM schema_migrations WHERE filename = '052_migrate_upstream_to_apikey.sql';"
+```
+
+Do not delete rows from `schema_migrations` before completing the real schema/data recovery, or the next startup may attempt to re-apply migrations onto an inconsistent database.
 
 ### Need to Skip a Migration (Emergency Only)
 ```sql

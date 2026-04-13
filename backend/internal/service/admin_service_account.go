@@ -64,12 +64,14 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if account.Type == AccountTypeOAuth {
 		switch account.Platform {
 		case PlatformOpenAI:
-			runDetachedTask("create_account_openai_privacy", func(ctx context.Context) {
+			runDetachedTask("create_account_openai_privacy", func(ctx context.Context) error {
 				s.EnsureOpenAIPrivacy(ctx, account)
+				return nil
 			}, "account_id", account.ID)
 		case PlatformAntigravity:
-			runDetachedTask("create_account_antigravity_privacy", func(ctx context.Context) {
+			runDetachedTask("create_account_antigravity_privacy", func(ctx context.Context) error {
 				s.EnsureAntigravityPrivacy(ctx, account)
+				return nil
 			}, "account_id", account.ID)
 		}
 	}

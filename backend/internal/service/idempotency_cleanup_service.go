@@ -9,6 +9,8 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
+const idempotencyCleanupRunTimeout = 10 * time.Second
+
 // IdempotencyCleanupService 定期清理已过期的幂等记录，避免表无限增长。
 type IdempotencyCleanupService struct {
 	repo     IdempotencyRepository
@@ -77,7 +79,7 @@ func (s *IdempotencyCleanupService) runLoop() {
 }
 
 func (s *IdempotencyCleanupService) cleanupOnce() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), idempotencyCleanupRunTimeout)
 	defer cancel()
 
 	deleted, err := s.repo.DeleteExpired(ctx, time.Now(), s.batch)

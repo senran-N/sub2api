@@ -48,6 +48,9 @@ func TestLatestMigrationBaseline(t *testing.T) {
 	t.Run("uses_latest_sorted_sql_file", func(t *testing.T) {
 		fsys := fstest.MapFS{
 			"001_init.sql": &fstest.MapFile{Data: []byte("CREATE TABLE t1(id int);")},
+			"010_final.down.sql": &fstest.MapFile{
+				Data: []byte("DROP TABLE IF EXISTS t2;"),
+			},
 			"010_final.sql": &fstest.MapFile{
 				Data: []byte("CREATE TABLE t2(id int);"),
 			},
@@ -66,6 +69,65 @@ func TestLatestMigrationBaseline(t *testing.T) {
 		_, _, _, err := latestMigrationBaseline(fsys)
 		require.Error(t, err)
 	})
+}
+
+func TestMigrationFileHelpers(t *testing.T) {
+	fsys := fstest.MapFS{
+		"001_init.sql":      &fstest.MapFile{Data: []byte("CREATE TABLE t(id int);")},
+		"001_init.down.sql": &fstest.MapFile{Data: []byte("DROP TABLE IF EXISTS t;")},
+		"010_last.sql":      &fstest.MapFile{Data: []byte("ALTER TABLE t ADD COLUMN name text;")},
+	}
+
+	files, err := migrationUpFiles(fsys)
+	require.NoError(t, err)
+	require.Equal(t, []string{"001_init.sql", "010_last.sql"}, files)
+	require.True(t, isDownMigrationFile("001_init.down.sql"))
+	require.False(t, isDownMigrationFile("001_init.sql"))
+	require.Equal(t, "010_last.down.sql", downMigrationNameFor("010_last.sql"))
+	require.Equal(t, "062_add_idx_notx.sql", normalizeMigrationExecutionName("062_add_idx_notx.down.sql"))
+}
+
+func TestGetRollbackMigrationStatusFS(t *testing.T) {
+	fsys := fstest.MapFS{
+		"001_ok.down.sql":           &fstest.MapFile{Data: []byte("ALTER TABLE t DROP COLUMN IF EXISTS c;")},
+		"002_irreversible.down.sql": &fstest.MapFile{Data: []byte("-- sub2api:irreversible\nDO $$ BEGIN RAISE EXCEPTION 'no'; END $$;")},
+	}
+
+	status, err := getRollbackMigrationStatusFS(fsys, "001_ok.sql")
+	require.NoError(t, err)
+	require.Equal(t, RollbackStatusReversible, status)
+
+	status, err = getRollbackMigrationStatusFS(fsys, "002_irreversible.sql")
+	require.NoError(t, err)
+	require.Equal(t, RollbackStatusIrreversible, status)
+
+	status, err = getRollbackMigrationStatusFS(fsys, "003_missing.sql")
+	require.NoError(t, err)
+	require.Equal(t, RollbackStatusMissing, status)
+}
+
+func TestPlanRollbackMigrations(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT filename FROM schema_migrations ORDER BY filename DESC LIMIT \\$1").
+		WithArgs(2).
+		WillReturnRows(sqlmock.NewRows([]string{"filename"}).
+			AddRow("002_bad.sql").
+			AddRow("001_ok.sql"))
+
+	plan, err := planRollbackMigrationsFS(context.Background(), db, fstest.MapFS{
+		"001_ok.down.sql":  &fstest.MapFile{Data: []byte("ALTER TABLE t DROP COLUMN IF EXISTS c;")},
+		"002_bad.down.sql": &fstest.MapFile{Data: []byte("-- sub2api:irreversible\nDO $$ BEGIN RAISE EXCEPTION 'no'; END $$;")},
+	}, 2)
+	require.NoError(t, err)
+	require.Len(t, plan, 2)
+	require.Equal(t, RollbackStatusIrreversible, plan[0].Status)
+	require.Equal(t, RollbackStatusReversible, plan[1].Status)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestIsMigrationChecksumCompatible_AdditionalCases(t *testing.T) {

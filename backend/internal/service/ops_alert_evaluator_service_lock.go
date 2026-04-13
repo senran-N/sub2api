@@ -8,6 +8,11 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
+const (
+	opsAlertEvaluatorLockReleaseTimeout = 5 * time.Second
+	opsAlertEvaluatorHeartbeatTimeout   = 2 * time.Second
+)
+
 func (s *OpsAlertEvaluatorService) tryAcquireLeaderLock(ctx context.Context, lock OpsDistributedLockSettings) (func(), bool) {
 	if !lock.Enabled {
 		return nil, true
@@ -41,7 +46,7 @@ func (s *OpsAlertEvaluatorService) tryAcquireLeaderLock(ctx context.Context, loc
 	}
 
 	return func() {
-		runRedisLeaderLockRelease(opsAlertEvaluatorReleaseScript, s.redisClient, key, s.instanceID, 5*time.Second)
+		runRedisLeaderLockRelease(opsAlertEvaluatorReleaseScript, s.redisClient, key, s.instanceID, opsAlertEvaluatorLockReleaseTimeout)
 	}, true
 }
 
@@ -63,7 +68,7 @@ func (s *OpsAlertEvaluatorService) recordHeartbeatSuccess(runAt time.Time, durat
 	}
 	now := time.Now().UTC()
 	durMs := duration.Milliseconds()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), opsAlertEvaluatorHeartbeatTimeout)
 	defer cancel()
 
 	msg := strings.TrimSpace(result)
@@ -87,7 +92,7 @@ func (s *OpsAlertEvaluatorService) recordHeartbeatError(runAt time.Time, duratio
 	now := time.Now().UTC()
 	durMs := duration.Milliseconds()
 	msg := truncateString(err.Error(), 2048)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), opsAlertEvaluatorHeartbeatTimeout)
 	defer cancel()
 	_ = s.opsRepo.UpsertJobHeartbeat(ctx, &OpsUpsertJobHeartbeatInput{
 		JobName:        opsAlertEvaluatorJobName,

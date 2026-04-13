@@ -51,6 +51,22 @@ CREATE TABLE IF NOT EXISTS atlas_schema_revisions (
 const migrationsAdvisoryLockID int64 = 694208311321144027
 const migrationsLockRetryInterval = 500 * time.Millisecond
 const nonTransactionalMigrationSuffix = "_notx.sql"
+const downMigrationSuffix = ".down.sql"
+const irreversibleMigrationMarker = "sub2api:irreversible"
+
+type RollbackMigrationStatus string
+
+const (
+	RollbackStatusMissing      RollbackMigrationStatus = "missing"
+	RollbackStatusReversible   RollbackMigrationStatus = "reversible"
+	RollbackStatusIrreversible RollbackMigrationStatus = "irreversible"
+)
+
+type RollbackPlanItem struct {
+	UpName   string
+	DownName string
+	Status   RollbackMigrationStatus
+}
 
 type migrationChecksumCompatibilityRule struct {
 	fileChecksum       string
@@ -93,6 +109,72 @@ func ApplyMigrations(ctx context.Context, db *sql.DB) error {
 		return errors.New("nil sql db")
 	}
 	return applyMigrationsFS(ctx, db, migrations.FS)
+}
+
+// RollbackMigrations 按已应用顺序回滚最近的若干条迁移。
+//
+// 回滚需要对应的 companion down migration 文件，命名规则为：
+//   - 001_example.sql -> 001_example.down.sql
+//   - 062_add_idx_notx.sql -> 062_add_idx_notx.down.sql
+//
+// steps 必须为正数。
+func RollbackMigrations(ctx context.Context, db *sql.DB, steps int) error {
+	if db == nil {
+		return errors.New("nil sql db")
+	}
+	if steps <= 0 {
+		return fmt.Errorf("invalid rollback steps: %d", steps)
+	}
+	return rollbackMigrationsFS(ctx, db, migrations.FS, steps)
+}
+
+// ListAppliedMigrations 返回已应用迁移文件名，按最新优先排序。
+func ListAppliedMigrations(ctx context.Context, db *sql.DB) ([]string, error) {
+	if db == nil {
+		return nil, errors.New("nil sql db")
+	}
+	if _, err := db.ExecContext(ctx, schemaMigrationsTableDDL); err != nil {
+		return nil, fmt.Errorf("create schema_migrations: %w", err)
+	}
+	return listAppliedMigrationNames(ctx, db, 0)
+}
+
+func GetRollbackMigrationStatus(name string) (RollbackMigrationStatus, error) {
+	return getRollbackMigrationStatusFS(migrations.FS, name)
+}
+
+func PlanRollbackMigrations(ctx context.Context, db *sql.DB, steps int) ([]RollbackPlanItem, error) {
+	return planRollbackMigrationsFS(ctx, db, migrations.FS, steps)
+}
+
+func planRollbackMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS, steps int) ([]RollbackPlanItem, error) {
+	if db == nil {
+		return nil, errors.New("nil sql db")
+	}
+	if steps <= 0 {
+		return nil, fmt.Errorf("invalid rollback steps: %d", steps)
+	}
+	if _, err := db.ExecContext(ctx, schemaMigrationsTableDDL); err != nil {
+		return nil, fmt.Errorf("create schema_migrations: %w", err)
+	}
+
+	applied, err := listAppliedMigrationNames(ctx, db, steps)
+	if err != nil {
+		return nil, err
+	}
+	plan := make([]RollbackPlanItem, 0, len(applied))
+	for _, upName := range applied {
+		status, err := getRollbackMigrationStatusFS(fsys, upName)
+		if err != nil {
+			return nil, err
+		}
+		plan = append(plan, RollbackPlanItem{
+			UpName:   upName,
+			DownName: downMigrationNameFor(upName),
+			Status:   status,
+		})
+	}
+	return plan, nil
 }
 
 // applyMigrationsFS 是迁移执行的核心实现。
@@ -142,11 +224,10 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 
 	// 获取所有 .sql 迁移文件并按文件名排序。
 	// 命名规范：使用零填充数字前缀（如 001_init.sql, 002_add_users.sql）。
-	files, err := fs.Glob(fsys, "*.sql")
+	files, err := migrationUpFiles(fsys)
 	if err != nil {
 		return fmt.Errorf("list migrations: %w", err)
 	}
-	sort.Strings(files) // 确保按文件名顺序执行迁移
 
 	for _, name := range files {
 		// 读取迁移文件内容
@@ -248,6 +329,111 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	return nil
 }
 
+type rollbackMigration struct {
+	upName   string
+	downName string
+	content  string
+	nonTx    bool
+}
+
+func rollbackMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS, steps int) error {
+	if db == nil {
+		return errors.New("nil sql db")
+	}
+	if steps <= 0 {
+		return fmt.Errorf("invalid rollback steps: %d", steps)
+	}
+
+	if err := pgAdvisoryLock(ctx, db); err != nil {
+		return err
+	}
+	defer func() {
+		_ = pgAdvisoryUnlock(context.Background(), db)
+	}()
+
+	if _, err := db.ExecContext(ctx, schemaMigrationsTableDDL); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+
+	applied, err := listAppliedMigrationNames(ctx, db, steps)
+	if err != nil {
+		return err
+	}
+	if len(applied) == 0 {
+		return nil
+	}
+
+	plan := make([]rollbackMigration, 0, len(applied))
+	for _, upName := range applied {
+		downName := downMigrationNameFor(upName)
+		contentBytes, readErr := fs.ReadFile(fsys, downName)
+		if readErr != nil {
+			if errors.Is(readErr, fs.ErrNotExist) {
+				return fmt.Errorf("rollback migration missing for %s: expected %s", upName, downName)
+			}
+			return fmt.Errorf("read rollback migration %s: %w", downName, readErr)
+		}
+		content := strings.TrimSpace(string(contentBytes))
+		if content == "" {
+			return fmt.Errorf("rollback migration %s is empty", downName)
+		}
+		if isIrreversibleRollbackMigration(content) {
+			return fmt.Errorf("rollback migration %s is marked irreversible; manual intervention required", downName)
+		}
+		nonTx, validateErr := validateMigrationExecutionMode(downName, content)
+		if validateErr != nil {
+			return fmt.Errorf("validate rollback migration %s: %w", downName, validateErr)
+		}
+		plan = append(plan, rollbackMigration{
+			upName:   upName,
+			downName: downName,
+			content:  content,
+			nonTx:    nonTx,
+		})
+	}
+
+	for _, migration := range plan {
+		if migration.nonTx {
+			statements := splitSQLStatements(migration.content)
+			for i, stmt := range statements {
+				trimmed := strings.TrimSpace(stmt)
+				if trimmed == "" {
+					continue
+				}
+				if stripSQLLineComment(trimmed) == "" {
+					continue
+				}
+				if _, err := db.ExecContext(ctx, trimmed); err != nil {
+					return fmt.Errorf("rollback migration %s (non-tx statement %d): %w", migration.downName, i+1, err)
+				}
+			}
+			if _, err := db.ExecContext(ctx, "DELETE FROM schema_migrations WHERE filename = $1", migration.upName); err != nil {
+				return fmt.Errorf("delete migration record %s (non-tx): %w", migration.upName, err)
+			}
+			continue
+		}
+
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin rollback migration %s: %w", migration.downName, err)
+		}
+		if _, err := tx.ExecContext(ctx, migration.content); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("rollback migration %s: %w", migration.downName, err)
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM schema_migrations WHERE filename = $1", migration.upName); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("delete migration record %s: %w", migration.upName, err)
+		}
+		if err := tx.Commit(); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("commit rollback migration %s: %w", migration.downName, err)
+		}
+	}
+
+	return nil
+}
+
 func ensureAtlasBaselineAligned(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	hasLegacy, err := tableExists(ctx, db, "schema_migrations")
 	if err != nil {
@@ -302,7 +488,7 @@ func tableExists(ctx context.Context, db *sql.DB, tableName string) (bool, error
 }
 
 func latestMigrationBaseline(fsys fs.FS) (string, string, string, error) {
-	files, err := fs.Glob(fsys, "*.sql")
+	files, err := migrationUpFiles(fsys)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -322,6 +508,65 @@ func latestMigrationBaseline(fsys fs.FS) (string, string, string, error) {
 	return version, version, hash, nil
 }
 
+func migrationUpFiles(fsys fs.FS) ([]string, error) {
+	files, err := fs.Glob(fsys, "*.sql")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(files))
+	for _, name := range files {
+		if isDownMigrationFile(name) {
+			continue
+		}
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func isDownMigrationFile(name string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(name)), downMigrationSuffix)
+}
+
+func downMigrationNameFor(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if strings.HasSuffix(trimmed, ".sql") {
+		return strings.TrimSuffix(trimmed, ".sql") + downMigrationSuffix
+	}
+	return trimmed + downMigrationSuffix
+}
+
+func getRollbackMigrationStatusFS(fsys fs.FS, upName string) (RollbackMigrationStatus, error) {
+	downName := downMigrationNameFor(upName)
+	contentBytes, err := fs.ReadFile(fsys, downName)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return RollbackStatusMissing, nil
+		}
+		return RollbackStatusMissing, fmt.Errorf("read rollback migration %s: %w", downName, err)
+	}
+	content := strings.TrimSpace(string(contentBytes))
+	if content == "" {
+		return RollbackStatusMissing, fmt.Errorf("rollback migration %s is empty", downName)
+	}
+	if isIrreversibleRollbackMigration(content) {
+		return RollbackStatusIrreversible, nil
+	}
+	return RollbackStatusReversible, nil
+}
+
+func isIrreversibleRollbackMigration(content string) bool {
+	return strings.Contains(strings.ToLower(content), irreversibleMigrationMarker)
+}
+
+func normalizeMigrationExecutionName(name string) string {
+	trimmed := strings.ToLower(strings.TrimSpace(name))
+	if strings.HasSuffix(trimmed, downMigrationSuffix) {
+		return strings.TrimSuffix(trimmed, downMigrationSuffix) + ".sql"
+	}
+	return trimmed
+}
+
 func isMigrationChecksumCompatible(name, dbChecksum, fileChecksum string) bool {
 	rule, ok := migrationChecksumCompatibilityRules[name]
 	if !ok {
@@ -335,7 +580,7 @@ func isMigrationChecksumCompatible(name, dbChecksum, fileChecksum string) bool {
 }
 
 func validateMigrationExecutionMode(name, content string) (bool, error) {
-	normalizedName := strings.ToLower(strings.TrimSpace(name))
+	normalizedName := normalizeMigrationExecutionName(name)
 	upperContent := strings.ToUpper(content)
 	nonTx := strings.HasSuffix(normalizedName, nonTransactionalMigrationSuffix)
 
@@ -398,6 +643,34 @@ func stripSQLLineComment(s string) string {
 		}
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func listAppliedMigrationNames(ctx context.Context, db *sql.DB, limit int) ([]string, error) {
+	query := "SELECT filename FROM schema_migrations ORDER BY filename DESC"
+	args := make([]any, 0, 1)
+	if limit > 0 {
+		query += " LIMIT $1"
+		args = append(args, limit)
+	}
+
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list applied migrations: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]string, 0)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan applied migrations: %w", err)
+		}
+		out = append(out, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate applied migrations: %w", err)
+	}
+	return out, nil
 }
 
 // pgAdvisoryLock 获取 PostgreSQL Advisory Lock。

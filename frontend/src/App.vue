@@ -1,31 +1,40 @@
 <script setup lang="ts">
-import { RouterView, useRouter, useRoute } from 'vue-router'
-import { computed, defineAsyncComponent, onMounted, onBeforeUnmount, watch, watchEffect } from 'vue'
-import Toast from '@/components/common/Toast.vue'
-import NavigationProgress from '@/components/common/NavigationProgress.vue'
-import i18n from '@/i18n'
-import { resolveRouteDocumentTitle } from '@/router/title'
-import { scheduleDeferredTask } from '@/utils/deferredTask'
+import { RouterView, useRouter, useRoute } from "vue-router";
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  onBeforeUnmount,
+  watch,
+  watchEffect,
+} from "vue";
+import Toast from "@/components/common/Toast.vue";
+import NavigationProgress from "@/components/common/NavigationProgress.vue";
+import { getLocale } from "@/i18n";
+import { resolveRouteDocumentTitle } from "@/router/title";
+import { scheduleDeferredTask } from "@/utils/deferredTask";
 import {
   useAdminSettingsStore,
   useAppStore,
   useAuthStore,
   useSubscriptionStore,
-  useAnnouncementStore
-} from '@/stores'
-import { fetchSetupStatus } from '@/api/bootstrap'
+  useAnnouncementStore,
+} from "@/stores";
+import { fetchSetupStatus } from "@/api/bootstrap";
 
-const router = useRouter()
-const route = useRoute()
-const appStore = useAppStore()
-const adminSettingsStore = useAdminSettingsStore()
-const authStore = useAuthStore()
-const subscriptionStore = useSubscriptionStore()
-const announcementStore = useAnnouncementStore()
-const AnnouncementPopup = defineAsyncComponent(() => import('@/components/common/AnnouncementPopup.vue'))
-const shouldRenderAnnouncementPopup = computed(() => authStore.isAuthenticated)
-let cancelAuthenticatedWarmup: (() => void) | null = null
-let delayedAnnouncementTimer: ReturnType<typeof setTimeout> | null = null
+const router = useRouter();
+const route = useRoute();
+const appStore = useAppStore();
+const adminSettingsStore = useAdminSettingsStore();
+const authStore = useAuthStore();
+const subscriptionStore = useSubscriptionStore();
+const announcementStore = useAnnouncementStore();
+const AnnouncementPopup = defineAsyncComponent(
+  () => import("@/components/common/AnnouncementPopup.vue"),
+);
+const shouldRenderAnnouncementPopup = computed(() => authStore.isAuthenticated);
+let cancelAuthenticatedWarmup: (() => void) | null = null;
+let delayedAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Update favicon dynamically
@@ -33,14 +42,14 @@ let delayedAnnouncementTimer: ReturnType<typeof setTimeout> | null = null
  */
 function updateFavicon(logoUrl: string) {
   // Find existing favicon link or create new one
-  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!link) {
-    link = document.createElement('link')
-    link.rel = 'icon'
-    document.head.appendChild(link)
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.appendChild(link);
   }
-  link.type = logoUrl.endsWith('.svg') ? 'image/svg+xml' : 'image/x-icon'
-  link.href = logoUrl
+  link.type = logoUrl.endsWith(".svg") ? "image/svg+xml" : "image/x-icon";
+  link.href = logoUrl;
 }
 
 // Watch for site settings changes and update favicon/title
@@ -48,63 +57,67 @@ watch(
   () => appStore.siteLogo,
   (newLogo) => {
     if (newLogo) {
-      updateFavicon(newLogo)
+      updateFavicon(newLogo);
     }
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 
 watchEffect(() => {
-  void i18n.global.locale.value
+  void getLocale();
 
   document.title = resolveRouteDocumentTitle(route, {
     siteName: appStore.siteName,
-    publicCustomMenuItems: appStore.cachedPublicSettings?.custom_menu_items ?? [],
+    publicCustomMenuItems:
+      appStore.cachedPublicSettings?.custom_menu_items ?? [],
     adminCustomMenuItems: adminSettingsStore.customMenuItems,
-    isAdmin: authStore.isAdmin
-  })
-})
+    isAdmin: authStore.isAdmin,
+  });
+});
 
 // Watch for authentication state and manage subscription data + announcements
 function onVisibilityChange() {
-  if (document.visibilityState === 'visible' && authStore.isAuthenticated) {
-    announcementStore.fetchAnnouncements()
+  if (document.visibilityState === "visible" && authStore.isAuthenticated) {
+    announcementStore.fetchAnnouncements();
   }
 }
 
 function clearAuthenticatedWarmup(): void {
   if (cancelAuthenticatedWarmup) {
-    cancelAuthenticatedWarmup()
-    cancelAuthenticatedWarmup = null
+    cancelAuthenticatedWarmup();
+    cancelAuthenticatedWarmup = null;
   }
 
   if (delayedAnnouncementTimer) {
-    clearTimeout(delayedAnnouncementTimer)
-    delayedAnnouncementTimer = null
+    clearTimeout(delayedAnnouncementTimer);
+    delayedAnnouncementTimer = null;
   }
 }
 
 function scheduleAuthenticatedWarmup(isNewLogin: boolean): void {
-  clearAuthenticatedWarmup()
-  subscriptionStore.startPolling()
+  clearAuthenticatedWarmup();
+  subscriptionStore.startPolling();
 
-  cancelAuthenticatedWarmup = scheduleDeferredTask(() => {
-    cancelAuthenticatedWarmup = null
+  cancelAuthenticatedWarmup = scheduleDeferredTask(
+    () => {
+      cancelAuthenticatedWarmup = null;
 
-    subscriptionStore.fetchActiveSubscriptions().catch((error) => {
-      console.error('Failed to preload subscriptions:', error)
-    })
+      subscriptionStore.fetchActiveSubscriptions().catch((error) => {
+        console.error("Failed to preload subscriptions:", error);
+      });
 
-    if (isNewLogin) {
-      delayedAnnouncementTimer = setTimeout(() => {
-        delayedAnnouncementTimer = null
-        void announcementStore.fetchAnnouncements(true)
-      }, 3000)
-      return
-    }
+      if (isNewLogin) {
+        delayedAnnouncementTimer = setTimeout(() => {
+          delayedAnnouncementTimer = null;
+          void announcementStore.fetchAnnouncements(true);
+        }, 3000);
+        return;
+      }
 
-    void announcementStore.fetchAnnouncements()
-  }, { timeout: 2000 })
+      void announcementStore.fetchAnnouncements();
+    },
+    { timeout: 2000 },
+  );
 }
 
 watch(
@@ -113,49 +126,49 @@ watch(
     if (isAuthenticated) {
       // Warm up authenticated-only data after the first paint to keep
       // initial rendering responsive.
-      scheduleAuthenticatedWarmup(oldValue === false)
+      scheduleAuthenticatedWarmup(oldValue === false);
 
       // Register visibility change listener
-      document.addEventListener('visibilitychange', onVisibilityChange)
+      document.addEventListener("visibilitychange", onVisibilityChange);
     } else {
-      clearAuthenticatedWarmup()
+      clearAuthenticatedWarmup();
 
       // User logged out: clear data and stop polling
-      subscriptionStore.clear()
-      announcementStore.reset()
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      subscriptionStore.clear();
+      announcementStore.reset();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     }
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 
 // Route change trigger (throttled by store)
 router.afterEach(() => {
   if (authStore.isAuthenticated) {
-    announcementStore.fetchAnnouncements()
+    announcementStore.fetchAnnouncements();
   }
-})
+});
 
 onBeforeUnmount(() => {
-  clearAuthenticatedWarmup()
-  document.removeEventListener('visibilitychange', onVisibilityChange)
-})
+  clearAuthenticatedWarmup();
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+});
 
 onMounted(async () => {
   // Check if setup is needed
   try {
-    const status = await fetchSetupStatus()
-    if (status.needs_setup && route.path !== '/setup') {
-      router.replace('/setup')
-      return
+    const status = await fetchSetupStatus();
+    if (status.needs_setup && route.path !== "/setup") {
+      router.replace("/setup");
+      return;
     }
   } catch {
     // If setup endpoint fails, assume normal mode and continue
   }
 
   // Load public settings into appStore (will be cached for other components)
-  await appStore.fetchPublicSettings()
-})
+  await appStore.fetchPublicSettings();
+});
 </script>
 
 <template>

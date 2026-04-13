@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const subscriptionExpiryRunTimeout = 10 * time.Second
+
 // SubscriptionExpiryService periodically updates expired subscription status.
 type SubscriptionExpiryService struct {
 	userSubRepo UserSubscriptionRepository
@@ -57,7 +59,7 @@ func (s *SubscriptionExpiryService) Stop() {
 }
 
 func (s *SubscriptionExpiryService) runOnce() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), subscriptionExpiryRunTimeout)
 	defer cancel()
 
 	updated, err := s.userSubRepo.BatchUpdateExpiredStatus(ctx)

@@ -656,6 +656,15 @@ func (c *Config) Validate() error {
 	if c.Ops.MetricsCollectorCache.TTL < 0 {
 		return fmt.Errorf("ops.metrics_collector_cache.ttl must be non-negative")
 	}
+	if c.Ops.SystemLogSink.QueueSize <= 0 {
+		return fmt.Errorf("ops.system_log_sink.queue_size must be positive")
+	}
+	if c.Ops.SystemLogSink.BatchSize <= 0 {
+		return fmt.Errorf("ops.system_log_sink.batch_size must be positive")
+	}
+	if c.Ops.SystemLogSink.FlushIntervalSeconds <= 0 {
+		return fmt.Errorf("ops.system_log_sink.flush_interval_seconds must be positive")
+	}
 	if c.Ops.Cleanup.ErrorLogRetentionDays < 0 {
 		return fmt.Errorf("ops.cleanup.error_log_retention_days must be non-negative")
 	}

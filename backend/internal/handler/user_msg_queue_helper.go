@@ -62,14 +62,14 @@ func (h *UserMsgQueueHelper) AcquireWithWait(
 		if err := h.queueService.EnforceDelay(ctx, accountID, baseRPM); err != nil {
 			if ctx.Err() != nil {
 				// 延迟期间 context 取消，释放锁
-				bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				bgCtx, bgCancel := newDetachedTimeoutContext(ctx, handlerReleaseCleanupTimeout)
 				_ = h.queueService.Release(bgCtx, accountID, result.RequestID)
 				bgCancel()
 				return nil, ctx.Err()
 			}
 		}
 		reqLog.Debug("gateway.umq_lock_acquired", zap.Int64("account_id", accountID))
-		return h.makeReleaseFunc(accountID, result.RequestID, reqLog), nil
+		return h.makeReleaseFunc(c.Request.Context(), accountID, result.RequestID, reqLog), nil
 	}
 
 	// 需要等待：指数退避轮询
@@ -135,14 +135,14 @@ func (h *UserMsgQueueHelper) waitForLockWithPing(
 				// 获取成功，执行 RPM 自适应延迟
 				if delayErr := h.queueService.EnforceDelay(ctx, accountID, baseRPM); delayErr != nil {
 					if ctx.Err() != nil {
-						bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Second)
+						bgCtx, bgCancel := newDetachedTimeoutContext(ctx, handlerReleaseCleanupTimeout)
 						_ = h.queueService.Release(bgCtx, accountID, result.RequestID)
 						bgCancel()
 						return nil, ctx.Err()
 					}
 				}
 				reqLog.Debug("gateway.umq_lock_acquired", zap.Int64("account_id", accountID))
-				return h.makeReleaseFunc(accountID, result.RequestID, reqLog), nil
+				return h.makeReleaseFunc(c.Request.Context(), accountID, result.RequestID, reqLog), nil
 			}
 			backoff = nextBackoff(backoff)
 			timer.Reset(backoff)
@@ -151,11 +151,11 @@ func (h *UserMsgQueueHelper) waitForLockWithPing(
 }
 
 // makeReleaseFunc 创建锁释放函数（使用 sync.Once 确保只执行一次）
-func (h *UserMsgQueueHelper) makeReleaseFunc(accountID int64, requestID string, reqLog *zap.Logger) func() {
+func (h *UserMsgQueueHelper) makeReleaseFunc(parent context.Context, accountID int64, requestID string, reqLog *zap.Logger) func() {
 	var once sync.Once
 	return func() {
 		once.Do(func() {
-			bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			bgCtx, bgCancel := newDetachedTimeoutContext(parent, handlerReleaseCleanupTimeout)
 			defer bgCancel()
 			if err := h.queueService.Release(bgCtx, accountID, requestID); err != nil {
 				reqLog.Warn("gateway.umq_release_failed",

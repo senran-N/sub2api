@@ -33,8 +33,8 @@
 ### 开发工具
 
 ```bash
-# golangci-lint v2.7
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7
+# golangci-lint v2.9
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.9
 
 # pnpm (前端包管理)
 npm install -g pnpm
@@ -46,13 +46,13 @@ npm install -g pnpm
 
 | Workflow | 触发条件 | 检查内容 |
 |----------|----------|----------|
-| **backend-ci.yml** | push, pull_request | 单元测试 + 集成测试 + golangci-lint v2.7 |
-| **security-scan.yml** | push, pull_request, 每周一 | govulncheck + gosec + pnpm audit |
-| **release.yml** | tag `v*` | 构建发布（PR 不触发） |
+| **backend-ci.yml** | push, pull_request | 单元测试 + 集成测试 + 迁移校验 + 覆盖率门槛 + golangci-lint v2.9 |
+| **security-scan.yml** | push, pull_request, 每周一 | Trivy（依赖/配置）+ govulncheck + pnpm audit |
+| **release.yml** | tag `v*` / workflow_dispatch | GoReleaser 发布 + Trivy + Cosign 签名 + GHCR 冒烟测试 |
 
 ### CI 要求
 
-- Go 版本必须是 **1.25.7**
+- Go 版本必须是 **1.26.2**
 - 前端使用 `pnpm install --frozen-lockfile`，必须提交 `pnpm-lock.yaml`
 
 ### 本地测试命令
@@ -66,6 +66,9 @@ cd backend && go test -tags=integration ./...
 
 # 代码质量检查
 cd backend && golangci-lint run ./...
+
+# 数据库迁移与回滚伴生文件校验
+cd backend && make migrate-validate
 
 # 前端依赖安装（必须用 pnpm）
 cd frontend && pnpm install
@@ -237,6 +240,7 @@ git add ent/       # 生成的文件也要提交
 
 - [ ] `go test -tags=unit ./...` 通过
 - [ ] `go test -tags=integration ./...` 通过
+- [ ] `make migrate-validate` 通过
 - [ ] `golangci-lint run ./...` 无新增问题
 - [ ] `pnpm-lock.yaml` 已同步（如果改了 package.json）
 - [ ] 所有 test stub 补全新接口方法（如果改了 interface）
@@ -307,6 +311,9 @@ go test -tags=integration ./...
 
 # Lint 检查
 golangci-lint run ./...
+
+# 迁移校验
+make migrate-validate
 ```
 
 ## 六、项目结构速览

@@ -19,6 +19,7 @@ import "embed"
 // 迁移文件要求：
 //   - 必须是幂等的（可重复执行而不产生错误）
 //   - 推荐使用 IF NOT EXISTS / IF EXISTS 语法
+//   - 回滚脚本使用同名前缀的 *.down.sql companion 文件
 //   - 一旦应用，不应修改已有的迁移文件（通过 checksum 校验）
 //
 // 示例迁移文件：

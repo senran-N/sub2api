@@ -19,7 +19,10 @@ import (
 )
 
 const (
-	usageCleanupWorkerName = "usage_cleanup_worker"
+	usageCleanupWorkerName         = "usage_cleanup_worker"
+	usageCleanupCancelCheckTimeout = 2 * time.Second
+	usageCleanupProgressTimeout    = 3 * time.Second
+	usageCleanupTaskUpdateTimeout  = 5 * time.Second
 )
 
 // UsageCleanupService 负责创建与执行使用记录清理任务
@@ -204,7 +207,7 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 		}
 		canceled, err := s.isTaskCanceled(ctx, task.ID)
 		if err != nil {
-			s.markTaskFailed(task.ID, deletedTotal, err)
+			s.markTaskFailed(ctx, task.ID, deletedTotal, err)
 			return
 		}
 		if canceled {
@@ -220,12 +223,12 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 				logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task interrupted: task=%d err=%v", task.ID, err)
 				return
 			}
-			s.markTaskFailed(task.ID, deletedTotal, err)
+			s.markTaskFailed(ctx, task.ID, deletedTotal, err)
 			return
 		}
 		deletedTotal += deleted
 		if deleted > 0 {
-			updateCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			updateCtx, cancel := newDetachedTimeoutContext(ctx, usageCleanupProgressTimeout)
 			if err := s.repo.UpdateTaskProgress(updateCtx, task.ID, deletedTotal); err != nil {
 				logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task progress update failed: task=%d deleted_rows=%d err=%v", task.ID, deletedTotal, err)
 			}
@@ -239,7 +242,7 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 		}
 	}
 
-	updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateCtx, cancel := newDetachedTimeoutContext(ctx, usageCleanupTaskUpdateTimeout)
 	defer cancel()
 	if err := s.repo.MarkTaskSucceeded(updateCtx, task.ID, deletedTotal); err != nil {
 		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] update task succeeded failed: task=%d err=%v", task.ID, err)
@@ -256,15 +259,15 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 	}
 }
 
-func (s *UsageCleanupService) markTaskFailed(taskID int64, deletedRows int64, err error) {
+func (s *UsageCleanupService) markTaskFailed(ctx context.Context, taskID int64, deletedRows int64, err error) {
 	msg := strings.TrimSpace(err.Error())
 	if len(msg) > 500 {
 		msg = msg[:500]
 	}
 	logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task failed: task=%d deleted_rows=%d err=%s", taskID, deletedRows, msg)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateCtx, cancel := newDetachedTimeoutContext(ctx, usageCleanupTaskUpdateTimeout)
 	defer cancel()
-	if updateErr := s.repo.MarkTaskFailed(ctx, taskID, deletedRows, msg); updateErr != nil {
+	if updateErr := s.repo.MarkTaskFailed(updateCtx, taskID, deletedRows, msg); updateErr != nil {
 		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] update task failed failed: task=%d err=%v", taskID, updateErr)
 	}
 }
@@ -273,7 +276,7 @@ func (s *UsageCleanupService) isTaskCanceled(ctx context.Context, taskID int64) 
 	if s == nil || s.repo == nil {
 		return false, fmt.Errorf("cleanup service not ready")
 	}
-	checkCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	checkCtx, cancel := newDetachedTimeoutContext(ctx, usageCleanupCancelCheckTimeout)
 	defer cancel()
 	status, err := s.repo.GetTaskStatus(checkCtx, taskID)
 	if err != nil {

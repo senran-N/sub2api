@@ -32,7 +32,10 @@ const (
 	opsMetricsCollectorLeaderLockKey = "ops:metrics:collector:leader"
 	opsMetricsCollectorLeaderLockTTL = 90 * time.Second
 
-	opsMetricsCollectorHeartbeatTimeout = 2 * time.Second
+	opsMetricsCollectorHeartbeatTimeout   = 2 * time.Second
+	opsMetricsCollectorSettingReadTimeout = 2 * time.Second
+	opsMetricsCollectorQueueDepthTimeout  = 2 * time.Second
+	opsMetricsCollectorLockReleaseTimeout = 2 * time.Second
 
 	bytesPerMB = 1024 * 1024
 )
@@ -130,7 +133,7 @@ func (c *OpsMetricsCollector) getInterval() time.Duration {
 		return interval
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), opsMetricsCollectorSettingReadTimeout)
 	defer cancel()
 
 	raw, err := c.settingRepo.GetValue(ctx, SettingKeyOpsMetricsIntervalSeconds)
@@ -372,7 +375,7 @@ func (c *OpsMetricsCollector) collectConcurrencyQueueDepth(parentCtx context.Con
 	}
 
 	// Best-effort: never let concurrency sampling break the metrics collector.
-	ctx, cancel := context.WithTimeout(parentCtx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(parentCtx, opsMetricsCollectorQueueDepthTimeout)
 	defer cancel()
 
 	accounts, err := c.accountRepo.ListSchedulable(ctx)
@@ -882,7 +885,7 @@ func (c *OpsMetricsCollector) tryAcquireLeaderLock(ctx context.Context) (func(),
 	}
 
 	release := func() {
-		runRedisLeaderLockRelease(opsMetricsCollectorReleaseScript, c.redisClient, opsMetricsCollectorLeaderLockKey, c.instanceID, 2*time.Second)
+		runRedisLeaderLockRelease(opsMetricsCollectorReleaseScript, c.redisClient, opsMetricsCollectorLeaderLockKey, c.instanceID, opsMetricsCollectorLockReleaseTimeout)
 	}
 	return release, true
 }

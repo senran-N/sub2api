@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS idx_usage_logs_created_requested_model_upstream_model;

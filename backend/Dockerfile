@@ -1,4 +1,4 @@
-FROM golang:1.25.7-alpine
+FROM golang:1.26.2-alpine
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ RUN apk add --no-cache git
 COPY go.mod go.sum ./
 
 # 下载依赖
-RUN go mod download
+RUN go mod download && go mod verify
 
 # 复制源代码
 COPY . .

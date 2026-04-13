@@ -11,6 +11,8 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/tlsfingerprint"
 )
 
+const tlsFingerprintProfileCacheRefreshTimeout = 3 * time.Second
+
 // TLSFingerprintProfileService TLS 指纹模板管理服务
 type TLSFingerprintProfileService struct {
 	repo  TLSFingerprintProfileRepository
@@ -42,7 +44,9 @@ func NewTLSFingerprintProfileService(
 
 	if cache != nil {
 		cache.SubscribeUpdates(ctx, func() {
-			if err := svc.refreshLocalCache(context.Background()); err != nil {
+			refreshCtx, cancel := svc.newCacheRefreshContext()
+			defer cancel()
+			if err := svc.refreshLocalCache(refreshCtx); err != nil {
 				logger.LegacyPrintf("service.tls_fp_profile", "[TLSFPProfileService] Failed to refresh cache on notification: %v", err)
 			}
 		})
@@ -216,7 +220,7 @@ func (s *TLSFingerprintProfileService) setLocalCache(profiles []*model.TLSFinger
 }
 
 func (s *TLSFingerprintProfileService) newCacheRefreshContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 3*time.Second)
+	return context.WithTimeout(context.Background(), tlsFingerprintProfileCacheRefreshTimeout)
 }
 
 func (s *TLSFingerprintProfileService) invalidateAndNotify(ctx context.Context) {

@@ -1,0 +1,11 @@
+ALTER TABLE api_keys DROP COLUMN IF EXISTS window_7d_start;
+ALTER TABLE api_keys DROP COLUMN IF EXISTS window_1d_start;
+ALTER TABLE api_keys DROP COLUMN IF EXISTS window_5h_start;
+
+ALTER TABLE api_keys DROP COLUMN IF EXISTS usage_7d;
+ALTER TABLE api_keys DROP COLUMN IF EXISTS usage_1d;
+ALTER TABLE api_keys DROP COLUMN IF EXISTS usage_5h;
+
+ALTER TABLE api_keys DROP COLUMN IF EXISTS rate_limit_7d;
+ALTER TABLE api_keys DROP COLUMN IF EXISTS rate_limit_1d;
+ALTER TABLE api_keys DROP COLUMN IF EXISTS rate_limit_5h;

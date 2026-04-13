@@ -10,11 +10,13 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
+const schedulerSnapshotOutboxPollTimeout = 10 * time.Second
+
 func (s *SchedulerSnapshotService) pollOutbox() {
 	if s.outboxRepo == nil || s.cache == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), schedulerSnapshotOutboxPollTimeout)
 	defer cancel()
 
 	watermark, err := s.cache.GetOutboxWatermark(ctx)

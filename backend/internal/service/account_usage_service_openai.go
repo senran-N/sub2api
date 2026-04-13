@@ -182,11 +182,11 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 		return nil, nil, nil
 	}
 
-	s.persistOpenAICodexProbeSnapshot(account.ID, updates, resetAt)
+	s.persistOpenAICodexProbeSnapshot(ctx, account.ID, updates, resetAt)
 	return updates, resetAt, nil
 }
 
-func (s *AccountUsageService) persistOpenAICodexProbeSnapshot(accountID int64, updates map[string]any, resetAt *time.Time) {
+func (s *AccountUsageService) persistOpenAICodexProbeSnapshot(ctx context.Context, accountID int64, updates map[string]any, resetAt *time.Time) {
 	if s == nil || s.accountRepo == nil || accountID <= 0 {
 		return
 	}
@@ -195,7 +195,7 @@ func (s *AccountUsageService) persistOpenAICodexProbeSnapshot(accountID int64, u
 	}
 
 	go func() {
-		updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		updateCtx, cancel := newDetachedTimeoutContext(ctx, 5*time.Second)
 		defer cancel()
 		if len(updates) > 0 {
 			_ = s.accountRepo.UpdateExtra(updateCtx, accountID, updates)

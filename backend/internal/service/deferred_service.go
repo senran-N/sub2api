@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const deferredLastUsedFlushTimeout = 10 * time.Second
+
 // DeferredService provides deferred batch update functionality
 type DeferredService struct {
 	accountRepo AccountRepository
@@ -62,7 +64,7 @@ func (s *DeferredService) flushLastUsed() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), deferredLastUsedFlushTimeout)
 	defer cancel()
 
 	if err := s.accountRepo.BatchUpdateLastUsed(ctx, updates); err != nil {

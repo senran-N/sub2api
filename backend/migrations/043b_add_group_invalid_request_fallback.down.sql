@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_groups_fallback_group_id_on_invalid_request;
+ALTER TABLE groups DROP COLUMN IF EXISTS fallback_group_id_on_invalid_request;

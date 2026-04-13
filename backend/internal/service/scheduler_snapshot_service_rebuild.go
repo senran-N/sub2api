@@ -8,6 +8,11 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
+const (
+	schedulerSnapshotBucketLockTTL      = 30 * time.Second
+	schedulerSnapshotBucketBuildTimeout = 30 * time.Second
+)
+
 func (s *SchedulerSnapshotService) rebuildByAccount(ctx context.Context, account *Account, groupIDs []int64, reason string) error {
 	if account == nil {
 		return nil
@@ -82,7 +87,7 @@ func (s *SchedulerSnapshotService) rebuildBucket(ctx context.Context, bucket Sch
 	if s.cache == nil {
 		return ErrSchedulerCacheNotReady
 	}
-	ok, err := s.cache.TryLockBucket(ctx, bucket, 30*time.Second)
+	ok, err := s.cache.TryLockBucket(ctx, bucket, schedulerSnapshotBucketLockTTL)
 	if err != nil {
 		return err
 	}
@@ -90,7 +95,7 @@ func (s *SchedulerSnapshotService) rebuildBucket(ctx context.Context, bucket Sch
 		return nil
 	}
 
-	rebuildCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	rebuildCtx, cancel := context.WithTimeout(ctx, schedulerSnapshotBucketBuildTimeout)
 	defer cancel()
 
 	accounts, err := s.loadAccountsFromDB(rebuildCtx, bucket, bucket.Mode == SchedulerModeMixed)
@@ -110,7 +115,7 @@ func (s *SchedulerSnapshotService) triggerFullRebuild(reason string) error {
 	if s.cache == nil {
 		return ErrSchedulerCacheNotReady
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), schedulerSnapshotBootstrapTimeout)
 	defer cancel()
 
 	buckets, err := s.cache.ListBuckets(ctx)

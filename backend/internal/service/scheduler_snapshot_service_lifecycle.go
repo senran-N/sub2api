@@ -7,6 +7,8 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
+const schedulerSnapshotBootstrapTimeout = 2 * time.Minute
+
 func (s *SchedulerSnapshotService) Start() {
 	if s == nil || s.cache == nil {
 		return
@@ -51,7 +53,7 @@ func (s *SchedulerSnapshotService) runInitialRebuild() {
 	if s.cache == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), schedulerSnapshotBootstrapTimeout)
 	defer cancel()
 
 	buckets, err := s.cache.ListBuckets(ctx)

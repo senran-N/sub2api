@@ -3,11 +3,13 @@ version: "2"
 linters:
   default: none
   enable:
+    - bodyclose
     - depguard
     - errcheck
     - gosec
     - govet
     - ineffassign
+    - misspell
     - staticcheck
     - unused
 
@@ -50,7 +52,6 @@ linters:
         - G104
         - G109
         - G115
-        - G201
         - G202
         - G301
         - G302

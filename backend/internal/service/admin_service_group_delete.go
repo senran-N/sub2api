@@ -24,14 +24,19 @@ func (s *adminServiceImpl) invalidateDeletedGroupSubscriptions(affectedUserIDs [
 		return
 	}
 
-	runDetachedTask("invalidate_deleted_group_subscriptions", func(ctx context.Context) {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	runDetachedTask("invalidate_deleted_group_subscriptions", func(ctx context.Context) error {
+		cacheCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
+		var firstErr error
 		for _, userID := range affectedUserIDs {
 			if err := s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID); err != nil {
 				logger.LegacyPrintf("service.admin", "invalidate subscription cache failed: user_id=%d group_id=%d err=%v", userID, groupID, err)
+				if firstErr == nil {
+					firstErr = err
+				}
 			}
 		}
+		return firstErr
 	}, "group_id", groupID)
 }
 

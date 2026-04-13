@@ -49,6 +49,14 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_b;
 		require.True(t, nonTx)
 		require.NoError(t, err)
 	})
+
+	t.Run("notx回滚迁移同样允许并发索引语句", func(t *testing.T) {
+		nonTx, err := validateMigrationExecutionMode("001_add_idx_notx.down.sql", `
+DROP INDEX CONCURRENTLY IF EXISTS idx_a;
+`)
+		require.True(t, nonTx)
+		require.NoError(t, err)
+	})
 }
 
 func TestApplyMigrationsFS_NonTransactionalMigration(t *testing.T) {
@@ -147,6 +155,81 @@ func TestApplyMigrationsFS_TransactionalMigration(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestRollbackMigrationsFS_TransactionalMigration(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	prepareRollbackBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT filename FROM schema_migrations ORDER BY filename DESC LIMIT \\$1").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"filename"}).AddRow("001_add_col.sql"))
+	mock.ExpectBegin()
+	mock.ExpectExec("ALTER TABLE t DROP COLUMN IF EXISTS name").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("DELETE FROM schema_migrations WHERE filename = \\$1").
+		WithArgs("001_add_col.sql").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
+		WithArgs(migrationsAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	fsys := fstest.MapFS{
+		"001_add_col.down.sql": &fstest.MapFile{
+			Data: []byte("ALTER TABLE t DROP COLUMN IF EXISTS name;"),
+		},
+	}
+
+	err = rollbackMigrationsFS(context.Background(), db, fsys, 1)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRollbackMigrationsFS_PreflightMissingDown(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	prepareRollbackBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT filename FROM schema_migrations ORDER BY filename DESC LIMIT \\$1").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"filename"}).AddRow("001_add_col.sql"))
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
+		WithArgs(migrationsAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err = rollbackMigrationsFS(context.Background(), db, fstest.MapFS{}, 1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "rollback migration missing")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRollbackMigrationsFS_PreflightIrreversible(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	prepareRollbackBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT filename FROM schema_migrations ORDER BY filename DESC LIMIT \\$1").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"filename"}).AddRow("001_add_col.sql"))
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
+		WithArgs(migrationsAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	fsys := fstest.MapFS{
+		"001_add_col.down.sql": &fstest.MapFile{
+			Data: []byte("-- sub2api:irreversible\nDO $$ BEGIN RAISE EXCEPTION 'no'; END $$;"),
+		},
+	}
+
+	err = rollbackMigrationsFS(context.Background(), db, fsys, 1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "marked irreversible")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func prepareMigrationsBootstrapExpectations(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery("SELECT pg_try_advisory_lock\\(\\$1\\)").
 		WithArgs(migrationsAdvisoryLockID).
@@ -161,4 +244,12 @@ func prepareMigrationsBootstrapExpectations(mock sqlmock.Sqlmock) {
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM atlas_schema_revisions").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+}
+
+func prepareRollbackBootstrapExpectations(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery("SELECT pg_try_advisory_lock\\(\\$1\\)").
+		WithArgs(migrationsAdvisoryLockID).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
 }

@@ -29,7 +29,10 @@ type cachedPassthroughRule struct {
 	errorCodeSet   map[int]struct{} // 预计算的 error code set
 }
 
-const maxBodyMatchLen = 8 << 10 // 8KB，错误信息不会在 8KB 之后才出现
+const (
+	maxBodyMatchLen                     = 8 << 10 // 8KB，错误信息不会在 8KB 之后才出现
+	errorPassthroughCacheRefreshTimeout = 3 * time.Second
+)
 
 // NewErrorPassthroughService 创建错误透传规则服务
 func NewErrorPassthroughService(
@@ -53,7 +56,9 @@ func NewErrorPassthroughService(
 	// 订阅缓存更新通知
 	if cache != nil {
 		cache.SubscribeUpdates(ctx, func() {
-			if err := svc.refreshLocalCache(context.Background()); err != nil {
+			refreshCtx, cancel := svc.newCacheRefreshContext()
+			defer cancel()
+			if err := svc.refreshLocalCache(refreshCtx); err != nil {
 				logger.LegacyPrintf("service.error_passthrough", "[ErrorPassthroughService] Failed to refresh cache on notification: %v", err)
 			}
 		})
@@ -252,7 +257,7 @@ func (s *ErrorPassthroughService) clearLocalCache() {
 
 // newCacheRefreshContext 为写路径缓存同步创建独立上下文，避免受请求取消影响。
 func (s *ErrorPassthroughService) newCacheRefreshContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 3*time.Second)
+	return context.WithTimeout(context.Background(), errorPassthroughCacheRefreshTimeout)
 }
 
 // invalidateAndNotify 使缓存失效并通知其他实例

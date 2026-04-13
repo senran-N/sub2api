@@ -15,6 +15,11 @@ import (
 	"github.com/senran-N/sub2api/internal/util/urlvalidator"
 )
 
+const (
+	pricingDownloadTimeout   = 30 * time.Second
+	pricingRemoteHashTimeout = 10 * time.Second
+)
+
 // downloadPricingData 从远程下载价格数据
 func (s *PricingService) downloadPricingData() error {
 	remoteURL, err := s.validatePricingURL(s.cfg.Pricing.RemoteURL)
@@ -23,7 +28,7 @@ func (s *PricingService) downloadPricingData() error {
 	}
 	logger.LegacyPrintf("service.pricing", "[Pricing] Downloading from %s", remoteURL)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), pricingDownloadTimeout)
 	defer cancel()
 
 	var remoteHash string
@@ -204,7 +209,7 @@ func (s *PricingService) fetchRemoteHash() (string, error) {
 		return "", err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), pricingRemoteHashTimeout)
 	defer cancel()
 
 	hash, err := s.remoteClient.FetchHashText(ctx, hashURL)

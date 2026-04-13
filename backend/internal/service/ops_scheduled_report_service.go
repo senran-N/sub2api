@@ -23,7 +23,9 @@ const (
 
 	opsScheduledReportLastRunKeyPrefix = "ops:scheduled_reports:last_run:"
 
-	opsScheduledReportTickInterval = 1 * time.Minute
+	opsScheduledReportTickInterval       = 1 * time.Minute
+	opsScheduledReportHeartbeatTimeout   = 2 * time.Second
+	opsScheduledReportLockReleaseTimeout = 2 * time.Second
 )
 
 var opsScheduledReportCronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
@@ -613,7 +615,7 @@ func (s *OpsScheduledReportService) tryAcquireLeaderLock(ctx context.Context) (f
 		return nil, false
 	}
 	return func() {
-		runRedisLeaderLockRelease(opsScheduledReportReleaseScript, s.redisClient, key, s.instanceID, 2*time.Second)
+		runRedisLeaderLockRelease(opsScheduledReportReleaseScript, s.redisClient, key, s.instanceID, opsScheduledReportLockReleaseTimeout)
 	}, true
 }
 
@@ -666,7 +668,7 @@ func (s *OpsScheduledReportService) recordHeartbeatSuccess(runAt time.Time, dura
 	}
 	now := time.Now().UTC()
 	durMs := duration.Milliseconds()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), opsScheduledReportHeartbeatTimeout)
 	defer cancel()
 	msg := strings.TrimSpace(result)
 	if msg == "" {
@@ -689,7 +691,7 @@ func (s *OpsScheduledReportService) recordHeartbeatError(runAt time.Time, durati
 	now := time.Now().UTC()
 	durMs := duration.Milliseconds()
 	msg := truncateString(err.Error(), 2048)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), opsScheduledReportHeartbeatTimeout)
 	defer cancel()
 	_ = s.opsService.opsRepo.UpsertJobHeartbeat(ctx, &OpsUpsertJobHeartbeatInput{
 		JobName:        opsScheduledReportJobName,

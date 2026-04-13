@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	systemOperationLockScope = "admin.system.operations.global_lock"
-	systemOperationLockKey   = "global-system-operation-lock"
+	systemOperationLockScope        = "admin.system.operations.global_lock"
+	systemOperationLockKey          = "global-system-operation-lock"
+	systemOperationLockRenewTimeout = 2 * time.Second
 )
 
 var (
@@ -171,7 +172,7 @@ func (s *SystemOperationLockService) renewLoop(lock *SystemOperationLock) {
 		select {
 		case <-ticker.C:
 			now := time.Now()
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), systemOperationLockRenewTimeout)
 			ok, err := s.repo.ExtendProcessingLock(
 				ctx,
 				lock.recordID,

@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const opsAlertEvaluatorSettingsFetchTimeout = 2 * time.Second
+
 func (s *OpsAlertEvaluatorService) Start() {
 	if s == nil {
 		return
@@ -54,7 +56,7 @@ func (s *OpsAlertEvaluatorService) getInterval() time.Duration {
 		return interval
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), opsAlertEvaluatorSettingsFetchTimeout)
 	defer cancel()
 
 	cfg, err := s.opsService.GetOpsAlertRuntimeSettings(ctx)

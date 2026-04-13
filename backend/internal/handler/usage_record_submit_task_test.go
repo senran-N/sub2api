@@ -54,6 +54,25 @@ func TestGatewayHandlerSubmitUsageRecordTask_WithoutPoolSyncFallback(t *testing.
 	require.True(t, called.Load())
 }
 
+func TestGatewayHandlerSubmitUsageRecordTaskWithParent_WithoutPoolSyncFallback(t *testing.T) {
+	h := &GatewayHandler{}
+	var called atomic.Bool
+	parent, cancelParent := context.WithCancel(context.Background())
+	cancelParent()
+
+	h.submitUsageRecordTaskWithParent(parent, func(ctx context.Context) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("expected deadline in fallback context")
+		}
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("expected parent cancellation to be detached, got %v", err)
+		}
+		called.Store(true)
+	})
+
+	require.True(t, called.Load())
+}
+
 func TestGatewayHandlerSubmitUsageRecordTask_NilTask(t *testing.T) {
 	h := &GatewayHandler{}
 	require.NotPanics(t, func() {
@@ -100,6 +119,25 @@ func TestOpenAIGatewayHandlerSubmitUsageRecordTask_WithoutPoolSyncFallback(t *te
 	h.submitUsageRecordTask(func(ctx context.Context) {
 		if _, ok := ctx.Deadline(); !ok {
 			t.Fatal("expected deadline in fallback context")
+		}
+		called.Store(true)
+	})
+
+	require.True(t, called.Load())
+}
+
+func TestOpenAIGatewayHandlerSubmitUsageRecordTaskWithParent_WithoutPoolSyncFallback(t *testing.T) {
+	h := &OpenAIGatewayHandler{}
+	var called atomic.Bool
+	parent, cancelParent := context.WithCancel(context.Background())
+	cancelParent()
+
+	h.submitUsageRecordTaskWithParent(parent, func(ctx context.Context) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("expected deadline in fallback context")
+		}
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("expected parent cancellation to be detached, got %v", err)
 		}
 		called.Store(true)
 	})

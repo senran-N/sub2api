@@ -177,13 +177,12 @@ import AccountTableActions from '@/components/admin/account/AccountTableActions.
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
-import type { SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
-import type { Account, AccountPlatform, AccountType } from '@/types'
+import type { Account } from '@/types'
 import AccountActionsCell from './accounts/AccountActionsCell.vue'
 import AccountExpiresCell from './accounts/AccountExpiresCell.vue'
 import AccountExportDialogOptions from './accounts/AccountExportDialogOptions.vue'
@@ -201,9 +200,7 @@ import AccountSchedulableToggle from './accounts/AccountSchedulableToggle.vue'
 import AccountToolbarControls from './accounts/AccountToolbarControls.vue'
 import {
   ACCOUNT_SORT_STORAGE_KEY,
-  type AccountListQuery,
-  patchAccountList,
-  updateSchedulableAccounts
+  type AccountListQuery
 } from './accounts/accountsList'
 import { useAccountsViewColumns } from './accounts/useAccountsViewColumns'
 import { useAccountsViewActions } from './accounts/useAccountsViewActions'
@@ -214,6 +211,7 @@ import {
   useAccountsViewExport
 } from './accounts/useAccountsViewExport'
 import { useAccountsViewRefresh } from './accounts/useAccountsViewRefresh'
+import { useAccountsViewState } from './accounts/useAccountsViewState'
 
 const CreateAccountModal = defineAsyncComponent(() => import('@/components/account/CreateAccountModal.vue'))
 const EditAccountModal = defineAsyncComponent(() => import('@/components/account/EditAccountModal.vue'))
@@ -233,38 +231,6 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 
 const accountTableRef = ref<HTMLElement | null>(null)
-const selPlatforms = computed<AccountPlatform[]>(() => {
-  const platforms = new Set(
-    accounts.value
-      .filter(a => isSelected(a.id))
-      .map(a => a.platform)
-  )
-  return [...platforms]
-})
-const selTypes = computed<AccountType[]>(() => {
-  const types = new Set(
-    accounts.value
-      .filter(a => isSelected(a.id))
-      .map(a => a.type)
-  )
-  return [...types]
-})
-const showEdit = ref(false)
-const showTempUnsched = ref(false)
-const showDeleteDialog = ref(false)
-const showReAuth = ref(false)
-const showTest = ref(false)
-const showStats = ref(false)
-const edAcc = ref<Account | null>(null)
-const tempUnschedAcc = ref<Account | null>(null)
-const deletingAcc = ref<Account | null>(null)
-const reAuthAcc = ref<Account | null>(null)
-const testingAcc = ref<Account | null>(null)
-const statsAcc = ref<Account | null>(null)
-const showSchedulePanel = ref(false)
-const scheduleAcc = ref<Account | null>(null)
-const scheduleModelOptions = ref<SelectOption[]>([])
-const togglingSchedulable = ref<number | null>(null)
 
 const {
   showCreate,
@@ -320,31 +286,54 @@ useSwipeSelect(accountTableRef, {
   deselect
 })
 
-const isAnyModalOpen = computed(() => {
-  return (
-    showCreate.value ||
-    showEdit.value ||
-    showSync.value ||
-    showImportData.value ||
-    showExportDataDialog.value ||
-    showBulkEdit.value ||
-    showTempUnsched.value ||
-    showDeleteDialog.value ||
-    showReAuth.value ||
-    showTest.value ||
-    showStats.value ||
-    showSchedulePanel.value ||
-    showErrorPassthrough.value
-  )
+const {
+  selPlatforms,
+  selTypes,
+  showEdit,
+  showTempUnsched,
+  showDeleteDialog,
+  showReAuth,
+  showTest,
+  showStats,
+  showSchedulePanel,
+  edAcc,
+  tempUnschedAcc,
+  deletingAcc,
+  reAuthAcc,
+  testingAcc,
+  statsAcc,
+  scheduleAcc,
+  scheduleModelOptions,
+  togglingSchedulable,
+  isAnyModalOpen,
+  syncAccountRefs,
+  toggleSelectAllVisible,
+  updateSchedulableInList,
+  handleBulkUpdated,
+  handleDataImported,
+  patchAccountInList
+} = useAccountsViewState({
+  accounts,
+  isSelected,
+  toggleVisible,
+  clearSelection,
+  reload: () => reload(),
+  params,
+  pagination,
+  getHasPendingListSync: () => hasPendingListSync.value,
+  setHasPendingListSync: (value) => {
+    hasPendingListSync.value = value
+  },
+  removeSelectedAccounts,
+  menu,
+  syncMenuAccount,
+  showCreate,
+  showSync,
+  showImportData,
+  showExportDataDialog,
+  showBulkEdit,
+  showErrorPassthrough
 })
-
-const syncAccountRefs = (nextAccount: Account) => {
-  if (edAcc.value?.id === nextAccount.id) edAcc.value = nextAccount
-  if (reAuthAcc.value?.id === nextAccount.id) reAuthAcc.value = nextAccount
-  if (tempUnschedAcc.value?.id === nextAccount.id) tempUnschedAcc.value = nextAccount
-  if (deletingAcc.value?.id === nextAccount.id) deletingAcc.value = nextAccount
-  syncMenuAccount(nextAccount)
-}
 
 const isActionMenuOpen = computed(() => menu.show)
 
@@ -404,57 +393,6 @@ const {
   syncAccountRefs
 })
 refreshUsageColumnStats = refreshTodayStatsBatch
-
-const toggleSelectAllVisible = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  toggleVisible(target.checked)
-}
-const updateSchedulableInList = (accountIds: number[], schedulable: boolean) => {
-  accounts.value = updateSchedulableAccounts(accounts.value, accountIds, schedulable)
-}
-const handleBulkUpdated = () => { showBulkEdit.value = false; clearSelection(); reload() }
-const handleDataImported = () => { showImportData.value = false; reload() }
-
-const patchAccountInList = (updatedAccount: Account) => {
-  const result = patchAccountList(
-    accounts.value,
-    updatedAccount,
-    {
-      platform: params.platform,
-      type: params.type,
-      status: params.status,
-      privacy_mode: params.privacy_mode,
-      group: params.group,
-      search: params.search
-    },
-    pagination,
-    hasPendingListSync.value,
-    menu.acc?.id ?? null
-  )
-
-  if (result.patchedAccount === null && result.removedAccountId === null) {
-    return
-  }
-
-  accounts.value = result.accounts
-  pagination.page = result.pagination.page
-  pagination.total = result.pagination.total
-  pagination.pages = result.pagination.pages
-  hasPendingListSync.value = result.hasPendingListSync
-
-  if (result.removedAccountId !== null) {
-    removeSelectedAccounts([result.removedAccountId])
-  }
-
-  if (result.shouldCloseMenu) {
-    menu.show = false
-    menu.acc = null
-  }
-
-  if (result.patchedAccount) {
-    syncAccountRefs(result.patchedAccount)
-  }
-}
 
 const {
   handleEdit,

@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const accountExpiryRunTimeout = 5 * time.Second
+
 // AccountExpiryService periodically pauses expired accounts when auto-pause is enabled.
 type AccountExpiryService struct {
 	accountRepo AccountRepository
@@ -57,7 +59,7 @@ func (s *AccountExpiryService) Stop() {
 }
 
 func (s *AccountExpiryService) runOnce() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), accountExpiryRunTimeout)
 	defer cancel()
 
 	updated, err := s.accountRepo.AutoPauseExpiredAccounts(ctx, time.Now())

@@ -14,6 +14,11 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
+const (
+	userMsgQueueCleanupScanTimeout    = 10 * time.Second
+	userMsgQueueCleanupReleaseTimeout = 2 * time.Second
+)
+
 // UserMsgQueueCache 用户消息串行队列 Redis 缓存接口
 type UserMsgQueueCache interface {
 	// AcquireLock 尝试获取账号级串行锁
@@ -251,7 +256,7 @@ func (s *UserMessageQueueService) StartCleanupWorker(interval time.Duration) {
 	}
 
 	runCleanup := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), userMsgQueueCleanupScanTimeout)
 		defer cancel()
 
 		accountIDs, err := s.cache.ScanLockKeys(ctx, 1000)
@@ -262,7 +267,7 @@ func (s *UserMessageQueueService) StartCleanupWorker(interval time.Duration) {
 
 		cleaned := 0
 		for _, accountID := range accountIDs {
-			cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			cleanCtx, cleanCancel := context.WithTimeout(context.Background(), userMsgQueueCleanupReleaseTimeout)
 			if err := s.cache.ForceReleaseLock(cleanCtx, accountID); err != nil {
 				logger.LegacyPrintf("service.umq", "Cleanup force release failed for account %d: %v", accountID, err)
 			} else {

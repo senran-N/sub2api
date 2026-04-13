@@ -64,17 +64,17 @@ func (s *SubscriptionService) InvalidateSubCache(userID, groupID int64) {
 	s.subCacheL1.Del(subCacheKey(userID, groupID))
 }
 
-func (s *SubscriptionService) invalidateSubscriptionCaches(userID, groupID int64) {
+func (s *SubscriptionService) invalidateSubscriptionCaches(ctx context.Context, userID, groupID int64) {
 	s.InvalidateSubCache(userID, groupID)
 	if s.billingCacheService == nil {
 		return
 	}
 
-	go func() {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), subscriptionCacheInvalidateTimeout)
+	go func(parent context.Context) {
+		cacheCtx, cancel := newDetachedTimeoutContext(parent, subscriptionCacheInvalidateTimeout)
 		defer cancel()
 		_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
-	}()
+	}(ctx)
 }
 
 func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID, groupID int64) (*UserSubscription, error) {

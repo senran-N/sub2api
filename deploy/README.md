@@ -232,6 +232,30 @@ docker compose -f docker-compose.standalone.yml pull
 docker compose -f docker-compose.standalone.yml up -d
 ```
 
+### Release Automation Notes
+
+The repository release workflow now includes a few safeguards beyond the image build itself:
+
+- `workflow_dispatch` supports `dry_run=true`, which runs GoReleaser in snapshot mode without publishing artifacts.
+- Release jobs run Trivy filesystem and config scans before publishing images.
+- Published GHCR release images are signed with Sigstore Cosign keyless signing.
+- Published GHCR images are smoke-tested with temporary PostgreSQL and Redis containers by running [`deploy/release-smoke-test.sh`](./release-smoke-test.sh) and checking `/health` plus the web entry page.
+
+If you need to reproduce the post-release smoke test locally:
+
+```bash
+chmod +x deploy/release-smoke-test.sh
+./deploy/release-smoke-test.sh ghcr.io/<owner>/sub2api:<tag>
+```
+
+If you want to verify a released GHCR image signature locally:
+
+```bash
+cosign verify ghcr.io/<owner>/sub2api:<tag> \
+  --certificate-identity-regexp 'https://github.com/<owner>/<repo>/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ### Environment Variables
 
 | Variable | Required | Default | Description |
