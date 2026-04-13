@@ -15,6 +15,11 @@ services:
     image: weishaw/sub2api:latest
     container_name: sub2api
     restart: unless-stopped
+    stop_grace_period: ${SUB2API_STOP_GRACE_PERIOD:-50s}
+    mem_limit: ${SUB2API_MEMORY_LIMIT:-2g}
+    mem_reservation: ${SUB2API_MEMORY_RESERVATION:-512m}
+    cpus: ${SUB2API_CPUS:-1.0}
+    pids_limit: ${SUB2API_PIDS_LIMIT:-512}
     ulimits:
       nofile:
         soft: 100000
@@ -37,6 +42,7 @@ services:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
       - SERVER_MODE=${SERVER_MODE:-release}
+      - SERVER_SHUTDOWN_TIMEOUT_SECONDS=${SERVER_SHUTDOWN_TIMEOUT_SECONDS:-45}
       - RUN_MODE=${RUN_MODE:-standard}
 
       # =======================================================================
@@ -77,6 +83,11 @@ services:
       - JWT_EXPIRE_HOUR=${JWT_EXPIRE_HOUR:-24}
 
       # =======================================================================
+      # TOTP (2FA) Configuration
+      # =======================================================================
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
+
+      # =======================================================================
       # Timezone Configuration
       # =======================================================================
       - TZ=${TZ:-Asia/Shanghai}
@@ -93,6 +104,25 @@ services:
       # SECURITY: This repo does not embed third-party client_secret.
       - GEMINI_CLI_OAUTH_CLIENT_SECRET=${GEMINI_CLI_OAUTH_CLIENT_SECRET:-}
       - ANTIGRAVITY_OAUTH_CLIENT_SECRET=${ANTIGRAVITY_OAUTH_CLIENT_SECRET:-}
+
+      # =======================================================================
+      # Security Configuration (URL Allowlist)
+      # =======================================================================
+      # Enable URL allowlist validation (production default: true; set false only for controlled dev/test cases)
+      - SECURITY_URL_ALLOWLIST_ENABLED=${SECURITY_URL_ALLOWLIST_ENABLED:-true}
+      # Allow insecure HTTP URLs when allowlist is disabled (default: false, requires https)
+      - SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=${SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP:-false}
+      # Allow private IP addresses for upstream/pricing/CRS (for internal deployments)
+      - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-false}
+      # Upstream hosts whitelist (comma-separated, only used when enabled=true)
+      - SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS=${SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS:-}
+
+      # =======================================================================
+      # Update Configuration
+      # =======================================================================
+      # Proxy for accessing GitHub (online updates + pricing data)
+      # Examples: http://host:port, socks5://host:port
+      - UPDATE_PROXY_URL=${UPDATE_PROXY_URL:-}
     healthcheck:
       test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s

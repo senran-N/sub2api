@@ -15,6 +15,7 @@ This directory contains files for deploying Sub2API on Linux servers.
 |------|-------------|
 | `docker-compose.yml` | Docker Compose configuration (named volumes) |
 | `docker-compose.local.yml` | Docker Compose configuration (local directories, easy migration) |
+| `docker-compose.standalone.yml` | Docker Compose configuration (external PostgreSQL/Redis) |
 | `docker-deploy.sh` | **One-click Docker deployment script (recommended)** |
 | `.env.example` | Docker environment variables template |
 | `DOCKER.md` | Docker Hub documentation |
@@ -103,8 +104,10 @@ docker compose -f docker-compose.local.yml logs -f sub2api
 |---------|-------------|-----------|----------|
 | **docker-compose.local.yml** | Local directories (./data, ./postgres_data, ./redis_data) | ✅ Easy (tar entire directory) | Production, need frequent backups/migration |
 | **docker-compose.yml** | Named volumes (/var/lib/docker/volumes/) | ⚠️ Requires docker commands | Simple setup, don't need migration |
+| **docker-compose.standalone.yml** | External PostgreSQL + Redis | Depends on external backups | Existing managed database/cache services |
 
 **Recommendation:** Use `docker-compose.local.yml` (deployed by `docker-deploy.sh`) for easier data management and migration.
+Use `docker-compose.standalone.yml` only when PostgreSQL and Redis are already managed outside this host; it reuses the same `.env.example` shutdown/resource/security defaults as the other compose variants.
 
 ### How Auto-Setup Works
 
@@ -205,11 +208,36 @@ docker compose up -d
 docker compose down -v
 ```
 
+For **standalone version** (docker-compose.standalone.yml, external PostgreSQL/Redis):
+
+```bash
+# Configure external dependencies in .env first
+# DATABASE_HOST=postgres.example.internal
+# DATABASE_PASSWORD=...
+# REDIS_HOST=redis.example.internal
+
+# Start services
+docker compose -f docker-compose.standalone.yml up -d
+
+# Stop services
+docker compose -f docker-compose.standalone.yml down
+
+# View logs
+docker compose -f docker-compose.standalone.yml logs -f sub2api
+
+# Update to latest version
+docker compose -f docker-compose.standalone.yml pull
+docker compose -f docker-compose.standalone.yml up -d
+```
+
 ### Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `POSTGRES_PASSWORD` | **Yes** | - | PostgreSQL password |
+| `POSTGRES_PASSWORD` | **Yes** | - | PostgreSQL password for bundled Postgres in `docker-compose.yml` / `docker-compose.local.yml` |
+| `DATABASE_HOST` | Standalone only | - | External PostgreSQL host for `docker-compose.standalone.yml` |
+| `DATABASE_PASSWORD` | Standalone only | - | External PostgreSQL password for `docker-compose.standalone.yml` |
+| `REDIS_HOST` | Standalone only | - | External Redis host for `docker-compose.standalone.yml` |
 | `JWT_SECRET` | **Recommended** | *(auto-generated)* | JWT secret (fixed for persistent sessions) |
 | `TOTP_ENCRYPTION_KEY` | **Recommended** | *(auto-generated)* | TOTP encryption key (fixed for persistent 2FA) |
 | `SERVER_PORT` | No | `8080` | Server port |
@@ -228,9 +256,9 @@ docker compose down -v
 | `GEMINI_OAUTH_SCOPES` | No | *(default)* | OAuth scopes (Gemini OAuth) |
 | `GEMINI_QUOTA_POLICY` | No | *(empty)* | JSON overrides for Gemini local quota simulation (Code Assist only). |
 
-If you increase `SERVER_SHUTDOWN_TIMEOUT_SECONDS`, raise `SUB2API_STOP_GRACE_PERIOD` as well so Docker does not SIGKILL the process before cleanup completes.
+If you increase `SERVER_SHUTDOWN_TIMEOUT_SECONDS`, raise `SUB2API_STOP_GRACE_PERIOD` as well so Docker does not SIGKILL the process before cleanup completes. This applies to `docker-compose.standalone.yml` too.
 
-Production deploy examples now keep `SECURITY_URL_ALLOWLIST_ENABLED=true` by default. If you use a custom upstream, pricing mirror, or CRS endpoint, add its host to the matching allowlist in `config.yaml` before switching traffic.
+Production deploy examples now keep `SECURITY_URL_ALLOWLIST_ENABLED=true` by default. If you use a custom upstream, pricing mirror, or CRS endpoint, add its host to the matching allowlist in `config.yaml` before switching traffic. The standalone compose file now inherits the same default instead of silently bypassing it.
 
 See `.env.example` for all available options.
 
