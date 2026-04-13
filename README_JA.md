@@ -399,11 +399,12 @@ default:
 - `cors.allowed_origins` - CORS 許可リスト
 - `security.url_allowlist` - 上流/価格/CRS ホストの許可リスト
 - `security.url_allowlist.enabled` - URL バリデーションの無効化（注意して使用）
-- `security.url_allowlist.allow_insecure_http` - バリデーション無効時に HTTP URL を許可
-- `security.url_allowlist.allow_private_hosts` - プライベート/ローカル IP アドレスを許可
+- `security.url_allowlist.allow_insecure_http` - バリデーション無効時に HTTP URL を明示的に許可
+- `security.url_allowlist.allow_private_hosts` - プライベート/ローカル IP アドレスを明示的に許可
 - `security.response_headers.enabled` - 設定可能なレスポンスヘッダーフィルタリングを有効化（無効時はデフォルトの許可リストを使用）
 - `security.csp` - Content-Security-Policy ヘッダーの制御
 - `billing.circuit_breaker` - 課金エラー時にフェイルクローズ
+- `server.shutdown_timeout_seconds` - graceful shutdown の秒数を制御
 - `server.trusted_proxies` - X-Forwarded-For パースの有効化
 - `turnstile.required` - リリースモードでの Turnstile 必須化
 

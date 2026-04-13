@@ -213,13 +213,21 @@ docker compose down -v
 | `JWT_SECRET` | **Recommended** | *(auto-generated)* | JWT secret (fixed for persistent sessions) |
 | `TOTP_ENCRYPTION_KEY` | **Recommended** | *(auto-generated)* | TOTP encryption key (fixed for persistent 2FA) |
 | `SERVER_PORT` | No | `8080` | Server port |
+| `SERVER_SHUTDOWN_TIMEOUT_SECONDS` | No | `45` | Application graceful shutdown timeout |
 | `ADMIN_EMAIL` | No | `admin@sub2api.local` | Admin email |
 | `ADMIN_PASSWORD` | No | *(auto-generated)* | Admin password |
 | `TZ` | No | `Asia/Shanghai` | Timezone |
+| `SUB2API_STOP_GRACE_PERIOD` | No | `50s` | Container stop grace period; keep slightly above shutdown timeout |
+| `SUB2API_MEMORY_LIMIT` | No | `2g` | Memory ceiling for the Sub2API container |
+| `SUB2API_CPUS` | No | `1.0` | CPU quota for the Sub2API container |
+| `SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP` | No | `false` | Allow `http://` upstream URLs only for trusted dev/test setups |
+| `SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS` | No | `false` | Allow private or localhost upstream targets only on trusted networks |
 | `GEMINI_OAUTH_CLIENT_ID` | No | *(builtin)* | Google OAuth client ID (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
 | `GEMINI_OAUTH_CLIENT_SECRET` | No | *(builtin)* | Google OAuth client secret (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
 | `GEMINI_OAUTH_SCOPES` | No | *(default)* | OAuth scopes (Gemini OAuth) |
 | `GEMINI_QUOTA_POLICY` | No | *(empty)* | JSON overrides for Gemini local quota simulation (Code Assist only). |
+
+If you increase `SERVER_SHUTDOWN_TIMEOUT_SECONDS`, raise `SUB2API_STOP_GRACE_PERIOD` as well so Docker does not SIGKILL the process before cleanup completes.
 
 See `.env.example` for all available options.
 
@@ -501,6 +509,7 @@ docker compose -f docker-compose.local.yml logs --tail=100 sub2api
 docker compose -f docker-compose.local.yml exec postgres pg_isready
 
 # Check Redis connection
+# REDISCLI_AUTH is reused automatically if REDIS_PASSWORD is set in the container
 docker compose -f docker-compose.local.yml exec redis redis-cli ping
 
 # Restart all services
@@ -523,6 +532,7 @@ docker compose logs --tail=100 sub2api
 docker compose exec postgres pg_isready
 
 # Check Redis connection
+# REDISCLI_AUTH is reused automatically if REDIS_PASSWORD is set in the container
 docker compose exec redis redis-cli ping
 
 # Restart all services

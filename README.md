@@ -400,11 +400,12 @@ Additional security-related options are available in `config.yaml`:
 - `cors.allowed_origins` for CORS allowlist
 - `security.url_allowlist` for upstream/pricing/CRS host allowlists
 - `security.url_allowlist.enabled` to disable URL validation (use with caution)
-- `security.url_allowlist.allow_insecure_http` to allow HTTP URLs when validation is disabled
-- `security.url_allowlist.allow_private_hosts` to allow private/local IP addresses
+- `security.url_allowlist.allow_insecure_http` to explicitly allow HTTP URLs when validation is disabled
+- `security.url_allowlist.allow_private_hosts` to explicitly allow private/local IP addresses
 - `security.response_headers.enabled` to enable configurable response header filtering (disabled uses default allowlist)
 - `security.csp` to control Content-Security-Policy headers
 - `billing.circuit_breaker` to fail closed on billing errors
+- `server.shutdown_timeout_seconds` to control graceful shutdown duration
 - `server.trusted_proxies` to enable X-Forwarded-For parsing
 - `turnstile.required` to require Turnstile in release mode
 
