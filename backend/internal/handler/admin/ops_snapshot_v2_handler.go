@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,7 +65,7 @@ func (h *OpsHandler) GetDashboardSnapshotV2(c *gin.Context) {
 	}
 	bucketSeconds := pickThroughputBucketSeconds(endTime.Sub(startTime))
 
-	keyRaw, _ := json.Marshal(opsDashboardSnapshotV2CacheKey{
+	cacheKey, cacheable := marshalDashboardCacheKey(opsDashboardSnapshotV2CacheKey{
 		StartTime:    startTime.UTC().Format(time.RFC3339),
 		EndTime:      endTime.UTC().Format(time.RFC3339),
 		Platform:     filter.Platform,
@@ -74,9 +73,7 @@ func (h *OpsHandler) GetDashboardSnapshotV2(c *gin.Context) {
 		QueryMode:    filter.QueryMode,
 		BucketSecond: bucketSeconds,
 	})
-	cacheKey := string(keyRaw)
-
-	cached, hit, err := opsDashboardSnapshotV2Cache.GetOrLoad(cacheKey, func() (any, error) {
+	loadPayload := func() (any, error) {
 		var (
 			overview *service.OpsDashboardOverview
 			trend    *service.OpsThroughputTrendResponse
@@ -120,7 +117,19 @@ func (h *OpsHandler) GetDashboardSnapshotV2(c *gin.Context) {
 			ThroughputTrend: trend,
 			ErrorTrend:      errTrend,
 		}, nil
-	})
+	}
+	if !cacheable {
+		payload, err := loadPayload()
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		c.Header("X-Snapshot-Cache", "skip")
+		response.Success(c, payload)
+		return
+	}
+
+	cached, hit, err := opsDashboardSnapshotV2Cache.GetOrLoad(cacheKey, loadPayload)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

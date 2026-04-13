@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -337,16 +336,17 @@ func (h *UserAttributeHandler) GetBatchUserAttributes(c *gin.Context) {
 		return
 	}
 
-	keyRaw, _ := json.Marshal(struct {
+	cacheKey, cacheable := marshalDashboardCacheKey(struct {
 		UserIDs []int64 `json:"user_ids"`
 	}{
 		UserIDs: userIDs,
 	})
-	cacheKey := string(keyRaw)
-	if cached, ok := userAttributesBatchCache.Get(cacheKey); ok {
-		c.Header("X-Snapshot-Cache", "hit")
-		response.Success(c, cached.Payload)
-		return
+	if cacheable {
+		if cached, ok := userAttributesBatchCache.Get(cacheKey); ok {
+			c.Header("X-Snapshot-Cache", "hit")
+			response.Success(c, cached.Payload)
+			return
+		}
 	}
 
 	attrs, err := h.attrService.GetBatchUserAttributes(c.Request.Context(), userIDs)
@@ -356,7 +356,11 @@ func (h *UserAttributeHandler) GetBatchUserAttributes(c *gin.Context) {
 	}
 
 	payload := BatchUserAttributesResponse{Attributes: attrs}
-	userAttributesBatchCache.Set(cacheKey, payload)
-	c.Header("X-Snapshot-Cache", "miss")
+	if cacheable {
+		userAttributesBatchCache.Set(cacheKey, payload)
+		c.Header("X-Snapshot-Cache", "miss")
+	} else {
+		c.Header("X-Snapshot-Cache", "skip")
+	}
 	response.Success(c, payload)
 }

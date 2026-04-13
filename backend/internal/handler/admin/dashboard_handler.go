@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -497,7 +496,7 @@ func (h *DashboardHandler) GetUserSpendingRanking(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
 	limit := parseRankingLimit(c.DefaultQuery("limit", "12"))
 
-	keyRaw, _ := json.Marshal(struct {
+	cacheKey, cacheable := marshalDashboardCacheKey(struct {
 		Start string `json:"start"`
 		End   string `json:"end"`
 		Limit int    `json:"limit"`
@@ -506,11 +505,12 @@ func (h *DashboardHandler) GetUserSpendingRanking(c *gin.Context) {
 		End:   endTime.UTC().Format(time.RFC3339),
 		Limit: limit,
 	})
-	cacheKey := string(keyRaw)
-	if cached, ok := dashboardUsersRankingCache.Get(cacheKey); ok {
-		c.Header("X-Snapshot-Cache", "hit")
-		response.Success(c, cached.Payload)
-		return
+	if cacheable {
+		if cached, ok := dashboardUsersRankingCache.Get(cacheKey); ok {
+			c.Header("X-Snapshot-Cache", "hit")
+			response.Success(c, cached.Payload)
+			return
+		}
 	}
 
 	ranking, err := h.dashboardService.GetUserSpendingRanking(c.Request.Context(), startTime, endTime, limit)
@@ -527,8 +527,13 @@ func (h *DashboardHandler) GetUserSpendingRanking(c *gin.Context) {
 		"start_date":        startTime.Format("2006-01-02"),
 		"end_date":          endTime.Add(-24 * time.Hour).Format("2006-01-02"),
 	}
-	dashboardUsersRankingCache.Set(cacheKey, payload)
-	c.Header("X-Snapshot-Cache", "miss")
+	if cacheable {
+		dashboardUsersRankingCache.Set(cacheKey, payload)
+		c.Header("X-Snapshot-Cache", "hit")
+		c.Header("X-Snapshot-Cache", "miss")
+	} else {
+		c.Header("X-Snapshot-Cache", "skip")
+	}
 	response.Success(c, payload)
 }
 
@@ -547,16 +552,17 @@ func (h *DashboardHandler) GetBatchUsersUsage(c *gin.Context) {
 		return
 	}
 
-	keyRaw, _ := json.Marshal(struct {
+	cacheKey, cacheable := marshalDashboardCacheKey(struct {
 		UserIDs []int64 `json:"user_ids"`
 	}{
 		UserIDs: userIDs,
 	})
-	cacheKey := string(keyRaw)
-	if cached, ok := dashboardBatchUsersUsageCache.Get(cacheKey); ok {
-		c.Header("X-Snapshot-Cache", "hit")
-		response.Success(c, cached.Payload)
-		return
+	if cacheable {
+		if cached, ok := dashboardBatchUsersUsageCache.Get(cacheKey); ok {
+			c.Header("X-Snapshot-Cache", "hit")
+			response.Success(c, cached.Payload)
+			return
+		}
 	}
 
 	stats, err := h.dashboardService.GetBatchUserUsageStats(c.Request.Context(), userIDs, time.Time{}, time.Time{})
@@ -566,8 +572,12 @@ func (h *DashboardHandler) GetBatchUsersUsage(c *gin.Context) {
 	}
 
 	payload := gin.H{"stats": stats}
-	dashboardBatchUsersUsageCache.Set(cacheKey, payload)
-	c.Header("X-Snapshot-Cache", "miss")
+	if cacheable {
+		dashboardBatchUsersUsageCache.Set(cacheKey, payload)
+		c.Header("X-Snapshot-Cache", "miss")
+	} else {
+		c.Header("X-Snapshot-Cache", "skip")
+	}
 	response.Success(c, payload)
 }
 
@@ -591,16 +601,17 @@ func (h *DashboardHandler) GetBatchAPIKeysUsage(c *gin.Context) {
 		return
 	}
 
-	keyRaw, _ := json.Marshal(struct {
+	cacheKey, cacheable := marshalDashboardCacheKey(struct {
 		APIKeyIDs []int64 `json:"api_key_ids"`
 	}{
 		APIKeyIDs: apiKeyIDs,
 	})
-	cacheKey := string(keyRaw)
-	if cached, ok := dashboardBatchAPIKeysUsageCache.Get(cacheKey); ok {
-		c.Header("X-Snapshot-Cache", "hit")
-		response.Success(c, cached.Payload)
-		return
+	if cacheable {
+		if cached, ok := dashboardBatchAPIKeysUsageCache.Get(cacheKey); ok {
+			c.Header("X-Snapshot-Cache", "hit")
+			response.Success(c, cached.Payload)
+			return
+		}
 	}
 
 	stats, err := h.dashboardService.GetBatchAPIKeyUsageStats(c.Request.Context(), apiKeyIDs, time.Time{}, time.Time{})
@@ -610,8 +621,12 @@ func (h *DashboardHandler) GetBatchAPIKeysUsage(c *gin.Context) {
 	}
 
 	payload := gin.H{"stats": stats}
-	dashboardBatchAPIKeysUsageCache.Set(cacheKey, payload)
-	c.Header("X-Snapshot-Cache", "miss")
+	if cacheable {
+		dashboardBatchAPIKeysUsageCache.Set(cacheKey, payload)
+		c.Header("X-Snapshot-Cache", "miss")
+	} else {
+		c.Header("X-Snapshot-Cache", "skip")
+	}
 	response.Success(c, payload)
 }
 

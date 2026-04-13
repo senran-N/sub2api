@@ -58,12 +58,17 @@ func cacheStatusValue(hit bool) string {
 	return "miss"
 }
 
-func mustMarshalDashboardCacheKey(value any) string {
+func marshalDashboardCacheKey(value any) (string, bool) {
 	raw, err := json.Marshal(value)
 	if err != nil {
-		return ""
+		return "", false
 	}
-	return string(raw)
+	return string(raw), true
+}
+
+func mustMarshalDashboardCacheKey(value any) string {
+	key, _ := marshalDashboardCacheKey(value)
+	return key
 }
 
 func snapshotPayloadAs[T any](payload any) (T, error) {

@@ -2,7 +2,6 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -91,7 +90,7 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 		return
 	}
 
-	keyRaw, _ := json.Marshal(dashboardSnapshotV2CacheKey{
+	cacheKey, cacheable := marshalDashboardCacheKey(dashboardSnapshotV2CacheKey{
 		StartTime:         startTime.UTC().Format(time.RFC3339),
 		EndTime:           endTime.UTC().Format(time.RFC3339),
 		Granularity:       granularity,
@@ -110,7 +109,28 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 		IncludeUsersTrend: includeUsersTrend,
 		UsersTrendLimit:   usersTrendLimit,
 	})
-	cacheKey := string(keyRaw)
+	if !cacheable {
+		payload, err := h.buildSnapshotV2Response(
+			c.Request.Context(),
+			startTime,
+			endTime,
+			granularity,
+			filters,
+			includeStats,
+			includeTrend,
+			includeModels,
+			includeGroups,
+			includeUsersTrend,
+			usersTrendLimit,
+		)
+		if err != nil {
+			response.Error(c, 500, err.Error())
+			return
+		}
+		c.Header("X-Snapshot-Cache", "skip")
+		response.Success(c, payload)
+		return
+	}
 
 	cached, hit, err := dashboardSnapshotV2Cache.GetOrLoad(cacheKey, func() (any, error) {
 		return h.buildSnapshotV2Response(
