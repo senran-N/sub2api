@@ -82,6 +82,47 @@ func TestTryStickySessionAccount_ClearsUnschedulableBinding(t *testing.T) {
 	require.Equal(t, 1, cache.deletedSessions["session-1"])
 }
 
+func TestTryStickySessionAccount_ClearsOAuthCredentialInvalidBinding(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"access_token": "token",
+					"expires_at":   time.Now().Add(-time.Hour).Format(time.RFC3339),
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	cache := &mockGatewayCacheForPlatform{
+		sessionBindings: map[string]int64{"session-1": 1},
+	}
+
+	svc := &GatewayService{
+		accountRepo: repo,
+		cache:       cache,
+		cfg:         testConfig(),
+	}
+
+	account, ok := svc.tryStickySessionAccount(ctx, nil, "session-1", "", nil, func(a *Account) bool {
+		return a.Platform == PlatformAnthropic
+	})
+
+	require.False(t, ok)
+	require.Nil(t, account)
+	require.Equal(t, 1, cache.deletedSessions["session-1"])
+}
+
 func TestSelectBestCandidateWithStickyPolicy_BindsSelectedAccount(t *testing.T) {
 	ctx := context.Background()
 	cache := &mockGatewayCacheForPlatform{}

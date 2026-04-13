@@ -32,8 +32,8 @@ func prefetchedStickyAccountIDFromContext(ctx context.Context, groupID *int64) i
 }
 
 // shouldClearStickySession 检查账号是否处于不可调度状态，需要清理粘性会话绑定。
-// 当账号状态为错误、禁用、不可调度、处于临时不可调度期间，
-// 或请求的模型处于限流状态时，返回 true。
+// 当账号状态为错误、禁用、不可调度、处于临时不可调度期间、
+// OAuth 凭证已明确不可恢复，或请求的模型处于限流状态时，返回 true。
 func shouldClearStickySession(account *Account, requestedModel string) bool {
 	if account == nil {
 		return false
@@ -42,6 +42,9 @@ func shouldClearStickySession(account *Account, requestedModel string) bool {
 		return true
 	}
 	if account.TempUnschedulableUntil != nil && time.Now().Before(*account.TempUnschedulableUntil) {
+		return true
+	}
+	if oauthSelectionCredentialIssue(account) != "" {
 		return true
 	}
 	if remaining := account.GetRateLimitRemainingTimeWithContext(context.Background(), requestedModel); remaining > 0 {

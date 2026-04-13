@@ -23,6 +23,7 @@ import (
 //   - 临时不可调度且未过期：清理
 //   - 临时不可调度已过期：不清理
 //   - 正常可调度状态：不清理
+//   - OAuth 凭证已明确不可恢复：清理
 //   - 模型限流（任意时长）：清理
 //
 // TestShouldClearStickySession tests the sticky session clearing logic.
@@ -52,6 +53,49 @@ func TestShouldClearStickySession(t *testing.T) {
 		{name: "temp unschedulable", account: &Account{Status: StatusActive, Schedulable: true, TempUnschedulableUntil: &future}, requestedModel: "", want: true},
 		{name: "temp unschedulable expired", account: &Account{Status: StatusActive, Schedulable: true, TempUnschedulableUntil: &past}, requestedModel: "", want: false},
 		{name: "active schedulable", account: &Account{Status: StatusActive, Schedulable: true}, requestedModel: "", want: false},
+		{
+			name: "oauth access token missing without refresh token",
+			account: &Account{
+				Status:      StatusActive,
+				Schedulable: true,
+				Type:        AccountTypeOAuth,
+				Credentials: map[string]any{
+					"access_token":  "   ",
+					"refresh_token": "",
+				},
+			},
+			requestedModel: "",
+			want:           true,
+		},
+		{
+			name: "oauth access token expired without refresh token",
+			account: &Account{
+				Status:      StatusActive,
+				Schedulable: true,
+				Type:        AccountTypeOAuth,
+				Credentials: map[string]any{
+					"access_token": "token",
+					"expires_at":   past.Format(time.RFC3339),
+				},
+			},
+			requestedModel: "",
+			want:           true,
+		},
+		{
+			name: "oauth access token expired with refresh token",
+			account: &Account{
+				Status:      StatusActive,
+				Schedulable: true,
+				Type:        AccountTypeOAuth,
+				Credentials: map[string]any{
+					"access_token":  "token",
+					"refresh_token": "refresh",
+					"expires_at":    past.Format(time.RFC3339),
+				},
+			},
+			requestedModel: "",
+			want:           false,
+		},
 		// 模型限流测试：有限流即清除
 		{
 			name: "model rate limited short duration",
