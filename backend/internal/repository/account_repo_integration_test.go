@@ -256,6 +256,48 @@ func (s *AccountRepoSuite) TestListWithFilters() {
 			},
 		},
 		{
+			name: "filter_by_status_active_excludes_rate_limited",
+			setup: func(client *dbent.Client) {
+				now := time.Now()
+				mustCreateAccount(s.T(), client, &service.Account{Name: "normal-active", Status: service.StatusActive})
+				mustCreateAccount(s.T(), client, &service.Account{
+					Name:             "rate-limited-active",
+					Status:           service.StatusActive,
+					RateLimitedAt:    ptrTime(now.Add(-time.Minute)),
+					RateLimitResetAt: ptrTime(now.Add(10 * time.Minute)),
+				})
+			},
+			status:    service.StatusActive,
+			wantCount: 1,
+			validate: func(accounts []service.Account) {
+				s.Require().Equal("normal-active", accounts[0].Name)
+			},
+		},
+		{
+			name: "filter_by_status_rate_limited",
+			setup: func(client *dbent.Client) {
+				now := time.Now()
+				mustCreateAccount(s.T(), client, &service.Account{Name: "normal-active", Status: service.StatusActive})
+				mustCreateAccount(s.T(), client, &service.Account{
+					Name:             "rate-limited-active",
+					Status:           service.StatusActive,
+					RateLimitedAt:    ptrTime(now.Add(-time.Minute)),
+					RateLimitResetAt: ptrTime(now.Add(10 * time.Minute)),
+				})
+				mustCreateAccount(s.T(), client, &service.Account{
+					Name:             "expired-rate-limit",
+					Status:           service.StatusActive,
+					RateLimitedAt:    ptrTime(now.Add(-20 * time.Minute)),
+					RateLimitResetAt: ptrTime(now.Add(-10 * time.Minute)),
+				})
+			},
+			status:    "rate_limited",
+			wantCount: 1,
+			validate: func(accounts []service.Account) {
+				s.Require().Equal("rate-limited-active", accounts[0].Name)
+			},
+		},
+		{
 			name: "filter_by_search",
 			setup: func(client *dbent.Client) {
 				mustCreateAccount(s.T(), client, &service.Account{Name: "alpha-account"})

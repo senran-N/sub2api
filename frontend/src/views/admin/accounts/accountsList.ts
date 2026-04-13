@@ -248,6 +248,17 @@ export function accountMatchesCurrentFilters(
       if (!Number.isFinite(resetAt) || resetAt <= nowMs) {
         return false
       }
+    } else if (filters.status === 'active') {
+      if (account.status !== 'active') {
+        return false
+      }
+
+      if (account.rate_limit_reset_at) {
+        const resetAt = new Date(account.rate_limit_reset_at).getTime()
+        if (Number.isFinite(resetAt) && resetAt > nowMs) {
+          return false
+        }
+      }
     } else if (account.status !== filters.status) {
       return false
     }

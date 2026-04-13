@@ -194,6 +194,16 @@ describe('accountsList helpers', () => {
     ).toBe(true)
 
     expect(
+      accountMatchesCurrentFilters(
+        rateLimited,
+        {
+          status: 'active'
+        },
+        new Date('2026-01-02T00:00:00Z').getTime()
+      )
+    ).toBe(false)
+
+    expect(
       accountMatchesCurrentFilters(rateLimited, {
         search: '9'
       })
