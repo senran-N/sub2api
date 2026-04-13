@@ -56,16 +56,13 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
 		if isOpenAIAccountExcluded(req.ExcludedIDs, account.ID) {
 			continue
 		}
-		if !account.IsSchedulable() {
-			continue
-		}
 		if schedGroup != nil && schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
 			continue
 		}
-		if req.RequestedModel != "" && !isOpenAIAccountModelEligible(account, req.RequestedModel) {
+		if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
 			continue
 		}
-		if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
+		if !isOpenAIAccountRuntimeEligible(account, req.RequestedModel) {
 			continue
 		}
 

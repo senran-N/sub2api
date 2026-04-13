@@ -12,6 +12,23 @@ func isOpenAIAccountBaseEligible(account *Account) bool {
 	return account != nil && account.IsOpenAI() && account.IsSchedulable()
 }
 
+func isOpenAIAccountRuntimeEligible(account *Account, requestedModel string) bool {
+	if account == nil || !account.IsOpenAI() {
+		return false
+	}
+	applyOpenAICodexRateLimitFromExtra(account, time.Now())
+	if !account.IsSchedulable() {
+		return false
+	}
+	if oauthSelectionCredentialIssue(account) != "" {
+		return false
+	}
+	if requestedModel != "" && !isOpenAIAccountModelEligible(account, requestedModel) {
+		return false
+	}
+	return true
+}
+
 func isOpenAIAccountModelEligible(account *Account, requestedModel string) bool {
 	if requestedModel == "" {
 		return true
@@ -47,10 +64,7 @@ func filterSchedulableOpenAICandidates(
 		if isOpenAIAccountExcluded(excludedIDs, account.ID) {
 			continue
 		}
-		if !account.IsSchedulable() {
-			continue
-		}
-		if requestedModel != "" && !isOpenAIAccountModelEligible(account, requestedModel) {
+		if !isOpenAIAccountRuntimeEligible(account, requestedModel) {
 			continue
 		}
 		candidates = append(candidates, account)

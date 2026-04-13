@@ -253,10 +253,7 @@ func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccount(ctx context.
 		}
 		fresh = current
 	}
-	if !isOpenAIAccountBaseEligible(fresh) {
-		return nil
-	}
-	if !isOpenAIAccountModelEligible(fresh, requestedModel) {
+	if !isOpenAIAccountRuntimeEligible(fresh, requestedModel) {
 		return nil
 	}
 	return fresh
@@ -275,10 +272,7 @@ func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Co
 		return nil
 	}
 	syncOpenAICodexRateLimitFromExtra(ctx, s.accountRepo, latest, time.Now())
-	if !isOpenAIAccountBaseEligible(latest) {
-		return nil
-	}
-	if !isOpenAIAccountModelEligible(latest, requestedModel) {
+	if !isOpenAIAccountRuntimeEligible(latest, requestedModel) {
 		return nil
 	}
 	return latest

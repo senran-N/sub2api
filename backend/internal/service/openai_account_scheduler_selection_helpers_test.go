@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -79,6 +80,72 @@ func TestPrepareLoadBalanceCandidates_PrivacyRequiredSkipsWithoutSideEffects(t *
 
 	require.Empty(t, filtered)
 	require.Empty(t, loadReq)
+}
+
+func TestPrepareLoadBalanceCandidates_SkipsRuntimeUnsafeAccounts(t *testing.T) {
+	now := time.Now().UTC()
+	usedPercent := 100.0
+	resetAfter := 3600
+	windowMinutes := 10080
+	codexExtra := buildCodexUsageExtraUpdates(&OpenAICodexUsageSnapshot{
+		PrimaryUsedPercent:       &usedPercent,
+		PrimaryResetAfterSeconds: &resetAfter,
+		PrimaryWindowMinutes:     &windowMinutes,
+		UpdatedAt:                now.Format(time.RFC3339),
+	}, now)
+
+	scheduler := &defaultOpenAIAccountScheduler{service: &OpenAIGatewayService{}}
+	req := OpenAIAccountScheduleRequest{
+		RequestedModel:    "gpt-5.1",
+		RequiredTransport: OpenAIUpstreamTransportAny,
+	}
+	accounts := []Account{
+		{
+			ID:          201,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Credentials: map[string]any{
+				"access_token": "oauth-token",
+				"expires_at":   now.Add(time.Hour).Format(time.RFC3339),
+			},
+			Extra: codexExtra,
+		},
+		{
+			ID:          202,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Credentials: map[string]any{
+				"access_token": "expired-token",
+				"expires_at":   now.Add(-time.Minute).Format(time.RFC3339),
+			},
+		},
+		{
+			ID:          203,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 2,
+			Credentials: map[string]any{
+				"access_token": "fresh-token",
+				"expires_at":   now.Add(time.Hour).Format(time.RFC3339),
+			},
+		},
+	}
+
+	filtered, loadReq := scheduler.prepareLoadBalanceCandidates(context.Background(), req, accounts, nil)
+
+	require.Len(t, filtered, 1)
+	require.Equal(t, int64(203), filtered[0].ID)
+	require.Len(t, loadReq, 1)
+	require.Equal(t, int64(203), loadReq[0].ID)
+	require.NotNil(t, accounts[0].RateLimitResetAt)
 }
 
 func TestLoadSchedulerAccountLoads(t *testing.T) {
