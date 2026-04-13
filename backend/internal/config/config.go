@@ -11,6 +11,15 @@ const (
 	RunModeSimple   = "simple"
 )
 
+const (
+	// DefaultOpsSystemLogSinkQueueSize is the default in-memory buffer for indexed ops logs.
+	DefaultOpsSystemLogSinkQueueSize = 5000
+	// DefaultOpsSystemLogSinkBatchSize is the default DB flush batch size for indexed ops logs.
+	DefaultOpsSystemLogSinkBatchSize = 200
+	// DefaultOpsSystemLogSinkFlushIntervalSeconds is the default flush cadence for partial ops log batches.
+	DefaultOpsSystemLogSinkFlushIntervalSeconds = 1
+)
+
 // 使用量记录队列溢出策略
 const (
 	UsageRecordOverflowPolicyDrop   = "drop"
@@ -773,6 +782,9 @@ type OpsConfig struct {
 	// MetricsCollectorCache controls Redis caching for expensive per-window collector queries.
 	MetricsCollectorCache OpsMetricsCollectorCacheConfig `mapstructure:"metrics_collector_cache"`
 
+	// SystemLogSink controls the in-process ops system log indexing sink.
+	SystemLogSink OpsSystemLogSinkConfig `mapstructure:"system_log_sink"`
+
 	// Pre-aggregation configuration.
 	Aggregation OpsAggregationConfig `mapstructure:"aggregation"`
 }
@@ -796,6 +808,12 @@ type OpsAggregationConfig struct {
 type OpsMetricsCollectorCacheConfig struct {
 	Enabled bool          `mapstructure:"enabled"`
 	TTL     time.Duration `mapstructure:"ttl"`
+}
+
+type OpsSystemLogSinkConfig struct {
+	QueueSize            int `mapstructure:"queue_size"`
+	BatchSize            int `mapstructure:"batch_size"`
+	FlushIntervalSeconds int `mapstructure:"flush_interval_seconds"`
 }
 
 type JWTConfig struct {

@@ -1328,6 +1328,21 @@ func TestValidateConfigErrors(t *testing.T) {
 			wantErr: "ops.metrics_collector_cache.ttl",
 		},
 		{
+			name:    "ops system log sink queue size",
+			mutate:  func(c *Config) { c.Ops.SystemLogSink.QueueSize = 0 },
+			wantErr: "ops.system_log_sink.queue_size",
+		},
+		{
+			name:    "ops system log sink batch size",
+			mutate:  func(c *Config) { c.Ops.SystemLogSink.BatchSize = 0 },
+			wantErr: "ops.system_log_sink.batch_size",
+		},
+		{
+			name:    "ops system log sink flush interval",
+			mutate:  func(c *Config) { c.Ops.SystemLogSink.FlushIntervalSeconds = 0 },
+			wantErr: "ops.system_log_sink.flush_interval_seconds",
+		},
+		{
 			name:    "ops cleanup retention",
 			mutate:  func(c *Config) { c.Ops.Cleanup.ErrorLogRetentionDays = -1 },
 			wantErr: "ops.cleanup.error_log_retention_days",
@@ -1650,5 +1665,22 @@ func TestLoad_DefaultGatewayUsageRecordConfig(t *testing.T) {
 	}
 	if cfg.Gateway.UsageRecord.AutoScaleCooldownSeconds != 10 {
 		t.Fatalf("auto_scale_cooldown_seconds = %d, want 10", cfg.Gateway.UsageRecord.AutoScaleCooldownSeconds)
+	}
+}
+
+func TestLoad_DefaultOpsSystemLogSinkConfig(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Ops.SystemLogSink.QueueSize != DefaultOpsSystemLogSinkQueueSize {
+		t.Fatalf("queue_size = %d, want %d", cfg.Ops.SystemLogSink.QueueSize, DefaultOpsSystemLogSinkQueueSize)
+	}
+	if cfg.Ops.SystemLogSink.BatchSize != DefaultOpsSystemLogSinkBatchSize {
+		t.Fatalf("batch_size = %d, want %d", cfg.Ops.SystemLogSink.BatchSize, DefaultOpsSystemLogSinkBatchSize)
+	}
+	if cfg.Ops.SystemLogSink.FlushIntervalSeconds != DefaultOpsSystemLogSinkFlushIntervalSeconds {
+		t.Fatalf("flush_interval_seconds = %d, want %d", cfg.Ops.SystemLogSink.FlushIntervalSeconds, DefaultOpsSystemLogSinkFlushIntervalSeconds)
 	}
 }

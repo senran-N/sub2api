@@ -298,6 +298,9 @@ func setDefaults() {
 	viper.SetDefault("ops.metrics_collector_cache.enabled", true)
 	// TTL should be slightly larger than collection interval (1m) to maximize cross-replica cache hits.
 	viper.SetDefault("ops.metrics_collector_cache.ttl", 65*time.Second)
+	viper.SetDefault("ops.system_log_sink.queue_size", DefaultOpsSystemLogSinkQueueSize)
+	viper.SetDefault("ops.system_log_sink.batch_size", DefaultOpsSystemLogSinkBatchSize)
+	viper.SetDefault("ops.system_log_sink.flush_interval_seconds", DefaultOpsSystemLogSinkFlushIntervalSeconds)
 
 	// JWT
 	viper.SetDefault("jwt.secret", "")

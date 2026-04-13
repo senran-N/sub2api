@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/util/logredact"
 )
@@ -45,13 +46,28 @@ type OpsSystemLogSink struct {
 	lastError atomic.Value
 }
 
-func NewOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
+func NewOpsSystemLogSink(opsRepo OpsRepository, cfgs ...*config.Config) *OpsSystemLogSink {
+	queueSize := config.DefaultOpsSystemLogSinkQueueSize
+	batchSize := config.DefaultOpsSystemLogSinkBatchSize
+	flushInterval := time.Duration(config.DefaultOpsSystemLogSinkFlushIntervalSeconds) * time.Second
+	if len(cfgs) > 0 && cfgs[0] != nil {
+		cfg := cfgs[0]
+		if cfg.Ops.SystemLogSink.QueueSize > 0 {
+			queueSize = cfg.Ops.SystemLogSink.QueueSize
+		}
+		if cfg.Ops.SystemLogSink.BatchSize > 0 {
+			batchSize = cfg.Ops.SystemLogSink.BatchSize
+		}
+		if cfg.Ops.SystemLogSink.FlushIntervalSeconds > 0 {
+			flushInterval = time.Duration(cfg.Ops.SystemLogSink.FlushIntervalSeconds) * time.Second
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &OpsSystemLogSink{
 		opsRepo:       opsRepo,
-		queue:         make(chan *logger.LogEvent, 5000),
-		batchSize:     200,
-		flushInterval: time.Second,
+		queue:         make(chan *logger.LogEvent, queueSize),
+		batchSize:     batchSize,
+		flushInterval: flushInterval,
 		ctx:           ctx,
 		cancel:        cancel,
 	}

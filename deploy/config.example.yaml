@@ -644,6 +644,16 @@ ops:
   # Other detailed settings (cleanup, aggregation, etc.) are configured in ops settings dialog
   # 其他详细设置（数据清理、预聚合等）在运维监控设置对话框中配置
   enabled: true
+  system_log_sink:
+    # Buffered indexed ops log events before drop
+    # 写入索引前的内存队列上限，超过后开始丢弃
+    queue_size: 5000
+    # Max events per DB flush
+    # 每次批量写库的最大事件数
+    batch_size: 200
+    # Flush cadence for partial batches (seconds)
+    # 未满批次时的定时 flush 间隔（秒）
+    flush_interval_seconds: 1
 
 # =============================================================================
 # JWT Configuration
