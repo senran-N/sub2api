@@ -265,6 +265,10 @@ If you increase `SERVER_SHUTDOWN_TIMEOUT_SECONDS`, raise `SUB2API_STOP_GRACE_PER
 
 Production deploy examples now keep `SECURITY_URL_ALLOWLIST_ENABLED=true` by default. If you use a custom upstream, pricing mirror, or CRS endpoint, add its host to the matching allowlist in `config.yaml` or set the matching `SECURITY_URL_ALLOWLIST_*_HOSTS` env var before switching traffic. The maintained Compose files now pass those env vars through consistently, including the standalone and dev variants.
 
+The maintained Compose files now also pass the full `.env` into the Sub2API container, so app-level knobs from `.env.example` such as `LOG_*`, `SERVER_MAX_REQUEST_BODY_SIZE`, `SERVER_H2C_*`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, and gateway scheduler/body-size overrides take effect without extra YAML edits.
+
+For the bundled PostgreSQL/Redis variants (`docker-compose.yml`, `docker-compose.local.yml`, `docker-compose.dev.yml`), `POSTGRES_MAX_CONNECTIONS`, `POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE`, `POSTGRES_MAINTENANCE_WORK_MEM`, and `REDIS_MAXCLIENTS` are wired into the service commands instead of being documentation-only.
+
 See `.env.example` for all available options.
 
 > **Note:** The `docker-deploy.sh` script automatically generates `JWT_SECRET`, `TOTP_ENCRYPTION_KEY`, and `POSTGRES_PASSWORD` for you.

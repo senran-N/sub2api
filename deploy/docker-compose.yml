@@ -3,8 +3,8 @@
 # =============================================================================
 # Quick Start:
 #   1. Copy .env.example to .env and configure
-#   2. docker-compose up -d
-#   3. Check logs: docker-compose logs -f sub2api
+#   2. docker compose up -d
+#   3. Check logs: docker compose logs -f sub2api
 #   4. Access: http://localhost:8080
 #
 # All configuration is done via environment variables.
@@ -19,6 +19,8 @@ services:
     image: weishaw/sub2api:latest
     container_name: sub2api
     restart: unless-stopped
+    env_file:
+      - .env
     stop_grace_period: ${SUB2API_STOP_GRACE_PERIOD:-50s}
     mem_limit: ${SUB2API_MEMORY_LIMIT:-2g}
     mem_reservation: ${SUB2API_MEMORY_RESERVATION:-512m}
@@ -169,6 +171,16 @@ services:
     image: postgres:18-alpine
     container_name: sub2api-postgres
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-1024}
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-1GB}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-4GB}
+      - -c
+      - maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-128MB}
     stop_grace_period: ${POSTGRES_STOP_GRACE_PERIOD:-60s}
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-1g}
     mem_reservation: ${POSTGRES_MEMORY_RESERVATION:-256m}
@@ -218,6 +230,7 @@ services:
           --save 60 1
           --appendonly yes
           --appendfsync everysec
+          --maxclients ${REDIS_MAXCLIENTS:-50000}
           $${REDIS_PASSWORD:+--requirepass "$$REDIS_PASSWORD"}'
     environment:
       - TZ=${TZ:-Asia/Shanghai}
