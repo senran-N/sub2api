@@ -8,6 +8,7 @@ import {
   type OpsUserConcurrencyStatsResponse,
   type RuntimeObservabilitySnapshot
 } from '@/api/admin/ops'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 
 interface Props {
   platformFilter?: string
@@ -423,9 +424,9 @@ async function loadData() {
       concurrency.value = concData
       availability.value = availData
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsConcurrencyCard] Failed to load data', err)
-    errorMessage.value = err?.response?.data?.detail || t('admin.ops.concurrency.loadFailed')
+    errorMessage.value = resolveRequestErrorMessage(err, t('admin.ops.concurrency.loadFailed'))
   } finally {
     loading.value = false
   }

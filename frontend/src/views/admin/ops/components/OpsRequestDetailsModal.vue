@@ -109,7 +109,7 @@ const fetchData = async () => {
     const res = await opsAPI.listRequestDetails(params)
     items.value = res.items || []
     total.value = res.total || 0
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[OpsRequestDetailsModal] Failed to fetch request details', e)
     appStore.showError(resolveRequestErrorMessage(e, t('admin.ops.requestDetails.failedToLoad')))
     items.value = []

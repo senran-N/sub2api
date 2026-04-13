@@ -34,7 +34,7 @@ async function loadConfig() {
   try {
     const data = await opsAPI.getEmailNotificationConfig()
     config.value = data
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsEmailNotificationCard] Failed to load config', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.email.loadFailed')))
   } finally {
@@ -53,7 +53,7 @@ async function saveConfig() {
     config.value = await opsAPI.updateEmailNotificationConfig(draft.value)
     showEditor.value = false
     appStore.showSuccess(t('admin.ops.email.saveSuccess'))
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsEmailNotificationCard] Failed to save config', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.email.saveFailed')))
   } finally {

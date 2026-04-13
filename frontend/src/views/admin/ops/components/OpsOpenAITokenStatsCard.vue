@@ -3,7 +3,12 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { opsAPI, type OpsOpenAITokenStatsResponse, type OpsOpenAITokenStatsTimeRange } from '@/api/admin/ops'
+import {
+  opsAPI,
+  type OpsOpenAITokenStatsParams,
+  type OpsOpenAITokenStatsResponse,
+  type OpsOpenAITokenStatsTimeRange
+} from '@/api/admin/ops'
 import { formatNumber } from '@/utils/format'
 import { resolveErrorMessage } from '@/utils/errorMessage'
 
@@ -81,8 +86,8 @@ function formatInt(v?: number | null): string {
   return formatNumber(Math.round(v))
 }
 
-function buildParams() {
-  const params: Record<string, any> = {
+function buildParams(): OpsOpenAITokenStatsParams {
+  const params: OpsOpenAITokenStatsParams = {
     time_range: timeRange.value,
     platform: props.platformFilter || undefined,
     group_id: typeof props.groupIdFilter === 'number' && props.groupIdFilter > 0 ? props.groupIdFilter : undefined

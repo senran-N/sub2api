@@ -2,6 +2,7 @@ import { reactive, ref, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import { adminUsageAPI, type AdminUsageQueryParams, type AdminUsageStatsResponse } from '@/api/admin/usage'
 import { formatReasoningEffort } from '@/utils/format'
+import { isAbortError } from '@/utils/requestError'
 import { requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import type {
   AdminUsageLog,
@@ -256,12 +257,12 @@ export function useUsageViewData(options: UsageViewDataOptions) {
 
       usageLogs.value = response.items
       options.pagination.total = response.total
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (usageAbortController !== controller || controller.signal.aborted) {
         return
       }
 
-      if (error?.name !== 'AbortError') {
+      if (!isAbortError(error)) {
         console.error('Failed to load usage logs:', error)
       }
     } finally {
@@ -470,8 +471,8 @@ export function useUsageViewData(options: UsageViewDataOptions) {
         `usage_${usageFilters.start_date || options.startDate.value}_to_${usageFilters.end_date || options.endDate.value}.xlsx`
       )
       options.showSuccess(options.t('usage.exportSuccess'))
-    } catch (error: any) {
-      if (error?.name === 'AbortError') {
+    } catch (error: unknown) {
+      if (isAbortError(error)) {
         return
       }
 

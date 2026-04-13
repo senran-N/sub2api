@@ -94,7 +94,7 @@ async function loadFirstPage() {
     const data = await opsAPI.listAlertEvents(buildQuery())
     events.value = data
     hasMore.value = data.length === PAGE_SIZE
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertEventsCard] Failed to load alert events', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertEvents.loadFailed')))
     events.value = []
@@ -121,7 +121,7 @@ async function loadMore() {
     }
     events.value = [...events.value, ...data]
     if (data.length < PAGE_SIZE) hasMore.value = false
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertEventsCard] Failed to load more alert events', err)
     hasMore.value = false
   } finally {
@@ -204,7 +204,7 @@ async function openDetail(row: AlertEvent) {
   try {
     const detail = await opsAPI.getAlertEvent(row.id)
     selected.value = detail
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertEventsCard] Failed to load alert detail', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertEvents.detail.loadFailed')))
   } finally {
@@ -246,7 +246,7 @@ async function loadHistory() {
       const g2 = ev.dimensions?.group_id
       return (g1 ?? null) === (g2 ?? null)
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertEventsCard] Failed to load alert history', err)
     history.value = []
   } finally {
@@ -283,7 +283,7 @@ async function silenceAlert() {
     })
 
     appStore.showSuccess(t('admin.ops.alertEvents.detail.silenceSuccess'))
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertEventsCard] Failed to silence alert', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertEvents.detail.silenceFailed')))
   } finally {
@@ -304,7 +304,7 @@ async function manualResolve() {
     selected.value = detail
     await loadFirstPage()
     await loadHistory()
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertEventsCard] Failed to resolve alert', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertEvents.detail.manualResolvedFailed')))
   } finally {

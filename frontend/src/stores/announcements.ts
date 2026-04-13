@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { UserAnnouncement } from '@/types'
+import { isAbortError } from '@/utils/requestError'
 
 const THROTTLE_MS = 20 * 60 * 1000 // 20 minutes
 
@@ -48,10 +49,12 @@ export const useAnnouncementStore = defineStore('announcements', () => {
       const all = await list(false)
       announcements.value = all.slice(0, 20)
       enqueueNewPopups()
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Revert throttle timestamp on failure so retry is allowed
       lastFetchTime.value = 0
-      console.error('Failed to fetch announcements:', err)
+      if (!isAbortError(err)) {
+        console.error('Failed to fetch announcements:', err)
+      }
     } finally {
       loading.value = false
     }
@@ -105,7 +108,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
       if (ann) {
         ann.read_at = new Date().toISOString()
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to mark announcement as read:', err)
     }
   }
@@ -123,7 +126,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
           a.read_at = new Date().toISOString()
         }
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to mark all as read:', err)
       throw err
     } finally {

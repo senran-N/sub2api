@@ -12,14 +12,18 @@ type ParsedGatewayError = {
   message: string
 }
 
+function asObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
 function parseGatewayErrorBody(raw: string): ParsedGatewayError | null {
   const text = String(raw || '').trim()
   if (!text) return null
 
   try {
-    const parsed = JSON.parse(text) as Record<string, any>
-    const err = parsed?.error as Record<string, any> | undefined
-    if (!err || typeof err !== 'object') return null
+    const parsed = asObject(JSON.parse(text))
+    const err = asObject(parsed?.error)
+    if (!err) return null
 
     const type = typeof err.type === 'string' ? err.type.trim() : ''
     const message = typeof err.message === 'string' ? err.message.trim() : ''

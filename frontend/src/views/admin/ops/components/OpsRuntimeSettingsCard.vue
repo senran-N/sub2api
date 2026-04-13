@@ -19,6 +19,7 @@ const showAlertEditor = ref(false)
 const draftAlert = ref<OpsAlertRuntimeSettings | null>(null)
 
 type ValidationResult = { valid: boolean; errors: string[] }
+type SilenceEntry = NonNullable<NonNullable<OpsAlertRuntimeSettings['silencing']>['entries']>[number]
 
 function normalizeSeverities(input: Array<string | null | undefined> | null | undefined): string[] {
   if (!input || input.length === 0) return []
@@ -36,6 +37,14 @@ function normalizeSeverities(input: Array<string | null | undefined> | null | un
     out.push(s)
   }
   return out
+}
+
+function getSilenceEntryRuleId(entry: SilenceEntry): number | undefined {
+  return typeof entry.rule_id === 'number' ? entry.rule_id : undefined
+}
+
+function getSilenceEntrySeverities(entry: SilenceEntry): string[] {
+  return Array.isArray(entry.severities) ? normalizeSeverities(entry.severities) : []
 }
 
 function validateRuntimeSettings(settings: OpsAlertRuntimeSettings): ValidationResult {
@@ -105,13 +114,13 @@ function validateRuntimeSettings(settings: OpsAlertRuntimeSettings): ValidationR
         errors.push(t('admin.ops.runtime.silencing.entries.validation.untilFormat'))
         break
       }
-      const ruleId = (entry as any)?.rule_id
+      const ruleId = getSilenceEntryRuleId(entry)
       if (typeof ruleId === 'number' && (!Number.isFinite(ruleId) || ruleId <= 0)) {
         errors.push(t('admin.ops.runtime.silencing.entries.validation.ruleIdPositive'))
         break
       }
-      if ((entry as any)?.severities) {
-        const raw = (entry as any).severities
+      const raw = entry.severities
+      if (raw) {
         const normalized = normalizeSeverities(Array.isArray(raw) ? raw : [raw])
         if (Array.isArray(raw) && raw.length > 0 && normalized.length === 0) {
           errors.push(t('admin.ops.runtime.silencing.entries.validation.severitiesFormat'))
@@ -133,7 +142,7 @@ async function loadSettings() {
   loading.value = true
   try {
     alertSettings.value = await opsAPI.getAlertRuntimeSettings()
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsRuntimeSettingsCard] Failed to load runtime settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.runtime.loadFailed')))
   } finally {
@@ -195,11 +204,11 @@ function updateSilenceEntryRuleId(index: number, raw: string) {
   if (!entries || !entries[index]) return
   const trimmed = raw.trim()
   if (!trimmed) {
-    delete (entries[index] as any).rule_id
+    delete entries[index].rule_id
     return
   }
   const n = Number.parseInt(trimmed, 10)
-  ;(entries[index] as any).rule_id = Number.isFinite(n) ? n : undefined
+  entries[index].rule_id = Number.isFinite(n) ? n : undefined
 }
 
 function updateSilenceEntrySeverities(index: number, raw: string) {
@@ -209,7 +218,7 @@ function updateSilenceEntrySeverities(index: number, raw: string) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
-  ;(entries[index] as any).severities = normalizeSeverities(parts)
+  entries[index].severities = normalizeSeverities(parts)
 }
 
 async function saveAlertSettings() {
@@ -224,7 +233,7 @@ async function saveAlertSettings() {
     alertSettings.value = await opsAPI.updateAlertRuntimeSettings(draftAlert.value)
     showAlertEditor.value = false
     appStore.showSuccess(t('admin.ops.runtime.saveSuccess'))
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsRuntimeSettingsCard] Failed to save alert runtime settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.runtime.saveFailed')))
   } finally {
@@ -455,7 +464,7 @@ onMounted(() => {
                   <div>
                     <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.entries.ruleId') }}</div>
                     <input
-                      :value="typeof (entry as any).rule_id === 'number' ? String((entry as any).rule_id) : ''"
+                      :value="typeof getSilenceEntryRuleId(entry) === 'number' ? String(getSilenceEntryRuleId(entry)) : ''"
                       type="text"
                       class="input font-mono text-sm"
                       :placeholder="t('admin.ops.runtime.silencing.entries.ruleIdPlaceholder')"
@@ -466,7 +475,7 @@ onMounted(() => {
                   <div>
                     <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.entries.severities') }}</div>
                     <input
-                      :value="Array.isArray((entry as any).severities) ? (entry as any).severities.join(', ') : ''"
+                      :value="getSilenceEntrySeverities(entry).join(', ')"
                       type="text"
                       class="input font-mono text-sm"
                       :placeholder="t('admin.ops.runtime.silencing.entries.severitiesPlaceholder')"
@@ -477,7 +486,7 @@ onMounted(() => {
                   <div>
                     <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.entries.until') }}</div>
                     <input
-                      v-model="(entry as any).until_rfc3339"
+                      v-model="entry.until_rfc3339"
                       type="text"
                       class="input font-mono text-sm"
               placeholder="2026-01-05T00:00:00Z"
@@ -487,7 +496,7 @@ onMounted(() => {
                   <div>
                     <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.entries.reason') }}</div>
                     <input
-                      v-model="(entry as any).reason"
+                      v-model="entry.reason"
                       type="text"
                       class="input"
                       :placeholder="t('admin.ops.runtime.silencing.reasonPlaceholder')"

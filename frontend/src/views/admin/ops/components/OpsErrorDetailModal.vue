@@ -323,7 +323,7 @@ async function fetchDetail(id: number) {
     const kind = props.errorType || (detail.value?.phase === 'upstream' ? 'upstream' : 'request')
     const d = kind === 'upstream' ? await opsAPI.getUpstreamErrorDetail(id) : await opsAPI.getRequestErrorDetail(id)
     detail.value = d
-  } catch (err: any) {
+  } catch (err: unknown) {
     detail.value = null
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadErrorDetail')))
   } finally {

@@ -60,7 +60,7 @@ async function loadAllSettings() {
           upstream_error_rate_percent_max: thresholds.upstream_error_rate_percent_max ?? 5
         }
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsSettingsDialog] Failed to load settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.settings.loadFailed')))
   } finally {
@@ -192,7 +192,7 @@ async function saveAllSettings() {
     appStore.showSuccess(t('admin.ops.settings.saveSuccess'))
     emit('saved')
     emit('close')
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsSettingsDialog] Failed to save settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.settings.saveFailed')))
   } finally {

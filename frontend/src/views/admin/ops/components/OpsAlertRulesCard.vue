@@ -22,7 +22,7 @@ async function load() {
   loading.value = true
   try {
     rules.value = await opsAPI.listAlertRules()
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertRulesCard] Failed to load rules', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.loadFailed')))
     rules.value = []
@@ -575,7 +575,7 @@ async function save() {
     editingId.value = null
     await load()
     appStore.showSuccess(t('admin.ops.alertRules.saveSuccess'))
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertRulesCard] Failed to save rule', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.saveFailed')))
   } finally {
@@ -599,7 +599,7 @@ async function confirmDelete() {
     pendingDelete.value = null
     await load()
     appStore.showSuccess(t('admin.ops.alertRules.deleteSuccess'))
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsAlertRulesCard] Failed to delete rule', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.deleteFailed')))
   }

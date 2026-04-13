@@ -168,7 +168,7 @@
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDebounceFn, useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import {
@@ -181,7 +181,7 @@ import {
   type OpsMetricThresholds
 } from '@/api/admin/ops'
 import { useAdminSettingsStore, useAppStore } from '@/stores'
-import { resolveRequestErrorMessage } from '@/utils/requestError'
+import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
 import OpsDashboardHeader from './components/OpsDashboardHeader.vue'
 import OpsDashboardSkeleton from './components/OpsDashboardSkeleton.vue'
 import OpsConcurrencyCard from './components/OpsConcurrencyCard.vue'
@@ -214,6 +214,15 @@ const allowedTimeRanges = new Set<TimeRange>(['5m', '30m', '1h', '6h', '24h', 'c
 
 type QueryMode = 'auto' | 'raw' | 'preagg'
 const allowedQueryModes = new Set<QueryMode>(['auto', 'raw', 'preagg'])
+
+type DashboardAPIParams = {
+  time_range?: Exclude<TimeRange, 'custom'>
+  start_time?: string
+  end_time?: string
+  platform?: string
+  group_id?: number
+  mode: QueryMode
+}
 
 const loading = ref(true)
 const hasLoadedOnce = ref(false)
@@ -274,12 +283,7 @@ let dashboardFetchController: AbortController | null = null
 let dashboardFetchSeq = 0
 
 function isCanceledRequest(err: unknown): boolean {
-  return (
-    !!err &&
-    typeof err === 'object' &&
-    'code' in err &&
-    (err as Record<string, unknown>).code === 'ERR_CANCELED'
-  )
+  return isAbortError(err)
 }
 
 function abortDashboardFetch() {
@@ -343,8 +347,8 @@ const applyRouteQueryToState = () => {
 
 applyRouteQueryToState()
 
-const buildQueryFromState = () => {
-  const next: Record<string, any> = { ...route.query }
+const buildQueryFromState = (): LocationQueryRaw => {
+  const next: LocationQueryRaw = { ...route.query }
 
   Object.values(QUERY_KEYS).forEach((k) => {
     delete next[k]
@@ -362,7 +366,7 @@ const syncQueryToRoute = useDebounceFn(async () => {
   if (isApplyingRouteQuery.value) return
   const nextQuery = buildQueryFromState()
 
-  const curr = route.query as Record<string, any>
+  const curr = route.query
   const nextKeys = Object.keys(nextQuery)
   const currKeys = Object.keys(curr)
   const sameLength = nextKeys.length === currKeys.length
@@ -481,7 +485,7 @@ async function openAlertRulesDialog() {
     return
   }
 
-  const nextQuery: Record<string, any> = { ...route.query, [QUERY_KEYS.openAlertRules]: '1' }
+  const nextQuery: LocationQueryRaw = { ...route.query, [QUERY_KEYS.openAlertRules]: '1' }
   delete nextQuery[QUERY_KEYS.fullscreen]
   await router.replace({ query: nextQuery })
   showAlertRulesCard.value = true
@@ -587,8 +591,8 @@ function openError(id: number) {
   showErrorModal.value = true
 }
 
-function buildApiParams() {
-  const params: any = {
+function buildApiParams(): DashboardAPIParams {
+  const params: DashboardAPIParams = {
     platform: platform.value || undefined,
     group_id: groupId.value ?? undefined,
     mode: queryMode.value
@@ -609,8 +613,8 @@ function buildApiParams() {
   return params
 }
 
-function buildSwitchTrendParams() {
-  const params: any = {
+function buildSwitchTrendParams(): DashboardAPIParams {
+  const params: DashboardAPIParams = {
     platform: platform.value || undefined,
     group_id: groupId.value ?? undefined,
     mode: queryMode.value
@@ -628,7 +632,7 @@ async function refreshOverviewWithCancel(fetchSeq: number, signal: AbortSignal) 
     const data = await opsAPI.getDashboardOverview(buildApiParams(), { signal })
     if (fetchSeq !== dashboardFetchSeq) return
     overview.value = data
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     overview.value = null
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadOverview')))
@@ -642,7 +646,7 @@ async function refreshSwitchTrendWithCancel(fetchSeq: number, signal: AbortSigna
     const data = await opsAPI.getThroughputTrend(buildSwitchTrendParams(), { signal })
     if (fetchSeq !== dashboardFetchSeq) return
     switchTrend.value = data
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     switchTrend.value = null
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadSwitchTrend')))
@@ -660,7 +664,7 @@ async function refreshThroughputTrendWithCancel(fetchSeq: number, signal: AbortS
     const data = await opsAPI.getThroughputTrend(buildApiParams(), { signal })
     if (fetchSeq !== dashboardFetchSeq) return
     throughputTrend.value = data
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     throughputTrend.value = null
     appStore.showError(
@@ -683,7 +687,7 @@ async function refreshCoreSnapshotWithCancel(fetchSeq: number, signal: AbortSign
     overview.value = data.overview
     throughputTrend.value = data.throughput_trend
     errorTrend.value = data.error_trend
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     // Fallback to legacy split endpoints when snapshot endpoint is unavailable.
     await Promise.all([
@@ -706,7 +710,7 @@ async function refreshLatencyHistogramWithCancel(fetchSeq: number, signal: Abort
     const data = await opsAPI.getLatencyHistogram(buildApiParams(), { signal })
     if (fetchSeq !== dashboardFetchSeq) return
     latencyHistogram.value = data
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     latencyHistogram.value = null
     appStore.showError(
@@ -726,7 +730,7 @@ async function refreshErrorTrendWithCancel(fetchSeq: number, signal: AbortSignal
     const data = await opsAPI.getErrorTrend(buildApiParams(), { signal })
     if (fetchSeq !== dashboardFetchSeq) return
     errorTrend.value = data
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     errorTrend.value = null
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadErrorTrend')))
@@ -744,7 +748,7 @@ async function refreshErrorDistributionWithCancel(fetchSeq: number, signal: Abor
     const data = await opsAPI.getErrorDistribution(buildApiParams(), { signal })
     if (fetchSeq !== dashboardFetchSeq) return
     errorDistribution.value = data
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
     errorDistribution.value = null
     appStore.showError(

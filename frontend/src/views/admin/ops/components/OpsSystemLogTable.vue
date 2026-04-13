@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { opsAPI, type OpsRuntimeLogConfig, type OpsSystemLog, type OpsSystemLogSinkHealth } from '@/api/admin/ops'
+import {
+  opsAPI,
+  type OpsRuntimeLogConfig,
+  type OpsSystemLog,
+  type OpsSystemLogCleanupRequest,
+  type OpsSystemLogQuery,
+  type OpsSystemLogSinkHealth
+} from '@/api/admin/ops'
 import Pagination from '@/components/common/Pagination.vue'
 import Select from '@/components/common/Select.vue'
 import { useAppStore } from '@/stores'
@@ -119,7 +126,7 @@ const formatTime = (value: string) => {
   return d.toLocaleString()
 }
 
-const getExtraString = (extra: Record<string, any> | undefined, key: string) => {
+const getExtraString = (extra: OpsSystemLog['extra'] | undefined, key: string) => {
   if (!extra) return ''
   const v = extra[key]
   if (v == null) return ''
@@ -175,8 +182,8 @@ const toRFC3339 = (value: string) => {
   return d.toISOString()
 }
 
-const buildQuery = () => {
-  const query: Record<string, any> = {
+const buildQuery = (): OpsSystemLogQuery => {
+  const query: OpsSystemLogQuery = {
     page: page.value,
     page_size: pageSize.value,
     time_range: filters.time_range
@@ -211,7 +218,7 @@ const fetchLogs = async () => {
     const res = await opsAPI.listSystemLogs(buildQuery())
     logs.value = res.items || []
     total.value = res.total || 0
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsSystemLogTable] Failed to fetch logs', err)
     appStore.showError(resolveRequestErrorMessage(err, '系统日志加载失败'))
   } finally {
@@ -238,7 +245,7 @@ const loadRuntimeConfig = async () => {
     runtimeConfig.caller = cfg.caller
     runtimeConfig.stacktrace_level = cfg.stacktrace_level
     runtimeConfig.retention_days = cfg.retention_days
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsSystemLogTable] Failed to load runtime log config', err)
     appStore.showError(resolveRequestErrorMessage(err, '加载日志配置失败'))
   } finally {
@@ -258,7 +265,7 @@ const saveRuntimeConfig = async () => {
     runtimeConfig.stacktrace_level = saved.stacktrace_level
     runtimeConfig.retention_days = saved.retention_days
     appStore.showSuccess('日志运行时配置已生效')
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsSystemLogTable] Failed to save runtime log config', err)
     appStore.showError(resolveRequestErrorMessage(err, '保存日志配置失败'))
   } finally {
@@ -282,7 +289,7 @@ const resetRuntimeConfig = async () => {
     runtimeConfig.retention_days = saved.retention_days
     appStore.showSuccess('已回滚到启动日志配置')
     await fetchHealth()
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsSystemLogTable] Failed to reset runtime log config', err)
     appStore.showError(resolveRequestErrorMessage(err, '回滚日志配置失败'))
   } finally {
@@ -294,7 +301,7 @@ const cleanupCurrentFilter = async () => {
   const ok = window.confirm('确认按当前筛选条件清理系统日志？该操作不可撤销。')
   if (!ok) return
   try {
-    const payload = {
+    const payload: OpsSystemLogCleanupRequest = {
       start_time: toRFC3339(filters.start_time),
       end_time: toRFC3339(filters.end_time),
       level: filters.level.trim() || undefined,
@@ -311,7 +318,7 @@ const cleanupCurrentFilter = async () => {
     appStore.showSuccess(`清理完成，删除 ${res.deleted || 0} 条日志`)
     page.value = 1
     await Promise.all([fetchLogs(), fetchHealth()])
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[OpsSystemLogTable] Failed to cleanup logs', err)
     appStore.showError(resolveRequestErrorMessage(err, '清理系统日志失败'))
   }
