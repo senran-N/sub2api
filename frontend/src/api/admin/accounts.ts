@@ -17,7 +17,8 @@ import type {
   AdminDataPayload,
   AdminDataImportResult,
   CheckMixedChannelRequest,
-  CheckMixedChannelResponse
+  CheckMixedChannelResponse,
+  JsonValue
 } from '@/types'
 
 /**
@@ -345,7 +346,7 @@ export async function batchCreate(accounts: CreateAccountRequest[]): Promise<{
 export async function batchUpdateCredentials(request: {
   account_ids: number[]
   field: string
-  value: any
+  value: JsonValue
 }): Promise<{
   success: number
   failed: number

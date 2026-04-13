@@ -251,7 +251,7 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
           options.showSuccess(optionsForMessage.successMessage)
         }
       })
-      .catch((error: any) => {
+      .catch((error: unknown) => {
         const errorMessage = optionsForMessage?.mapErrorMessage
           ? optionsForMessage.mapErrorMessage(error)
           : optionsForMessage?.errorMessage

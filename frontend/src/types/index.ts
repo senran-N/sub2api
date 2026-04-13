@@ -7,8 +7,11 @@
 export interface SelectOption {
   value: string | number | boolean | null
   label: string
-  [key: string]: any // Support extra properties for custom templates
+  [key: string]: unknown // Support extra properties for custom templates
 }
+
+export type JsonObject = Record<string, unknown>
+export type JsonValue = string | number | boolean | null | JsonObject | JsonValue[]
 
 export interface BasePaginationResponse<T> {
   items: T[]
@@ -246,7 +249,7 @@ export interface ProxyNode {
   type: 'ss' | 'ssr' | 'vmess' | 'vless' | 'trojan' | 'hysteria' | 'hysteria2'
   server: string
   port: number
-  config: Record<string, unknown> // JSON configuration specific to proxy type
+  config: JsonObject // JSON configuration specific to proxy type
   latency: number | null // in milliseconds
   last_checked: string | null
   is_available: boolean
@@ -686,11 +689,11 @@ export interface Account {
   notes?: string | null
   platform: AccountPlatform
   type: AccountType
-  credentials?: Record<string, unknown>
+  credentials?: JsonObject
   // Extra fields including Codex usage and model-level rate limits (Antigravity smart retry)
   extra?: (CodexUsageSnapshot & {
     model_rate_limits?: Record<string, { rate_limited_at: string; rate_limit_reset_at: string }>
-  } & Record<string, unknown>)
+  } & JsonObject)
   proxy_id: number | null
   concurrency: number
   load_factor?: number | null
@@ -870,8 +873,8 @@ export interface CreateAccountRequest {
   notes?: string | null
   platform: AccountPlatform
   type: AccountType
-  credentials: Record<string, unknown>
-  extra?: Record<string, unknown>
+  credentials: JsonObject
+  extra?: JsonObject
   proxy_id?: number | null
   concurrency?: number
   load_factor?: number | null
@@ -887,8 +890,8 @@ export interface UpdateAccountRequest {
   name?: string
   notes?: string | null
   type?: AccountType
-  credentials?: Record<string, unknown>
-  extra?: Record<string, unknown>
+  credentials?: JsonObject
+  extra?: JsonObject
   proxy_id?: number | null
   concurrency?: number
   load_factor?: number | null
@@ -965,8 +968,8 @@ export interface AdminDataAccount {
   notes?: string | null
   platform: AccountPlatform
   type: AccountType
-  credentials: Record<string, unknown>
-  extra?: Record<string, unknown>
+  credentials: JsonObject
+  extra?: JsonObject
   proxy_key?: string | null
   concurrency: number
   priority: number
