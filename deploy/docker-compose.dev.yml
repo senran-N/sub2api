@@ -15,6 +15,11 @@ services:
       dockerfile: Dockerfile
     container_name: sub2api-dev
     restart: unless-stopped
+    stop_grace_period: ${SUB2API_STOP_GRACE_PERIOD:-50s}
+    mem_limit: ${SUB2API_MEMORY_LIMIT:-2g}
+    mem_reservation: ${SUB2API_MEMORY_RESERVATION:-512m}
+    cpus: ${SUB2API_CPUS:-1.0}
+    pids_limit: ${SUB2API_PIDS_LIMIT:-512}
     ports:
       - "${BIND_HOST:-127.0.0.1}:${SERVER_PORT:-8080}:8080"
     volumes:
@@ -24,6 +29,7 @@ services:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
       - SERVER_MODE=debug
+      - SERVER_SHUTDOWN_TIMEOUT_SECONDS=${SERVER_SHUTDOWN_TIMEOUT_SECONDS:-45}
       - RUN_MODE=${RUN_MODE:-standard}
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
@@ -40,6 +46,10 @@ services:
       - JWT_SECRET=${JWT_SECRET:-}
       - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
       - TZ=${TZ:-Asia/Shanghai}
+      - SECURITY_URL_ALLOWLIST_ENABLED=${SECURITY_URL_ALLOWLIST_ENABLED:-true}
+      - SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=${SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP:-false}
+      - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-false}
+      - UPDATE_PROXY_URL=${UPDATE_PROXY_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,6 +68,10 @@ services:
     image: postgres:18-alpine
     container_name: sub2api-postgres-dev
     restart: unless-stopped
+    stop_grace_period: ${POSTGRES_STOP_GRACE_PERIOD:-60s}
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-1g}
+    mem_reservation: ${POSTGRES_MEMORY_RESERVATION:-256m}
+    cpus: ${POSTGRES_CPUS:-1.0}
     volumes:
       - ./postgres_data:/var/lib/postgresql
     environment:
@@ -78,6 +92,10 @@ services:
     image: redis:8-alpine
     container_name: sub2api-redis-dev
     restart: unless-stopped
+    stop_grace_period: ${REDIS_STOP_GRACE_PERIOD:-30s}
+    mem_limit: ${REDIS_MEMORY_LIMIT:-512m}
+    mem_reservation: ${REDIS_MEMORY_RESERVATION:-128m}
+    cpus: ${REDIS_CPUS:-0.5}
     volumes:
       - ./redis_data:/data
     command: >

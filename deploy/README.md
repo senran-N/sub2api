@@ -16,6 +16,7 @@ This directory contains files for deploying Sub2API on Linux servers.
 | `docker-compose.yml` | Docker Compose configuration (named volumes) |
 | `docker-compose.local.yml` | Docker Compose configuration (local directories, easy migration) |
 | `docker-compose.standalone.yml` | Docker Compose configuration (external PostgreSQL/Redis) |
+| `docker-compose.dev.yml` | Local source-build compose file for testing repo changes |
 | `docker-deploy.sh` | **One-click Docker deployment script (recommended)** |
 | `.env.example` | Docker environment variables template |
 | `DOCKER.md` | Docker Hub documentation |
@@ -108,6 +109,7 @@ docker compose -f docker-compose.local.yml logs -f sub2api
 
 **Recommendation:** Use `docker-compose.local.yml` (deployed by `docker-deploy.sh`) for easier data management and migration.
 Use `docker-compose.standalone.yml` only when PostgreSQL and Redis are already managed outside this host; it reuses the same `.env.example` shutdown/resource/security defaults as the other compose variants.
+Use `docker-compose.dev.yml` when you want to build from the checked-out source tree; it now mirrors the same shutdown timeout, URL allowlist, and resource-limit env knobs so local source testing does not silently relax the baseline.
 
 ### How Auto-Setup Works
 
