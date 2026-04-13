@@ -84,3 +84,56 @@ func TestTrySelectStickyAccountWithoutRouting_ClearsUnschedulableBinding(t *test
 	require.Nil(t, result)
 	require.Equal(t, 1, cache.deletedSessions["sticky"])
 }
+
+func TestTrySelectStickyAccountWithoutRouting_ClearsCodexRateLimitedBinding(t *testing.T) {
+	now := time.Now().UTC()
+	usedPercent := 100.0
+	resetAfter := 3600
+	windowMinutes := 10080
+	cache := &mockGatewayCacheForPlatform{
+		sessionBindings: map[string]int64{"sticky": 1},
+	}
+	svc := &GatewayService{
+		cache: cache,
+		cfg:   testConfig(),
+	}
+
+	accountByID := map[int64]*Account{
+		1: {
+			ID:          1,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Credentials: map[string]any{
+				"access_token": "token",
+				"expires_at":   now.Add(time.Hour).Format(time.RFC3339),
+			},
+			Extra: buildCodexUsageExtraUpdates(&OpenAICodexUsageSnapshot{
+				PrimaryUsedPercent:       &usedPercent,
+				PrimaryResetAfterSeconds: &resetAfter,
+				PrimaryWindowMinutes:     &windowMinutes,
+				UpdatedAt:                now.Format(time.RFC3339),
+			}, now),
+		},
+	}
+
+	result, ok := svc.trySelectStickyAccountWithoutRouting(
+		context.Background(),
+		nil,
+		"sticky",
+		"gpt-5.1",
+		1,
+		nil,
+		accountByID,
+		PlatformOpenAI,
+		false,
+		time.Second,
+		1,
+	)
+
+	require.False(t, ok)
+	require.Nil(t, result)
+	require.Equal(t, 1, cache.deletedSessions["sticky"])
+	require.NotNil(t, accountByID[1].RateLimitResetAt)
+}

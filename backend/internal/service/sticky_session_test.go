@@ -34,6 +34,15 @@ func TestShouldClearStickySession(t *testing.T) {
 	now := time.Now()
 	future := now.Add(1 * time.Hour)
 	past := now.Add(-1 * time.Hour)
+	usedPercent := 100.0
+	resetAfter := 3600
+	windowMinutes := 10080
+	codexExtra := buildCodexUsageExtraUpdates(&OpenAICodexUsageSnapshot{
+		PrimaryUsedPercent:       &usedPercent,
+		PrimaryResetAfterSeconds: &resetAfter,
+		PrimaryWindowMinutes:     &windowMinutes,
+		UpdatedAt:                now.UTC().Format(time.RFC3339),
+	}, now.UTC())
 
 	// 短限流时间（有限流即清除粘性会话）
 	shortRateLimitReset := now.Add(5 * time.Second).Format(time.RFC3339)
@@ -95,6 +104,22 @@ func TestShouldClearStickySession(t *testing.T) {
 			},
 			requestedModel: "",
 			want:           false,
+		},
+		{
+			name: "openai codex snapshot rate limited",
+			account: &Account{
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"access_token": "token",
+					"expires_at":   future.Format(time.RFC3339),
+				},
+				Extra: codexExtra,
+			},
+			requestedModel: "gpt-5.1",
+			want:           true,
 		},
 		// 模型限流测试：有限流即清除
 		{

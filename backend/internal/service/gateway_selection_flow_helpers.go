@@ -33,15 +33,19 @@ func prefetchedStickyAccountIDFromContext(ctx context.Context, groupID *int64) i
 
 // shouldClearStickySession 检查账号是否处于不可调度状态，需要清理粘性会话绑定。
 // 当账号状态为错误、禁用、不可调度、处于临时不可调度期间、
-// OAuth 凭证已明确不可恢复，或请求的模型处于限流状态时，返回 true。
+// OAuth 凭证已明确不可恢复，或请求的模型/账号已处于限流状态时，返回 true。
 func shouldClearStickySession(account *Account, requestedModel string) bool {
 	if account == nil {
 		return false
 	}
+	applyOpenAICodexRateLimitFromExtra(account, time.Now())
 	if account.Status == StatusError || account.Status == StatusDisabled || !account.Schedulable {
 		return true
 	}
 	if account.TempUnschedulableUntil != nil && time.Now().Before(*account.TempUnschedulableUntil) {
+		return true
+	}
+	if account.IsRateLimited() {
 		return true
 	}
 	if oauthSelectionCredentialIssue(account) != "" {
