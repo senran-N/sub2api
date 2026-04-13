@@ -193,6 +193,56 @@ func TestPrepareOpenAIForwardRequest_AppliesDefaultMappedModelForReasoningVarian
 	require.Equal(t, "gpt-5.2-xhigh", prepared.reqBody["model"])
 }
 
+func TestForwardAsChatCompletions_OAuthPromptCacheKeyKeepsIsolatedSessionID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	requestBody := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":false}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(requestBody))
+	c.Set("api_key", &APIKey{ID: 101})
+
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type": []string{"text/event-stream"},
+				"x-request-id": []string{"rid-chat-isolated"},
+			},
+			Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+				`data: {"type":"response.created","response":{"id":"resp_chat_isolated","object":"response","model":"gpt-5.4","status":"in_progress","output":[]}}`,
+				`data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_chat_isolated","type":"message","role":"assistant","content":[],"status":"in_progress"}}`,
+				`data: {"type":"response.content_part.done","output_index":0,"content_index":0,"item_id":"msg_chat_isolated","part":{"type":"output_text","text":"hello back"}}`,
+				`data: {"type":"response.completed","response":{"id":"resp_chat_isolated","object":"response","model":"gpt-5.4","status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":2}}}`,
+				`data: [DONE]`,
+			}, "\n"))),
+		},
+	}
+
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+	account := &Account{
+		ID:          1,
+		Name:        "oauth-chat",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token":       "oauth-token",
+			"chatgpt_account_id": "chatgpt-acc",
+		},
+	}
+
+	promptCacheKey := "pc-shared"
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, requestBody, promptCacheKey, "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	isolatedPromptCacheKey := isolateOpenAISessionID(101, promptCacheKey)
+	require.Equal(t, isolatedPromptCacheKey, upstream.lastReq.Header.Get("conversation_id"))
+	require.Equal(t, generateSessionUUID(isolatedPromptCacheKey), upstream.lastReq.Header.Get("session_id"))
+	require.NotEqual(t, generateSessionUUID(promptCacheKey), upstream.lastReq.Header.Get("session_id"))
+}
+
 func TestParseOpenAIWSIngressClientPayload_APIKeyPreservesMappedCustomModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
