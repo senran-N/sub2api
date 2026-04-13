@@ -17,9 +17,15 @@ type selectionFailureStats struct {
 	PlatformFiltered   int
 	ModelUnsupported   int
 	ModelRateLimited   int
+	QuotaLimited       int
+	WindowCostLimited  int
+	RPMLimited         int
 	SamplePlatformIDs  []int64
 	SampleMappingIDs   []int64
 	SampleRateLimitIDs []string
+	SampleQuotaIDs     []int64
+	SampleWindowIDs    []int64
+	SampleRPMIDs       []int64
 }
 
 type selectionFailureDiagnosis struct {
@@ -40,7 +46,7 @@ func (s *GatewayService) logDetailedSelectionFailure(
 	stats := s.collectSelectionFailureStats(ctx, accounts, requestedModel, platform, excludedIDs, allowMixedScheduling)
 	logger.LegacyPrintf(
 		"service.gateway",
-		"[SelectAccountDetailed] group_id=%v model=%s platform=%s session=%s total=%d eligible=%d excluded=%d unschedulable=%d platform_filtered=%d model_unsupported=%d model_rate_limited=%d sample_platform_filtered=%v sample_model_unsupported=%v sample_model_rate_limited=%v",
+		"[SelectAccountDetailed] group_id=%v model=%s platform=%s session=%s total=%d eligible=%d excluded=%d unschedulable=%d platform_filtered=%d model_unsupported=%d model_rate_limited=%d quota_limited=%d window_cost_limited=%d rpm_limited=%d sample_platform_filtered=%v sample_model_unsupported=%v sample_model_rate_limited=%v sample_quota_limited=%v sample_window_cost_limited=%v sample_rpm_limited=%v",
 		derefGroupID(groupID),
 		requestedModel,
 		platform,
@@ -52,9 +58,15 @@ func (s *GatewayService) logDetailedSelectionFailure(
 		stats.PlatformFiltered,
 		stats.ModelUnsupported,
 		stats.ModelRateLimited,
+		stats.QuotaLimited,
+		stats.WindowCostLimited,
+		stats.RPMLimited,
 		stats.SamplePlatformIDs,
 		stats.SampleMappingIDs,
 		stats.SampleRateLimitIDs,
+		stats.SampleQuotaIDs,
+		stats.SampleWindowIDs,
+		stats.SampleRPMIDs,
 	)
 	return stats
 }
@@ -77,7 +89,7 @@ func (s *GatewayService) logDetailedSelectionFailureFromPager(
 	}
 	logger.LegacyPrintf(
 		"service.gateway",
-		"[SelectAccountDetailed] group_id=%v model=%s platform=%s session=%s total=%d eligible=%d excluded=%d unschedulable=%d platform_filtered=%d model_unsupported=%d model_rate_limited=%d sample_platform_filtered=%v sample_model_unsupported=%v sample_model_rate_limited=%v",
+		"[SelectAccountDetailed] group_id=%v model=%s platform=%s session=%s total=%d eligible=%d excluded=%d unschedulable=%d platform_filtered=%d model_unsupported=%d model_rate_limited=%d quota_limited=%d window_cost_limited=%d rpm_limited=%d sample_platform_filtered=%v sample_model_unsupported=%v sample_model_rate_limited=%v sample_quota_limited=%v sample_window_cost_limited=%v sample_rpm_limited=%v",
 		derefGroupID(groupID),
 		requestedModel,
 		platform,
@@ -89,9 +101,15 @@ func (s *GatewayService) logDetailedSelectionFailureFromPager(
 		stats.PlatformFiltered,
 		stats.ModelUnsupported,
 		stats.ModelRateLimited,
+		stats.QuotaLimited,
+		stats.WindowCostLimited,
+		stats.RPMLimited,
 		stats.SamplePlatformIDs,
 		stats.SampleMappingIDs,
 		stats.SampleRateLimitIDs,
+		stats.SampleQuotaIDs,
+		stats.SampleWindowIDs,
+		stats.SampleRPMIDs,
 	)
 	return stats, nil
 }
@@ -155,6 +173,15 @@ func (s *GatewayService) collectSelectionFailureStats(
 			stats.ModelRateLimited++
 			remaining := acc.GetRateLimitRemainingTimeWithContext(ctx, requestedModel).Truncate(time.Second)
 			stats.SampleRateLimitIDs = appendSelectionFailureRateSample(stats.SampleRateLimitIDs, acc.ID, remaining)
+		case "quota_limited":
+			stats.QuotaLimited++
+			stats.SampleQuotaIDs = appendSelectionFailureSampleID(stats.SampleQuotaIDs, acc.ID)
+		case "window_cost_limited":
+			stats.WindowCostLimited++
+			stats.SampleWindowIDs = appendSelectionFailureSampleID(stats.SampleWindowIDs, acc.ID)
+		case "rpm_limited":
+			stats.RPMLimited++
+			stats.SampleRPMIDs = appendSelectionFailureSampleID(stats.SampleRPMIDs, acc.ID)
 		default:
 			stats.Eligible++
 		}
@@ -208,6 +235,24 @@ func (s *GatewayService) diagnoseSelectionFailure(
 			Detail:   fmt.Sprintf("remaining=%s", remaining),
 		}
 	}
+	if !s.isAccountSchedulableForQuota(acc) {
+		return selectionFailureDiagnosis{
+			Category: "quota_limited",
+			Detail:   "quota_exceeded",
+		}
+	}
+	if !s.isAccountSchedulableForWindowCost(ctx, acc, false) {
+		return selectionFailureDiagnosis{
+			Category: "window_cost_limited",
+			Detail:   "window_cost_exceeded",
+		}
+	}
+	if !s.isAccountSchedulableForRPM(ctx, acc, false) {
+		return selectionFailureDiagnosis{
+			Category: "rpm_limited",
+			Detail:   "rpm_exceeded",
+		}
+	}
 	return selectionFailureDiagnosis{Category: "eligible"}
 }
 
@@ -253,6 +298,11 @@ func summarizeSelectionFailureStats(stats selectionFailureStats) string {
 		stats.PlatformFiltered,
 		stats.ModelUnsupported,
 		stats.ModelRateLimited,
+	) + fmt.Sprintf(
+		" quota_limited=%d window_cost_limited=%d rpm_limited=%d",
+		stats.QuotaLimited,
+		stats.WindowCostLimited,
+		stats.RPMLimited,
 	)
 }
 
@@ -264,6 +314,9 @@ func mergeSelectionFailureStats(dst, src selectionFailureStats) selectionFailure
 	dst.PlatformFiltered += src.PlatformFiltered
 	dst.ModelUnsupported += src.ModelUnsupported
 	dst.ModelRateLimited += src.ModelRateLimited
+	dst.QuotaLimited += src.QuotaLimited
+	dst.WindowCostLimited += src.WindowCostLimited
+	dst.RPMLimited += src.RPMLimited
 	for _, id := range src.SamplePlatformIDs {
 		dst.SamplePlatformIDs = appendSelectionFailureSampleID(dst.SamplePlatformIDs, id)
 	}
@@ -275,6 +328,15 @@ func mergeSelectionFailureStats(dst, src selectionFailureStats) selectionFailure
 			break
 		}
 		dst.SampleRateLimitIDs = append(dst.SampleRateLimitIDs, sample)
+	}
+	for _, id := range src.SampleQuotaIDs {
+		dst.SampleQuotaIDs = appendSelectionFailureSampleID(dst.SampleQuotaIDs, id)
+	}
+	for _, id := range src.SampleWindowIDs {
+		dst.SampleWindowIDs = appendSelectionFailureSampleID(dst.SampleWindowIDs, id)
+	}
+	for _, id := range src.SampleRPMIDs {
+		dst.SampleRPMIDs = appendSelectionFailureSampleID(dst.SampleRPMIDs, id)
 	}
 	return dst
 }

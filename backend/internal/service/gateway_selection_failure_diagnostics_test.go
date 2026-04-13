@@ -34,17 +34,20 @@ func TestAppendSelectionFailureRateSample_LimitsToFive(t *testing.T) {
 
 func TestSummarizeSelectionFailureStats(t *testing.T) {
 	stats := selectionFailureStats{
-		Total:            7,
-		Eligible:         1,
-		Excluded:         2,
-		Unschedulable:    3,
-		PlatformFiltered: 4,
-		ModelUnsupported: 5,
-		ModelRateLimited: 6,
+		Total:             7,
+		Eligible:          1,
+		Excluded:          2,
+		Unschedulable:     3,
+		PlatformFiltered:  4,
+		ModelUnsupported:  5,
+		ModelRateLimited:  6,
+		QuotaLimited:      7,
+		WindowCostLimited: 8,
+		RPMLimited:        9,
 	}
 
 	got := summarizeSelectionFailureStats(stats)
-	want := "total=7 eligible=1 excluded=2 unschedulable=3 platform_filtered=4 model_unsupported=5 model_rate_limited=6"
+	want := "total=7 eligible=1 excluded=2 unschedulable=3 platform_filtered=4 model_unsupported=5 model_rate_limited=6 quota_limited=7 window_cost_limited=8 rpm_limited=9"
 	if got != want {
 		t.Fatalf("summary=%q want=%q", got, want)
 	}
@@ -153,5 +156,105 @@ func TestDiagnoseSelectionFailure_OAuthCredentialIssue(t *testing.T) {
 	}
 	if diagnosis.Detail != "oauth_access_token_expired" {
 		t.Fatalf("detail=%q want=oauth_access_token_expired", diagnosis.Detail)
+	}
+}
+
+func TestDiagnoseSelectionFailure_QuotaLimited(t *testing.T) {
+	svc := &GatewayService{}
+	acc := &Account{
+		ID:          21,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			"quota_limit": 10,
+			"quota_used":  10,
+		},
+	}
+
+	diagnosis := svc.diagnoseSelectionFailure(
+		context.Background(),
+		acc,
+		"",
+		PlatformOpenAI,
+		nil,
+		false,
+	)
+
+	if diagnosis.Category != "quota_limited" {
+		t.Fatalf("category=%q want=quota_limited", diagnosis.Category)
+	}
+	if diagnosis.Detail != "quota_exceeded" {
+		t.Fatalf("detail=%q want=quota_exceeded", diagnosis.Detail)
+	}
+}
+
+func TestDiagnoseSelectionFailure_WindowCostLimited(t *testing.T) {
+	cache := &sessionLimitRuntimeStub{
+		windowCost: 21,
+		windowHit:  true,
+	}
+	svc := &GatewayService{sessionLimitCache: cache}
+	acc := &Account{
+		ID:          22,
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			"window_cost_limit": 10.0,
+		},
+	}
+
+	diagnosis := svc.diagnoseSelectionFailure(
+		context.Background(),
+		acc,
+		"",
+		PlatformAnthropic,
+		nil,
+		false,
+	)
+
+	if diagnosis.Category != "window_cost_limited" {
+		t.Fatalf("category=%q want=window_cost_limited", diagnosis.Category)
+	}
+	if diagnosis.Detail != "window_cost_exceeded" {
+		t.Fatalf("detail=%q want=window_cost_exceeded", diagnosis.Detail)
+	}
+}
+
+func TestDiagnoseSelectionFailure_RPMLimited(t *testing.T) {
+	svc := &GatewayService{
+		rpmCache: &rpmCacheRuntimeLimitsStub{
+			getCount: 12,
+		},
+	}
+	acc := &Account{
+		ID:          23,
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			"base_rpm":          10,
+			"rpm_sticky_buffer": 2,
+		},
+	}
+
+	diagnosis := svc.diagnoseSelectionFailure(
+		context.Background(),
+		acc,
+		"",
+		PlatformAnthropic,
+		nil,
+		false,
+	)
+
+	if diagnosis.Category != "rpm_limited" {
+		t.Fatalf("category=%q want=rpm_limited", diagnosis.Category)
+	}
+	if diagnosis.Detail != "rpm_exceeded" {
+		t.Fatalf("detail=%q want=rpm_exceeded", diagnosis.Detail)
 	}
 }
