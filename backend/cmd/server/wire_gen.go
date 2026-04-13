@@ -32,6 +32,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	lifecycleRegistry := service.ProvideLifecycleRegistry()
 	client, err := repository.ProvideEnt(configConfig)
 	if err != nil {
 		return nil, err
@@ -138,7 +139,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	geminiTokenProvider := service.ProvideGeminiTokenProvider(accountRepository, v7, geminiOAuthService, oAuthRefreshAPI)
 	v11 := repository.NewGatewayCache(redisClient)
 	v12 := repository.NewSchedulerOutboxRepository(db)
-	schedulerSnapshotService := service.ProvideSchedulerSnapshotService(schedulerCache, v12, accountRepository, groupRepository, configConfig)
+	schedulerSnapshotService := service.ProvideSchedulerSnapshotService(schedulerCache, v12, accountRepository, groupRepository, configConfig, lifecycleRegistry)
 	antigravityTokenProvider := service.ProvideAntigravityTokenProvider(accountRepository, v7, antigravityOAuthService, oAuthRefreshAPI, v5)
 	v13 := repository.NewInternal500CounterCache(redisClient)
 	antigravityGatewayService := service.NewAntigravityGatewayService(accountRepository, v11, schedulerSnapshotService, antigravityTokenProvider, rateLimitService, httpUpstream, settingService, v13)
@@ -178,7 +179,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	openAITokenProvider := service.ProvideOpenAITokenProvider(accountRepository, v7, openAIOAuthService, oAuthRefreshAPI)
 	openAIGatewayService := service.NewOpenAIGatewayService(accountRepository, usageLogRepository, usageBillingRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, v11, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider, modelPricingResolver, channelService)
 	geminiMessagesCompatService := service.NewGeminiMessagesCompatService(accountRepository, groupRepository, v11, schedulerSnapshotService, geminiTokenProvider, rateLimitService, httpUpstream, antigravityGatewayService, configConfig)
-	opsSystemLogSink := service.ProvideOpsSystemLogSink(opsRepository)
+	opsSystemLogSink := service.ProvideOpsSystemLogSink(opsRepository, configConfig)
 	opsService := service.NewOpsService(opsRepository, settingRepository, configConfig, accountRepository, userRepository, concurrencyService, gatewayService, openAIGatewayService, geminiMessagesCompatService, antigravityGatewayService, opsSystemLogSink)
 	settingHandler := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService)
 	opsHandler := admin.NewOpsHandler(opsService)
@@ -226,17 +227,17 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	routeDependencies := server.ProvideRouteDependencies(configConfig, handlers, jwtAuthMiddleware, adminAuthMiddleware, redisClient, gatewayRouteDependencies)
 	engine := server.ProvideRouter(configConfig, routeDependencies)
 	httpServer := server.ProvideHTTPServer(configConfig, engine)
-	opsMetricsCollector := service.ProvideOpsMetricsCollector(opsRepository, settingRepository, accountRepository, concurrencyService, db, redisClient, configConfig)
-	opsAggregationService := service.ProvideOpsAggregationService(opsRepository, settingRepository, db, redisClient, configConfig)
-	opsAlertEvaluatorService := service.ProvideOpsAlertEvaluatorService(opsService, opsRepository, emailService, redisClient, configConfig)
-	opsCleanupService := service.ProvideOpsCleanupService(opsRepository, db, redisClient, configConfig)
+	service.ProvideOpsMetricsCollector(opsRepository, settingRepository, accountRepository, concurrencyService, db, redisClient, configConfig, lifecycleRegistry)
+	service.ProvideOpsAggregationService(opsRepository, settingRepository, db, redisClient, configConfig, lifecycleRegistry)
+	service.ProvideOpsAlertEvaluatorService(opsService, opsRepository, emailService, redisClient, configConfig, lifecycleRegistry)
+	service.ProvideOpsCleanupService(opsRepository, db, redisClient, configConfig, lifecycleRegistry)
 	opsScheduledReportService := service.ProvideOpsScheduledReportService(opsService, userService, emailService, redisClient, configConfig)
 	tokenRefreshService := service.ProvideTokenRefreshService(accountRepository, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, compositeTokenCacheInvalidator, schedulerCache, configConfig, v5, privacyClientFactory, proxyRepository, oAuthRefreshAPI)
 	accountExpiryService := service.ProvideAccountExpiryService(accountRepository)
 	subscriptionExpiryService := service.ProvideSubscriptionExpiryService(userSubscriptionRepository)
 	claudeCodeProfileSyncService := service.ProvideClaudeCodeProfileSyncStarter(configConfig)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(v18, scheduledTestService, accountTestService, rateLimitService, configConfig)
-	v20 := provideCleanup(configConfig, client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
+	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, opsScheduledReportService, opsSystemLogSink, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v20,
@@ -266,13 +267,9 @@ func provideCleanup(
 	cfg *config.Config,
 	entClient *ent.Client,
 	rdb *redis.Client,
-	opsMetricsCollector *service.OpsMetricsCollector,
-	opsAggregation *service.OpsAggregationService,
-	opsAlertEvaluator *service.OpsAlertEvaluatorService,
-	opsCleanup *service.OpsCleanupService,
+	lifecycleRegistry *service.LifecycleRegistry,
 	opsScheduledReport *service.OpsScheduledReportService,
 	opsSystemLogSink *service.OpsSystemLogSink,
-	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
 	subscriptionExpiry *service.SubscriptionExpiryService,
@@ -296,14 +293,10 @@ func provideCleanup(
 		ctx, cancel := context.WithTimeout(context.Background(), resolveShutdownTimeout(cfg))
 		defer cancel()
 
-		parallelSteps := []cleanupStep{
+		parallelSteps := lifecycleRegistrySteps(lifecycleRegistry)
+		parallelSteps = append(parallelSteps, []cleanupStep{
 			stopStep("OpsScheduledReportService", opsScheduledReport),
-			stopStep("OpsCleanupService", opsCleanup),
 			stopStep("OpsSystemLogSink", opsSystemLogSink),
-			stopStep("OpsAlertEvaluatorService", opsAlertEvaluator),
-			stopStep("OpsAggregationService", opsAggregation),
-			stopStep("OpsMetricsCollector", opsMetricsCollector),
-			stopStep("SchedulerSnapshotService", schedulerSnapshot),
 			stopStep("UsageCleanupService", usageCleanup),
 			stopStep("IdempotencyCleanupService", idempotencyCleanup),
 			stopStep("ClaudeCodeProfileSyncService", claudeProfileSync),
@@ -326,7 +319,7 @@ func provideCleanup(
 			}),
 			stopStep("ScheduledTestRunnerService", scheduledTestRunner),
 			stopStep("BackupService", backupSvc),
-		}
+		}...)
 
 		infraSteps := []cleanupStep{
 			closeStep("Redis", rdb),
@@ -335,4 +328,14 @@ func provideCleanup(
 
 		runCleanup(ctx, parallelSteps, infraSteps)
 	}
+}
+
+func lifecycleRegistrySteps(registry *service.LifecycleRegistry) []cleanupStep {
+	entries := registry.Entries()
+	steps := make([]cleanupStep, 0, len(entries))
+	for _, entry := range entries {
+		entry := entry
+		steps = append(steps, callbackStep(entry.Name, entry.Stop))
+	}
+	return steps
 }

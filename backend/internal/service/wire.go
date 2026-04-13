@@ -17,6 +17,10 @@ type BuildInfo struct {
 	BuildType string
 }
 
+func ProvideLifecycleRegistry() *LifecycleRegistry {
+	return NewLifecycleRegistry()
+}
+
 // ProvidePricingService creates and initializes PricingService
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
@@ -189,10 +193,10 @@ func ProvideSchedulerSnapshotService(
 	accountRepo AccountRepository,
 	groupRepo GroupRepository,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *SchedulerSnapshotService {
 	svc := NewSchedulerSnapshotService(cache, outboxRepo, accountRepo, groupRepo, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "SchedulerSnapshotService", svc)
 }
 
 // ProvideRateLimitService creates RateLimitService with optional dependencies.
@@ -222,10 +226,10 @@ func ProvideOpsMetricsCollector(
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsMetricsCollector {
 	collector := NewOpsMetricsCollector(opsRepo, settingRepo, accountRepo, concurrencyService, db, redisClient, cfg)
-	collector.Start()
-	return collector
+	return manageStartStopLifecycle(lifecycle, "OpsMetricsCollector", collector)
 }
 
 // ProvideOpsAggregationService creates and starts OpsAggregationService (hourly/daily pre-aggregation).
@@ -235,10 +239,10 @@ func ProvideOpsAggregationService(
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsAggregationService {
 	svc := NewOpsAggregationService(opsRepo, settingRepo, db, redisClient, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "OpsAggregationService", svc)
 }
 
 // ProvideOpsAlertEvaluatorService creates and starts OpsAlertEvaluatorService.
@@ -248,10 +252,10 @@ func ProvideOpsAlertEvaluatorService(
 	emailService *EmailService,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsAlertEvaluatorService {
 	svc := NewOpsAlertEvaluatorService(opsService, opsRepo, emailService, redisClient, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "OpsAlertEvaluatorService", svc)
 }
 
 // ProvideOpsCleanupService creates and starts OpsCleanupService (cron scheduled).
@@ -260,14 +264,14 @@ func ProvideOpsCleanupService(
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsCleanupService {
 	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "OpsCleanupService", svc)
 }
 
-func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
-	sink := NewOpsSystemLogSink(opsRepo)
+func ProvideOpsSystemLogSink(opsRepo OpsRepository, cfg *config.Config) *OpsSystemLogSink {
+	sink := NewOpsSystemLogSink(opsRepo, cfg)
 	sink.Start()
 	logger.SetSink(sink)
 	return sink
@@ -450,6 +454,7 @@ var ProviderSet = wire.NewSet(
 	NewTLSFingerprintProfileService,
 	NewCompatibleUpstreamModelsService,
 	NewDigestSessionStore,
+	ProvideLifecycleRegistry,
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
 	ProvideIdempotencyCleanupService,

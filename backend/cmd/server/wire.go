@@ -68,13 +68,9 @@ func provideCleanup(
 	cfg *config.Config,
 	entClient *ent.Client,
 	rdb *redis.Client,
-	opsMetricsCollector *service.OpsMetricsCollector,
-	opsAggregation *service.OpsAggregationService,
-	opsAlertEvaluator *service.OpsAlertEvaluatorService,
-	opsCleanup *service.OpsCleanupService,
+	lifecycleRegistry *service.LifecycleRegistry,
 	opsScheduledReport *service.OpsScheduledReportService,
 	opsSystemLogSink *service.OpsSystemLogSink,
-	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
 	subscriptionExpiry *service.SubscriptionExpiryService,
@@ -99,14 +95,10 @@ func provideCleanup(
 		defer cancel()
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
-		parallelSteps := []cleanupStep{
+		parallelSteps := lifecycleRegistrySteps(lifecycleRegistry)
+		parallelSteps = append(parallelSteps, []cleanupStep{
 			stopStep("OpsScheduledReportService", opsScheduledReport),
-			stopStep("OpsCleanupService", opsCleanup),
 			stopStep("OpsSystemLogSink", opsSystemLogSink),
-			stopStep("OpsAlertEvaluatorService", opsAlertEvaluator),
-			stopStep("OpsAggregationService", opsAggregation),
-			stopStep("OpsMetricsCollector", opsMetricsCollector),
-			stopStep("SchedulerSnapshotService", schedulerSnapshot),
 			stopStep("UsageCleanupService", usageCleanup),
 			stopStep("IdempotencyCleanupService", idempotencyCleanup),
 			stopStep("ClaudeCodeProfileSyncService", claudeProfileSync),
@@ -129,7 +121,7 @@ func provideCleanup(
 			}),
 			stopStep("ScheduledTestRunnerService", scheduledTestRunner),
 			stopStep("BackupService", backupSvc),
-		}
+		}...)
 
 		infraSteps := []cleanupStep{
 			closeStep("Redis", rdb),
@@ -138,4 +130,14 @@ func provideCleanup(
 
 		runCleanup(ctx, parallelSteps, infraSteps)
 	}
+}
+
+func lifecycleRegistrySteps(registry *service.LifecycleRegistry) []cleanupStep {
+	entries := registry.Entries()
+	steps := make([]cleanupStep, 0, len(entries))
+	for _, entry := range entries {
+		entry := entry
+		steps = append(steps, callbackStep(entry.Name, entry.Stop))
+	}
+	return steps
 }
