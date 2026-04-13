@@ -31,6 +31,8 @@ const (
 	envOpsWSTrustProxy     = "OPS_WS_TRUST_PROXY"
 	envOpsWSTrustedProxies = "OPS_WS_TRUSTED_PROXIES"
 	envOpsWSOriginPolicy   = "OPS_WS_ORIGIN_POLICY"
+	// These caps stay env-only on purpose: they are deployment-scoped circuit breakers
+	// for the admin realtime channel and should not expand the main config surface.
 	envOpsWSMaxConns       = "OPS_WS_MAX_CONNS"
 	envOpsWSMaxConnsPerIP  = "OPS_WS_MAX_CONNS_PER_IP"
 )

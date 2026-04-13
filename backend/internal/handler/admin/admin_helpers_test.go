@@ -224,3 +224,29 @@ func TestOpsWSHelpers(t *testing.T) {
 	require.True(t, isAddrInTrustedProxies(addr, prefixes))
 	require.False(t, isAddrInTrustedProxies(netip.MustParseAddr("192.168.0.1"), prefixes))
 }
+
+func TestLoadOpsWSRuntimeLimitsFromEnv(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		limits := loadOpsWSRuntimeLimitsFromEnv()
+		require.Equal(t, int32(defaultMaxWSConns), limits.MaxConns)
+		require.Equal(t, int32(defaultMaxWSConnsPerIP), limits.MaxConnsPerIP)
+	})
+
+	t.Run("overrides", func(t *testing.T) {
+		t.Setenv(envOpsWSMaxConns, "256")
+		t.Setenv(envOpsWSMaxConnsPerIP, "0")
+
+		limits := loadOpsWSRuntimeLimitsFromEnv()
+		require.Equal(t, int32(256), limits.MaxConns)
+		require.Equal(t, int32(0), limits.MaxConnsPerIP)
+	})
+
+	t.Run("invalid values fall back", func(t *testing.T) {
+		t.Setenv(envOpsWSMaxConns, "-1")
+		t.Setenv(envOpsWSMaxConnsPerIP, "oops")
+
+		limits := loadOpsWSRuntimeLimitsFromEnv()
+		require.Equal(t, int32(defaultMaxWSConns), limits.MaxConns)
+		require.Equal(t, int32(defaultMaxWSConnsPerIP), limits.MaxConnsPerIP)
+	})
+}
