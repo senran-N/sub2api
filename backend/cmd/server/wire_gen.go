@@ -237,7 +237,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	subscriptionExpiryService := service.ProvideSubscriptionExpiryService(userSubscriptionRepository)
 	claudeCodeProfileSyncService := service.ProvideClaudeCodeProfileSyncStarter(configConfig)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(v18, scheduledTestService, accountTestService, rateLimitService, configConfig)
-	v20 := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
+	v20 := provideCleanup(configConfig, client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v20,
@@ -264,6 +264,7 @@ func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
 }
 
 func provideCleanup(
+	cfg *config.Config,
 	entClient *ent.Client,
 	rdb *redis.Client,
 	opsMetricsCollector *service.OpsMetricsCollector,
@@ -293,7 +294,12 @@ func provideCleanup(
 	backupSvc *service.BackupService,
 ) func() {
 	return func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownTimeout := 45 * time.Second
+		if cfg != nil && cfg.Server.ShutdownTimeout > 0 {
+			shutdownTimeout = time.Duration(cfg.Server.ShutdownTimeout) * time.Second
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
 		parallelSteps := []cleanupStep{

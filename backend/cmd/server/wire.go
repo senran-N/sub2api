@@ -66,6 +66,7 @@ func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
 }
 
 func provideCleanup(
+	cfg *config.Config,
 	entClient *ent.Client,
 	rdb *redis.Client,
 	opsMetricsCollector *service.OpsMetricsCollector,
@@ -95,7 +96,12 @@ func provideCleanup(
 	backupSvc *service.BackupService,
 ) func() {
 	return func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownTimeout := 45 * time.Second
+		if cfg != nil && cfg.Server.ShutdownTimeout > 0 {
+			shutdownTimeout = time.Duration(cfg.Server.ShutdownTimeout) * time.Second
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
