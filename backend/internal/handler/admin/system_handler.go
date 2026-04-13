@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -158,9 +159,16 @@ func (h *SystemHandler) acquireSystemLock(
 		return nil, nil, err
 	}
 	release := func(reason string, succeeded bool) {
-		releaseCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		releaseCtx, cancel := newDetachedTimeoutContext(ctx, systemLockReleaseTimeout)
 		defer cancel()
-		_ = h.lockSvc.Release(releaseCtx, lock, succeeded, reason)
+		if err := h.lockSvc.Release(releaseCtx, lock, succeeded, reason); err != nil {
+			slog.Warn("release system operation lock failed",
+				"operation_id", lock.OperationID(),
+				"reason", reason,
+				"succeeded", succeeded,
+				"err", err,
+			)
+		}
 	}
 	return lock, release, nil
 }

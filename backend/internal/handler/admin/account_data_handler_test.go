@@ -17,6 +17,11 @@ type dataResponse struct {
 	Data dataPayload `json:"data"`
 }
 
+type dataImportResponse struct {
+	Code int              `json:"code"`
+	Data DataImportResult `json:"data"`
+}
+
 type dataPayload struct {
 	Type     string        `json:"type"`
 	Version  int           `json:"version"`
@@ -230,4 +235,69 @@ func TestImportDataReusesProxyAndSkipsDefaultGroup(t *testing.T) {
 	require.Len(t, adminSvc.createdProxies, 0)
 	require.Len(t, adminSvc.createdAccounts, 1)
 	require.True(t, adminSvc.createdAccounts[0].SkipDefaultGroupBind)
+}
+
+func TestImportDataReportsProxyStatusUpdateError(t *testing.T) {
+	router, adminSvc := setupAccountDataRouter()
+	adminSvc.updateProxyErr = service.ErrProxyNotFound
+	adminSvc.proxies = []service.Proxy{
+		{
+			ID:       1,
+			Name:     "proxy-a",
+			Protocol: "http",
+			Host:     "1.2.3.4",
+			Port:     8080,
+			Username: "u",
+			Password: "p",
+			Status:   service.StatusActive,
+		},
+	}
+
+	payload := map[string]any{
+		"data": map[string]any{
+			"type":    dataType,
+			"version": dataVersion,
+			"proxies": []map[string]any{
+				{
+					"proxy_key": "http|1.2.3.4|8080|u|p",
+					"name":      "proxy-a",
+					"protocol":  "http",
+					"host":      "1.2.3.4",
+					"port":      8080,
+					"username":  "u",
+					"password":  "p",
+					"status":    "inactive",
+				},
+				{
+					"proxy_key": "https|10.0.0.2|443|n|q",
+					"name":      "proxy-b",
+					"protocol":  "https",
+					"host":      "10.0.0.2",
+					"port":      443,
+					"username":  "n",
+					"password":  "q",
+					"status":    "inactive",
+				},
+			},
+			"accounts": []map[string]any{},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp dataImportResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 1, resp.Data.ProxyReused)
+	require.Equal(t, 1, resp.Data.ProxyCreated)
+	require.Len(t, resp.Data.Errors, 2)
+	require.Contains(t, resp.Data.Errors[0].Message, "update status failed")
+	require.Contains(t, resp.Data.Errors[1].Message, "update status failed")
 }

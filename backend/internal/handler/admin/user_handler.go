@@ -112,7 +112,14 @@ func (h *UserHandler) List(c *gin.Context) {
 				MaxConcurrency: users[i].Concurrency,
 			}
 		}
-		loadInfo, _ = h.concurrencyService.GetUsersLoadBatch(c.Request.Context(), usersConcurrency)
+		var loadErr error
+		loadInfo, loadErr = h.concurrencyService.GetUsersLoadBatch(c.Request.Context(), usersConcurrency)
+		if loadErr != nil {
+			if ginErr := c.Error(loadErr); ginErr != nil {
+				ginErr.SetType(gin.ErrorTypePrivate)
+			}
+			loadInfo = nil
+		}
 	}
 
 	// Build response with concurrency info

@@ -482,7 +482,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
-			h.submitUsageRecordTask(func(ctx context.Context) {
+			h.submitUsageRecordTaskWithParent(c.Request.Context(), func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
 					APIKey:             apiKey,
@@ -736,7 +736,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						fallbackGroup, err := h.gatewayService.ResolveGroupByID(c.Request.Context(), *fallbackGroupID)
 						if err != nil {
 							reqLog.Warn("gateway.resolve_fallback_group_failed", zap.Int64("fallback_group_id", *fallbackGroupID), zap.Error(err))
-							_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
+							if mappedErr := h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body); mappedErr != nil {
+								if ginErr := c.Error(mappedErr); ginErr != nil {
+									ginErr.SetType(gin.ErrorTypePrivate)
+								}
+							}
 							return
 						}
 						if fallbackGroup.Platform != service.PlatformAnthropic ||
@@ -747,7 +751,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 								zap.String("fallback_platform", fallbackGroup.Platform),
 								zap.String("fallback_subscription_type", fallbackGroup.SubscriptionType),
 							)
-							_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
+							if mappedErr := h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body); mappedErr != nil {
+								if ginErr := c.Error(mappedErr); ginErr != nil {
+									ginErr.SetType(gin.ErrorTypePrivate)
+								}
+							}
 							return
 						}
 						fallbackAPIKey := cloneAPIKeyWithGroup(apiKey, fallbackGroup)
@@ -765,7 +773,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						retryWithFallback = true
 						break
 					}
-					_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
+					if mappedErr := h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body); mappedErr != nil {
+						if ginErr := c.Error(mappedErr); ginErr != nil {
+							ginErr.SetType(gin.ErrorTypePrivate)
+						}
+					}
 					return
 				}
 				var failoverErr *service.UpstreamFailoverError
@@ -829,7 +841,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
-			h.submitUsageRecordTask(func(ctx context.Context) {
+			h.submitUsageRecordTaskWithParent(c.Request.Context(), func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
 					APIKey:             currentAPIKey,
@@ -1369,7 +1381,9 @@ func (h *GatewayHandler) handleStreamingAwareError(c *gin.Context, status int, e
 			// SSE 错误事件固定 schema，使用 Quote 直拼可避免额外 Marshal 分配。
 			errorEvent := `data: {"type":"error","error":{"type":` + strconv.Quote(errType) + `,"message":` + strconv.Quote(message) + `}}` + "\n\n"
 			if _, err := fmt.Fprint(c.Writer, errorEvent); err != nil {
-				_ = c.Error(err)
+				if ginErr := c.Error(err); ginErr != nil {
+					ginErr.SetType(gin.ErrorTypePrivate)
+				}
 			}
 			flusher.Flush()
 		}
@@ -1838,6 +1852,10 @@ func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger
 }
 
 func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
+	h.submitUsageRecordTaskWithParent(nil, task)
+}
+
+func (h *GatewayHandler) submitUsageRecordTaskWithParent(parent context.Context, task service.UsageRecordTask) {
 	if task == nil {
 		return
 	}
@@ -1846,7 +1864,7 @@ func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
 		return
 	}
 	// 回退路径：worker 池未注入时同步执行，避免退回到无界 goroutine 模式。
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := newDetachedTimeoutContext(parent, usageRecordFallbackTaskTimeout)
 	defer cancel()
 	defer func() {
 		if recovered := recover(); recovered != nil {

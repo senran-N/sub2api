@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -176,7 +177,9 @@ func (h *ProxyHandler) ImportData(c *gin.Context) {
 		ids := append([]int64(nil), latencyProbeIDs...)
 		runDetachedAdminTask("import_proxy_latency_probe", 2*time.Minute, func(ctx context.Context) {
 			for _, id := range ids {
-				_, _ = h.adminService.TestProxy(ctx, id)
+				if _, err := h.adminService.TestProxy(ctx, id); err != nil {
+					slog.Warn("proxy latency probe failed after import", "proxy_id", id, "err", err)
+				}
 			}
 		}, "count", len(ids))
 	}

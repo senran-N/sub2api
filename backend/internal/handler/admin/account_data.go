@@ -231,9 +231,16 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			result.ProxyReused++
 			if normalizedStatus != "" {
 				if proxy, getErr := h.adminService.GetProxy(ctx, existingID); getErr == nil && proxy != nil && proxy.Status != normalizedStatus {
-					_, _ = h.adminService.UpdateProxy(ctx, existingID, &service.UpdateProxyInput{
+					if _, updateErr := h.adminService.UpdateProxy(ctx, existingID, &service.UpdateProxyInput{
 						Status: normalizedStatus,
-					})
+					}); updateErr != nil {
+						result.Errors = append(result.Errors, DataImportError{
+							Kind:     "proxy",
+							Name:     item.Name,
+							ProxyKey: key,
+							Message:  "update status failed: " + updateErr.Error(),
+						})
+					}
 				}
 			}
 			continue
@@ -261,9 +268,16 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 		result.ProxyCreated++
 
 		if normalizedStatus != "" && normalizedStatus != created.Status {
-			_, _ = h.adminService.UpdateProxy(ctx, created.ID, &service.UpdateProxyInput{
+			if _, updateErr := h.adminService.UpdateProxy(ctx, created.ID, &service.UpdateProxyInput{
 				Status: normalizedStatus,
-			})
+			}); updateErr != nil {
+				result.Errors = append(result.Errors, DataImportError{
+					Kind:     "proxy",
+					Name:     item.Name,
+					ProxyKey: key,
+					Message:  "update status failed: " + updateErr.Error(),
+				})
+			}
 		}
 	}
 
