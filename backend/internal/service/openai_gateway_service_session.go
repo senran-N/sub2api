@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -51,6 +52,22 @@ func (s *OpenAIGatewayService) GenerateSessionHashWithFallback(c *gin.Context, b
 	currentHash, legacyHash := deriveOpenAISessionHashes(seed)
 	attachOpenAILegacySessionHashToGin(c, legacyHash)
 	return currentHash
+}
+
+func BuildOpenAIWSIngressFallbackSessionSeed(apiKey *APIKey) string {
+	if apiKey == nil {
+		return ""
+	}
+
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	}
+	return fmt.Sprintf("openai_ws_ingress:%d:%d:%d", groupID, apiKey.UserID, apiKey.ID)
+}
+
+func (s *OpenAIGatewayService) GenerateOpenAIWSIngressSessionHash(c *gin.Context, body []byte) string {
+	return s.GenerateSessionHashWithFallback(c, body, BuildOpenAIWSIngressFallbackSessionSeed(getOpenAIAPIKeyFromContext(c)))
 }
 
 func resolveOpenAIRequestSessionID(c *gin.Context, body []byte) string {

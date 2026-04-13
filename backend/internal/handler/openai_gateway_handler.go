@@ -1189,11 +1189,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		return
 	}
 
-	sessionHash := h.gatewayService.GenerateSessionHashWithFallback(
-		c,
-		firstMessage,
-		openAIWSIngressFallbackSessionSeed(subject.UserID, apiKey.ID, apiKey.GroupID),
-	)
+	sessionHash := h.gatewayService.GenerateOpenAIWSIngressSessionHash(c, firstMessage)
 	initialSelectionModel := schedulingModel
 	selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
 		ctx,
@@ -1631,14 +1627,6 @@ func ensureOpenAIPoolModeSessionHash(sessionHash string, account *service.Accoun
 	}
 	// 为当前请求生成一次性粘性会话键，确保同账号重试不会重新负载均衡到其他账号。
 	return "openai-pool-retry-" + uuid.NewString()
-}
-
-func openAIWSIngressFallbackSessionSeed(userID, apiKeyID int64, groupID *int64) string {
-	gid := int64(0)
-	if groupID != nil {
-		gid = *groupID
-	}
-	return fmt.Sprintf("openai_ws_ingress:%d:%d:%d", gid, userID, apiKeyID)
 }
 
 func isOpenAIWSUpgradeRequest(r *http.Request) bool {

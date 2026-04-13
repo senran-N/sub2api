@@ -255,6 +255,23 @@ func TestOpenAIGatewayService_GenerateSessionHashWithFallback(t *testing.T) {
 	require.Equal(t, "", empty)
 }
 
+func TestOpenAIGatewayService_GenerateOpenAIWSIngressSessionHash_UsesAPIKeyFallbackSeed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+
+	groupID := int64(9)
+	apiKey := &APIKey{ID: 200, UserID: 100, GroupID: &groupID}
+	c.Set("api_key", apiKey)
+
+	svc := &OpenAIGatewayService{}
+	seed := BuildOpenAIWSIngressFallbackSessionSeed(apiKey)
+	got := svc.GenerateOpenAIWSIngressSessionHash(c, []byte(`{"model":"gpt-5.1"}`))
+
+	require.Equal(t, fmt.Sprintf("%016x", xxhash.Sum64String(seed)), got)
+}
+
 func (c stubConcurrencyCache) GetAccountWaitingCount(ctx context.Context, accountID int64) (int, error) {
 	if c.waitCounts != nil {
 		if count, ok := c.waitCounts[accountID]; ok {

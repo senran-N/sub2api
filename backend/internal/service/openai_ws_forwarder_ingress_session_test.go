@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -162,6 +162,71 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 	require.Equal(t, int64(1), metrics.AcquireTotal, "同一 ingress 会话多 turn 应只获取一次上游 lease")
 	require.Equal(t, 1, captureDialer.DialCount(), "同一 ingress 会话应保持同一上游连接")
 	require.Len(t, captureConn.writes, 2, "应向同一上游连接发送两轮 response.create")
+}
+
+func TestOpenAIGatewayService_BuildOpenAIWSIngressSessionContext_UsesFallbackSessionHash(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Config{}
+	cfg.Security.URLAllowlist.Enabled = false
+	cfg.Security.URLAllowlist.AllowInsecureHTTP = true
+	cfg.Gateway.OpenAIWS.Enabled = true
+	cfg.Gateway.OpenAIWS.OAuthEnabled = true
+	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
+	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = true
+
+	pool := newOpenAIWSConnPool(cfg)
+	store := NewOpenAIWSStateStore(&stubGatewayCache{})
+	svc := &OpenAIGatewayService{
+		cfg:                cfg,
+		httpUpstream:       &httpUpstreamRecorder{},
+		cache:              &stubGatewayCache{},
+		toolCorrector:      NewCodexToolCorrector(),
+		openaiWSResolver:   NewOpenAIWSProtocolResolver(cfg),
+		openaiWSPool:       pool,
+		openaiWSStateStore: store,
+	}
+
+	account := &Account{
+		ID:          118,
+		Name:        "openai-ingress-fallback-session",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "sk-test",
+		},
+		Extra: map[string]any{
+			"responses_websockets_v2_enabled": true,
+		},
+	}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	groupID := int64(10118)
+	apiKey := &APIKey{ID: 22, UserID: 33, GroupID: &groupID}
+	c.Set("api_key", apiKey)
+
+	firstPayload := []byte(`{"type":"response.create","model":"gpt-5.1","stream":false}`)
+	sessionHash := svc.GenerateOpenAIWSIngressSessionHash(c, firstPayload)
+	require.NotEmpty(t, sessionHash)
+	store.BindSessionTurnState(groupID, sessionHash, "turn_state_restored", time.Minute)
+
+	session, err := svc.buildOpenAIWSIngressSessionContext(
+		c,
+		account,
+		"sk-test",
+		firstPayload,
+		OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2},
+		OpenAIWSIngressModeCtxPool,
+		false,
+	)
+	require.NoError(t, err)
+	require.Equal(t, sessionHash, session.sessionHash)
+	require.Equal(t, "turn_state_restored", session.turnState)
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_RewritesDefaultFallbackModelOnResponse(t *testing.T) {

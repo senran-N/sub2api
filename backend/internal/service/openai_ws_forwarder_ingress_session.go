@@ -74,7 +74,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 	turnState := strings.TrimSpace(c.GetHeader(openAIWSTurnStateHeader))
 	stateStore := s.getOpenAIWSStateStore()
 	groupID := getOpenAIGroupIDFromContext(c)
-	sessionHash := s.GenerateSessionHash(c, firstPayload.rawForHash)
+	sessionHash := s.GenerateOpenAIWSIngressSessionHash(c, firstPayload.rawForHash)
 	if turnState == "" && stateStore != nil && sessionHash != "" {
 		if savedTurnState, ok := stateStore.GetSessionTurnState(groupID, sessionHash); ok {
 			turnState = savedTurnState
