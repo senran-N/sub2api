@@ -15,7 +15,6 @@ type cleanupStep struct {
 
 func runCleanup(ctx context.Context, parallelSteps []cleanupStep, infraSteps []cleanupStep) {
 	var wg sync.WaitGroup
-	errCh := make(chan error, len(parallelSteps))
 
 	for _, step := range parallelSteps {
 		step := step
@@ -23,7 +22,6 @@ func runCleanup(ctx context.Context, parallelSteps []cleanupStep, infraSteps []c
 		go func() {
 			defer wg.Done()
 			if err := step.fn(); err != nil {
-				errCh <- err
 				log.Printf("Cleanup error [%s]: %v", step.name, err)
 			}
 		}()
@@ -40,8 +38,6 @@ func runCleanup(ctx context.Context, parallelSteps []cleanupStep, infraSteps []c
 	case <-ctx.Done():
 		log.Printf("Cleanup timeout after %s", ctx.Err())
 	}
-
-	close(errCh)
 
 	for _, step := range infraSteps {
 		if err := step.fn(); err != nil {
