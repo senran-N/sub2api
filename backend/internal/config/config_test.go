@@ -234,11 +234,11 @@ func TestLoadDefaultSecurityToggles(t *testing.T) {
 	if cfg.Security.URLAllowlist.Enabled {
 		t.Fatalf("URLAllowlist.Enabled = true, want false")
 	}
-	if !cfg.Security.URLAllowlist.AllowInsecureHTTP {
-		t.Fatalf("URLAllowlist.AllowInsecureHTTP = false, want true")
+	if cfg.Security.URLAllowlist.AllowInsecureHTTP {
+		t.Fatalf("URLAllowlist.AllowInsecureHTTP = true, want false")
 	}
-	if !cfg.Security.URLAllowlist.AllowPrivateHosts {
-		t.Fatalf("URLAllowlist.AllowPrivateHosts = false, want true")
+	if cfg.Security.URLAllowlist.AllowPrivateHosts {
+		t.Fatalf("URLAllowlist.AllowPrivateHosts = true, want false")
 	}
 	if !cfg.Security.ResponseHeaders.Enabled {
 		t.Fatalf("ResponseHeaders.Enabled = false, want true")
@@ -255,6 +255,41 @@ func TestLoadDefaultServerMode(t *testing.T) {
 
 	if cfg.Server.Mode != "release" {
 		t.Fatalf("Server.Mode = %q, want %q", cfg.Server.Mode, "release")
+	}
+	if cfg.Server.ShutdownTimeout != 45 {
+		t.Fatalf("Server.ShutdownTimeout = %d, want 45", cfg.Server.ShutdownTimeout)
+	}
+}
+
+func TestValidateServerShutdownTimeout(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	cfg.Server.ShutdownTimeout = 0
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatalf("Validate() expected error for server.shutdown_timeout_seconds")
+	}
+	if !strings.Contains(err.Error(), "server.shutdown_timeout_seconds") {
+		t.Fatalf("Validate() expected server.shutdown_timeout_seconds error, got: %v", err)
+	}
+}
+
+func TestLoadServerShutdownTimeoutFromEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("SERVER_SHUTDOWN_TIMEOUT_SECONDS", "60")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.Server.ShutdownTimeout != 60 {
+		t.Fatalf("Server.ShutdownTimeout = %d, want 60", cfg.Server.ShutdownTimeout)
 	}
 }
 

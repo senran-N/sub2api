@@ -229,13 +229,14 @@ type PricingConfig struct {
 type ServerConfig struct {
 	Host               string    `mapstructure:"host"`
 	Port               int       `mapstructure:"port"`
-	Mode               string    `mapstructure:"mode"`                  // debug/release
-	FrontendURL        string    `mapstructure:"frontend_url"`          // 前端基础 URL，用于生成邮件中的外部链接
-	ReadHeaderTimeout  int       `mapstructure:"read_header_timeout"`   // 读取请求头超时（秒）
-	IdleTimeout        int       `mapstructure:"idle_timeout"`          // 空闲连接超时（秒）
-	TrustedProxies     []string  `mapstructure:"trusted_proxies"`       // 可信代理列表（CIDR/IP）
-	MaxRequestBodySize int64     `mapstructure:"max_request_body_size"` // 全局最大请求体限制
-	H2C                H2CConfig `mapstructure:"h2c"`                   // HTTP/2 Cleartext 配置
+	Mode               string    `mapstructure:"mode"`                     // debug/release
+	FrontendURL        string    `mapstructure:"frontend_url"`             // 前端基础 URL，用于生成邮件中的外部链接
+	ReadHeaderTimeout  int       `mapstructure:"read_header_timeout"`      // 读取请求头超时（秒）
+	IdleTimeout        int       `mapstructure:"idle_timeout"`             // 空闲连接超时（秒）
+	ShutdownTimeout    int       `mapstructure:"shutdown_timeout_seconds"` // 优雅关停超时（秒）
+	TrustedProxies     []string  `mapstructure:"trusted_proxies"`          // 可信代理列表（CIDR/IP）
+	MaxRequestBodySize int64     `mapstructure:"max_request_body_size"`    // 全局最大请求体限制
+	H2C                H2CConfig `mapstructure:"h2c"`                      // HTTP/2 Cleartext 配置
 }
 
 // H2CConfig HTTP/2 Cleartext 配置
@@ -1086,6 +1087,7 @@ func setDefaults() {
 	viper.SetDefault("server.frontend_url", "")
 	viper.SetDefault("server.read_header_timeout", 30) // 30秒读取请求头
 	viper.SetDefault("server.idle_timeout", 120)       // 120秒空闲超时
+	viper.SetDefault("server.shutdown_timeout_seconds", 45)
 	viper.SetDefault("server.trusted_proxies", []string{})
 	viper.SetDefault("server.max_request_body_size", int64(256*1024*1024))
 	// H2C 默认配置
@@ -1135,8 +1137,8 @@ func setDefaults() {
 		"raw.githubusercontent.com",
 	})
 	viper.SetDefault("security.url_allowlist.crs_hosts", []string{})
-	viper.SetDefault("security.url_allowlist.allow_private_hosts", true)
-	viper.SetDefault("security.url_allowlist.allow_insecure_http", true)
+	viper.SetDefault("security.url_allowlist.allow_private_hosts", false)
+	viper.SetDefault("security.url_allowlist.allow_insecure_http", false)
 	viper.SetDefault("security.response_headers.enabled", true)
 	viper.SetDefault("security.response_headers.additional_allowed", []string{})
 	viper.SetDefault("security.response_headers.force_remove", []string{})
@@ -1542,6 +1544,9 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("server.frontend_url invalid: must not include userinfo")
 		}
 		warnIfInsecureURL("server.frontend_url", c.Server.FrontendURL)
+	}
+	if c.Server.ShutdownTimeout <= 0 {
+		return fmt.Errorf("server.shutdown_timeout_seconds must be positive")
 	}
 	if c.JWT.ExpireHour <= 0 {
 		return fmt.Errorf("jwt.expire_hour must be positive")
