@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -75,4 +76,46 @@ func TestFilterLoadAwareCandidates_AppliesEligibilityRules(t *testing.T) {
 
 	require.Len(t, candidates, 1)
 	require.Equal(t, int64(5), candidates[0].ID)
+}
+
+func TestFilterLoadAwareCandidates_SkipsExpiredOAuthWithoutRefreshToken(t *testing.T) {
+	svc := &GatewayService{cfg: testConfig()}
+	expiredAt := time.Now().Add(-time.Minute).Format(time.RFC3339)
+
+	accounts := []Account{
+		{
+			ID:          1,
+			Platform:    PlatformAnthropic,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Credentials: map[string]any{
+				"access_token": "expired-token",
+				"expires_at":   expiredAt,
+			},
+		},
+		{
+			ID:          2,
+			Platform:    PlatformAnthropic,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Credentials: map[string]any{
+				"access_token": "fresh-token",
+				"expires_at":   time.Now().Add(time.Hour).Format(time.RFC3339),
+			},
+		},
+	}
+
+	candidates := svc.filterLoadAwareCandidates(
+		context.Background(),
+		accounts,
+		"",
+		PlatformAnthropic,
+		false,
+		nil,
+	)
+
+	require.Len(t, candidates, 1)
+	require.Equal(t, int64(2), candidates[0].ID)
 }

@@ -177,6 +177,9 @@ func (s *GatewayService) diagnoseSelectionFailure(
 	if _, excluded := excludedIDs[acc.ID]; excluded {
 		return selectionFailureDiagnosis{Category: "excluded"}
 	}
+	if detail := oauthSelectionCredentialIssue(acc); detail != "" {
+		return selectionFailureDiagnosis{Category: "unschedulable", Detail: detail}
+	}
 	if !s.isAccountSchedulableForSelection(acc) {
 		return selectionFailureDiagnosis{Category: "unschedulable", Detail: "generic_unschedulable"}
 	}

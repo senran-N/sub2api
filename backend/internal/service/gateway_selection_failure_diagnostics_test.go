@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -120,5 +121,37 @@ func TestIsPlatformFilteredForSelection(t *testing.T) {
 				t.Fatalf("filtered=%v want=%v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDiagnoseSelectionFailure_OAuthCredentialIssue(t *testing.T) {
+	svc := &GatewayService{}
+	expiredAt := time.Now().Add(-time.Minute).Format(time.RFC3339)
+	acc := &Account{
+		ID:          11,
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"access_token": "expired-token",
+			"expires_at":   expiredAt,
+		},
+	}
+
+	diagnosis := svc.diagnoseSelectionFailure(
+		context.Background(),
+		acc,
+		"",
+		PlatformAnthropic,
+		nil,
+		false,
+	)
+
+	if diagnosis.Category != "unschedulable" {
+		t.Fatalf("category=%q want=unschedulable", diagnosis.Category)
+	}
+	if diagnosis.Detail != "oauth_access_token_expired" {
+		t.Fatalf("detail=%q want=oauth_access_token_expired", diagnosis.Detail)
 	}
 }

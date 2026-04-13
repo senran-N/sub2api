@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
@@ -293,7 +295,44 @@ func (s *GatewayService) isAccountSchedulableForSelection(account *Account) bool
 	if account == nil {
 		return false
 	}
-	return account.IsSchedulable()
+	if !account.IsSchedulable() {
+		return false
+	}
+	return oauthSelectionCredentialIssue(account) == ""
+}
+
+func oauthSelectionCredentialIssue(account *Account) string {
+	if account == nil || !account.IsOAuth() {
+		return ""
+	}
+	if len(account.Credentials) == 0 {
+		return ""
+	}
+
+	_, hasAccessToken := account.Credentials["access_token"]
+	_, hasRefreshToken := account.Credentials["refresh_token"]
+	_, hasExpiresAt := account.Credentials["expires_at"]
+	if !hasAccessToken && !hasRefreshToken && !hasExpiresAt {
+		return ""
+	}
+
+	accessToken := strings.TrimSpace(account.GetCredential("access_token"))
+	refreshToken := strings.TrimSpace(account.GetCredential("refresh_token"))
+	if hasAccessToken && accessToken == "" && refreshToken == "" {
+		return "oauth_access_token_missing"
+	}
+	if !hasExpiresAt {
+		return ""
+	}
+
+	expiresAt := account.GetCredentialAsTime("expires_at")
+	if expiresAt == nil {
+		return ""
+	}
+	if !expiresAt.After(time.Now()) && refreshToken == "" {
+		return "oauth_access_token_expired"
+	}
+	return ""
 }
 
 func (s *GatewayService) isAccountSchedulableForModelSelection(ctx context.Context, account *Account, requestedModel string) bool {
