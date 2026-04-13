@@ -263,13 +263,11 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
       })
 
   const handleRefresh = async (account: Account) => {
-    try {
-      const updated = await adminAPI.accounts.refreshCredentials(account.id)
-      options.patchAccountInList(updated)
-      options.enterAutoRefreshSilentWindow()
-    } catch (error) {
-      console.error('Failed to refresh credentials:', error)
-    }
+    await runSingleAccountUpdate(adminAPI.accounts.refreshCredentials(account.id), {
+      successMessage: options.t('admin.accounts.tokenRefreshed'),
+      mapErrorMessage: (error: unknown) =>
+        resolveRequestErrorMessage(error, options.t('admin.accounts.failedToRefresh'))
+    })
   }
 
   const handleRecoverState = async (account: Account) => {

@@ -276,6 +276,38 @@ describe('useAccountsViewActions', () => {
     expect(setup.togglingSchedulable.value).toBeNull()
   })
 
+  it('shows visible feedback for single-account refresh token', async () => {
+    const setup = createComposable([1])
+    const updated = createAccount({ id: 21, updated_at: '2026-01-02T00:00:00Z' })
+    refreshCredentials.mockResolvedValue(updated)
+
+    await setup.composable.handleRefresh(createAccount({ id: 21 }))
+
+    expect(refreshCredentials).toHaveBeenCalledWith(21)
+    expect(setup.patchAccountInList).toHaveBeenCalledWith(updated)
+    expect(setup.enterAutoRefreshSilentWindow).toHaveBeenCalledTimes(1)
+    expect(setup.showSuccess).toHaveBeenCalledWith('admin.accounts.tokenRefreshed')
+  })
+
+  it('shows resolved request messages for single-account refresh token failures', async () => {
+    const setup = createComposable([1])
+
+    refreshCredentials.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'refresh-token-blocked'
+        }
+      }
+    })
+    await setup.composable.handleRefresh(createAccount({ id: 22 }))
+
+    refreshCredentials.mockRejectedValueOnce(new Error('refresh unavailable'))
+    await setup.composable.handleRefresh(createAccount({ id: 23 }))
+
+    expect(setup.showError).toHaveBeenNthCalledWith(1, 'refresh-token-blocked')
+    expect(setup.showError).toHaveBeenNthCalledWith(2, 'refresh unavailable')
+  })
+
   it('uses resolved request messages for recover state failures', async () => {
     const setup = createComposable()
 
