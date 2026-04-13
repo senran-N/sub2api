@@ -251,7 +251,17 @@ docker compose -f docker-compose.standalone.yml up -d
 | `TZ` | No | `Asia/Shanghai` | Timezone |
 | `SUB2API_STOP_GRACE_PERIOD` | No | `50s` | Container stop grace period; keep slightly above shutdown timeout |
 | `SUB2API_MEMORY_LIMIT` | No | `2g` | Memory ceiling for the Sub2API container |
+| `SUB2API_MEMORY_RESERVATION` | No | `512m` | Soft memory reservation for the Sub2API container |
 | `SUB2API_CPUS` | No | `1.0` | CPU quota for the Sub2API container |
+| `SUB2API_PIDS_LIMIT` | No | `512` | PID ceiling for the Sub2API container |
+| `POSTGRES_STOP_GRACE_PERIOD` | Bundled only | `60s` | Stop grace period for the bundled PostgreSQL container |
+| `POSTGRES_MEMORY_LIMIT` | Bundled only | `1g` | Memory ceiling for the bundled PostgreSQL container |
+| `POSTGRES_MEMORY_RESERVATION` | Bundled only | `256m` | Soft memory reservation for the bundled PostgreSQL container |
+| `POSTGRES_CPUS` | Bundled only | `1.0` | CPU quota for the bundled PostgreSQL container |
+| `REDIS_STOP_GRACE_PERIOD` | Bundled only | `30s` | Stop grace period for the bundled Redis container |
+| `REDIS_MEMORY_LIMIT` | Bundled only | `512m` | Memory ceiling for the bundled Redis container |
+| `REDIS_MEMORY_RESERVATION` | Bundled only | `128m` | Soft memory reservation for the bundled Redis container |
+| `REDIS_CPUS` | Bundled only | `0.5` | CPU quota for the bundled Redis container |
 | `SECURITY_URL_ALLOWLIST_ENABLED` | No | `true` | Enforce upstream/pricing host allowlists by default in production deploys |
 | `SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP` | No | `false` | Allow `http://` upstream URLs only for trusted dev/test setups |
 | `SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS` | No | `false` | Allow private or localhost upstream targets only on trusted networks |
@@ -264,6 +274,8 @@ docker compose -f docker-compose.standalone.yml up -d
 | `GEMINI_QUOTA_POLICY` | No | *(empty)* | JSON overrides for Gemini local quota simulation (Code Assist only). |
 
 If you increase `SERVER_SHUTDOWN_TIMEOUT_SECONDS`, raise `SUB2API_STOP_GRACE_PERIOD` as well so Docker does not SIGKILL the process before cleanup completes. This applies to `docker-compose.standalone.yml` too.
+
+The bundled PostgreSQL/Redis variants (`docker-compose.yml`, `docker-compose.local.yml`, `docker-compose.dev.yml`) expose the `POSTGRES_*` and `REDIS_*` stop/resource knobs from `.env.example` directly in Compose. Keep those aligned with the corresponding memory/CPU ceilings when tightening host-level capacity plans.
 
 Production deploy examples now keep `SECURITY_URL_ALLOWLIST_ENABLED=true` by default. If you use a custom upstream, pricing mirror, or CRS endpoint, add its host to the matching allowlist in `config.yaml` or set the matching `SECURITY_URL_ALLOWLIST_*_HOSTS` env var before switching traffic. The maintained Compose files now pass those env vars through consistently, including the standalone and dev variants.
 
