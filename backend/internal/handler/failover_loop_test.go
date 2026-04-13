@@ -219,6 +219,42 @@ func TestHandleFailoverError_BasicSwitch(t *testing.T) {
 	})
 }
 
+func TestHandleFailoverError_ImmediateExhaustStatuses(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+	}{
+		{name: "401 blocks account switching", statusCode: 401},
+		{name: "403 blocks account switching", statusCode: 403},
+		{name: "429 blocks account switching", statusCode: 429},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockTempUnscheduler{}
+			fs := NewFailoverState(3, false)
+			err := newTestFailoverErr(tt.statusCode, false, false)
+
+			action := fs.HandleFailoverError(context.Background(), mock, 100, "openai", err)
+
+			require.Equal(t, FailoverExhausted, action)
+			require.Equal(t, 0, fs.SwitchCount)
+			require.Contains(t, fs.FailedAccountIDs, int64(100))
+			require.Empty(t, mock.calls)
+			require.Equal(t, err, fs.LastFailoverErr)
+		})
+	}
+}
+
+func TestShouldExhaustFailoverImmediately(t *testing.T) {
+	require.False(t, shouldExhaustFailoverImmediately(nil))
+	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(401, false, false)))
+	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(403, false, false)))
+	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(429, false, false)))
+	require.False(t, shouldExhaustFailoverImmediately(newTestFailoverErr(500, false, false)))
+	require.False(t, shouldExhaustFailoverImmediately(newTestFailoverErr(400, true, false)))
+}
+
 // ---------------------------------------------------------------------------
 // HandleFailoverError — 缓存计费 (ForceCacheBilling)
 // ---------------------------------------------------------------------------

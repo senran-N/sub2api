@@ -76,6 +76,11 @@ func (s *FailoverState) HandleFailoverError(
 		s.ForceCacheBilling = true
 	}
 
+	if shouldExhaustFailoverImmediately(failoverErr) {
+		s.FailedAccountIDs[accountID] = struct{}{}
+		return FailoverExhausted
+	}
+
 	// 同账号重试：对 RetryableOnSameAccount 的临时性错误，先在同一账号上重试
 	if failoverErr.RetryableOnSameAccount && s.SameAccountRetryCount[accountID] < maxSameAccountRetries {
 		s.SameAccountRetryCount[accountID]++
@@ -158,6 +163,18 @@ func (s *FailoverState) HandleSelectionExhausted(ctx context.Context) FailoverAc
 // 粘性会话切换账号、或上游明确标记时，将 input_tokens 转为 cache_read 计费。
 func needForceCacheBilling(hasBoundSession bool, failoverErr *service.UpstreamFailoverError) bool {
 	return hasBoundSession || (failoverErr != nil && failoverErr.ForceCacheBilling)
+}
+
+func shouldExhaustFailoverImmediately(failoverErr *service.UpstreamFailoverError) bool {
+	if failoverErr == nil {
+		return false
+	}
+	switch failoverErr.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
+		return true
+	default:
+		return false
+	}
 }
 
 // sleepWithContext 等待指定时长，返回 false 表示 context 已取消。
