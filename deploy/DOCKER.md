@@ -1,62 +1,68 @@
 # Sub2API Docker Image
 
-Sub2API is an AI API Gateway Platform for distributing and managing AI product subscription API quotas.
+Sub2API is an AI API gateway platform for distributing and managing AI product subscription API quotas.
 
 ## Quick Start
+
+The container expects PostgreSQL and Redis to be reachable. For a single-host deployment with bundled Postgres/Redis, use the Compose files in [`deploy/README.md`](./README.md) instead.
 
 ```bash
 docker run -d \
   --name sub2api \
   -p 8080:8080 \
-  -e DATABASE_URL="postgres://user:pass@host:5432/sub2api" \
-  -e REDIS_URL="redis://host:6379" \
+  -v sub2api_data:/app/data \
+  -e AUTO_SETUP=true \
+  -e SERVER_PORT=8080 \
+  -e SERVER_MODE=release \
+  -e SERVER_SHUTDOWN_TIMEOUT_SECONDS=45 \
+  -e DATABASE_HOST=postgres.example.internal \
+  -e DATABASE_PORT=5432 \
+  -e DATABASE_USER=sub2api \
+  -e DATABASE_PASSWORD=change_this_database_password \
+  -e DATABASE_DBNAME=sub2api \
+  -e REDIS_HOST=redis.example.internal \
+  -e REDIS_PORT=6379 \
+  -e JWT_SECRET="$(openssl rand -hex 32)" \
+  -e TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  -e SECURITY_URL_ALLOWLIST_ENABLED=true \
+  -e SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=false \
+  -e SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=false \
   weishaw/sub2api:latest
 ```
 
-## Docker Compose
+## Recommended Compose Paths
 
-```yaml
-version: '3.8'
+Use the maintained Compose examples from this repository instead of writing a fresh file from scratch:
 
-services:
-  sub2api:
-    image: weishaw/sub2api:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/sub2api?sslmode=disable
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - db
-      - redis
+- `deploy/docker-compose.yml`: named volumes for app, Postgres, and Redis
+- `deploy/docker-compose.local.yml`: local directories for easier backup and migration
+- `deploy/docker-compose.standalone.yml`: external PostgreSQL and Redis
+- `deploy/docker-compose.dev.yml`: build from the checked-out source tree
 
-  db:
-    image: postgres:18-alpine
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=sub2api
-    volumes:
-      - postgres_data:/var/lib/postgresql
+All of them share the same `.env.example` knobs for graceful shutdown, resource limits, and URL allowlist defaults.
 
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
+## Important Environment Variables
 
-volumes:
-  postgres_data:
-  redis_data:
-```
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `DATABASE_HOST` | Yes | - | PostgreSQL host |
+| `DATABASE_PORT` | No | `5432` | PostgreSQL port |
+| `DATABASE_USER` | No | `sub2api` | PostgreSQL user |
+| `DATABASE_PASSWORD` | Yes | - | PostgreSQL password |
+| `DATABASE_DBNAME` | No | `sub2api` | PostgreSQL database name |
+| `REDIS_HOST` | Yes | - | Redis host |
+| `REDIS_PORT` | No | `6379` | Redis port |
+| `REDIS_PASSWORD` | No | empty | Redis password |
+| `SERVER_PORT` | No | `8080` | HTTP listen port |
+| `SERVER_MODE` | No | `release` | `release` or `debug` |
+| `SERVER_SHUTDOWN_TIMEOUT_SECONDS` | No | `45` | Graceful shutdown timeout |
+| `JWT_SECRET` | Recommended | auto-generated if empty | Set a fixed value to keep sessions valid across restarts |
+| `TOTP_ENCRYPTION_KEY` | Recommended | auto-generated if empty | Set a fixed value to keep existing 2FA secrets valid |
+| `SECURITY_URL_ALLOWLIST_ENABLED` | No | `true` | Keeps upstream/pricing host validation enabled by default |
+| `SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP` | No | `false` | Only enable for trusted dev/test HTTP endpoints |
+| `SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS` | No | `false` | Only enable on trusted internal networks |
 
-## Environment Variables
-
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
-| `REDIS_URL` | Redis connection string | Yes | - |
-| `PORT` | Server port | No | `8080` |
-| `GIN_MODE` | Gin framework mode (`debug`/`release`) | No | `release` |
+If you use custom upstream, pricing, or CRS hosts while `SECURITY_URL_ALLOWLIST_ENABLED=true`, add those hosts to the matching allowlist in `config.yaml` first.
 
 ## Supported Architectures
 
@@ -65,12 +71,12 @@ volumes:
 
 ## Tags
 
-- `latest` - Latest stable release
-- `x.y.z` - Specific version
-- `x.y` - Latest patch of minor version
-- `x` - Latest minor of major version
+- `latest`: latest stable release
+- `x.y.z`: specific version
+- `x.y`: latest patch in a minor series
+- `x`: latest minor in a major series
 
 ## Links
 
 - [GitHub Repository](https://github.com/weishaw/sub2api)
-- [Documentation](https://github.com/weishaw/sub2api#readme)
+- [Deployment Documentation](https://github.com/weishaw/sub2api/blob/main/deploy/README.md)
