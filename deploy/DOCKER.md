@@ -61,8 +61,11 @@ All of them share the same `.env.example` knobs for graceful shutdown, resource 
 | `SECURITY_URL_ALLOWLIST_ENABLED` | No | `true` | Keeps upstream/pricing host validation enabled by default |
 | `SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP` | No | `false` | Only enable for trusted dev/test HTTP endpoints |
 | `SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS` | No | `false` | Only enable on trusted internal networks |
+| `SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS` | No | empty | Extra upstream API hosts to append to the built-in allowlist |
+| `SECURITY_URL_ALLOWLIST_PRICING_HOSTS` | No | empty | Extra pricing mirror hosts to append to the built-in allowlist |
+| `SECURITY_URL_ALLOWLIST_CRS_HOSTS` | No | empty | CRS sync hosts to allow when enabling CRS synchronization |
 
-If you use custom upstream, pricing, or CRS hosts while `SECURITY_URL_ALLOWLIST_ENABLED=true`, add those hosts to the matching allowlist in `config.yaml` first.
+If you use custom upstream, pricing, or CRS hosts while `SECURITY_URL_ALLOWLIST_ENABLED=true`, add those hosts to the matching allowlist in `config.yaml` or pass the matching `SECURITY_URL_ALLOWLIST_*_HOSTS` env var.
 
 ## Supported Architectures
 

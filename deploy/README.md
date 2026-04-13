@@ -253,6 +253,9 @@ docker compose -f docker-compose.standalone.yml up -d
 | `SECURITY_URL_ALLOWLIST_ENABLED` | No | `true` | Enforce upstream/pricing host allowlists by default in production deploys |
 | `SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP` | No | `false` | Allow `http://` upstream URLs only for trusted dev/test setups |
 | `SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS` | No | `false` | Allow private or localhost upstream targets only on trusted networks |
+| `SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS` | No | empty | Extra upstream API hosts to append to the built-in allowlist |
+| `SECURITY_URL_ALLOWLIST_PRICING_HOSTS` | No | empty | Extra pricing mirror hosts to append to the built-in allowlist |
+| `SECURITY_URL_ALLOWLIST_CRS_HOSTS` | No | empty | CRS sync hosts to allow when enabling CRS synchronization |
 | `GEMINI_OAUTH_CLIENT_ID` | No | *(builtin)* | Google OAuth client ID (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
 | `GEMINI_OAUTH_CLIENT_SECRET` | No | *(builtin)* | Google OAuth client secret (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
 | `GEMINI_OAUTH_SCOPES` | No | *(default)* | OAuth scopes (Gemini OAuth) |
@@ -260,7 +263,7 @@ docker compose -f docker-compose.standalone.yml up -d
 
 If you increase `SERVER_SHUTDOWN_TIMEOUT_SECONDS`, raise `SUB2API_STOP_GRACE_PERIOD` as well so Docker does not SIGKILL the process before cleanup completes. This applies to `docker-compose.standalone.yml` too.
 
-Production deploy examples now keep `SECURITY_URL_ALLOWLIST_ENABLED=true` by default. If you use a custom upstream, pricing mirror, or CRS endpoint, add its host to the matching allowlist in `config.yaml` before switching traffic. The standalone compose file now inherits the same default instead of silently bypassing it.
+Production deploy examples now keep `SECURITY_URL_ALLOWLIST_ENABLED=true` by default. If you use a custom upstream, pricing mirror, or CRS endpoint, add its host to the matching allowlist in `config.yaml` or set the matching `SECURITY_URL_ALLOWLIST_*_HOSTS` env var before switching traffic. The maintained Compose files now pass those env vars through consistently, including the standalone and dev variants.
 
 See `.env.example` for all available options.
 
