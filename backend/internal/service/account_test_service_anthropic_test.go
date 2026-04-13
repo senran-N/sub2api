@@ -155,6 +155,43 @@ func TestAccountTestService_AnthropicOAuthProbeUsesClaudeNormalization(t *testin
 	require.Contains(t, string(readAnthropicAccountTestRequestBody(t, upstream.requests[0])), `"model":"claude-sonnet-4-5-20250929"`)
 }
 
+func TestAccountTestService_BedrockProbeUsesResolvedRuntimeModelID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, `{"content":[{"text":"ok"}]}`)
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          73,
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeBedrock,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"auth_mode":  "apikey",
+			"api_key":    "bedrock-token",
+			"aws_region": "eu-west-1",
+			"model_mapping": map[string]any{
+				"gpt-5.4": "claude-sonnet-4-5",
+			},
+		},
+	}
+
+	err := svc.testClaudeAccountConnection(ctx, account, "gpt-5.4-xhigh", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, BuildBedrockURL("eu-west-1", "eu.anthropic.claude-sonnet-4-5-20250929-v1:0", false), upstream.requests[0].URL.String())
+	require.Equal(t, "Bearer bedrock-token", upstream.requests[0].Header.Get("Authorization"))
+}
+
 func readAnthropicAccountTestRequestBody(t *testing.T, req *http.Request) []byte {
 	t.Helper()
 	if req == nil || req.Body == nil {
