@@ -2,6 +2,7 @@ package service
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
@@ -273,18 +274,40 @@ func resolveCodexVersion(userAgent, versionHeader string) string {
 		return ""
 	}
 
-	for _, sep := range []string{"/", " "} {
-		index := strings.Index(ua, sep)
-		if index < 0 || index >= len(ua)-1 {
+	normalizedUA := strings.ToLower(ua)
+	for _, marker := range []string{
+		"codex_cli_rs/",
+		"codex_vscode/",
+		"codex_app/",
+		"codex_chatgpt_desktop/",
+		"codex_atlas/",
+		"codex_exec/",
+		"codex_sdk_ts/",
+		"codex desktop/",
+		"codex/",
+	} {
+		index := strings.Index(normalizedUA, marker)
+		if index < 0 || index+len(marker) >= len(ua) {
 			continue
 		}
-		prefix := strings.ToLower(strings.TrimSpace(ua[:index]))
-		switch prefix {
-		case "codex_cli_rs", "codex_vscode", "codex_app", "codex_chatgpt_desktop", "codex_atlas", "codex_exec", "codex_sdk_ts", "codex":
-			return strings.TrimSpace(ua[index+1:])
+		if version := trimCodexVersionToken(ua[index+len(marker):]); version != "" {
+			return version
 		}
 	}
 	return ""
+}
+
+func trimCodexVersionToken(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	for i, r := range value {
+		if unicode.IsSpace(r) || r == '(' || r == ')' || r == ';' {
+			return strings.TrimSpace(value[:i])
+		}
+	}
+	return value
 }
 
 func hasNonEmptyOpenAIRequestField(body []byte, path string) bool {

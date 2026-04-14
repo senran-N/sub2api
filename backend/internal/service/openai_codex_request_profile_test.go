@@ -47,6 +47,22 @@ func TestGetCodexRequestProfile_HTTPResponses(t *testing.T) {
 	require.Equal(t, OpenAIPreviousResponseIDKindResponseID, profile.Continuation.PreviousResponseIDKind)
 }
 
+func TestGetCodexRequestProfile_CompositeOfficialUserAgentVersion(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", strings.NewReader(`{"model":"gpt-5.3-codex"}`))
+	c.Request.Header.Set("User-Agent", "Mozilla/5.0 codex_cli_rs/0.98.0 (Windows 10.0.19045; x86_64) unknown")
+	SetOpenAIClientTransport(c, OpenAIClientTransportHTTP)
+
+	profile := GetCodexRequestProfile(c, []byte(`{"model":"gpt-5.3-codex"}`), false)
+
+	require.True(t, profile.OfficialClient)
+	require.Equal(t, CodexOfficialClientReasonUserAgent, profile.OfficialClientReason)
+	require.Equal(t, "0.98.0", profile.CodexVersion)
+}
+
 func TestGetCodexRequestProfile_WSResponsesWarmupAndContinuation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -71,6 +87,22 @@ func TestGetCodexRequestProfile_WSResponsesWarmupAndContinuation(t *testing.T) {
 	require.True(t, profile.Continuation.HasTurnState)
 	require.True(t, profile.Continuation.DependsOnPriorResponse)
 	require.Equal(t, OpenAIPreviousResponseIDKindMessageID, profile.Continuation.PreviousResponseIDKind)
+}
+
+func TestGetCodexRequestProfile_CodexDesktopVersion(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/openai/v1/responses", nil)
+	c.Request.Header.Set("User-Agent", "Mozilla/5.0 Codex Desktop/1.2.3")
+	SetOpenAIClientTransport(c, OpenAIClientTransportWS)
+
+	profile := GetCodexRequestProfile(c, []byte(`{"type":"response.create","model":"gpt-5.3-codex"}`), false)
+
+	require.True(t, profile.OfficialClient)
+	require.Equal(t, CodexOfficialClientReasonUserAgent, profile.OfficialClientReason)
+	require.Equal(t, "1.2.3", profile.CodexVersion)
 }
 
 func TestGetCodexRequestProfile_CacheRespectsForceFlagAndBodyHash(t *testing.T) {
