@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -226,6 +227,35 @@ func TestOpenAIGatewayService_ApplyCodexTransportCooldownRecovery(t *testing.T) 
 	require.True(t, decision.Applied)
 	require.True(t, decision.MarkedTransportCooldown)
 	require.True(t, svc.isOpenAIWSFallbackCooling(52))
+}
+
+func TestClassifyCodexWSFailoverError(t *testing.T) {
+	t.Run("ws_rate_limit", func(t *testing.T) {
+		failoverErr := classifyCodexWSFailoverError(wrapOpenAIWSFallback("upstream_rate_limited", &openAIWSDialError{
+			StatusCode: http.StatusTooManyRequests,
+			Err:        errors.New("rate limited"),
+		}))
+
+		require.NotNil(t, failoverErr)
+		require.Equal(t, http.StatusTooManyRequests, failoverErr.StatusCode)
+		require.Equal(t, "upstream_rate_limited", failoverErr.FailureReason)
+	})
+
+	t.Run("ws_upstream_5xx", func(t *testing.T) {
+		failoverErr := classifyCodexWSFailoverError(wrapOpenAIWSFallback("upstream_5xx", &openAIWSDialError{
+			StatusCode: http.StatusBadGateway,
+			Err:        errors.New("bad gateway"),
+		}))
+
+		require.NotNil(t, failoverErr)
+		require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+		require.Equal(t, "upstream_5xx", failoverErr.FailureReason)
+	})
+
+	t.Run("transport_failure_stays_local", func(t *testing.T) {
+		failoverErr := classifyCodexWSFailoverError(wrapOpenAIWSFallback("read_event", errors.New("read failed")))
+		require.Nil(t, failoverErr)
+	})
 }
 
 func TestOpenAIGatewayService_RecordCodexRecoveryAccountSwitch(t *testing.T) {

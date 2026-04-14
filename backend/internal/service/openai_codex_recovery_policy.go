@@ -247,13 +247,19 @@ func classifyCodexRequestFailoverError(err error) *UpstreamFailoverError {
 func classifyCodexWSFailoverError(wsErr error) *UpstreamFailoverError {
 	reason, _ := classifyOpenAIWSReconnectReason(wsErr)
 	reason = normalizeCodexRecoveryFailureReason(reason)
-	if reason != "upstream_rate_limited" {
+	switch reason {
+	case "upstream_rate_limited", "upstream_5xx":
+	default:
 		return nil
 	}
 
 	statusCode, _, _, _, ok := resolveOpenAIWSFallbackErrorResponse(wsErr)
 	if !ok || statusCode <= 0 {
-		statusCode = http.StatusTooManyRequests
+		if reason == "upstream_5xx" {
+			statusCode = http.StatusBadGateway
+		} else {
+			statusCode = http.StatusTooManyRequests
+		}
 	}
 
 	return &UpstreamFailoverError{
