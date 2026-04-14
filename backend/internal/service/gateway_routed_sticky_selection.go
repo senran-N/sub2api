@@ -59,6 +59,13 @@ func (s *GatewayService) trySelectRoutedStickyAccount(
 		s.clearMissingStickyBinding(ctx, groupID, sessionHash, stickyAccountID)
 		return nil, false
 	}
+	if shouldClearStickySession(stickyAccount, requestedModel) {
+		if s.cache != nil {
+			_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
+		}
+		s.logStickyCacheMiss(stickyAccount, stickyAccountID, sessionHash, "account_cleared", stickyAccountCurrentRPM(ctx, stickyAccount.ID))
+		return nil, false
+	}
 
 	gatePass := s.isAccountSchedulableForSelection(stickyAccount) &&
 		s.isAccountAllowedForPlatform(stickyAccount, platform, useMixed) &&

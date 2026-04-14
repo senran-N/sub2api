@@ -79,3 +79,91 @@ func TestTrySelectRoutedStickyAccount_ClearsMissingBinding(t *testing.T) {
 	require.Nil(t, result)
 	require.Equal(t, 1, cache.deletedSessions["session-1"])
 }
+
+func TestTrySelectRoutedStickyAccount_ClearsInvalidBinding(t *testing.T) {
+	t.Run("rate limited account", func(t *testing.T) {
+		rateLimitedUntil := time.Now().Add(5 * time.Minute)
+		cache := &mockGatewayCacheForPlatform{
+			sessionBindings: map[string]int64{"session-1": 1},
+		}
+		svc := &GatewayService{
+			cache: cache,
+			cfg:   testConfig(),
+		}
+
+		result, ok := svc.trySelectRoutedStickyAccount(
+			context.Background(),
+			nil,
+			"session-1",
+			"claude-3-5-sonnet-20241022",
+			1,
+			[]int64{1},
+			nil,
+			map[int64]*Account{
+				1: {
+					ID:               1,
+					Platform:         PlatformAnthropic,
+					Type:             AccountTypeOAuth,
+					Status:           StatusActive,
+					Schedulable:      true,
+					Concurrency:      5,
+					RateLimitResetAt: &rateLimitedUntil,
+				},
+			},
+			PlatformAnthropic,
+			false,
+			time.Second,
+			1,
+		)
+
+		require.False(t, ok)
+		require.Nil(t, result)
+		require.Equal(t, 1, cache.deletedSessions["session-1"])
+		_, exists := cache.sessionBindings["session-1"]
+		require.False(t, exists)
+	})
+
+	t.Run("expired oauth without refresh token", func(t *testing.T) {
+		cache := &mockGatewayCacheForPlatform{
+			sessionBindings: map[string]int64{"session-1": 1},
+		}
+		svc := &GatewayService{
+			cache: cache,
+			cfg:   testConfig(),
+		}
+
+		result, ok := svc.trySelectRoutedStickyAccount(
+			context.Background(),
+			nil,
+			"session-1",
+			"claude-3-5-sonnet-20241022",
+			1,
+			[]int64{1},
+			nil,
+			map[int64]*Account{
+				1: {
+					ID:          1,
+					Platform:    PlatformAnthropic,
+					Type:        AccountTypeOAuth,
+					Status:      StatusActive,
+					Schedulable: true,
+					Concurrency: 5,
+					Credentials: map[string]any{
+						"access_token": "expired-token",
+						"expires_at":   time.Now().Add(-time.Minute).Format(time.RFC3339),
+					},
+				},
+			},
+			PlatformAnthropic,
+			false,
+			time.Second,
+			1,
+		)
+
+		require.False(t, ok)
+		require.Nil(t, result)
+		require.Equal(t, 1, cache.deletedSessions["session-1"])
+		_, exists := cache.sessionBindings["session-1"]
+		require.False(t, exists)
+	})
+}
