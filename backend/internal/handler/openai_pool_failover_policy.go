@@ -42,9 +42,6 @@ func applyOpenAIPoolFailoverPolicy(
 		return decision
 	}
 
-	if recordSwitch != nil {
-		recordSwitch()
-	}
 	if failedAccountIDs != nil {
 		failedAccountIDs[account.ID] = struct{}{}
 	}
@@ -52,6 +49,9 @@ func applyOpenAIPoolFailoverPolicy(
 		return decision
 	}
 
+	if recordSwitch != nil {
+		recordSwitch()
+	}
 	*switchCount++
 	decision.Action = FailoverContinue
 	decision.SwitchCount = *switchCount

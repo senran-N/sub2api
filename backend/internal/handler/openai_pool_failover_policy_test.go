@@ -109,5 +109,5 @@ func TestApplyOpenAIPoolFailoverPolicy_ExhaustedWhenSwitchBudgetReached(t *testi
 	require.Equal(t, 2, decision.SwitchCount)
 	require.Equal(t, 2, switchCount)
 	require.Contains(t, failedAccountIDs, int64(14))
-	require.Equal(t, 1, recordedSwitches)
+	require.Zero(t, recordedSwitches)
 }
