@@ -595,6 +595,7 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIHTTP(
 
 		reasoningEffort := extractOpenAIReasoningEffort(prepared.reqBody, prepared.originalModel)
 		serviceTier := extractOpenAIServiceTier(prepared.reqBody)
+		s.bindCodexSessionTransportFromBody(c, prepared.body, OpenAIUpstreamTransportHTTPSSE)
 
 		return &OpenAIForwardResult{
 			RequestID:       resp.Header.Get("x-request-id"),

@@ -11,23 +11,27 @@ const (
 	codexTransportPreferredConnSourceNone             = ""
 	codexTransportPreferredConnSourcePreviousResponse = "previous_response_id"
 	codexTransportPreferredConnSourceSession          = "session"
+	codexTransportPreferredTransportSourceNone        = ""
+	codexTransportPreferredTransportSourceSession     = "session"
 )
 
 // CodexTransportState captures the resolved transport/continuation state shared by
 // HTTP-triggered WS forwarding and WS ingress turn bootstrap.
 type CodexTransportState struct {
-	FallbackCooling         bool
-	ForceNewConn            bool
-	GroupID                 int64
-	HasExplicitContinuation bool
-	PreferredConnID         string
-	PreferredConnSource     string
-	SessionHash             string
-	StoreDisabled           bool
-	StoreDisabledConnMode   string
-	TurnState               string
-	TurnStateRestored       bool
-	Warmup                  bool
+	FallbackCooling          bool
+	ForceNewConn             bool
+	GroupID                  int64
+	HasExplicitContinuation  bool
+	PreferredConnID          string
+	PreferredConnSource      string
+	PreferredTransport       OpenAIUpstreamTransport
+	PreferredTransportSource string
+	SessionHash              string
+	StoreDisabled            bool
+	StoreDisabledConnMode    string
+	TurnState                string
+	TurnStateRestored        bool
+	Warmup                   bool
 }
 
 type codexTransportStateInput struct {
@@ -44,12 +48,14 @@ type codexTransportStateInput struct {
 
 func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input codexTransportStateInput) CodexTransportState {
 	state := CodexTransportState{
-		FallbackCooling:       s.isOpenAIWSFallbackCooling(input.AccountID),
-		GroupID:               getOpenAIGroupIDFromContext(c),
-		PreferredConnSource:   codexTransportPreferredConnSourceNone,
-		StoreDisabled:         input.StoreDisabled,
-		StoreDisabledConnMode: s.openAIWSStoreDisabledConnMode(),
-		TurnState:             strings.TrimSpace(input.TurnState),
+		FallbackCooling:          s.isOpenAIWSFallbackCooling(input.AccountID),
+		GroupID:                  getOpenAIGroupIDFromContext(c),
+		PreferredConnSource:      codexTransportPreferredConnSourceNone,
+		PreferredTransport:       OpenAIUpstreamTransportAny,
+		PreferredTransportSource: codexTransportPreferredTransportSourceNone,
+		StoreDisabled:            input.StoreDisabled,
+		StoreDisabledConnMode:    s.openAIWSStoreDisabledConnMode(),
+		TurnState:                strings.TrimSpace(input.TurnState),
 	}
 
 	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
@@ -77,6 +83,10 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 			state.TurnStateRestored = true
 		}
 	}
+	if preferredTransport, ok := s.getCodexSessionPreferredTransport(stateStore, state.GroupID, state.SessionHash); ok {
+		state.PreferredTransport = preferredTransport
+		state.PreferredTransportSource = codexTransportPreferredTransportSourceSession
+	}
 
 	resolveCtx := context.Background()
 	if c != nil && c.Request != nil {
@@ -96,4 +106,71 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 	forceNewConnByPolicy := shouldForceNewConnOnStoreDisabled(state.StoreDisabledConnMode, input.LastFailureReason)
 	state.ForceNewConn = forceNewConnByPolicy && state.StoreDisabled && !state.HasExplicitContinuation && state.SessionHash != "" && state.PreferredConnID == ""
 	return state
+}
+
+func (s *OpenAIGatewayService) getCodexSessionPreferredTransport(
+	store OpenAIWSStateStore,
+	groupID int64,
+	sessionHash string,
+) (OpenAIUpstreamTransport, bool) {
+	if s == nil || store == nil || strings.TrimSpace(sessionHash) == "" {
+		return OpenAIUpstreamTransportAny, false
+	}
+	return store.GetSessionTransport(groupID, sessionHash)
+}
+
+func (s *OpenAIGatewayService) bindCodexSessionTransport(
+	store OpenAIWSStateStore,
+	groupID int64,
+	sessionHash string,
+	transport OpenAIUpstreamTransport,
+	warmup bool,
+) {
+	if s == nil || store == nil || warmup {
+		return
+	}
+	normalizedSessionHash := strings.TrimSpace(sessionHash)
+	normalizedTransport := normalizeOpenAIWSSessionTransport(transport)
+	if normalizedSessionHash == "" || normalizedTransport == OpenAIUpstreamTransportAny {
+		return
+	}
+	store.BindSessionTransport(groupID, normalizedSessionHash, normalizedTransport, s.openAIWSSessionStickyTTL())
+}
+
+func (s *OpenAIGatewayService) bindCodexSessionTransportFromBody(
+	c *gin.Context,
+	body []byte,
+	transport OpenAIUpstreamTransport,
+) {
+	if s == nil || c == nil || len(body) == 0 {
+		return
+	}
+	store := s.getOpenAIWSStateStore()
+	if store == nil {
+		return
+	}
+	forceCodexCLI := s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
+	if !profile.OfficialClient || profile.Warmup {
+		return
+	}
+	sessionHash := s.GenerateSessionHash(c, body)
+	s.bindCodexSessionTransport(store, getOpenAIGroupIDFromContext(c), sessionHash, transport, false)
+}
+
+func (s *OpenAIGatewayService) resolveCodexPreferredTransport(
+	ctx context.Context,
+	groupID *int64,
+	sessionHash string,
+	requiredTransport OpenAIUpstreamTransport,
+) OpenAIUpstreamTransport {
+	if requiredTransport != OpenAIUpstreamTransportAny {
+		return requiredTransport
+	}
+	store := s.getOpenAIWSStateStore()
+	preferredTransport, ok := s.getCodexSessionPreferredTransport(store, derefGroupID(groupID), sessionHash)
+	if !ok {
+		return requiredTransport
+	}
+	return preferredTransport
 }

@@ -75,6 +75,22 @@ func TestOpenAIWSStateStore_SessionConnTTL(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestOpenAIWSStateStore_SessionTransportTTL(t *testing.T) {
+	store := NewOpenAIWSStateStore(nil)
+	store.BindSessionTransport(9, "session_hash_transport_1", OpenAIUpstreamTransportResponsesWebsocketV2, 30*time.Millisecond)
+
+	transport, ok := store.GetSessionTransport(9, "session_hash_transport_1")
+	require.True(t, ok)
+	require.Equal(t, OpenAIUpstreamTransportResponsesWebsocketV2, transport)
+
+	_, ok = store.GetSessionTransport(10, "session_hash_transport_1")
+	require.False(t, ok)
+
+	time.Sleep(60 * time.Millisecond)
+	_, ok = store.GetSessionTransport(9, "session_hash_transport_1")
+	require.False(t, ok)
+}
+
 func TestOpenAIWSStateStore_GetResponseAccount_NoStaleAfterCacheMiss(t *testing.T) {
 	cache := &stubGatewayCache{sessionBindings: map[string]int64{}}
 	store := NewOpenAIWSStateStore(cache)

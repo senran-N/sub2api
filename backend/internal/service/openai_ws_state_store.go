@@ -39,6 +39,11 @@ type openAIWSSessionConnBinding struct {
 	expiresAt time.Time
 }
 
+type openAIWSSessionTransportBinding struct {
+	transport OpenAIUpstreamTransport
+	expiresAt time.Time
+}
+
 // OpenAIWSStateStore 管理 WSv2 的粘连状态。
 // - response_id -> account_id 用于续链路由
 // - response_id -> conn_id 用于连接内上下文复用
@@ -61,6 +66,10 @@ type OpenAIWSStateStore interface {
 	BindSessionConn(groupID int64, sessionHash, connID string, ttl time.Duration)
 	GetSessionConn(groupID int64, sessionHash string) (string, bool)
 	DeleteSessionConn(groupID int64, sessionHash string)
+
+	BindSessionTransport(groupID int64, sessionHash string, transport OpenAIUpstreamTransport, ttl time.Duration)
+	GetSessionTransport(groupID int64, sessionHash string) (OpenAIUpstreamTransport, bool)
+	DeleteSessionTransport(groupID int64, sessionHash string)
 }
 
 type defaultOpenAIWSStateStore struct {
@@ -74,6 +83,8 @@ type defaultOpenAIWSStateStore struct {
 	sessionToTurnState   map[string]openAIWSTurnStateBinding
 	sessionToConnMu      sync.RWMutex
 	sessionToConn        map[string]openAIWSSessionConnBinding
+	sessionToTransportMu sync.RWMutex
+	sessionToTransport   map[string]openAIWSSessionTransportBinding
 
 	lastCleanupUnixNano atomic.Int64
 }
@@ -86,6 +97,7 @@ func NewOpenAIWSStateStore(cache GatewayCache) OpenAIWSStateStore {
 		responseToConn:     make(map[string]openAIWSConnBinding, 256),
 		sessionToTurnState: make(map[string]openAIWSTurnStateBinding, 256),
 		sessionToConn:      make(map[string]openAIWSSessionConnBinding, 256),
+		sessionToTransport: make(map[string]openAIWSSessionTransportBinding, 256),
 	}
 	store.lastCleanupUnixNano.Store(time.Now().UnixNano())
 	return store
@@ -299,6 +311,55 @@ func (s *defaultOpenAIWSStateStore) DeleteSessionConn(groupID int64, sessionHash
 	s.sessionToConnMu.Unlock()
 }
 
+func (s *defaultOpenAIWSStateStore) BindSessionTransport(groupID int64, sessionHash string, transport OpenAIUpstreamTransport, ttl time.Duration) {
+	key := openAIWSSessionTurnStateKey(groupID, sessionHash)
+	normalizedTransport := normalizeOpenAIWSSessionTransport(transport)
+	if key == "" || normalizedTransport == OpenAIUpstreamTransportAny {
+		return
+	}
+	ttl = normalizeOpenAIWSTTL(ttl)
+	s.maybeCleanup()
+
+	s.sessionToTransportMu.Lock()
+	ensureBindingCapacity(s.sessionToTransport, key, openAIWSStateStoreMaxEntriesPerMap)
+	s.sessionToTransport[key] = openAIWSSessionTransportBinding{
+		transport: normalizedTransport,
+		expiresAt: time.Now().Add(ttl),
+	}
+	s.sessionToTransportMu.Unlock()
+}
+
+func (s *defaultOpenAIWSStateStore) GetSessionTransport(groupID int64, sessionHash string) (OpenAIUpstreamTransport, bool) {
+	key := openAIWSSessionTurnStateKey(groupID, sessionHash)
+	if key == "" {
+		return OpenAIUpstreamTransportAny, false
+	}
+	s.maybeCleanup()
+
+	now := time.Now()
+	s.sessionToTransportMu.RLock()
+	binding, ok := s.sessionToTransport[key]
+	s.sessionToTransportMu.RUnlock()
+	if !ok || now.After(binding.expiresAt) {
+		return OpenAIUpstreamTransportAny, false
+	}
+	normalizedTransport := normalizeOpenAIWSSessionTransport(binding.transport)
+	if normalizedTransport == OpenAIUpstreamTransportAny {
+		return OpenAIUpstreamTransportAny, false
+	}
+	return normalizedTransport, true
+}
+
+func (s *defaultOpenAIWSStateStore) DeleteSessionTransport(groupID int64, sessionHash string) {
+	key := openAIWSSessionTurnStateKey(groupID, sessionHash)
+	if key == "" {
+		return
+	}
+	s.sessionToTransportMu.Lock()
+	delete(s.sessionToTransport, key)
+	s.sessionToTransportMu.Unlock()
+}
+
 func (s *defaultOpenAIWSStateStore) maybeCleanup() {
 	if s == nil {
 		return
@@ -328,6 +389,10 @@ func (s *defaultOpenAIWSStateStore) maybeCleanup() {
 	s.sessionToConnMu.Lock()
 	cleanupExpiredSessionConnBindings(s.sessionToConn, now, openAIWSStateStoreCleanupMaxPerMap)
 	s.sessionToConnMu.Unlock()
+
+	s.sessionToTransportMu.Lock()
+	cleanupExpiredSessionTransportBindings(s.sessionToTransport, now, openAIWSStateStoreCleanupMaxPerMap)
+	s.sessionToTransportMu.Unlock()
 }
 
 func cleanupExpiredAccountBindings(bindings map[string]openAIWSAccountBinding, now time.Time, maxScan int) {
@@ -394,6 +459,22 @@ func cleanupExpiredSessionConnBindings(bindings map[string]openAIWSSessionConnBi
 	}
 }
 
+func cleanupExpiredSessionTransportBindings(bindings map[string]openAIWSSessionTransportBinding, now time.Time, maxScan int) {
+	if len(bindings) == 0 || maxScan <= 0 {
+		return
+	}
+	scanned := 0
+	for key, binding := range bindings {
+		if now.After(binding.expiresAt) || normalizeOpenAIWSSessionTransport(binding.transport) == OpenAIUpstreamTransportAny {
+			delete(bindings, key)
+		}
+		scanned++
+		if scanned >= maxScan {
+			break
+		}
+	}
+}
+
 func ensureBindingCapacity[T any](bindings map[string]T, incomingKey string, maxEntries int) {
 	if len(bindings) < maxEntries || maxEntries <= 0 {
 		return
@@ -422,6 +503,15 @@ func normalizeOpenAIWSTTL(ttl time.Duration) time.Duration {
 		return time.Hour
 	}
 	return ttl
+}
+
+func normalizeOpenAIWSSessionTransport(transport OpenAIUpstreamTransport) OpenAIUpstreamTransport {
+	switch transport {
+	case OpenAIUpstreamTransportHTTPSSE, OpenAIUpstreamTransportResponsesWebsocket, OpenAIUpstreamTransportResponsesWebsocketV2:
+		return transport
+	default:
+		return OpenAIUpstreamTransportAny
+	}
 }
 
 func openAIWSSessionTurnStateKey(groupID int64, sessionHash string) string {

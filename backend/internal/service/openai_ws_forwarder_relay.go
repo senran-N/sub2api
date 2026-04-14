@@ -38,6 +38,7 @@ type openAIWSForwardRelayRequest struct {
 	turnState            string
 	promptCacheKey       string
 	startTime            time.Time
+	warmup               bool
 }
 
 type openAIWSForwardRelayResult struct {
@@ -404,6 +405,7 @@ func (s *OpenAIGatewayService) relayOpenAIWSForwardV2(req openAIWSForwardRelayRe
 		StoreDisabled: req.storeDisabled,
 		Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
+	s.bindCodexSessionTransport(req.stateStore, req.groupID, req.sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, req.warmup)
 	firstTokenMsValue := -1
 	if firstTokenMs != nil {
 		firstTokenMsValue = *firstTokenMs

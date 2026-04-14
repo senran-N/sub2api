@@ -354,6 +354,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		turnState:            turnState,
 		promptCacheKey:       promptCacheKey,
 		startTime:            startTime,
+		warmup:               transportState.Warmup,
 	})
 	if err != nil {
 		return nil, err
@@ -917,6 +918,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if stateStore != nil && storeDisabled && sessionHash != "" {
 			stateStore.BindSessionConn(groupID, sessionHash, connID, s.openAIWSSessionStickyTTL())
 		}
+		s.bindCodexSessionTransport(stateStore, groupID, sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, turn == 1 && ingressSession.firstTurnWarmup)
 		if connID != "" {
 			preferredConnID = connID
 		}

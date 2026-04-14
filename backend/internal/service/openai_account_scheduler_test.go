@@ -554,6 +554,77 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionSticky_ForceHTTP
 	}
 }
 
+func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionPreferredWSV2SkipsStickyHTTPAccount(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(10105)
+	sessionHash := "session_hash_preferred_ws"
+	accounts := []Account{
+		{
+			ID:          2191,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Priority:    0,
+		},
+		{
+			ID:          2192,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Priority:    5,
+			Extra: map[string]any{
+				"openai_apikey_responses_websockets_v2_enabled": true,
+			},
+		},
+	}
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{
+			"openai:" + sessionHash: 2191,
+		},
+	}
+	store := NewOpenAIWSStateStore(cache)
+	store.BindSessionTransport(groupID, sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, time.Minute)
+	cfg := newOpenAIWSV2TestConfig()
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			2191: {AccountID: 2191, LoadRate: 0, WaitingCount: 0},
+			2192: {AccountID: 2192, LoadRate: 90, WaitingCount: 5},
+		},
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: accounts},
+		cache:              cache,
+		cfg:                cfg,
+		openaiWSStateStore: store,
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		ctx,
+		&groupID,
+		"",
+		sessionHash,
+		"gpt-5.1",
+		nil,
+		OpenAIUpstreamTransportAny,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(2192), selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	require.False(t, decision.StickySessionHit)
+	require.Equal(t, 1, decision.CandidateCount)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
 func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStickyHTTPAccount(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(1011)

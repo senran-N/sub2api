@@ -148,6 +148,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	if usage == nil {
 		usage = &OpenAIUsage{}
 	}
+	s.bindCodexSessionTransportFromBody(c, body, OpenAIUpstreamTransportHTTPSSE)
 
 	return &OpenAIForwardResult{
 		RequestID:       resp.Header.Get("x-request-id"),

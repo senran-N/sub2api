@@ -30,6 +30,7 @@ type openAIWSIngressSessionContext struct {
 	storeDisabled         bool
 	storeDisabledConnMode string
 	isCodexCLI            bool
+	firstTurnWarmup       bool
 	baseAcquireReq        openAIWSAcquireRequest
 	pool                  *openAIWSConnPool
 }
@@ -122,6 +123,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 		storeDisabled:         storeDisabled,
 		storeDisabledConnMode: storeDisabledConnMode,
 		isCodexCLI:            isCodexCLI,
+		firstTurnWarmup:       transportState.Warmup,
 		baseAcquireReq: openAIWSAcquireRequest{
 			Account: account,
 			WSURL:   wsURL,

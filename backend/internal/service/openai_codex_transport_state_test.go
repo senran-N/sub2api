@@ -34,6 +34,7 @@ func TestResolveCodexTransportState_PromptCacheFallbackAndSessionContinuation(t 
 	sessionHash, _ := openAIWSSessionHashesFromID("pcache_turn_1")
 	store.BindSessionTurnState(groupID, sessionHash, "turn_state_restored", time.Minute)
 	store.BindSessionConn(groupID, sessionHash, "conn_session_1", time.Minute)
+	store.BindSessionTransport(groupID, sessionHash, OpenAIUpstreamTransportHTTPSSE, time.Minute)
 	svc.markOpenAIWSFallbackCooling(17, "upgrade_required")
 
 	state := svc.resolveCodexTransportState(c, codexTransportStateInput{
@@ -51,6 +52,8 @@ func TestResolveCodexTransportState_PromptCacheFallbackAndSessionContinuation(t 
 	require.True(t, state.TurnStateRestored)
 	require.Equal(t, "conn_session_1", state.PreferredConnID)
 	require.Equal(t, codexTransportPreferredConnSourceSession, state.PreferredConnSource)
+	require.Equal(t, OpenAIUpstreamTransportHTTPSSE, state.PreferredTransport)
+	require.Equal(t, codexTransportPreferredTransportSourceSession, state.PreferredTransportSource)
 	require.Equal(t, openAIWSStoreDisabledConnModeAdaptive, state.StoreDisabledConnMode)
 	require.False(t, state.ForceNewConn)
 	require.True(t, state.FallbackCooling)
@@ -149,4 +152,18 @@ func TestResolveCodexTransportState_ForceNewConnForFreshStoreDisabledTurn(t *tes
 	require.Equal(t, openAIWSStoreDisabledConnModeAdaptive, state.StoreDisabledConnMode)
 	require.True(t, state.ForceNewConn)
 	require.Empty(t, state.PreferredConnID)
+}
+
+func TestBindCodexSessionTransport_IgnoresWarmup(t *testing.T) {
+	store := NewOpenAIWSStateStore(nil)
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+
+	svc.bindCodexSessionTransport(store, 91, "session_hash_warmup", OpenAIUpstreamTransportResponsesWebsocketV2, true)
+	_, ok := store.GetSessionTransport(91, "session_hash_warmup")
+	require.False(t, ok)
+
+	svc.bindCodexSessionTransport(store, 91, "session_hash_warmup", OpenAIUpstreamTransportResponsesWebsocketV2, false)
+	transport, ok := store.GetSessionTransport(91, "session_hash_warmup")
+	require.True(t, ok)
+	require.Equal(t, OpenAIUpstreamTransportResponsesWebsocketV2, transport)
 }
