@@ -219,35 +219,36 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
-				// Pool mode: retry on the same account
-				if failoverErr.RetryableOnSameAccount {
-					retryLimit := account.GetPoolModeRetryCount()
-					if sameAccountRetryCount[account.ID] < retryLimit {
-						sameAccountRetryCount[account.ID]++
-						reqLog.Warn("openai_chat_completions.pool_mode_same_account_retry",
-							zap.Int64("account_id", account.ID),
-							zap.Int("upstream_status", failoverErr.StatusCode),
-							zap.Int("retry_limit", retryLimit),
-							zap.Int("retry_count", sameAccountRetryCount[account.ID]),
-						)
-						if !sleepWithContext(c.Request.Context(), sameAccountRetryDelay) {
-							return
-						}
-						continue
-					}
-				}
-				h.gatewayService.RecordOpenAIAccountSwitch()
-				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
-				if switchCount >= maxAccountSwitches {
+				decision := applyOpenAIPoolFailoverPolicy(
+					account,
+					failoverErr,
+					sameAccountRetryCount,
+					failedAccountIDs,
+					&switchCount,
+					maxAccountSwitches,
+					h.gatewayService.RecordOpenAIAccountSwitch,
+				)
+				if decision.SameAccountRetry {
+					reqLog.Warn("openai_chat_completions.pool_mode_same_account_retry",
+						zap.Int64("account_id", account.ID),
+						zap.Int("upstream_status", failoverErr.StatusCode),
+						zap.Int("retry_limit", decision.RetryLimit),
+						zap.Int("retry_count", decision.RetryCount),
+					)
+					if !sleepWithContext(c.Request.Context(), sameAccountRetryDelay) {
+						return
+					}
+					continue
+				}
+				if decision.Action == FailoverExhausted {
 					h.handleFailoverExhausted(c, failoverErr, streamStarted)
 					return
 				}
-				switchCount++
 				reqLog.Warn("openai_chat_completions.upstream_failover_switching",
 					zap.Int64("account_id", account.ID),
 					zap.Int("upstream_status", failoverErr.StatusCode),
-					zap.Int("switch_count", switchCount),
+					zap.Int("switch_count", decision.SwitchCount),
 					zap.Int("max_switches", maxAccountSwitches),
 				)
 				continue
