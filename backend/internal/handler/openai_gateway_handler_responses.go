@@ -93,12 +93,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
+	profile := service.GetCodexRequestProfile(c, body, h != nil && h.cfg != nil && h.cfg.Gateway.ForceCodexCLI)
 	reqMeta := service.GetOpenAIRequestMeta(c, body)
-	if !reqMeta.ModelExists || reqMeta.ModelType != gjson.String || reqMeta.Model == "" {
+	if !reqMeta.ModelExists || reqMeta.ModelType != gjson.String || profile.Body.Model == "" {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
-	reqModel := reqMeta.Model
+	reqModel := profile.Body.Model
 
 	if reqMeta.StreamExists && reqMeta.StreamType != gjson.True && reqMeta.StreamType != gjson.False {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "invalid stream field type")
@@ -116,13 +117,15 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	if channelMapping.MappedModel != "" {
 		schedulingModel = channelMapping.MappedModel
 	}
-	previousResponseID := reqMeta.PreviousResponseID
+	previousResponseID := profile.Body.PreviousResponseID
 	if previousResponseID != "" {
-		previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
+		previousResponseIDKind := profile.Continuation.PreviousResponseIDKind
 		reqLog = reqLog.With(
 			zap.Bool("has_previous_response_id", true),
 			zap.String("previous_response_id_kind", previousResponseIDKind),
 			zap.Int("previous_response_id_len", len(previousResponseID)),
+			zap.String("codex_wire_api", string(profile.WireAPI)),
+			zap.Bool("codex_official_client", profile.OfficialClient),
 		)
 		if previousResponseIDKind == service.OpenAIPreviousResponseIDKindMessageID {
 			reqLog.Warn("openai.request_validation_failed",

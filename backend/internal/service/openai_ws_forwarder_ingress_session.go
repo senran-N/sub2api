@@ -11,7 +11,6 @@ import (
 
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
-	"github.com/senran-N/sub2api/internal/pkg/openai"
 )
 
 type openAIWSIngressSessionContext struct {
@@ -96,8 +95,8 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 		}
 	}
 
-	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator")) ||
-		(s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
+	profile := GetCodexRequestProfile(c, firstPayload.rawForHash, s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
+	isCodexCLI := profile.OfficialClient
 	wsHeaders, _ := s.buildOpenAIWSHeaders(
 		c,
 		account,

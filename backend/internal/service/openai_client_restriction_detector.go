@@ -1,9 +1,8 @@
 package service
 
 import (
-	"github.com/senran-N/sub2api/internal/config"
-	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 )
 
 const (
@@ -49,32 +48,20 @@ func (d *OpenAICodexClientRestrictionDetector) Detect(c *gin.Context, account *A
 		}
 	}
 
-	if d != nil && d.cfg != nil && d.cfg.Gateway.ForceCodexCLI {
-		return CodexClientRestrictionDetectionResult{
-			Enabled: true,
-			Matched: true,
-			Reason:  CodexClientRestrictionReasonForceCodexCLI,
+	forceCodexCLI := d != nil && d.cfg != nil && d.cfg.Gateway.ForceCodexCLI
+	profile := GetCodexRequestProfile(c, nil, forceCodexCLI)
+	if profile.OfficialClient {
+		reason := CodexClientRestrictionReasonMatchedUA
+		switch profile.OfficialClientReason {
+		case CodexOfficialClientReasonOriginator:
+			reason = CodexClientRestrictionReasonMatchedOriginator
+		case CodexOfficialClientReasonForceCodexCLI:
+			reason = CodexClientRestrictionReasonForceCodexCLI
 		}
-	}
-
-	userAgent := ""
-	originator := ""
-	if c != nil {
-		userAgent = c.GetHeader("User-Agent")
-		originator = c.GetHeader("originator")
-	}
-	if openai.IsCodexOfficialClientRequest(userAgent) {
 		return CodexClientRestrictionDetectionResult{
 			Enabled: true,
 			Matched: true,
-			Reason:  CodexClientRestrictionReasonMatchedUA,
-		}
-	}
-	if openai.IsCodexOfficialClientOriginator(originator) {
-		return CodexClientRestrictionDetectionResult{
-			Enabled: true,
-			Matched: true,
-			Reason:  CodexClientRestrictionReasonMatchedOriginator,
+			Reason:  reason,
 		}
 	}
 

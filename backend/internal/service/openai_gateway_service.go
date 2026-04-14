@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
-	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/sjson"
 )
@@ -383,10 +382,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	originalBody := body
+	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
 	reqMeta := getOpenAIRequestMeta(c, body)
 	reqModel, reqStream, promptCacheKey := reqMeta.Model, reqMeta.Stream, reqMeta.PromptCacheKey
 
-	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator")) || (s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
+	isCodexCLI := profile.OfficialClient
 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
 	clientTransport := GetOpenAIClientTransport(c)
 	// 仅允许 WS 入站请求走 WS 上游，避免出现 HTTP -> WS 协议混用。

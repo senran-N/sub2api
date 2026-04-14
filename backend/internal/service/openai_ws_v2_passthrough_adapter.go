@@ -9,11 +9,10 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/senran-N/sub2api/internal/pkg/logger"
-	"github.com/senran-N/sub2api/internal/pkg/openai"
-	openaiwsv2 "github.com/senran-N/sub2api/internal/service/openai_ws_v2"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
+	openaiwsv2 "github.com/senran-N/sub2api/internal/service/openai_ws_v2"
 	"github.com/tidwall/gjson"
 )
 
@@ -106,13 +105,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		account.ProxyID != nil && account.Proxy != nil,
 	)
 
-	isCodexCLI := false
-	if c != nil {
-		isCodexCLI = openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator"))
-	}
-	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
-		isCodexCLI = true
-	}
+	profile := GetCodexRequestProfile(c, firstClientMessage, s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
+	isCodexCLI := profile.OfficialClient
 	headers, _ := s.buildOpenAIWSHeaders(c, account, token, wsDecision, isCodexCLI, "", "", "")
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {

@@ -104,13 +104,14 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		return
 	}
 
-	reqModel := strings.TrimSpace(gjson.GetBytes(firstMessage, "model").String())
+	profile := service.GetCodexRequestProfile(c, firstMessage, h != nil && h.cfg != nil && h.cfg.Gateway.ForceCodexCLI)
+	reqModel := profile.Body.Model
 	if reqModel == "" {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
-	previousResponseID := strings.TrimSpace(gjson.GetBytes(firstMessage, "previous_response_id").String())
-	previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
+	previousResponseID := profile.Body.PreviousResponseID
+	previousResponseIDKind := profile.Continuation.PreviousResponseIDKind
 	if previousResponseID != "" && previousResponseIDKind == service.OpenAIPreviousResponseIDKindMessageID {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "previous_response_id must be a response.id (resp_*), not a message id")
 		return
@@ -118,6 +119,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	reqLog = reqLog.With(
 		zap.Bool("ws_ingress", true),
 		zap.String("model", reqModel),
+		zap.String("codex_wire_api", string(profile.WireAPI)),
+		zap.Bool("codex_official_client", profile.OfficialClient),
 		zap.Bool("has_previous_response_id", previousResponseID != ""),
 		zap.String("previous_response_id_kind", previousResponseIDKind),
 	)
