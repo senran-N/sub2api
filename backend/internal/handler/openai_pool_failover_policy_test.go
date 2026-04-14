@@ -24,6 +24,7 @@ func TestApplyOpenAIPoolFailoverPolicy_ImmediateExhaustStatuses(t *testing.T) {
 				failedAccountIDs,
 				&switchCount,
 				3,
+				func() {},
 				func() { recordedSwitches++ },
 			)
 
@@ -51,6 +52,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetry(t *testing.T) {
 		failedAccountIDs,
 		&switchCount,
 		3,
+		func() {},
 		func() { recordedSwitches++ },
 	)
 
@@ -69,6 +71,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SwitchAfterRetryBudget(t *testing.T) {
 	sameAccountRetryCount := map[int64]int{13: account.GetPoolModeRetryCount()}
 	switchCount := 0
 	recordedSwitches := 0
+	tempUnschedCalls := 0
 
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
@@ -77,6 +80,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SwitchAfterRetryBudget(t *testing.T) {
 		failedAccountIDs,
 		&switchCount,
 		3,
+		func() { tempUnschedCalls++ },
 		func() { recordedSwitches++ },
 	)
 
@@ -86,6 +90,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SwitchAfterRetryBudget(t *testing.T) {
 	require.Equal(t, 1, switchCount)
 	require.Contains(t, failedAccountIDs, int64(13))
 	require.Equal(t, 1, recordedSwitches)
+	require.Equal(t, 1, tempUnschedCalls)
 }
 
 func TestApplyOpenAIPoolFailoverPolicy_ExhaustedWhenSwitchBudgetReached(t *testing.T) {
@@ -94,6 +99,7 @@ func TestApplyOpenAIPoolFailoverPolicy_ExhaustedWhenSwitchBudgetReached(t *testi
 	sameAccountRetryCount := make(map[int64]int)
 	switchCount := 2
 	recordedSwitches := 0
+	tempUnschedCalls := 0
 
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
@@ -102,6 +108,7 @@ func TestApplyOpenAIPoolFailoverPolicy_ExhaustedWhenSwitchBudgetReached(t *testi
 		failedAccountIDs,
 		&switchCount,
 		2,
+		func() { tempUnschedCalls++ },
 		func() { recordedSwitches++ },
 	)
 
@@ -110,4 +117,28 @@ func TestApplyOpenAIPoolFailoverPolicy_ExhaustedWhenSwitchBudgetReached(t *testi
 	require.Equal(t, 2, switchCount)
 	require.Contains(t, failedAccountIDs, int64(14))
 	require.Zero(t, recordedSwitches)
+	require.Zero(t, tempUnschedCalls)
+}
+
+func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetryDoesNotTempUnschedule(t *testing.T) {
+	account := &service.Account{ID: 15}
+	failedAccountIDs := make(map[int64]struct{})
+	sameAccountRetryCount := make(map[int64]int)
+	switchCount := 0
+	tempUnschedCalls := 0
+
+	decision := applyOpenAIPoolFailoverPolicy(
+		account,
+		&service.UpstreamFailoverError{StatusCode: http.StatusBadGateway, RetryableOnSameAccount: true},
+		sameAccountRetryCount,
+		failedAccountIDs,
+		&switchCount,
+		3,
+		func() { tempUnschedCalls++ },
+		nil,
+	)
+
+	require.Equal(t, FailoverContinue, decision.Action)
+	require.True(t, decision.SameAccountRetry)
+	require.Zero(t, tempUnschedCalls)
 }

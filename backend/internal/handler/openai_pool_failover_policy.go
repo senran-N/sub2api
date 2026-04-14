@@ -17,6 +17,7 @@ func applyOpenAIPoolFailoverPolicy(
 	failedAccountIDs map[int64]struct{},
 	switchCount *int,
 	maxAccountSwitches int,
+	tempUnscheduleRetryable func(),
 	recordSwitch func(),
 ) openAIPoolFailoverDecision {
 	decision := openAIPoolFailoverDecision{Action: FailoverExhausted}
@@ -40,6 +41,10 @@ func applyOpenAIPoolFailoverPolicy(
 		decision.SameAccountRetry = true
 		decision.RetryCount = sameAccountRetryCount[account.ID]
 		return decision
+	}
+
+	if failoverErr.RetryableOnSameAccount && tempUnscheduleRetryable != nil {
+		tempUnscheduleRetryable()
 	}
 
 	if failedAccountIDs != nil {

@@ -132,15 +132,22 @@ type ForwardResult struct {
 // TempUnscheduleRetryableError 对 RetryableOnSameAccount 类型的 failover 错误触发临时封禁。
 // 由 handler 层在同账号重试全部用尽、切换账号时调用。
 func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accountID int64, failoverErr *UpstreamFailoverError) {
+	tempUnscheduleRetryableError(ctx, s.accountRepo, accountID, failoverErr)
+}
+
+func tempUnscheduleRetryableError(ctx context.Context, repo AccountRepository, accountID int64, failoverErr *UpstreamFailoverError) {
+	if repo == nil || accountID <= 0 {
+		return
+	}
 	if failoverErr == nil || !failoverErr.RetryableOnSameAccount {
 		return
 	}
 	// 根据状态码选择封禁策略
 	switch failoverErr.StatusCode {
 	case http.StatusBadRequest:
-		tempUnscheduleGoogleConfigError(ctx, s.accountRepo, accountID, "[handler]")
+		tempUnscheduleGoogleConfigError(ctx, repo, accountID, "[handler]")
 	case http.StatusBadGateway:
-		tempUnscheduleEmptyResponse(ctx, s.accountRepo, accountID, "[handler]")
+		tempUnscheduleEmptyResponse(ctx, repo, accountID, "[handler]")
 	}
 }
 

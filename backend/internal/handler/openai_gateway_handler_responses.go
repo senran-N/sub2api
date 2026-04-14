@@ -292,6 +292,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					failedAccountIDs,
 					&switchCount,
 					maxAccountSwitches,
+					func() {
+						h.gatewayService.TempUnscheduleRetryableError(c.Request.Context(), account.ID, failoverErr)
+					},
 					h.gatewayService.RecordOpenAIAccountSwitch,
 				)
 				if decision.SameAccountRetry {

@@ -234,6 +234,12 @@ type OpenAIGatewayService struct {
 	codexSnapshotThrottle *accountWriteThrottle
 }
 
+// TempUnscheduleRetryableError mirrors the shared gateway failover quarantine for
+// OpenAI pool-mode handlers after same-account retries are exhausted.
+func (s *OpenAIGatewayService) TempUnscheduleRetryableError(ctx context.Context, accountID int64, failoverErr *UpstreamFailoverError) {
+	tempUnscheduleRetryableError(ctx, s.accountRepo, accountID, failoverErr)
+}
+
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
 func NewOpenAIGatewayService(
 	accountRepo AccountRepository,
