@@ -188,6 +188,20 @@ func TestCodexRecoveryPolicy_Failover(t *testing.T) {
 		require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
 	})
 
+	t.Run("exhausts_ws_auth_failed_forbidden", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			FailureReason: "auth_failed",
+			Reason:        codexRecoveryReasonFailover,
+			StatusCode:    http.StatusForbidden,
+			Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
+		})
+
+		require.True(t, decision.Applied)
+		require.True(t, decision.ExhaustFailover)
+		require.False(t, decision.SwitchAccount)
+		require.Equal(t, codexRecoveryActionExhaustFailover, decision.Action)
+	})
+
 	t.Run("switches_account_on_http_request_timeout", func(t *testing.T) {
 		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
 			AccountID:     46,
@@ -250,6 +264,17 @@ func TestClassifyCodexWSFailoverError(t *testing.T) {
 		require.NotNil(t, failoverErr)
 		require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
 		require.Equal(t, "upstream_5xx", failoverErr.FailureReason)
+	})
+
+	t.Run("ws_auth_failed_forbidden", func(t *testing.T) {
+		failoverErr := classifyCodexWSFailoverError(wrapOpenAIWSFallback("auth_failed", &openAIWSDialError{
+			StatusCode: http.StatusForbidden,
+			Err:        errors.New("forbidden"),
+		}))
+
+		require.NotNil(t, failoverErr)
+		require.Equal(t, http.StatusForbidden, failoverErr.StatusCode)
+		require.Equal(t, "auth_failed", failoverErr.FailureReason)
 	})
 
 	t.Run("transport_failure_stays_local", func(t *testing.T) {

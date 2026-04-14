@@ -248,7 +248,7 @@ func classifyCodexWSFailoverError(wsErr error) *UpstreamFailoverError {
 	reason, _ := classifyOpenAIWSReconnectReason(wsErr)
 	reason = normalizeCodexRecoveryFailureReason(reason)
 	switch reason {
-	case "upstream_rate_limited", "upstream_5xx":
+	case "auth_failed", "upstream_rate_limited", "upstream_5xx":
 	default:
 		return nil
 	}
