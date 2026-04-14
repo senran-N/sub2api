@@ -330,6 +330,20 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(statusCode i
 	return isOpenAITransientProcessingError(statusCode, upstreamMsg, upstreamBody)
 }
 
+func classifyOpenAIHTTPFailoverReason(statusCode int) string {
+	switch statusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "auth_failed"
+	case http.StatusTooManyRequests:
+		return "upstream_rate_limited"
+	default:
+		if statusCode >= http.StatusInternalServerError {
+			return "upstream_5xx"
+		}
+	}
+	return ""
+}
+
 func (s *OpenAIGatewayService) handleFailoverSideEffects(ctx context.Context, resp *http.Response, account *Account) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)

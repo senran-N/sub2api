@@ -23,6 +23,14 @@ func (s *stubCodexRestrictionDetector) Detect(_ *gin.Context, _ *Account) CodexC
 	return s.result
 }
 
+type codexHTTPAuthFailoverRepoStub struct {
+	stubOpenAIAccountRepo
+}
+
+func (r *codexHTTPAuthFailoverRepoStub) SetError(context.Context, int64, string) error {
+	return nil
+}
+
 func TestOpenAIGatewayService_GetCodexClientRestrictionDetector(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -238,6 +246,26 @@ func TestIsOpenAIPoolModeRetryableStatus(t *testing.T) {
 	require.False(t, isOpenAIPoolModeRetryableStatus(http.StatusForbidden))
 }
 
+func TestClassifyOpenAIHTTPFailoverReason(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		want       string
+	}{
+		{name: "unauthorized", statusCode: http.StatusUnauthorized, want: "auth_failed"},
+		{name: "forbidden", statusCode: http.StatusForbidden, want: "auth_failed"},
+		{name: "rate_limited", statusCode: http.StatusTooManyRequests, want: "upstream_rate_limited"},
+		{name: "upstream_5xx", statusCode: http.StatusBadGateway, want: "upstream_5xx"},
+		{name: "other_4xx", statusCode: http.StatusPaymentRequired, want: ""},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, classifyOpenAIHTTPFailoverReason(tt.statusCode))
+		})
+	}
+}
+
 func TestOpenAIGatewayService_Forward_LogsInstructionsRequiredDetails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logSink, restore := captureStructuredLog(t)
@@ -376,7 +404,8 @@ func TestOpenAIGatewayService_Forward_OfficialCodexHTTPRequestFailuresTriggerFai
 				cfg: &config.Config{
 					Gateway: config.GatewayConfig{ForceCodexCLI: false},
 				},
-				httpUpstream: upstream,
+				httpUpstream:     upstream,
+				rateLimitService: &RateLimitService{accountRepo: &codexHTTPAuthFailoverRepoStub{}},
 			}
 			account := &Account{
 				ID:             1001,
@@ -399,6 +428,67 @@ func TestOpenAIGatewayService_Forward_OfficialCodexHTTPRequestFailuresTriggerFai
 			require.Equal(t, tt.wantStatusCode, failoverErr.StatusCode)
 			require.Equal(t, tt.wantReason, failoverErr.FailureReason)
 			require.False(t, c.Writer.Written(), "service 层应返回 failover 错误给上层换号，而不是直接向客户端写响应")
+		})
+	}
+}
+
+func TestOpenAIGatewayService_Forward_OfficialCodexHTTPAuthFailuresTriggerFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	testCases := []struct {
+		name       string
+		statusCode int
+	}{
+		{name: "unauthorized", statusCode: http.StatusUnauthorized},
+		{name: "forbidden", statusCode: http.StatusForbidden},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+			c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			upstream := &httpUpstreamRecorder{
+				resp: &http.Response{
+					StatusCode: tt.statusCode,
+					Header: http.Header{
+						"Content-Type": []string{"application/json"},
+						"x-request-id": []string{"rid-auth"},
+					},
+					Body: io.NopCloser(strings.NewReader(`{"error":{"type":"permission_error","message":"forbidden"}}`)),
+				},
+			}
+			svc := &OpenAIGatewayService{
+				cfg: &config.Config{
+					Gateway: config.GatewayConfig{ForceCodexCLI: false},
+				},
+				httpUpstream:     upstream,
+				rateLimitService: &RateLimitService{accountRepo: &codexHTTPAuthFailoverRepoStub{}},
+			}
+			account := &Account{
+				ID:             1001,
+				Name:           "codex max套餐",
+				Platform:       PlatformOpenAI,
+				Type:           AccountTypeAPIKey,
+				Concurrency:    1,
+				Credentials:    map[string]any{"api_key": "sk-test"},
+				Status:         StatusActive,
+				Schedulable:    true,
+				RateMultiplier: f64p(1),
+			}
+			body := []byte(`{"model":"gpt-5.1-codex","stream":false,"input":[{"type":"text","text":"hello"}]}`)
+
+			_, err := svc.Forward(context.Background(), c, account, body, "")
+			require.Error(t, err)
+
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.Equal(t, tt.statusCode, failoverErr.StatusCode)
+			require.Equal(t, "auth_failed", failoverErr.FailureReason)
+			require.False(t, c.Writer.Written(), "service 层应返回 failover 错误给上层统一 exhaust，而不是直接向客户端写响应")
 		})
 	}
 }
