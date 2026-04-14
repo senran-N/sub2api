@@ -108,3 +108,58 @@ func TestFilterRoutedCandidates_CollectsFilteringStats(t *testing.T) {
 	require.Equal(t, []int64{6}, result.Stats.ModelScopeSkippedID)
 	require.Equal(t, 1, result.Stats.FilteredWindowCost)
 }
+
+func TestFilterRoutedCandidates_SkipsOpenAICodexSnapshotRateLimitedAccounts(t *testing.T) {
+	now := time.Now().UTC()
+	usedPercent := 100.0
+	resetAfter := 3600
+	windowMinutes := 10080
+	codexExtra := buildCodexUsageExtraUpdates(&OpenAICodexUsageSnapshot{
+		PrimaryUsedPercent:       &usedPercent,
+		PrimaryResetAfterSeconds: &resetAfter,
+		PrimaryWindowMinutes:     &windowMinutes,
+		UpdatedAt:                now.Format(time.RFC3339),
+	}, now)
+
+	svc := &GatewayService{cfg: testConfig()}
+	accountByID := map[int64]*Account{
+		11: {
+			ID:          11,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Credentials: map[string]any{
+				"access_token": "fresh-token",
+				"expires_at":   now.Add(time.Hour).Format(time.RFC3339),
+			},
+			Extra: codexExtra,
+		},
+		12: {
+			ID:          12,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Credentials: map[string]any{
+				"access_token": "fresh-token-2",
+				"expires_at":   now.Add(time.Hour).Format(time.RFC3339),
+			},
+		},
+	}
+
+	result := svc.filterRoutedCandidates(
+		context.Background(),
+		accountByID,
+		[]int64{11, 12},
+		"gpt-5.1",
+		PlatformOpenAI,
+		false,
+		nil,
+	)
+
+	require.Len(t, result.Candidates, 1)
+	require.Equal(t, int64(12), result.Candidates[0].ID)
+	require.Equal(t, 1, result.Stats.FilteredUnsched)
+	require.NotNil(t, accountByID[11].RateLimitResetAt)
+}

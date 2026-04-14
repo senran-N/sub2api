@@ -295,6 +295,7 @@ func (s *GatewayService) isAccountSchedulableForSelection(account *Account) bool
 	if account == nil {
 		return false
 	}
+	applyOpenAICodexRateLimitFromExtra(account, time.Now())
 	if !account.IsSchedulable() {
 		return false
 	}
