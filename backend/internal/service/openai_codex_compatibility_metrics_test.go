@@ -122,6 +122,44 @@ func TestSnapshotOpenAICodexCompatibilityMetrics(t *testing.T) {
 	require.GreaterOrEqual(t, wsAfter.ChainHitTotal, wsBefore.ChainHitTotal+1)
 }
 
+func TestObserveOpenAICodexSchedulingDecision_WarmupSkipped(t *testing.T) {
+	before := SnapshotOpenAICodexCompatibilityMetrics()
+
+	ObserveOpenAICodexRequestProfile(CodexRequestProfile{
+		OfficialClient: true,
+		CodexVersion:   "warmup-skip",
+		WireAPI:        CodexWireAPIResponsesWebSocket,
+		Warmup:         true,
+	})
+	ObserveOpenAICodexSchedulingDecision(CodexRequestProfile{
+		OfficialClient: true,
+		CodexVersion:   "warmup-skip",
+		WireAPI:        CodexWireAPIResponsesWebSocket,
+		Warmup:         true,
+	}, OpenAIAccountScheduleDecision{StickySessionHit: true})
+
+	after := SnapshotOpenAICodexCompatibilityMetrics()
+
+	require.GreaterOrEqual(t, after.Summary.OfficialRequestTotal, before.Summary.OfficialRequestTotal+1)
+	require.Equal(t, before.Summary.ChainSelectionTotal, after.Summary.ChainSelectionTotal)
+	require.Equal(t, before.Summary.ChainHitTotal, after.Summary.ChainHitTotal)
+	require.Equal(t, before.Summary.ChainSessionHitTotal, after.Summary.ChainSessionHitTotal)
+
+	versionBefore := codexVersionMetricTotal(before, "warmup-skip")
+	versionAfter := codexVersionMetricTotal(after, "warmup-skip")
+	require.GreaterOrEqual(t, versionAfter.OfficialRequestTotal, versionBefore.OfficialRequestTotal+1)
+	require.GreaterOrEqual(t, versionAfter.WarmupTotal, versionBefore.WarmupTotal+1)
+	require.Equal(t, versionBefore.ChainSelectionTotal, versionAfter.ChainSelectionTotal)
+	require.Equal(t, versionBefore.ChainHitTotal, versionAfter.ChainHitTotal)
+
+	transportBefore := codexTransportMetricTotal(before, string(CodexWireAPIResponsesWebSocket))
+	transportAfter := codexTransportMetricTotal(after, string(CodexWireAPIResponsesWebSocket))
+	require.GreaterOrEqual(t, transportAfter.OfficialRequestTotal, transportBefore.OfficialRequestTotal+1)
+	require.GreaterOrEqual(t, transportAfter.WarmupTotal, transportBefore.WarmupTotal+1)
+	require.Equal(t, transportBefore.ChainSelectionTotal, transportAfter.ChainSelectionTotal)
+	require.Equal(t, transportBefore.ChainHitTotal, transportAfter.ChainHitTotal)
+}
+
 func codexVersionMetricTotal(
 	snapshot OpenAICodexCompatibilityMetricsSnapshot,
 	version string,

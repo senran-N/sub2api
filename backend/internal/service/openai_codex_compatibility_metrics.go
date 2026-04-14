@@ -204,6 +204,9 @@ func ObserveOpenAICodexSchedulingDecision(profile CodexRequestProfile, decision 
 	if !profile.OfficialClient {
 		return
 	}
+	if profile.Warmup {
+		return
+	}
 
 	openAICodexChainSelectionTotal.Add(1)
 	chainHit := decision.StickyPreviousHit || decision.StickySessionHit
