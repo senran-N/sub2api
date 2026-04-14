@@ -173,8 +173,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 	sessionHash := h.gatewayService.GenerateOpenAIWSIngressSessionHash(c, firstMessage)
 	initialSelectionModel := schedulingModel
+	schedulerCtx := service.WithOpenAICodexTransportPreference(ctx, profile.NativeClient)
 	selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-		ctx,
+		schedulerCtx,
 		apiKey.GroupID,
 		previousResponseID,
 		sessionHash,
@@ -194,7 +195,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				zap.String("default_mapped_model", defaultModel),
 			)
 			selection, scheduleDecision, err = h.gatewayService.SelectAccountWithScheduler(
-				ctx,
+				schedulerCtx,
 				apiKey.GroupID,
 				previousResponseID,
 				sessionHash,

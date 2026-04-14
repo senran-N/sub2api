@@ -131,6 +131,23 @@ func (s *OpenAIGatewayService) getCodexSessionPreferredTransport(
 	return store.GetSessionTransport(groupID, sessionHash)
 }
 
+type openAICodexTransportPreferenceContextKey struct{}
+
+func WithOpenAICodexTransportPreference(ctx context.Context, enabled bool) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, openAICodexTransportPreferenceContextKey{}, enabled)
+}
+
+func shouldApplyOpenAICodexTransportPreference(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	enabled, _ := ctx.Value(openAICodexTransportPreferenceContextKey{}).(bool)
+	return enabled
+}
+
 func (s *OpenAIGatewayService) bindCodexSessionTransport(
 	store OpenAIWSStateStore,
 	groupID int64,
@@ -200,6 +217,9 @@ func (s *OpenAIGatewayService) resolveCodexPreferredTransport(
 	requiredTransport OpenAIUpstreamTransport,
 ) OpenAIUpstreamTransport {
 	if requiredTransport != OpenAIUpstreamTransportAny {
+		return requiredTransport
+	}
+	if !shouldApplyOpenAICodexTransportPreference(ctx) {
 		return requiredTransport
 	}
 	store := s.getOpenAIWSStateStore()

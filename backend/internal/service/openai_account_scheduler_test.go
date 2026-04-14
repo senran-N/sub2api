@@ -555,7 +555,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionSticky_ForceHTTP
 }
 
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionPreferredWSV2SkipsStickyHTTPAccount(t *testing.T) {
-	ctx := context.Background()
+	ctx := WithOpenAICodexTransportPreference(context.Background(), true)
 	groupID := int64(10105)
 	sessionHash := "session_hash_preferred_ws"
 	accounts := []Account{
@@ -620,6 +620,76 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionPreferredWSV2Ski
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	require.False(t, decision.StickySessionHit)
 	require.Equal(t, 1, decision.CandidateCount)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAIGatewayService_SelectAccountWithScheduler_NonNativeIgnoresSessionPreferredTransport(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(10106)
+	sessionHash := "session_hash_non_native_transport"
+	accounts := []Account{
+		{
+			ID:          2291,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Priority:    0,
+		},
+		{
+			ID:          2292,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Priority:    5,
+			Extra: map[string]any{
+				"openai_apikey_responses_websockets_v2_enabled": true,
+			},
+		},
+	}
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{
+			"openai:" + sessionHash: 2291,
+		},
+	}
+	store := NewOpenAIWSStateStore(cache)
+	store.BindSessionTransport(groupID, sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, time.Minute)
+	cfg := newOpenAIWSV2TestConfig()
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			2291: {AccountID: 2291, LoadRate: 0, WaitingCount: 0},
+			2292: {AccountID: 2292, LoadRate: 90, WaitingCount: 5},
+		},
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: accounts},
+		cache:              cache,
+		cfg:                cfg,
+		openaiWSStateStore: store,
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		ctx,
+		&groupID,
+		"",
+		sessionHash,
+		"gpt-5.1",
+		nil,
+		OpenAIUpstreamTransportAny,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(2291), selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerSessionSticky, decision.Layer)
+	require.True(t, decision.StickySessionHit)
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}

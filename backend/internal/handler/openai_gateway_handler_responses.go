@@ -182,13 +182,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
 	codexSchedulingObserved := false
+	schedulerCtx := service.WithOpenAICodexTransportPreference(c.Request.Context(), profile.NativeClient)
 
 	for {
 		c.Set("openai_responses_fallback_model", "")
 		// Select account supporting the requested model
 		reqLog.Debug("openai.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-			c.Request.Context(),
+			schedulerCtx,
 			apiKey.GroupID,
 			previousResponseID,
 			sessionHash,
@@ -212,7 +213,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						zap.String("default_mapped_model", defaultModel),
 					)
 					selection, scheduleDecision, err = h.gatewayService.SelectAccountWithScheduler(
-						c.Request.Context(),
+						schedulerCtx,
 						apiKey.GroupID,
 						previousResponseID,
 						sessionHash,
