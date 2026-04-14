@@ -14,6 +14,24 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 ) (*AccountSelectionResult, error) {
+	return s.selectAccountByPreviousResponseIDForScheduler(
+		ctx,
+		groupID,
+		previousResponseID,
+		requestedModel,
+		excludedIDs,
+		OpenAIUpstreamTransportResponsesWebsocketV2,
+	)
+}
+
+func (s *OpenAIGatewayService) selectAccountByPreviousResponseIDForScheduler(
+	ctx context.Context,
+	groupID *int64,
+	previousResponseID string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredTransport OpenAIUpstreamTransport,
+) (*AccountSelectionResult, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -42,6 +60,9 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 	account, err := s.getSchedulableAccount(ctx, accountID)
 	if err != nil || account == nil {
 		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
+		return nil, nil
+	}
+	if s.isOpenAITransportFallbackCooling(account.ID, requiredTransport) {
 		return nil, nil
 	}
 	// 非 WSv2 场景（如 force_http/全局关闭）不应使用 previous_response_id 粘连，

@@ -29,6 +29,9 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 			Transport:   req.RequiredTransport,
 		}).SessionStickyAccount
 	}
+	if s.service.isOpenAITransportFallbackCooling(stickyAccountID, req.RequiredTransport) {
+		return nil, nil
+	}
 
 	account, accountID := s.service.resolveOpenAIStickySessionAccount(
 		ctx,
@@ -72,6 +75,7 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 type openAIAccountCandidateScore struct {
 	account   *Account
 	loadInfo  *AccountLoadInfo
+	cooling   bool
 	score     float64
 	errorRate float64
 	ttft      float64
@@ -106,6 +110,9 @@ func (h *openAIAccountCandidateHeap) Pop() any {
 func isOpenAIAccountCandidateBetter(left openAIAccountCandidateScore, right openAIAccountCandidateScore) bool {
 	if left.score != right.score {
 		return left.score > right.score
+	}
+	if left.cooling != right.cooling {
+		return !left.cooling
 	}
 	if left.account.Priority != right.account.Priority {
 		return left.account.Priority < right.account.Priority
@@ -309,6 +316,12 @@ func chooseOpenAIWaitCandidate(candidates []openAIAccountCandidateScore) *openAI
 	best := &candidates[0]
 	for i := 1; i < len(candidates); i++ {
 		candidate := &candidates[i]
+		if candidate.cooling != best.cooling {
+			if !candidate.cooling {
+				best = candidate
+			}
+			continue
+		}
 		if candidate.loadInfo == nil {
 			continue
 		}
@@ -378,7 +391,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalanceFullScan(
 
 	loadMap := s.loadSchedulerAccountLoads(ctx, loadReq)
 
-	candidates, loadSkew := s.buildOpenAILoadBalancedCandidates(filtered, loadMap)
+	candidates, loadSkew := s.buildOpenAILoadBalancedCandidates(filtered, loadMap, req.RequiredTransport)
 
 	topK := normalizeOpenAISchedulerTopK(s.service.openAIWSLBTopK(), len(candidates))
 	selectionOrder := buildOpenAIImmediateSelectionOrder(candidates, topK, req)
@@ -438,7 +451,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalancePagedSnapshot(
 			}
 
 			loadMap := s.loadSchedulerAccountLoads(ctx, prepared.loadReq)
-			candidates, _ := s.buildOpenAILoadBalancedCandidates(prepared.filtered, loadMap)
+			candidates, _ := s.buildOpenAILoadBalancedCandidates(prepared.filtered, loadMap, req.RequiredTransport)
 			candidateCount += len(candidates)
 			for i := range candidates {
 				loadRate := float64(candidates[i].loadInfo.LoadRate)

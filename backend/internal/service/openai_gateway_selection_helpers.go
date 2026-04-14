@@ -395,6 +395,22 @@ func (s *OpenAIGatewayService) isAccountTransportCompatible(account *Account, re
 	return s.getOpenAIWSProtocolResolver().Resolve(account).Transport == requiredTransport
 }
 
+func shouldAvoidOpenAIWSFallbackCooling(requiredTransport OpenAIUpstreamTransport) bool {
+	switch requiredTransport {
+	case OpenAIUpstreamTransportResponsesWebsocket, OpenAIUpstreamTransportResponsesWebsocketV2:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *OpenAIGatewayService) isOpenAITransportFallbackCooling(accountID int64, requiredTransport OpenAIUpstreamTransport) bool {
+	if !shouldAvoidOpenAIWSFallbackCooling(requiredTransport) {
+		return false
+	}
+	return s.isOpenAIWSFallbackCooling(accountID)
+}
+
 func (s *OpenAIGatewayService) tryAcquireImmediateOpenAISelection(
 	ctx context.Context,
 	account *Account,

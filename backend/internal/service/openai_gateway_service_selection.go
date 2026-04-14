@@ -25,7 +25,7 @@ func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.C
 }
 
 func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64) (*Account, error) {
-	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, stickyAccountID); account != nil {
+	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, stickyAccountID, OpenAIUpstreamTransportAny); account != nil {
 		return account, nil
 	}
 
@@ -70,13 +70,16 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 }
 
 // tryStickySessionHit tries to resolve a sticky session to a currently usable account.
-func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64) *Account {
+func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64, requiredTransport OpenAIUpstreamTransport) *Account {
 	if stickyAccountID <= 0 {
 		stickyAccountID = s.resolveCodexChainState(ctx, codexChainStateInput{
 			GroupID:     derefGroupID(groupID),
 			SessionHash: sessionHash,
-			Transport:   OpenAIUpstreamTransportAny,
+			Transport:   requiredTransport,
 		}).SessionStickyAccount
+	}
+	if s.isOpenAITransportFallbackCooling(stickyAccountID, requiredTransport) {
+		return nil
 	}
 	account, _ := s.resolveOpenAIStickySessionAccount(
 		ctx,

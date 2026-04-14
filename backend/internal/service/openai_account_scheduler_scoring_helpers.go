@@ -1,5 +1,7 @@
 package service
 
+const openAIWSFallbackCoolingScorePenalty = 8.0
+
 type openAIAccountScoreContext struct {
 	minPriority   int
 	maxPriority   int
@@ -61,6 +63,7 @@ func (ctx openAIAccountScoreContext) loadSkew(candidateCount int) float64 {
 func (s *defaultOpenAIAccountScheduler) buildOpenAILoadBalancedCandidates(
 	filtered []*Account,
 	loadMap map[int64]*AccountLoadInfo,
+	requiredTransport OpenAIUpstreamTransport,
 ) ([]openAIAccountCandidateScore, float64) {
 	if len(filtered) == 0 {
 		return nil, 0
@@ -75,10 +78,12 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAILoadBalancedCandidates(
 		}
 
 		errorRate, ttft, hasTTFT := s.stats.snapshot(account.ID)
+		cooling := s != nil && s.service != nil && s.service.isOpenAITransportFallbackCooling(account.ID, requiredTransport)
 		scoreCtx.observe(account, loadInfo, ttft, hasTTFT)
 		candidates = append(candidates, openAIAccountCandidateScore{
 			account:   account,
 			loadInfo:  loadInfo,
+			cooling:   cooling,
 			errorRate: errorRate,
 			ttft:      ttft,
 			hasTTFT:   hasTTFT,
@@ -114,5 +119,8 @@ func (s *defaultOpenAIAccountScheduler) scoreOpenAICandidates(
 			weights.Queue*queueFactor +
 			weights.ErrorRate*errorFactor +
 			weights.TTFT*ttftFactor
+		if item.cooling {
+			item.score -= openAIWSFallbackCoolingScorePenalty
+		}
 	}
 }
