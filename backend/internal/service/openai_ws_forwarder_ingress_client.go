@@ -137,6 +137,23 @@ func (s *OpenAIGatewayService) parseOpenAIWSIngressClientPayload(c *gin.Context,
 		}
 		normalized = next
 	}
+	if account != nil && account.Type == AccountTypeOAuth && account.ID > 0 {
+		reqBody := make(map[string]any)
+		if err := json.Unmarshal(normalized, &reqBody); err != nil {
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(websocket.StatusPolicyViolation, "invalid websocket request payload", err)
+		}
+		if rewriteOpenAICodexBodyIdentityMap(account.ID, reqBody) {
+			next, err := json.Marshal(reqBody)
+			if err != nil {
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(websocket.StatusPolicyViolation, "invalid websocket request payload", err)
+			}
+			normalized = next
+			promptCacheKey = ""
+			if value, ok := reqBody["prompt_cache_key"].(string); ok {
+				promptCacheKey = strings.TrimSpace(value)
+			}
+		}
+	}
 
 	return openAIWSClientPayload{
 		payloadRaw:         normalized,

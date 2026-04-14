@@ -37,16 +37,16 @@ func getAPIKeyIDFromContext(c *gin.Context) int64 {
 	return apiKey.ID
 }
 
-// isolateOpenAISessionID 将 apiKeyID 混入 session 标识符，
-// 确保不同 API Key 的用户即使使用相同的原始 session_id/conversation_id，
-// 到达上游的标识符也不同，防止跨用户会话碰撞。
-func isolateOpenAISessionID(apiKeyID int64, raw string) string {
+// isolateOpenAISessionID 将账号命名空间混入 OpenAI/Codex 会话标识符，
+// 让同一个 OAuth 账号在上游始终表现为同一个稳定客户端人格，
+// 同时避免把下游原始 session/conversation/prompt_cache_key 直接暴露给上游。
+func isolateOpenAISessionID(accountID int64, raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
 	}
 	hash := xxhash.New()
-	_, _ = fmt.Fprintf(hash, "k%d:", apiKeyID)
+	_, _ = fmt.Fprintf(hash, "a%d:", accountID)
 	_, _ = hash.WriteString(raw)
 	return fmt.Sprintf("%016x", hash.Sum64())
 }

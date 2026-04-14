@@ -124,6 +124,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		turnState = strings.TrimSpace(c.GetHeader(openAIWSTurnStateHeader))
 		turnMetadata = strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader))
 	}
+	if account != nil && account.Type == AccountTypeOAuth {
+		turnMetadata = resolveOpenAICodexUpstreamTurnMetadata(account.ID, turnMetadata)
+	}
 	setOpenAIWSTurnMetadata(payload, turnMetadata)
 	payloadEventType := openAIWSPayloadString(payload, "type")
 	if payloadEventType == "" {
@@ -394,7 +397,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		return errors.New("token is empty")
 	}
 
-	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
+	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+	profile := GetCodexRequestProfile(c, firstClientMessage, forceCodexCLI)
+	wsDecision := s.getOpenAIWSProtocolResolver().ResolveWithProfile(account, profile)
 	modeRouterV2Enabled := s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled
 	ingressMode := OpenAIWSIngressModeCtxPool
 	if modeRouterV2Enabled {

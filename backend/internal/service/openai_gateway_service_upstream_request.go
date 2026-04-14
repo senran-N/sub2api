@@ -76,26 +76,70 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 	if account.Type == AccountTypeOAuth {
 		req.Header.Del("conversation_id")
 		req.Header.Del("session_id")
+		req.Header.Del("accept-language")
 
-		apiKeyID := getAPIKeyIDFromContext(c)
-		sessionResolution := policy.ResolveOAuthSessionHeaders(promptCacheKey, resolveOpenAICompactSessionID(c), true)
-		req.Header.Set("OpenAI-Beta", policy.ResolveOpenAIBeta("responses=experimental"))
-		req.Header.Set("originator", policy.ResolveOriginator())
+		sessionResolution := policy.ResolveOAuthSessionHeaders(promptCacheKey, resolveOpenAICompactSessionID(c), !profile.NativeClient)
+		req.Header.Set("OpenAI-Beta", openAICodexHTTPBetaValue)
+		req.Header.Set("originator", resolveOpenAICodexUpstreamOriginator(account))
 		if profile.CompactPath {
 			req.Header.Set("accept", policy.ResolveAccept("application/json"))
-			req.Header.Set("version", policy.ResolveVersion(codexCLIVersion))
+			req.Header.Set("version", resolveOpenAICodexUpstreamVersion(account))
 		} else {
 			req.Header.Set("accept", policy.ResolveAccept("text/event-stream"))
 		}
+		isolatedSessionID := ""
 		if sessionResolution.SessionID != "" {
-			req.Header.Set("session_id", isolateOpenAISessionID(apiKeyID, sessionResolution.SessionID))
+			isolatedSessionID = resolveOpenAICodexUpstreamSessionHeaderValue(account.ID, sessionResolution.SessionID, sessionResolution.SessionSource)
+			req.Header.Set("session_id", isolatedSessionID)
 		}
 		if sessionResolution.ConversationID != "" {
-			req.Header.Set("conversation_id", isolateOpenAISessionID(apiKeyID, sessionResolution.ConversationID))
+			req.Header.Set("conversation_id", resolveOpenAICodexUpstreamSessionHeaderValue(account.ID, sessionResolution.ConversationID, sessionResolution.ConversationSource))
+		}
+		if requestID := resolveOpenAICodexUpstreamClientRequestID(account.ID, profile.Headers.ClientRequestID, isolatedSessionID); requestID != "" {
+			req.Header.Set("x-client-request-id", requestID)
+		}
+		if betaFeatures := resolveOpenAICodexUpstreamBetaFeatures(account); betaFeatures != "" {
+			req.Header.Set("x-codex-beta-features", betaFeatures)
+		} else {
+			req.Header.Del("x-codex-beta-features")
+		}
+		if turnMetadata := resolveOpenAICodexUpstreamTurnMetadata(account.ID, profile.Headers.TurnMetadata); turnMetadata != "" {
+			req.Header.Set(openAIWSTurnMetadataHeader, turnMetadata)
+		} else {
+			req.Header.Del(openAIWSTurnMetadataHeader)
+		}
+		if acceptLanguage := resolveOpenAICodexUpstreamAcceptLanguage(account); acceptLanguage != "" {
+			req.Header.Set("accept-language", acceptLanguage)
+		}
+		if windowID := resolveOpenAICodexUpstreamWindowID(account.ID); windowID != "" {
+			req.Header.Set(openAICodexMetadataWindowIDKey, windowID)
+		}
+		if subagent := resolveOpenAICodexUpstreamSubagent(profile, body); subagent != "" {
+			req.Header.Set(openAICodexMetadataSubagentKey, subagent)
+		} else {
+			req.Header.Del(openAICodexMetadataSubagentKey)
+		}
+		if parentThreadID := resolveOpenAICodexUpstreamParentThreadID(account.ID, profile, body); parentThreadID != "" {
+			req.Header.Set(openAICodexMetadataParentThreadIDKey, parentThreadID)
+		} else {
+			req.Header.Del(openAICodexMetadataParentThreadIDKey)
+		}
+		if profile.CompactPath {
+			if installationID := resolveOpenAICodexUpstreamInstallationID(account.ID); installationID != "" {
+				req.Header.Set(openAICodexMetadataInstallationIDKey, installationID)
+			}
+		} else {
+			req.Header.Del(openAICodexMetadataInstallationIDKey)
 		}
 	}
 
-	if userAgent := policy.ResolveUserAgent(account, forceCodexCLI, false); userAgent != "" {
+	userAgent := ""
+	if account != nil && account.Type == AccountTypeOAuth {
+		userAgent = resolveOpenAICodexUpstreamUserAgent(account)
+	} else {
+		userAgent = policy.ResolveUserAgent(account, forceCodexCLI, false)
+	}
+	if userAgent != "" {
 		req.Header.Set("user-agent", userAgent)
 	}
 	if req.Header.Get("content-type") == "" {
@@ -105,7 +149,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 	return req, nil
 }
 
-func setOpenAICompatPromptCacheSessionID(c *gin.Context, req *http.Request, promptCacheKey string) {
+func setOpenAICompatPromptCacheSessionID(c *gin.Context, account *Account, req *http.Request, promptCacheKey string) {
 	if req == nil {
 		return
 	}
@@ -114,6 +158,9 @@ func setOpenAICompatPromptCacheSessionID(c *gin.Context, req *http.Request, prom
 		return
 	}
 
-	apiKeyID := getAPIKeyIDFromContext(c)
-	req.Header.Set("session_id", generateSessionUUID(isolateOpenAISessionID(apiKeyID, promptCacheKey)))
+	accountID := int64(0)
+	if account != nil {
+		accountID = account.ID
+	}
+	req.Header.Set("session_id", generateSessionUUID(resolveOpenAICodexUpstreamSessionHeaderValue(accountID, promptCacheKey, "prompt_cache_key")))
 }

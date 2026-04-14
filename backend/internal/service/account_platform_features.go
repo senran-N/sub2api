@@ -296,6 +296,34 @@ func (a *Account) GetOpenAIUserAgent() string {
 	return a.GetCredential("user_agent")
 }
 
+func (a *Account) GetOpenAICodexOriginator() string {
+	if !a.IsOpenAI() {
+		return ""
+	}
+	return a.GetCredential("originator")
+}
+
+func (a *Account) GetOpenAICodexVersion() string {
+	if !a.IsOpenAI() {
+		return ""
+	}
+	return a.GetCredential("version")
+}
+
+func (a *Account) GetOpenAICodexBetaFeatures() string {
+	if !a.IsOpenAI() {
+		return ""
+	}
+	return a.GetCredential("codex_beta_features")
+}
+
+func (a *Account) GetOpenAICodexAcceptLanguage() string {
+	if !a.IsOpenAI() {
+		return ""
+	}
+	return a.GetCredential("accept_language")
+}
+
 func (a *Account) GetChatGPTAccountID() string {
 	if !a.IsOpenAIOAuth() {
 		return ""

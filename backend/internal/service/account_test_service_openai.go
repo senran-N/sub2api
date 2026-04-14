@@ -27,10 +27,9 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	}
 
 	var (
-		authToken        string
-		apiURL           string
-		isOAuth          bool
-		chatgptAccountID string
+		authToken string
+		apiURL    string
+		isOAuth   bool
 	)
 	if account.IsOAuth() {
 		isOAuth = true
@@ -39,7 +38,6 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 			return s.sendErrorAndEnd(c, "No access token available")
 		}
 		apiURL = chatgptCodexAPIURL
-		chatgptAccountID = account.GetChatGPTAccountID()
 	} else if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
 		authToken = account.GetOpenAIApiKey()
 		if authToken == "" {
@@ -68,26 +66,24 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	payloadBytes, _ := json.Marshal(payload)
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(payloadBytes))
-	if err != nil {
-		return s.sendErrorAndEnd(c, "Failed to create request")
-	}
-	req.Header.Set("Content-Type", "application/json")
+	var req *http.Request
+	var err error
 	if isOAuth {
-		req.Header.Set("Authorization", "Bearer "+authToken)
+		req, err = newOpenAICodexOAuthResponsesRequest(ctx, apiURL, authToken, payloadBytes, "text/event-stream", account)
 	} else {
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(payloadBytes))
+		if err != nil {
+			return s.sendErrorAndEnd(c, "Failed to create request")
+		}
+		req.Header.Set("Content-Type", "application/json")
 		newOpenAIResponsesUpstreamTargetWithOptions(
 			account.GetOpenAIBaseURL(),
 			account.GetCompatibleAuthMode(""),
 			account.GetCompatibleEndpointOverride("responses"),
 		).ApplyAuthHeader(req.Header, authToken)
 	}
-	if isOAuth {
-		req.Host = "chatgpt.com"
-		req.Header.Set("accept", "text/event-stream")
-		if chatgptAccountID != "" {
-			req.Header.Set("chatgpt-account-id", chatgptAccountID)
-		}
+	if err != nil {
+		return s.sendErrorAndEnd(c, "Failed to create request")
 	}
 
 	resp, err := s.httpUpstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))

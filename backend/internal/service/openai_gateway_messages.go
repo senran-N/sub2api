@@ -95,6 +95,11 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		if promptCacheKey != "" {
 			reqBody["prompt_cache_key"] = promptCacheKey
 		}
+		if rewriteOpenAICodexBodyIdentityMap(account.ID, reqBody) {
+			if value, ok := reqBody["prompt_cache_key"].(string); ok {
+				promptCacheKey = strings.TrimSpace(value)
+			}
+		}
 		// OAuth codex transform forces stream=true upstream, so always use
 		// the streaming response handler regardless of what the client asked.
 		isStream = true
@@ -118,7 +123,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 
 	// Override session_id with a deterministic UUID derived from the isolated
 	// session key, ensuring different API keys produce different upstream sessions.
-	setOpenAICompatPromptCacheSessionID(c, upstreamReq, promptCacheKey)
+	setOpenAICompatPromptCacheSessionID(c, account, upstreamReq, promptCacheKey)
 
 	// 7. Send request
 	proxyURL := ""

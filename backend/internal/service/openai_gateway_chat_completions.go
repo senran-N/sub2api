@@ -120,6 +120,11 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		} else if promptCacheKey != "" {
 			reqBody["prompt_cache_key"] = promptCacheKey
 		}
+		if rewriteOpenAICodexBodyIdentityMap(account.ID, reqBody) {
+			if value, ok := reqBody["prompt_cache_key"].(string); ok {
+				promptCacheKey = strings.TrimSpace(value)
+			}
+		}
 		responsesBody, err = json.Marshal(reqBody)
 		if err != nil {
 			return nil, fmt.Errorf("remarshal after codex transform: %w", err)
@@ -138,7 +143,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
 
-	setOpenAICompatPromptCacheSessionID(c, upstreamReq, promptCacheKey)
+	setOpenAICompatPromptCacheSessionID(c, account, upstreamReq, promptCacheKey)
 
 	// 7. Send request
 	proxyURL := ""

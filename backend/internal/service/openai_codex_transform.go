@@ -152,7 +152,10 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 	if v, ok := reqBody["model"].(string); ok {
 		model = v
 	}
-	normalizedModel := normalizeCodexUpstreamModel(model)
+	normalizedModel := strings.TrimSpace(model)
+	if !isCodexCLI {
+		normalizedModel = normalizeCodexUpstreamModel(model)
+	}
 	if normalizedModel != "" {
 		if model != normalizedModel {
 			reqBody["model"] = normalizedModel

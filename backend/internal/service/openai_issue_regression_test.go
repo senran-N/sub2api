@@ -145,6 +145,50 @@ func TestPrepareOpenAIForwardRequest_OfficialCodexPreservesMissingInstructions(t
 	require.False(t, hasInstructions)
 }
 
+func TestPrepareOpenAIForwardRequest_OfficialCodexPreservesReasoningMinimal(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.117.0")
+
+	account := &Account{
+		Name:     "test-openai",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+	}
+	body := []byte(`{"model":"gpt-5.4","reasoning":{"effort":"minimal"},"input":"hello"}`)
+
+	svc := &OpenAIGatewayService{}
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", false, "", "", true, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+	require.Equal(t, "minimal", gjson.GetBytes(prepared.body, "reasoning.effort").String())
+	require.Equal(t, "minimal", prepared.reqBody["reasoning"].(map[string]any)["effort"])
+}
+
+func TestPrepareOpenAIForwardRequest_OfficialCodexPreservesNativeModelIdentifier(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.117.0")
+
+	account := &Account{
+		Name:     "test-openai",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+	}
+	body := []byte(`{"model":"codex-mini-latest","stream":true,"store":false,"input":"hello"}`)
+
+	svc := &OpenAIGatewayService{}
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "codex-mini-latest", true, "", "", true, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+	require.Equal(t, "codex-mini-latest", gjson.GetBytes(prepared.body, "model").String())
+	require.Equal(t, "codex-mini-latest", prepared.reqBody["model"])
+}
+
 func TestPrepareOpenAIForwardRequest_ForceCodexCLICompatStillInjectsInstructions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -243,12 +287,12 @@ func TestSetOpenAICompatPromptCacheSessionID_UsesIsolatedPromptCacheKey(t *testi
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
-	c.Set("api_key", &APIKey{ID: 101})
 
 	req := httptest.NewRequest(http.MethodPost, "https://chatgpt.com/backend-api/codex/responses", nil)
-	setOpenAICompatPromptCacheSessionID(c, req, "pc-shared")
+	account := &Account{ID: 101, Type: AccountTypeOAuth}
+	setOpenAICompatPromptCacheSessionID(c, account, req, "pc-shared")
 
-	isolatedPromptCacheKey := isolateOpenAISessionID(101, "pc-shared")
+	isolatedPromptCacheKey := isolateOpenAISessionID(account.ID, "pc-shared")
 	require.Equal(t, generateSessionUUID(isolatedPromptCacheKey), req.Header.Get("session_id"))
 }
 
@@ -296,7 +340,7 @@ func TestForwardAsChatCompletions_OAuthPromptCacheKeyKeepsIsolatedSessionID(t *t
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	isolatedPromptCacheKey := isolateOpenAISessionID(101, promptCacheKey)
+	isolatedPromptCacheKey := isolateOpenAISessionID(account.ID, promptCacheKey)
 	require.Equal(t, isolatedPromptCacheKey, upstream.lastReq.Header.Get("conversation_id"))
 	require.Equal(t, generateSessionUUID(isolatedPromptCacheKey), upstream.lastReq.Header.Get("session_id"))
 	require.NotEqual(t, generateSessionUUID(promptCacheKey), upstream.lastReq.Header.Get("session_id"))

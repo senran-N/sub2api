@@ -134,6 +134,16 @@ func TestOpenAIWSProtocolResolver_Resolve(t *testing.T) {
 		require.Equal(t, OpenAIUpstreamTransportHTTPSSE, decision.Transport)
 		require.Equal(t, "unknown_auth_type", decision.Reason)
 	})
+
+	t.Run("native http fallback preserves http decision", func(t *testing.T) {
+		decision := NewOpenAIWSProtocolResolver(baseCfg).ResolveWithProfile(openAIOAuthEnabled, CodexRequestProfile{
+			NativeClient:    true,
+			ClientTransport: OpenAIClientTransportHTTP,
+			WireAPI:         CodexWireAPIResponsesHTTP,
+		})
+		require.Equal(t, OpenAIUpstreamTransportHTTPSSE, decision.Transport)
+		require.Equal(t, "native_client_http", decision.Reason)
+	})
 }
 
 func TestOpenAIWSProtocolResolver_Resolve_ModeRouterV2(t *testing.T) {

@@ -21,6 +21,7 @@ type OpenAIWSProtocolDecision struct {
 // OpenAIWSProtocolResolver 定义 OpenAI 上游协议决策。
 type OpenAIWSProtocolResolver interface {
 	Resolve(account *Account) OpenAIWSProtocolDecision
+	ResolveWithProfile(account *Account, profile CodexRequestProfile) OpenAIWSProtocolDecision
 }
 
 type defaultOpenAIWSProtocolResolver struct {
@@ -33,6 +34,13 @@ func NewOpenAIWSProtocolResolver(cfg *config.Config) OpenAIWSProtocolResolver {
 }
 
 func (r *defaultOpenAIWSProtocolResolver) Resolve(account *Account) OpenAIWSProtocolDecision {
+	return r.ResolveWithProfile(account, CodexRequestProfile{})
+}
+
+func (r *defaultOpenAIWSProtocolResolver) ResolveWithProfile(account *Account, profile CodexRequestProfile) OpenAIWSProtocolDecision {
+	if profile.NativeClient && profile.ClientTransport == OpenAIClientTransportHTTP && profile.WireAPI == CodexWireAPIResponsesHTTP {
+		return openAIWSHTTPDecision("native_client_http")
+	}
 	if account == nil {
 		return openAIWSHTTPDecision("account_missing")
 	}

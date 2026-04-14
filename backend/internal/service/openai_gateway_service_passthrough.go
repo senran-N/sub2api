@@ -33,7 +33,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
 		profile := GetCodexRequestProfile(c, body, forceCodexCLI)
 		policy := NewCodexNativeMutationPolicy(profile)
-		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, policy)
+		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, account, policy)
 		if err != nil {
 			return nil, err
 		}
@@ -232,28 +232,72 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	if account.Type == AccountTypeOAuth {
 		promptCacheKey := strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
 		req.Host = "chatgpt.com"
+		req.Header.Del("accept-language")
 		if chatgptAccountID := account.GetChatGPTAccountID(); chatgptAccountID != "" {
 			req.Header.Set("chatgpt-account-id", chatgptAccountID)
 		}
-		apiKeyID := getAPIKeyIDFromContext(c)
-		sessionResolution := policy.ResolveOAuthSessionHeaders(promptCacheKey, resolveOpenAICompactSessionID(c), true)
+		sessionResolution := policy.ResolveOAuthSessionHeaders(promptCacheKey, resolveOpenAICompactSessionID(c), !profile.NativeClient)
 		if profile.CompactPath {
 			req.Header.Set("accept", policy.ResolveAccept("application/json"))
-			req.Header.Set("version", policy.ResolveVersion(codexCLIVersion))
+			req.Header.Set("version", resolveOpenAICodexUpstreamVersion(account))
 		} else {
 			req.Header.Set("accept", policy.ResolveAccept("text/event-stream"))
 		}
-		req.Header.Set("OpenAI-Beta", policy.ResolveOpenAIBeta("responses=experimental"))
-		req.Header.Set("originator", policy.ResolveOriginator())
+		req.Header.Set("OpenAI-Beta", openAICodexHTTPBetaValue)
+		req.Header.Set("originator", resolveOpenAICodexUpstreamOriginator(account))
+		isolatedSessionID := ""
 		if sessionResolution.SessionID != "" {
-			req.Header.Set("session_id", isolateOpenAISessionID(apiKeyID, sessionResolution.SessionID))
+			isolatedSessionID = resolveOpenAICodexUpstreamSessionHeaderValue(account.ID, sessionResolution.SessionID, sessionResolution.SessionSource)
+			req.Header.Set("session_id", isolatedSessionID)
 		}
 		if sessionResolution.ConversationID != "" {
-			req.Header.Set("conversation_id", isolateOpenAISessionID(apiKeyID, sessionResolution.ConversationID))
+			req.Header.Set("conversation_id", resolveOpenAICodexUpstreamSessionHeaderValue(account.ID, sessionResolution.ConversationID, sessionResolution.ConversationSource))
+		}
+		if requestID := resolveOpenAICodexUpstreamClientRequestID(account.ID, profile.Headers.ClientRequestID, isolatedSessionID); requestID != "" {
+			req.Header.Set("x-client-request-id", requestID)
+		}
+		if betaFeatures := resolveOpenAICodexUpstreamBetaFeatures(account); betaFeatures != "" {
+			req.Header.Set("x-codex-beta-features", betaFeatures)
+		} else {
+			req.Header.Del("x-codex-beta-features")
+		}
+		if turnMetadata := resolveOpenAICodexUpstreamTurnMetadata(account.ID, profile.Headers.TurnMetadata); turnMetadata != "" {
+			req.Header.Set(openAIWSTurnMetadataHeader, turnMetadata)
+		} else {
+			req.Header.Del(openAIWSTurnMetadataHeader)
+		}
+		if acceptLanguage := resolveOpenAICodexUpstreamAcceptLanguage(account); acceptLanguage != "" {
+			req.Header.Set("accept-language", acceptLanguage)
+		}
+		if windowID := resolveOpenAICodexUpstreamWindowID(account.ID); windowID != "" {
+			req.Header.Set(openAICodexMetadataWindowIDKey, windowID)
+		}
+		if subagent := resolveOpenAICodexUpstreamSubagent(profile, body); subagent != "" {
+			req.Header.Set(openAICodexMetadataSubagentKey, subagent)
+		} else {
+			req.Header.Del(openAICodexMetadataSubagentKey)
+		}
+		if parentThreadID := resolveOpenAICodexUpstreamParentThreadID(account.ID, profile, body); parentThreadID != "" {
+			req.Header.Set(openAICodexMetadataParentThreadIDKey, parentThreadID)
+		} else {
+			req.Header.Del(openAICodexMetadataParentThreadIDKey)
+		}
+		if profile.CompactPath {
+			if installationID := resolveOpenAICodexUpstreamInstallationID(account.ID); installationID != "" {
+				req.Header.Set(openAICodexMetadataInstallationIDKey, installationID)
+			}
+		} else {
+			req.Header.Del(openAICodexMetadataInstallationIDKey)
 		}
 	}
 
-	if userAgent := policy.ResolveUserAgent(account, forceCodexCLI, true); userAgent != "" {
+	userAgent := ""
+	if account != nil && account.Type == AccountTypeOAuth {
+		userAgent = resolveOpenAICodexUpstreamUserAgent(account)
+	} else {
+		userAgent = policy.ResolveUserAgent(account, forceCodexCLI, true)
+	}
+	if userAgent != "" {
 		req.Header.Set("user-agent", userAgent)
 	}
 

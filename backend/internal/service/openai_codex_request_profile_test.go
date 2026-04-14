@@ -23,6 +23,8 @@ func TestGetCodexRequestProfile_HTTPResponses(t *testing.T) {
 	c.Request.Header.Set("session_id", "session_123")
 	c.Request.Header.Set("conversation_id", "conversation_123")
 	c.Request.Header.Set("originator", "codex_cli_rs")
+	c.Request.Header.Set("x-openai-subagent", "review")
+	c.Request.Header.Set("x-codex-parent-thread-id", "thread_parent_123")
 	SetOpenAIClientTransport(c, OpenAIClientTransportHTTP)
 
 	profile := GetCodexRequestProfile(c, []byte(`{"model":"gpt-5.3-codex","stream":true,"store":false,"prompt_cache_key":"cache_123","previous_response_id":"resp_prev_123","instructions":"be concise"}`), false)
@@ -46,6 +48,8 @@ func TestGetCodexRequestProfile_HTTPResponses(t *testing.T) {
 	require.True(t, profile.Body.InstructionsPresent)
 	require.True(t, profile.Continuation.DependsOnPriorResponse)
 	require.Equal(t, OpenAIPreviousResponseIDKindResponseID, profile.Continuation.PreviousResponseIDKind)
+	require.Equal(t, "review", profile.Headers.Subagent)
+	require.Equal(t, "thread_parent_123", profile.Headers.ParentThreadID)
 }
 
 func TestGetCodexRequestProfile_CompositeOfficialUserAgentVersion(t *testing.T) {

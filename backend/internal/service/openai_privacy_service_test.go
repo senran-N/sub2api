@@ -16,6 +16,7 @@ func TestDisableOpenAITraining_UsesAPIRequestHeaders(t *testing.T) {
 		require.Equal(t, http.MethodPatch, r.Method)
 		require.Equal(t, "/backend-api/settings/account_user_setting", r.URL.Path)
 		require.Equal(t, "application/json", r.Header.Get("Accept"))
+		require.Equal(t, codexCLIUserAgent, r.Header.Get("User-Agent"))
 		require.Equal(t, "cors", r.Header.Get("sec-fetch-mode"))
 		require.Equal(t, "same-origin", r.Header.Get("sec-fetch-site"))
 		require.Equal(t, "empty", r.Header.Get("sec-fetch-dest"))

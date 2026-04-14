@@ -54,6 +54,7 @@ func disableOpenAITraining(ctx context.Context, clientFactory PrivacyClientFacto
 	resp, err := client.R().
 		SetContext(ctx).
 		SetHeader("Authorization", "Bearer "+accessToken).
+		SetHeader("User-Agent", resolveOpenAICodexUpstreamUserAgent(nil)).
 		SetHeader("Origin", "https://chatgpt.com").
 		SetHeader("Referer", "https://chatgpt.com/").
 		SetHeader("Accept", "application/json").
@@ -116,6 +117,7 @@ func fetchChatGPTAccountInfo(ctx context.Context, clientFactory PrivacyClientFac
 	resp, err := client.R().
 		SetContext(ctx).
 		SetHeader("Authorization", "Bearer "+accessToken).
+		SetHeader("User-Agent", resolveOpenAICodexUpstreamUserAgent(nil)).
 		SetHeader("Origin", "https://chatgpt.com").
 		SetHeader("Referer", "https://chatgpt.com/").
 		SetHeader("Accept", "application/json").

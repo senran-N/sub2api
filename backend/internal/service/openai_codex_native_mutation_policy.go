@@ -35,6 +35,20 @@ func (p CodexNativeMutationPolicy) ResolveOpenAIBeta(fallback string) string {
 	return strings.TrimSpace(fallback)
 }
 
+func (p CodexNativeMutationPolicy) ResolveCodexBetaFeatures() string {
+	return strings.TrimSpace(p.Profile.Headers.CodexBeta)
+}
+
+func (p CodexNativeMutationPolicy) ResolveClientRequestID(fallback string) string {
+	if value := strings.TrimSpace(p.Profile.Headers.ClientRequestID); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(fallback); value != "" {
+		return value
+	}
+	return p.ResolveRequestSessionID()
+}
+
 func (p CodexNativeMutationPolicy) ResolveOriginator() string {
 	if value := strings.TrimSpace(p.Profile.Headers.Originator); value != "" {
 		return value

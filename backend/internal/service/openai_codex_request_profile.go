@@ -39,16 +39,20 @@ const (
 
 // CodexRequestHeaderProfile captures the Codex-relevant request headers that influence forwarding and chaining.
 type CodexRequestHeaderProfile struct {
-	Accept         string
-	AcceptLanguage string
-	ConversationID string
-	OpenAIBeta     string
-	Originator     string
-	SessionID      string
-	TurnMetadata   string
-	TurnState      string
-	UserAgent      string
-	Version        string
+	Accept          string
+	AcceptLanguage  string
+	ConversationID  string
+	CodexBeta       string
+	ClientRequestID string
+	OpenAIBeta      string
+	Originator      string
+	ParentThreadID  string
+	SessionID       string
+	Subagent        string
+	TurnMetadata    string
+	TurnState       string
+	UserAgent       string
+	Version         string
 }
 
 // CodexRequestBodyProfile captures the request body signals that affect transport, mutation, and continuation.
@@ -165,9 +169,13 @@ func hashCodexRequestProfileContext(c *gin.Context) uint64 {
 		"Accept",
 		"Accept-Language",
 		"conversation_id",
+		"x-codex-beta-features",
+		"x-client-request-id",
+		openAICodexMetadataParentThreadIDKey,
 		"OpenAI-Beta",
 		"originator",
 		"session_id",
+		openAICodexMetadataSubagentKey,
 		openAIWSTurnMetadataHeader,
 		openAIWSTurnStateHeader,
 		"User-Agent",
@@ -181,16 +189,20 @@ func hashCodexRequestProfileContext(c *gin.Context) uint64 {
 
 func buildCodexRequestProfile(c *gin.Context, body []byte, forceCodexCLI bool) CodexRequestProfile {
 	headers := CodexRequestHeaderProfile{
-		Accept:         getTrimmedCodexRequestHeader(c, "Accept"),
-		AcceptLanguage: getTrimmedCodexRequestHeader(c, "Accept-Language"),
-		ConversationID: getTrimmedCodexRequestHeader(c, "conversation_id"),
-		OpenAIBeta:     getTrimmedCodexRequestHeader(c, "OpenAI-Beta"),
-		Originator:     getTrimmedCodexRequestHeader(c, "originator"),
-		SessionID:      getTrimmedCodexRequestHeader(c, "session_id"),
-		TurnMetadata:   getTrimmedCodexRequestHeader(c, openAIWSTurnMetadataHeader),
-		TurnState:      getTrimmedCodexRequestHeader(c, openAIWSTurnStateHeader),
-		UserAgent:      getTrimmedCodexRequestHeader(c, "User-Agent"),
-		Version:        getTrimmedCodexRequestHeader(c, "version"),
+		Accept:          getTrimmedCodexRequestHeader(c, "Accept"),
+		AcceptLanguage:  getTrimmedCodexRequestHeader(c, "Accept-Language"),
+		ConversationID:  getTrimmedCodexRequestHeader(c, "conversation_id"),
+		CodexBeta:       getTrimmedCodexRequestHeader(c, "x-codex-beta-features"),
+		ClientRequestID: getTrimmedCodexRequestHeader(c, "x-client-request-id"),
+		OpenAIBeta:      getTrimmedCodexRequestHeader(c, "OpenAI-Beta"),
+		Originator:      getTrimmedCodexRequestHeader(c, "originator"),
+		ParentThreadID:  getTrimmedCodexRequestHeader(c, openAICodexMetadataParentThreadIDKey),
+		SessionID:       getTrimmedCodexRequestHeader(c, "session_id"),
+		Subagent:        getTrimmedCodexRequestHeader(c, openAICodexMetadataSubagentKey),
+		TurnMetadata:    getTrimmedCodexRequestHeader(c, openAIWSTurnMetadataHeader),
+		TurnState:       getTrimmedCodexRequestHeader(c, openAIWSTurnStateHeader),
+		UserAgent:       getTrimmedCodexRequestHeader(c, "User-Agent"),
+		Version:         getTrimmedCodexRequestHeader(c, "version"),
 	}
 	officialClient, officialReason := detectCodexOfficialClient(headers.UserAgent, headers.Originator, forceCodexCLI)
 	nativeClient := officialClient && officialReason != CodexOfficialClientReasonForceCodexCLI

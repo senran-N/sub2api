@@ -402,8 +402,9 @@ func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, p
 	return meta.Model, meta.Stream, meta.PromptCacheKey
 }
 
-// normalizeOpenAIPassthroughOAuthBody 将透传 OAuth 请求体收敛为旧链路关键行为。
-func normalizeOpenAIPassthroughOAuthBody(body []byte, policy CodexNativeMutationPolicy) ([]byte, bool, error) {
+// normalizeOpenAIPassthroughOAuthBody 将透传 OAuth 请求体收敛为旧链路关键行为，
+// 并移除会暴露下游设备/窗口/请求身份的原始 Codex 标识。
+func normalizeOpenAIPassthroughOAuthBody(body []byte, account *Account, policy CodexNativeMutationPolicy) ([]byte, bool, error) {
 	if len(body) == 0 {
 		return body, false, nil
 	}
@@ -453,6 +454,21 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, policy CodexNativeMutation
 			next, err := sjson.SetBytes(normalized, "instructions", defaultOpenAICodexInstructions)
 			if err != nil {
 				return body, false, fmt.Errorf("normalize passthrough body default instructions: %w", err)
+			}
+			normalized = next
+			changed = true
+		}
+	}
+
+	if account != nil && account.Type == AccountTypeOAuth && account.ID > 0 {
+		reqBody := make(map[string]any)
+		if err := json.Unmarshal(normalized, &reqBody); err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body parse identity fields: %w", err)
+		}
+		if rewriteOpenAICodexBodyIdentityMap(account.ID, reqBody) {
+			next, err := json.Marshal(reqBody)
+			if err != nil {
+				return body, false, fmt.Errorf("normalize passthrough body rewrite identity fields: %w", err)
 			}
 			normalized = next
 			changed = true

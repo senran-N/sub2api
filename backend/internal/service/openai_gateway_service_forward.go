@@ -38,6 +38,7 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
 	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
 	policy := NewCodexNativeMutationPolicy(profile)
+	preserveNativeRequestBody := policy.Profile.NativeClient
 
 	reqBody, err := getOpenAIRequestBodyMap(c, body)
 	if err != nil {
@@ -129,6 +130,9 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 
 	if model, ok := reqBody["model"].(string); ok {
 		normalizedModel := normalizeOpenAIModelForUpstream(account, model)
+		if preserveNativeRequestBody {
+			normalizedModel = strings.TrimSpace(model)
+		}
 		if normalizedModel != "" && normalizedModel != model {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex model normalization: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
 				model, normalizedModel, account.Name, account.Type, isCodexCLI)
@@ -145,12 +149,14 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 		}
 	}
 
-	if reasoning, ok := reqBody["reasoning"].(map[string]any); ok {
-		if effort, ok := reasoning["effort"].(string); ok && effort == "minimal" {
-			reasoning["effort"] = "none"
-			bodyModified = true
-			markPatchSet("reasoning.effort", "none")
-			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized reasoning.effort: minimal -> none (account: %s)", account.Name)
+	if !preserveNativeRequestBody {
+		if reasoning, ok := reqBody["reasoning"].(map[string]any); ok {
+			if effort, ok := reasoning["effort"].(string); ok && effort == "minimal" {
+				reasoning["effort"] = "none"
+				bodyModified = true
+				markPatchSet("reasoning.effort", "none")
+				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized reasoning.effort: minimal -> none (account: %s)", account.Name)
+			}
 		}
 	}
 
@@ -165,6 +171,13 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 		}
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
+		}
+		if rewriteOpenAICodexBodyIdentityMap(account.ID, reqBody) {
+			bodyModified = true
+			disablePatch()
+			if value, ok := reqBody["prompt_cache_key"].(string); ok {
+				promptCacheKey = strings.TrimSpace(value)
+			}
 		}
 	}
 

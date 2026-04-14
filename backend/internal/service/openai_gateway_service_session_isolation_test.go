@@ -19,10 +19,10 @@ func TestIsolateOpenAISessionID(t *testing.T) {
 		assert.Equal(t, a, b)
 	})
 
-	t.Run("different_apiKeyID_different_result", func(t *testing.T) {
+	t.Run("different_accountID_different_result", func(t *testing.T) {
 		a := isolateOpenAISessionID(1, "same_session")
 		b := isolateOpenAISessionID(2, "same_session")
-		require.NotEqual(t, a, b, "不同 API Key 使用相同 session_id 应产生不同隔离值")
+		require.NotEqual(t, a, b, "不同账号使用相同 session_id 应产生不同隔离值")
 	})
 
 	t.Run("different_raw_different_result", func(t *testing.T) {
@@ -40,10 +40,10 @@ func TestIsolateOpenAISessionID(t *testing.T) {
 		}
 	})
 
-	t.Run("zero_apiKeyID_still_works", func(t *testing.T) {
+	t.Run("zero_accountID_still_works", func(t *testing.T) {
 		result := isolateOpenAISessionID(0, "session")
 		assert.NotEmpty(t, result)
-		// apiKeyID=0 与 apiKeyID=1 应产生不同结果
+		// accountID=0 与 accountID=1 应产生不同结果
 		other := isolateOpenAISessionID(1, "session")
 		assert.NotEqual(t, result, other)
 	})

@@ -84,17 +84,20 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	if account != nil && account.Type == AccountTypeOAuth {
 		sessionResolution = policy.ResolveOAuthSessionHeaders(promptCacheKey, "", false)
 	}
-	if acceptLanguage := policy.ResolveAcceptLanguage(); acceptLanguage != "" {
+	if acceptLanguage := policy.ResolveAcceptLanguage(); acceptLanguage != "" && (account == nil || account.Type != AccountTypeOAuth) {
 		headers.Set("accept-language", acceptLanguage)
 	}
-	// OAuth 账号：将 apiKeyID 混入 session 标识符，防止跨用户会话碰撞。
 	if account != nil && account.Type == AccountTypeOAuth {
-		apiKeyID := getAPIKeyIDFromContext(c)
+		isolatedSessionID := ""
 		if sessionResolution.SessionID != "" {
-			headers.Set("session_id", isolateOpenAISessionID(apiKeyID, sessionResolution.SessionID))
+			isolatedSessionID = resolveOpenAICodexUpstreamSessionHeaderValue(account.ID, sessionResolution.SessionID, sessionResolution.SessionSource)
+			headers.Set("session_id", isolatedSessionID)
 		}
 		if sessionResolution.ConversationID != "" {
-			headers.Set("conversation_id", isolateOpenAISessionID(apiKeyID, sessionResolution.ConversationID))
+			headers.Set("conversation_id", resolveOpenAICodexUpstreamSessionHeaderValue(account.ID, sessionResolution.ConversationID, sessionResolution.ConversationSource))
+		}
+		if requestID := resolveOpenAICodexUpstreamClientRequestID(account.ID, profile.Headers.ClientRequestID, isolatedSessionID); requestID != "" {
+			headers.Set("x-client-request-id", requestID)
 		}
 	} else {
 		if sessionResolution.SessionID != "" {
@@ -103,11 +106,18 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 		if sessionResolution.ConversationID != "" {
 			headers.Set("conversation_id", sessionResolution.ConversationID)
 		}
+		if requestID := policy.ResolveClientRequestID(sessionResolution.SessionID); requestID != "" {
+			headers.Set("x-client-request-id", requestID)
+		}
 	}
 	if state := strings.TrimSpace(turnState); state != "" {
 		headers.Set(openAIWSTurnStateHeader, state)
 	}
-	if metadata := strings.TrimSpace(turnMetadata); metadata != "" {
+	metadataValue := strings.TrimSpace(turnMetadata)
+	if account != nil && account.Type == AccountTypeOAuth {
+		metadataValue = resolveOpenAICodexUpstreamTurnMetadata(account.ID, metadataValue)
+	}
+	if metadata := strings.TrimSpace(metadataValue); metadata != "" {
 		headers.Set(openAIWSTurnMetadataHeader, metadata)
 	}
 
@@ -115,16 +125,49 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 		if chatgptAccountID := account.GetChatGPTAccountID(); chatgptAccountID != "" {
 			headers.Set("chatgpt-account-id", chatgptAccountID)
 		}
-		headers.Set("originator", policy.ResolveOriginator())
+		headers.Set("originator", resolveOpenAICodexUpstreamOriginator(account))
+		if acceptLanguage := resolveOpenAICodexUpstreamAcceptLanguage(account); acceptLanguage != "" {
+			headers.Set("accept-language", acceptLanguage)
+		} else {
+			headers.Del("accept-language")
+		}
+		if windowID := resolveOpenAICodexUpstreamWindowID(account.ID); windowID != "" {
+			headers.Set(openAICodexMetadataWindowIDKey, windowID)
+		}
+		if subagent := resolveOpenAICodexUpstreamSubagent(profile, nil); subagent != "" {
+			headers.Set(openAICodexMetadataSubagentKey, subagent)
+		} else {
+			headers.Del(openAICodexMetadataSubagentKey)
+		}
+		if parentThreadID := resolveOpenAICodexUpstreamParentThreadID(account.ID, profile, nil); parentThreadID != "" {
+			headers.Set(openAICodexMetadataParentThreadIDKey, parentThreadID)
+		} else {
+			headers.Del(openAICodexMetadataParentThreadIDKey)
+		}
 	}
 
 	betaValue := openAIWSBetaV2Value
 	if decision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
 		betaValue = openAIWSBetaV1Value
 	}
-	headers.Set("OpenAI-Beta", policy.ResolveOpenAIBeta(betaValue))
+	if account != nil && account.Type == AccountTypeOAuth {
+		headers.Set("OpenAI-Beta", betaValue)
+	} else {
+		headers.Set("OpenAI-Beta", policy.ResolveOpenAIBeta(betaValue))
+	}
+	if betaFeatures := resolveOpenAICodexUpstreamBetaFeatures(account); betaFeatures != "" {
+		headers.Set("x-codex-beta-features", betaFeatures)
+	} else {
+		headers.Del("x-codex-beta-features")
+	}
 
-	if userAgent := policy.ResolveUserAgent(account, forceCodexCLI, true); userAgent != "" {
+	userAgent := ""
+	if account != nil && account.Type == AccountTypeOAuth {
+		userAgent = resolveOpenAICodexUpstreamUserAgent(account)
+	} else {
+		userAgent = policy.ResolveUserAgent(account, forceCodexCLI, true)
+	}
+	if userAgent != "" {
 		headers.Set("user-agent", userAgent)
 	}
 

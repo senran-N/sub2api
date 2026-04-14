@@ -80,6 +80,7 @@ func TestOpenAIOAuthService_RefreshTokenWithClientID_RefreshesPlanTypeFromBacken
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/backend-api/accounts/check/v4-2023-04-27", r.URL.Path)
 		require.Equal(t, "Bearer access-token-1", r.Header.Get("Authorization"))
+		require.Equal(t, codexCLIUserAgent, r.Header.Get("User-Agent"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"accounts":{"org-live":{"account":{"plan_type":"team","is_default":true}}}}`))
 	}))

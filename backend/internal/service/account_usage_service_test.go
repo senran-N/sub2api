@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 type accountUsageCodexProbeRepo struct {
@@ -198,4 +200,100 @@ func TestBuildCodexUsageProgressFromExtra_ZerosExpiredWindow(t *testing.T) {
 			t.Fatalf("expected Utilization=0 for expired 7d window, got %v", progress.Utilization)
 		}
 	})
+}
+
+func TestAccountUsageService_BuildOpenAICodexProbeRequestUsesStablePersona(t *testing.T) {
+	t.Parallel()
+
+	svc := &AccountUsageService{
+		identityCache: &identityCacheStub{
+			fingerprint: &Fingerprint{UserAgent: "leaked-local-client/9.9"},
+		},
+	}
+	account := &Account{
+		ID:       42,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"chatgpt_account_id": "chatgpt-acc",
+		},
+	}
+
+	req, err := svc.buildOpenAICodexProbeRequest(context.Background(), account, "access-token", []byte(`{"model":"gpt-5"}`))
+	require.NoError(t, err)
+	require.Equal(t, "chatgpt.com", req.Host)
+	require.Equal(t, "Bearer access-token", req.Header.Get("Authorization"))
+	require.Equal(t, "text/event-stream", req.Header.Get("Accept"))
+	require.Equal(t, openAICodexHTTPBetaValue, req.Header.Get("OpenAI-Beta"))
+	require.Equal(t, "codex_cli_rs", req.Header.Get("Originator"))
+	require.Empty(t, req.Header.Get("Version"))
+	require.Equal(t, codexCLIUserAgent, req.Header.Get("User-Agent"))
+	require.Equal(t, "chatgpt-acc", req.Header.Get("chatgpt-account-id"))
+	require.Empty(t, req.Header.Get("Accept-Language"))
+	require.Empty(t, req.Header.Get("x-codex-beta-features"))
+}
+
+func TestNewOpenAICodexOAuthResponsesRequestHonorsAccountOverrides(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		ID:       7,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"user_agent":          "Codex Desktop/0.200.0 (Windows 10.0.19045; x86_64)",
+			"originator":          "codex_vscode",
+			"version":             "v0.200.0",
+			"accept_language":     "en-US",
+			"codex_beta_features": "feature_a,feature_b",
+		},
+	}
+
+	req, err := newOpenAICodexOAuthResponsesRequest(context.Background(), chatgptCodexURL, "token", []byte(`{}`), "application/json", account)
+	require.NoError(t, err)
+	require.Equal(t, "application/json", req.Header.Get("Accept"))
+	require.Equal(t, "codex_cli_rs/0.200.0", req.Header.Get("User-Agent"))
+	require.Equal(t, "codex_cli_rs", req.Header.Get("Originator"))
+	require.Empty(t, req.Header.Get("Version"))
+	require.Equal(t, "en-US", req.Header.Get("Accept-Language"))
+	require.Equal(t, "feature_a,feature_b", req.Header.Get("x-codex-beta-features"))
+	require.Equal(t, openAICodexHTTPBetaValue, req.Header.Get("OpenAI-Beta"))
+}
+
+func TestNewOpenAICodexOAuthResponsesRequestCompactSetsVersion(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		ID:       8,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"version": "0.210.0",
+		},
+	}
+
+	req, err := newOpenAICodexOAuthResponsesRequest(context.Background(), chatgptCodexURL+"/compact", "token", []byte(`{}`), "application/json", account)
+	require.NoError(t, err)
+	require.Equal(t, "0.210.0", req.Header.Get("Version"))
+}
+
+func TestNewOpenAICodexOAuthResponsesRequestIgnoresNonOfficialOverrideFingerprint(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		ID:       9,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"user_agent": "Mozilla/5.0 CustomApp/9.9",
+			"originator": "custom_desktop",
+			"version":    "not-a-version",
+		},
+	}
+
+	req, err := newOpenAICodexOAuthResponsesRequest(context.Background(), chatgptCodexURL+"/compact", "token", []byte(`{}`), "application/json", account)
+	require.NoError(t, err)
+	require.Equal(t, codexCLIUserAgent, req.Header.Get("User-Agent"))
+	require.Equal(t, "codex_cli_rs", req.Header.Get("Originator"))
+	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
 }
