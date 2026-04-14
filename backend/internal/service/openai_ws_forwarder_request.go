@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/tidwall/gjson"
 )
 
@@ -67,6 +66,11 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	turnMetadata string,
 	promptCacheKey string,
 ) (http.Header, openAIWSSessionHeaderResolution) {
+	_ = isCodexCLI
+	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+	profile := GetCodexRequestProfile(c, nil, forceCodexCLI)
+	policy := NewCodexNativeMutationPolicy(profile)
+
 	headers := make(http.Header)
 	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
 	if account != nil && (account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream) {
@@ -79,10 +83,11 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	upstreamTarget.ApplyAuthHeader(headers, token)
 
 	sessionResolution := resolveOpenAIWSSessionHeaders(c, promptCacheKey)
-	if c != nil && c.Request != nil {
-		if v := strings.TrimSpace(c.Request.Header.Get("accept-language")); v != "" {
-			headers.Set("accept-language", v)
-		}
+	if account != nil && account.Type == AccountTypeOAuth {
+		sessionResolution = policy.ResolveOAuthSessionHeaders(promptCacheKey, "", false)
+	}
+	if acceptLanguage := policy.ResolveAcceptLanguage(); acceptLanguage != "" {
+		headers.Set("accept-language", acceptLanguage)
 	}
 	// OAuth 账号：将 apiKeyID 混入 session 标识符，防止跨用户会话碰撞。
 	if account != nil && account.Type == AccountTypeOAuth {
@@ -112,31 +117,17 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 		if chatgptAccountID := account.GetChatGPTAccountID(); chatgptAccountID != "" {
 			headers.Set("chatgpt-account-id", chatgptAccountID)
 		}
-		headers.Set("originator", resolveOpenAIUpstreamOriginator(c, isCodexCLI))
+		headers.Set("originator", policy.ResolveOriginator())
 	}
 
 	betaValue := openAIWSBetaV2Value
 	if decision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
 		betaValue = openAIWSBetaV1Value
 	}
-	headers.Set("OpenAI-Beta", betaValue)
+	headers.Set("OpenAI-Beta", policy.ResolveOpenAIBeta(betaValue))
 
-	customUA := ""
-	if account != nil {
-		customUA = account.GetOpenAIUserAgent()
-	}
-	if strings.TrimSpace(customUA) != "" {
-		headers.Set("user-agent", customUA)
-	} else if c != nil {
-		if ua := strings.TrimSpace(c.GetHeader("User-Agent")); ua != "" {
-			headers.Set("user-agent", ua)
-		}
-	}
-	if s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
-		headers.Set("user-agent", codexCLIUserAgent)
-	}
-	if account != nil && account.Type == AccountTypeOAuth && !openai.IsCodexCLIRequest(headers.Get("user-agent")) {
-		headers.Set("user-agent", codexCLIUserAgent)
+	if userAgent := policy.ResolveUserAgent(account, forceCodexCLI, true); userAgent != "" {
+		headers.Set("user-agent", userAgent)
 	}
 
 	return headers, sessionResolution

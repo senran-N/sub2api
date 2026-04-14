@@ -14,7 +14,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
-	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
@@ -31,7 +30,10 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
 	if account != nil && account.Type == AccountTypeOAuth {
-		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, isOpenAIResponsesCompactPath(c))
+		forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+		profile := GetCodexRequestProfile(c, body, forceCodexCLI)
+		policy := NewCodexNativeMutationPolicy(profile)
+		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, policy)
 		if err != nil {
 			return nil, err
 		}
@@ -167,6 +169,10 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	body []byte,
 	token string,
 ) (*http.Request, error) {
+	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
+	policy := NewCodexNativeMutationPolicy(profile)
+
 	targetURL := openaiPlatformAPIURL
 	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
 	switch account.Type {
@@ -229,48 +235,25 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 			req.Header.Set("chatgpt-account-id", chatgptAccountID)
 		}
 		apiKeyID := getAPIKeyIDFromContext(c)
-		clientSessionID := strings.TrimSpace(req.Header.Get("session_id"))
-		clientConversationID := strings.TrimSpace(req.Header.Get("conversation_id"))
-		if isOpenAIResponsesCompactPath(c) {
-			req.Header.Set("accept", "application/json")
-			if req.Header.Get("version") == "" {
-				req.Header.Set("version", codexCLIVersion)
-			}
-			if clientSessionID == "" {
-				clientSessionID = resolveOpenAICompactSessionID(c)
-			}
-		} else if req.Header.Get("accept") == "" {
-			req.Header.Set("accept", "text/event-stream")
+		sessionResolution := policy.ResolveOAuthSessionHeaders(promptCacheKey, resolveOpenAICompactSessionID(c), true)
+		if profile.CompactPath {
+			req.Header.Set("accept", policy.ResolveAccept("application/json"))
+			req.Header.Set("version", policy.ResolveVersion(codexCLIVersion))
+		} else {
+			req.Header.Set("accept", policy.ResolveAccept("text/event-stream"))
 		}
-		if req.Header.Get("OpenAI-Beta") == "" {
-			req.Header.Set("OpenAI-Beta", "responses=experimental")
+		req.Header.Set("OpenAI-Beta", policy.ResolveOpenAIBeta("responses=experimental"))
+		req.Header.Set("originator", policy.ResolveOriginator())
+		if sessionResolution.SessionID != "" {
+			req.Header.Set("session_id", isolateOpenAISessionID(apiKeyID, sessionResolution.SessionID))
 		}
-		if req.Header.Get("originator") == "" {
-			req.Header.Set("originator", "codex_cli_rs")
-		}
-		if clientSessionID == "" {
-			clientSessionID = promptCacheKey
-		}
-		if clientConversationID == "" {
-			clientConversationID = promptCacheKey
-		}
-		if clientSessionID != "" {
-			req.Header.Set("session_id", isolateOpenAISessionID(apiKeyID, clientSessionID))
-		}
-		if clientConversationID != "" {
-			req.Header.Set("conversation_id", isolateOpenAISessionID(apiKeyID, clientConversationID))
+		if sessionResolution.ConversationID != "" {
+			req.Header.Set("conversation_id", isolateOpenAISessionID(apiKeyID, sessionResolution.ConversationID))
 		}
 	}
 
-	customUA := account.GetOpenAIUserAgent()
-	if customUA != "" {
-		req.Header.Set("user-agent", customUA)
-	}
-	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
-		req.Header.Set("user-agent", codexCLIUserAgent)
-	}
-	if account.Type == AccountTypeOAuth && !openai.IsCodexCLIRequest(req.Header.Get("user-agent")) {
-		req.Header.Set("user-agent", codexCLIUserAgent)
+	if userAgent := policy.ResolveUserAgent(account, forceCodexCLI, true); userAgent != "" {
+		req.Header.Set("user-agent", userAgent)
 	}
 
 	if req.Header.Get("content-type") == "" {

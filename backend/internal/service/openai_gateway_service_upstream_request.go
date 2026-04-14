@@ -20,6 +20,10 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 	isCodexCLI bool,
 ) (*http.Request, error) {
 	_ = isStream
+	_ = isCodexCLI
+	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
+	policy := NewCodexNativeMutationPolicy(profile)
 
 	var targetURL string
 	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
@@ -75,31 +79,26 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 		req.Header.Del("conversation_id")
 		req.Header.Del("session_id")
 
-		req.Header.Set("OpenAI-Beta", "responses=experimental")
-		req.Header.Set("originator", resolveOpenAIUpstreamOriginator(c, isCodexCLI))
 		apiKeyID := getAPIKeyIDFromContext(c)
-		if isOpenAIResponsesCompactPath(c) {
-			req.Header.Set("accept", "application/json")
-			if req.Header.Get("version") == "" {
-				req.Header.Set("version", codexCLIVersion)
-			}
-			compactSession := resolveOpenAICompactSessionID(c)
-			req.Header.Set("session_id", isolateOpenAISessionID(apiKeyID, compactSession))
+		sessionResolution := policy.ResolveOAuthSessionHeaders(promptCacheKey, resolveOpenAICompactSessionID(c), true)
+		req.Header.Set("OpenAI-Beta", policy.ResolveOpenAIBeta("responses=experimental"))
+		req.Header.Set("originator", policy.ResolveOriginator())
+		if profile.CompactPath {
+			req.Header.Set("accept", policy.ResolveAccept("application/json"))
+			req.Header.Set("version", policy.ResolveVersion(codexCLIVersion))
 		} else {
-			req.Header.Set("accept", "text/event-stream")
+			req.Header.Set("accept", policy.ResolveAccept("text/event-stream"))
 		}
-		if promptCacheKey != "" {
-			isolated := isolateOpenAISessionID(apiKeyID, promptCacheKey)
-			req.Header.Set("conversation_id", isolated)
-			req.Header.Set("session_id", isolated)
+		if sessionResolution.SessionID != "" {
+			req.Header.Set("session_id", isolateOpenAISessionID(apiKeyID, sessionResolution.SessionID))
+		}
+		if sessionResolution.ConversationID != "" {
+			req.Header.Set("conversation_id", isolateOpenAISessionID(apiKeyID, sessionResolution.ConversationID))
 		}
 	}
 
-	if customUA := account.GetOpenAIUserAgent(); customUA != "" {
-		req.Header.Set("user-agent", customUA)
-	}
-	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
-		req.Header.Set("user-agent", codexCLIUserAgent)
+	if userAgent := policy.ResolveUserAgent(account, forceCodexCLI, false); userAgent != "" {
+		req.Header.Set("user-agent", userAgent)
 	}
 	if req.Header.Get("content-type") == "" {
 		req.Header.Set("content-type", "application/json")

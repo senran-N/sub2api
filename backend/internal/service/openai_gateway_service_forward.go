@@ -35,6 +35,10 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 	isCodexCLI bool,
 	wsDecision OpenAIWSProtocolDecision,
 ) (*openAIForwardPreparedRequest, error) {
+	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
+	policy := NewCodexNativeMutationPolicy(profile)
+
 	reqBody, err := getOpenAIRequestBodyMap(c, body)
 	if err != nil {
 		return nil, err
@@ -151,7 +155,7 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 	}
 
 	if account.Type == AccountTypeOAuth {
-		codexResult := applyCodexOAuthTransform(reqBody, isCodexCLI, isOpenAIResponsesCompactPath(c))
+		codexResult := applyCodexOAuthTransform(reqBody, policy.Profile.OfficialClient, policy.Profile.CompactPath)
 		if codexResult.Modified {
 			bodyModified = true
 			disablePatch()
