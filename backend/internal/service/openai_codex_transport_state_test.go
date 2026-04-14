@@ -160,11 +160,11 @@ func TestBindCodexSessionTransport_IgnoresWarmup(t *testing.T) {
 	store := NewOpenAIWSStateStore(nil)
 	svc := &OpenAIGatewayService{cfg: &config.Config{}}
 
-	svc.bindCodexSessionTransport(store, 91, "session_hash_warmup", OpenAIUpstreamTransportResponsesWebsocketV2, true)
+	svc.bindCodexSessionTransport(store, 91, "session_hash_warmup", OpenAIUpstreamTransportResponsesWebsocketV2, true, true)
 	_, ok := store.GetSessionTransport(91, "session_hash_warmup")
 	require.False(t, ok)
 
-	svc.bindCodexSessionTransport(store, 91, "session_hash_warmup", OpenAIUpstreamTransportResponsesWebsocketV2, false)
+	svc.bindCodexSessionTransport(store, 91, "session_hash_warmup", OpenAIUpstreamTransportResponsesWebsocketV2, false, true)
 	transport, ok := store.GetSessionTransport(91, "session_hash_warmup")
 	require.True(t, ok)
 	require.Equal(t, OpenAIUpstreamTransportResponsesWebsocketV2, transport)
@@ -174,12 +174,31 @@ func TestBindCodexSessionTransport_MarksHTTPFallbackDowngrade(t *testing.T) {
 	store := NewOpenAIWSStateStore(nil)
 	svc := &OpenAIGatewayService{cfg: &config.Config{}}
 
-	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportResponsesWebsocketV2, false)
+	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportResponsesWebsocketV2, false, true)
 	require.False(t, store.HasSessionTransportFallback(91, "session_hash_transport_fb"))
 
-	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportHTTPSSE, false)
+	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportHTTPSSE, false, true)
 	require.True(t, store.HasSessionTransportFallback(91, "session_hash_transport_fb"))
 
-	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportResponsesWebsocketV2, false)
+	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportResponsesWebsocketV2, false, true)
 	require.False(t, store.HasSessionTransportFallback(91, "session_hash_transport_fb"))
+}
+
+func TestBindCodexSessionTransport_NonOfficialMetricsSkipped(t *testing.T) {
+	store := NewOpenAIWSStateStore(nil)
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	before := SnapshotOpenAICodexCompatibilityMetrics()
+
+	svc.bindCodexSessionTransport(store, 91, "session_hash_non_official", OpenAIUpstreamTransportResponsesWebsocketV2, false, false)
+	svc.bindCodexSessionTransport(store, 91, "session_hash_non_official", OpenAIUpstreamTransportHTTPSSE, false, false)
+
+	transport, ok := store.GetSessionTransport(91, "session_hash_non_official")
+	require.True(t, ok)
+	require.Equal(t, OpenAIUpstreamTransportHTTPSSE, transport)
+	require.True(t, store.HasSessionTransportFallback(91, "session_hash_non_official"))
+
+	after := SnapshotOpenAICodexCompatibilityMetrics()
+	require.Equal(t, before.SessionTransportBindWSTotal, after.SessionTransportBindWSTotal)
+	require.Equal(t, before.SessionTransportBindHTTPTotal, after.SessionTransportBindHTTPTotal)
+	require.Equal(t, before.SessionTransportHTTPDowngradeTotal, after.SessionTransportHTTPDowngradeTotal)
 }

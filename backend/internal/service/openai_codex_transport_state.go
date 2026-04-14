@@ -18,21 +18,22 @@ const (
 // CodexTransportState captures the resolved transport/continuation state shared by
 // HTTP-triggered WS forwarding and WS ingress turn bootstrap.
 type CodexTransportState struct {
-	FallbackCooling          bool
-	ForceNewConn             bool
-	GroupID                  int64
-	HasExplicitContinuation  bool
-	PreferredConnID          string
-	PreferredConnSource      string
-	PreferredHTTPFallback    bool
-	PreferredTransport       OpenAIUpstreamTransport
-	PreferredTransportSource string
-	SessionHash              string
-	StoreDisabled            bool
-	StoreDisabledConnMode    string
-	TurnState                string
-	TurnStateRestored        bool
-	Warmup                   bool
+	FallbackCooling           bool
+	ForceNewConn              bool
+	GroupID                   int64
+	HasExplicitContinuation   bool
+	PreferredConnID           string
+	PreferredConnSource       string
+	TrackCompatibilityMetrics bool
+	PreferredHTTPFallback     bool
+	PreferredTransport        OpenAIUpstreamTransport
+	PreferredTransportSource  string
+	SessionHash               string
+	StoreDisabled             bool
+	StoreDisabledConnMode     string
+	TurnState                 string
+	TurnStateRestored         bool
+	Warmup                    bool
 }
 
 type codexTransportStateInput struct {
@@ -60,12 +61,11 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 	}
 
 	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
-	if len(input.Body) > 0 {
-		profile := GetCodexRequestProfile(c, input.Body, forceCodexCLI)
-		state.Warmup = profile.Warmup
-		if profile.OfficialClient && state.Warmup {
-			recordOpenAICodexTransportWarmup()
-		}
+	profile := GetCodexRequestProfile(c, input.Body, forceCodexCLI)
+	state.TrackCompatibilityMetrics = profile.OfficialClient
+	state.Warmup = profile.Warmup
+	if state.TrackCompatibilityMetrics && state.Warmup {
+		recordOpenAICodexTransportWarmup()
 	}
 
 	if input.PreferIngressSession {
@@ -92,9 +92,11 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 		state.PreferredTransport = preferredTransport
 		state.PreferredTransportSource = codexTransportPreferredTransportSourceSession
 		state.PreferredHTTPFallback = preferredTransport == OpenAIUpstreamTransportHTTPSSE && stateStore.HasSessionTransportFallback(state.GroupID, state.SessionHash)
-		recordOpenAICodexSessionPreferredTransportHit(preferredTransport, state.PreferredHTTPFallback)
+		if state.TrackCompatibilityMetrics {
+			recordOpenAICodexSessionPreferredTransportHit(preferredTransport, state.PreferredHTTPFallback)
+		}
 	}
-	if state.FallbackCooling {
+	if state.TrackCompatibilityMetrics && state.FallbackCooling {
 		recordOpenAICodexTransportFallbackCoolingHit()
 	}
 
@@ -135,12 +137,15 @@ func (s *OpenAIGatewayService) bindCodexSessionTransport(
 	sessionHash string,
 	transport OpenAIUpstreamTransport,
 	warmup bool,
+	trackCompatibilityMetrics bool,
 ) {
 	if s == nil || store == nil {
 		return
 	}
 	if warmup {
-		recordOpenAICodexSessionTransportBind(transport, true, false)
+		if trackCompatibilityMetrics {
+			recordOpenAICodexSessionTransportBind(transport, true, false)
+		}
 		return
 	}
 	normalizedSessionHash := strings.TrimSpace(sessionHash)
@@ -162,7 +167,9 @@ func (s *OpenAIGatewayService) bindCodexSessionTransport(
 		store.ClearSessionTransportFallback(groupID, normalizedSessionHash)
 	}
 	store.BindSessionTransport(groupID, normalizedSessionHash, normalizedTransport, s.openAIWSSessionStickyTTL())
-	recordOpenAICodexSessionTransportBind(normalizedTransport, false, httpDowngrade)
+	if trackCompatibilityMetrics {
+		recordOpenAICodexSessionTransportBind(normalizedTransport, false, httpDowngrade)
+	}
 }
 
 func (s *OpenAIGatewayService) bindCodexSessionTransportFromBody(
@@ -183,7 +190,7 @@ func (s *OpenAIGatewayService) bindCodexSessionTransportFromBody(
 		return
 	}
 	sessionHash := s.GenerateSessionHash(c, body)
-	s.bindCodexSessionTransport(store, getOpenAIGroupIDFromContext(c), sessionHash, transport, false)
+	s.bindCodexSessionTransport(store, getOpenAIGroupIDFromContext(c), sessionHash, transport, false, true)
 }
 
 func (s *OpenAIGatewayService) resolveCodexPreferredTransport(

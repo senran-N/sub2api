@@ -16,29 +16,30 @@ import (
 )
 
 type openAIWSForwardRelayRequest struct {
-	ctx                  context.Context
-	c                    *gin.Context
-	account              *Account
-	lease                *openAIWSConnLease
-	payload              map[string]any
-	payloadBytes         int
-	reqBody              map[string]any
-	originalModel        string
-	mappedModel          string
-	reqStream            bool
-	debugEnabled         bool
-	previousResponseID   string
-	previousResponseKind string
-	sessionResolution    openAIWSSessionHeaderResolution
-	wsHeaders            http.Header
-	storeDisabled        bool
-	stateStore           OpenAIWSStateStore
-	groupID              int64
-	sessionHash          string
-	turnState            string
-	promptCacheKey       string
-	startTime            time.Time
-	warmup               bool
+	ctx                       context.Context
+	c                         *gin.Context
+	account                   *Account
+	lease                     *openAIWSConnLease
+	payload                   map[string]any
+	payloadBytes              int
+	reqBody                   map[string]any
+	originalModel             string
+	mappedModel               string
+	reqStream                 bool
+	debugEnabled              bool
+	previousResponseID        string
+	previousResponseKind      string
+	sessionResolution         openAIWSSessionHeaderResolution
+	wsHeaders                 http.Header
+	storeDisabled             bool
+	stateStore                OpenAIWSStateStore
+	groupID                   int64
+	sessionHash               string
+	turnState                 string
+	promptCacheKey            string
+	startTime                 time.Time
+	trackCompatibilityMetrics bool
+	warmup                    bool
 }
 
 type openAIWSForwardRelayResult struct {
@@ -405,7 +406,7 @@ func (s *OpenAIGatewayService) relayOpenAIWSForwardV2(req openAIWSForwardRelayRe
 		StoreDisabled: req.storeDisabled,
 		Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
-	s.bindCodexSessionTransport(req.stateStore, req.groupID, req.sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, req.warmup)
+	s.bindCodexSessionTransport(req.stateStore, req.groupID, req.sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, req.warmup, req.trackCompatibilityMetrics)
 	firstTokenMsValue := -1
 	if firstTokenMs != nil {
 		firstTokenMsValue = *firstTokenMs

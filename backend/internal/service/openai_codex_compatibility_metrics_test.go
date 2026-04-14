@@ -16,9 +16,9 @@ func TestSnapshotOpenAICodexCompatibilityMetrics(t *testing.T) {
 
 	store := NewOpenAIWSStateStore(nil)
 	svc := &OpenAIGatewayService{cfg: &config.Config{}}
-	svc.bindCodexSessionTransport(store, 9, "session_hash_metrics", OpenAIUpstreamTransportResponsesWebsocketV2, true)
-	svc.bindCodexSessionTransport(store, 9, "session_hash_metrics", OpenAIUpstreamTransportResponsesWebsocketV2, false)
-	svc.bindCodexSessionTransport(store, 9, "session_hash_metrics", OpenAIUpstreamTransportHTTPSSE, false)
+	svc.bindCodexSessionTransport(store, 9, "session_hash_metrics", OpenAIUpstreamTransportResponsesWebsocketV2, true, true)
+	svc.bindCodexSessionTransport(store, 9, "session_hash_metrics", OpenAIUpstreamTransportResponsesWebsocketV2, false, true)
+	svc.bindCodexSessionTransport(store, 9, "session_hash_metrics", OpenAIUpstreamTransportHTTPSSE, false, true)
 
 	afterBind := SnapshotOpenAICodexCompatibilityMetrics()
 	require.GreaterOrEqual(t, afterBind.SessionTransportWarmupIgnoredTotal, before.SessionTransportWarmupIgnoredTotal+1)
@@ -28,6 +28,8 @@ func TestSnapshotOpenAICodexCompatibilityMetrics(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	c := newTestGinContext(t)
+	c.Request.Header.Set("User-Agent", "Mozilla/5.0 codex_cli_rs/0.200.0")
+	c.Request.Header.Set("originator", "codex_vscode")
 	groupID := int64(9)
 	c.Set("api_key", &APIKey{GroupID: &groupID})
 
@@ -158,6 +160,42 @@ func TestObserveOpenAICodexSchedulingDecision_WarmupSkipped(t *testing.T) {
 	require.GreaterOrEqual(t, transportAfter.WarmupTotal, transportBefore.WarmupTotal+1)
 	require.Equal(t, transportBefore.ChainSelectionTotal, transportAfter.ChainSelectionTotal)
 	require.Equal(t, transportBefore.ChainHitTotal, transportAfter.ChainHitTotal)
+}
+
+func TestResolveCodexTransportState_NonOfficialMetricsSkipped(t *testing.T) {
+	before := SnapshotOpenAICodexCompatibilityMetrics()
+
+	store := NewOpenAIWSStateStore(nil)
+	svc := &OpenAIGatewayService{
+		cfg:                &config.Config{},
+		cache:              &stubGatewayCache{},
+		openaiWSStateStore: store,
+	}
+
+	gin.SetMode(gin.TestMode)
+	c := newTestGinContext(t)
+	groupID := int64(19)
+	c.Set("api_key", &APIKey{GroupID: &groupID})
+
+	sessionHash := DeriveSessionHashFromSeed("pcache_non_official_metrics")
+	store.BindSessionTransport(groupID, sessionHash, OpenAIUpstreamTransportHTTPSSE, time.Minute)
+	store.MarkSessionTransportFallback(groupID, sessionHash, time.Minute)
+	svc.cfg.Gateway.OpenAIWS.FallbackCooldownSeconds = 30
+	svc.markOpenAIWSFallbackCooling(42, "upgrade_required")
+
+	state := svc.resolveCodexTransportState(c, codexTransportStateInput{
+		AccountID:      42,
+		PromptCacheKey: "pcache_non_official_metrics",
+	})
+	require.Equal(t, OpenAIUpstreamTransportHTTPSSE, state.PreferredTransport)
+	require.True(t, state.PreferredHTTPFallback)
+	require.False(t, state.TrackCompatibilityMetrics)
+
+	after := SnapshotOpenAICodexCompatibilityMetrics()
+	require.Equal(t, before.TransportFallbackCoolingHitTotal, after.TransportFallbackCoolingHitTotal)
+	require.Equal(t, before.SessionPreferredTransportHitTotal, after.SessionPreferredTransportHitTotal)
+	require.Equal(t, before.SessionPreferredTransportHTTPHitTotal, after.SessionPreferredTransportHTTPHitTotal)
+	require.Equal(t, before.SessionHTTPFallbackHitTotal, after.SessionHTTPFallbackHitTotal)
 }
 
 func codexVersionMetricTotal(

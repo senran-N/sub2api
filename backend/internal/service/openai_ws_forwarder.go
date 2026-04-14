@@ -332,29 +332,30 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 	relayResult, err := s.relayOpenAIWSForwardV2(openAIWSForwardRelayRequest{
-		ctx:                  ctx,
-		c:                    c,
-		account:              account,
-		lease:                lease,
-		payload:              payload,
-		payloadBytes:         resolvePayloadBytes(),
-		reqBody:              reqBody,
-		originalModel:        originalModel,
-		mappedModel:          mappedModel,
-		reqStream:            reqStream,
-		debugEnabled:         debugEnabled,
-		previousResponseID:   previousResponseID,
-		previousResponseKind: previousResponseIDKind,
-		sessionResolution:    sessionResolution,
-		wsHeaders:            wsHeaders,
-		storeDisabled:        storeDisabled,
-		stateStore:           stateStore,
-		groupID:              groupID,
-		sessionHash:          sessionHash,
-		turnState:            turnState,
-		promptCacheKey:       promptCacheKey,
-		startTime:            startTime,
-		warmup:               transportState.Warmup,
+		ctx:                       ctx,
+		c:                         c,
+		account:                   account,
+		lease:                     lease,
+		payload:                   payload,
+		payloadBytes:              resolvePayloadBytes(),
+		reqBody:                   reqBody,
+		originalModel:             originalModel,
+		mappedModel:               mappedModel,
+		reqStream:                 reqStream,
+		debugEnabled:              debugEnabled,
+		previousResponseID:        previousResponseID,
+		previousResponseKind:      previousResponseIDKind,
+		sessionResolution:         sessionResolution,
+		wsHeaders:                 wsHeaders,
+		storeDisabled:             storeDisabled,
+		stateStore:                stateStore,
+		groupID:                   groupID,
+		sessionHash:               sessionHash,
+		turnState:                 turnState,
+		promptCacheKey:            promptCacheKey,
+		startTime:                 startTime,
+		trackCompatibilityMetrics: transportState.TrackCompatibilityMetrics,
+		warmup:                    transportState.Warmup,
 	})
 	if err != nil {
 		return nil, err
@@ -918,7 +919,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if stateStore != nil && storeDisabled && sessionHash != "" {
 			stateStore.BindSessionConn(groupID, sessionHash, connID, s.openAIWSSessionStickyTTL())
 		}
-		s.bindCodexSessionTransport(stateStore, groupID, sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, turn == 1 && ingressSession.firstTurnWarmup)
+		s.bindCodexSessionTransport(stateStore, groupID, sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, turn == 1 && ingressSession.firstTurnWarmup, ingressSession.isCodexCLI)
 		if connID != "" {
 			preferredConnID = connID
 		}
