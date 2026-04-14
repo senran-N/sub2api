@@ -13,6 +13,14 @@ type OpenAICodexCompatibilityMetricsSnapshot struct {
 	SessionTransportBindHTTPTotal         int64 `json:"session_transport_bind_http_total"`
 	SessionTransportWarmupIgnoredTotal    int64 `json:"session_transport_warmup_ignored_total"`
 	SessionTransportHTTPDowngradeTotal    int64 `json:"session_transport_http_downgrade_total"`
+	RecoveryWSRetryTotal                  int64 `json:"recovery_ws_retry_total"`
+	RecoveryHTTPRetryTotal                int64 `json:"recovery_http_retry_total"`
+	RecoveryPreviousResponseAppliedTotal  int64 `json:"recovery_previous_response_applied_total"`
+	RecoveryPreviousResponseSkippedTotal  int64 `json:"recovery_previous_response_skipped_total"`
+	RecoveryInvalidEncryptedAppliedTotal  int64 `json:"recovery_invalid_encrypted_applied_total"`
+	RecoveryInvalidEncryptedSkippedTotal  int64 `json:"recovery_invalid_encrypted_skipped_total"`
+	RecoveryDropPreviousResponseIDTotal   int64 `json:"recovery_drop_previous_response_id_total"`
+	RecoveryTrimEncryptedReasoningTotal   int64 `json:"recovery_trim_encrypted_reasoning_total"`
 }
 
 var (
@@ -26,6 +34,14 @@ var (
 	openAICodexSessionTransportBindHTTPTotal         atomic.Int64
 	openAICodexSessionTransportWarmupIgnoredTotal    atomic.Int64
 	openAICodexSessionTransportHTTPDowngradeTotal    atomic.Int64
+	openAICodexRecoveryWSRetryTotal                  atomic.Int64
+	openAICodexRecoveryHTTPRetryTotal                atomic.Int64
+	openAICodexRecoveryPreviousResponseAppliedTotal  atomic.Int64
+	openAICodexRecoveryPreviousResponseSkippedTotal  atomic.Int64
+	openAICodexRecoveryInvalidEncryptedAppliedTotal  atomic.Int64
+	openAICodexRecoveryInvalidEncryptedSkippedTotal  atomic.Int64
+	openAICodexRecoveryDropPreviousResponseIDTotal   atomic.Int64
+	openAICodexRecoveryTrimEncryptedReasoningTotal   atomic.Int64
 )
 
 func recordOpenAICodexTransportWarmup() {
@@ -65,6 +81,41 @@ func recordOpenAICodexSessionTransportBind(transport OpenAIUpstreamTransport, wa
 	}
 }
 
+func recordOpenAICodexRecoveryDecision(decision CodexRecoveryDecision) {
+	switch decision.Reason {
+	case codexRecoveryReasonPreviousResponseNotFound:
+		if decision.Applied {
+			openAICodexRecoveryPreviousResponseAppliedTotal.Add(1)
+		} else {
+			openAICodexRecoveryPreviousResponseSkippedTotal.Add(1)
+		}
+	case codexRecoveryReasonInvalidEncryptedContent:
+		if decision.Applied {
+			openAICodexRecoveryInvalidEncryptedAppliedTotal.Add(1)
+		} else {
+			openAICodexRecoveryInvalidEncryptedSkippedTotal.Add(1)
+		}
+	default:
+		return
+	}
+
+	if decision.DroppedPreviousResponseID {
+		openAICodexRecoveryDropPreviousResponseIDTotal.Add(1)
+	}
+	if decision.TrimmedEncryptedReasoning {
+		openAICodexRecoveryTrimEncryptedReasoningTotal.Add(1)
+	}
+	if !decision.Applied {
+		return
+	}
+	switch decision.Transport {
+	case OpenAIUpstreamTransportHTTPSSE:
+		openAICodexRecoveryHTTPRetryTotal.Add(1)
+	case OpenAIUpstreamTransportResponsesWebsocket, OpenAIUpstreamTransportResponsesWebsocketV2:
+		openAICodexRecoveryWSRetryTotal.Add(1)
+	}
+}
+
 func SnapshotOpenAICodexCompatibilityMetrics() OpenAICodexCompatibilityMetricsSnapshot {
 	return OpenAICodexCompatibilityMetricsSnapshot{
 		TransportWarmupTotal:                  openAICodexTransportWarmupTotal.Load(),
@@ -77,5 +128,13 @@ func SnapshotOpenAICodexCompatibilityMetrics() OpenAICodexCompatibilityMetricsSn
 		SessionTransportBindHTTPTotal:         openAICodexSessionTransportBindHTTPTotal.Load(),
 		SessionTransportWarmupIgnoredTotal:    openAICodexSessionTransportWarmupIgnoredTotal.Load(),
 		SessionTransportHTTPDowngradeTotal:    openAICodexSessionTransportHTTPDowngradeTotal.Load(),
+		RecoveryWSRetryTotal:                  openAICodexRecoveryWSRetryTotal.Load(),
+		RecoveryHTTPRetryTotal:                openAICodexRecoveryHTTPRetryTotal.Load(),
+		RecoveryPreviousResponseAppliedTotal:  openAICodexRecoveryPreviousResponseAppliedTotal.Load(),
+		RecoveryPreviousResponseSkippedTotal:  openAICodexRecoveryPreviousResponseSkippedTotal.Load(),
+		RecoveryInvalidEncryptedAppliedTotal:  openAICodexRecoveryInvalidEncryptedAppliedTotal.Load(),
+		RecoveryInvalidEncryptedSkippedTotal:  openAICodexRecoveryInvalidEncryptedSkippedTotal.Load(),
+		RecoveryDropPreviousResponseIDTotal:   openAICodexRecoveryDropPreviousResponseIDTotal.Load(),
+		RecoveryTrimEncryptedReasoningTotal:   openAICodexRecoveryTrimEncryptedReasoningTotal.Load(),
 	}
 }

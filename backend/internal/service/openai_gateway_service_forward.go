@@ -278,70 +278,71 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIWS(
 	wsLastFailureReason := ""
 	wsPrevResponseRecoveryTried := false
 	wsInvalidEncryptedContentRecoveryTried := false
+	recoveryPolicy := CodexRecoveryPolicy{}
 
-	recoverPrevResponseNotFound := func(attempt int) bool {
-		if wsPrevResponseRecoveryTried {
-			return false
-		}
-		previousResponseID := openAIWSPayloadString(wsReqBody, "previous_response_id")
-		if previousResponseID == "" {
+	applyWSRecovery := func(attempt int, reason string) bool {
+		switch reason {
+		case codexRecoveryReasonPreviousResponseNotFound:
+			if wsPrevResponseRecoveryTried {
+				return false
+			}
+			decision := recoveryPolicy.Apply(wsReqBody, CodexRecoveryPolicyInput{
+				Reason:    reason,
+				Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+			})
+			if !decision.Applied {
+				logOpenAIWSModeInfo(
+					"reconnect_prev_response_recovery_skip account_id=%d attempt=%d reason=%s previous_response_id_present=%v",
+					account.ID,
+					attempt,
+					normalizeOpenAIWSLogValue(decision.SkipReason),
+					decision.PreviousResponseID != "",
+				)
+				return false
+			}
+			wsPrevResponseRecoveryTried = true
 			logOpenAIWSModeInfo(
-				"reconnect_prev_response_recovery_skip account_id=%d attempt=%d reason=missing_previous_response_id previous_response_id_present=false",
+				"reconnect_prev_response_recovery account_id=%d attempt=%d action=%s retry=1 previous_response_id=%s previous_response_id_kind=%s",
 				account.ID,
 				attempt,
+				normalizeOpenAIWSLogValue(decision.Action),
+				truncateOpenAIWSLogValue(decision.PreviousResponseID, openAIWSIDValueMaxLen),
+				normalizeOpenAIWSLogValue(decision.PreviousResponseIDKind),
 			)
-			return false
-		}
-		if HasFunctionCallOutput(wsReqBody) {
+			return true
+		case codexRecoveryReasonInvalidEncryptedContent:
+			if wsInvalidEncryptedContentRecoveryTried {
+				return false
+			}
+			decision := recoveryPolicy.Apply(wsReqBody, CodexRecoveryPolicyInput{
+				Reason:    reason,
+				Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+			})
+			if !decision.Applied {
+				logOpenAIWSModeInfo(
+					"reconnect_invalid_encrypted_content_recovery_skip account_id=%d attempt=%d reason=%s",
+					account.ID,
+					attempt,
+					normalizeOpenAIWSLogValue(decision.SkipReason),
+				)
+				return false
+			}
+			wsInvalidEncryptedContentRecoveryTried = true
 			logOpenAIWSModeInfo(
-				"reconnect_prev_response_recovery_skip account_id=%d attempt=%d reason=has_function_call_output previous_response_id_present=true",
+				"reconnect_invalid_encrypted_content_recovery account_id=%d attempt=%d action=%s retry=1 previous_response_id_present=%v previous_response_id=%s previous_response_id_kind=%s has_function_call_output=%v dropped_previous_response_id=%v",
 				account.ID,
 				attempt,
+				normalizeOpenAIWSLogValue(decision.Action),
+				decision.PreviousResponseID != "",
+				truncateOpenAIWSLogValue(decision.PreviousResponseID, openAIWSIDValueMaxLen),
+				normalizeOpenAIWSLogValue(decision.PreviousResponseIDKind),
+				decision.HasFunctionCallOutput,
+				decision.DroppedPreviousResponseID,
 			)
+			return true
+		default:
 			return false
 		}
-		delete(wsReqBody, "previous_response_id")
-		wsPrevResponseRecoveryTried = true
-		logOpenAIWSModeInfo(
-			"reconnect_prev_response_recovery account_id=%d attempt=%d action=drop_previous_response_id retry=1 previous_response_id=%s previous_response_id_kind=%s",
-			account.ID,
-			attempt,
-			truncateOpenAIWSLogValue(previousResponseID, openAIWSIDValueMaxLen),
-			normalizeOpenAIWSLogValue(ClassifyOpenAIPreviousResponseIDKind(previousResponseID)),
-		)
-		return true
-	}
-
-	recoverInvalidEncryptedContent := func(attempt int) bool {
-		if wsInvalidEncryptedContentRecoveryTried {
-			return false
-		}
-		removedReasoningItems := trimOpenAIEncryptedReasoningItems(wsReqBody)
-		if !removedReasoningItems {
-			logOpenAIWSModeInfo(
-				"reconnect_invalid_encrypted_content_recovery_skip account_id=%d attempt=%d reason=missing_encrypted_reasoning_items",
-				account.ID,
-				attempt,
-			)
-			return false
-		}
-		previousResponseID := openAIWSPayloadString(wsReqBody, "previous_response_id")
-		hasFunctionCallOutput := HasFunctionCallOutput(wsReqBody)
-		if previousResponseID != "" && !hasFunctionCallOutput {
-			delete(wsReqBody, "previous_response_id")
-		}
-		wsInvalidEncryptedContentRecoveryTried = true
-		logOpenAIWSModeInfo(
-			"reconnect_invalid_encrypted_content_recovery account_id=%d attempt=%d action=drop_encrypted_reasoning_items retry=1 previous_response_id_present=%v previous_response_id=%s previous_response_id_kind=%s has_function_call_output=%v dropped_previous_response_id=%v",
-			account.ID,
-			attempt,
-			previousResponseID != "",
-			truncateOpenAIWSLogValue(previousResponseID, openAIWSIDValueMaxLen),
-			normalizeOpenAIWSLogValue(ClassifyOpenAIPreviousResponseIDKind(previousResponseID)),
-			hasFunctionCallOutput,
-			previousResponseID != "" && !hasFunctionCallOutput,
-		)
-		return true
 	}
 
 	retryBudget := s.openAIWSRetryTotalBudget()
@@ -376,10 +377,7 @@ wsRetryLoop:
 		if reason != "" {
 			wsLastFailureReason = reason
 		}
-		if reason == "previous_response_not_found" && recoverPrevResponseNotFound(attempt) {
-			continue
-		}
-		if reason == "invalid_encrypted_content" && recoverInvalidEncryptedContent(attempt) {
+		if applyWSRecovery(attempt, reason) {
 			continue
 		}
 		if retryable && attempt < maxAttempts {
@@ -478,6 +476,7 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIHTTP(
 	isCodexCLI bool,
 ) (*OpenAIForwardResult, error) {
 	httpInvalidEncryptedContentRetryTried := false
+	recoveryPolicy := CodexRecoveryPolicy{}
 
 	for {
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, prepared.reqStream)
@@ -524,7 +523,11 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIHTTP(
 			upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 			upstreamCode := extractUpstreamErrorCode(respBody)
 			if !httpInvalidEncryptedContentRetryTried && resp.StatusCode == http.StatusBadRequest && upstreamCode == "invalid_encrypted_content" {
-				if trimOpenAIEncryptedReasoningItems(prepared.reqBody) {
+				decision := recoveryPolicy.Apply(prepared.reqBody, CodexRecoveryPolicyInput{
+					Reason:    codexRecoveryReasonInvalidEncryptedContent,
+					Transport: OpenAIUpstreamTransportHTTPSSE,
+				})
+				if decision.Applied {
 					prepared.body, err = json.Marshal(prepared.reqBody)
 					if err != nil {
 						return nil, fmt.Errorf("serialize invalid_encrypted_content retry body: %w", err)
@@ -534,7 +537,7 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIHTTP(
 					logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Retrying non-WSv2 request once after invalid_encrypted_content (account: %s)", account.Name)
 					continue
 				}
-				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Skip non-WSv2 invalid_encrypted_content retry because encrypted reasoning items are missing (account: %s)", account.Name)
+				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Skip non-WSv2 invalid_encrypted_content retry because %s (account: %s)", decision.SkipReason, account.Name)
 			}
 			if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
 				upstreamDetail := ""
