@@ -23,6 +23,7 @@ type GeminiTokenProvider struct {
 	refreshAPI         *OAuthRefreshAPI
 	executor           OAuthRefreshExecutor
 	refreshPolicy      ProviderRefreshPolicy
+	tempUnschedCache   TempUnschedCache
 }
 
 func NewGeminiTokenProvider(
@@ -47,6 +48,11 @@ func (p *GeminiTokenProvider) SetRefreshAPI(api *OAuthRefreshAPI, executor OAuth
 // SetRefreshPolicy injects caller-side refresh policy.
 func (p *GeminiTokenProvider) SetRefreshPolicy(policy ProviderRefreshPolicy) {
 	p.refreshPolicy = policy
+}
+
+// SetTempUnschedCache injects temp unschedulable cache for immediate scheduler sync.
+func (p *GeminiTokenProvider) SetTempUnschedCache(cache TempUnschedCache) {
+	p.tempUnschedCache = cache
 }
 
 func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Account) (string, error) {
@@ -74,6 +80,7 @@ func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 		result, err := p.refreshAPI.RefreshIfNeeded(ctx, account, p.executor, geminiTokenRefreshSkew)
 		if err != nil {
 			if p.refreshPolicy.OnRefreshError == ProviderRefreshErrorReturn {
+				p.markTempUnschedulable(account, err)
 				return "", err
 			}
 		} else if result.LockHeld {
@@ -166,6 +173,48 @@ func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 	}
 
 	return accessToken, nil
+}
+
+// markTempUnschedulable marks a Gemini OAuth account temporarily unschedulable
+// after a request-path refresh failure so new selections stop hitting it until
+// background refresh or operator action recovers the credentials.
+func (p *GeminiTokenProvider) markTempUnschedulable(account *Account, refreshErr error) {
+	if p.accountRepo == nil || account == nil {
+		return
+	}
+
+	now := time.Now()
+	until := now.Add(tokenRefreshTempUnschedDuration)
+	reason := "token refresh failed on request path: " + refreshErr.Error()
+	bgCtx := context.Background()
+
+	if err := p.accountRepo.SetTempUnschedulable(bgCtx, account.ID, until, reason); err != nil {
+		slog.Warn("gemini_token_provider.set_temp_unschedulable_failed",
+			"account_id", account.ID,
+			"error", err,
+		)
+		return
+	}
+
+	slog.Warn("gemini_token_provider.temp_unschedulable_set",
+		"account_id", account.ID,
+		"until", until.Format(time.RFC3339),
+		"reason", reason,
+	)
+
+	if p.tempUnschedCache != nil {
+		state := &TempUnschedState{
+			UntilUnix:       until.Unix(),
+			TriggeredAtUnix: now.Unix(),
+			ErrorMessage:    reason,
+		}
+		if err := p.tempUnschedCache.SetTempUnsched(bgCtx, account.ID, state); err != nil {
+			slog.Warn("gemini_token_provider.temp_unsched_cache_set_failed",
+				"account_id", account.ID,
+				"error", err,
+			)
+		}
+	}
 }
 
 func GeminiTokenCacheKey(account *Account) string {
