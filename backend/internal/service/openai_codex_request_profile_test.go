@@ -100,3 +100,24 @@ func TestGetCodexRequestProfile_CacheRespectsForceFlagAndBodyHash(t *testing.T) 
 	updatedProfile := GetCodexRequestProfile(c, secondBody, true)
 	require.Equal(t, "gpt-5.4-codex", updatedProfile.Body.Model)
 }
+
+func TestGetCodexRequestProfile_CacheInvalidatesOnHeaderChanges(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	c.Request.Header.Set("session_id", "session_123")
+	SetOpenAIClientTransport(c, OpenAIClientTransportHTTP)
+
+	profile := GetCodexRequestProfile(c, nil, false)
+	require.Equal(t, "session_123", profile.Headers.SessionID)
+	require.Empty(t, profile.Headers.ConversationID)
+
+	c.Request.Header.Del("session_id")
+	c.Request.Header.Set("conversation_id", "conversation_456")
+
+	updatedProfile := GetCodexRequestProfile(c, nil, false)
+	require.Empty(t, updatedProfile.Headers.SessionID)
+	require.Equal(t, "conversation_456", updatedProfile.Headers.ConversationID)
+}

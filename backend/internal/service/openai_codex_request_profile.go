@@ -94,11 +94,13 @@ type CodexRequestProfile struct {
 type codexRequestProfileCache struct {
 	BodyBound     bool
 	BodyHash      uint64
+	ContextHash   uint64
 	ForceCodexCLI bool
 }
 
 // GetCodexRequestProfile returns the shared Codex request profile and caches it on gin.Context.
 func GetCodexRequestProfile(c *gin.Context, body []byte, forceCodexCLI bool) CodexRequestProfile {
+	cacheTag := buildCodexRequestProfileCacheTag(c, body, forceCodexCLI)
 	if c != nil {
 		if cached, ok := c.Get(OpenAIParsedCodexRequestProfileKey); ok {
 			if profile, ok := cached.(CodexRequestProfile); ok {
@@ -106,8 +108,8 @@ func GetCodexRequestProfile(c *gin.Context, body []byte, forceCodexCLI bool) Cod
 				if !hasCacheState {
 					return profile
 				}
-				if cacheTag, ok := cacheState.(codexRequestProfileCache); ok {
-					if cacheTag.ForceCodexCLI == forceCodexCLI && codexRequestProfileCacheMatches(cacheTag, body) {
+				if cachedTag, ok := cacheState.(codexRequestProfileCache); ok {
+					if codexRequestProfileCacheMatches(cachedTag, cacheTag) {
 						return profile
 					}
 				}
@@ -117,25 +119,62 @@ func GetCodexRequestProfile(c *gin.Context, body []byte, forceCodexCLI bool) Cod
 
 	profile := buildCodexRequestProfile(c, body, forceCodexCLI)
 	if c != nil {
-		cacheTag := codexRequestProfileCache{ForceCodexCLI: forceCodexCLI}
-		if len(body) > 0 {
-			cacheTag.BodyBound = true
-			cacheTag.BodyHash = xxhash.Sum64(body)
-		}
 		c.Set(OpenAIParsedCodexRequestProfileKey, profile)
 		c.Set(OpenAIParsedCodexRequestProfileCacheKey, cacheTag)
 	}
 	return profile
 }
 
-func codexRequestProfileCacheMatches(cacheTag codexRequestProfileCache, body []byte) bool {
-	if len(body) == 0 {
-		return !cacheTag.BodyBound
+func buildCodexRequestProfileCacheTag(c *gin.Context, body []byte, forceCodexCLI bool) codexRequestProfileCache {
+	cacheTag := codexRequestProfileCache{
+		ContextHash:   hashCodexRequestProfileContext(c),
+		ForceCodexCLI: forceCodexCLI,
 	}
-	if !cacheTag.BodyBound {
-		return false
+	if len(body) > 0 {
+		cacheTag.BodyBound = true
+		cacheTag.BodyHash = xxhash.Sum64(body)
 	}
-	return cacheTag.BodyHash == xxhash.Sum64(body)
+	return cacheTag
+}
+
+func codexRequestProfileCacheMatches(cached, current codexRequestProfileCache) bool {
+	return cached.BodyBound == current.BodyBound &&
+		cached.BodyHash == current.BodyHash &&
+		cached.ContextHash == current.ContextHash &&
+		cached.ForceCodexCLI == current.ForceCodexCLI
+}
+
+func hashCodexRequestProfileContext(c *gin.Context) uint64 {
+	if c == nil {
+		return 0
+	}
+
+	hasher := xxhash.New()
+	writeValue := func(value string) {
+		_, _ = hasher.WriteString(strings.TrimSpace(value))
+		_, _ = hasher.Write([]byte{0})
+	}
+
+	if c.Request != nil && c.Request.URL != nil {
+		writeValue(c.Request.URL.Path)
+	}
+	writeValue(string(GetOpenAIClientTransport(c)))
+	for _, key := range []string{
+		"Accept",
+		"Accept-Language",
+		"conversation_id",
+		"OpenAI-Beta",
+		"originator",
+		"session_id",
+		openAIWSTurnMetadataHeader,
+		openAIWSTurnStateHeader,
+		"User-Agent",
+		"version",
+	} {
+		writeValue(getTrimmedCodexRequestHeader(c, key))
+	}
+
+	return hasher.Sum64()
 }
 
 func buildCodexRequestProfile(c *gin.Context, body []byte, forceCodexCLI bool) CodexRequestProfile {
