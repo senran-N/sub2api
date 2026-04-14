@@ -61,12 +61,10 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	account *Account,
 	token string,
 	decision OpenAIWSProtocolDecision,
-	isCodexCLI bool,
 	turnState string,
 	turnMetadata string,
 	promptCacheKey string,
 ) (http.Header, openAIWSSessionHeaderResolution) {
-	_ = isCodexCLI
 	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
 	profile := GetCodexRequestProfile(c, nil, forceCodexCLI)
 	policy := NewCodexNativeMutationPolicy(profile)
@@ -82,7 +80,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	}
 	upstreamTarget.ApplyAuthHeader(headers, token)
 
-	sessionResolution := resolveOpenAIWSSessionHeaders(c, promptCacheKey)
+	sessionResolution := policy.ResolveSessionHeaders(promptCacheKey)
 	if account != nil && account.Type == AccountTypeOAuth {
 		sessionResolution = policy.ResolveOAuthSessionHeaders(promptCacheKey, "", false)
 	}

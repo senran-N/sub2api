@@ -26,6 +26,51 @@ func TestCodexNativeMutationPolicy_ResolveOAuthSessionHeaders_PreservesHeaderIDs
 	require.Equal(t, "header_conversation_id", resolution.ConversationSource)
 }
 
+func TestCodexNativeMutationPolicy_ResolveSessionHeaders_PrefersHeadersThenPromptCacheKey(t *testing.T) {
+	t.Run("conversation header backfills session id", func(t *testing.T) {
+		policy := NewCodexNativeMutationPolicy(CodexRequestProfile{
+			Headers: CodexRequestHeaderProfile{
+				ConversationID: "conv-cli",
+			},
+		})
+
+		resolution := policy.ResolveSessionHeaders("pcache_123")
+		require.Equal(t, "conv-cli", resolution.SessionID)
+		require.Equal(t, "conv-cli", resolution.ConversationID)
+		require.Equal(t, "header_conversation_id", resolution.SessionSource)
+		require.Equal(t, "header_conversation_id", resolution.ConversationSource)
+	})
+
+	t.Run("prompt cache key is only used when headers are absent", func(t *testing.T) {
+		policy := NewCodexNativeMutationPolicy(CodexRequestProfile{})
+
+		resolution := policy.ResolveSessionHeaders("pcache_123")
+		require.Equal(t, "pcache_123", resolution.SessionID)
+		require.Empty(t, resolution.ConversationID)
+		require.Equal(t, "prompt_cache_key", resolution.SessionSource)
+		require.Equal(t, "none", resolution.ConversationSource)
+	})
+}
+
+func TestCodexNativeMutationPolicy_ResolveRequestSessionID_PrefersHeadersThenBody(t *testing.T) {
+	policy := NewCodexNativeMutationPolicy(CodexRequestProfile{
+		Headers: CodexRequestHeaderProfile{
+			ConversationID: "conv-cli",
+		},
+		Body: CodexRequestBodyProfile{
+			PromptCacheKey: "pcache_123",
+		},
+	})
+	require.Equal(t, "conv-cli", policy.ResolveRequestSessionID())
+
+	policy = NewCodexNativeMutationPolicy(CodexRequestProfile{
+		Body: CodexRequestBodyProfile{
+			PromptCacheKey: "pcache_123",
+		},
+	})
+	require.Equal(t, "pcache_123", policy.ResolveRequestSessionID())
+}
+
 func TestCodexNativeMutationPolicy_ResolveUserAgent_PreservesOfficialCompositeUA(t *testing.T) {
 	policy := NewCodexNativeMutationPolicy(CodexRequestProfile{
 		OfficialClient: true,
@@ -61,7 +106,7 @@ func TestOpenAIBuildUpstreamRequestOAuthCompact_PreservesClientFingerprint(t *te
 		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-acc"},
 	}
 
-	req, err := svc.buildUpstreamRequest(context.Background(), c, account, []byte(`{"model":"gpt-5"}`), "token", false, "pcache_123", true)
+	req, err := svc.buildUpstreamRequest(context.Background(), c, account, []byte(`{"model":"gpt-5"}`), "token", false, "pcache_123")
 	require.NoError(t, err)
 	require.Equal(t, "Mozilla/5.0 codex_cli_rs/0.200.0", req.Header.Get("User-Agent"))
 	require.Equal(t, "codex_vscode", req.Header.Get("originator"))
@@ -120,7 +165,7 @@ func TestOpenAIBuildOpenAIWSHeadersOAuth_PreservesClientFingerprint(t *testing.T
 		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-acc"},
 	}
 
-	headers, resolution := svc.buildOpenAIWSHeaders(c, account, "token", OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, true, "", "", "pcache_123")
+	headers, resolution := svc.buildOpenAIWSHeaders(c, account, "token", OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, "", "", "pcache_123")
 	require.Equal(t, "Mozilla/5.0 codex_cli_rs/0.200.0", headers.Get("User-Agent"))
 	require.Equal(t, "codex_vscode", headers.Get("originator"))
 	require.Equal(t, "responses=experimental,foo=bar", headers.Get("OpenAI-Beta"))

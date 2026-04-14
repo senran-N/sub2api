@@ -105,9 +105,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		account.ProxyID != nil && account.Proxy != nil,
 	)
 
-	profile := GetCodexRequestProfile(c, firstClientMessage, s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
-	isCodexCLI := profile.OfficialClient
-	headers, _ := s.buildOpenAIWSHeaders(c, account, token, wsDecision, isCodexCLI, "", "", "")
+	headers, _ := s.buildOpenAIWSHeaders(c, account, token, wsDecision, "", "", "")
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()

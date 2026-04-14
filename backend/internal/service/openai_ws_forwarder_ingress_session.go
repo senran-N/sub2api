@@ -102,7 +102,6 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 		account,
 		token,
 		wsDecision,
-		isCodexCLI,
 		turnState,
 		strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)),
 		firstPayload.promptCacheKey,

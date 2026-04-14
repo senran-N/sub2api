@@ -74,27 +74,7 @@ func resolveOpenAIRequestSessionID(c *gin.Context, body []byte) string {
 	if c == nil {
 		return ""
 	}
-
-	sessionID := strings.TrimSpace(c.GetHeader("session_id"))
-	if sessionID == "" {
-		sessionID = strings.TrimSpace(c.GetHeader("conversation_id"))
-	}
-	if sessionID == "" && len(body) > 0 {
-		sessionID = getOpenAIRequestMeta(c, body).PromptCacheKey
-	}
-	return sessionID
-}
-
-func resolveOpenAIUpstreamOriginator(c *gin.Context, isOfficialClient bool) string {
-	if c != nil {
-		if originator := strings.TrimSpace(c.GetHeader("originator")); originator != "" {
-			return originator
-		}
-	}
-	if isOfficialClient {
-		return "codex_cli_rs"
-	}
-	return "opencode"
+	return NewCodexNativeMutationPolicy(GetCodexRequestProfile(c, body, false)).ResolveRequestSessionID()
 }
 
 // BindStickySession sets session -> account binding with the configured sticky TTL.

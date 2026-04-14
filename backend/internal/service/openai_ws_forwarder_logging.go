@@ -3,8 +3,6 @@ package service
 import (
 	"net/http"
 	"strings"
-
-	"github.com/gin-gonic/gin"
 )
 
 func normalizeOpenAIWSLogValue(value string) string {
@@ -45,34 +43,6 @@ type openAIWSSessionHeaderResolution struct {
 	ConversationID     string
 	SessionSource      string
 	ConversationSource string
-}
-
-func resolveOpenAIWSSessionHeaders(c *gin.Context, promptCacheKey string) openAIWSSessionHeaderResolution {
-	resolution := openAIWSSessionHeaderResolution{
-		SessionSource:      "none",
-		ConversationSource: "none",
-	}
-	if c != nil && c.Request != nil {
-		if sessionID := strings.TrimSpace(c.Request.Header.Get("session_id")); sessionID != "" {
-			resolution.SessionID = sessionID
-			resolution.SessionSource = "header_session_id"
-		}
-		if conversationID := strings.TrimSpace(c.Request.Header.Get("conversation_id")); conversationID != "" {
-			resolution.ConversationID = conversationID
-			resolution.ConversationSource = "header_conversation_id"
-			if resolution.SessionID == "" {
-				resolution.SessionID = conversationID
-				resolution.SessionSource = "header_conversation_id"
-			}
-		}
-	}
-
-	cacheKey := strings.TrimSpace(promptCacheKey)
-	if cacheKey != "" && resolution.SessionID == "" {
-		resolution.SessionID = cacheKey
-		resolution.SessionSource = "prompt_cache_key"
-	}
-	return resolution
 }
 
 func shouldLogOpenAIWSEvent(idx int, eventType string) bool {

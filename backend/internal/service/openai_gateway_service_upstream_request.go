@@ -17,10 +17,8 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 	token string,
 	isStream bool,
 	promptCacheKey string,
-	isCodexCLI bool,
 ) (*http.Request, error) {
 	_ = isStream
-	_ = isCodexCLI
 	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
 	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
 	policy := NewCodexNativeMutationPolicy(profile)

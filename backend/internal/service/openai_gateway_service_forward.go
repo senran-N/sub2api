@@ -481,7 +481,7 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIHTTP(
 
 	for {
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, prepared.reqStream)
-		upstreamReq, err := s.buildUpstreamRequest(upstreamCtx, c, account, prepared.body, token, prepared.reqStream, prepared.promptCacheKey, isCodexCLI)
+		upstreamReq, err := s.buildUpstreamRequest(upstreamCtx, c, account, prepared.body, token, prepared.reqStream, prepared.promptCacheKey)
 		releaseUpstreamCtx()
 		if err != nil {
 			return nil, err

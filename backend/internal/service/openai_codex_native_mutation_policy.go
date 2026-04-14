@@ -74,7 +74,29 @@ func (p CodexNativeMutationPolicy) ResolveVersion(fallback string) string {
 	return strings.TrimSpace(fallback)
 }
 
+func (p CodexNativeMutationPolicy) ResolveRequestSessionID() string {
+	if sessionID := strings.TrimSpace(p.Profile.Headers.SessionID); sessionID != "" {
+		return sessionID
+	}
+	if conversationID := strings.TrimSpace(p.Profile.Headers.ConversationID); conversationID != "" {
+		return conversationID
+	}
+	return strings.TrimSpace(p.Profile.Body.PromptCacheKey)
+}
+
+func (p CodexNativeMutationPolicy) ResolveSessionHeaders(promptCacheKey string) openAIWSSessionHeaderResolution {
+	return p.resolveSessionHeaders(promptCacheKey, "", false, false)
+}
+
 func (p CodexNativeMutationPolicy) ResolveOAuthSessionHeaders(promptCacheKey, compactSessionID string, includeConversationPromptFallback bool) openAIWSSessionHeaderResolution {
+	return p.resolveSessionHeaders(promptCacheKey, compactSessionID, includeConversationPromptFallback, p.Profile.CompactPath)
+}
+
+func (p CodexNativeMutationPolicy) resolveSessionHeaders(
+	promptCacheKey, compactSessionID string,
+	includeConversationPromptFallback bool,
+	enableCompactPathFallback bool,
+) openAIWSSessionHeaderResolution {
 	resolution := openAIWSSessionHeaderResolution{
 		SessionSource:      "none",
 		ConversationSource: "none",
@@ -93,7 +115,7 @@ func (p CodexNativeMutationPolicy) ResolveOAuthSessionHeaders(promptCacheKey, co
 		}
 	}
 
-	if p.Profile.CompactPath {
+	if enableCompactPathFallback {
 		if resolution.SessionID == "" {
 			if compactSessionID = strings.TrimSpace(compactSessionID); compactSessionID != "" {
 				resolution.SessionID = compactSessionID
