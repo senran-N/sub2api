@@ -17,6 +17,8 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/claude"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"go.uber.org/zap"
 )
 
@@ -76,6 +78,10 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	if err != nil {
 		return nil, fmt.Errorf("marshal responses request: %w", err)
 	}
+	responsesBody, err = ensureOpenAIResponsesPromptCacheKey(responsesBody, promptCacheKey)
+	if err != nil {
+		return nil, err
+	}
 
 	if account.Type == AccountTypeOAuth {
 		var reqBody map[string]any
@@ -85,7 +91,8 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		codexResult := applyCodexOAuthTransform(reqBody, false, false)
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
-		} else if promptCacheKey != "" {
+		}
+		if promptCacheKey != "" {
 			reqBody["prompt_cache_key"] = promptCacheKey
 		}
 		// OAuth codex transform forces stream=true upstream, so always use
@@ -206,6 +213,22 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	}
 
 	return result, handleErr
+}
+
+func ensureOpenAIResponsesPromptCacheKey(body []byte, promptCacheKey string) ([]byte, error) {
+	promptCacheKey = strings.TrimSpace(promptCacheKey)
+	if promptCacheKey == "" {
+		return body, nil
+	}
+	if existing := strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String()); existing != "" {
+		return body, nil
+	}
+
+	next, err := sjson.SetBytes(body, "prompt_cache_key", promptCacheKey)
+	if err != nil {
+		return nil, fmt.Errorf("set prompt_cache_key: %w", err)
+	}
+	return next, nil
 }
 
 // handleAnthropicErrorResponse reads an upstream error and returns it in
