@@ -274,7 +274,11 @@ func isOpenAITransientProcessingError(upstreamStatusCode int, upstreamMsg string
 }
 
 func isOpenAIPoolModeRetryableStatus(statusCode int) bool {
-	return statusCode == http.StatusTooManyRequests
+	// OpenAI pool-mode only retries same-account for body-classified transient
+	// processing failures (see isOpenAITransientProcessingError). Plain status
+	// codes like 429 should fail over immediately so the scheduler can respect
+	// upstream rate-limit state instead of hammering the same OAuth account.
+	return false
 }
 
 // GetAccessToken gets the access token for an OpenAI account

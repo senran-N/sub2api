@@ -988,6 +988,26 @@ func TestParseGatewayRequest_MaxTokensBoundary(t *testing.T) {
 			body:          `{"max_tokens":null}`,
 			wantMaxTokens: 0, // gjson Type=Null != Number → 条件不满足，跳过
 		},
+		{
+			name:          "max_output_tokens 作为回退",
+			body:          `{"max_output_tokens":2048}`,
+			wantMaxTokens: 2048,
+		},
+		{
+			name:          "max_completion_tokens 作为回退",
+			body:          `{"max_completion_tokens":1536}`,
+			wantMaxTokens: 1536,
+		},
+		{
+			name:          "output_config.max_tokens 作为最后回退",
+			body:          `{"output_config":{"max_tokens":768}}`,
+			wantMaxTokens: 768,
+		},
+		{
+			name:          "max_tokens 优先于其他字段",
+			body:          `{"max_tokens":256,"max_output_tokens":2048,"output_config":{"max_tokens":768}}`,
+			wantMaxTokens: 256,
+		},
 	}
 
 	for _, tt := range tests {

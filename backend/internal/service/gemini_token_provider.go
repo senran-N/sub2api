@@ -186,9 +186,10 @@ func (p *GeminiTokenProvider) markTempUnschedulable(account *Account, refreshErr
 	now := time.Now()
 	until := now.Add(tokenRefreshTempUnschedDuration)
 	reason := "token refresh failed on request path: " + refreshErr.Error()
-	bgCtx := context.Background()
+	writeCtx, cancel := newTempUnschedWriteContext(nil)
+	defer cancel()
 
-	if err := p.accountRepo.SetTempUnschedulable(bgCtx, account.ID, until, reason); err != nil {
+	if err := p.accountRepo.SetTempUnschedulable(writeCtx, account.ID, until, reason); err != nil {
 		slog.Warn("gemini_token_provider.set_temp_unschedulable_failed",
 			"account_id", account.ID,
 			"error", err,
@@ -208,7 +209,7 @@ func (p *GeminiTokenProvider) markTempUnschedulable(account *Account, refreshErr
 			TriggeredAtUnix: now.Unix(),
 			ErrorMessage:    reason,
 		}
-		if err := p.tempUnschedCache.SetTempUnsched(bgCtx, account.ID, state); err != nil {
+		if err := p.tempUnschedCache.SetTempUnsched(writeCtx, account.ID, state); err != nil {
 			slog.Warn("gemini_token_provider.temp_unsched_cache_set_failed",
 				"account_id", account.ID,
 				"error", err,

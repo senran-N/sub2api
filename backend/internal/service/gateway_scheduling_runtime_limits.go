@@ -35,7 +35,7 @@ func (s *GatewayService) withWindowCostPrefetch(ctx context.Context, accounts []
 	}
 
 	accountByID := make(map[int64]*Account)
-	accountIDs := make([]int64, 0, len(accounts))
+	accountWindows := make(map[int64]time.Time, len(accounts))
 	for i := range accounts {
 		account := &accounts[i]
 		if account == nil || !account.IsAnthropicOAuthOrSetupToken() {
@@ -45,14 +45,14 @@ func (s *GatewayService) withWindowCostPrefetch(ctx context.Context, accounts []
 			continue
 		}
 		accountByID[account.ID] = account
-		accountIDs = append(accountIDs, account.ID)
+		accountWindows[account.ID] = account.GetCurrentWindowStartTime()
 	}
-	if len(accountIDs) == 0 {
+	if len(accountWindows) == 0 {
 		return ctx
 	}
 
-	costs := make(map[int64]float64, len(accountIDs))
-	cacheValues, err := s.sessionLimitCache.GetWindowCostBatch(ctx, accountIDs)
+	costs := make(map[int64]float64, len(accountWindows))
+	cacheValues, err := s.sessionLimitCache.GetWindowCostBatch(ctx, accountWindows)
 	if err == nil {
 		for accountID, cost := range cacheValues {
 			costs[accountID] = cost
@@ -62,7 +62,7 @@ func (s *GatewayService) withWindowCostPrefetch(ctx context.Context, accounts []
 		windowCostPrefetchErrorTotal.Add(1)
 		logger.LegacyPrintf("service.gateway", "window_cost batch cache read failed: %v", err)
 	}
-	cacheMissCount := len(accountIDs) - len(costs)
+	cacheMissCount := len(accountWindows) - len(costs)
 	if cacheMissCount < 0 {
 		cacheMissCount = 0
 	}
@@ -70,7 +70,7 @@ func (s *GatewayService) withWindowCostPrefetch(ctx context.Context, accounts []
 
 	missingByStart := make(map[int64][]int64)
 	startTimes := make(map[int64]time.Time)
-	for _, accountID := range accountIDs {
+	for accountID := range accountWindows {
 		if _, ok := costs[accountID]; ok {
 			continue
 		}
@@ -107,7 +107,7 @@ func (s *GatewayService) withWindowCostPrefetch(ctx context.Context, accounts []
 						cost = stats.StandardCost
 					}
 					costs[accountID] = cost
-					_ = s.sessionLimitCache.SetWindowCost(ctx, accountID, cost)
+					_ = s.sessionLimitCache.SetWindowCost(ctx, accountID, startTime, cost)
 				}
 				continue
 			}
@@ -125,7 +125,7 @@ func (s *GatewayService) withWindowCostPrefetch(ctx context.Context, accounts []
 			}
 			cost := stats.StandardCost
 			costs[accountID] = cost
-			_ = s.sessionLimitCache.SetWindowCost(ctx, accountID, cost)
+			_ = s.sessionLimitCache.SetWindowCost(ctx, accountID, startTime, cost)
 		}
 	}
 
@@ -155,23 +155,22 @@ func (s *GatewayService) isAccountSchedulableForWindowCost(ctx context.Context, 
 	}
 
 	var currentCost float64
+	windowStart := account.GetCurrentWindowStartTime()
 	if cost, ok := windowCostFromPrefetchContext(ctx, account.ID); ok {
 		currentCost = cost
 	} else if s.sessionLimitCache != nil {
-		if cost, hit, err := s.sessionLimitCache.GetWindowCost(ctx, account.ID); err == nil && hit {
+		if cost, hit, err := s.sessionLimitCache.GetWindowCost(ctx, account.ID, windowStart); err == nil && hit {
 			currentCost = cost
 		} else {
-			startTime := account.GetCurrentWindowStartTime()
-			stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, startTime)
+			stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, windowStart)
 			if err != nil {
 				return true
 			}
 			currentCost = stats.StandardCost
-			_ = s.sessionLimitCache.SetWindowCost(ctx, account.ID, currentCost)
+			_ = s.sessionLimitCache.SetWindowCost(ctx, account.ID, windowStart, currentCost)
 		}
 	} else {
-		startTime := account.GetCurrentWindowStartTime()
-		stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, startTime)
+		stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, windowStart)
 		if err != nil {
 			return true
 		}
@@ -254,10 +253,39 @@ func (s *GatewayService) isAccountSchedulableForRPM(ctx context.Context, account
 	return true
 }
 
+func rpmReservationLimit(account *Account, allowStickyOverflow bool) int {
+	if account == nil {
+		return 0
+	}
+	limit := account.GetBaseRPM()
+	if limit <= 0 {
+		return 0
+	}
+	if allowStickyOverflow {
+		if buffer := account.GetRPMStickyBuffer(); buffer > 0 {
+			limit += buffer
+		}
+	}
+	return limit
+}
+
+// TryReserveAccountRPM atomically reserves one outbound RPM slot before forwarding.
+// 调度阶段的 RPM 读取仅用于批量筛选；真正阻止高并发超发由这里负责。
+func (s *GatewayService) TryReserveAccountRPM(ctx context.Context, account *Account, allowStickyOverflow bool) (bool, int, error) {
+	if account == nil || !account.IsAnthropicOAuthOrSetupToken() || s.rpmCache == nil {
+		return true, 0, nil
+	}
+
+	limit := rpmReservationLimit(account, allowStickyOverflow)
+	if limit <= 0 {
+		return true, 0, nil
+	}
+
+	return s.rpmCache.ReserveRPM(ctx, account.ID, limit)
+}
+
 // IncrementAccountRPM increments the RPM counter for the given account.
-// 已知 TOCTOU 竞态：调度时读取 RPM 计数与此处递增之间存在时间窗口，
-// 高并发下可能短暂超出 RPM 限制。这是与 WindowCost 一致的 soft-limit
-// 设计权衡——可接受的少量超额优于加锁带来的延迟和复杂度。
+// 仅保留给非 admission-control 调用；正常转发路径应优先使用 TryReserveAccountRPM。
 func (s *GatewayService) IncrementAccountRPM(ctx context.Context, accountID int64) error {
 	if s.rpmCache == nil {
 		return nil

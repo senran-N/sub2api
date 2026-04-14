@@ -82,6 +82,14 @@ func (s *GatewayService) BindStickySession(ctx context.Context, groupID *int64, 
 	return s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, accountID, stickySessionTTL)
 }
 
+// ClearStickySessionBinding removes the current session -> account binding.
+func (s *GatewayService) ClearStickySessionBinding(ctx context.Context, groupID *int64, sessionHash string) error {
+	if sessionHash == "" || s.cache == nil {
+		return nil
+	}
+	return s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
+}
+
 // GetCachedSessionAccountID retrieves the account ID bound to a sticky session.
 // Returns 0 if no binding exists or on error.
 func (s *GatewayService) GetCachedSessionAccountID(ctx context.Context, groupID *int64, sessionHash string) (int64, error) {

@@ -142,12 +142,16 @@ func tempUnscheduleRetryableError(ctx context.Context, repo AccountRepository, a
 	if failoverErr == nil || !failoverErr.RetryableOnSameAccount {
 		return
 	}
+
+	writeCtx, cancel := newTempUnschedWriteContext(ctx)
+	defer cancel()
+
 	// 根据状态码选择封禁策略
 	switch failoverErr.StatusCode {
 	case http.StatusBadRequest:
-		tempUnscheduleGoogleConfigError(ctx, repo, accountID, "[handler]")
+		tempUnscheduleGoogleConfigError(writeCtx, repo, accountID, "[handler]")
 	case http.StatusBadGateway:
-		tempUnscheduleEmptyResponse(ctx, repo, accountID, "[handler]")
+		tempUnscheduleEmptyResponse(writeCtx, repo, accountID, "[handler]")
 	}
 }
 

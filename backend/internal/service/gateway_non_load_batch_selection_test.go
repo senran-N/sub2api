@@ -41,16 +41,24 @@ func (s *sessionLimitPerAccountStub) IsSessionActive(ctx context.Context, accoun
 	return false, nil
 }
 
-func (s *sessionLimitPerAccountStub) GetWindowCost(ctx context.Context, accountID int64) (float64, bool, error) {
+func (s *sessionLimitPerAccountStub) GetWindowCost(ctx context.Context, accountID int64, windowStart time.Time) (float64, bool, error) {
 	return 0, false, nil
 }
 
-func (s *sessionLimitPerAccountStub) SetWindowCost(ctx context.Context, accountID int64, cost float64) error {
+func (s *sessionLimitPerAccountStub) SetWindowCost(ctx context.Context, accountID int64, windowStart time.Time, cost float64) error {
 	return nil
 }
 
-func (s *sessionLimitPerAccountStub) GetWindowCostBatch(ctx context.Context, accountIDs []int64) (map[int64]float64, error) {
+func (s *sessionLimitPerAccountStub) GetWindowCostBatch(ctx context.Context, accountWindows map[int64]time.Time) (map[int64]float64, error) {
 	return nil, nil
+}
+
+func (s *sessionLimitPerAccountStub) ReserveWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string, cost float64, limit float64, ttl time.Duration) (bool, float64, error) {
+	return true, 0, nil
+}
+
+func (s *sessionLimitPerAccountStub) ReleaseWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string) error {
+	return nil
 }
 
 func TestCloneExcludedAccountIDs_CreatesIndependentCopy(t *testing.T) {

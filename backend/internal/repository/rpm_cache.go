@@ -4,35 +4,66 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
+	"github.com/senran-N/sub2api/internal/service"
 )
 
 // RPM 计数器缓存常量定义
 //
 // 设计说明：
-// 使用 Redis 简单计数器跟踪每个账号每分钟的请求数：
-// - Key: rpm:{accountID}:{minuteTimestamp}
+// 使用 Redis Hash 跟踪每个账号最近 1-2 分钟的请求数：
+// - Key: rpm:account:{accountID}
+// - Field: minuteTimestamp
 // - Value: 当前分钟内的请求计数
-// - TTL: 120 秒（覆盖当前分钟 + 一定冗余）
+// - TTL: 120 秒（覆盖当前分钟窗口 + 一定冗余）
 //
-// 使用 TxPipeline（MULTI/EXEC）执行 INCR + EXPIRE，保证原子性且兼容 Redis Cluster。
-// 通过 rdb.Time() 获取服务端时间，避免多实例时钟不同步。
-//
-// 设计决策：
-//   - TxPipeline vs Pipeline：Pipeline 仅合并发送但不保证原子，TxPipeline 使用 MULTI/EXEC 事务保证原子执行。
-//   - rdb.Time() 单独调用：Pipeline/TxPipeline 中无法引用前一命令的结果，因此 TIME 必须单独调用（2 RTT）。
-//     Lua 脚本可以做到 1 RTT，但在 Redis Cluster 中动态拼接 key 存在 CROSSSLOT 风险，选择安全性优先。
+// Reserve/Increment 使用 Lua + Redis TIME 在服务端完成“取当前分钟 + 递增/限流判断”，
+// 消除客户端 TIME/INCR 之间的分钟边界竞态，同时只触达单个 key。
 const (
 	// RPM 计数器键前缀
-	// 格式: rpm:{accountID}:{minuteTimestamp}
-	rpmKeyPrefix = "rpm:"
+	// 格式: rpm:account:{accountID}
+	rpmKeyPrefix = "rpm:account:"
 
 	// RPM 计数器 TTL（120 秒，覆盖当前分钟窗口 + 冗余）
 	rpmKeyTTL = 120 * time.Second
+)
+
+var (
+	reserveRPMScript = redis.NewScript(`
+		local key = KEYS[1]
+		local limit = tonumber(ARGV[1])
+		local ttl = tonumber(ARGV[2])
+
+		local timeResult = redis.call('TIME')
+		local minuteField = tostring(math.floor(tonumber(timeResult[1]) / 60))
+		local current = tonumber(redis.call('HGET', key, minuteField) or '0')
+
+		if current >= limit then
+			if current > 0 then
+				redis.call('EXPIRE', key, ttl)
+			end
+			return {0, current}
+		end
+
+		current = tonumber(redis.call('HINCRBY', key, minuteField, 1))
+		redis.call('EXPIRE', key, ttl)
+		return {1, current}
+	`)
+
+	incrementRPMScript = redis.NewScript(`
+		local key = KEYS[1]
+		local ttl = tonumber(ARGV[1])
+
+		local timeResult = redis.call('TIME')
+		local minuteField = tostring(math.floor(tonumber(timeResult[1]) / 60))
+		local current = tonumber(redis.call('HINCRBY', key, minuteField, 1))
+		redis.call('EXPIRE', key, ttl)
+		return current
+	`)
 )
 
 // RPMCacheImpl RPM 计数器缓存 Redis 实现
@@ -42,23 +73,22 @@ type RPMCacheImpl struct {
 
 // NewRPMCache 创建 RPM 计数器缓存
 func NewRPMCache(rdb *redis.Client) service.RPMCache {
+	ctx := context.Background()
+	for _, script := range []*redis.Script{reserveRPMScript, incrementRPMScript} {
+		if err := script.Load(ctx, rdb).Err(); err != nil {
+			log.Printf("[RPMCache] Failed to preload Lua script: %v", err)
+		}
+	}
 	return &RPMCacheImpl{rdb: rdb}
 }
 
-// currentMinuteKey 获取当前分钟的完整 Redis key
-// 使用 rdb.Time() 获取 Redis 服务端时间，避免多实例时钟偏差
-func (c *RPMCacheImpl) currentMinuteKey(ctx context.Context, accountID int64) (string, error) {
-	serverTime, err := c.rdb.Time(ctx).Result()
-	if err != nil {
-		return "", fmt.Errorf("redis TIME: %w", err)
-	}
-	minuteTS := serverTime.Unix() / 60
-	return fmt.Sprintf("%s%d:%d", rpmKeyPrefix, accountID, minuteTS), nil
+func rpmAccountKey(accountID int64) string {
+	return fmt.Sprintf("%s%d", rpmKeyPrefix, accountID)
 }
 
-// currentMinuteSuffix 获取当前分钟时间戳后缀（供批量操作使用）
+// currentMinuteField 获取当前分钟 field（供查询路径使用）
 // 使用 rdb.Time() 获取 Redis 服务端时间
-func (c *RPMCacheImpl) currentMinuteSuffix(ctx context.Context) (string, error) {
+func (c *RPMCacheImpl) currentMinuteField(ctx context.Context) (string, error) {
 	serverTime, err := c.rdb.Time(ctx).Result()
 	if err != nil {
 		return "", fmt.Errorf("redis TIME: %w", err)
@@ -67,35 +97,51 @@ func (c *RPMCacheImpl) currentMinuteSuffix(ctx context.Context) (string, error) 
 	return strconv.FormatInt(minuteTS, 10), nil
 }
 
-// IncrementRPM 原子递增并返回当前分钟的计数
-// 使用 TxPipeline (MULTI/EXEC) 执行 INCR + EXPIRE，保证原子性且兼容 Redis Cluster
+// ReserveRPM 原子预留一个 RPM 配额位。
+func (c *RPMCacheImpl) ReserveRPM(ctx context.Context, accountID int64, limit int) (bool, int, error) {
+	if limit <= 0 {
+		return true, 0, nil
+	}
+
+	raw, err := reserveRPMScript.Run(ctx, c.rdb, []string{rpmAccountKey(accountID)}, limit, int(rpmKeyTTL.Seconds())).Result()
+	if err != nil {
+		return false, 0, fmt.Errorf("rpm reserve: %w", err)
+	}
+
+	values, ok := raw.([]any)
+	if !ok || len(values) != 2 {
+		return false, 0, fmt.Errorf("rpm reserve: unexpected script result %T", raw)
+	}
+
+	allowed, err := redisInt(values[0])
+	if err != nil {
+		return false, 0, fmt.Errorf("rpm reserve: parse allowed: %w", err)
+	}
+	count, err := redisInt(values[1])
+	if err != nil {
+		return false, 0, fmt.Errorf("rpm reserve: parse count: %w", err)
+	}
+
+	return allowed == 1, count, nil
+}
+
+// IncrementRPM 原子递增并返回当前分钟的计数。
 func (c *RPMCacheImpl) IncrementRPM(ctx context.Context, accountID int64) (int, error) {
-	key, err := c.currentMinuteKey(ctx, accountID)
+	count, err := incrementRPMScript.Run(ctx, c.rdb, []string{rpmAccountKey(accountID)}, int(rpmKeyTTL.Seconds())).Int()
 	if err != nil {
 		return 0, fmt.Errorf("rpm increment: %w", err)
 	}
-
-	// 使用 TxPipeline (MULTI/EXEC) 保证 INCR + EXPIRE 原子执行
-	// EXPIRE 幂等，每次都设置不影响正确性
-	pipe := c.rdb.TxPipeline()
-	incrCmd := pipe.Incr(ctx, key)
-	pipe.Expire(ctx, key, rpmKeyTTL)
-
-	if _, err := pipe.Exec(ctx); err != nil {
-		return 0, fmt.Errorf("rpm increment: %w", err)
-	}
-
-	return int(incrCmd.Val()), nil
+	return count, nil
 }
 
 // GetRPM 获取当前分钟的 RPM 计数
 func (c *RPMCacheImpl) GetRPM(ctx context.Context, accountID int64) (int, error) {
-	key, err := c.currentMinuteKey(ctx, accountID)
+	field, err := c.currentMinuteField(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("rpm get: %w", err)
 	}
 
-	val, err := c.rdb.Get(ctx, key).Int()
+	val, err := c.rdb.HGet(ctx, rpmAccountKey(accountID), field).Int()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil // 当前分钟无记录
 	}
@@ -111,18 +157,15 @@ func (c *RPMCacheImpl) GetRPMBatch(ctx context.Context, accountIDs []int64) (map
 		return map[int64]int{}, nil
 	}
 
-	// 获取当前分钟后缀
-	minuteSuffix, err := c.currentMinuteSuffix(ctx)
+	minuteField, err := c.currentMinuteField(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("rpm batch get: %w", err)
 	}
 
-	// 使用 Pipeline 批量 GET
 	pipe := c.rdb.Pipeline()
 	cmds := make(map[int64]*redis.StringCmd, len(accountIDs))
 	for _, id := range accountIDs {
-		key := fmt.Sprintf("%s%d:%s", rpmKeyPrefix, id, minuteSuffix)
-		cmds[id] = pipe.Get(ctx, key)
+		cmds[id] = pipe.HGet(ctx, rpmAccountKey(id), minuteField)
 	}
 
 	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
@@ -138,4 +181,19 @@ func (c *RPMCacheImpl) GetRPMBatch(ctx context.Context, accountIDs []int64) (map
 		}
 	}
 	return result, nil
+}
+
+func redisInt(raw any) (int, error) {
+	switch v := raw.(type) {
+	case int64:
+		return int(v), nil
+	case string:
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, err
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("unexpected value type %T", raw)
+	}
 }

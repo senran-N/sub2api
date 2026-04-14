@@ -58,6 +58,22 @@ type ParsedRequest struct {
 	OnUpstreamAccepted func()
 }
 
+func parseIntegralTokenLimit(jsonStr string, paths ...string) int {
+	for _, path := range paths {
+		result := gjson.Get(jsonStr, path)
+		if !result.Exists() || result.Type != gjson.Number {
+			continue
+		}
+		f := result.Float()
+		if math.IsNaN(f) || math.IsInf(f, 0) || f != math.Trunc(f) ||
+			f > float64(math.MaxInt) || f < float64(math.MinInt) {
+			continue
+		}
+		return int(f)
+	}
+	return 0
+}
+
 func NormalizeSessionUserAgent(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -131,14 +147,7 @@ func ParseGatewayRequest(body []byte, protocol string) (*ParsedRequest, error) {
 
 	parsed.OutputEffort = strings.TrimSpace(gjson.Get(jsonStr, "output_config.effort").String())
 
-	maxTokensResult := gjson.Get(jsonStr, "max_tokens")
-	if maxTokensResult.Exists() && maxTokensResult.Type == gjson.Number {
-		f := maxTokensResult.Float()
-		if !math.IsNaN(f) && !math.IsInf(f, 0) && f == math.Trunc(f) &&
-			f <= float64(math.MaxInt) && f >= float64(math.MinInt) {
-			parsed.MaxTokens = int(f)
-		}
-	}
+	parsed.MaxTokens = parseIntegralTokenLimit(jsonStr, "max_tokens", "max_output_tokens", "max_completion_tokens", "output_config.max_tokens")
 
 	switch protocol {
 	case domain.PlatformGemini:

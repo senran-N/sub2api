@@ -12,7 +12,9 @@ type SessionLimitCache interface {
 	GetActiveSessionCount(ctx context.Context, accountID int64) (int, error)
 	GetActiveSessionCountBatch(ctx context.Context, accountIDs []int64, idleTimeouts map[int64]time.Duration) (map[int64]int, error)
 	IsSessionActive(ctx context.Context, accountID int64, sessionUUID string) (bool, error)
-	GetWindowCost(ctx context.Context, accountID int64) (cost float64, hit bool, err error)
-	SetWindowCost(ctx context.Context, accountID int64, cost float64) error
-	GetWindowCostBatch(ctx context.Context, accountIDs []int64) (map[int64]float64, error)
+	GetWindowCost(ctx context.Context, accountID int64, windowStart time.Time) (cost float64, hit bool, err error)
+	SetWindowCost(ctx context.Context, accountID int64, windowStart time.Time, cost float64) error
+	GetWindowCostBatch(ctx context.Context, accountWindows map[int64]time.Time) (map[int64]float64, error)
+	ReserveWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string, cost float64, limit float64, ttl time.Duration) (allowed bool, total float64, err error)
+	ReleaseWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string) error
 }

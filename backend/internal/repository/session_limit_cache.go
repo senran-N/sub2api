@@ -26,11 +26,14 @@ const (
 	sessionLimitKeyPrefix = "session_limit:account:"
 
 	// 窗口费用缓存键前缀
-	// 格式: window_cost:account:{accountID}
+	// 格式: window_cost:account:{accountID}:window:{windowStartUnix}
 	windowCostKeyPrefix = "window_cost:account:"
 
 	// 窗口费用缓存 TTL（30秒）
 	windowCostCacheTTL = 30 * time.Second
+
+	// 预留窗口费用的默认回收缓冲
+	windowCostKeyTTL = 3 * time.Minute
 )
 
 var (
@@ -141,6 +144,170 @@ var (
 
 		return 1
 	`)
+
+	reserveWindowCostScript = redis.NewScript(`
+		local key = KEYS[1]
+		local reservationID = ARGV[1]
+		local cost = tonumber(ARGV[2])
+		local limit = tonumber(ARGV[3])
+		local ttlSeconds = tonumber(ARGV[4])
+		local keyTTLSeconds = tonumber(ARGV[5])
+
+		local timeResult = redis.call('TIME')
+		local now = tonumber(timeResult[1])
+
+		local fields = redis.call('HGETALL', key)
+		local actual = 0
+		local actualExp = 0
+		local reservations = {}
+		local expiries = {}
+
+		for i = 1, #fields, 2 do
+			local field = fields[i]
+			local value = fields[i + 1]
+			if field == 'actual' then
+				actual = tonumber(value) or 0
+			elseif field == 'actual_exp' then
+				actualExp = tonumber(value) or 0
+			else
+				local prefix = string.sub(field, 1, 2)
+				local id = string.sub(field, 3)
+				if prefix == 'r:' then
+					reservations[id] = tonumber(value) or 0
+				elseif prefix == 'e:' then
+					expiries[id] = tonumber(value) or 0
+				end
+			end
+		end
+
+		if actualExp <= now then
+			actual = 0
+		end
+
+		local reserved = 0
+		local deleteFields = {}
+		for id, reservedCost in pairs(reservations) do
+			local expiresAt = expiries[id] or 0
+			if expiresAt <= now then
+				table.insert(deleteFields, 'r:' .. id)
+				table.insert(deleteFields, 'e:' .. id)
+			elseif id ~= reservationID then
+				reserved = reserved + reservedCost
+			end
+		end
+		if #deleteFields > 0 then
+			redis.call('HDEL', key, unpack(deleteFields))
+		end
+
+		if actual + reserved + cost > limit then
+			if redis.call('HLEN', key) > 0 then
+				redis.call('EXPIRE', key, keyTTLSeconds)
+			end
+			return {0, actual + reserved}
+		end
+
+		redis.call('HSET', key, 'r:' .. reservationID, cost, 'e:' .. reservationID, now + ttlSeconds)
+		redis.call('EXPIRE', key, keyTTLSeconds)
+		return {1, actual + reserved + cost}
+	`)
+
+	releaseWindowCostScript = redis.NewScript(`
+		local key = KEYS[1]
+		local reservationID = ARGV[1]
+		redis.call('HDEL', key, 'r:' .. reservationID, 'e:' .. reservationID)
+		if redis.call('HLEN', key) == 0 then
+			redis.call('DEL', key)
+		end
+		return 1
+	`)
+
+	evaluateWindowCostScript = redis.NewScript(`
+		local key = KEYS[1]
+
+		local timeResult = redis.call('TIME')
+		local now = tonumber(timeResult[1])
+
+		local fields = redis.call('HGETALL', key)
+		if #fields == 0 then
+			return {0, 0}
+		end
+
+		local actual = 0
+		local actualExp = 0
+		local reserved = 0
+		local deleteFields = {}
+
+		local reservations = {}
+		local expiries = {}
+		for i = 1, #fields, 2 do
+			local field = fields[i]
+			local value = fields[i + 1]
+			if field == 'actual' then
+				actual = tonumber(value) or 0
+			elseif field == 'actual_exp' then
+				actualExp = tonumber(value) or 0
+			else
+				local prefix = string.sub(field, 1, 2)
+				local id = string.sub(field, 3)
+				if prefix == 'r:' then
+					reservations[id] = tonumber(value) or 0
+				elseif prefix == 'e:' then
+					expiries[id] = tonumber(value) or 0
+				end
+			end
+		end
+
+		if actualExp <= now then
+			actual = 0
+		end
+
+		for id, reservedCost in pairs(reservations) do
+			local expiresAt = expiries[id] or 0
+			if expiresAt <= now then
+				table.insert(deleteFields, 'r:' .. id)
+				table.insert(deleteFields, 'e:' .. id)
+			else
+				reserved = reserved + reservedCost
+			end
+		end
+
+		if #deleteFields > 0 then
+			redis.call('HDEL', key, unpack(deleteFields))
+		end
+
+		local total = actual + reserved
+		if total <= 0 then
+			if actual <= 0 and redis.call('HLEN', key) == 0 then
+				redis.call('DEL', key)
+			elseif redis.call('HLEN', key) > 0 then
+				redis.call('EXPIRE', key, ARGV[1])
+			end
+			return {0, 0}
+		end
+
+		redis.call('EXPIRE', key, ARGV[1])
+		return {1, total}
+	`)
+
+	setWindowCostScript = redis.NewScript(`
+		local key = KEYS[1]
+		local nextActual = tonumber(ARGV[1])
+		local actualTTLSeconds = tonumber(ARGV[2])
+		local keyTTLSeconds = tonumber(ARGV[3])
+
+		local timeResult = redis.call('TIME')
+		local now = tonumber(timeResult[1])
+
+		local currentActual = tonumber(redis.call('HGET', key, 'actual') or '0')
+		local currentActualExp = tonumber(redis.call('HGET', key, 'actual_exp') or '0')
+		if currentActualExp > now and currentActual > nextActual then
+			nextActual = currentActual
+		end
+
+		redis.call('HSET', key, 'actual', nextActual, 'actual_exp', now + actualTTLSeconds)
+		redis.call('EXPIRE', key, keyTTLSeconds)
+		return nextActual
+	`)
 )
 
 type sessionLimitCache struct {
@@ -162,6 +329,10 @@ func NewSessionLimitCache(rdb *redis.Client, defaultIdleTimeoutMinutes int) port
 		refreshSessionScript,
 		getActiveSessionCountScript,
 		isSessionActiveScript,
+		reserveWindowCostScript,
+		releaseWindowCostScript,
+		evaluateWindowCostScript,
+		setWindowCostScript,
 	}
 	for _, script := range scripts {
 		if err := script.Load(ctx, rdb).Err(); err != nil {
@@ -181,8 +352,8 @@ func sessionLimitKey(accountID int64) string {
 }
 
 // windowCostKey 生成窗口费用缓存的 Redis 键
-func windowCostKey(accountID int64) string {
-	return fmt.Sprintf("%s%d", windowCostKeyPrefix, accountID)
+func windowCostKey(accountID int64, windowStart time.Time) string {
+	return fmt.Sprintf("%s%d:window:%d", windowCostKeyPrefix, accountID, windowStart.UTC().Unix())
 }
 
 // RegisterSession 注册会话活动
@@ -287,58 +458,166 @@ func (c *sessionLimitCache) IsSessionActive(ctx context.Context, accountID int64
 
 // ========== 5h窗口费用缓存实现 ==========
 
-// GetWindowCost 获取缓存的窗口费用
-func (c *sessionLimitCache) GetWindowCost(ctx context.Context, accountID int64) (float64, bool, error) {
-	key := windowCostKey(accountID)
-	val, err := c.rdb.Get(ctx, key).Float64()
-	if err == redis.Nil {
-		return 0, false, nil // 缓存未命中
+func (c *sessionLimitCache) currentUnixSecond(ctx context.Context) (int64, error) {
+	serverTime, err := c.rdb.Time(ctx).Result()
+	if err != nil {
+		return 0, err
 	}
+	return serverTime.Unix(), nil
+}
+
+func (c *sessionLimitCache) evaluateWindowCost(ctx context.Context, key string) (float64, bool, error) {
+	raw, err := evaluateWindowCostScript.Run(ctx, c.rdb, []string{key}, int(windowCostKeyTTL.Seconds())).Result()
 	if err != nil {
 		return 0, false, err
 	}
-	return val, true, nil
+	values, ok := raw.([]any)
+	if !ok || len(values) != 2 {
+		return 0, false, fmt.Errorf("unexpected evaluate window cost result %T", raw)
+	}
+
+	hit, err := parseRedisInt64(values[0])
+	if err != nil {
+		return 0, false, err
+	}
+	total, err := parseRedisFloat64(values[1])
+	if err != nil {
+		return 0, false, err
+	}
+	return total, hit == 1, nil
+}
+
+// GetWindowCost 获取缓存的窗口费用
+func (c *sessionLimitCache) GetWindowCost(ctx context.Context, accountID int64, windowStart time.Time) (float64, bool, error) {
+	return c.evaluateWindowCost(ctx, windowCostKey(accountID, windowStart))
 }
 
 // SetWindowCost 设置窗口费用缓存
-func (c *sessionLimitCache) SetWindowCost(ctx context.Context, accountID int64, cost float64) error {
-	key := windowCostKey(accountID)
-	return c.rdb.Set(ctx, key, cost, windowCostCacheTTL).Err()
+func (c *sessionLimitCache) SetWindowCost(ctx context.Context, accountID int64, windowStart time.Time, cost float64) error {
+	_, err := setWindowCostScript.Run(
+		ctx,
+		c.rdb,
+		[]string{windowCostKey(accountID, windowStart)},
+		strconv.FormatFloat(cost, 'f', -1, 64),
+		int(windowCostCacheTTL.Seconds()),
+		int(windowCostKeyTTL.Seconds()),
+	).Result()
+	return err
 }
 
 // GetWindowCostBatch 批量获取窗口费用缓存
-func (c *sessionLimitCache) GetWindowCostBatch(ctx context.Context, accountIDs []int64) (map[int64]float64, error) {
-	if len(accountIDs) == 0 {
+func (c *sessionLimitCache) GetWindowCostBatch(ctx context.Context, accountWindows map[int64]time.Time) (map[int64]float64, error) {
+	if len(accountWindows) == 0 {
 		return make(map[int64]float64), nil
 	}
 
-	// 构建批量查询的 keys
-	keys := make([]string, len(accountIDs))
-	for i, accountID := range accountIDs {
-		keys[i] = windowCostKey(accountID)
+	pipe := c.rdb.Pipeline()
+	cmds := make(map[int64]*redis.Cmd, len(accountWindows))
+	for accountID, windowStart := range accountWindows {
+		cmds[accountID] = evaluateWindowCostScript.Run(ctx, pipe, []string{windowCostKey(accountID, windowStart)}, int(windowCostKeyTTL.Seconds()))
 	}
 
-	// 使用 MGET 批量获取
-	vals, err := c.rdb.MGet(ctx, keys...).Result()
+	_, err := pipe.Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make(map[int64]float64, len(accountIDs))
-	for i, val := range vals {
-		if val == nil {
-			continue // 缓存未命中
+	results := make(map[int64]float64, len(accountWindows))
+	for accountID, cmd := range cmds {
+		raw, err := cmd.Result()
+		if err != nil {
+			continue
 		}
-		// 尝试解析为 float64
-		switch v := val.(type) {
-		case string:
-			if cost, err := strconv.ParseFloat(v, 64); err == nil {
-				results[accountIDs[i]] = cost
-			}
-		case float64:
-			results[accountIDs[i]] = v
+		values, ok := raw.([]any)
+		if !ok || len(values) != 2 {
+			continue
 		}
+		hit, err := parseRedisInt64(values[0])
+		if err != nil || hit != 1 {
+			continue
+		}
+		cost, err := parseRedisFloat64(values[1])
+		if err != nil {
+			continue
+		}
+		results[accountID] = cost
 	}
 
 	return results, nil
+}
+
+func (c *sessionLimitCache) ReserveWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string, cost float64, limit float64, ttl time.Duration) (bool, float64, error) {
+	if reservationID == "" || cost <= 0 || limit <= 0 {
+		return true, 0, nil
+	}
+
+	ttlSeconds := int(ttl.Seconds())
+	if ttlSeconds <= 0 {
+		ttlSeconds = int(windowCostCacheTTL.Seconds())
+	}
+
+	raw, err := reserveWindowCostScript.Run(
+		ctx,
+		c.rdb,
+		[]string{windowCostKey(accountID, windowStart)},
+		reservationID,
+		strconv.FormatFloat(cost, 'f', -1, 64),
+		strconv.FormatFloat(limit, 'f', -1, 64),
+		ttlSeconds,
+		int(windowCostKeyTTL.Seconds()),
+	).Result()
+	if err != nil {
+		return true, 0, err
+	}
+
+	values, ok := raw.([]any)
+	if !ok || len(values) != 2 {
+		return true, 0, fmt.Errorf("unexpected reserve window cost result %T", raw)
+	}
+
+	allowed, err := parseRedisInt64(values[0])
+	if err != nil {
+		return true, 0, err
+	}
+	total, err := parseRedisFloat64(values[1])
+	if err != nil {
+		return true, 0, err
+	}
+	return allowed == 1, total, nil
+}
+
+func (c *sessionLimitCache) ReleaseWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string) error {
+	if reservationID == "" {
+		return nil
+	}
+	_, err := releaseWindowCostScript.Run(ctx, c.rdb, []string{windowCostKey(accountID, windowStart)}, reservationID).Result()
+	return err
+}
+
+func parseRedisFloat64(raw any) (float64, error) {
+	switch v := raw.(type) {
+	case string:
+		return strconv.ParseFloat(v, 64)
+	case []byte:
+		return strconv.ParseFloat(string(v), 64)
+	case float64:
+		return v, nil
+	case int64:
+		return float64(v), nil
+	default:
+		return 0, fmt.Errorf("unexpected float type %T", raw)
+	}
+}
+
+func parseRedisInt64(raw any) (int64, error) {
+	switch v := raw.(type) {
+	case string:
+		return strconv.ParseInt(v, 10, 64)
+	case []byte:
+		return strconv.ParseInt(string(v), 10, 64)
+	case int64:
+		return v, nil
+	default:
+		return 0, fmt.Errorf("unexpected int type %T", raw)
+	}
 }

@@ -162,6 +162,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		APIKeyID:  apiKey.ID,
 	}
 	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+	sessionBoundAccountID := h.prefetchStickySessionBinding(c, apiKey.GroupID, sessionHash)
 
 	// 3. Account selection + failover loop
 	fs := NewFailoverState(h.maxAccountSwitches, false)
@@ -246,6 +247,35 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			}
 		}
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+		if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, apiKey.GroupID, sessionHash) {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			fs.FailedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
+		billingModel := parsedReq.Model
+		if channelMapping.Mapped {
+			billingModel = channelMapping.MappedModel
+		}
+		windowCostReservation, windowCostAllowed := h.tryReserveAccountWindowCostForForward(
+			c.Request.Context(),
+			reqLog,
+			account,
+			apiKey,
+			parsedReq,
+			billingModel,
+			sessionBoundAccountID,
+			apiKey.GroupID,
+			sessionHash,
+		)
+		if !windowCostAllowed {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			fs.FailedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
 
 		// 5. Forward request
 		writerSizeBeforeForward := c.Writer.Size()
@@ -260,6 +290,9 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		}
 
 		if err != nil {
+			if c.Writer.Size() == writerSizeBeforeForward {
+				h.releaseWindowCostReservation(c.Request.Context(), reqLog, windowCostReservation)
+			}
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				// Can't failover if streaming content already sent

@@ -130,12 +130,18 @@ func (c StubSessionLimitCache) GetActiveSessionCountBatch(_ context.Context, _ [
 func (c StubSessionLimitCache) IsSessionActive(_ context.Context, _ int64, _ string) (bool, error) {
 	return false, nil
 }
-func (c StubSessionLimitCache) GetWindowCost(_ context.Context, _ int64) (float64, bool, error) {
+func (c StubSessionLimitCache) GetWindowCost(_ context.Context, _ int64, _ time.Time) (float64, bool, error) {
 	return 0, false, nil
 }
-func (c StubSessionLimitCache) SetWindowCost(_ context.Context, _ int64, _ float64) error {
+func (c StubSessionLimitCache) SetWindowCost(_ context.Context, _ int64, _ time.Time, _ float64) error {
 	return nil
 }
-func (c StubSessionLimitCache) GetWindowCostBatch(_ context.Context, _ []int64) (map[int64]float64, error) {
+func (c StubSessionLimitCache) GetWindowCostBatch(_ context.Context, _ map[int64]time.Time) (map[int64]float64, error) {
 	return nil, nil
+}
+func (c StubSessionLimitCache) ReserveWindowCost(_ context.Context, _ int64, _ time.Time, _ string, _ float64, _ float64, _ time.Duration) (bool, float64, error) {
+	return true, 0, nil
+}
+func (c StubSessionLimitCache) ReleaseWindowCost(_ context.Context, _ int64, _ time.Time, _ string) error {
+	return nil
 }

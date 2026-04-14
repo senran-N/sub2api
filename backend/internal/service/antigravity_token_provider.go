@@ -189,7 +189,7 @@ func (p *AntigravityTokenProvider) shouldAttemptBackfill(accountID int64) bool {
 
 // markTempUnschedulable 在请求路径上 token 刷新失败时标记账号临时不可调度。
 // 同时写 DB 和 Redis 缓存，确保调度器立即跳过该账号。
-// 使用 background context 因为请求 context 可能已超时。
+// 使用带超时的脱离 context，避免在请求超时后继续无限阻塞热路径。
 func (p *AntigravityTokenProvider) markTempUnschedulable(account *Account, refreshErr error) {
 	if p.accountRepo == nil || account == nil {
 		return
@@ -197,8 +197,9 @@ func (p *AntigravityTokenProvider) markTempUnschedulable(account *Account, refre
 	now := time.Now()
 	until := now.Add(tokenRefreshTempUnschedDuration)
 	reason := "token refresh failed on request path: " + refreshErr.Error()
-	bgCtx := context.Background()
-	if err := p.accountRepo.SetTempUnschedulable(bgCtx, account.ID, until, reason); err != nil {
+	writeCtx, cancel := newTempUnschedWriteContext(nil)
+	defer cancel()
+	if err := p.accountRepo.SetTempUnschedulable(writeCtx, account.ID, until, reason); err != nil {
 		slog.Warn("antigravity_token_provider.set_temp_unschedulable_failed",
 			"account_id", account.ID,
 			"error", err,
@@ -217,7 +218,7 @@ func (p *AntigravityTokenProvider) markTempUnschedulable(account *Account, refre
 			TriggeredAtUnix: now.Unix(),
 			ErrorMessage:    reason,
 		}
-		if err := p.tempUnschedCache.SetTempUnsched(bgCtx, account.ID, state); err != nil {
+		if err := p.tempUnschedCache.SetTempUnsched(writeCtx, account.ID, state); err != nil {
 			slog.Warn("antigravity_token_provider.temp_unsched_cache_set_failed",
 				"account_id", account.ID,
 				"error", err,

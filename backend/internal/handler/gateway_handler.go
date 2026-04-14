@@ -278,15 +278,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 查询粘性会话绑定的账号 ID
 	var sessionBoundAccountID int64
 	if sessionKey != "" {
-		sessionBoundAccountID, _ = h.gatewayService.GetCachedSessionAccountID(c.Request.Context(), apiKey.GroupID, sessionKey)
-		if sessionBoundAccountID > 0 {
-			prefetchedGroupID := int64(0)
-			if apiKey.GroupID != nil {
-				prefetchedGroupID = *apiKey.GroupID
-			}
-			ctx := service.WithPrefetchedStickySession(c.Request.Context(), sessionBoundAccountID, prefetchedGroupID, h.metadataBridgeEnabled())
-			c.Request = c.Request.WithContext(ctx)
-		}
+		sessionBoundAccountID = h.prefetchStickySessionBinding(c, apiKey.GroupID, sessionKey)
 	}
 	// 判断是否真的绑定了粘性会话：有 sessionKey 且已经绑定到某个账号
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
@@ -403,6 +395,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 			// 账号槽位/等待计数需要在超时或断开时安全回收
 			accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+			if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, apiKey.GroupID, sessionKey) {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				fs.FailedAccountIDs[account.ID] = struct{}{}
+				continue
+			}
 
 			// 转发请求 - 根据账号平台分流
 			var result *service.ForwardResult
@@ -459,15 +458,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
 				return
-			}
-
-			// RPM 计数递增（Forward 成功后）
-			// 注意：TOCTOU 竞态是已知且可接受的设计权衡，与 WindowCost 一致的 soft-limit 模式。
-			// 在高并发下可能短暂超出 RPM 限制，但不会导致请求失败。
-			if account.IsAnthropicOAuthOrSetupToken() && account.GetBaseRPM() > 0 {
-				if err := h.gatewayService.IncrementAccountRPM(c.Request.Context(), account.ID); err != nil {
-					reqLog.Warn("gateway.rpm_increment_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-				}
 			}
 
 			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
@@ -692,6 +682,39 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				parsedReq.Body = h.gatewayService.ReplaceModelInBody(parsedReq.Body, channelMapping.MappedModel)
 				body = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
 			}
+			if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, currentAPIKey.GroupID, sessionKey) {
+				if queueRelease != nil {
+					queueRelease()
+				}
+				parsedReq.OnUpstreamAccepted = nil
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				fs.FailedAccountIDs[account.ID] = struct{}{}
+				continue
+			}
+			windowCostReservation, windowCostAllowed := h.tryReserveAccountWindowCostForForward(
+				c.Request.Context(),
+				reqLog,
+				account,
+				currentAPIKey,
+				parsedReq,
+				parsedReq.Model,
+				sessionBoundAccountID,
+				currentAPIKey.GroupID,
+				sessionKey,
+			)
+			if !windowCostAllowed {
+				if queueRelease != nil {
+					queueRelease()
+				}
+				parsedReq.OnUpstreamAccepted = nil
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				fs.FailedAccountIDs[account.ID] = struct{}{}
+				continue
+			}
 
 			// 转发请求 - 根据账号平台分流
 			var result *service.ForwardResult
@@ -718,6 +741,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				accountReleaseFunc()
 			}
 			if err != nil {
+				if c.Writer.Size() == writerSizeBeforeForward {
+					h.releaseWindowCostReservation(c.Request.Context(), reqLog, windowCostReservation)
+				}
 				// Beta policy block: return 400 immediately, no failover
 				var betaBlockedErr *service.BetaBlockedError
 				if errors.As(err, &betaBlockedErr) {
@@ -818,15 +844,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
 				return
-			}
-
-			// RPM 计数递增（Forward 成功后）
-			// 注意：TOCTOU 竞态是已知且可接受的设计权衡，与 WindowCost 一致的 soft-limit 模式。
-			// 在高并发下可能短暂超出 RPM 限制，但不会导致请求失败。
-			if account.IsAnthropicOAuthOrSetupToken() && account.GetBaseRPM() > 0 {
-				if err := h.gatewayService.IncrementAccountRPM(c.Request.Context(), account.ID); err != nil {
-					reqLog.Warn("gateway.rpm_increment_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-				}
 			}
 
 			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
@@ -1539,15 +1556,23 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		APIKeyID:  apiKey.ID,
 	}
 	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+	sessionBoundAccountID := h.prefetchStickySessionBinding(c, apiKey.GroupID, sessionHash)
 
-	// 选择支持该模型的账号
-	account, err := h.gatewayService.SelectAccountForModel(c.Request.Context(), apiKey.GroupID, sessionHash, parsedReq.Model)
-	if err != nil {
-		reqLog.Warn("gateway.count_tokens_select_account_failed", zap.Error(err))
-		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable")
-		return
+	excludedIDs := make(map[int64]struct{})
+	var account *service.Account
+	for {
+		account, err = h.gatewayService.SelectAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, sessionHash, parsedReq.Model, excludedIDs)
+		if err != nil {
+			reqLog.Warn("gateway.count_tokens_select_account_failed", zap.Error(err))
+			h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable")
+			return
+		}
+		setOpsSelectedAccount(c, account.ID, account.Platform)
+		if h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, apiKey.GroupID, sessionHash) {
+			break
+		}
+		excludedIDs[account.ID] = struct{}{}
 	}
-	setOpsSelectedAccount(c, account.ID, account.Platform)
 
 	// 转发请求（不记录使用量）
 	if err := h.gatewayService.ForwardCountTokens(c.Request.Context(), c, account, parsedReq); err != nil {

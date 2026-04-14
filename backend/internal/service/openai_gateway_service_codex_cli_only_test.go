@@ -232,7 +232,7 @@ func TestIsOpenAITransientProcessingError(t *testing.T) {
 }
 
 func TestIsOpenAIPoolModeRetryableStatus(t *testing.T) {
-	require.True(t, isOpenAIPoolModeRetryableStatus(http.StatusTooManyRequests))
+	require.False(t, isOpenAIPoolModeRetryableStatus(http.StatusTooManyRequests))
 	require.False(t, isOpenAIPoolModeRetryableStatus(http.StatusUnauthorized))
 	require.False(t, isOpenAIPoolModeRetryableStatus(http.StatusForbidden))
 }

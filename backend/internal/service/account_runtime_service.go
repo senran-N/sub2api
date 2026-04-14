@@ -51,7 +51,7 @@ func (s *AccountRuntimeService) CollectAccountMetrics(ctx context.Context, accou
 	}
 
 	accountIDs := make([]int64, 0, len(accounts))
-	windowCostIDs := make([]int64, 0, len(accounts))
+	windowCostScopes := make(map[int64]time.Time, len(accounts))
 	sessionLimitIDs := make([]int64, 0, len(accounts))
 	rpmIDs := make([]int64, 0, len(accounts))
 	sessionIdleTimeouts := make(map[int64]time.Duration)
@@ -67,7 +67,7 @@ func (s *AccountRuntimeService) CollectAccountMetrics(ctx context.Context, accou
 			continue
 		}
 		if account.GetWindowCostLimit() > 0 {
-			windowCostIDs = append(windowCostIDs, account.ID)
+			windowCostScopes[account.ID] = account.GetCurrentWindowStartTime()
 			missingWindowCostAccounts = append(missingWindowCostAccounts, *account)
 		}
 		if account.GetMaxSessions() > 0 {
@@ -97,12 +97,12 @@ func (s *AccountRuntimeService) CollectAccountMetrics(ctx context.Context, accou
 		}
 	}
 
-	if len(windowCostIDs) == 0 {
+	if len(windowCostScopes) == 0 {
 		return metrics
 	}
 
 	if s.sessionLimitCache != nil {
-		if cachedCosts, err := s.sessionLimitCache.GetWindowCostBatch(ctx, windowCostIDs); err == nil && cachedCosts != nil {
+		if cachedCosts, err := s.sessionLimitCache.GetWindowCostBatch(ctx, windowCostScopes); err == nil && cachedCosts != nil {
 			for accountID, cost := range cachedCosts {
 				metrics.WindowCosts[accountID] = cost
 			}
@@ -136,7 +136,7 @@ func (s *AccountRuntimeService) CollectAccountMetrics(ctx context.Context, accou
 		}
 		metrics.WindowCosts[account.ID] = cost
 		if s.sessionLimitCache != nil {
-			_ = s.sessionLimitCache.SetWindowCost(ctx, account.ID, cost)
+			_ = s.sessionLimitCache.SetWindowCost(ctx, account.ID, account.GetCurrentWindowStartTime(), cost)
 		}
 	}
 

@@ -47,7 +47,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetry(t *testing.T) {
 
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
-		&service.UpstreamFailoverError{StatusCode: http.StatusBadGateway, RetryableOnSameAccount: true},
+		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -75,7 +75,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SwitchAfterRetryBudget(t *testing.T) {
 
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
-		&service.UpstreamFailoverError{StatusCode: http.StatusBadGateway, RetryableOnSameAccount: true},
+		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -129,7 +129,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetryDoesNotTempUnschedule(t *
 
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
-		&service.UpstreamFailoverError{StatusCode: http.StatusBadGateway, RetryableOnSameAccount: true},
+		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,

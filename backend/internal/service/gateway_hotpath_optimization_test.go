@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	gocache "github.com/patrickmn/go-cache"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/senran-N/sub2api/internal/pkg/usagestats"
-	gocache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,12 +82,12 @@ type sessionLimitCacheHotpathStub struct {
 	setErr  error
 }
 
-func (s *sessionLimitCacheHotpathStub) GetWindowCostBatch(ctx context.Context, accountIDs []int64) (map[int64]float64, error) {
+func (s *sessionLimitCacheHotpathStub) GetWindowCostBatch(ctx context.Context, accountWindows map[int64]time.Time) (map[int64]float64, error) {
 	if s.batchErr != nil {
 		return nil, s.batchErr
 	}
-	out := make(map[int64]float64, len(accountIDs))
-	for _, id := range accountIDs {
+	out := make(map[int64]float64, len(accountWindows))
+	for id := range accountWindows {
 		if v, ok := s.batchData[id]; ok {
 			out[id] = v
 		}
@@ -95,7 +95,7 @@ func (s *sessionLimitCacheHotpathStub) GetWindowCostBatch(ctx context.Context, a
 	return out, nil
 }
 
-func (s *sessionLimitCacheHotpathStub) SetWindowCost(ctx context.Context, accountID int64, cost float64) error {
+func (s *sessionLimitCacheHotpathStub) SetWindowCost(ctx context.Context, accountID int64, windowStart time.Time, cost float64) error {
 	if s.setErr != nil {
 		return s.setErr
 	}
@@ -103,6 +103,14 @@ func (s *sessionLimitCacheHotpathStub) SetWindowCost(ctx context.Context, accoun
 		s.setData = make(map[int64]float64)
 	}
 	s.setData[accountID] = cost
+	return nil
+}
+
+func (s *sessionLimitCacheHotpathStub) ReserveWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string, cost float64, limit float64, ttl time.Duration) (bool, float64, error) {
+	return true, 0, nil
+}
+
+func (s *sessionLimitCacheHotpathStub) ReleaseWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string) error {
 	return nil
 }
 
