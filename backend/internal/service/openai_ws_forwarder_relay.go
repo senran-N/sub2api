@@ -393,14 +393,17 @@ func (s *OpenAIGatewayService) relayOpenAIWSForwardV2(req openAIWSForwardRelayRe
 		flushStreamWriter(true)
 	}
 
-	if responseID != "" && req.stateStore != nil {
-		ttl := s.openAIWSResponseStickyTTL()
-		logOpenAIWSBindResponseAccountWarn(req.groupID, req.account.ID, responseID, req.stateStore.BindResponseAccount(req.ctx, req.groupID, responseID, req.account.ID, ttl))
-		req.stateStore.BindResponseConn(responseID, req.lease.ConnID(), ttl)
-	}
-	if req.stateStore != nil && req.storeDisabled && req.sessionHash != "" {
-		req.stateStore.BindSessionConn(req.groupID, req.sessionHash, req.lease.ConnID(), s.openAIWSSessionStickyTTL())
-	}
+	s.bindCodexChainSuccess(req.ctx, req.stateStore, codexChainBinding{
+		AccountID:     req.account.ID,
+		ConnID:        req.lease.ConnID(),
+		GroupID:       req.groupID,
+		ResponseID:    responseID,
+		ResponseTTL:   s.openAIWSResponseStickyTTL(),
+		SessionHash:   req.sessionHash,
+		SessionTTL:    s.openAIWSSessionStickyTTL(),
+		StoreDisabled: req.storeDisabled,
+		Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
 	firstTokenMsValue := -1
 	if firstTokenMs != nil {
 		firstTokenMsValue = *firstTokenMs

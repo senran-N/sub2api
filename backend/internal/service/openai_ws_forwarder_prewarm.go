@@ -156,11 +156,14 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 	}
 
 	lease.MarkPrewarmed()
-	if prewarmResponseID != "" && stateStore != nil {
-		ttl := s.openAIWSResponseStickyTTL()
-		logOpenAIWSBindResponseAccountWarn(groupID, account.ID, prewarmResponseID, stateStore.BindResponseAccount(ctx, groupID, prewarmResponseID, account.ID, ttl))
-		stateStore.BindResponseConn(prewarmResponseID, lease.ConnID(), ttl)
-	}
+	s.bindCodexChainSuccess(ctx, stateStore, codexChainBinding{
+		AccountID:   account.ID,
+		ConnID:      lease.ConnID(),
+		GroupID:     groupID,
+		ResponseID:  prewarmResponseID,
+		ResponseTTL: s.openAIWSResponseStickyTTL(),
+		Transport:   OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
 	logOpenAIWSModeInfo(
 		"prewarm_done account_id=%d conn_id=%s response_id=%s events=%d terminal_events=%d duration_ms=%d",
 		account.ID,

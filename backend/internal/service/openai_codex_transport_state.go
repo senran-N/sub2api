@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -77,20 +78,20 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 		}
 	}
 
-	if stateStore != nil {
-		if responseID := strings.TrimSpace(input.PreviousResponseID); responseID != "" {
-			if connID, ok := stateStore.GetResponseConn(responseID); ok {
-				state.PreferredConnID = connID
-				state.PreferredConnSource = codexTransportPreferredConnSourcePreviousResponse
-			}
-		}
-		if state.PreferredConnID == "" && state.StoreDisabled && strings.TrimSpace(input.PreviousResponseID) == "" && state.HasExplicitContinuation && state.SessionHash != "" {
-			if connID, ok := stateStore.GetSessionConn(state.GroupID, state.SessionHash); ok {
-				state.PreferredConnID = connID
-				state.PreferredConnSource = codexTransportPreferredConnSourceSession
-			}
-		}
+	resolveCtx := context.Background()
+	if c != nil && c.Request != nil {
+		resolveCtx = c.Request.Context()
 	}
+	chainState := s.resolveCodexChainState(resolveCtx, codexChainStateInput{
+		GroupID:                 state.GroupID,
+		HasExplicitContinuation: state.HasExplicitContinuation,
+		PreviousResponseID:      input.PreviousResponseID,
+		SessionHash:             state.SessionHash,
+		StoreDisabled:           state.StoreDisabled,
+		Transport:               OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
+	state.PreferredConnID = chainState.PreferredConnID
+	state.PreferredConnSource = chainState.PreferredConnSource
 
 	forceNewConnByPolicy := shouldForceNewConnOnStoreDisabled(state.StoreDisabledConnMode, input.LastFailureReason)
 	state.ForceNewConn = forceNewConnByPolicy && state.StoreDisabled && !state.HasExplicitContinuation && state.SessionHash != "" && state.PreferredConnID == ""

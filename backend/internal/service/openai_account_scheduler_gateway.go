@@ -37,12 +37,11 @@ func (s *OpenAIGatewayService) SelectAccountWithScheduler(
 		return selection, decision, err
 	}
 
-	var stickyAccountID int64
-	if sessionHash != "" && s.cache != nil {
-		if accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash); err == nil && accountID > 0 {
-			stickyAccountID = accountID
-		}
-	}
+	stickyAccountID := s.resolveCodexChainState(ctx, codexChainStateInput{
+		GroupID:     derefGroupID(groupID),
+		SessionHash: sessionHash,
+		Transport:   requiredTransport,
+	}).SessionStickyAccount
 
 	return scheduler.Select(ctx, OpenAIAccountScheduleRequest{
 		GroupID:            groupID,

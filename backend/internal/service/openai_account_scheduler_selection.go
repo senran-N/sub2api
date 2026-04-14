@@ -21,13 +21,22 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, nil
 	}
 
+	stickyAccountID := req.StickyAccountID
+	if stickyAccountID <= 0 {
+		stickyAccountID = s.service.resolveCodexChainState(ctx, codexChainStateInput{
+			GroupID:     derefGroupID(req.GroupID),
+			SessionHash: sessionHash,
+			Transport:   req.RequiredTransport,
+		}).SessionStickyAccount
+	}
+
 	account, accountID := s.service.resolveOpenAIStickySessionAccount(
 		ctx,
 		req.GroupID,
 		sessionHash,
 		req.RequestedModel,
 		req.ExcludedIDs,
-		req.StickyAccountID,
+		stickyAccountID,
 		openAIStickySessionResolvePolicy{
 			deleteOnLookupMiss: true,
 			refreshTTLOnHit:    false,

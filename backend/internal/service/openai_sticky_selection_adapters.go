@@ -42,12 +42,13 @@ func (s *OpenAIGatewayService) buildOpenAIResponseBindingSelectionAdapter(
 	store OpenAIWSStateStore,
 ) func(account *Account, acquired *AcquireResult) *AccountSelectionResult {
 	return func(account *Account, acquired *AcquireResult) *AccountSelectionResult {
-		logOpenAIWSBindResponseAccountWarn(
-			derefGroupID(groupID),
-			accountID,
-			responseID,
-			store.BindResponseAccount(ctx, derefGroupID(groupID), responseID, accountID, s.openAIWSResponseStickyTTL()),
-		)
+		s.bindCodexChainSuccess(ctx, store, codexChainBinding{
+			AccountID:   accountID,
+			GroupID:     derefGroupID(groupID),
+			ResponseID:  responseID,
+			ResponseTTL: s.openAIWSResponseStickyTTL(),
+			Transport:   OpenAIUpstreamTransportResponsesWebsocketV2,
+		})
 		return newOpenAIAcquiredSelection(account, acquired)
 	}
 }

@@ -26,8 +26,13 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 		return nil, nil
 	}
 
-	accountID, err := store.GetResponseAccount(ctx, derefGroupID(groupID), responseID)
-	if err != nil || accountID <= 0 {
+	chainState := s.resolveCodexChainState(ctx, codexChainStateInput{
+		GroupID:            derefGroupID(groupID),
+		PreviousResponseID: responseID,
+		Transport:          OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
+	accountID := chainState.ResponseAccountID
+	if accountID <= 0 {
 		return nil, nil
 	}
 	if isOpenAIAccountExcluded(excludedIDs, accountID) {

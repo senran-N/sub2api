@@ -71,6 +71,13 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 
 // tryStickySessionHit tries to resolve a sticky session to a currently usable account.
 func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64) *Account {
+	if stickyAccountID <= 0 {
+		stickyAccountID = s.resolveCodexChainState(ctx, codexChainStateInput{
+			GroupID:     derefGroupID(groupID),
+			SessionHash: sessionHash,
+			Transport:   OpenAIUpstreamTransportAny,
+		}).SessionStickyAccount
+	}
 	account, _ := s.resolveOpenAIStickySessionAccount(
 		ctx,
 		groupID,
@@ -115,12 +122,11 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts [
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	cfg := gatewaySchedulingConfigOrDefault(s.cfg)
 	stickyTTL := s.openAIWSSessionStickyTTL()
-	stickyAccountID := int64(0)
-	if sessionHash != "" && s.cache != nil {
-		if accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash); err == nil {
-			stickyAccountID = accountID
-		}
-	}
+	stickyAccountID := s.resolveCodexChainState(ctx, codexChainStateInput{
+		GroupID:     derefGroupID(groupID),
+		SessionHash: sessionHash,
+		Transport:   OpenAIUpstreamTransportAny,
+	}).SessionStickyAccount
 
 	if s.concurrencyService == nil || !cfg.LoadBatchEnabled {
 		return s.selectOpenAIAccountWithoutLoadBatch(
