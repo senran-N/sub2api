@@ -1850,7 +1850,17 @@ func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger
 		zap.Int64("metadata_legacy_fallback_total", metrics.MetadataLegacyFallbackTotal),
 	)
 	codexMetrics := runtimeMetrics.OpenAICodexCompatibility
+	codexSummary := codexMetrics.Summary
 	reqLog.Info("gateway.codex_compatibility_metrics",
+		zap.Int64("official_request_total", codexSummary.OfficialRequestTotal),
+		zap.Int64("official_responses_http_requests_total", codexSummary.OfficialResponsesHTTPRequests),
+		zap.Int64("official_responses_websocket_requests_total", codexSummary.OfficialResponsesWebSocketRequests),
+		zap.Int64("chain_selection_total", codexSummary.ChainSelectionTotal),
+		zap.Int64("chain_hit_total", codexSummary.ChainHitTotal),
+		zap.Float64("chain_hit_rate", codexSummary.ChainHitRate),
+		zap.Float64("session_http_fallback_hit_rate", codexSummary.SessionHTTPFallbackHitRate),
+		zap.Int64("minimal_rewrite_applied_total", codexSummary.MinimalRewriteAppliedTotal),
+		zap.Float64("minimal_rewrite_rate", codexSummary.MinimalRewriteRate),
 		zap.Int64("transport_warmup_total", codexMetrics.TransportWarmupTotal),
 		zap.Int64("transport_fallback_cooling_hit_total", codexMetrics.TransportFallbackCoolingHitTotal),
 		zap.Int64("session_preferred_transport_hit_total", codexMetrics.SessionPreferredTransportHitTotal),

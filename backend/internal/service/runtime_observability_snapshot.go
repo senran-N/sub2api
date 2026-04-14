@@ -21,10 +21,7 @@ type RuntimeCompatibilityFallbackSummary struct {
 	MetadataLegacyFallbackTotal  int64   `json:"metadata_legacy_fallback_total"`
 }
 
-type RuntimeCodexCompatibilitySummary struct {
-	SessionHTTPFallbackHitTotal        int64 `json:"session_http_fallback_hit_total"`
-	SessionTransportHTTPDowngradeTotal int64 `json:"session_transport_http_downgrade_total"`
-}
+type RuntimeCodexCompatibilitySummary = OpenAICodexCompatibilitySummarySnapshot
 
 type RuntimeObservabilitySummary struct {
 	SchedulingRuntimeKernel     SchedulingRuntimeKernelSummary      `json:"scheduling_runtime_kernel"`
@@ -68,10 +65,7 @@ func buildRuntimeObservabilitySummary(
 			SessionHashLegacyReadHitRate: compatibility.SessionHashLegacyReadHitRate,
 			MetadataLegacyFallbackTotal:  compatibility.MetadataLegacyFallbackTotal,
 		},
-		OpenAICodexCompatibility: RuntimeCodexCompatibilitySummary{
-			SessionHTTPFallbackHitTotal:        codexCompatibility.SessionHTTPFallbackHitTotal,
-			SessionTransportHTTPDowngradeTotal: codexCompatibility.SessionTransportHTTPDowngradeTotal,
-		},
+		OpenAICodexCompatibility: codexCompatibility.Summary,
 	}
 }
 

@@ -105,6 +105,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	}
 
 	profile := service.GetCodexRequestProfile(c, firstMessage, h != nil && h.cfg != nil && h.cfg.Gateway.ForceCodexCLI)
+	service.ObserveOpenAICodexRequestProfile(profile)
 	reqModel := profile.Body.Model
 	if reqModel == "" {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
@@ -219,6 +220,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
 		return
 	}
+	service.ObserveOpenAICodexSchedulingDecision(profile, scheduleDecision)
 
 	account := selection.Account
 	accountMaxConcurrency := account.Concurrency

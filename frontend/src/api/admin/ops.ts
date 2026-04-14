@@ -569,11 +569,47 @@ export interface OpenAICodexCompatibilityMetricsSnapshot {
   recovery_invalid_encrypted_skipped_total: number
   recovery_drop_previous_response_id_total: number
   recovery_trim_encrypted_reasoning_total: number
+  summary: RuntimeCodexCompatibilitySummary
+  by_version: OpenAICodexCompatibilityVersionMetricsSnapshot[]
+  by_transport: OpenAICodexCompatibilityTransportMetricsSnapshot[]
 }
 
 export interface RuntimeCodexCompatibilitySummary {
-  session_http_fallback_hit_total: number
-  session_transport_http_downgrade_total: number
+  official_request_total: number
+  official_responses_http_requests_total: number
+  official_responses_websocket_requests_total: number
+  chain_selection_total: number
+  chain_hit_total: number
+  chain_previous_response_hit_total: number
+  chain_session_hit_total: number
+  chain_hit_rate: number
+  chain_previous_response_hit_rate: number
+  chain_session_hit_rate: number
+  session_http_fallback_hit_rate: number
+  session_transport_http_downgrade_rate: number
+  minimal_rewrite_applied_total: number
+  minimal_rewrite_rate: number
+}
+
+export interface OpenAICodexCompatibilityVersionMetricsSnapshot {
+  version: string
+  official_request_total: number
+  responses_http_requests_total: number
+  responses_websocket_requests_total: number
+  warmup_total: number
+  chain_selection_total: number
+  chain_hit_total: number
+  chain_hit_rate: number
+}
+
+export interface OpenAICodexCompatibilityTransportMetricsSnapshot {
+  transport: string
+  official_request_total: number
+  warmup_total: number
+  chain_selection_total: number
+  chain_hit_total: number
+  chain_hit_rate: number
+  minimal_rewrite_applied_total: number
 }
 
 export interface RuntimeObservabilitySummary {

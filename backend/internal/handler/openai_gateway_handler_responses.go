@@ -94,6 +94,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 
 	profile := service.GetCodexRequestProfile(c, body, h != nil && h.cfg != nil && h.cfg.Gateway.ForceCodexCLI)
+	service.ObserveOpenAICodexRequestProfile(profile)
 	reqMeta := service.GetOpenAIRequestMeta(c, body)
 	if !reqMeta.ModelExists || reqMeta.ModelType != gjson.String || profile.Body.Model == "" {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
@@ -180,6 +181,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	codexSchedulingObserved := false
 
 	for {
 		c.Set("openai_responses_fallback_model", "")
@@ -251,6 +253,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			zap.Int64("latency_ms", scheduleDecision.LatencyMs),
 			zap.Float64("load_skew", scheduleDecision.LoadSkew),
 		)
+		if !codexSchedulingObserved {
+			service.ObserveOpenAICodexSchedulingDecision(profile, scheduleDecision)
+			codexSchedulingObserved = true
+		}
 		account := selection.Account
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))

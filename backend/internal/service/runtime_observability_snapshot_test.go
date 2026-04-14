@@ -34,8 +34,15 @@ func TestBuildRuntimeObservabilitySummary(t *testing.T) {
 			MetadataLegacyFallbackTotal:  11,
 		},
 		OpenAICodexCompatibilityMetricsSnapshot{
-			SessionHTTPFallbackHitTotal:        4,
-			SessionTransportHTTPDowngradeTotal: 2,
+			Summary: OpenAICodexCompatibilitySummarySnapshot{
+				OfficialRequestTotal:              9,
+				ChainSelectionTotal:               6,
+				ChainHitTotal:                     4,
+				SessionHTTPFallbackHitRate:        0.5,
+				SessionTransportHTTPDowngradeRate: 0.25,
+				MinimalRewriteAppliedTotal:        2,
+				MinimalRewriteRate:                2.0 / 9.0,
+			},
 		},
 	)
 
@@ -53,6 +60,11 @@ func TestBuildRuntimeObservabilitySummary(t *testing.T) {
 
 	require.InDelta(t, 0.75, summary.OpenAICompatibilityFallback.SessionHashLegacyReadHitRate, 0.0001)
 	require.Equal(t, int64(11), summary.OpenAICompatibilityFallback.MetadataLegacyFallbackTotal)
-	require.Equal(t, int64(4), summary.OpenAICodexCompatibility.SessionHTTPFallbackHitTotal)
-	require.Equal(t, int64(2), summary.OpenAICodexCompatibility.SessionTransportHTTPDowngradeTotal)
+	require.Equal(t, int64(9), summary.OpenAICodexCompatibility.OfficialRequestTotal)
+	require.Equal(t, int64(6), summary.OpenAICodexCompatibility.ChainSelectionTotal)
+	require.Equal(t, int64(4), summary.OpenAICodexCompatibility.ChainHitTotal)
+	require.InDelta(t, 0.5, summary.OpenAICodexCompatibility.SessionHTTPFallbackHitRate, 0.0001)
+	require.InDelta(t, 0.25, summary.OpenAICodexCompatibility.SessionTransportHTTPDowngradeRate, 0.0001)
+	require.Equal(t, int64(2), summary.OpenAICodexCompatibility.MinimalRewriteAppliedTotal)
+	require.InDelta(t, 2.0/9.0, summary.OpenAICodexCompatibility.MinimalRewriteRate, 0.0001)
 }
