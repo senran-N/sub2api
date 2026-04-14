@@ -140,6 +140,39 @@ func TestCodexRecoveryPolicy_TransportFailure(t *testing.T) {
 	})
 }
 
+func TestCodexRecoveryPolicy_Failover(t *testing.T) {
+	policy := CodexRecoveryPolicy{}
+
+	t.Run("exhausts_rate_limited_failover", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			FailureReason: "upstream_rate_limited",
+			Reason:        codexRecoveryReasonFailover,
+			StatusCode:    http.StatusTooManyRequests,
+			Transport:     OpenAIUpstreamTransportHTTPSSE,
+		})
+
+		require.True(t, decision.Applied)
+		require.True(t, decision.ExhaustFailover)
+		require.Equal(t, codexRecoveryActionExhaustFailover, decision.Action)
+		require.False(t, decision.SwitchAccount)
+	})
+
+	t.Run("switches_account_on_upstream_5xx", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			AccountID:     44,
+			FailureReason: "upstream_5xx",
+			Reason:        codexRecoveryReasonFailover,
+			StatusCode:    http.StatusBadGateway,
+			Transport:     OpenAIUpstreamTransportHTTPSSE,
+		})
+
+		require.True(t, decision.Applied)
+		require.False(t, decision.ExhaustFailover)
+		require.True(t, decision.SwitchAccount)
+		require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
+	})
+}
+
 func TestOpenAIGatewayService_ApplyCodexTransportCooldownRecovery(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Gateway.OpenAIWS.FallbackCooldownSeconds = 30
@@ -175,6 +208,20 @@ func TestOpenAIGatewayService_RecordCodexRecoveryAccountSwitch(t *testing.T) {
 func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) {
 	before := SnapshotOpenAICodexCompatibilityMetrics()
 	policy := CodexRecoveryPolicy{}
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		FailureReason: "upstream_rate_limited",
+		Reason:        codexRecoveryReasonFailover,
+		StatusCode:    http.StatusTooManyRequests,
+		Transport:     OpenAIUpstreamTransportHTTPSSE,
+	})
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		FailureReason: "upstream_5xx",
+		Reason:        codexRecoveryReasonFailover,
+		StatusCode:    http.StatusBadGateway,
+		Transport:     OpenAIUpstreamTransportHTTPSSE,
+	})
 
 	policy.Apply(nil, CodexRecoveryPolicyInput{
 		AccountID:     71,
@@ -242,6 +289,8 @@ func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) 
 	})
 
 	after := SnapshotOpenAICodexCompatibilityMetrics()
+	require.GreaterOrEqual(t, after.RecoveryFailoverExhaustAppliedTotal, before.RecoveryFailoverExhaustAppliedTotal+1)
+	require.GreaterOrEqual(t, after.RecoveryFailoverExhaustSkippedTotal, before.RecoveryFailoverExhaustSkippedTotal+1)
 	require.GreaterOrEqual(t, after.RecoveryTransportCooldownAppliedTotal, before.RecoveryTransportCooldownAppliedTotal+1)
 	require.GreaterOrEqual(t, after.RecoveryTransportCooldownSkippedTotal, before.RecoveryTransportCooldownSkippedTotal+1)
 	require.GreaterOrEqual(t, after.RecoveryAccountSwitchAppliedTotal, before.RecoveryAccountSwitchAppliedTotal+1)

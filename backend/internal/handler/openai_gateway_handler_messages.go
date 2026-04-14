@@ -255,6 +255,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				decision := applyOpenAIPoolFailoverPolicy(
 					account,
 					failoverErr,
+					service.CodexRecoveryDecision{},
 					sameAccountRetryCount,
 					failedAccountIDs,
 					&switchCount,

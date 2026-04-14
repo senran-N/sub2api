@@ -288,9 +288,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				lastFailoverErr = failoverErr
+				codexFailoverDecision := service.CodexRecoveryDecision{}
+				if profile.OfficialClient {
+					codexFailoverDecision = h.gatewayService.ResolveCodexFailoverRecovery(c, account, failoverErr)
+				}
 				decision := applyOpenAIPoolFailoverPolicy(
 					account,
 					failoverErr,
+					codexFailoverDecision,
 					sameAccountRetryCount,
 					failedAccountIDs,
 					&switchCount,
@@ -300,7 +305,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					},
 					func() {
 						h.gatewayService.RecordOpenAIAccountSwitch()
-						h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr)
+						if profile.OfficialClient && codexFailoverDecision.SwitchAccount {
+							h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr)
+						}
 					},
 				)
 				if decision.SameAccountRetry {

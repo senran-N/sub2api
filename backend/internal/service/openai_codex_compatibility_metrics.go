@@ -13,6 +13,8 @@ type OpenAICodexCompatibilityMetricsSnapshot struct {
 	SessionTransportBindHTTPTotal         int64 `json:"session_transport_bind_http_total"`
 	SessionTransportWarmupIgnoredTotal    int64 `json:"session_transport_warmup_ignored_total"`
 	SessionTransportHTTPDowngradeTotal    int64 `json:"session_transport_http_downgrade_total"`
+	RecoveryFailoverExhaustAppliedTotal   int64 `json:"recovery_failover_exhaust_applied_total"`
+	RecoveryFailoverExhaustSkippedTotal   int64 `json:"recovery_failover_exhaust_skipped_total"`
 	RecoveryTransportCooldownAppliedTotal int64 `json:"recovery_transport_cooldown_applied_total"`
 	RecoveryTransportCooldownSkippedTotal int64 `json:"recovery_transport_cooldown_skipped_total"`
 	RecoveryAccountSwitchAppliedTotal     int64 `json:"recovery_account_switch_applied_total"`
@@ -38,6 +40,8 @@ var (
 	openAICodexSessionTransportBindHTTPTotal         atomic.Int64
 	openAICodexSessionTransportWarmupIgnoredTotal    atomic.Int64
 	openAICodexSessionTransportHTTPDowngradeTotal    atomic.Int64
+	openAICodexRecoveryFailoverExhaustAppliedTotal   atomic.Int64
+	openAICodexRecoveryFailoverExhaustSkippedTotal   atomic.Int64
 	openAICodexRecoveryTransportCooldownAppliedTotal atomic.Int64
 	openAICodexRecoveryTransportCooldownSkippedTotal atomic.Int64
 	openAICodexRecoveryAccountSwitchAppliedTotal     atomic.Int64
@@ -91,6 +95,13 @@ func recordOpenAICodexSessionTransportBind(transport OpenAIUpstreamTransport, wa
 
 func recordOpenAICodexRecoveryDecision(decision CodexRecoveryDecision) {
 	switch decision.Reason {
+	case codexRecoveryReasonFailover:
+		if decision.ExhaustFailover {
+			openAICodexRecoveryFailoverExhaustAppliedTotal.Add(1)
+		} else {
+			openAICodexRecoveryFailoverExhaustSkippedTotal.Add(1)
+		}
+		return
 	case codexRecoveryReasonTransportFailure:
 		if decision.Applied {
 			openAICodexRecoveryTransportCooldownAppliedTotal.Add(1)
@@ -150,6 +161,8 @@ func SnapshotOpenAICodexCompatibilityMetrics() OpenAICodexCompatibilityMetricsSn
 		SessionTransportBindHTTPTotal:         openAICodexSessionTransportBindHTTPTotal.Load(),
 		SessionTransportWarmupIgnoredTotal:    openAICodexSessionTransportWarmupIgnoredTotal.Load(),
 		SessionTransportHTTPDowngradeTotal:    openAICodexSessionTransportHTTPDowngradeTotal.Load(),
+		RecoveryFailoverExhaustAppliedTotal:   openAICodexRecoveryFailoverExhaustAppliedTotal.Load(),
+		RecoveryFailoverExhaustSkippedTotal:   openAICodexRecoveryFailoverExhaustSkippedTotal.Load(),
 		RecoveryTransportCooldownAppliedTotal: openAICodexRecoveryTransportCooldownAppliedTotal.Load(),
 		RecoveryTransportCooldownSkippedTotal: openAICodexRecoveryTransportCooldownSkippedTotal.Load(),
 		RecoveryAccountSwitchAppliedTotal:     openAICodexRecoveryAccountSwitchAppliedTotal.Load(),

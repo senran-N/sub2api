@@ -223,6 +223,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				decision := applyOpenAIPoolFailoverPolicy(
 					account,
 					failoverErr,
+					service.CodexRecoveryDecision{},
 					sameAccountRetryCount,
 					failedAccountIDs,
 					&switchCount,

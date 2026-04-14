@@ -20,6 +20,7 @@ func TestApplyOpenAIPoolFailoverPolicy_ImmediateExhaustStatuses(t *testing.T) {
 			decision := applyOpenAIPoolFailoverPolicy(
 				account,
 				&service.UpstreamFailoverError{StatusCode: status, RetryableOnSameAccount: true},
+				service.CodexRecoveryDecision{},
 				sameAccountRetryCount,
 				failedAccountIDs,
 				&switchCount,
@@ -48,6 +49,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetry(t *testing.T) {
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
 		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
+		service.CodexRecoveryDecision{},
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -76,6 +78,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SwitchAfterRetryBudget(t *testing.T) {
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
 		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
+		service.CodexRecoveryDecision{},
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -104,6 +107,7 @@ func TestApplyOpenAIPoolFailoverPolicy_ExhaustedWhenSwitchBudgetReached(t *testi
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
 		&service.UpstreamFailoverError{StatusCode: http.StatusBadGateway},
+		service.CodexRecoveryDecision{},
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -130,6 +134,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetryDoesNotTempUnschedule(t *
 	decision := applyOpenAIPoolFailoverPolicy(
 		account,
 		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
+		service.CodexRecoveryDecision{},
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -141,4 +146,33 @@ func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetryDoesNotTempUnschedule(t *
 	require.Equal(t, FailoverContinue, decision.Action)
 	require.True(t, decision.SameAccountRetry)
 	require.Zero(t, tempUnschedCalls)
+}
+
+func TestApplyOpenAIPoolFailoverPolicy_CodexExhaustDecision(t *testing.T) {
+	account := &service.Account{ID: 16}
+	failedAccountIDs := make(map[int64]struct{})
+	sameAccountRetryCount := make(map[int64]int)
+	switchCount := 0
+	recordedSwitches := 0
+
+	decision := applyOpenAIPoolFailoverPolicy(
+		account,
+		&service.UpstreamFailoverError{StatusCode: http.StatusBadGateway},
+		service.CodexRecoveryDecision{
+			Applied:         true,
+			Action:          "exhaust_failover",
+			ExhaustFailover: true,
+			Reason:          "failover",
+		},
+		sameAccountRetryCount,
+		failedAccountIDs,
+		&switchCount,
+		3,
+		func() {},
+		func() { recordedSwitches++ },
+	)
+
+	require.Equal(t, FailoverExhausted, decision.Action)
+	require.Contains(t, failedAccountIDs, int64(16))
+	require.Zero(t, recordedSwitches)
 }

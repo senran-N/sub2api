@@ -13,6 +13,7 @@ type openAIPoolFailoverDecision struct {
 func applyOpenAIPoolFailoverPolicy(
 	account *service.Account,
 	failoverErr *service.UpstreamFailoverError,
+	codexDecision service.CodexRecoveryDecision,
 	sameAccountRetryCount map[int64]int,
 	failedAccountIDs map[int64]struct{},
 	switchCount *int,
@@ -27,6 +28,13 @@ func applyOpenAIPoolFailoverPolicy(
 
 	decision.RetryLimit = account.GetPoolModeRetryCount()
 	decision.SwitchCount = *switchCount
+
+	if codexDecision.ExhaustFailover {
+		if failedAccountIDs != nil {
+			failedAccountIDs[account.ID] = struct{}{}
+		}
+		return decision
+	}
 
 	if shouldExhaustFailoverImmediately(failoverErr) {
 		if failedAccountIDs != nil {

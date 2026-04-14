@@ -570,9 +570,17 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIHTTP(
 				})
 
 				s.handleFailoverSideEffects(ctx, resp, account)
+				failoverReason := ""
+				switch {
+				case resp.StatusCode == http.StatusTooManyRequests:
+					failoverReason = "upstream_rate_limited"
+				case resp.StatusCode >= http.StatusInternalServerError:
+					failoverReason = "upstream_5xx"
+				}
 				return nil, &UpstreamFailoverError{
 					StatusCode:             resp.StatusCode,
 					ResponseBody:           respBody,
+					FailureReason:          failoverReason,
 					RetryableOnSameAccount: account.IsPoolMode() && (isOpenAIPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
 				}
 			}

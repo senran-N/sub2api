@@ -9,9 +9,11 @@ import (
 const (
 	codexRecoveryActionNone                     = ""
 	codexRecoveryActionDropPreviousResponseID   = "drop_previous_response_id"
+	codexRecoveryActionExhaustFailover          = "exhaust_failover"
 	codexRecoveryActionMarkTransportCooldown    = "mark_transport_cooldown"
 	codexRecoveryActionSwitchAccount            = "switch_account"
 	codexRecoveryActionTrimEncryptedReasoning   = "drop_encrypted_reasoning_items"
+	codexRecoveryReasonFailover                 = "failover"
 	codexRecoveryReasonAccountSwitch            = "account_switch"
 	codexRecoveryReasonInvalidEncryptedContent  = "invalid_encrypted_content"
 	codexRecoveryReasonPreviousResponseNotFound = "previous_response_not_found"
@@ -31,6 +33,7 @@ type CodexRecoveryDecision struct {
 	AccountID                 int64
 	Applied                   bool
 	DroppedPreviousResponseID bool
+	ExhaustFailover           bool
 	FailureReason             string
 	HasFunctionCallOutput     bool
 	MarkedTransportCooldown   bool
@@ -62,6 +65,26 @@ func (CodexRecoveryPolicy) Apply(reqBody map[string]any, input CodexRecoveryPoli
 	decision.PreviousResponseIDKind = ClassifyOpenAIPreviousResponseIDKind(decision.PreviousResponseID)
 
 	switch decision.Reason {
+	case codexRecoveryReasonFailover:
+		switch {
+		case isCodexImmediateFailoverExhaust(decision.StatusCode, decision.FailureReason):
+			decision.Action = codexRecoveryActionExhaustFailover
+			decision.Applied = true
+			decision.ExhaustFailover = true
+		case isCodexFailoverSwitchAccountStatus(decision.StatusCode):
+			if decision.AccountID <= 0 {
+				decision.SkipReason = "missing_account_id"
+				recordOpenAICodexRecoveryDecision(decision)
+				return decision
+			}
+			decision.Action = codexRecoveryActionSwitchAccount
+			decision.Applied = true
+			decision.SwitchAccount = true
+		default:
+			decision.SkipReason = "unsupported_failover_status"
+			recordOpenAICodexRecoveryDecision(decision)
+			return decision
+		}
 	case codexRecoveryReasonTransportFailure:
 		if decision.AccountID <= 0 {
 			decision.SkipReason = "missing_account_id"
@@ -165,6 +188,23 @@ func isCodexTransportCooldownFailureReason(reason string) bool {
 	}
 }
 
+func isCodexImmediateFailoverExhaust(statusCode int, failureReason string) bool {
+	switch normalizeCodexRecoveryFailureReason(failureReason) {
+	case "upstream_rate_limited":
+		return true
+	}
+	switch statusCode {
+	case 401, 403, 429:
+		return true
+	default:
+		return false
+	}
+}
+
+func isCodexFailoverSwitchAccountStatus(statusCode int) bool {
+	return statusCode >= 500
+}
+
 func resolveCodexRecoveryTransport(c *gin.Context) OpenAIUpstreamTransport {
 	if c != nil {
 		if raw := strings.TrimSpace(c.GetString("openai_ws_transport_decision")); raw != "" {
@@ -207,9 +247,31 @@ func (s *OpenAIGatewayService) RecordCodexRecoveryAccountSwitch(
 		return CodexRecoveryDecision{}
 	}
 	return CodexRecoveryPolicy{}.Apply(nil, CodexRecoveryPolicyInput{
-		AccountID:  account.ID,
-		Reason:     codexRecoveryReasonAccountSwitch,
-		StatusCode: failoverErr.StatusCode,
-		Transport:  resolveCodexRecoveryTransport(c),
+		AccountID:     account.ID,
+		Reason:        codexRecoveryReasonAccountSwitch,
+		FailureReason: failoverErr.FailureReason,
+		StatusCode:    failoverErr.StatusCode,
+		Transport:     resolveCodexRecoveryTransport(c),
+	})
+}
+
+func (s *OpenAIGatewayService) ResolveCodexFailoverRecovery(
+	c *gin.Context,
+	account *Account,
+	failoverErr *UpstreamFailoverError,
+) CodexRecoveryDecision {
+	if failoverErr == nil {
+		return CodexRecoveryDecision{}
+	}
+	accountID := int64(0)
+	if account != nil {
+		accountID = account.ID
+	}
+	return CodexRecoveryPolicy{}.Apply(nil, CodexRecoveryPolicyInput{
+		AccountID:     accountID,
+		FailureReason: failoverErr.FailureReason,
+		Reason:        codexRecoveryReasonFailover,
+		StatusCode:    failoverErr.StatusCode,
+		Transport:     resolveCodexRecoveryTransport(c),
 	})
 }
