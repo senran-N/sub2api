@@ -440,6 +440,7 @@ wsRetryLoop:
 	}
 
 	if wsErr == nil {
+		s.clearOpenAIWSFallbackCooling(account.ID)
 		firstTokenMs := int64(0)
 		hasFirstTokenMs := wsResult != nil && wsResult.FirstTokenMs != nil
 		if hasFirstTokenMs {
@@ -460,6 +461,15 @@ wsRetryLoop:
 		)
 		wsResult.UpstreamModel = prepared.mappedModel
 		return wsResult, nil
+	}
+
+	if decision := s.applyCodexTransportCooldownRecovery(account.ID, wsLastFailureReason, OpenAIUpstreamTransportResponsesWebsocketV2); decision.Applied {
+		logOpenAIWSModeInfo(
+			"recovery_transport_cooldown account_id=%d action=%s reason=%s",
+			account.ID,
+			normalizeOpenAIWSLogValue(decision.Action),
+			normalizeOpenAIWSLogValue(decision.FailureReason),
+		)
 	}
 
 	s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)

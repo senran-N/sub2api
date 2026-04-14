@@ -262,7 +262,10 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					func() {
 						h.gatewayService.TempUnscheduleRetryableError(c.Request.Context(), account.ID, failoverErr)
 					},
-					h.gatewayService.RecordOpenAIAccountSwitch,
+					func() {
+						h.gatewayService.RecordOpenAIAccountSwitch()
+						h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr)
+					},
 				)
 				if decision.SameAccountRetry {
 					reqLog.Warn("openai_messages.pool_mode_same_account_retry",

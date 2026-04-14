@@ -1,8 +1,12 @@
 package service
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,9 +109,97 @@ func TestCodexRecoveryPolicy_InvalidEncryptedContent(t *testing.T) {
 	})
 }
 
+func TestCodexRecoveryPolicy_TransportFailure(t *testing.T) {
+	policy := CodexRecoveryPolicy{}
+
+	t.Run("marks_ws_transport_cooldown_for_retryable_failure", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			AccountID:     41,
+			FailureReason: "prewarm_read_event",
+			Reason:        codexRecoveryReasonTransportFailure,
+			Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
+		})
+
+		require.True(t, decision.Applied)
+		require.Equal(t, codexRecoveryActionMarkTransportCooldown, decision.Action)
+		require.True(t, decision.MarkedTransportCooldown)
+		require.Equal(t, "read_event", decision.FailureReason)
+	})
+
+	t.Run("skips_non_transport_failure_reason", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			AccountID:     41,
+			FailureReason: "upstream_rate_limited",
+			Reason:        codexRecoveryReasonTransportFailure,
+			Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
+		})
+
+		require.False(t, decision.Applied)
+		require.Equal(t, "unsupported_failure_reason", decision.SkipReason)
+		require.False(t, decision.MarkedTransportCooldown)
+	})
+}
+
+func TestOpenAIGatewayService_ApplyCodexTransportCooldownRecovery(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Gateway.OpenAIWS.FallbackCooldownSeconds = 30
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	decision := svc.applyCodexTransportCooldownRecovery(52, "read_event", OpenAIUpstreamTransportResponsesWebsocketV2)
+
+	require.True(t, decision.Applied)
+	require.True(t, decision.MarkedTransportCooldown)
+	require.True(t, svc.isOpenAIWSFallbackCooling(52))
+}
+
+func TestOpenAIGatewayService_RecordCodexRecoveryAccountSwitch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	c.Set("openai_ws_transport_decision", string(OpenAIUpstreamTransportResponsesWebsocketV2))
+
+	svc := &OpenAIGatewayService{}
+	account := &Account{ID: 61}
+	failoverErr := &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+
+	decision := svc.RecordCodexRecoveryAccountSwitch(c, account, failoverErr)
+
+	require.True(t, decision.Applied)
+	require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
+	require.True(t, decision.SwitchAccount)
+	require.Equal(t, OpenAIUpstreamTransportResponsesWebsocketV2, decision.Transport)
+	require.Equal(t, http.StatusBadGateway, decision.StatusCode)
+}
+
 func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) {
 	before := SnapshotOpenAICodexCompatibilityMetrics()
 	policy := CodexRecoveryPolicy{}
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		AccountID:     71,
+		FailureReason: "read_event",
+		Reason:        codexRecoveryReasonTransportFailure,
+		Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		Reason:    codexRecoveryReasonTransportFailure,
+		Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		AccountID:  72,
+		Reason:     codexRecoveryReasonAccountSwitch,
+		StatusCode: http.StatusBadGateway,
+		Transport:  OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		Reason:     codexRecoveryReasonAccountSwitch,
+		StatusCode: http.StatusBadGateway,
+		Transport:  OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
 
 	policy.Apply(map[string]any{
 		"previous_response_id": "resp_prev_metrics",
@@ -150,6 +242,10 @@ func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) 
 	})
 
 	after := SnapshotOpenAICodexCompatibilityMetrics()
+	require.GreaterOrEqual(t, after.RecoveryTransportCooldownAppliedTotal, before.RecoveryTransportCooldownAppliedTotal+1)
+	require.GreaterOrEqual(t, after.RecoveryTransportCooldownSkippedTotal, before.RecoveryTransportCooldownSkippedTotal+1)
+	require.GreaterOrEqual(t, after.RecoveryAccountSwitchAppliedTotal, before.RecoveryAccountSwitchAppliedTotal+1)
+	require.GreaterOrEqual(t, after.RecoveryAccountSwitchSkippedTotal, before.RecoveryAccountSwitchSkippedTotal+1)
 	require.GreaterOrEqual(t, after.RecoveryWSRetryTotal, before.RecoveryWSRetryTotal+1)
 	require.GreaterOrEqual(t, after.RecoveryHTTPRetryTotal, before.RecoveryHTTPRetryTotal+1)
 	require.GreaterOrEqual(t, after.RecoveryPreviousResponseAppliedTotal, before.RecoveryPreviousResponseAppliedTotal+1)

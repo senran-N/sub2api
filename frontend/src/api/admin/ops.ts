@@ -555,6 +555,10 @@ export interface OpenAICodexCompatibilityMetricsSnapshot {
   session_transport_bind_http_total: number
   session_transport_warmup_ignored_total: number
   session_transport_http_downgrade_total: number
+  recovery_transport_cooldown_applied_total: number
+  recovery_transport_cooldown_skipped_total: number
+  recovery_account_switch_applied_total: number
+  recovery_account_switch_skipped_total: number
   recovery_ws_retry_total: number
   recovery_http_retry_total: number
   recovery_previous_response_applied_total: number

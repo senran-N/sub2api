@@ -13,6 +13,10 @@ type OpenAICodexCompatibilityMetricsSnapshot struct {
 	SessionTransportBindHTTPTotal         int64 `json:"session_transport_bind_http_total"`
 	SessionTransportWarmupIgnoredTotal    int64 `json:"session_transport_warmup_ignored_total"`
 	SessionTransportHTTPDowngradeTotal    int64 `json:"session_transport_http_downgrade_total"`
+	RecoveryTransportCooldownAppliedTotal int64 `json:"recovery_transport_cooldown_applied_total"`
+	RecoveryTransportCooldownSkippedTotal int64 `json:"recovery_transport_cooldown_skipped_total"`
+	RecoveryAccountSwitchAppliedTotal     int64 `json:"recovery_account_switch_applied_total"`
+	RecoveryAccountSwitchSkippedTotal     int64 `json:"recovery_account_switch_skipped_total"`
 	RecoveryWSRetryTotal                  int64 `json:"recovery_ws_retry_total"`
 	RecoveryHTTPRetryTotal                int64 `json:"recovery_http_retry_total"`
 	RecoveryPreviousResponseAppliedTotal  int64 `json:"recovery_previous_response_applied_total"`
@@ -34,6 +38,10 @@ var (
 	openAICodexSessionTransportBindHTTPTotal         atomic.Int64
 	openAICodexSessionTransportWarmupIgnoredTotal    atomic.Int64
 	openAICodexSessionTransportHTTPDowngradeTotal    atomic.Int64
+	openAICodexRecoveryTransportCooldownAppliedTotal atomic.Int64
+	openAICodexRecoveryTransportCooldownSkippedTotal atomic.Int64
+	openAICodexRecoveryAccountSwitchAppliedTotal     atomic.Int64
+	openAICodexRecoveryAccountSwitchSkippedTotal     atomic.Int64
 	openAICodexRecoveryWSRetryTotal                  atomic.Int64
 	openAICodexRecoveryHTTPRetryTotal                atomic.Int64
 	openAICodexRecoveryPreviousResponseAppliedTotal  atomic.Int64
@@ -83,6 +91,20 @@ func recordOpenAICodexSessionTransportBind(transport OpenAIUpstreamTransport, wa
 
 func recordOpenAICodexRecoveryDecision(decision CodexRecoveryDecision) {
 	switch decision.Reason {
+	case codexRecoveryReasonTransportFailure:
+		if decision.Applied {
+			openAICodexRecoveryTransportCooldownAppliedTotal.Add(1)
+		} else {
+			openAICodexRecoveryTransportCooldownSkippedTotal.Add(1)
+		}
+		return
+	case codexRecoveryReasonAccountSwitch:
+		if decision.Applied {
+			openAICodexRecoveryAccountSwitchAppliedTotal.Add(1)
+		} else {
+			openAICodexRecoveryAccountSwitchSkippedTotal.Add(1)
+		}
+		return
 	case codexRecoveryReasonPreviousResponseNotFound:
 		if decision.Applied {
 			openAICodexRecoveryPreviousResponseAppliedTotal.Add(1)
@@ -128,6 +150,10 @@ func SnapshotOpenAICodexCompatibilityMetrics() OpenAICodexCompatibilityMetricsSn
 		SessionTransportBindHTTPTotal:         openAICodexSessionTransportBindHTTPTotal.Load(),
 		SessionTransportWarmupIgnoredTotal:    openAICodexSessionTransportWarmupIgnoredTotal.Load(),
 		SessionTransportHTTPDowngradeTotal:    openAICodexSessionTransportHTTPDowngradeTotal.Load(),
+		RecoveryTransportCooldownAppliedTotal: openAICodexRecoveryTransportCooldownAppliedTotal.Load(),
+		RecoveryTransportCooldownSkippedTotal: openAICodexRecoveryTransportCooldownSkippedTotal.Load(),
+		RecoveryAccountSwitchAppliedTotal:     openAICodexRecoveryAccountSwitchAppliedTotal.Load(),
+		RecoveryAccountSwitchSkippedTotal:     openAICodexRecoveryAccountSwitchSkippedTotal.Load(),
 		RecoveryWSRetryTotal:                  openAICodexRecoveryWSRetryTotal.Load(),
 		RecoveryHTTPRetryTotal:                openAICodexRecoveryHTTPRetryTotal.Load(),
 		RecoveryPreviousResponseAppliedTotal:  openAICodexRecoveryPreviousResponseAppliedTotal.Load(),

@@ -230,7 +230,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					func() {
 						h.gatewayService.TempUnscheduleRetryableError(c.Request.Context(), account.ID, failoverErr)
 					},
-					h.gatewayService.RecordOpenAIAccountSwitch,
+					func() {
+						h.gatewayService.RecordOpenAIAccountSwitch()
+						h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr)
+					},
 				)
 				if decision.SameAccountRetry {
 					reqLog.Warn("openai_chat_completions.pool_mode_same_account_retry",
