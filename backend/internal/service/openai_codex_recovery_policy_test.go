@@ -125,6 +125,7 @@ func TestCodexRecoveryPolicy_TransportFailure(t *testing.T) {
 		require.Equal(t, codexRecoveryActionMarkTransportCooldown, decision.Action)
 		require.True(t, decision.MarkedTransportCooldown)
 		require.Equal(t, "read_event", decision.FailureReason)
+		require.True(t, decision.Warmup)
 	})
 
 	t.Run("skips_non_transport_failure_reason", func(t *testing.T) {
@@ -156,6 +157,7 @@ func TestCodexRecoveryPolicy_Failover(t *testing.T) {
 		require.True(t, decision.ExhaustFailover)
 		require.Equal(t, codexRecoveryActionExhaustFailover, decision.Action)
 		require.False(t, decision.SwitchAccount)
+		require.False(t, decision.Warmup)
 	})
 
 	t.Run("switches_account_on_upstream_5xx", func(t *testing.T) {
@@ -171,6 +173,22 @@ func TestCodexRecoveryPolicy_Failover(t *testing.T) {
 		require.False(t, decision.ExhaustFailover)
 		require.True(t, decision.SwitchAccount)
 		require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
+		require.False(t, decision.Warmup)
+	})
+
+	t.Run("marks_prewarm_failover_as_warmup", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			AccountID:     48,
+			FailureReason: "prewarm_upstream_5xx",
+			Reason:        codexRecoveryReasonFailover,
+			StatusCode:    http.StatusBadGateway,
+			Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
+		})
+
+		require.True(t, decision.Applied)
+		require.True(t, decision.SwitchAccount)
+		require.Equal(t, "upstream_5xx", decision.FailureReason)
+		require.True(t, decision.Warmup)
 	})
 
 	t.Run("switches_account_on_ws_rate_limit_failover", func(t *testing.T) {
@@ -264,6 +282,7 @@ func TestClassifyCodexWSFailoverError(t *testing.T) {
 		require.NotNil(t, failoverErr)
 		require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
 		require.Equal(t, "upstream_5xx", failoverErr.FailureReason)
+		require.False(t, failoverErr.Warmup)
 	})
 
 	t.Run("ws_auth_failed_forbidden", func(t *testing.T) {
@@ -275,6 +294,19 @@ func TestClassifyCodexWSFailoverError(t *testing.T) {
 		require.NotNil(t, failoverErr)
 		require.Equal(t, http.StatusForbidden, failoverErr.StatusCode)
 		require.Equal(t, "auth_failed", failoverErr.FailureReason)
+		require.False(t, failoverErr.Warmup)
+	})
+
+	t.Run("ws_prewarm_upstream_5xx", func(t *testing.T) {
+		failoverErr := classifyCodexWSFailoverError(wrapOpenAIWSFallback("prewarm_upstream_5xx", &openAIWSDialError{
+			StatusCode: http.StatusBadGateway,
+			Err:        errors.New("bad gateway"),
+		}))
+
+		require.NotNil(t, failoverErr)
+		require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+		require.Equal(t, "upstream_5xx", failoverErr.FailureReason)
+		require.True(t, failoverErr.Warmup)
 	})
 
 	t.Run("transport_failure_stays_local", func(t *testing.T) {
@@ -433,6 +465,44 @@ func TestOpenAIGatewayService_RecordCodexRecoveryAccountSwitch_NonOfficialMetric
 	require.False(t, decision.TrackCompatibilityMetrics)
 
 	after := SnapshotOpenAICodexCompatibilityMetrics()
+	require.Equal(t, before.RecoveryAccountSwitchAppliedTotal, after.RecoveryAccountSwitchAppliedTotal)
+	require.Equal(t, before.RecoveryWSRetryTotal, after.RecoveryWSRetryTotal)
+}
+
+func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryWarmupSkipped(t *testing.T) {
+	before := SnapshotOpenAICodexCompatibilityMetrics()
+	policy := CodexRecoveryPolicy{}
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		AccountID:                 91,
+		FailureReason:             "prewarm_read_event",
+		Reason:                    codexRecoveryReasonTransportFailure,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		AccountID:                 92,
+		FailureReason:             "prewarm_upstream_5xx",
+		Reason:                    codexRecoveryReasonFailover,
+		StatusCode:                http.StatusBadGateway,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
+	})
+
+	policy.Apply(nil, CodexRecoveryPolicyInput{
+		AccountID:                 93,
+		Reason:                    codexRecoveryReasonAccountSwitch,
+		StatusCode:                http.StatusBadGateway,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
+		Warmup:                    true,
+	})
+
+	after := SnapshotOpenAICodexCompatibilityMetrics()
+	require.Equal(t, before.RecoveryTransportCooldownAppliedTotal, after.RecoveryTransportCooldownAppliedTotal)
+	require.Equal(t, before.RecoveryFailoverExhaustAppliedTotal, after.RecoveryFailoverExhaustAppliedTotal)
+	require.Equal(t, before.RecoveryFailoverExhaustSkippedTotal, after.RecoveryFailoverExhaustSkippedTotal)
 	require.Equal(t, before.RecoveryAccountSwitchAppliedTotal, after.RecoveryAccountSwitchAppliedTotal)
 	require.Equal(t, before.RecoveryWSRetryTotal, after.RecoveryWSRetryTotal)
 }

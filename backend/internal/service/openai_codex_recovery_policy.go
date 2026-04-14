@@ -31,6 +31,7 @@ type CodexRecoveryPolicyInput struct {
 	StatusCode                int
 	TrackCompatibilityMetrics bool
 	Transport                 OpenAIUpstreamTransport
+	Warmup                    bool
 }
 
 type CodexRecoveryDecision struct {
@@ -51,6 +52,7 @@ type CodexRecoveryDecision struct {
 	TrackCompatibilityMetrics bool
 	Transport                 OpenAIUpstreamTransport
 	TrimmedEncryptedReasoning bool
+	Warmup                    bool
 }
 
 // CodexRecoveryPolicy centralizes Codex-specific minimal recovery rewrites so
@@ -68,6 +70,7 @@ func (CodexRecoveryPolicy) Apply(reqBody map[string]any, input CodexRecoveryPoli
 		TrackCompatibilityMetrics: input.TrackCompatibilityMetrics,
 		Transport:                 normalizeOpenAIWSSessionTransport(input.Transport),
 		HasFunctionCallOutput:     HasFunctionCallOutput(reqBody),
+		Warmup:                    input.Warmup || isCodexWarmupFailureReason(input.FailureReason),
 	}
 	decision.PreviousResponseIDKind = ClassifyOpenAIPreviousResponseIDKind(decision.PreviousResponseID)
 
@@ -174,6 +177,10 @@ func normalizeCodexRecoveryFailureReason(reason string) string {
 	return reason
 }
 
+func isCodexWarmupFailureReason(reason string) bool {
+	return strings.HasPrefix(strings.TrimSpace(reason), "prewarm_")
+}
+
 func isCodexTransportCooldownFailureReason(reason string) bool {
 	switch normalizeCodexRecoveryFailureReason(reason) {
 	case "read_event",
@@ -246,6 +253,7 @@ func classifyCodexRequestFailoverError(err error) *UpstreamFailoverError {
 
 func classifyCodexWSFailoverError(wsErr error) *UpstreamFailoverError {
 	reason, _ := classifyOpenAIWSReconnectReason(wsErr)
+	warmup := isCodexWarmupFailureReason(reason)
 	reason = normalizeCodexRecoveryFailureReason(reason)
 	switch reason {
 	case "auth_failed", "upstream_rate_limited", "upstream_5xx":
@@ -265,6 +273,7 @@ func classifyCodexWSFailoverError(wsErr error) *UpstreamFailoverError {
 	return &UpstreamFailoverError{
 		StatusCode:    statusCode,
 		FailureReason: reason,
+		Warmup:        warmup,
 	}
 }
 
@@ -295,6 +304,7 @@ func (s *OpenAIGatewayService) applyCodexTransportCooldownRecovery(
 		Reason:                    codexRecoveryReasonTransportFailure,
 		TrackCompatibilityMetrics: true,
 		Transport:                 transport,
+		Warmup:                    isCodexWarmupFailureReason(reason),
 	})
 	if decision.Applied && decision.MarkedTransportCooldown {
 		s.markOpenAIWSFallbackCooling(accountID, decision.FailureReason)
@@ -318,6 +328,7 @@ func (s *OpenAIGatewayService) RecordCodexRecoveryAccountSwitch(
 		StatusCode:                failoverErr.StatusCode,
 		TrackCompatibilityMetrics: trackMetrics,
 		Transport:                 resolveCodexRecoveryTransport(c),
+		Warmup:                    failoverErr.Warmup,
 	})
 }
 
@@ -340,5 +351,6 @@ func (s *OpenAIGatewayService) ResolveCodexFailoverRecovery(
 		StatusCode:                failoverErr.StatusCode,
 		TrackCompatibilityMetrics: true,
 		Transport:                 resolveCodexRecoveryTransport(c),
+		Warmup:                    failoverErr.Warmup,
 	})
 }

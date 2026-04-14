@@ -244,6 +244,9 @@ func recordOpenAICodexRecoveryDecision(decision CodexRecoveryDecision) {
 	if !decision.TrackCompatibilityMetrics {
 		return
 	}
+	if decision.Warmup {
+		return
+	}
 
 	transportKey := normalizeCodexCompatibilityRecoveryTransportKey(decision.Transport)
 	minimalRewriteApplied := false
