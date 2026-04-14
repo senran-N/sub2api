@@ -136,7 +136,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	compatibleUpstreamModelsService := service.NewCompatibleUpstreamModelsService(accountRepository, httpUpstream, configConfig, tlsFingerprintProfileService)
 	accountUsageService := service.NewAccountUsageService(accountRepository, usageLogRepository, claudeUsageFetcher, geminiQuotaService, antigravityQuotaFetcher, usageCache, v8, tlsFingerprintProfileService)
 	oAuthRefreshAPI := service.NewOAuthRefreshAPI(accountRepository, v7)
-	geminiTokenProvider := service.ProvideGeminiTokenProvider(accountRepository, v7, geminiOAuthService, oAuthRefreshAPI)
+	geminiTokenProvider := service.ProvideGeminiTokenProvider(accountRepository, v7, geminiOAuthService, oAuthRefreshAPI, v5)
 	v11 := repository.NewGatewayCache(redisClient)
 	v12 := repository.NewSchedulerOutboxRepository(db)
 	schedulerSnapshotService := service.ProvideSchedulerSnapshotService(schedulerCache, v12, accountRepository, groupRepository, configConfig, lifecycleRegistry)
