@@ -312,7 +312,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					func() {
 						h.gatewayService.RecordOpenAIAccountSwitch()
 						if profile.OfficialClient && codexFailoverDecision.SwitchAccount {
-							h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr)
+							h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, true)
 						}
 					},
 				)

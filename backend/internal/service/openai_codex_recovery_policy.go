@@ -25,11 +25,12 @@ const (
 )
 
 type CodexRecoveryPolicyInput struct {
-	AccountID     int64
-	FailureReason string
-	Reason        string
-	StatusCode    int
-	Transport     OpenAIUpstreamTransport
+	AccountID                 int64
+	FailureReason             string
+	Reason                    string
+	StatusCode                int
+	TrackCompatibilityMetrics bool
+	Transport                 OpenAIUpstreamTransport
 }
 
 type CodexRecoveryDecision struct {
@@ -47,6 +48,7 @@ type CodexRecoveryDecision struct {
 	SkipReason                string
 	StatusCode                int
 	SwitchAccount             bool
+	TrackCompatibilityMetrics bool
 	Transport                 OpenAIUpstreamTransport
 	TrimmedEncryptedReasoning bool
 }
@@ -57,14 +59,15 @@ type CodexRecoveryPolicy struct{}
 
 func (CodexRecoveryPolicy) Apply(reqBody map[string]any, input CodexRecoveryPolicyInput) CodexRecoveryDecision {
 	decision := CodexRecoveryDecision{
-		Action:                codexRecoveryActionNone,
-		AccountID:             input.AccountID,
-		FailureReason:         normalizeCodexRecoveryFailureReason(input.FailureReason),
-		PreviousResponseID:    openAIWSPayloadString(reqBody, "previous_response_id"),
-		Reason:                strings.TrimSpace(input.Reason),
-		StatusCode:            input.StatusCode,
-		Transport:             normalizeOpenAIWSSessionTransport(input.Transport),
-		HasFunctionCallOutput: HasFunctionCallOutput(reqBody),
+		Action:                    codexRecoveryActionNone,
+		AccountID:                 input.AccountID,
+		FailureReason:             normalizeCodexRecoveryFailureReason(input.FailureReason),
+		PreviousResponseID:        openAIWSPayloadString(reqBody, "previous_response_id"),
+		Reason:                    strings.TrimSpace(input.Reason),
+		StatusCode:                input.StatusCode,
+		TrackCompatibilityMetrics: input.TrackCompatibilityMetrics,
+		Transport:                 normalizeOpenAIWSSessionTransport(input.Transport),
+		HasFunctionCallOutput:     HasFunctionCallOutput(reqBody),
 	}
 	decision.PreviousResponseIDKind = ClassifyOpenAIPreviousResponseIDKind(decision.PreviousResponseID)
 
@@ -281,10 +284,11 @@ func (s *OpenAIGatewayService) applyCodexTransportCooldownRecovery(
 	transport OpenAIUpstreamTransport,
 ) CodexRecoveryDecision {
 	decision := CodexRecoveryPolicy{}.Apply(nil, CodexRecoveryPolicyInput{
-		AccountID:     accountID,
-		FailureReason: reason,
-		Reason:        codexRecoveryReasonTransportFailure,
-		Transport:     transport,
+		AccountID:                 accountID,
+		FailureReason:             reason,
+		Reason:                    codexRecoveryReasonTransportFailure,
+		TrackCompatibilityMetrics: true,
+		Transport:                 transport,
 	})
 	if decision.Applied && decision.MarkedTransportCooldown {
 		s.markOpenAIWSFallbackCooling(accountID, decision.FailureReason)
@@ -296,16 +300,18 @@ func (s *OpenAIGatewayService) RecordCodexRecoveryAccountSwitch(
 	c *gin.Context,
 	account *Account,
 	failoverErr *UpstreamFailoverError,
+	trackMetrics bool,
 ) CodexRecoveryDecision {
 	if account == nil || failoverErr == nil {
 		return CodexRecoveryDecision{}
 	}
 	return CodexRecoveryPolicy{}.Apply(nil, CodexRecoveryPolicyInput{
-		AccountID:     account.ID,
-		Reason:        codexRecoveryReasonAccountSwitch,
-		FailureReason: failoverErr.FailureReason,
-		StatusCode:    failoverErr.StatusCode,
-		Transport:     resolveCodexRecoveryTransport(c),
+		AccountID:                 account.ID,
+		Reason:                    codexRecoveryReasonAccountSwitch,
+		FailureReason:             failoverErr.FailureReason,
+		StatusCode:                failoverErr.StatusCode,
+		TrackCompatibilityMetrics: trackMetrics,
+		Transport:                 resolveCodexRecoveryTransport(c),
 	})
 }
 
@@ -322,10 +328,11 @@ func (s *OpenAIGatewayService) ResolveCodexFailoverRecovery(
 		accountID = account.ID
 	}
 	return CodexRecoveryPolicy{}.Apply(nil, CodexRecoveryPolicyInput{
-		AccountID:     accountID,
-		FailureReason: failoverErr.FailureReason,
-		Reason:        codexRecoveryReasonFailover,
-		StatusCode:    failoverErr.StatusCode,
-		Transport:     resolveCodexRecoveryTransport(c),
+		AccountID:                 accountID,
+		FailureReason:             failoverErr.FailureReason,
+		Reason:                    codexRecoveryReasonFailover,
+		StatusCode:                failoverErr.StatusCode,
+		TrackCompatibilityMetrics: true,
+		Transport:                 resolveCodexRecoveryTransport(c),
 	})
 }

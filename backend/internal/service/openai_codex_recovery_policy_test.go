@@ -239,7 +239,7 @@ func TestOpenAIGatewayService_RecordCodexRecoveryAccountSwitch(t *testing.T) {
 	account := &Account{ID: 61}
 	failoverErr := &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
 
-	decision := svc.RecordCodexRecoveryAccountSwitch(c, account, failoverErr)
+	decision := svc.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, true)
 
 	require.True(t, decision.Applied)
 	require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
@@ -253,42 +253,48 @@ func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) 
 	policy := CodexRecoveryPolicy{}
 
 	policy.Apply(nil, CodexRecoveryPolicyInput{
-		FailureReason: "upstream_rate_limited",
-		Reason:        codexRecoveryReasonFailover,
-		StatusCode:    http.StatusTooManyRequests,
-		Transport:     OpenAIUpstreamTransportHTTPSSE,
+		FailureReason:             "upstream_rate_limited",
+		Reason:                    codexRecoveryReasonFailover,
+		StatusCode:                http.StatusTooManyRequests,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportHTTPSSE,
 	})
 
 	policy.Apply(nil, CodexRecoveryPolicyInput{
-		FailureReason: "upstream_5xx",
-		Reason:        codexRecoveryReasonFailover,
-		StatusCode:    http.StatusBadGateway,
-		Transport:     OpenAIUpstreamTransportHTTPSSE,
+		FailureReason:             "upstream_5xx",
+		Reason:                    codexRecoveryReasonFailover,
+		StatusCode:                http.StatusBadGateway,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportHTTPSSE,
 	})
 
 	policy.Apply(nil, CodexRecoveryPolicyInput{
-		AccountID:     71,
-		FailureReason: "read_event",
-		Reason:        codexRecoveryReasonTransportFailure,
-		Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
+		AccountID:                 71,
+		FailureReason:             "read_event",
+		Reason:                    codexRecoveryReasonTransportFailure,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
 
 	policy.Apply(nil, CodexRecoveryPolicyInput{
-		Reason:    codexRecoveryReasonTransportFailure,
-		Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+		Reason:                    codexRecoveryReasonTransportFailure,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
 
 	policy.Apply(nil, CodexRecoveryPolicyInput{
-		AccountID:  72,
-		Reason:     codexRecoveryReasonAccountSwitch,
-		StatusCode: http.StatusBadGateway,
-		Transport:  OpenAIUpstreamTransportResponsesWebsocketV2,
+		AccountID:                 72,
+		Reason:                    codexRecoveryReasonAccountSwitch,
+		StatusCode:                http.StatusBadGateway,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
 
 	policy.Apply(nil, CodexRecoveryPolicyInput{
-		Reason:     codexRecoveryReasonAccountSwitch,
-		StatusCode: http.StatusBadGateway,
-		Transport:  OpenAIUpstreamTransportResponsesWebsocketV2,
+		Reason:                    codexRecoveryReasonAccountSwitch,
+		StatusCode:                http.StatusBadGateway,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
 
 	policy.Apply(map[string]any{
@@ -297,8 +303,9 @@ func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) 
 			map[string]any{"type": "input_text", "text": "hello"},
 		},
 	}, CodexRecoveryPolicyInput{
-		Reason:    codexRecoveryReasonPreviousResponseNotFound,
-		Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+		Reason:                    codexRecoveryReasonPreviousResponseNotFound,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
 
 	policy.Apply(map[string]any{
@@ -307,8 +314,9 @@ func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) 
 			map[string]any{"type": "reasoning", "encrypted_content": "gCCC"},
 		},
 	}, CodexRecoveryPolicyInput{
-		Reason:    codexRecoveryReasonInvalidEncryptedContent,
-		Transport: OpenAIUpstreamTransportHTTPSSE,
+		Reason:                    codexRecoveryReasonInvalidEncryptedContent,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportHTTPSSE,
 	})
 
 	policy.Apply(map[string]any{
@@ -317,8 +325,9 @@ func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) 
 			map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok"},
 		},
 	}, CodexRecoveryPolicyInput{
-		Reason:    codexRecoveryReasonPreviousResponseNotFound,
-		Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+		Reason:                    codexRecoveryReasonPreviousResponseNotFound,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
 
 	policy.Apply(map[string]any{
@@ -327,8 +336,9 @@ func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) 
 			map[string]any{"type": "input_text", "text": "no encrypted reasoning"},
 		},
 	}, CodexRecoveryPolicyInput{
-		Reason:    codexRecoveryReasonInvalidEncryptedContent,
-		Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+		Reason:                    codexRecoveryReasonInvalidEncryptedContent,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 	})
 
 	after := SnapshotOpenAICodexCompatibilityMetrics()
@@ -346,4 +356,28 @@ func TestSnapshotOpenAICodexCompatibilityMetrics_RecoveryCounters(t *testing.T) 
 	require.GreaterOrEqual(t, after.RecoveryInvalidEncryptedSkippedTotal, before.RecoveryInvalidEncryptedSkippedTotal+1)
 	require.GreaterOrEqual(t, after.RecoveryDropPreviousResponseIDTotal, before.RecoveryDropPreviousResponseIDTotal+1)
 	require.GreaterOrEqual(t, after.RecoveryTrimEncryptedReasoningTotal, before.RecoveryTrimEncryptedReasoningTotal+1)
+}
+
+func TestOpenAIGatewayService_RecordCodexRecoveryAccountSwitch_NonOfficialMetricsSkipped(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/chat/completions", nil)
+	c.Set("openai_ws_transport_decision", string(OpenAIUpstreamTransportResponsesWebsocketV2))
+
+	before := SnapshotOpenAICodexCompatibilityMetrics()
+
+	svc := &OpenAIGatewayService{}
+	account := &Account{ID: 88}
+	failoverErr := &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+
+	decision := svc.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, false)
+
+	require.True(t, decision.Applied)
+	require.True(t, decision.SwitchAccount)
+	require.False(t, decision.TrackCompatibilityMetrics)
+
+	after := SnapshotOpenAICodexCompatibilityMetrics()
+	require.Equal(t, before.RecoveryAccountSwitchAppliedTotal, after.RecoveryAccountSwitchAppliedTotal)
+	require.Equal(t, before.RecoveryWSRetryTotal, after.RecoveryWSRetryTotal)
 }

@@ -287,8 +287,9 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIWS(
 				return false
 			}
 			decision := recoveryPolicy.Apply(wsReqBody, CodexRecoveryPolicyInput{
-				Reason:    reason,
-				Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+				Reason:                    reason,
+				TrackCompatibilityMetrics: isCodexCLI,
+				Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 			})
 			if !decision.Applied {
 				logOpenAIWSModeInfo(
@@ -315,8 +316,9 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIWS(
 				return false
 			}
 			decision := recoveryPolicy.Apply(wsReqBody, CodexRecoveryPolicyInput{
-				Reason:    reason,
-				Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+				Reason:                    reason,
+				TrackCompatibilityMetrics: isCodexCLI,
+				Transport:                 OpenAIUpstreamTransportResponsesWebsocketV2,
 			})
 			if !decision.Applied {
 				logOpenAIWSModeInfo(
@@ -542,8 +544,9 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIHTTP(
 			upstreamCode := extractUpstreamErrorCode(respBody)
 			if !httpInvalidEncryptedContentRetryTried && resp.StatusCode == http.StatusBadRequest && upstreamCode == "invalid_encrypted_content" {
 				decision := recoveryPolicy.Apply(prepared.reqBody, CodexRecoveryPolicyInput{
-					Reason:    codexRecoveryReasonInvalidEncryptedContent,
-					Transport: OpenAIUpstreamTransportHTTPSSE,
+					Reason:                    codexRecoveryReasonInvalidEncryptedContent,
+					TrackCompatibilityMetrics: isCodexCLI,
+					Transport:                 OpenAIUpstreamTransportHTTPSSE,
 				})
 				if decision.Applied {
 					prepared.body, err = json.Marshal(prepared.reqBody)

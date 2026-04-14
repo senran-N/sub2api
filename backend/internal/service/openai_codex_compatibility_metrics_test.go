@@ -77,8 +77,9 @@ func TestSnapshotOpenAICodexCompatibilityMetrics(t *testing.T) {
 	decision := CodexRecoveryPolicy{}.Apply(map[string]any{
 		"previous_response_id": "resp_metrics_1",
 	}, CodexRecoveryPolicyInput{
-		Reason:    codexRecoveryReasonPreviousResponseNotFound,
-		Transport: OpenAIUpstreamTransportHTTPSSE,
+		Reason:                    codexRecoveryReasonPreviousResponseNotFound,
+		TrackCompatibilityMetrics: true,
+		Transport:                 OpenAIUpstreamTransportHTTPSSE,
 	})
 	require.True(t, decision.Applied)
 

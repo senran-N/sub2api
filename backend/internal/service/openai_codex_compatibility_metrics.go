@@ -238,6 +238,10 @@ func ObserveOpenAICodexSchedulingDecision(profile CodexRequestProfile, decision 
 }
 
 func recordOpenAICodexRecoveryDecision(decision CodexRecoveryDecision) {
+	if !decision.TrackCompatibilityMetrics {
+		return
+	}
+
 	transportKey := normalizeCodexCompatibilityRecoveryTransportKey(decision.Transport)
 	minimalRewriteApplied := false
 

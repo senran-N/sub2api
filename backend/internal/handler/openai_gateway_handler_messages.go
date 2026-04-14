@@ -265,7 +265,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					},
 					func() {
 						h.gatewayService.RecordOpenAIAccountSwitch()
-						h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr)
+						h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, false)
 					},
 				)
 				if decision.SameAccountRetry {
