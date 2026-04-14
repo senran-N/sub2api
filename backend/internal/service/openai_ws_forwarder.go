@@ -124,7 +124,6 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		turnState = strings.TrimSpace(c.GetHeader(openAIWSTurnStateHeader))
 		turnMetadata = strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader))
 	}
-	hasExplicitContinuation := previousResponseID != "" || turnState != "" || hasFunctionCallOutput
 	setOpenAIWSTurnMetadata(payload, turnMetadata)
 	payloadEventType := openAIWSPayloadString(payload, "type")
 	if payloadEventType == "" {
@@ -149,52 +148,46 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		)
 	}
 
-	stateStore := s.getOpenAIWSStateStore()
-	groupID := getOpenAIGroupIDFromContext(c)
-	sessionHash := s.GenerateSessionHash(c, nil)
-	if sessionHash == "" {
-		var legacySessionHash string
-		sessionHash, legacySessionHash = openAIWSSessionHashesFromID(promptCacheKey)
-		attachOpenAILegacySessionHashToGin(c, legacySessionHash)
-	}
-	if turnState == "" && hasExplicitContinuation && stateStore != nil && sessionHash != "" {
-		if savedTurnState, ok := stateStore.GetSessionTurnState(groupID, sessionHash); ok {
-			turnState = savedTurnState
-		}
-	}
-	preferredConnID := ""
-	if stateStore != nil && previousResponseID != "" {
-		if connID, ok := stateStore.GetResponseConn(previousResponseID); ok {
-			preferredConnID = connID
-		}
-	}
 	storeDisabled := s.isOpenAIWSStoreDisabledInRequest(reqBody, account)
-	if stateStore != nil && storeDisabled && previousResponseID == "" && hasExplicitContinuation && sessionHash != "" {
-		if connID, ok := stateStore.GetSessionConn(groupID, sessionHash); ok {
-			preferredConnID = connID
-		}
-	}
-	storeDisabledConnMode := s.openAIWSStoreDisabledConnMode()
-	forceNewConnByPolicy := shouldForceNewConnOnStoreDisabled(storeDisabledConnMode, lastFailureReason)
-	forceNewConn := forceNewConnByPolicy && storeDisabled && !hasExplicitContinuation && sessionHash != "" && preferredConnID == ""
+	transportState := s.resolveCodexTransportState(c, codexTransportStateInput{
+		AccountID:             account.ID,
+		HasFunctionCallOutput: hasFunctionCallOutput,
+		LastFailureReason:     lastFailureReason,
+		PreviousResponseID:    previousResponseID,
+		PromptCacheKey:        promptCacheKey,
+		StoreDisabled:         storeDisabled,
+		TurnState:             turnState,
+	})
+	stateStore := s.getOpenAIWSStateStore()
+	groupID := transportState.GroupID
+	sessionHash := transportState.SessionHash
+	turnState = transportState.TurnState
+	preferredConnID := transportState.PreferredConnID
+	hasExplicitContinuation := transportState.HasExplicitContinuation
+	storeDisabledConnMode := transportState.StoreDisabledConnMode
+	forceNewConn := transportState.ForceNewConn
 	wsHeaders, sessionResolution := s.buildOpenAIWSHeaders(c, account, token, decision, turnState, turnMetadata, promptCacheKey)
 	logOpenAIWSModeDebug(
-		"acquire_start account_id=%d account_type=%s transport=%s preferred_conn_id=%s has_previous_response_id=%v has_explicit_continuation=%v session_hash=%s has_turn_state=%v turn_state_len=%d has_turn_metadata=%v turn_metadata_len=%d store_disabled=%v store_disabled_conn_mode=%s retry_last_reason=%s force_new_conn=%v header_user_agent=%s header_openai_beta=%s header_originator=%s header_accept_language=%s header_session_id=%s header_conversation_id=%s session_id_source=%s conversation_id_source=%s has_prompt_cache_key=%v has_chatgpt_account_id=%v has_authorization=%v has_session_id=%v has_conversation_id=%v proxy_enabled=%v",
+		"acquire_start account_id=%d account_type=%s transport=%s preferred_conn_id=%s preferred_conn_source=%s has_previous_response_id=%v has_explicit_continuation=%v session_hash=%s has_turn_state=%v turn_state_len=%d restored_turn_state=%v has_turn_metadata=%v turn_metadata_len=%d store_disabled=%v store_disabled_conn_mode=%s retry_last_reason=%s force_new_conn=%v warmup=%v fallback_cooling=%v header_user_agent=%s header_openai_beta=%s header_originator=%s header_accept_language=%s header_session_id=%s header_conversation_id=%s session_id_source=%s conversation_id_source=%s has_prompt_cache_key=%v has_chatgpt_account_id=%v has_authorization=%v has_session_id=%v has_conversation_id=%v proxy_enabled=%v",
 		account.ID,
 		account.Type,
 		normalizeOpenAIWSLogValue(string(decision.Transport)),
 		truncateOpenAIWSLogValue(preferredConnID, openAIWSIDValueMaxLen),
+		normalizeOpenAIWSLogValue(transportState.PreferredConnSource),
 		previousResponseID != "",
 		hasExplicitContinuation,
 		truncateOpenAIWSLogValue(sessionHash, 12),
 		turnState != "",
 		len(turnState),
+		transportState.TurnStateRestored,
 		turnMetadata != "",
 		len(turnMetadata),
 		storeDisabled,
 		normalizeOpenAIWSLogValue(storeDisabledConnMode),
 		truncateOpenAIWSLogValue(lastFailureReason, openAIWSLogValueMaxLen),
 		forceNewConn,
+		transportState.Warmup,
+		transportState.FallbackCooling,
 		openAIWSHeaderValueForLog(wsHeaders, "user-agent"),
 		openAIWSHeaderValueForLog(wsHeaders, "openai-beta"),
 		openAIWSHeaderValueForLog(wsHeaders, "originator"),

@@ -71,29 +71,23 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 	firstPayload = s.prepareOpenAIWSClientPayload(account, firstPayload)
 
 	turnState := strings.TrimSpace(c.GetHeader(openAIWSTurnStateHeader))
-	stateStore := s.getOpenAIWSStateStore()
-	groupID := getOpenAIGroupIDFromContext(c)
-	sessionHash := s.GenerateOpenAIWSIngressSessionHash(c, firstPayload.rawForHash)
-	if turnState == "" && stateStore != nil && sessionHash != "" {
-		if savedTurnState, ok := stateStore.GetSessionTurnState(groupID, sessionHash); ok {
-			turnState = savedTurnState
-		}
-	}
-
-	preferredConnID := ""
-	if stateStore != nil && firstPayload.previousResponseID != "" {
-		if connID, ok := stateStore.GetResponseConn(firstPayload.previousResponseID); ok {
-			preferredConnID = connID
-		}
-	}
-
 	storeDisabled := firstPayload.storeDisabled
-	storeDisabledConnMode := s.openAIWSStoreDisabledConnMode()
-	if stateStore != nil && storeDisabled && firstPayload.previousResponseID == "" && sessionHash != "" {
-		if connID, ok := stateStore.GetSessionConn(groupID, sessionHash); ok {
-			preferredConnID = connID
-		}
-	}
+	transportState := s.resolveCodexTransportState(c, codexTransportStateInput{
+		AccountID:             account.ID,
+		Body:                  firstPayload.rawForHash,
+		HasFunctionCallOutput: firstPayload.payloadMeta.hasFunctionCallOutput,
+		PreferIngressSession:  true,
+		PreviousResponseID:    firstPayload.previousResponseID,
+		PromptCacheKey:        firstPayload.promptCacheKey,
+		StoreDisabled:         storeDisabled,
+		TurnState:             turnState,
+	})
+	stateStore := s.getOpenAIWSStateStore()
+	groupID := transportState.GroupID
+	sessionHash := transportState.SessionHash
+	turnState = transportState.TurnState
+	preferredConnID := transportState.PreferredConnID
+	storeDisabledConnMode := transportState.StoreDisabledConnMode
 
 	profile := GetCodexRequestProfile(c, firstPayload.rawForHash, s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
 	isCodexCLI := profile.OfficialClient
@@ -158,14 +152,18 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 
 	if session.debugEnabled {
 		logOpenAIWSModeDebug(
-			"ingress_ws_start account_id=%d account_type=%s transport=%s ws_host=%s preferred_conn_id=%s has_session_hash=%v has_previous_response_id=%v store_disabled=%v",
+			"ingress_ws_start account_id=%d account_type=%s transport=%s ws_host=%s preferred_conn_id=%s preferred_conn_source=%s has_session_hash=%v has_previous_response_id=%v restored_turn_state=%v warmup=%v fallback_cooling=%v store_disabled=%v",
 			account.ID,
 			account.Type,
 			normalizeOpenAIWSLogValue(string(wsDecision.Transport)),
 			wsHost,
 			truncateOpenAIWSLogValue(preferredConnID, openAIWSIDValueMaxLen),
+			normalizeOpenAIWSLogValue(transportState.PreferredConnSource),
 			sessionHash != "",
 			firstPayload.previousResponseID != "",
+			transportState.TurnStateRestored,
+			transportState.Warmup,
+			transportState.FallbackCooling,
 			storeDisabled,
 		)
 	}
