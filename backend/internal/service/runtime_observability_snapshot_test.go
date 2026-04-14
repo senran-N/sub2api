@@ -33,6 +33,10 @@ func TestBuildRuntimeObservabilitySummary(t *testing.T) {
 			SessionHashLegacyReadHitRate: 0.75,
 			MetadataLegacyFallbackTotal:  11,
 		},
+		OpenAICodexCompatibilityMetricsSnapshot{
+			SessionHTTPFallbackHitTotal:        4,
+			SessionTransportHTTPDowngradeTotal: 2,
+		},
 	)
 
 	require.InDelta(t, 50.0, summary.SchedulingRuntimeKernel.AvgFetchedAccountsPerPage, 0.0001)
@@ -49,4 +53,6 @@ func TestBuildRuntimeObservabilitySummary(t *testing.T) {
 
 	require.InDelta(t, 0.75, summary.OpenAICompatibilityFallback.SessionHashLegacyReadHitRate, 0.0001)
 	require.Equal(t, int64(11), summary.OpenAICompatibilityFallback.MetadataLegacyFallbackTotal)
+	require.Equal(t, int64(4), summary.OpenAICodexCompatibility.SessionHTTPFallbackHitTotal)
+	require.Equal(t, int64(2), summary.OpenAICodexCompatibility.SessionTransportHTTPDowngradeTotal)
 }

@@ -1849,6 +1849,19 @@ func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger
 		zap.Float64("session_hash_legacy_read_hit_rate", metrics.SessionHashLegacyReadHitRate),
 		zap.Int64("metadata_legacy_fallback_total", metrics.MetadataLegacyFallbackTotal),
 	)
+	codexMetrics := runtimeMetrics.OpenAICodexCompatibility
+	reqLog.Info("gateway.codex_compatibility_metrics",
+		zap.Int64("transport_warmup_total", codexMetrics.TransportWarmupTotal),
+		zap.Int64("transport_fallback_cooling_hit_total", codexMetrics.TransportFallbackCoolingHitTotal),
+		zap.Int64("session_preferred_transport_hit_total", codexMetrics.SessionPreferredTransportHitTotal),
+		zap.Int64("session_preferred_transport_ws_hit_total", codexMetrics.SessionPreferredTransportWSHitTotal),
+		zap.Int64("session_preferred_transport_http_hit_total", codexMetrics.SessionPreferredTransportHTTPHitTotal),
+		zap.Int64("session_http_fallback_hit_total", codexMetrics.SessionHTTPFallbackHitTotal),
+		zap.Int64("session_transport_bind_ws_total", codexMetrics.SessionTransportBindWSTotal),
+		zap.Int64("session_transport_bind_http_total", codexMetrics.SessionTransportBindHTTPTotal),
+		zap.Int64("session_transport_warmup_ignored_total", codexMetrics.SessionTransportWarmupIgnoredTotal),
+		zap.Int64("session_transport_http_downgrade_total", codexMetrics.SessionTransportHTTPDowngradeTotal),
+	)
 	reqLog.Info("gateway.scheduling_runtime_kernel_metrics",
 		zap.Int64("index_page_fetches", runtimeMetrics.SchedulingRuntimeKernel.IndexPageFetches),
 		zap.Int64("index_fetched_accounts", runtimeMetrics.SchedulingRuntimeKernel.IndexFetchedAccounts),

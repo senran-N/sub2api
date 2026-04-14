@@ -35,6 +35,7 @@ func TestResolveCodexTransportState_PromptCacheFallbackAndSessionContinuation(t 
 	store.BindSessionTurnState(groupID, sessionHash, "turn_state_restored", time.Minute)
 	store.BindSessionConn(groupID, sessionHash, "conn_session_1", time.Minute)
 	store.BindSessionTransport(groupID, sessionHash, OpenAIUpstreamTransportHTTPSSE, time.Minute)
+	store.MarkSessionTransportFallback(groupID, sessionHash, time.Minute)
 	svc.markOpenAIWSFallbackCooling(17, "upgrade_required")
 
 	state := svc.resolveCodexTransportState(c, codexTransportStateInput{
@@ -54,6 +55,7 @@ func TestResolveCodexTransportState_PromptCacheFallbackAndSessionContinuation(t 
 	require.Equal(t, codexTransportPreferredConnSourceSession, state.PreferredConnSource)
 	require.Equal(t, OpenAIUpstreamTransportHTTPSSE, state.PreferredTransport)
 	require.Equal(t, codexTransportPreferredTransportSourceSession, state.PreferredTransportSource)
+	require.True(t, state.PreferredHTTPFallback)
 	require.Equal(t, openAIWSStoreDisabledConnModeAdaptive, state.StoreDisabledConnMode)
 	require.False(t, state.ForceNewConn)
 	require.True(t, state.FallbackCooling)
@@ -166,4 +168,18 @@ func TestBindCodexSessionTransport_IgnoresWarmup(t *testing.T) {
 	transport, ok := store.GetSessionTransport(91, "session_hash_warmup")
 	require.True(t, ok)
 	require.Equal(t, OpenAIUpstreamTransportResponsesWebsocketV2, transport)
+}
+
+func TestBindCodexSessionTransport_MarksHTTPFallbackDowngrade(t *testing.T) {
+	store := NewOpenAIWSStateStore(nil)
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+
+	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportResponsesWebsocketV2, false)
+	require.False(t, store.HasSessionTransportFallback(91, "session_hash_transport_fb"))
+
+	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportHTTPSSE, false)
+	require.True(t, store.HasSessionTransportFallback(91, "session_hash_transport_fb"))
+
+	svc.bindCodexSessionTransport(store, 91, "session_hash_transport_fb", OpenAIUpstreamTransportResponsesWebsocketV2, false)
+	require.False(t, store.HasSessionTransportFallback(91, "session_hash_transport_fb"))
 }

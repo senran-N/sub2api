@@ -24,6 +24,7 @@ type CodexTransportState struct {
 	HasExplicitContinuation  bool
 	PreferredConnID          string
 	PreferredConnSource      string
+	PreferredHTTPFallback    bool
 	PreferredTransport       OpenAIUpstreamTransport
 	PreferredTransportSource string
 	SessionHash              string
@@ -60,7 +61,11 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 
 	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
 	if len(input.Body) > 0 {
-		state.Warmup = GetCodexRequestProfile(c, input.Body, forceCodexCLI).Warmup
+		profile := GetCodexRequestProfile(c, input.Body, forceCodexCLI)
+		state.Warmup = profile.Warmup
+		if profile.OfficialClient && state.Warmup {
+			recordOpenAICodexTransportWarmup()
+		}
 	}
 
 	if input.PreferIngressSession {
@@ -86,6 +91,11 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 	if preferredTransport, ok := s.getCodexSessionPreferredTransport(stateStore, state.GroupID, state.SessionHash); ok {
 		state.PreferredTransport = preferredTransport
 		state.PreferredTransportSource = codexTransportPreferredTransportSourceSession
+		state.PreferredHTTPFallback = preferredTransport == OpenAIUpstreamTransportHTTPSSE && stateStore.HasSessionTransportFallback(state.GroupID, state.SessionHash)
+		recordOpenAICodexSessionPreferredTransportHit(preferredTransport, state.PreferredHTTPFallback)
+	}
+	if state.FallbackCooling {
+		recordOpenAICodexTransportFallbackCoolingHit()
 	}
 
 	resolveCtx := context.Background()
@@ -126,7 +136,11 @@ func (s *OpenAIGatewayService) bindCodexSessionTransport(
 	transport OpenAIUpstreamTransport,
 	warmup bool,
 ) {
-	if s == nil || store == nil || warmup {
+	if s == nil || store == nil {
+		return
+	}
+	if warmup {
+		recordOpenAICodexSessionTransportBind(transport, true, false)
 		return
 	}
 	normalizedSessionHash := strings.TrimSpace(sessionHash)
@@ -134,7 +148,21 @@ func (s *OpenAIGatewayService) bindCodexSessionTransport(
 	if normalizedSessionHash == "" || normalizedTransport == OpenAIUpstreamTransportAny {
 		return
 	}
+	previousTransport, hasPreviousTransport := store.GetSessionTransport(groupID, normalizedSessionHash)
+	httpDowngrade := normalizedTransport == OpenAIUpstreamTransportHTTPSSE &&
+		hasPreviousTransport &&
+		isOpenAIWSSessionWebsocketTransport(previousTransport)
+	if normalizedTransport == OpenAIUpstreamTransportHTTPSSE {
+		if httpDowngrade || store.HasSessionTransportFallback(groupID, normalizedSessionHash) {
+			store.MarkSessionTransportFallback(groupID, normalizedSessionHash, s.openAIWSSessionStickyTTL())
+		} else {
+			store.ClearSessionTransportFallback(groupID, normalizedSessionHash)
+		}
+	} else {
+		store.ClearSessionTransportFallback(groupID, normalizedSessionHash)
+	}
 	store.BindSessionTransport(groupID, normalizedSessionHash, normalizedTransport, s.openAIWSSessionStickyTTL())
+	recordOpenAICodexSessionTransportBind(normalizedTransport, false, httpDowngrade)
 }
 
 func (s *OpenAIGatewayService) bindCodexSessionTransportFromBody(
@@ -173,4 +201,13 @@ func (s *OpenAIGatewayService) resolveCodexPreferredTransport(
 		return requiredTransport
 	}
 	return preferredTransport
+}
+
+func isOpenAIWSSessionWebsocketTransport(transport OpenAIUpstreamTransport) bool {
+	switch normalizeOpenAIWSSessionTransport(transport) {
+	case OpenAIUpstreamTransportResponsesWebsocket, OpenAIUpstreamTransportResponsesWebsocketV2:
+		return true
+	default:
+		return false
+	}
 }

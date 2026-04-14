@@ -91,6 +91,22 @@ func TestOpenAIWSStateStore_SessionTransportTTL(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestOpenAIWSStateStore_SessionTransportFallbackTTL(t *testing.T) {
+	store := NewOpenAIWSStateStore(nil)
+	store.MarkSessionTransportFallback(9, "session_hash_transport_fb_1", 30*time.Millisecond)
+
+	require.True(t, store.HasSessionTransportFallback(9, "session_hash_transport_fb_1"))
+	require.False(t, store.HasSessionTransportFallback(10, "session_hash_transport_fb_1"))
+
+	time.Sleep(60 * time.Millisecond)
+	require.False(t, store.HasSessionTransportFallback(9, "session_hash_transport_fb_1"))
+
+	store.MarkSessionTransportFallback(9, "session_hash_transport_fb_2", time.Minute)
+	require.True(t, store.HasSessionTransportFallback(9, "session_hash_transport_fb_2"))
+	store.ClearSessionTransportFallback(9, "session_hash_transport_fb_2")
+	require.False(t, store.HasSessionTransportFallback(9, "session_hash_transport_fb_2"))
+}
+
 func TestOpenAIWSStateStore_GetResponseAccount_NoStaleAfterCacheMiss(t *testing.T) {
 	cache := &stubGatewayCache{sessionBindings: map[string]int64{}}
 	store := NewOpenAIWSStateStore(cache)

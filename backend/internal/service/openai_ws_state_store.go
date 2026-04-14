@@ -44,6 +44,10 @@ type openAIWSSessionTransportBinding struct {
 	expiresAt time.Time
 }
 
+type openAIWSSessionFlagBinding struct {
+	expiresAt time.Time
+}
+
 // OpenAIWSStateStore 管理 WSv2 的粘连状态。
 // - response_id -> account_id 用于续链路由
 // - response_id -> conn_id 用于连接内上下文复用
@@ -70,6 +74,9 @@ type OpenAIWSStateStore interface {
 	BindSessionTransport(groupID int64, sessionHash string, transport OpenAIUpstreamTransport, ttl time.Duration)
 	GetSessionTransport(groupID int64, sessionHash string) (OpenAIUpstreamTransport, bool)
 	DeleteSessionTransport(groupID int64, sessionHash string)
+	MarkSessionTransportFallback(groupID int64, sessionHash string, ttl time.Duration)
+	HasSessionTransportFallback(groupID int64, sessionHash string) bool
+	ClearSessionTransportFallback(groupID int64, sessionHash string)
 }
 
 type defaultOpenAIWSStateStore struct {
@@ -85,6 +92,8 @@ type defaultOpenAIWSStateStore struct {
 	sessionToConn        map[string]openAIWSSessionConnBinding
 	sessionToTransportMu sync.RWMutex
 	sessionToTransport   map[string]openAIWSSessionTransportBinding
+	sessionToFallbackMu  sync.RWMutex
+	sessionToFallback    map[string]openAIWSSessionFlagBinding
 
 	lastCleanupUnixNano atomic.Int64
 }
@@ -98,6 +107,7 @@ func NewOpenAIWSStateStore(cache GatewayCache) OpenAIWSStateStore {
 		sessionToTurnState: make(map[string]openAIWSTurnStateBinding, 256),
 		sessionToConn:      make(map[string]openAIWSSessionConnBinding, 256),
 		sessionToTransport: make(map[string]openAIWSSessionTransportBinding, 256),
+		sessionToFallback:  make(map[string]openAIWSSessionFlagBinding, 256),
 	}
 	store.lastCleanupUnixNano.Store(time.Now().UnixNano())
 	return store
@@ -360,6 +370,46 @@ func (s *defaultOpenAIWSStateStore) DeleteSessionTransport(groupID int64, sessio
 	s.sessionToTransportMu.Unlock()
 }
 
+func (s *defaultOpenAIWSStateStore) MarkSessionTransportFallback(groupID int64, sessionHash string, ttl time.Duration) {
+	key := openAIWSSessionTurnStateKey(groupID, sessionHash)
+	if key == "" {
+		return
+	}
+	ttl = normalizeOpenAIWSTTL(ttl)
+	s.maybeCleanup()
+
+	s.sessionToFallbackMu.Lock()
+	ensureBindingCapacity(s.sessionToFallback, key, openAIWSStateStoreMaxEntriesPerMap)
+	s.sessionToFallback[key] = openAIWSSessionFlagBinding{
+		expiresAt: time.Now().Add(ttl),
+	}
+	s.sessionToFallbackMu.Unlock()
+}
+
+func (s *defaultOpenAIWSStateStore) HasSessionTransportFallback(groupID int64, sessionHash string) bool {
+	key := openAIWSSessionTurnStateKey(groupID, sessionHash)
+	if key == "" {
+		return false
+	}
+	s.maybeCleanup()
+
+	now := time.Now()
+	s.sessionToFallbackMu.RLock()
+	binding, ok := s.sessionToFallback[key]
+	s.sessionToFallbackMu.RUnlock()
+	return ok && !now.After(binding.expiresAt)
+}
+
+func (s *defaultOpenAIWSStateStore) ClearSessionTransportFallback(groupID int64, sessionHash string) {
+	key := openAIWSSessionTurnStateKey(groupID, sessionHash)
+	if key == "" {
+		return
+	}
+	s.sessionToFallbackMu.Lock()
+	delete(s.sessionToFallback, key)
+	s.sessionToFallbackMu.Unlock()
+}
+
 func (s *defaultOpenAIWSStateStore) maybeCleanup() {
 	if s == nil {
 		return
@@ -393,6 +443,10 @@ func (s *defaultOpenAIWSStateStore) maybeCleanup() {
 	s.sessionToTransportMu.Lock()
 	cleanupExpiredSessionTransportBindings(s.sessionToTransport, now, openAIWSStateStoreCleanupMaxPerMap)
 	s.sessionToTransportMu.Unlock()
+
+	s.sessionToFallbackMu.Lock()
+	cleanupExpiredSessionFlagBindings(s.sessionToFallback, now, openAIWSStateStoreCleanupMaxPerMap)
+	s.sessionToFallbackMu.Unlock()
 }
 
 func cleanupExpiredAccountBindings(bindings map[string]openAIWSAccountBinding, now time.Time, maxScan int) {
@@ -466,6 +520,22 @@ func cleanupExpiredSessionTransportBindings(bindings map[string]openAIWSSessionT
 	scanned := 0
 	for key, binding := range bindings {
 		if now.After(binding.expiresAt) || normalizeOpenAIWSSessionTransport(binding.transport) == OpenAIUpstreamTransportAny {
+			delete(bindings, key)
+		}
+		scanned++
+		if scanned >= maxScan {
+			break
+		}
+	}
+}
+
+func cleanupExpiredSessionFlagBindings(bindings map[string]openAIWSSessionFlagBinding, now time.Time, maxScan int) {
+	if len(bindings) == 0 || maxScan <= 0 {
+		return
+	}
+	scanned := 0
+	for key, binding := range bindings {
+		if now.After(binding.expiresAt) {
 			delete(bindings, key)
 		}
 		scanned++

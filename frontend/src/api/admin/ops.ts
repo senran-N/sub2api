@@ -544,16 +544,36 @@ export interface RuntimeCompatibilityFallbackSummary {
   metadata_legacy_fallback_total: number
 }
 
+export interface OpenAICodexCompatibilityMetricsSnapshot {
+  transport_warmup_total: number
+  transport_fallback_cooling_hit_total: number
+  session_preferred_transport_hit_total: number
+  session_preferred_transport_ws_hit_total: number
+  session_preferred_transport_http_hit_total: number
+  session_http_fallback_hit_total: number
+  session_transport_bind_ws_total: number
+  session_transport_bind_http_total: number
+  session_transport_warmup_ignored_total: number
+  session_transport_http_downgrade_total: number
+}
+
+export interface RuntimeCodexCompatibilitySummary {
+  session_http_fallback_hit_total: number
+  session_transport_http_downgrade_total: number
+}
+
 export interface RuntimeObservabilitySummary {
   scheduling_runtime_kernel: SchedulingRuntimeKernelSummary
   idempotency: RuntimeIdempotencySummary
   openai_compatibility_fallback: RuntimeCompatibilityFallbackSummary
+  openai_codex_compatibility: RuntimeCodexCompatibilitySummary
 }
 
 export interface RuntimeObservabilitySnapshot {
   scheduling_runtime_kernel: SchedulingRuntimeKernelMetricsSnapshot
   idempotency: IdempotencyMetricsSnapshot
   openai_compatibility_fallback: OpenAICompatibilityFallbackMetricsSnapshot
+  openai_codex_compatibility: OpenAICodexCompatibilityMetricsSnapshot
   summary: RuntimeObservabilitySummary
 }
 

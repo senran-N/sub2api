@@ -21,16 +21,23 @@ type RuntimeCompatibilityFallbackSummary struct {
 	MetadataLegacyFallbackTotal  int64   `json:"metadata_legacy_fallback_total"`
 }
 
+type RuntimeCodexCompatibilitySummary struct {
+	SessionHTTPFallbackHitTotal        int64 `json:"session_http_fallback_hit_total"`
+	SessionTransportHTTPDowngradeTotal int64 `json:"session_transport_http_downgrade_total"`
+}
+
 type RuntimeObservabilitySummary struct {
 	SchedulingRuntimeKernel     SchedulingRuntimeKernelSummary      `json:"scheduling_runtime_kernel"`
 	Idempotency                 RuntimeIdempotencySummary           `json:"idempotency"`
 	OpenAICompatibilityFallback RuntimeCompatibilityFallbackSummary `json:"openai_compatibility_fallback"`
+	OpenAICodexCompatibility    RuntimeCodexCompatibilitySummary    `json:"openai_codex_compatibility"`
 }
 
 type RuntimeObservabilitySnapshot struct {
 	SchedulingRuntimeKernel     SchedulingRuntimeKernelMetricsSnapshot     `json:"scheduling_runtime_kernel"`
 	Idempotency                 IdempotencyMetricsSnapshot                 `json:"idempotency"`
 	OpenAICompatibilityFallback OpenAICompatibilityFallbackMetricsSnapshot `json:"openai_compatibility_fallback"`
+	OpenAICodexCompatibility    OpenAICodexCompatibilityMetricsSnapshot    `json:"openai_codex_compatibility"`
 	Summary                     RuntimeObservabilitySummary                `json:"summary"`
 }
 
@@ -38,6 +45,7 @@ func buildRuntimeObservabilitySummary(
 	scheduling SchedulingRuntimeKernelMetricsSnapshot,
 	idempotency IdempotencyMetricsSnapshot,
 	compatibility OpenAICompatibilityFallbackMetricsSnapshot,
+	codexCompatibility OpenAICodexCompatibilityMetricsSnapshot,
 ) RuntimeObservabilitySummary {
 	idempotencyEvents := float64(idempotency.ClaimTotal + idempotency.ReplayTotal + idempotency.ConflictTotal)
 
@@ -60,6 +68,10 @@ func buildRuntimeObservabilitySummary(
 			SessionHashLegacyReadHitRate: compatibility.SessionHashLegacyReadHitRate,
 			MetadataLegacyFallbackTotal:  compatibility.MetadataLegacyFallbackTotal,
 		},
+		OpenAICodexCompatibility: RuntimeCodexCompatibilitySummary{
+			SessionHTTPFallbackHitTotal:        codexCompatibility.SessionHTTPFallbackHitTotal,
+			SessionTransportHTTPDowngradeTotal: codexCompatibility.SessionTransportHTTPDowngradeTotal,
+		},
 	}
 }
 
@@ -67,12 +79,14 @@ func SnapshotRuntimeObservability() RuntimeObservabilitySnapshot {
 	scheduling := SnapshotSchedulingRuntimeKernelMetrics()
 	idempotency := GetIdempotencyMetricsSnapshot()
 	compatibility := SnapshotOpenAICompatibilityFallbackMetrics()
+	codexCompatibility := SnapshotOpenAICodexCompatibilityMetrics()
 
 	return RuntimeObservabilitySnapshot{
 		SchedulingRuntimeKernel:     scheduling,
 		Idempotency:                 idempotency,
 		OpenAICompatibilityFallback: compatibility,
-		Summary:                     buildRuntimeObservabilitySummary(scheduling, idempotency, compatibility),
+		OpenAICodexCompatibility:    codexCompatibility,
+		Summary:                     buildRuntimeObservabilitySummary(scheduling, idempotency, compatibility, codexCompatibility),
 	}
 }
 
