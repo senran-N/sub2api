@@ -307,7 +307,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_CompactUsesJSONAndKeepsNonStreami
 	require.Contains(t, rec.Body.String(), `"id":"cmp_123"`)
 }
 
-func TestOpenAIGatewayService_OAuthPassthrough_CodexMissingInstructionsInjectsDefaultBeforeUpstream(t *testing.T) {
+func TestOpenAIGatewayService_OAuthPassthrough_OfficialCodexPreservesMissingInstructionsBeforeUpstream(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -356,7 +356,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_CodexMissingInstructionsInjectsDe
 	require.NotNil(t, upstream.lastReq)
 	require.Equal(t, false, gjson.GetBytes(upstream.lastBody, "store").Bool())
 	require.Equal(t, true, gjson.GetBytes(upstream.lastBody, "stream").Bool())
-	require.Equal(t, defaultOpenAICodexInstructions, strings.TrimSpace(gjson.GetBytes(upstream.lastBody, "instructions").String()))
+	require.False(t, gjson.GetBytes(upstream.lastBody, "instructions").Exists())
 	require.Contains(t, rec.Body.String(), `"text":"ok"`)
 }
 

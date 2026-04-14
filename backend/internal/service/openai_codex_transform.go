@@ -493,8 +493,11 @@ func extractSystemMessagesFromInput(reqBody map[string]any) bool {
 	return true
 }
 
-// applyInstructions 处理 instructions 字段：仅在 instructions 为空时填充默认值。
+// applyInstructions 处理 instructions 字段：仅为非官方兼容链路补默认值。
 func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
+	if isCodexCLI {
+		return false
+	}
 	if !isInstructionsEmpty(reqBody) {
 		return false
 	}

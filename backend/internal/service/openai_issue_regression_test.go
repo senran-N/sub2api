@@ -121,6 +121,29 @@ func TestPrepareOpenAIForwardRequest_StripsUnsupportedUserField(t *testing.T) {
 	require.NotContains(t, prepared.reqBody, "user")
 }
 
+func TestPrepareOpenAIForwardRequest_OfficialCodexPreservesMissingInstructions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.104.0")
+
+	account := &Account{
+		Name:     "test-openai",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+	}
+	body := []byte(`{"model":"gpt-5.4","input":"hello"}`)
+
+	svc := &OpenAIGatewayService{}
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", false, "", "", true, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+	require.False(t, gjson.GetBytes(prepared.body, "instructions").Exists())
+	_, hasInstructions := prepared.reqBody["instructions"]
+	require.False(t, hasInstructions)
+}
+
 func TestPrepareOpenAIForwardRequest_APIKeyPreservesMappedCustomModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

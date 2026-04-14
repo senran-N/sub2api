@@ -108,7 +108,7 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 		patchDisabled = true
 	}
 
-	if isInstructionsEmpty(reqBody) {
+	if !policy.Profile.OfficialClient && isInstructionsEmpty(reqBody) {
 		reqBody["instructions"] = defaultOpenAICodexInstructions
 		bodyModified = true
 		markPatchSet("instructions", defaultOpenAICodexInstructions)

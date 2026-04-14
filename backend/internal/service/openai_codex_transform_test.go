@@ -273,8 +273,8 @@ func TestApplyCodexOAuthTransform_CodexCLI_PreservesExistingInstructions(t *test
 	_ = result
 }
 
-func TestApplyCodexOAuthTransform_CodexCLI_SuppliesDefaultWhenEmpty(t *testing.T) {
-	// Codex CLI 场景：无 instructions 时补充默认值
+func TestApplyCodexOAuthTransform_CodexCLI_PreservesMissingInstructions(t *testing.T) {
+	// Codex CLI 场景：空 instructions 保持原样，避免官方原生链路被预先改写。
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -283,9 +283,8 @@ func TestApplyCodexOAuthTransform_CodexCLI_SuppliesDefaultWhenEmpty(t *testing.T
 
 	result := applyCodexOAuthTransform(reqBody, true, false) // isCodexCLI=true
 
-	instructions, ok := reqBody["instructions"].(string)
-	require.True(t, ok)
-	require.NotEmpty(t, instructions)
+	_, ok := reqBody["instructions"]
+	require.False(t, ok)
 	require.True(t, result.Modified)
 }
 
