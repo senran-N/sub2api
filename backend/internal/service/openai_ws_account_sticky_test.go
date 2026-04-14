@@ -137,6 +137,103 @@ func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_DBRuntimeRecheck
 	require.Zero(t, boundAccountID)
 }
 
+func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_OAuthCredentialInvalidMiss(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(25)
+	account := Account{
+		ID:          14,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token": "expired-token",
+			"expires_at":   time.Now().Add(-time.Minute).Format(time.RFC3339),
+		},
+		Extra: map[string]any{
+			"openai_oauth_responses_websockets_v2_enabled": true,
+		},
+	}
+	cache := &stubGatewayCache{}
+	store := NewOpenAIWSStateStore(cache)
+	cfg := newOpenAIWSV2TestConfig()
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{account}},
+		cache:              cache,
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{}),
+		openaiWSStateStore: store,
+	}
+
+	require.NoError(t, store.BindResponseAccount(ctx, groupID, "resp_prev_oauth_invalid", account.ID, time.Hour))
+
+	selection, err := svc.SelectAccountByPreviousResponseID(ctx, &groupID, "resp_prev_oauth_invalid", "gpt-5.1", nil)
+	require.NoError(t, err)
+	require.Nil(t, selection, "OAuth 凭证已失效的账号不应继续命中 previous_response_id 粘连")
+	boundAccountID, getErr := store.GetResponseAccount(ctx, groupID, "resp_prev_oauth_invalid")
+	require.NoError(t, getErr)
+	require.Zero(t, boundAccountID)
+}
+
+func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_DBRuntimeRecheckOAuthCredentialInvalidMiss(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(26)
+	staleAccount := &Account{
+		ID:          15,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token": "healthy-token",
+			"expires_at":   time.Now().Add(time.Hour).Format(time.RFC3339),
+		},
+		Extra: map[string]any{
+			"openai_oauth_responses_websockets_v2_enabled": true,
+		},
+	}
+	dbAccount := Account{
+		ID:          15,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token": "expired-token",
+			"expires_at":   time.Now().Add(-time.Minute).Format(time.RFC3339),
+		},
+		Extra: map[string]any{
+			"openai_oauth_responses_websockets_v2_enabled": true,
+		},
+	}
+	cache := &stubGatewayCache{}
+	store := NewOpenAIWSStateStore(cache)
+	cfg := newOpenAIWSV2TestConfig()
+	snapshotCache := &openAISnapshotCacheStub{
+		accountsByID: map[int64]*Account{dbAccount.ID: staleAccount},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{dbAccount}},
+		cache:              cache,
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{}),
+		openaiWSStateStore: store,
+		schedulerSnapshot:  &SchedulerSnapshotService{cache: snapshotCache},
+	}
+
+	require.NoError(t, store.BindResponseAccount(ctx, groupID, "resp_prev_db_oauth_invalid", dbAccount.ID, time.Hour))
+
+	selection, err := svc.SelectAccountByPreviousResponseID(ctx, &groupID, "resp_prev_db_oauth_invalid", "gpt-5.1", nil)
+	require.NoError(t, err)
+	require.Nil(t, selection, "DB 中已失效的 OAuth 账号不应继续命中 previous_response_id 粘连")
+	boundAccountID, getErr := store.GetResponseAccount(ctx, groupID, "resp_prev_db_oauth_invalid")
+	require.NoError(t, getErr)
+	require.Zero(t, boundAccountID)
+}
+
 func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_Excluded(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(23)
