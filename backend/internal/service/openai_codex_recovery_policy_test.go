@@ -254,11 +254,28 @@ func TestOpenAIGatewayService_ApplyCodexTransportCooldownRecovery(t *testing.T) 
 	cfg.Gateway.OpenAIWS.FallbackCooldownSeconds = 30
 	svc := &OpenAIGatewayService{cfg: cfg}
 
-	decision := svc.applyCodexTransportCooldownRecovery(52, "read_event", OpenAIUpstreamTransportResponsesWebsocketV2)
+	decision := svc.applyCodexTransportCooldownRecovery(52, "read_event", OpenAIUpstreamTransportResponsesWebsocketV2, true)
 
 	require.True(t, decision.Applied)
 	require.True(t, decision.MarkedTransportCooldown)
 	require.True(t, svc.isOpenAIWSFallbackCooling(52))
+	require.True(t, decision.TrackCompatibilityMetrics)
+}
+
+func TestOpenAIGatewayService_ApplyCodexTransportCooldownRecovery_NonNativeMetricsSkipped(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Gateway.OpenAIWS.FallbackCooldownSeconds = 30
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	before := SnapshotOpenAICodexCompatibilityMetrics()
+	decision := svc.applyCodexTransportCooldownRecovery(53, "read_event", OpenAIUpstreamTransportResponsesWebsocketV2, false)
+	after := SnapshotOpenAICodexCompatibilityMetrics()
+
+	require.True(t, decision.Applied)
+	require.True(t, decision.MarkedTransportCooldown)
+	require.True(t, svc.isOpenAIWSFallbackCooling(53))
+	require.False(t, decision.TrackCompatibilityMetrics)
+	require.Equal(t, before.RecoveryTransportCooldownAppliedTotal, after.RecoveryTransportCooldownAppliedTotal)
 }
 
 func TestClassifyCodexWSFailoverError(t *testing.T) {

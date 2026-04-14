@@ -465,7 +465,7 @@ wsRetryLoop:
 		return wsResult, nil
 	}
 
-	if decision := s.applyCodexTransportCooldownRecovery(account.ID, wsLastFailureReason, OpenAIUpstreamTransportResponsesWebsocketV2); decision.Applied {
+	if decision := s.applyCodexTransportCooldownRecovery(account.ID, wsLastFailureReason, OpenAIUpstreamTransportResponsesWebsocketV2, isCodexCLI); decision.Applied {
 		logOpenAIWSModeInfo(
 			"recovery_transport_cooldown account_id=%d action=%s reason=%s",
 			account.ID,

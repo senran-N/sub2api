@@ -297,12 +297,13 @@ func (s *OpenAIGatewayService) applyCodexTransportCooldownRecovery(
 	accountID int64,
 	reason string,
 	transport OpenAIUpstreamTransport,
+	trackMetrics bool,
 ) CodexRecoveryDecision {
 	decision := CodexRecoveryPolicy{}.Apply(nil, CodexRecoveryPolicyInput{
 		AccountID:                 accountID,
 		FailureReason:             reason,
 		Reason:                    codexRecoveryReasonTransportFailure,
-		TrackCompatibilityMetrics: true,
+		TrackCompatibilityMetrics: trackMetrics,
 		Transport:                 transport,
 		Warmup:                    isCodexWarmupFailureReason(reason),
 	})
