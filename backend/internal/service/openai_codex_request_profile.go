@@ -84,6 +84,7 @@ type CodexRequestProfile struct {
 	Continuation          CodexContinuationProfile
 	ForceCodexCLI         bool
 	Headers               CodexRequestHeaderProfile
+	NativeClient          bool
 	OfficialClient        bool
 	OfficialClientReason  string
 	TransportFallbackHTTP bool
@@ -192,6 +193,7 @@ func buildCodexRequestProfile(c *gin.Context, body []byte, forceCodexCLI bool) C
 		Version:        getTrimmedCodexRequestHeader(c, "version"),
 	}
 	officialClient, officialReason := detectCodexOfficialClient(headers.UserAgent, headers.Originator, forceCodexCLI)
+	nativeClient := officialClient && officialReason != CodexOfficialClientReasonForceCodexCLI
 	meta := getOpenAIRequestMeta(c, body)
 	storeValue := gjson.GetBytes(body, "store")
 	requestType := strings.TrimSpace(gjson.GetBytes(body, "type").String())
@@ -202,6 +204,7 @@ func buildCodexRequestProfile(c *gin.Context, body []byte, forceCodexCLI bool) C
 		CompactPath:           isOpenAIResponsesCompactPath(c),
 		ForceCodexCLI:         forceCodexCLI,
 		Headers:               headers,
+		NativeClient:          nativeClient,
 		OfficialClient:        officialClient,
 		OfficialClientReason:  officialReason,
 		TransportFallbackHTTP: false,

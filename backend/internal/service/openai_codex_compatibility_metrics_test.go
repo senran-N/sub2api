@@ -55,22 +55,26 @@ func TestSnapshotOpenAICodexCompatibilityMetrics(t *testing.T) {
 	require.GreaterOrEqual(t, afterResolve.SessionHTTPFallbackHitTotal, before.SessionHTTPFallbackHitTotal+1)
 
 	ObserveOpenAICodexRequestProfile(CodexRequestProfile{
+		NativeClient:   true,
 		OfficialClient: true,
 		CodexVersion:   "0.1.0",
 		WireAPI:        CodexWireAPIResponsesHTTP,
 	})
 	ObserveOpenAICodexRequestProfile(CodexRequestProfile{
+		NativeClient:   true,
 		OfficialClient: true,
 		CodexVersion:   "0.1.0",
 		WireAPI:        CodexWireAPIResponsesWebSocket,
 		Warmup:         true,
 	})
 	ObserveOpenAICodexSchedulingDecision(CodexRequestProfile{
+		NativeClient:   true,
 		OfficialClient: true,
 		CodexVersion:   "0.1.0",
 		WireAPI:        CodexWireAPIResponsesHTTP,
 	}, OpenAIAccountScheduleDecision{StickyPreviousHit: true})
 	ObserveOpenAICodexSchedulingDecision(CodexRequestProfile{
+		NativeClient:   true,
 		OfficialClient: true,
 		CodexVersion:   "0.1.0",
 		WireAPI:        CodexWireAPIResponsesWebSocket,
@@ -128,12 +132,14 @@ func TestObserveOpenAICodexSchedulingDecision_WarmupSkipped(t *testing.T) {
 	before := SnapshotOpenAICodexCompatibilityMetrics()
 
 	ObserveOpenAICodexRequestProfile(CodexRequestProfile{
+		NativeClient:   true,
 		OfficialClient: true,
 		CodexVersion:   "warmup-skip",
 		WireAPI:        CodexWireAPIResponsesWebSocket,
 		Warmup:         true,
 	})
 	ObserveOpenAICodexSchedulingDecision(CodexRequestProfile{
+		NativeClient:   true,
 		OfficialClient: true,
 		CodexVersion:   "warmup-skip",
 		WireAPI:        CodexWireAPIResponsesWebSocket,
@@ -196,6 +202,28 @@ func TestResolveCodexTransportState_NonOfficialMetricsSkipped(t *testing.T) {
 	require.Equal(t, before.SessionPreferredTransportHitTotal, after.SessionPreferredTransportHitTotal)
 	require.Equal(t, before.SessionPreferredTransportHTTPHitTotal, after.SessionPreferredTransportHTTPHitTotal)
 	require.Equal(t, before.SessionHTTPFallbackHitTotal, after.SessionHTTPFallbackHitTotal)
+}
+
+func TestObserveOpenAICodexCompatibilityMetrics_ForceCodexCLICompatibilitySkipped(t *testing.T) {
+	before := SnapshotOpenAICodexCompatibilityMetrics()
+
+	profile := CodexRequestProfile{
+		OfficialClient:       true,
+		OfficialClientReason: CodexOfficialClientReasonForceCodexCLI,
+		NativeClient:         false,
+		CodexVersion:         "force-codex-cli",
+		WireAPI:              CodexWireAPIResponsesHTTP,
+	}
+
+	ObserveOpenAICodexRequestProfile(profile)
+	ObserveOpenAICodexSchedulingDecision(profile, OpenAIAccountScheduleDecision{StickyPreviousHit: true})
+
+	after := SnapshotOpenAICodexCompatibilityMetrics()
+	require.Equal(t, before.Summary.OfficialRequestTotal, after.Summary.OfficialRequestTotal)
+	require.Equal(t, before.Summary.ChainSelectionTotal, after.Summary.ChainSelectionTotal)
+	require.Equal(t, before.Summary.ChainHitTotal, after.Summary.ChainHitTotal)
+	require.Equal(t, codexVersionMetricTotal(before, "force-codex-cli"), codexVersionMetricTotal(after, "force-codex-cli"))
+	require.Equal(t, codexTransportMetricTotal(before, string(CodexWireAPIResponsesHTTP)), codexTransportMetricTotal(after, string(CodexWireAPIResponsesHTTP)))
 }
 
 func codexVersionMetricTotal(

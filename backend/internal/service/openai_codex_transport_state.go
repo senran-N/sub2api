@@ -62,7 +62,7 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 
 	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
 	profile := GetCodexRequestProfile(c, input.Body, forceCodexCLI)
-	state.TrackCompatibilityMetrics = profile.OfficialClient
+	state.TrackCompatibilityMetrics = profile.NativeClient
 	state.Warmup = profile.Warmup
 	if state.TrackCompatibilityMetrics && state.Warmup {
 		recordOpenAICodexTransportWarmup()
@@ -186,7 +186,7 @@ func (s *OpenAIGatewayService) bindCodexSessionTransportFromBody(
 	}
 	forceCodexCLI := s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
 	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
-	if !profile.OfficialClient || profile.Warmup {
+	if !profile.NativeClient || profile.Warmup {
 		return
 	}
 	sessionHash := s.GenerateSessionHash(c, body)

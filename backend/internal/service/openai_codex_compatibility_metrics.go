@@ -162,7 +162,7 @@ func recordOpenAICodexSessionTransportBind(transport OpenAIUpstreamTransport, wa
 }
 
 func ObserveOpenAICodexRequestProfile(profile CodexRequestProfile) {
-	if !profile.OfficialClient {
+	if !profile.NativeClient {
 		return
 	}
 
@@ -201,7 +201,7 @@ func ObserveOpenAICodexRequestProfile(profile CodexRequestProfile) {
 }
 
 func ObserveOpenAICodexSchedulingDecision(profile CodexRequestProfile, decision OpenAIAccountScheduleDecision) {
-	if !profile.OfficialClient {
+	if !profile.NativeClient {
 		return
 	}
 	if profile.Warmup {

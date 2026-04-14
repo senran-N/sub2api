@@ -447,7 +447,7 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, policy CodexNativeMutation
 	}
 
 	model := strings.ToLower(strings.TrimSpace(gjson.GetBytes(normalized, "model").String()))
-	if strings.Contains(model, "codex") && !policy.Profile.OfficialClient {
+	if strings.Contains(model, "codex") && !policy.Profile.NativeClient {
 		instructions := gjson.GetBytes(normalized, "instructions")
 		if !instructions.Exists() || instructions.Type != gjson.String || strings.TrimSpace(instructions.String()) == "" {
 			next, err := sjson.SetBytes(normalized, "instructions", defaultOpenAICodexInstructions)

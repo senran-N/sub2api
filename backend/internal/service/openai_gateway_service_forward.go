@@ -108,7 +108,7 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 		patchDisabled = true
 	}
 
-	if !policy.Profile.OfficialClient && isInstructionsEmpty(reqBody) {
+	if !policy.Profile.NativeClient && isInstructionsEmpty(reqBody) {
 		reqBody["instructions"] = defaultOpenAICodexInstructions
 		bodyModified = true
 		markPatchSet("instructions", defaultOpenAICodexInstructions)
@@ -155,7 +155,7 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 	}
 
 	if account.Type == AccountTypeOAuth {
-		codexResult := applyCodexOAuthTransform(reqBody, policy.Profile.OfficialClient, policy.Profile.CompactPath)
+		codexResult := applyCodexOAuthTransform(reqBody, policy.Profile.NativeClient, policy.Profile.CompactPath)
 		if codexResult.Modified {
 			bodyModified = true
 			disablePatch()

@@ -28,6 +28,7 @@ func TestGetCodexRequestProfile_HTTPResponses(t *testing.T) {
 	profile := GetCodexRequestProfile(c, []byte(`{"model":"gpt-5.3-codex","stream":true,"store":false,"prompt_cache_key":"cache_123","previous_response_id":"resp_prev_123","instructions":"be concise"}`), false)
 
 	require.True(t, profile.OfficialClient)
+	require.True(t, profile.NativeClient)
 	require.Equal(t, CodexOfficialClientReasonUserAgent, profile.OfficialClientReason)
 	require.Equal(t, "0.104.0", profile.CodexVersion)
 	require.Equal(t, CodexWireAPIResponsesHTTP, profile.WireAPI)
@@ -59,6 +60,7 @@ func TestGetCodexRequestProfile_CompositeOfficialUserAgentVersion(t *testing.T) 
 	profile := GetCodexRequestProfile(c, []byte(`{"model":"gpt-5.3-codex"}`), false)
 
 	require.True(t, profile.OfficialClient)
+	require.True(t, profile.NativeClient)
 	require.Equal(t, CodexOfficialClientReasonUserAgent, profile.OfficialClientReason)
 	require.Equal(t, "0.98.0", profile.CodexVersion)
 }
@@ -77,6 +79,7 @@ func TestGetCodexRequestProfile_WSResponsesWarmupAndContinuation(t *testing.T) {
 	profile := GetCodexRequestProfile(c, body, false)
 
 	require.True(t, profile.OfficialClient)
+	require.True(t, profile.NativeClient)
 	require.Equal(t, CodexOfficialClientReasonOriginator, profile.OfficialClientReason)
 	require.Equal(t, CodexWireAPIResponsesWebSocket, profile.WireAPI)
 	require.Equal(t, OpenAIClientTransportWS, profile.ClientTransport)
@@ -101,6 +104,7 @@ func TestGetCodexRequestProfile_CodexDesktopVersion(t *testing.T) {
 	profile := GetCodexRequestProfile(c, []byte(`{"type":"response.create","model":"gpt-5.3-codex"}`), false)
 
 	require.True(t, profile.OfficialClient)
+	require.True(t, profile.NativeClient)
 	require.Equal(t, CodexOfficialClientReasonUserAgent, profile.OfficialClientReason)
 	require.Equal(t, "1.2.3", profile.CodexVersion)
 }
@@ -119,14 +123,17 @@ func TestGetCodexRequestProfile_CacheRespectsForceFlagAndBodyHash(t *testing.T) 
 
 	headerOnlyProfile := GetCodexRequestProfile(c, nil, false)
 	require.False(t, headerOnlyProfile.OfficialClient)
+	require.False(t, headerOnlyProfile.NativeClient)
 	require.Empty(t, headerOnlyProfile.Body.Model)
 
 	profile := GetCodexRequestProfile(c, firstBody, false)
 	require.False(t, profile.OfficialClient)
+	require.False(t, profile.NativeClient)
 	require.Equal(t, "gpt-5.3-codex", profile.Body.Model)
 
 	forcedProfile := GetCodexRequestProfile(c, firstBody, true)
 	require.True(t, forcedProfile.OfficialClient)
+	require.False(t, forcedProfile.NativeClient)
 	require.Equal(t, CodexOfficialClientReasonForceCodexCLI, forcedProfile.OfficialClientReason)
 
 	updatedProfile := GetCodexRequestProfile(c, secondBody, true)

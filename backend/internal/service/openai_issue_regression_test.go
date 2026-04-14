@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -142,6 +143,28 @@ func TestPrepareOpenAIForwardRequest_OfficialCodexPreservesMissingInstructions(t
 	require.False(t, gjson.GetBytes(prepared.body, "instructions").Exists())
 	_, hasInstructions := prepared.reqBody["instructions"]
 	require.False(t, hasInstructions)
+}
+
+func TestPrepareOpenAIForwardRequest_ForceCodexCLICompatStillInjectsInstructions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("User-Agent", "curl/8.0")
+
+	account := &Account{
+		Name:     "test-openai",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+	}
+	body := []byte(`{"model":"gpt-5.4","input":"hello"}`)
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: true}}}
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", false, "", "", false, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+	require.Equal(t, defaultOpenAICodexInstructions, gjson.GetBytes(prepared.body, "instructions").String())
+	require.Equal(t, defaultOpenAICodexInstructions, prepared.reqBody["instructions"])
 }
 
 func TestPrepareOpenAIForwardRequest_APIKeyPreservesMappedCustomModel(t *testing.T) {

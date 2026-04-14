@@ -91,7 +91,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 	storeDisabledConnMode := transportState.StoreDisabledConnMode
 
 	profile := GetCodexRequestProfile(c, firstPayload.rawForHash, s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
-	isCodexCLI := profile.OfficialClient
+	isCodexCLI := profile.NativeClient
 	wsHeaders, _ := s.buildOpenAIWSHeaders(
 		c,
 		account,

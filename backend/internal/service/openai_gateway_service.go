@@ -387,7 +387,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	reqMeta := getOpenAIRequestMeta(c, body)
 	reqModel, reqStream, promptCacheKey := reqMeta.Model, reqMeta.Stream, reqMeta.PromptCacheKey
 
-	isCodexCLI := profile.OfficialClient
+	isCodexCLI := profile.NativeClient
 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
 	clientTransport := GetOpenAIClientTransport(c)
 	// 仅允许 WS 入站请求走 WS 上游，避免出现 HTTP -> WS 协议混用。
