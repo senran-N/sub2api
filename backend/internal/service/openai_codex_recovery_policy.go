@@ -1,6 +1,10 @@
 package service
 
 import (
+	"context"
+	"errors"
+	"net"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -67,11 +71,7 @@ func (CodexRecoveryPolicy) Apply(reqBody map[string]any, input CodexRecoveryPoli
 	switch decision.Reason {
 	case codexRecoveryReasonFailover:
 		switch {
-		case isCodexImmediateFailoverExhaust(decision.StatusCode, decision.FailureReason):
-			decision.Action = codexRecoveryActionExhaustFailover
-			decision.Applied = true
-			decision.ExhaustFailover = true
-		case isCodexFailoverSwitchAccountStatus(decision.StatusCode):
+		case shouldCodexSwitchAccountOnFailover(decision.StatusCode, decision.FailureReason, decision.Transport):
 			if decision.AccountID <= 0 {
 				decision.SkipReason = "missing_account_id"
 				recordOpenAICodexRecoveryDecision(decision)
@@ -80,6 +80,10 @@ func (CodexRecoveryPolicy) Apply(reqBody map[string]any, input CodexRecoveryPoli
 			decision.Action = codexRecoveryActionSwitchAccount
 			decision.Applied = true
 			decision.SwitchAccount = true
+		case isCodexImmediateFailoverExhaust(decision.StatusCode, decision.FailureReason, decision.Transport):
+			decision.Action = codexRecoveryActionExhaustFailover
+			decision.Applied = true
+			decision.ExhaustFailover = true
 		default:
 			decision.SkipReason = "unsupported_failover_status"
 			recordOpenAICodexRecoveryDecision(decision)
@@ -188,21 +192,71 @@ func isCodexTransportCooldownFailureReason(reason string) bool {
 	}
 }
 
-func isCodexImmediateFailoverExhaust(statusCode int, failureReason string) bool {
+func isCodexImmediateFailoverExhaust(statusCode int, failureReason string, transport OpenAIUpstreamTransport) bool {
 	switch normalizeCodexRecoveryFailureReason(failureReason) {
 	case "upstream_rate_limited":
-		return true
+		return !isOpenAIWSSessionWebsocketTransport(transport)
 	}
 	switch statusCode {
-	case 401, 403, 429:
+	case 401, 403:
 		return true
+	case 429:
+		return !isOpenAIWSSessionWebsocketTransport(transport)
 	default:
 		return false
 	}
 }
 
-func isCodexFailoverSwitchAccountStatus(statusCode int) bool {
+func shouldCodexSwitchAccountOnFailover(statusCode int, failureReason string, transport OpenAIUpstreamTransport) bool {
+	switch normalizeCodexRecoveryFailureReason(failureReason) {
+	case "upstream_rate_limited":
+		return isOpenAIWSSessionWebsocketTransport(transport)
+	case "request_timeout", "request_error":
+		return transport == OpenAIUpstreamTransportHTTPSSE
+	case "upstream_5xx":
+		return true
+	}
 	return statusCode >= 500
+}
+
+func classifyCodexRequestFailoverError(err error) *UpstreamFailoverError {
+	if err == nil {
+		return nil
+	}
+	statusCode := http.StatusBadGateway
+	failureReason := "request_error"
+	if errors.Is(err, context.DeadlineExceeded) {
+		statusCode = http.StatusGatewayTimeout
+		failureReason = "request_timeout"
+	} else {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			statusCode = http.StatusGatewayTimeout
+			failureReason = "request_timeout"
+		}
+	}
+	return &UpstreamFailoverError{
+		StatusCode:    statusCode,
+		FailureReason: failureReason,
+	}
+}
+
+func classifyCodexWSFailoverError(wsErr error) *UpstreamFailoverError {
+	reason, _ := classifyOpenAIWSReconnectReason(wsErr)
+	reason = normalizeCodexRecoveryFailureReason(reason)
+	if reason != "upstream_rate_limited" {
+		return nil
+	}
+
+	statusCode, _, _, _, ok := resolveOpenAIWSFallbackErrorResponse(wsErr)
+	if !ok || statusCode <= 0 {
+		statusCode = http.StatusTooManyRequests
+	}
+
+	return &UpstreamFailoverError{
+		StatusCode:    statusCode,
+		FailureReason: reason,
+	}
 }
 
 func resolveCodexRecoveryTransport(c *gin.Context) OpenAIUpstreamTransport {

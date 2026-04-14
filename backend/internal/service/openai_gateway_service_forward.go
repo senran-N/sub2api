@@ -471,6 +471,11 @@ wsRetryLoop:
 			normalizeOpenAIWSLogValue(decision.FailureReason),
 		)
 	}
+	if isCodexCLI {
+		if failoverErr := classifyCodexWSFailoverError(wsErr); failoverErr != nil {
+			return nil, failoverErr
+		}
+	}
 
 	s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)
 	return nil, wsErr
@@ -515,6 +520,9 @@ func (s *OpenAIGatewayService) forwardPreparedOpenAIHTTP(
 				Kind:               "request_error",
 				Message:            safeErr,
 			})
+			if isCodexCLI {
+				return nil, classifyCodexRequestFailoverError(err)
+			}
 			c.JSON(http.StatusBadGateway, gin.H{
 				"error": gin.H{
 					"type":    "upstream_error",

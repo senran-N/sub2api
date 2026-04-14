@@ -29,6 +29,8 @@ func applyOpenAIPoolFailoverPolicy(
 	decision.RetryLimit = account.GetPoolModeRetryCount()
 	decision.SwitchCount = *switchCount
 
+	forceSwitchAccount := codexDecision.SwitchAccount
+
 	if codexDecision.ExhaustFailover {
 		if failedAccountIDs != nil {
 			failedAccountIDs[account.ID] = struct{}{}
@@ -36,14 +38,14 @@ func applyOpenAIPoolFailoverPolicy(
 		return decision
 	}
 
-	if shouldExhaustFailoverImmediately(failoverErr) {
+	if !forceSwitchAccount && shouldExhaustFailoverImmediately(failoverErr) {
 		if failedAccountIDs != nil {
 			failedAccountIDs[account.ID] = struct{}{}
 		}
 		return decision
 	}
 
-	if failoverErr.RetryableOnSameAccount && sameAccountRetryCount != nil && sameAccountRetryCount[account.ID] < decision.RetryLimit {
+	if !forceSwitchAccount && failoverErr.RetryableOnSameAccount && sameAccountRetryCount != nil && sameAccountRetryCount[account.ID] < decision.RetryLimit {
 		sameAccountRetryCount[account.ID]++
 		decision.Action = FailoverContinue
 		decision.SameAccountRetry = true
@@ -51,7 +53,7 @@ func applyOpenAIPoolFailoverPolicy(
 		return decision
 	}
 
-	if failoverErr.RetryableOnSameAccount && tempUnscheduleRetryable != nil {
+	if !forceSwitchAccount && failoverErr.RetryableOnSameAccount && tempUnscheduleRetryable != nil {
 		tempUnscheduleRetryable()
 	}
 

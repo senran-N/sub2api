@@ -176,3 +176,36 @@ func TestApplyOpenAIPoolFailoverPolicy_CodexExhaustDecision(t *testing.T) {
 	require.Contains(t, failedAccountIDs, int64(16))
 	require.Zero(t, recordedSwitches)
 }
+
+func TestApplyOpenAIPoolFailoverPolicy_CodexSwitchDecisionOverridesImmediate429Exhaust(t *testing.T) {
+	account := &service.Account{ID: 17}
+	failedAccountIDs := make(map[int64]struct{})
+	sameAccountRetryCount := make(map[int64]int)
+	switchCount := 0
+	recordedSwitches := 0
+
+	decision := applyOpenAIPoolFailoverPolicy(
+		account,
+		&service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests, RetryableOnSameAccount: true},
+		service.CodexRecoveryDecision{
+			Applied:       true,
+			Action:        "switch_account",
+			SwitchAccount: true,
+			Reason:        "failover",
+		},
+		sameAccountRetryCount,
+		failedAccountIDs,
+		&switchCount,
+		3,
+		func() {},
+		func() { recordedSwitches++ },
+	)
+
+	require.Equal(t, FailoverContinue, decision.Action)
+	require.False(t, decision.SameAccountRetry)
+	require.Equal(t, 1, decision.SwitchCount)
+	require.Equal(t, 1, switchCount)
+	require.Contains(t, failedAccountIDs, int64(17))
+	require.Empty(t, sameAccountRetryCount)
+	require.Equal(t, 1, recordedSwitches)
+}

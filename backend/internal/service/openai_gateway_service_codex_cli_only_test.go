@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -337,4 +338,67 @@ func TestOpenAIGatewayService_Forward_TransientProcessingErrorTriggersFailover(t
 	require.Equal(t, http.StatusBadRequest, failoverErr.StatusCode)
 	require.Contains(t, string(failoverErr.ResponseBody), "An error occurred while processing your request")
 	require.False(t, c.Writer.Written(), "service 层应返回 failover 错误给上层换号，而不是直接向客户端写响应")
+}
+
+func TestOpenAIGatewayService_Forward_OfficialCodexHTTPRequestFailuresTriggerFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	testCases := []struct {
+		name           string
+		upstreamErr    error
+		wantStatusCode int
+		wantReason     string
+	}{
+		{
+			name:           "request_timeout",
+			upstreamErr:    context.DeadlineExceeded,
+			wantStatusCode: http.StatusGatewayTimeout,
+			wantReason:     "request_timeout",
+		},
+		{
+			name:           "request_error",
+			upstreamErr:    errors.New("dial tcp 1.2.3.4:443: connect: connection refused"),
+			wantStatusCode: http.StatusBadGateway,
+			wantReason:     "request_error",
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+			c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			upstream := &httpUpstreamRecorder{err: tt.upstreamErr}
+			svc := &OpenAIGatewayService{
+				cfg: &config.Config{
+					Gateway: config.GatewayConfig{ForceCodexCLI: false},
+				},
+				httpUpstream: upstream,
+			}
+			account := &Account{
+				ID:             1001,
+				Name:           "codex max套餐",
+				Platform:       PlatformOpenAI,
+				Type:           AccountTypeAPIKey,
+				Concurrency:    1,
+				Credentials:    map[string]any{"api_key": "sk-test"},
+				Status:         StatusActive,
+				Schedulable:    true,
+				RateMultiplier: f64p(1),
+			}
+			body := []byte(`{"model":"gpt-5.1-codex","stream":false,"input":[{"type":"text","text":"hello"}]}`)
+
+			_, err := svc.Forward(context.Background(), c, account, body, "")
+			require.Error(t, err)
+
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.Equal(t, tt.wantStatusCode, failoverErr.StatusCode)
+			require.Equal(t, tt.wantReason, failoverErr.FailureReason)
+			require.False(t, c.Writer.Written(), "service 层应返回 failover 错误给上层换号，而不是直接向客户端写响应")
+		})
+	}
 }

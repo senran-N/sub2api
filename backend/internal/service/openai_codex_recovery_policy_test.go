@@ -171,6 +171,49 @@ func TestCodexRecoveryPolicy_Failover(t *testing.T) {
 		require.True(t, decision.SwitchAccount)
 		require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
 	})
+
+	t.Run("switches_account_on_ws_rate_limit_failover", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			AccountID:     45,
+			FailureReason: "upstream_rate_limited",
+			Reason:        codexRecoveryReasonFailover,
+			StatusCode:    http.StatusTooManyRequests,
+			Transport:     OpenAIUpstreamTransportResponsesWebsocketV2,
+		})
+
+		require.True(t, decision.Applied)
+		require.False(t, decision.ExhaustFailover)
+		require.True(t, decision.SwitchAccount)
+		require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
+	})
+
+	t.Run("switches_account_on_http_request_timeout", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			AccountID:     46,
+			FailureReason: "request_timeout",
+			Reason:        codexRecoveryReasonFailover,
+			StatusCode:    http.StatusGatewayTimeout,
+			Transport:     OpenAIUpstreamTransportHTTPSSE,
+		})
+
+		require.True(t, decision.Applied)
+		require.True(t, decision.SwitchAccount)
+		require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
+	})
+
+	t.Run("switches_account_on_http_request_error", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			AccountID:     47,
+			FailureReason: "request_error",
+			Reason:        codexRecoveryReasonFailover,
+			StatusCode:    http.StatusBadGateway,
+			Transport:     OpenAIUpstreamTransportHTTPSSE,
+		})
+
+		require.True(t, decision.Applied)
+		require.True(t, decision.SwitchAccount)
+		require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
+	})
 }
 
 func TestOpenAIGatewayService_ApplyCodexTransportCooldownRecovery(t *testing.T) {
