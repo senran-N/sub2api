@@ -785,6 +785,74 @@ func TestGatewayService_AnthropicOAuth_ForwardPreservesBillingHeaderSystemBlock(
 	}
 }
 
+func TestGatewayService_AnthropicOAuth_ForwardMovesCustomSystemIntoMessages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	body := `{"model":"claude-3-5-sonnet-latest","system":"You are a helpful assistant.","messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`
+	parsed, err := ParseGatewayRequest([]byte(body), PlatformAnthropic)
+	require.NoError(t, err)
+
+	upstream := &anthropicHTTPUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type": []string{"application/json"},
+				"x-request-id": []string{"rid-oauth-migrate"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{"id":"msg_1","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":12,"output_tokens":7}}`)),
+		},
+	}
+
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			MaxLineSize: defaultMaxLineSize,
+		},
+	}
+	svc := &GatewayService{
+		cfg:                  cfg,
+		responseHeaderFilter: compileResponseHeaderFilter(cfg),
+		httpUpstream:         upstream,
+		rateLimitService:     &RateLimitService{},
+		deferredService:      &DeferredService{},
+	}
+
+	account := &Account{
+		ID:          302,
+		Name:        "anthropic-oauth-migrate",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token": "oauth-token",
+		},
+		Status:      StatusActive,
+		Schedulable: true,
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, parsed)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	system := gjson.GetBytes(upstream.lastBody, "system")
+	require.True(t, system.Exists())
+	require.True(t, system.IsArray())
+	require.Len(t, system.Array(), 1)
+	require.Equal(t, claudeCodeSystemPrompt, system.Array()[0].Get("text").String())
+
+	messages := gjson.GetBytes(upstream.lastBody, "messages")
+	require.True(t, messages.IsArray())
+	require.Len(t, messages.Array(), 3)
+	require.Equal(t, "user", messages.Array()[0].Get("role").String())
+	require.Equal(t, "[System Instructions]\nYou are a helpful assistant.", messages.Array()[0].Get("content.0.text").String())
+	require.Equal(t, "assistant", messages.Array()[1].Get("role").String())
+	require.Equal(t, "Understood. I will follow these instructions.", messages.Array()[1].Get("content.0.text").String())
+	require.Equal(t, "hello", messages.Array()[2].Get("content.0.text").String())
+}
+
 func TestGatewayService_AnthropicAPIKeyPassthrough_StreamingStillCollectsUsageAfterClientDisconnect(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

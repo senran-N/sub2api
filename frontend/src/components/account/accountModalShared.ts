@@ -13,6 +13,7 @@ import {
   type TempUnschedRuleForm
 } from './credentialsBuilder'
 import {
+  OPENAI_WS_MODE_CTX_POOL,
   OPENAI_WS_MODE_OFF,
   OPENAI_WS_MODE_PASSTHROUGH,
   type OpenAIWSMode
@@ -242,6 +243,7 @@ export function buildAccountUmqModeOptions(t: Translate) {
 export function buildAccountOpenAIWSModeOptions(t: Translate): Array<{ value: OpenAIWSMode; label: string }> {
   return [
     { value: OPENAI_WS_MODE_OFF, label: t('admin.accounts.openai.wsModeOff') },
+    { value: OPENAI_WS_MODE_CTX_POOL, label: t('admin.accounts.openai.wsModeCtxPool') },
     { value: OPENAI_WS_MODE_PASSTHROUGH, label: t('admin.accounts.openai.wsModePassthrough') }
   ]
 }

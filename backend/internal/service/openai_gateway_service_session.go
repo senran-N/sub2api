@@ -20,17 +20,21 @@ func (s *OpenAIGatewayService) ExtractSessionID(c *gin.Context, body []byte) str
 //  1. Header: session_id
 //  2. Header: conversation_id
 //  3. Body:   prompt_cache_key (opencode)
+//  4. Body:   stable content-derived fallback for non-Codex clients
 func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) string {
 	if c == nil {
 		return ""
 	}
 
-	sessionID := resolveOpenAIRequestSessionID(c, body)
-	if sessionID == "" {
+	sessionSeed := resolveOpenAIRequestSessionID(c, body)
+	if sessionSeed == "" {
+		sessionSeed = deriveOpenAIContentSessionSeed(body)
+	}
+	if sessionSeed == "" {
 		return ""
 	}
 
-	currentHash, legacyHash := deriveOpenAISessionHashes(sessionID)
+	currentHash, legacyHash := deriveOpenAISessionHashes(sessionSeed)
 	attachOpenAILegacySessionHashToGin(c, legacyHash)
 	return currentHash
 }
@@ -39,17 +43,19 @@ func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) 
 // 当未携带 session_id/conversation_id/prompt_cache_key 时，使用 fallbackSeed 生成稳定哈希。
 // 该方法用于 WS ingress，避免会话信号缺失时发生跨账号漂移。
 func (s *OpenAIGatewayService) GenerateSessionHashWithFallback(c *gin.Context, body []byte, fallbackSeed string) string {
-	sessionHash := s.GenerateSessionHash(c, body)
-	if sessionHash != "" {
-		return sessionHash
-	}
-
-	seed := strings.TrimSpace(fallbackSeed)
-	if seed == "" {
+	if c == nil {
 		return ""
 	}
 
-	currentHash, legacyHash := deriveOpenAISessionHashes(seed)
+	sessionSeed := resolveOpenAIRequestSessionID(c, body)
+	if sessionSeed == "" {
+		sessionSeed = strings.TrimSpace(fallbackSeed)
+	}
+	if sessionSeed == "" {
+		return ""
+	}
+
+	currentHash, legacyHash := deriveOpenAISessionHashes(sessionSeed)
 	attachOpenAILegacySessionHashToGin(c, legacyHash)
 	return currentHash
 }

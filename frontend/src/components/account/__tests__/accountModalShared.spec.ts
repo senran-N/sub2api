@@ -64,6 +64,7 @@ describe('accountModalShared', () => {
     ])
     expect(buildAccountOpenAIWSModeOptions(t).map((item) => item.value)).toEqual([
       'off',
+      'ctx_pool',
       'passthrough'
     ])
     expect(buildAccountTempUnschedPresets(t)).toHaveLength(3)

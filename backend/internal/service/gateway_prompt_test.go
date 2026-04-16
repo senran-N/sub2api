@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 func TestIsClaudeCodeClient(t *testing.T) {
@@ -275,6 +276,102 @@ func TestInjectClaudeCodePrompt(t *testing.T) {
 				require.True(t, ok)
 				require.Equal(t, tt.wantSecondText, second["text"])
 			}
+		})
+	}
+}
+
+func TestRewriteSystemForNonClaudeCode(t *testing.T) {
+	tests := []struct {
+		name                   string
+		body                   string
+		system                 any
+		wantSystemLen          int
+		wantPreservedSystemRaw string
+		wantMessagesLen        int
+		wantFirstMessageText   string
+	}{
+		{
+			name:            "nil system keeps only Claude Code block",
+			body:            `{"model":"claude-3","messages":[{"role":"user","content":"hello"}]}`,
+			system:          nil,
+			wantSystemLen:   1,
+			wantMessagesLen: 1,
+		},
+		{
+			name:                 "custom string system migrates into messages",
+			body:                 `{"model":"claude-3","messages":[{"role":"user","content":"hello"}]}`,
+			system:               "You are a personal assistant running inside OpenClaw.",
+			wantSystemLen:        1,
+			wantMessagesLen:      3,
+			wantFirstMessageText: "[System Instructions]\nYou are a personal assistant running inside OpenClaw.",
+		},
+		{
+			name: "custom array system migrates but billing header stays in system",
+			body: `{"model":"claude-3","messages":[{"role":"user","content":"hello"}]}`,
+			system: []any{
+				map[string]any{"type": "text", "text": "First instruction"},
+				map[string]any{"type": "text", "text": "x-anthropic-billing-header: cc_version=2.1.87.449; cc_entrypoint=cli;"},
+				map[string]any{"type": "text", "text": "Second instruction"},
+			},
+			wantSystemLen:          2,
+			wantPreservedSystemRaw: "x-anthropic-billing-header: cc_version=2.1.87.449; cc_entrypoint=cli;",
+			wantMessagesLen:        3,
+			wantFirstMessageText:   "[System Instructions]\nFirst instruction\n\nSecond instruction",
+		},
+		{
+			name:                 "existing Claude Code prompt is deduplicated while custom text migrates",
+			body:                 `{"model":"claude-3","messages":[{"role":"user","content":"hello"}]}`,
+			system:               []any{map[string]any{"type": "text", "text": claudeCodeSystemPrompt}, map[string]any{"type": "text", "text": "Custom prompt"}},
+			wantSystemLen:        1,
+			wantMessagesLen:      3,
+			wantFirstMessageText: "[System Instructions]\nCustom prompt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := rewriteSystemForNonClaudeCode([]byte(tt.body), tt.system)
+
+			var parsed map[string]any
+			err := json.Unmarshal(result, &parsed)
+			require.NoError(t, err)
+
+			system, ok := parsed["system"].([]any)
+			require.True(t, ok, "system should be an array")
+			require.Len(t, system, tt.wantSystemLen)
+
+			first, ok := system[0].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, claudeCodeSystemPrompt, first["text"])
+
+			if tt.wantPreservedSystemRaw != "" {
+				require.Contains(t, gjson.GetBytes(result, "system").Raw, tt.wantPreservedSystemRaw)
+			}
+
+			messages, ok := parsed["messages"].([]any)
+			require.True(t, ok, "messages should be an array")
+			require.Len(t, messages, tt.wantMessagesLen)
+
+			if tt.wantFirstMessageText == "" {
+				return
+			}
+
+			firstMessage, ok := messages[0].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, "user", firstMessage["role"])
+
+			firstContent, ok := firstMessage["content"].([]any)
+			require.True(t, ok)
+			require.Len(t, firstContent, 1)
+
+			firstBlock, ok := firstContent[0].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, tt.wantFirstMessageText, firstBlock["text"])
+
+			ackMessage, ok := messages[1].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, "assistant", ackMessage["role"])
+			require.Contains(t, gjson.GetBytes(result, "messages.1.content.0.text").String(), "Understood. I will follow these instructions.")
 		})
 	}
 }

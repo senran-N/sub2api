@@ -65,8 +65,8 @@ func (s *GatewayService) normalizeForwardOAuthRequestBody(
 ) ([]byte, string) {
 	isHaikuModel := strings.Contains(strings.ToLower(reqModel), "haiku")
 	systemRewritten := false
-	if !isHaikuModel && !systemIncludesClaudeCodePrompt(parsed.System) {
-		body = injectClaudeCodePrompt(body, parsed.System)
+	if !isHaikuModel {
+		body = rewriteSystemForNonClaudeCode(body, parsed.System)
 		systemRewritten = true
 	}
 
