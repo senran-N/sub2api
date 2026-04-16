@@ -772,9 +772,14 @@ func TestGatewayService_AnthropicOAuth_ForwardPreservesBillingHeaderSystemBlock(
 			require.NotNil(t, upstream.lastReq)
 			require.Equal(t, "Bearer oauth-token", getHeaderRaw(upstream.lastReq.Header, "authorization"))
 			require.Contains(t, getHeaderRaw(upstream.lastReq.Header, "anthropic-beta"), claude.BetaOAuth)
+			require.Contains(t, getHeaderRaw(upstream.lastReq.Header, "anthropic-beta"), claude.BetaClaudeCode)
 
 			system := gjson.GetBytes(upstream.lastBody, "system")
 			require.True(t, system.Exists())
+			require.True(t, system.IsArray(), "system should be rewritten as Claude Code style blocks")
+			require.NotEmpty(t, system.Array())
+			require.Equal(t, claudeCodeSystemPrompt, system.Array()[0].Get("text").String())
+			require.Equal(t, "ephemeral", system.Array()[0].Get("cache_control.type").String())
 			require.Contains(t, system.Raw, "x-anthropic-billing-header keep")
 		})
 	}

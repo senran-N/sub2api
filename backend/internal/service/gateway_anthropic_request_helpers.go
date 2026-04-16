@@ -159,14 +159,20 @@ func (s *GatewayService) configureMessagesBetaHeader(
 	policyFilterSet map[string]struct{},
 ) {
 	effectiveDropSet := mergeDropSets(policyFilterSet)
-	effectiveDropWithClaudeCodeSet := mergeDropSets(policyFilterSet, claude.ClaudeCodeBetaToken())
 
 	if tokenType == "oauth" {
 		if mimicClaudeCode {
 			applyClaudeCodeMimicHeaders(req, getHeaderRaw(req.Header, "x-stainless-helper-method") == "stream")
 			incomingBeta := getHeaderRaw(req.Header, "anthropic-beta")
 			requiredBetas := []string{claude.OAuthBetaToken(), claude.InterleavedThinkingBetaToken()}
-			setHeaderRaw(req.Header, "anthropic-beta", mergeAnthropicBetaDropping(requiredBetas, incomingBeta, effectiveDropWithClaudeCodeSet))
+			if !strings.Contains(strings.ToLower(modelID), "haiku") {
+				requiredBetas = []string{
+					claude.ClaudeCodeBetaToken(),
+					claude.OAuthBetaToken(),
+					claude.InterleavedThinkingBetaToken(),
+				}
+			}
+			setHeaderRaw(req.Header, "anthropic-beta", mergeAnthropicBetaDropping(requiredBetas, incomingBeta, effectiveDropSet))
 			return
 		}
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/pkg/claude"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -58,6 +59,44 @@ func TestGatewayService_BuildUpstreamRequest_OAuthMimicUsesMinimalStableDefaults
 	require.Empty(t, getHeaderRaw(req.Header, "x-stainless-arch"))
 	require.Empty(t, getHeaderRaw(req.Header, "x-stainless-runtime"))
 	require.Empty(t, getHeaderRaw(req.Header, "x-stainless-runtime-version"))
+	require.Contains(t, getHeaderRaw(req.Header, "anthropic-beta"), claude.BetaClaudeCode)
+	require.Contains(t, getHeaderRaw(req.Header, "anthropic-beta"), claude.BetaOAuth)
+	require.Contains(t, getHeaderRaw(req.Header, "anthropic-beta"), claude.BetaInterleavedThinking)
+}
+
+func TestGatewayService_BuildUpstreamRequest_OAuthMimicHaikuOmitsClaudeCodeBeta(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	svc := &GatewayService{
+		identityService: NewIdentityService(&identityCacheStub{}),
+	}
+	account := &Account{
+		ID:       105,
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeOAuth,
+	}
+
+	req, err := svc.buildUpstreamRequest(
+		context.Background(),
+		c,
+		account,
+		[]byte(`{"model":"claude-3-5-haiku-latest"}`),
+		"oauth-token",
+		"oauth",
+		"claude-3-5-haiku-latest",
+		false,
+		true,
+	)
+	require.NoError(t, err)
+
+	betaHeader := getHeaderRaw(req.Header, "anthropic-beta")
+	require.NotContains(t, betaHeader, claude.BetaClaudeCode)
+	require.Contains(t, betaHeader, claude.BetaOAuth)
+	require.Contains(t, betaHeader, claude.BetaInterleavedThinking)
 }
 
 func TestGatewayService_BuildUpstreamRequest_OAuthMimicPreservesObservedFingerprintHeaders(t *testing.T) {

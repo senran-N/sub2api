@@ -64,8 +64,10 @@ func (s *GatewayService) normalizeForwardOAuthRequestBody(
 	reqModel string,
 ) ([]byte, string) {
 	isHaikuModel := strings.Contains(strings.ToLower(reqModel), "haiku")
+	systemRewritten := false
 	if !isHaikuModel && !systemIncludesClaudeCodePrompt(parsed.System) {
 		body = injectClaudeCodePrompt(body, parsed.System)
+		systemRewritten = true
 	}
 
 	if !isHaikuModel && s.identityService != nil && c != nil && c.Request != nil {
@@ -76,7 +78,7 @@ func (s *GatewayService) normalizeForwardOAuthRequestBody(
 		}
 	}
 
-	normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: true}
+	normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: !systemRewritten}
 	if s.identityService != nil && c != nil && c.Request != nil {
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if err == nil && fp != nil {
