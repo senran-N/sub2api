@@ -932,7 +932,7 @@ func (s *UsageLogRepoSuite) TestGetUserDashboardStats_AggregatesTodayAndAPIKeyCo
 		CacheReadTokens:     4,
 		TotalCost:           1.5,
 		ActualCost:          2.5,
-		DurationMs:          180,
+		DurationMs:          intPtr(180),
 		CreatedAt:           yesterday,
 	})
 	s.Require().NoError(err)
@@ -949,7 +949,7 @@ func (s *UsageLogRepoSuite) TestGetUserDashboardStats_AggregatesTodayAndAPIKeyCo
 		CacheReadTokens:     2,
 		TotalCost:           0.75,
 		ActualCost:          1.25,
-		DurationMs:          120,
+		DurationMs:          intPtr(120),
 		CreatedAt:           recent,
 	})
 	s.Require().NoError(err)
@@ -1001,7 +1001,7 @@ func (s *UsageLogRepoSuite) TestGetAPIKeyDashboardStats_ScopesToRequestedKey() {
 		CacheReadTokens:     4,
 		TotalCost:           1.5,
 		ActualCost:          2.5,
-		DurationMs:          180,
+		DurationMs:          intPtr(180),
 		CreatedAt:           yesterday,
 	})
 	s.Require().NoError(err)
@@ -1018,7 +1018,7 @@ func (s *UsageLogRepoSuite) TestGetAPIKeyDashboardStats_ScopesToRequestedKey() {
 		CacheReadTokens:     2,
 		TotalCost:           0.75,
 		ActualCost:          1.25,
-		DurationMs:          120,
+		DurationMs:          intPtr(120),
 		CreatedAt:           recent,
 	})
 	s.Require().NoError(err)
@@ -1035,7 +1035,7 @@ func (s *UsageLogRepoSuite) TestGetAPIKeyDashboardStats_ScopesToRequestedKey() {
 		CacheReadTokens:     20,
 		TotalCost:           9.9,
 		ActualCost:          9.9,
-		DurationMs:          30,
+		DurationMs:          intPtr(30),
 		CreatedAt:           recent,
 	})
 	s.Require().NoError(err)

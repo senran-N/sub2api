@@ -25,7 +25,7 @@ type Profile struct {
 	PointFormats        []uint16
 	EnableGREASE        bool
 	SignatureAlgorithms []uint16 // Empty uses defaultSignatureAlgorithms
-	ALPNProtocols       []string // Empty uses ["http/1.1"]
+	ALPNProtocols       []string // Empty uses ["h2", "http/1.1"]
 	SupportedVersions   []uint16 // Empty uses [TLS1.3, TLS1.2]
 	KeyShareGroups      []uint16 // Empty uses [X25519]
 	PSKModes            []uint16 // Empty uses [psk_dhe_ke]

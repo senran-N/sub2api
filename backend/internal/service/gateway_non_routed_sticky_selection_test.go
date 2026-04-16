@@ -85,7 +85,7 @@ func TestTrySelectStickyAccountWithoutRouting_ClearsUnschedulableBinding(t *test
 	require.Equal(t, 1, cache.deletedSessions["sticky"])
 }
 
-func TestTrySelectStickyAccountWithoutRouting_ClearsCodexRateLimitedBinding(t *testing.T) {
+func TestTrySelectStickyAccountWithoutRouting_KeepsCodexSnapshotBinding(t *testing.T) {
 	now := time.Now().UTC()
 	usedPercent := 100.0
 	resetAfter := 3600
@@ -132,8 +132,11 @@ func TestTrySelectStickyAccountWithoutRouting_ClearsCodexRateLimitedBinding(t *t
 		1,
 	)
 
-	require.False(t, ok)
-	require.Nil(t, result)
-	require.Equal(t, 1, cache.deletedSessions["sticky"])
-	require.NotNil(t, accountByID[1].RateLimitResetAt)
+	require.True(t, ok)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Account)
+	require.Equal(t, int64(1), result.Account.ID)
+	require.True(t, result.Acquired)
+	require.Empty(t, cache.deletedSessions)
+	require.Nil(t, accountByID[1].RateLimitResetAt)
 }

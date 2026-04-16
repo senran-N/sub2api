@@ -141,11 +141,13 @@ func TestPrepareLoadBalanceCandidates_SkipsRuntimeUnsafeAccounts(t *testing.T) {
 
 	filtered, loadReq := scheduler.prepareLoadBalanceCandidates(context.Background(), req, accounts, nil)
 
-	require.Len(t, filtered, 1)
-	require.Equal(t, int64(203), filtered[0].ID)
-	require.Len(t, loadReq, 1)
-	require.Equal(t, int64(203), loadReq[0].ID)
-	require.NotNil(t, accounts[0].RateLimitResetAt)
+	require.Len(t, filtered, 2)
+	require.Equal(t, int64(201), filtered[0].ID)
+	require.Equal(t, int64(203), filtered[1].ID)
+	require.Len(t, loadReq, 2)
+	require.Equal(t, int64(201), loadReq[0].ID)
+	require.Equal(t, int64(203), loadReq[1].ID)
+	require.Nil(t, accounts[0].RateLimitResetAt)
 }
 
 func TestLoadSchedulerAccountLoads(t *testing.T) {

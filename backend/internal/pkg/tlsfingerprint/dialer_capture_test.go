@@ -38,14 +38,14 @@ type CapturedFingerprint struct {
 // TestDialerAgainstCaptureServer connects to the tls-fingerprint-web capture server
 // and verifies that the dialer's TLS fingerprint matches the configured Profile.
 //
-// Default capture server: https://tls.sub2api.org:8090
-// Override with env: TLSFINGERPRINT_CAPTURE_URL=https://localhost:8443
+// Set TLSFINGERPRINT_CAPTURE_URL to opt into the external capture-server test.
+// Example: TLSFINGERPRINT_CAPTURE_URL=https://tls.sub2api.org:8090
 //
 // Run: go test -v -run TestDialerAgainstCaptureServer ./internal/pkg/tlsfingerprint/...
 func TestDialerAgainstCaptureServer(t *testing.T) {
 	captureURL := os.Getenv("TLSFINGERPRINT_CAPTURE_URL")
 	if captureURL == "" {
-		captureURL = "https://tls.sub2api.org:8090"
+		t.Skip("set TLSFINGERPRINT_CAPTURE_URL to run capture-server integration coverage")
 	}
 
 	tests := []struct {
@@ -350,8 +350,8 @@ func TestBuildClientHelloSpecNewFields(t *testing.T) {
 	for _, ext := range specDefault.Extensions {
 		switch e := ext.(type) {
 		case *utls.ALPNExtension:
-			if len(e.AlpnProtocols) != 1 || e.AlpnProtocols[0] != "http/1.1" {
-				t.Errorf("default ALPN: got %v, want [http/1.1]", e.AlpnProtocols)
+			if len(e.AlpnProtocols) != 2 || e.AlpnProtocols[0] != "h2" || e.AlpnProtocols[1] != "http/1.1" {
+				t.Errorf("default ALPN: got %v, want [h2 http/1.1]", e.AlpnProtocols)
 			}
 		case *utls.SupportedVersionsExtension:
 			if len(e.Versions) != 2 {

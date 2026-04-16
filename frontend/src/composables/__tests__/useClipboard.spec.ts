@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
-// Mock i18n
-vi.mock('@/i18n', () => ({
-  i18n: {
-    global: {
-      t: (key: string) => key,
+// Mock i18n while preserving named exports used by the composable.
+vi.mock('@/i18n', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/i18n')>()
+  return {
+    ...actual,
+    i18n: {
+      global: {
+        t: (key: string) => key,
+      },
     },
-  },
-}))
+    translateMessage: (key: string) => key,
+  }
+})
 
 // Mock app store
 const mockShowSuccess = vi.fn()

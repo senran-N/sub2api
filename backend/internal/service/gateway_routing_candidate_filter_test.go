@@ -109,7 +109,7 @@ func TestFilterRoutedCandidates_CollectsFilteringStats(t *testing.T) {
 	require.Equal(t, 1, result.Stats.FilteredWindowCost)
 }
 
-func TestFilterRoutedCandidates_SkipsOpenAICodexSnapshotRateLimitedAccounts(t *testing.T) {
+func TestFilterRoutedCandidates_KeepsOpenAICodexSnapshotAccountsEligible(t *testing.T) {
 	now := time.Now().UTC()
 	usedPercent := 100.0
 	resetAfter := 3600
@@ -158,8 +158,9 @@ func TestFilterRoutedCandidates_SkipsOpenAICodexSnapshotRateLimitedAccounts(t *t
 		nil,
 	)
 
-	require.Len(t, result.Candidates, 1)
-	require.Equal(t, int64(12), result.Candidates[0].ID)
-	require.Equal(t, 1, result.Stats.FilteredUnsched)
-	require.NotNil(t, accountByID[11].RateLimitResetAt)
+	require.Len(t, result.Candidates, 2)
+	require.Equal(t, int64(11), result.Candidates[0].ID)
+	require.Equal(t, int64(12), result.Candidates[1].ID)
+	require.Zero(t, result.Stats.FilteredUnsched)
+	require.Nil(t, accountByID[11].RateLimitResetAt)
 }

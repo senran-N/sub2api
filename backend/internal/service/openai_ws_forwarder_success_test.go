@@ -883,7 +883,7 @@ func TestOpenAIGatewayService_PrewarmReadHonorsParentContext(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
-	defer cancel()
+	cancel()
 	start := time.Now()
 	err := svc.performOpenAIWSGeneratePrewarm(
 		ctx,
@@ -899,7 +899,8 @@ func TestOpenAIGatewayService_PrewarmReadHonorsParentContext(t *testing.T) {
 	elapsed := time.Since(start)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "prewarm_read_event")
-	require.Less(t, elapsed, 180*time.Millisecond, "预热读取应受父 context 取消控制，不应阻塞到 read_timeout")
+	require.ErrorIs(t, err, context.Canceled)
+	require.Less(t, elapsed, 50*time.Millisecond, "预热读取应立即响应已取消的父 context")
 }
 
 func TestOpenAIGatewayService_Forward_WSv2_TurnMetadataInPayloadOnConnReuse(t *testing.T) {

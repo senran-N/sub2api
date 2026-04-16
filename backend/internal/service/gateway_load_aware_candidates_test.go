@@ -120,7 +120,7 @@ func TestFilterLoadAwareCandidates_SkipsExpiredOAuthWithoutRefreshToken(t *testi
 	require.Equal(t, int64(2), candidates[0].ID)
 }
 
-func TestFilterLoadAwareCandidates_SkipsOpenAICodexSnapshotRateLimitedAccounts(t *testing.T) {
+func TestFilterLoadAwareCandidates_KeepsOpenAICodexSnapshotAccountsEligible(t *testing.T) {
 	svc := &GatewayService{cfg: testConfig()}
 	now := time.Now().UTC()
 	usedPercent := 100.0
@@ -168,7 +168,8 @@ func TestFilterLoadAwareCandidates_SkipsOpenAICodexSnapshotRateLimitedAccounts(t
 		nil,
 	)
 
-	require.Len(t, candidates, 1)
-	require.Equal(t, int64(2), candidates[0].ID)
-	require.NotNil(t, accounts[0].RateLimitResetAt)
+	require.Len(t, candidates, 2)
+	require.Equal(t, int64(1), candidates[0].ID)
+	require.Equal(t, int64(2), candidates[1].ID)
+	require.Nil(t, accounts[0].RateLimitResetAt)
 }

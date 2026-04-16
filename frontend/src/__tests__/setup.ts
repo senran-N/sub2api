@@ -29,19 +29,21 @@ function createMemoryStorage(): Storage {
   }
 }
 
-if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localStorage.clear !== 'function') {
-  Object.defineProperty(globalThis, 'localStorage', {
+function ensureStorage(name: 'localStorage' | 'sessionStorage') {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, name)
+  if (descriptor && 'value' in descriptor && descriptor.value && typeof descriptor.value.clear === 'function') {
+    return
+  }
+
+  Object.defineProperty(globalThis, name, {
     value: createMemoryStorage(),
     configurable: true,
+    writable: true,
   })
 }
 
-if (typeof globalThis.sessionStorage === 'undefined' || typeof globalThis.sessionStorage.clear !== 'function') {
-  Object.defineProperty(globalThis, 'sessionStorage', {
-    value: createMemoryStorage(),
-    configurable: true,
-  })
-}
+ensureStorage('localStorage')
+ensureStorage('sessionStorage')
 
 // Mock requestIdleCallback (Safari < 15 不支持)
 if (typeof globalThis.requestIdleCallback === 'undefined') {

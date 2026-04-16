@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/senran-N/sub2api/internal/service"
+	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -22,7 +22,7 @@ var testSlotTTL = time.Duration(testSlotTTLMinutes) * time.Minute
 
 type ConcurrencyCacheSuite struct {
 	IntegrationRedisSuite
-	cache service.ConcurrencyCache
+	cache *concurrencyCache
 }
 
 func TestConcurrencyCacheSuite(t *testing.T) {
@@ -31,7 +31,9 @@ func TestConcurrencyCacheSuite(t *testing.T) {
 
 func (s *ConcurrencyCacheSuite) SetupTest() {
 	s.IntegrationRedisSuite.SetupTest()
-	s.cache = NewConcurrencyCache(s.rdb, testSlotTTLMinutes, int(testSlotTTL.Seconds()))
+	cache, ok := NewConcurrencyCache(s.rdb, testSlotTTLMinutes, int(testSlotTTL.Seconds())).(*concurrencyCache)
+	require.True(s.T(), ok)
+	s.cache = cache
 }
 
 func (s *ConcurrencyCacheSuite) TestAccountSlot_AcquireAndRelease() {
@@ -328,7 +330,7 @@ func (s *ConcurrencyCacheSuite) TestGetAccountsLoadBatch() {
 	// Account 3: 0/1 slots used, 0 waiting (idle)
 
 	// Query batch load
-	accounts := []service.AccountWithConcurrency{
+	accounts := []domain.AccountWithConcurrency{
 		{ID: account1, MaxConcurrency: 3},
 		{ID: account2, MaxConcurrency: 2},
 		{ID: account3, MaxConcurrency: 1},
@@ -365,7 +367,7 @@ func (s *ConcurrencyCacheSuite) TestGetAccountsLoadBatch() {
 
 func (s *ConcurrencyCacheSuite) TestGetAccountsLoadBatch_Empty() {
 	// Test with empty account list
-	loadMap, err := s.cache.GetAccountsLoadBatch(s.ctx, []service.AccountWithConcurrency{})
+	loadMap, err := s.cache.GetAccountsLoadBatch(s.ctx, []domain.AccountWithConcurrency{})
 	require.NoError(s.T(), err)
 	require.Empty(s.T(), loadMap)
 }

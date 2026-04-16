@@ -13,11 +13,10 @@ const initialMessages = {
   [DEFAULT_LOCALE]: enMessages,
 } as Record<string, LocaleMessages>;
 
-const localeLoaders: Record<
+const localeLoaders: Partial<Record<
   LocaleCode,
   () => Promise<{ default: LocaleMessages }>
-> = {
-  en: () => import("./locales/en"),
+>> = {
   zh: () => import("./locales/zh"),
 };
 
@@ -57,6 +56,11 @@ export async function loadLocaleMessages(locale: LocaleCode): Promise<void> {
   }
 
   const loader = localeLoaders[locale];
+  if (!loader) {
+    loadedLocales.add(locale);
+    return;
+  }
+
   const module = await loader();
   i18n.global.setLocaleMessage(locale, module.default as never);
   loadedLocales.add(locale);
