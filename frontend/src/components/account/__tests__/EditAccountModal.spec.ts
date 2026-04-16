@@ -184,4 +184,18 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(showErrorMock).toHaveBeenCalledWith('edit detail error')
   })
+
+  it('applies the xAI preset onto the OpenAI-compatible base URL field', async () => {
+    const wrapper = mountModal()
+    const baseUrlInput = wrapper.get('input[placeholder="admin.accounts.openai.baseUrlPlaceholder"]')
+    const xaiPreset = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'admin.accounts.openai.baseUrlPresets.xai')
+
+    expect(xaiPreset).toBeTruthy()
+
+    await xaiPreset!.trigger('click')
+
+    expect((baseUrlInput.element as HTMLInputElement).value).toBe('https://api.x.ai')
+  })
 })

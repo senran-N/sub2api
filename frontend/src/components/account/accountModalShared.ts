@@ -4,7 +4,14 @@ import type {
   AccountType,
   CheckMixedChannelResponse
 } from '@/types'
-import type { TempUnschedRuleForm } from './credentialsBuilder'
+import {
+  DEFAULT_ANTHROPIC_BASE_URL,
+  DEFAULT_ANTIGRAVITY_BASE_URL,
+  DEFAULT_GEMINI_BASE_URL,
+  DEFAULT_OPENAI_BASE_URL,
+  OPENAI_COMPATIBLE_XAI_BASE_URL,
+  type TempUnschedRuleForm
+} from './credentialsBuilder'
 import {
   OPENAI_WS_MODE_OFF,
   OPENAI_WS_MODE_PASSTHROUGH,
@@ -13,6 +20,11 @@ import {
 
 export type Translate = (key: string, values?: Record<string, unknown>) => string
 type QuotaResetMode = 'rolling' | 'fixed' | null
+
+export interface AccountBaseUrlPreset {
+  label: string
+  value: string
+}
 
 interface AccountQuotaExtraOptions {
   dailyResetHour: number | null
@@ -148,6 +160,22 @@ export function resolveAccountBaseUrlHint(platform: AccountPlatform | null | und
   return t('admin.accounts.baseUrlHint')
 }
 
+export function resolveAccountBaseUrlPlaceholder(
+  platform: AccountPlatform | null | undefined,
+  t: Translate
+) {
+  if (platform === 'openai') {
+    return t('admin.accounts.openai.baseUrlPlaceholder')
+  }
+  if (platform === 'gemini') {
+    return DEFAULT_GEMINI_BASE_URL
+  }
+  if (platform === 'antigravity') {
+    return DEFAULT_ANTIGRAVITY_BASE_URL
+  }
+  return DEFAULT_ANTHROPIC_BASE_URL
+}
+
 export function resolveAccountApiKeyHint(platform: AccountPlatform | null | undefined, t: Translate) {
   if (platform === 'openai') {
     return t('admin.accounts.openai.apiKeyHint')
@@ -156,6 +184,35 @@ export function resolveAccountApiKeyHint(platform: AccountPlatform | null | unde
     return t('admin.accounts.gemini.apiKeyHint')
   }
   return t('admin.accounts.apiKeyHint')
+}
+
+export function resolveAccountApiKeyPlaceholder(
+  platform: AccountPlatform | null | undefined,
+  t: Translate
+) {
+  if (platform === 'openai') {
+    return t('admin.accounts.openai.apiKeyPlaceholder')
+  }
+  if (platform === 'gemini') {
+    return 'AIza...'
+  }
+  if (platform === 'antigravity') {
+    return 'sk-...'
+  }
+  return 'sk-ant-...'
+}
+
+export function buildOpenAICompatibleBaseUrlPresets(t: Translate): AccountBaseUrlPreset[] {
+  return [
+    {
+      label: t('admin.accounts.openai.baseUrlPresets.official'),
+      value: DEFAULT_OPENAI_BASE_URL
+    },
+    {
+      label: t('admin.accounts.openai.baseUrlPresets.xai'),
+      value: OPENAI_COMPATIBLE_XAI_BASE_URL
+    }
+  ]
 }
 
 export function resolveCreateAccountOAuthStepTitle(

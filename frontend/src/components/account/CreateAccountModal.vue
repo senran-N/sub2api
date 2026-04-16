@@ -687,18 +687,25 @@
       <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
       <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
         <div>
-          <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
+          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <label class="input-label mb-0">{{ t('admin.accounts.baseUrl') }}</label>
+            <div v-if="form.platform === 'openai'" class="flex flex-wrap gap-2">
+              <button
+                v-for="preset in openAICompatibleBaseUrlPresets"
+                :key="preset.value"
+                type="button"
+                :class="getPresetMappingChipClasses('success')"
+                @click="apiKeyBaseUrl = preset.value"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
+          </div>
           <input
             v-model="apiKeyBaseUrl"
             type="text"
             class="input"
-            :placeholder="
-              form.platform === 'openai'
-                ? 'https://api.openai.com'
-                : form.platform === 'gemini'
-                  ? 'https://generativelanguage.googleapis.com'
-                  : 'https://api.anthropic.com'
-            "
+            :placeholder="baseUrlPlaceholder"
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
         </div>
@@ -709,13 +716,7 @@
             type="password"
             required
             class="input font-mono"
-            :placeholder="
-              form.platform === 'openai'
-                ? 'sk-proj-...'
-                : form.platform === 'gemini'
-                  ? 'AIza...'
-                  : 'sk-ant-...'
-            "
+            :placeholder="apiKeyPlaceholder"
           />
           <p class="input-hint">{{ apiKeyHint }}</p>
         </div>
@@ -2477,6 +2478,7 @@ import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import {
+  buildOpenAICompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
   buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
@@ -2488,7 +2490,9 @@ import {
   needsMixedChannelCheck,
   resetCreateAccountForm,
   resolveAccountApiKeyHint,
+  resolveAccountApiKeyPlaceholder,
   resolveAccountBaseUrlHint,
+  resolveAccountBaseUrlPlaceholder,
   resolveCreateAccountOAuthStepTitle,
   resolveMixedChannelWarningMessage,
   type CreateAccountForm
@@ -2571,8 +2575,20 @@ const baseUrlHint = computed(() => {
   return resolveAccountBaseUrlHint(form.platform, t)
 })
 
+const baseUrlPlaceholder = computed(() => {
+  return resolveAccountBaseUrlPlaceholder(form.platform, t)
+})
+
 const apiKeyHint = computed(() => {
   return resolveAccountApiKeyHint(form.platform, t)
+})
+
+const apiKeyPlaceholder = computed(() => {
+  return resolveAccountApiKeyPlaceholder(form.platform, t)
+})
+
+const openAICompatibleBaseUrlPresets = computed(() => {
+  return buildOpenAICompatibleBaseUrlPresets(t)
 })
 
 interface Props {

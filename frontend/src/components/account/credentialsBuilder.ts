@@ -22,6 +22,11 @@ export interface TempUnschedRulePayload {
 
 export const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 export const MAX_POOL_MODE_RETRY_COUNT = 10
+export const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com'
+export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com'
+export const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
+export const DEFAULT_ANTIGRAVITY_BASE_URL = 'https://cloudcode-pa.googleapis.com'
+export const OPENAI_COMPATIBLE_XAI_BASE_URL = 'https://api.x.ai'
 
 export function applyInterceptWarmup(
   credentials: Record<string, unknown>,
@@ -37,12 +42,12 @@ export function applyInterceptWarmup(
 
 export function getDefaultBaseURL(platform: AccountPlatform): string {
   if (platform === 'openai') {
-    return 'https://api.openai.com'
+    return DEFAULT_OPENAI_BASE_URL
   }
   if (platform === 'gemini') {
-    return 'https://generativelanguage.googleapis.com'
+    return DEFAULT_GEMINI_BASE_URL
   }
-  return 'https://api.anthropic.com'
+  return DEFAULT_ANTHROPIC_BASE_URL
 }
 
 export function normalizePoolModeRetryCount(value: number): number {

@@ -2410,8 +2410,14 @@ export default {
       apiKeyHint: '您的 Claude Console API Key',
       // OpenAI specific hints
       openai: {
-        baseUrlHint: '留空使用官方 OpenAI API',
-        apiKeyHint: '您的 OpenAI API Key',
+        baseUrlHint: '默认使用官方 OpenAI API；接入 xAI/Grok 时可直接切换为 https://api.x.ai',
+        baseUrlPlaceholder: 'https://api.openai.com 或 https://api.x.ai',
+        apiKeyHint: '填写 OpenAI 或 xAI/Grok 的 API Key',
+        apiKeyPlaceholder: 'OpenAI / xAI API Key',
+        baseUrlPresets: {
+          official: 'OpenAI 官方',
+          xai: 'xAI / Grok'
+        },
         oauthPassthrough: '自动透传（仅替换认证）',
         oauthPassthroughDesc:
           '开启后，该 OpenAI 账号将走透传/认证替换链路，并保留计费/并发/审计及必要安全过滤。API Key 账号会在兼容时尽量保留原始上游 HTTP 协议；OAuth 账号仍按上游要求的协议转发。',

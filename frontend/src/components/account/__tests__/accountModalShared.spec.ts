@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildOpenAICompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
   buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
@@ -12,7 +13,9 @@ import {
   needsMixedChannelCheck,
   resetCreateAccountForm,
   resolveAccountApiKeyHint,
+  resolveAccountApiKeyPlaceholder,
   resolveAccountBaseUrlHint,
+  resolveAccountBaseUrlPlaceholder,
   resolveCreateAccountOAuthStepTitle,
   resolveMixedChannelWarningMessage
 } from '../accountModalShared'
@@ -21,13 +24,33 @@ const t = (key: string, values?: Record<string, unknown>) =>
   values ? `${key}:${JSON.stringify(values)}` : key
 
 describe('accountModalShared', () => {
-  it('resolves platform-specific hints and oauth titles', () => {
+  it('resolves platform-specific hints, placeholders, presets, and oauth titles', () => {
     expect(resolveAccountBaseUrlHint('openai', t)).toBe('admin.accounts.openai.baseUrlHint')
     expect(resolveAccountBaseUrlHint('gemini', t)).toBe('admin.accounts.gemini.baseUrlHint')
     expect(resolveAccountBaseUrlHint('anthropic', t)).toBe('admin.accounts.baseUrlHint')
+    expect(resolveAccountBaseUrlPlaceholder('openai', t)).toBe(
+      'admin.accounts.openai.baseUrlPlaceholder'
+    )
+    expect(resolveAccountBaseUrlPlaceholder('antigravity', t)).toBe(
+      'https://cloudcode-pa.googleapis.com'
+    )
 
     expect(resolveAccountApiKeyHint('openai', t)).toBe('admin.accounts.openai.apiKeyHint')
     expect(resolveAccountApiKeyHint('gemini', t)).toBe('admin.accounts.gemini.apiKeyHint')
+    expect(resolveAccountApiKeyPlaceholder('openai', t)).toBe(
+      'admin.accounts.openai.apiKeyPlaceholder'
+    )
+    expect(resolveAccountApiKeyPlaceholder('gemini', t)).toBe('AIza...')
+    expect(buildOpenAICompatibleBaseUrlPresets(t)).toEqual([
+      {
+        label: 'admin.accounts.openai.baseUrlPresets.official',
+        value: 'https://api.openai.com'
+      },
+      {
+        label: 'admin.accounts.openai.baseUrlPresets.xai',
+        value: 'https://api.x.ai'
+      }
+    ])
     expect(resolveCreateAccountOAuthStepTitle('antigravity', t)).toBe(
       'admin.accounts.oauth.antigravity.title'
     )

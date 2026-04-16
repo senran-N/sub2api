@@ -29,20 +29,25 @@
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div>
-          <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
+          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <label class="input-label mb-0">{{ t('admin.accounts.baseUrl') }}</label>
+            <div v-if="account.platform === 'openai'" class="flex flex-wrap gap-2">
+              <button
+                v-for="preset in openAICompatibleBaseUrlPresets"
+                :key="preset.value"
+                type="button"
+                :class="getPresetMappingChipClasses('success')"
+                @click="editBaseUrl = preset.value"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
+          </div>
           <input
             v-model="editBaseUrl"
             type="text"
             class="input"
-            :placeholder="
-              account.platform === 'openai'
-                ? 'https://api.openai.com'
-                : account.platform === 'gemini'
-                  ? 'https://generativelanguage.googleapis.com'
-                  : account.platform === 'antigravity'
-                    ? 'https://cloudcode-pa.googleapis.com'
-                    : 'https://api.anthropic.com'
-            "
+            :placeholder="baseUrlPlaceholder"
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
         </div>
@@ -52,15 +57,7 @@
             v-model="editApiKey"
             type="password"
             class="input font-mono"
-            :placeholder="
-              account.platform === 'openai'
-                ? 'sk-proj-...'
-                : account.platform === 'gemini'
-                  ? 'AIza...'
-                  : account.platform === 'antigravity'
-                    ? 'sk-...'
-                    : 'sk-ant-...'
-            "
+            :placeholder="apiKeyPlaceholder"
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
         </div>
@@ -1595,6 +1592,7 @@ import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import {
+  buildOpenAICompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
   buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
@@ -1604,7 +1602,9 @@ import {
   createDefaultEditAccountForm,
   hydrateEditAccountForm,
   needsMixedChannelCheck,
+  resolveAccountApiKeyPlaceholder,
   resolveAccountBaseUrlHint,
+  resolveAccountBaseUrlPlaceholder,
   resolveMixedChannelWarningMessage,
   type EditAccountForm
 } from '@/components/account/accountModalShared'
@@ -1674,6 +1674,18 @@ const authStore = useAuthStore()
 // Platform-specific hint for Base URL
 const baseUrlHint = computed(() => {
   return resolveAccountBaseUrlHint(props.account?.platform, t)
+})
+
+const baseUrlPlaceholder = computed(() => {
+  return resolveAccountBaseUrlPlaceholder(props.account?.platform, t)
+})
+
+const apiKeyPlaceholder = computed(() => {
+  return resolveAccountApiKeyPlaceholder(props.account?.platform, t)
+})
+
+const openAICompatibleBaseUrlPresets = computed(() => {
+  return buildOpenAICompatibleBaseUrlPresets(t)
 })
 
 const antigravityPresetMappings = computed(() => getPresetMappingsByPlatform('antigravity'))

@@ -2260,8 +2260,14 @@ export default {
       apiKeyHint: 'Your Claude Console API Key',
       // OpenAI specific hints
       openai: {
-        baseUrlHint: 'Leave default for official OpenAI API',
-        apiKeyHint: 'Your OpenAI API Key',
+        baseUrlHint: 'Defaults to the official OpenAI API; switch to https://api.x.ai for xAI/Grok',
+        baseUrlPlaceholder: 'https://api.openai.com or https://api.x.ai',
+        apiKeyHint: 'Use an OpenAI or xAI/Grok API key',
+        apiKeyPlaceholder: 'OpenAI / xAI API Key',
+        baseUrlPresets: {
+          official: 'OpenAI Official',
+          xai: 'xAI / Grok'
+        },
         oauthPassthrough: 'Auto passthrough (auth only)',
         oauthPassthroughDesc:
           'When enabled, this OpenAI account uses the passthrough/auth-replacement path while keeping billing/concurrency/audit and necessary safety filtering. API Key accounts preserve compatible upstream HTTP protocols when possible; OAuth accounts still follow the upstream protocol required by the provider.',

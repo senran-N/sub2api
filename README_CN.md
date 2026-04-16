@@ -34,6 +34,7 @@ Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅的
 ## 核心功能
 
 - **多账号管理** - 支持多种上游账号类型（OAuth、API Key）
+- **OpenAI 兼容透传** - xAI/Grok 等 OpenAI 兼容上游可直接复用 OpenAI 账号流程，并覆盖图片、音频、视频、embeddings、moderations 与 realtime client secrets 等多模态接口
 - **API Key 分发** - 为用户生成和管理 API Key
 - **精确计费** - Token 级别的用量追踪和成本计算
 - **智能调度** - 智能账号选择，支持粘性会话
