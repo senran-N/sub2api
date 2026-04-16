@@ -51,7 +51,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 
 	// API Key passthrough must preserve the original Chat Completions protocol
 	// so OpenAI-compatible upstreams that do not implement /v1/responses keep working.
-	if account != nil && account.IsOpenAIApiKey() && account.IsOpenAIPassthroughEnabled() {
+	if account != nil && account.SupportsOpenAIPassthroughHTTP() {
 		forwardBody := body
 		if mappedModel != "" && mappedModel != originalModel {
 			var patchErr error

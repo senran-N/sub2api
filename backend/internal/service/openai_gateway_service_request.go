@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"strings"
 
 	"github.com/cespare/xxhash/v2"
@@ -25,6 +28,13 @@ type openAIRequestMeta struct {
 	PreviousResponseID string
 	ReasoningPresent   bool
 	ReasoningEffort    string
+}
+
+type openAICompatiblePassthroughRequestMeta struct {
+	Model           string
+	Stream          bool
+	ReasoningEffort string
+	JSONBody        bool
 }
 
 type openAIRequestMetaCache struct {
@@ -231,6 +241,91 @@ func appendOpenAIResponsesRequestPathSuffix(baseURL, suffix string) string {
 		return trimmedBase
 	}
 	return trimmedBase + trimmedSuffix
+}
+
+func GetOpenAICompatiblePassthroughRequestMeta(c *gin.Context, body []byte) openAICompatiblePassthroughRequestMeta {
+	if len(body) == 0 {
+		return openAICompatiblePassthroughRequestMeta{}
+	}
+
+	contentType := ""
+	if c != nil && c.Request != nil {
+		contentType = c.Request.Header.Get("Content-Type")
+	}
+	mediaType, params, _ := mime.ParseMediaType(contentType)
+	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
+
+	if isJSONLikeContentType(mediaType) || gjson.ValidBytes(body) {
+		reqMeta := GetOpenAIRequestMeta(c, body)
+		return openAICompatiblePassthroughRequestMeta{
+			Model:           reqMeta.Model,
+			Stream:          reqMeta.Stream,
+			ReasoningEffort: reqMeta.ReasoningEffort,
+			JSONBody:        gjson.ValidBytes(body),
+		}
+	}
+
+	if mediaType == "multipart/form-data" {
+		meta := openAICompatiblePassthroughRequestMeta{}
+		boundary := strings.TrimSpace(params["boundary"])
+		if boundary == "" {
+			return meta
+		}
+		reader := multipart.NewReader(bytes.NewReader(body), boundary)
+		for {
+			part, err := reader.NextPart()
+			if err != nil {
+				if err == io.EOF {
+					return meta
+				}
+				return meta
+			}
+
+			name := strings.TrimSpace(part.FormName())
+			switch name {
+			case "model":
+				value, err := readMultipartTextField(part, 8<<10)
+				_ = part.Close()
+				if err == nil {
+					meta.Model = strings.TrimSpace(value)
+				}
+			case "stream":
+				value, err := readMultipartTextField(part, 64)
+				_ = part.Close()
+				if err == nil {
+					meta.Stream = strings.EqualFold(strings.TrimSpace(value), "true")
+				}
+			default:
+				_ = part.Close()
+			}
+
+			if meta.Model != "" {
+				return meta
+			}
+		}
+	}
+
+	return openAICompatiblePassthroughRequestMeta{}
+}
+
+func isJSONLikeContentType(mediaType string) bool {
+	switch mediaType {
+	case "application/json", "text/json":
+		return true
+	default:
+		return strings.HasSuffix(mediaType, "+json")
+	}
+}
+
+func readMultipartTextField(part *multipart.Part, maxBytes int64) (string, error) {
+	if part == nil {
+		return "", nil
+	}
+	raw, err := io.ReadAll(io.LimitReader(part, maxBytes))
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func getOpenAIReasoningEffortFromReqBody(reqBody map[string]any) (value string, present bool) {

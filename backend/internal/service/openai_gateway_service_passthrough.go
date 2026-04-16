@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -200,12 +201,22 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 			account.GetCompatibleEndpointOverride("chat_completions"),
 		)
 		targetURL = upstreamTarget.URL
+		if c != nil && c.Request != nil && c.Request.URL != nil && c.Request.URL.RawQuery != "" {
+			if parsedTarget, err := url.Parse(targetURL); err == nil {
+				parsedTarget.RawQuery = c.Request.URL.RawQuery
+				targetURL = parsedTarget.String()
+			}
+		}
 	}
 	if account.Type != AccountTypeAPIKey && account.Type != AccountTypeUpstream {
 		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	method := http.MethodPost
+	if c != nil && c.Request != nil && strings.TrimSpace(c.Request.Method) != "" {
+		method = c.Request.Method
+	}
+	req, err := http.NewRequestWithContext(ctx, method, targetURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

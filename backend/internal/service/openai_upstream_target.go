@@ -61,13 +61,19 @@ func newOpenAIPassthroughUpstreamTargetWithOptions(base, rawRequestPath, authMod
 	if strings.TrimSpace(responsesOverride) != "" {
 		targetURL = resolveCompatibleEndpointURL(normalizedBase, "/v1/responses", responsesOverride)
 	}
-	if suffix := openAIResponsesRequestPathSuffixFromPath(rawRequestPath); suffix != "" {
-		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, suffix)
-	}
-	if isOpenAIChatCompletionsPath(rawRequestPath) {
+	switch {
+	case hasOpenAIResponsesRequestPath(rawRequestPath):
+		if suffix := openAIResponsesRequestPathSuffixFromPath(rawRequestPath); suffix != "" {
+			targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, suffix)
+		}
+	case isOpenAIChatCompletionsPath(rawRequestPath):
 		targetURL = buildOpenAIChatCompletionsURL(normalizedBase)
 		if strings.TrimSpace(chatOverride) != "" {
 			targetURL = resolveCompatibleEndpointURL(normalizedBase, "/v1/chat/completions", chatOverride)
+		}
+	default:
+		if passthroughPath := normalizeOpenAICompatiblePassthroughRequestPath(rawRequestPath); passthroughPath != "" {
+			targetURL = resolveCompatibleEndpointURL(normalizedBase, passthroughPath, "")
 		}
 	}
 
@@ -206,6 +212,27 @@ func normalizeOpenAIModelsPath(path string, azure bool) string {
 func isOpenAIChatCompletionsPath(rawPath string) bool {
 	trimmed := strings.TrimRight(strings.TrimSpace(rawPath), "/")
 	return strings.HasSuffix(trimmed, "/chat/completions")
+}
+
+func hasOpenAIResponsesRequestPath(rawPath string) bool {
+	trimmed := strings.TrimRight(strings.TrimSpace(rawPath), "/")
+	return trimmed == "/responses" || strings.Contains(trimmed, "/v1/responses")
+}
+
+func normalizeOpenAICompatiblePassthroughRequestPath(rawPath string) string {
+	trimmed := strings.TrimRight(strings.TrimSpace(rawPath), "/")
+	switch {
+	case trimmed == "":
+		return ""
+	case trimmed == "/responses" || strings.HasPrefix(trimmed, "/responses/"):
+		return "/v1" + trimmed
+	case trimmed == "/chat/completions":
+		return "/v1/chat/completions"
+	case strings.HasPrefix(trimmed, "/v1/"):
+		return trimmed
+	default:
+		return trimmed
+	}
 }
 
 func normalizeOpenAIResponsesPath(path string, azure bool) string {

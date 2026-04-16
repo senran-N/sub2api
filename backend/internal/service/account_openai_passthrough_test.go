@@ -71,6 +71,41 @@ func TestAccount_IsOpenAIOAuthPassthroughEnabled(t *testing.T) {
 	})
 }
 
+func TestAccount_SupportsOpenAIPassthroughHTTP(t *testing.T) {
+	t.Run("API Key passthrough account", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Type:     AccountTypeAPIKey,
+			Extra: map[string]any{
+				"openai_passthrough": true,
+			},
+		}
+		require.True(t, account.SupportsOpenAIPassthroughHTTP())
+	})
+
+	t.Run("upstream passthrough account", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Type:     AccountTypeUpstream,
+			Extra: map[string]any{
+				"openai_passthrough": true,
+			},
+		}
+		require.True(t, account.SupportsOpenAIPassthroughHTTP())
+	})
+
+	t.Run("oauth passthrough account is excluded from generic http passthrough", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Type:     AccountTypeOAuth,
+			Extra: map[string]any{
+				"openai_passthrough": true,
+			},
+		}
+		require.False(t, account.SupportsOpenAIPassthroughHTTP())
+	})
+}
+
 func TestAccount_IsCodexCLIOnlyEnabled(t *testing.T) {
 	t.Run("OpenAI OAuth 开启", func(t *testing.T) {
 		account := &Account{

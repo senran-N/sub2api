@@ -58,6 +58,19 @@ func (d gatewayProtocolDispatcher) ChatCompletions(c *gin.Context) {
 	d.handlers.Gateway.ChatCompletions(c)
 }
 
+func (d gatewayProtocolDispatcher) OpenAICompatiblePassthrough(c *gin.Context) {
+	if d.usesOpenAIProtocol(c) {
+		d.handlers.OpenAIGateway.Passthrough(c)
+		return
+	}
+	c.JSON(http.StatusNotFound, gin.H{
+		"error": gin.H{
+			"type":    "not_found_error",
+			"message": "The requested endpoint is not available for this platform",
+		},
+	})
+}
+
 func (d gatewayProtocolDispatcher) usesOpenAIProtocol(c *gin.Context) bool {
 	return d.groupPlatform(c) == service.PlatformOpenAI
 }

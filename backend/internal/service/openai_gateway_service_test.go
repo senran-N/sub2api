@@ -1738,11 +1738,68 @@ func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesResponsesSuffixForA
 	require.Equal(t, "https://compatible.example.com/v1/responses/compact", req.URL.String())
 }
 
+func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesGenericCompatiblePathAndQuery(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/videos/job_123?include=output", nil)
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+		},
+	}}
+	account := &Account{
+		Type:        AccountTypeAPIKey,
+		Platform:    PlatformOpenAI,
+		Credentials: map[string]any{"base_url": "https://api.x.ai"},
+	}
+
+	req, err := svc.buildUpstreamRequestOpenAIPassthrough(c.Request.Context(), c, account, nil, "token")
+	require.NoError(t, err)
+	require.Equal(t, http.MethodGet, req.Method)
+	require.Equal(t, "https://api.x.ai/v1/videos/job_123?include=output", req.URL.String())
+}
+
+func TestOpenAIBuildUpstreamRequestOpenAIPassthroughSupportsUpstreamAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader([]byte(`{"model":"gpt-5"}`)))
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+		},
+	}}
+	account := &Account{
+		Type:     AccountTypeUpstream,
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{
+			"base_url": "https://compatible.example.com/v1",
+			"api_key":  "sk-upstream",
+		},
+		Extra: map[string]any{"openai_passthrough": true},
+	}
+
+	req, err := svc.buildUpstreamRequestOpenAIPassthrough(c.Request.Context(), c, account, []byte(`{"model":"gpt-5"}`), "sk-upstream")
+	require.NoError(t, err)
+	require.Equal(t, "https://compatible.example.com/v1/chat/completions", req.URL.String())
+	require.Equal(t, "Bearer sk-upstream", req.Header.Get("Authorization"))
+}
+
 func TestOpenAIChatCompletionsPathDetection(t *testing.T) {
 	require.True(t, isOpenAIChatCompletionsPath("/v1/chat/completions"))
 	require.True(t, isOpenAIChatCompletionsPath("/openai/v1/chat/completions/"))
 	require.False(t, isOpenAIChatCompletionsPath("/v1/chat/completions-legacy"))
 	require.False(t, isOpenAIChatCompletionsPath("/v1/responses"))
+}
+
+func TestNormalizeOpenAICompatiblePassthroughRequestPath(t *testing.T) {
+	require.Equal(t, "/v1/images/generations", normalizeOpenAICompatiblePassthroughRequestPath("/v1/images/generations"))
+	require.Equal(t, "/v1/videos/job_123", normalizeOpenAICompatiblePassthroughRequestPath("/v1/videos/job_123/"))
+	require.Equal(t, "/v1/responses/compact", normalizeOpenAICompatiblePassthroughRequestPath("/responses/compact"))
+	require.Equal(t, "/v1/chat/completions", normalizeOpenAICompatiblePassthroughRequestPath("/chat/completions"))
 }
 
 func TestOpenAIForwardAsChatCompletionsAPIKeyPassthroughPreservesProtocol(t *testing.T) {

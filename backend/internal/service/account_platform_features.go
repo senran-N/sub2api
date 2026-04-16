@@ -249,6 +249,14 @@ func (a *Account) IsOpenAIApiKey() bool {
 	return a.IsOpenAI() && a.Type == AccountTypeAPIKey
 }
 
+func (a *Account) IsOpenAICompatibleUpstream() bool {
+	return a != nil && a.IsOpenAI() && (a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream)
+}
+
+func (a *Account) SupportsOpenAIPassthroughHTTP() bool {
+	return a.IsOpenAICompatibleUpstream() && a.IsOpenAIPassthroughEnabled()
+}
+
 func (a *Account) GetOpenAIBaseURL() string {
 	if !a.IsOpenAI() {
 		return ""

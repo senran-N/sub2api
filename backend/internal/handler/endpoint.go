@@ -18,6 +18,16 @@ const (
 	EndpointMessages        = "/v1/messages"
 	EndpointChatCompletions = "/v1/chat/completions"
 	EndpointResponses       = "/v1/responses"
+	EndpointEmbeddings      = "/v1/embeddings"
+	EndpointModerations     = "/v1/moderations"
+	EndpointImages          = "/v1/images"
+	EndpointVideos          = "/v1/videos"
+	EndpointAudioSpeech     = "/v1/audio/speech"
+	EndpointAudioTranscribe = "/v1/audio/transcriptions"
+	EndpointAudioTranslate  = "/v1/audio/translations"
+	EndpointTTS             = "/v1/tts"
+	EndpointSTT             = "/v1/stt"
+	EndpointRealtimeSecret  = "/v1/realtime/client_secrets"
 	EndpointGeminiModels    = "/v1beta/models"
 )
 
@@ -46,6 +56,26 @@ func NormalizeInboundEndpoint(path string) string {
 		return EndpointMessages
 	case strings.Contains(path, EndpointResponses):
 		return EndpointResponses
+	case strings.Contains(path, EndpointEmbeddings):
+		return EndpointEmbeddings
+	case strings.Contains(path, EndpointModerations):
+		return EndpointModerations
+	case strings.Contains(path, EndpointAudioSpeech):
+		return EndpointAudioSpeech
+	case strings.Contains(path, EndpointAudioTranscribe):
+		return EndpointAudioTranscribe
+	case strings.Contains(path, EndpointAudioTranslate):
+		return EndpointAudioTranslate
+	case strings.Contains(path, EndpointRealtimeSecret):
+		return EndpointRealtimeSecret
+	case strings.Contains(path, EndpointTTS):
+		return EndpointTTS
+	case strings.Contains(path, EndpointSTT):
+		return EndpointSTT
+	case strings.Contains(path, EndpointImages):
+		return EndpointImages
+	case strings.Contains(path, EndpointVideos):
+		return EndpointVideos
 	case strings.Contains(path, EndpointGeminiModels):
 		return EndpointGeminiModels
 	default:
@@ -167,10 +197,34 @@ func GetUpstreamEndpoint(c *gin.Context, platform string) string {
 	if c != nil && c.Request != nil && c.Request.URL != nil {
 		rawPath = c.Request.URL.Path
 	}
-	if platform == service.PlatformOpenAI && inbound == EndpointChatCompletions && isOpenAIPassthroughRequest(c) {
-		return EndpointChatCompletions
+	if platform == service.PlatformOpenAI && isOpenAIPassthroughRequest(c) {
+		return deriveOpenAICompatiblePassthroughEndpoint(inbound, rawPath)
 	}
 	return DeriveUpstreamEndpoint(inbound, rawPath, platform)
+}
+
+func deriveOpenAICompatiblePassthroughEndpoint(inbound, rawPath string) string {
+	switch inbound {
+	case EndpointResponses:
+		if suffix := responsesSubpathSuffix(rawPath); suffix != "" {
+			return EndpointResponses + suffix
+		}
+		return EndpointResponses
+	case EndpointChatCompletions,
+		EndpointEmbeddings,
+		EndpointModerations,
+		EndpointImages,
+		EndpointVideos,
+		EndpointAudioSpeech,
+		EndpointAudioTranscribe,
+		EndpointAudioTranslate,
+		EndpointTTS,
+		EndpointSTT,
+		EndpointRealtimeSecret:
+		return inbound
+	default:
+		return inbound
+	}
 }
 
 func isOpenAIPassthroughRequest(c *gin.Context) bool {

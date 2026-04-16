@@ -47,6 +47,15 @@ func RegisterGatewayRoutes(
 		gateway.POST("/responses/*subpath", dispatcher.Responses)
 		gateway.GET("/responses", h.OpenAIGateway.ResponsesWebSocket)
 		gateway.POST("/chat/completions", dispatcher.ChatCompletions)
+		gateway.Any("/images/*subpath", dispatcher.OpenAICompatiblePassthrough)
+		gateway.Any("/audio/*subpath", dispatcher.OpenAICompatiblePassthrough)
+		gateway.Any("/embeddings", dispatcher.OpenAICompatiblePassthrough)
+		gateway.Any("/moderations", dispatcher.OpenAICompatiblePassthrough)
+		gateway.Any("/tts", dispatcher.OpenAICompatiblePassthrough)
+		gateway.Any("/stt", dispatcher.OpenAICompatiblePassthrough)
+		gateway.Any("/videos", dispatcher.OpenAICompatiblePassthrough)
+		gateway.Any("/videos/*subpath", dispatcher.OpenAICompatiblePassthrough)
+		gateway.Any("/realtime/client_secrets", dispatcher.OpenAICompatiblePassthrough)
 	}
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）

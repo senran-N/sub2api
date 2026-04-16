@@ -25,6 +25,16 @@ func TestNormalizeInboundEndpoint(t *testing.T) {
 		{"/v1/messages", EndpointMessages},
 		{"/v1/chat/completions", EndpointChatCompletions},
 		{"/v1/responses", EndpointResponses},
+		{"/v1/embeddings", EndpointEmbeddings},
+		{"/v1/moderations", EndpointModerations},
+		{"/v1/images/generations", EndpointImages},
+		{"/v1/audio/speech", EndpointAudioSpeech},
+		{"/v1/audio/transcriptions", EndpointAudioTranscribe},
+		{"/v1/audio/translations", EndpointAudioTranslate},
+		{"/v1/tts", EndpointTTS},
+		{"/v1/stt", EndpointSTT},
+		{"/v1/realtime/client_secrets", EndpointRealtimeSecret},
+		{"/v1/videos/job_123", EndpointVideos},
 		{"/v1beta/models", EndpointGeminiModels},
 
 		// Prefixed paths (antigravity, openai).
@@ -73,6 +83,9 @@ func TestDeriveUpstreamEndpoint(t *testing.T) {
 		{"openai responses nested", EndpointResponses, "/openai/v1/responses/compact/detail", service.PlatformOpenAI, "/v1/responses/compact/detail"},
 		{"openai from messages", EndpointMessages, "/v1/messages", service.PlatformOpenAI, EndpointResponses},
 		{"openai from completions", EndpointChatCompletions, "/v1/chat/completions", service.PlatformOpenAI, EndpointResponses},
+		{"openai passthrough images", EndpointImages, "/v1/images/generations", service.PlatformOpenAI, EndpointResponses},
+		{"openai passthrough audio", EndpointAudioTranscribe, "/v1/audio/transcriptions", service.PlatformOpenAI, EndpointResponses},
+		{"openai passthrough videos", EndpointVideos, "/v1/videos/job_123", service.PlatformOpenAI, EndpointResponses},
 
 		// Antigravity — uses inbound to pick Claude vs Gemini upstream.
 		{"antigravity claude", EndpointMessages, "/antigravity/v1/messages", service.PlatformAntigravity, EndpointMessages},
@@ -163,6 +176,30 @@ func TestGetUpstreamEndpoint_OpenAIPassthroughChatCompletions(t *testing.T) {
 
 	got := GetUpstreamEndpoint(c, service.PlatformOpenAI)
 	require.Equal(t, EndpointChatCompletions, got)
+}
+
+func TestGetUpstreamEndpoint_OpenAIPassthroughCompatibleEndpoints(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: "/v1/images/generations", want: EndpointImages},
+		{path: "/v1/audio/transcriptions", want: EndpointAudioTranscribe},
+		{path: "/v1/tts", want: EndpointTTS},
+		{path: "/v1/videos/job_123", want: EndpointVideos},
+		{path: "/v1/realtime/client_secrets", want: EndpointRealtimeSecret},
+	}
+
+	for _, tt := range tests {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, tt.path, nil)
+		c.Set(ctxKeyInboundEndpoint, NormalizeInboundEndpoint(c.Request.URL.Path))
+		c.Set("openai_passthrough", true)
+
+		got := GetUpstreamEndpoint(c, service.PlatformOpenAI)
+		require.Equal(t, tt.want, got)
+	}
 }
 
 func TestGuessPlatformFromPath(t *testing.T) {
