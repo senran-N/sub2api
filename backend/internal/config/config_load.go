@@ -101,6 +101,14 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.Log.Environment = strings.TrimSpace(cfg.Log.Environment)
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
 	cfg.Log.Output.FilePath = strings.TrimSpace(cfg.Log.Output.FilePath)
+	cfg.Gateway.ForcedCodexInstructionsTemplateFile = strings.TrimSpace(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
+	if cfg.Gateway.ForcedCodexInstructionsTemplateFile != "" {
+		data, err := os.ReadFile(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
+		if err != nil {
+			return nil, fmt.Errorf("read forced codex instructions template: %w", err)
+		}
+		cfg.Gateway.ForcedCodexInstructionsTemplate = strings.TrimSpace(string(data))
+	}
 
 	// 兼容旧键 gateway.openai_ws.sticky_previous_response_ttl_seconds。
 	// 新键未配置（<=0）时回退旧键；新键优先。

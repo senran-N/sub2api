@@ -1742,7 +1742,19 @@ export default {
         allowDispatchHint: '启用后，此 OpenAI 分组的 API Key 可以通过 /v1/messages 端点调度请求',
         defaultModel: '默认映射模型',
         defaultModelPlaceholder: '例如: gpt-4.1',
-        defaultModelHint: '当账号未配置模型映射时，所有请求模型将映射到此模型'
+        defaultModelHint: '普通 OpenAI 兼容路径未命中账号级模型映射时使用此模型',
+        opusModel: 'Opus 默认映射',
+        opusModelPlaceholder: '例如: gpt-5.4',
+        sonnetModel: 'Sonnet 默认映射',
+        sonnetModelPlaceholder: '例如: gpt-5.3-codex',
+        haikuModel: 'Haiku 默认映射',
+        haikuModelPlaceholder: '例如: gpt-5.4-mini',
+        familyModelHint: '仅 `/v1/messages` 使用这些分族映射；未写精确映射时按 Opus/Sonnet/Haiku 回退',
+        exactMappings: '精确模型映射',
+        addExactMapping: '添加映射',
+        exactMappingsHint: '可为具体 Claude 模型单独指定目标 OpenAI 模型，优先级高于分族映射',
+        claudeModelPlaceholder: 'Claude 模型，例如 claude-sonnet-4-5',
+        targetModelPlaceholder: '目标 OpenAI 模型，例如 gpt-5.2'
       },
       invalidRequestFallback: {
         title: '无效请求兜底分组',

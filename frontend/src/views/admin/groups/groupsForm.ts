@@ -6,6 +6,13 @@ import type {
   SubscriptionType,
   UpdateGroupRequest
 } from '@/types'
+import {
+  createDefaultMessagesDispatchFormState,
+  messagesDispatchConfigToFormState,
+  messagesDispatchFormStateToConfig,
+  resetMessagesDispatchFormState,
+  type MessagesDispatchMappingRow
+} from '@/views/admin/groupsMessagesDispatch'
 
 export const DEFAULT_SUPPORTED_MODEL_SCOPES = ['claude', 'gemini_text', 'gemini_image'] as const
 export const ACCOUNT_FILTER_PLATFORMS: readonly GroupPlatform[] = [
@@ -50,6 +57,10 @@ interface GroupBaseForm {
   fallback_group_id_on_invalid_request: number | null
   allow_messages_dispatch: boolean
   default_mapped_model: string
+  opus_mapped_model: string
+  sonnet_mapped_model: string
+  haiku_mapped_model: string
+  exact_model_mappings: MessagesDispatchMappingRow[]
   require_oauth_only: boolean
   require_privacy_set: boolean
   model_routing_enabled: boolean
@@ -67,6 +78,7 @@ export interface EditGroupForm extends GroupBaseForm {
 export type GroupDialogForm = CreateGroupForm | EditGroupForm
 
 export function createDefaultCreateGroupForm(): CreateGroupForm {
+  const messagesDispatchDefaults = createDefaultMessagesDispatchFormState()
   return {
     name: '',
     description: '',
@@ -85,6 +97,10 @@ export function createDefaultCreateGroupForm(): CreateGroupForm {
     fallback_group_id_on_invalid_request: null,
     allow_messages_dispatch: false,
     default_mapped_model: 'gpt-5.4',
+    opus_mapped_model: messagesDispatchDefaults.opus_mapped_model,
+    sonnet_mapped_model: messagesDispatchDefaults.sonnet_mapped_model,
+    haiku_mapped_model: messagesDispatchDefaults.haiku_mapped_model,
+    exact_model_mappings: [],
     require_oauth_only: false,
     require_privacy_set: false,
     model_routing_enabled: false,
@@ -111,6 +127,7 @@ export function resetEditGroupForm(form: EditGroupForm): void {
 }
 
 export function hydrateEditGroupForm(form: EditGroupForm, group: AdminGroup): void {
+  const messagesDispatchState = messagesDispatchConfigToFormState(group.messages_dispatch_model_config)
   Object.assign(form, createDefaultEditGroupForm(), {
     name: group.name,
     description: group.description || '',
@@ -130,6 +147,10 @@ export function hydrateEditGroupForm(form: EditGroupForm, group: AdminGroup): vo
     fallback_group_id_on_invalid_request: group.fallback_group_id_on_invalid_request,
     allow_messages_dispatch: group.allow_messages_dispatch || false,
     default_mapped_model: group.default_mapped_model || '',
+    opus_mapped_model: messagesDispatchState.opus_mapped_model,
+    sonnet_mapped_model: messagesDispatchState.sonnet_mapped_model,
+    haiku_mapped_model: messagesDispatchState.haiku_mapped_model,
+    exact_model_mappings: messagesDispatchState.exact_model_mappings,
     require_oauth_only: group.require_oauth_only ?? false,
     require_privacy_set: group.require_privacy_set ?? false,
     model_routing_enabled: group.model_routing_enabled || false,
@@ -252,6 +273,10 @@ export function applyGroupFormPlatformRules(
     | 'fallback_group_id_on_invalid_request'
     | 'allow_messages_dispatch'
     | 'default_mapped_model'
+    | 'opus_mapped_model'
+    | 'sonnet_mapped_model'
+    | 'haiku_mapped_model'
+    | 'exact_model_mappings'
     | 'require_oauth_only'
     | 'require_privacy_set'
   >
@@ -262,6 +287,7 @@ export function applyGroupFormPlatformRules(
   if (form.platform !== 'openai') {
     form.allow_messages_dispatch = false
     form.default_mapped_model = ''
+    resetMessagesDispatchFormState(form)
   }
   if (!ACCOUNT_FILTER_PLATFORMS.includes(form.platform)) {
     form.require_oauth_only = false
@@ -355,6 +381,7 @@ function buildBaseGroupPayload(
     fallback_group_id_on_invalid_request: form.fallback_group_id_on_invalid_request,
     allow_messages_dispatch: form.allow_messages_dispatch,
     default_mapped_model: form.default_mapped_model,
+    messages_dispatch_model_config: messagesDispatchFormStateToConfig(form),
     require_oauth_only: form.require_oauth_only,
     require_privacy_set: form.require_privacy_set,
     model_routing_enabled: form.model_routing_enabled,

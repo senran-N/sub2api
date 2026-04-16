@@ -12,6 +12,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -285,6 +286,118 @@ func TestAPIKeyService_GetByKey_CacheMissStoresL2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(5), apiKey.ID)
 	require.Len(t, cache.setAuthKeys, 1)
+}
+
+func TestAPIKeyService_GetByKey_StaleSnapshotVersionFallsBackToRepository(t *testing.T) {
+	cache := &authCacheStub{}
+	var repoCalls int
+	repo := &authRepoStub{
+		getByKeyForAuth: func(ctx context.Context, key string) (*APIKey, error) {
+			repoCalls++
+			return &APIKey{
+				ID:     7,
+				UserID: 11,
+				Status: StatusActive,
+				User: &User{
+					ID:          11,
+					Status:      StatusActive,
+					Role:        RoleUser,
+					Balance:     3,
+					Concurrency: 2,
+				},
+				Group: &Group{
+					ID:                    5,
+					Name:                  "openai",
+					Platform:              PlatformOpenAI,
+					Status:                StatusActive,
+					Hydrated:              true,
+					SubscriptionType:      SubscriptionTypeStandard,
+					RateMultiplier:        1,
+					AllowMessagesDispatch: true,
+					DefaultMappedModel:    "gpt-5.4",
+					MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
+						SonnetMappedModel: "gpt-5.2",
+						ExactModelMappings: map[string]string{
+							"claude-opus-4-6": "gpt-5.4",
+						},
+					},
+				},
+			}, nil
+		},
+	}
+	cfg := &config.Config{
+		APIKeyAuth: config.APIKeyAuthCacheConfig{
+			L2TTLSeconds: 60,
+		},
+	}
+	svc := NewAPIKeyService(repo, nil, nil, nil, nil, cache, cfg)
+	cache.getAuthCache = func(ctx context.Context, key string) (*APIKeyAuthCacheEntry, error) {
+		return &APIKeyAuthCacheEntry{
+			Snapshot: &APIKeyAuthSnapshot{
+				Version: domain.APIKeyAuthSnapshotVersion - 1,
+			},
+		}, nil
+	}
+
+	apiKey, err := svc.GetByKey(context.Background(), "k1")
+	require.NoError(t, err)
+	require.Equal(t, 1, repoCalls)
+	require.NotNil(t, apiKey.Group)
+	require.True(t, apiKey.Group.AllowMessagesDispatch)
+	require.Equal(t, "gpt-5.2", apiKey.Group.MessagesDispatchModelConfig.SonnetMappedModel)
+	require.Equal(t, "gpt-5.4", apiKey.Group.MessagesDispatchModelConfig.ExactModelMappings["claude-opus-4-6"])
+	require.Len(t, cache.setAuthKeys, 1)
+}
+
+func TestAPIKeyService_SnapshotRoundTripPreservesMessagesDispatchModelConfig(t *testing.T) {
+	svc := &APIKeyService{}
+	apiKey := &APIKey{
+		ID:     9,
+		UserID: 21,
+		Status: StatusActive,
+		User: &User{
+			ID:          21,
+			Status:      StatusActive,
+			Role:        RoleUser,
+			Balance:     10,
+			Concurrency: 4,
+		},
+		Group: &Group{
+			ID:                    12,
+			Name:                  "openai",
+			Platform:              PlatformOpenAI,
+			Status:                StatusActive,
+			Hydrated:              true,
+			SubscriptionType:      SubscriptionTypeStandard,
+			RateMultiplier:        1,
+			AllowMessagesDispatch: true,
+			DefaultMappedModel:    "gpt-5.4",
+			MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
+				OpusMappedModel:   "gpt-5.4",
+				SonnetMappedModel: "gpt-5.3-codex",
+				HaikuMappedModel:  "gpt-5.4-mini",
+				ExactModelMappings: map[string]string{
+					"claude-sonnet-4-5-20250929": "gpt-5.2",
+				},
+			},
+		},
+	}
+
+	snapshot := svc.snapshotFromAPIKey(apiKey)
+	require.NotNil(t, snapshot)
+	require.Equal(t, domain.APIKeyAuthSnapshotVersion, snapshot.Version)
+	require.NotNil(t, snapshot.Group)
+	require.True(t, snapshot.Group.AllowMessagesDispatch)
+	require.Equal(t, "gpt-5.4", snapshot.Group.DefaultMappedModel)
+
+	restored := svc.snapshotToAPIKey("k-test", snapshot)
+	require.NotNil(t, restored)
+	require.Equal(t, "k-test", restored.Key)
+	require.NotNil(t, restored.Group)
+	require.True(t, restored.Group.AllowMessagesDispatch)
+	require.Equal(t, "gpt-5.4", restored.Group.DefaultMappedModel)
+	require.Equal(t, "gpt-5.3-codex", restored.Group.MessagesDispatchModelConfig.SonnetMappedModel)
+	require.Equal(t, "gpt-5.2", restored.Group.MessagesDispatchModelConfig.ExactModelMappings["claude-sonnet-4-5-20250929"])
 }
 
 func TestAPIKeyService_GetByKey_UsesL1Cache(t *testing.T) {

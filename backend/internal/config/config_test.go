@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +28,21 @@ func TestLoadForBootstrapAllowsMissingJWTSecret(t *testing.T) {
 	if cfg.JWT.Secret != "" {
 		t.Fatalf("LoadForBootstrap() should keep empty jwt.secret during bootstrap")
 	}
+}
+
+func TestLoadForcedCodexInstructionsTemplate(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	dir := t.TempDir()
+	templatePath := filepath.Join(dir, "forced-codex-instructions.tmpl")
+	require.NoError(t, os.WriteFile(templatePath, []byte("  billing={{.BillingModel}}\n"), 0o600))
+	configPath := filepath.Join(dir, "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("gateway:\n  forced_codex_instructions_template_file: "+templatePath+"\n"), 0o600))
+	t.Setenv("DATA_DIR", dir)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "billing={{.BillingModel}}", cfg.Gateway.ForcedCodexInstructionsTemplate)
 }
 
 func TestNormalizeRunMode(t *testing.T) {

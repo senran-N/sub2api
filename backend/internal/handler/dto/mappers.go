@@ -138,6 +138,12 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		ModelRoutingEnabled:     g.ModelRoutingEnabled,
 		MCPXMLInject:            g.MCPXMLInject,
 		DefaultMappedModel:      g.DefaultMappedModel,
+		MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
+			OpusMappedModel:    g.MessagesDispatchModelConfig.OpusMappedModel,
+			SonnetMappedModel:  g.MessagesDispatchModelConfig.SonnetMappedModel,
+			HaikuMappedModel:   g.MessagesDispatchModelConfig.HaikuMappedModel,
+			ExactModelMappings: g.MessagesDispatchModelConfig.ExactModelMappings,
+		},
 		SupportedModelScopes:    g.SupportedModelScopes,
 		AccountCount:            g.AccountCount,
 		ActiveAccountCount:      g.ActiveAccountCount,

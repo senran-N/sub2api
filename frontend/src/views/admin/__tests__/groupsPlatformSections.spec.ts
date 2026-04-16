@@ -17,11 +17,15 @@ const ToggleStub = {
 }
 
 describe('group platform sections', () => {
-  it('binds openai messages dispatch and default model through the shared section', async () => {
+  it('binds openai messages dispatch and mapping editors through the shared section', async () => {
     const form = {
       platform: 'openai',
       allow_messages_dispatch: false,
-      default_mapped_model: ''
+      default_mapped_model: '',
+      opus_mapped_model: 'gpt-5.4',
+      sonnet_mapped_model: 'gpt-5.3-codex',
+      haiku_mapped_model: 'gpt-5.4-mini',
+      exact_model_mappings: []
     } as any
 
     const wrapper = mount(GroupOpenAIMessagesSection, {
@@ -36,10 +40,20 @@ describe('group platform sections', () => {
     })
 
     await wrapper.find('.toggle').setValue(true)
-    await wrapper.get('input[type="text"]').setValue('gpt-5.4')
+    const inputs = wrapper.findAll('input[type="text"]')
+    await inputs[0].setValue('gpt-5.4')
+    await inputs[1].setValue('gpt-5.2')
+    await wrapper.get('button[type="button"]').trigger('click')
+    const mappingInputs = wrapper.findAll('.group-openai-messages-section__mapping-row input')
+    await mappingInputs[0].setValue('claude-opus-4-6')
+    await mappingInputs[1].setValue('gpt-5.4')
 
     expect(form.allow_messages_dispatch).toBe(true)
     expect(form.default_mapped_model).toBe('gpt-5.4')
+    expect(form.opus_mapped_model).toBe('gpt-5.2')
+    expect(form.exact_model_mappings).toEqual([
+      { claude_model: 'claude-opus-4-6', target_model: 'gpt-5.4' }
+    ])
   })
 
   it('binds oauth and privacy account filters through the shared section', async () => {

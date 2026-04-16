@@ -28,6 +28,7 @@ type CreateGroupInput struct {
 	SupportedModelScopes            []string
 	AllowMessagesDispatch           bool
 	DefaultMappedModel              string
+	MessagesDispatchModelConfig     OpenAIMessagesDispatchModelConfig
 	RequireOAuthOnly                bool
 	RequirePrivacySet               bool
 	CopyAccountsFromGroupIDs        []int64
@@ -63,6 +64,7 @@ type UpdateGroupInput struct {
 	SupportedModelScopes            *[]string
 	AllowMessagesDispatch           *bool
 	DefaultMappedModel              *string
+	MessagesDispatchModelConfig     *OpenAIMessagesDispatchModelConfig
 	RequireOAuthOnly                *bool
 	RequirePrivacySet               *bool
 	CopyAccountsFromGroupIDs        []int64

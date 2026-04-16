@@ -112,6 +112,23 @@ func TestOpenAIHandleStreamingAwareError_NonStreaming(t *testing.T) {
 	assert.Equal(t, "test error", errorObj["message"])
 }
 
+func TestResolveOpenAIMessagesDispatchMappedModel(t *testing.T) {
+	apiKey := &service.APIKey{
+		Group: &service.Group{
+			MessagesDispatchModelConfig: service.OpenAIMessagesDispatchModelConfig{
+				SonnetMappedModel: "gpt-5.2",
+				ExactModelMappings: map[string]string{
+					"claude-opus-4-6": "gpt-5.4",
+				},
+			},
+		},
+	}
+
+	require.Equal(t, "gpt-5.4", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-opus-4-6"))
+	require.Equal(t, "gpt-5.2", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
+	require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(nil, "claude-opus-4-6"))
+}
+
 func TestReadRequestBodyWithPrealloc(t *testing.T) {
 	payload := `{"model":"gpt-5","input":"hello"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(payload))

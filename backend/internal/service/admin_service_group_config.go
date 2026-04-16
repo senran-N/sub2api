@@ -71,7 +71,9 @@ func (s *adminServiceImpl) buildGroupForCreate(ctx context.Context, input *Creat
 		RequireOAuthOnly:                input.RequireOAuthOnly,
 		RequirePrivacySet:               input.RequirePrivacySet,
 		DefaultMappedModel:              input.DefaultMappedModel,
+		MessagesDispatchModelConfig:     normalizeOpenAIMessagesDispatchModelConfig(input.MessagesDispatchModelConfig),
 	}
+	sanitizeGroupMessagesDispatchFields(group)
 	return group, platform, nil
 }
 
@@ -161,6 +163,10 @@ func (s *adminServiceImpl) applyUpdateGroupInput(ctx context.Context, id int64, 
 	if input.DefaultMappedModel != nil {
 		group.DefaultMappedModel = *input.DefaultMappedModel
 	}
+	if input.MessagesDispatchModelConfig != nil {
+		group.MessagesDispatchModelConfig = normalizeOpenAIMessagesDispatchModelConfig(*input.MessagesDispatchModelConfig)
+	}
+	sanitizeGroupMessagesDispatchFields(group)
 
 	return nil
 }

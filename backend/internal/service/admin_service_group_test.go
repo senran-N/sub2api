@@ -245,6 +245,65 @@ func TestAdminService_UpdateGroup_PartialImagePricing(t *testing.T) {
 	require.Nil(t, repo.updated.ImagePrice4K)
 }
 
+func TestAdminService_CreateGroup_NormalizesMessagesDispatchModelConfig(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	input := &CreateGroupInput{
+		Name:                  "openai-group",
+		Platform:              PlatformOpenAI,
+		RateMultiplier:        1,
+		AllowMessagesDispatch: true,
+		MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
+			OpusMappedModel:   " gpt-5.4 ",
+			SonnetMappedModel: " gpt 5.4 extrahigh ",
+			ExactModelMappings: map[string]string{
+				" claude-opus-4-6 ": " gpt-5.2 ",
+			},
+		},
+	}
+
+	group, err := svc.CreateGroup(context.Background(), input)
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.NotNil(t, repo.created)
+	require.True(t, repo.created.AllowMessagesDispatch)
+	require.Equal(t, OpenAIMessagesDispatchModelConfig{
+		OpusMappedModel:   "gpt-5.4",
+		SonnetMappedModel: "gpt-5.4-xhigh",
+		ExactModelMappings: map[string]string{
+			"claude-opus-4-6": "gpt-5.2",
+		},
+	}, repo.created.MessagesDispatchModelConfig)
+}
+
+func TestAdminService_UpdateGroup_SwitchingAwayFromOpenAIClearsMessagesDispatchConfig(t *testing.T) {
+	existingGroup := &Group{
+		ID:                    1,
+		Name:                  "openai-group",
+		Platform:              PlatformOpenAI,
+		Status:                StatusActive,
+		AllowMessagesDispatch: true,
+		DefaultMappedModel:    "gpt-5.4",
+		MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
+			OpusMappedModel: "gpt-5.2",
+		},
+	}
+	repo := &groupRepoStubForAdmin{getByID: existingGroup}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	group, err := svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{
+		Platform: PlatformAnthropic,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.NotNil(t, repo.updated)
+	require.Equal(t, PlatformAnthropic, repo.updated.Platform)
+	require.False(t, repo.updated.AllowMessagesDispatch)
+	require.Empty(t, repo.updated.DefaultMappedModel)
+	require.Equal(t, OpenAIMessagesDispatchModelConfig{}, repo.updated.MessagesDispatchModelConfig)
+}
+
 func TestAdminService_ListGroups_WithSearch(t *testing.T) {
 	// 测试：
 	// 1. search 参数正常传递到 repository 层

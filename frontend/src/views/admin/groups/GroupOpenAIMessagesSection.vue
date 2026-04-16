@@ -26,6 +26,69 @@
         class="input"
       />
       <p class="input-hint">{{ t('admin.groups.openaiMessages.defaultModelHint') }}</p>
+
+      <div class="group-openai-messages-section__grid mt-4">
+        <div>
+          <label class="input-label">{{ t('admin.groups.openaiMessages.opusModel') }}</label>
+          <input
+            v-model="form.opus_mapped_model"
+            type="text"
+            :placeholder="t('admin.groups.openaiMessages.opusModelPlaceholder')"
+            class="input"
+          />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.groups.openaiMessages.sonnetModel') }}</label>
+          <input
+            v-model="form.sonnet_mapped_model"
+            type="text"
+            :placeholder="t('admin.groups.openaiMessages.sonnetModelPlaceholder')"
+            class="input"
+          />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.groups.openaiMessages.haikuModel') }}</label>
+          <input
+            v-model="form.haiku_mapped_model"
+            type="text"
+            :placeholder="t('admin.groups.openaiMessages.haikuModelPlaceholder')"
+            class="input"
+          />
+        </div>
+      </div>
+      <p class="input-hint">{{ t('admin.groups.openaiMessages.familyModelHint') }}</p>
+
+      <div class="mt-4">
+        <div class="group-openai-messages-section__row mb-2">
+          <label class="input-label mb-0">{{ t('admin.groups.openaiMessages.exactMappings') }}</label>
+          <button type="button" class="btn btn-secondary btn-sm" @click="addExactMapping">
+            {{ t('admin.groups.openaiMessages.addExactMapping') }}
+          </button>
+        </div>
+        <p class="input-hint">{{ t('admin.groups.openaiMessages.exactMappingsHint') }}</p>
+
+        <div
+          v-for="(row, index) in form.exact_model_mappings"
+          :key="`mapping-${index}`"
+          class="group-openai-messages-section__mapping-row"
+        >
+          <input
+            v-model="row.claude_model"
+            type="text"
+            :placeholder="t('admin.groups.openaiMessages.claudeModelPlaceholder')"
+            class="input"
+          />
+          <input
+            v-model="row.target_model"
+            type="text"
+            :placeholder="t('admin.groups.openaiMessages.targetModelPlaceholder')"
+            class="input"
+          />
+          <button type="button" class="btn btn-danger btn-sm" @click="removeExactMapping(index)">
+            {{ t('common.actions.delete') }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -35,16 +98,45 @@ import { useI18n } from 'vue-i18n'
 import Toggle from '@/components/common/Toggle.vue'
 import type { CreateGroupForm, EditGroupForm } from './groupsForm'
 
-defineProps<{
+const props = defineProps<{
   form: CreateGroupForm | EditGroupForm
 }>()
 
 const { t } = useI18n()
+
+function addExactMapping(): void {
+  props.form.exact_model_mappings.push({
+    claude_model: '',
+    target_model: ''
+  })
+}
+
+function removeExactMapping(index: number): void {
+  props.form.exact_model_mappings.splice(index, 1)
+}
 </script>
 
 <style scoped>
 .group-openai-messages-section {
   border-color: var(--theme-page-border);
+}
+
+.group-openai-messages-section__grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.group-openai-messages-section__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.group-openai-messages-section__mapping-row {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 .group-openai-messages-section__title,
@@ -54,5 +146,15 @@ const { t } = useI18n()
 
 .group-openai-messages-section__hint {
   color: var(--theme-page-muted);
+}
+
+@media (min-width: 768px) {
+  .group-openai-messages-section__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .group-openai-messages-section__mapping-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
 }
 </style>

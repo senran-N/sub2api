@@ -51,6 +51,7 @@ function createAdminGroup(overrides: Partial<AdminGroup> = {}): AdminGroup {
     active_account_count: 2,
     rate_limited_account_count: 0,
     default_mapped_model: '',
+    messages_dispatch_model_config: undefined,
     sort_order: 10,
     ...overrides
   }
@@ -89,6 +90,13 @@ describe('hydrateEditGroupForm', () => {
         platform: 'openai',
         allow_messages_dispatch: true,
         default_mapped_model: 'gpt-5.4',
+        messages_dispatch_model_config: {
+          opus_mapped_model: 'gpt-5.4',
+          sonnet_mapped_model: 'gpt-5.2',
+          exact_model_mappings: {
+            'claude-opus-4-6': 'gpt-5.4'
+          }
+        },
         model_routing_enabled: true,
         supported_model_scopes: ['claude']
       })
@@ -97,6 +105,11 @@ describe('hydrateEditGroupForm', () => {
     expect(editForm.platform).toBe('openai')
     expect(editForm.allow_messages_dispatch).toBe(true)
     expect(editForm.default_mapped_model).toBe('gpt-5.4')
+    expect(editForm.opus_mapped_model).toBe('gpt-5.4')
+    expect(editForm.sonnet_mapped_model).toBe('gpt-5.2')
+    expect(editForm.exact_model_mappings).toEqual([
+      { claude_model: 'claude-opus-4-6', target_model: 'gpt-5.4' }
+    ])
     expect(editForm.model_routing_enabled).toBe(true)
     expect(editForm.supported_model_scopes).toEqual(['claude'])
     expect(editForm.copy_accounts_from_group_ids).toEqual([])
@@ -183,6 +196,7 @@ describe('create form rules', () => {
     createForm.platform = 'gemini'
     createForm.allow_messages_dispatch = true
     createForm.default_mapped_model = 'gpt-5.4'
+    createForm.opus_mapped_model = 'gpt-5.2'
     createForm.require_oauth_only = true
     createForm.require_privacy_set = true
     createForm.fallback_group_id_on_invalid_request = 8
@@ -190,6 +204,7 @@ describe('create form rules', () => {
     expect(createForm.fallback_group_id_on_invalid_request).toBeNull()
     expect(createForm.allow_messages_dispatch).toBe(false)
     expect(createForm.default_mapped_model).toBe('')
+    expect(createForm.opus_mapped_model).toBe('gpt-5.4')
     expect(createForm.require_oauth_only).toBe(false)
     expect(createForm.require_privacy_set).toBe(false)
   })
@@ -203,6 +218,7 @@ describe('group payload builders', () => {
     createForm.weekly_limit_usd = 12
     createForm.monthly_limit_usd = -5
     createForm.allow_messages_dispatch = true
+    createForm.exact_model_mappings = [{ claude_model: 'claude-opus-4-6', target_model: 'gpt-5.4' }]
     createForm.copy_accounts_from_group_ids = [1, 2]
 
     const payload = buildCreateGroupPayload(createForm, [
@@ -216,6 +232,14 @@ describe('group payload builders', () => {
     expect(payload.weekly_limit_usd).toBe(12)
     expect(payload.monthly_limit_usd).toBeNull()
     expect(payload.allow_messages_dispatch).toBe(true)
+    expect(payload.messages_dispatch_model_config).toEqual({
+      opus_mapped_model: 'gpt-5.4',
+      sonnet_mapped_model: 'gpt-5.3-codex',
+      haiku_mapped_model: 'gpt-5.4-mini',
+      exact_model_mappings: {
+        'claude-opus-4-6': 'gpt-5.4'
+      }
+    })
     expect(payload.copy_accounts_from_group_ids).toEqual([1, 2])
     expect(payload.model_routing).toEqual({
       'claude-*': [11]

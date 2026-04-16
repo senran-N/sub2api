@@ -1656,7 +1656,19 @@ export default {
         allowDispatchHint: 'When enabled, API keys in this OpenAI group can dispatch requests through /v1/messages endpoint',
         defaultModel: 'Default mapped model',
         defaultModelPlaceholder: 'e.g., gpt-4.1',
-        defaultModelHint: 'When account has no model mapping configured, all request models will be mapped to this model'
+        defaultModelHint: 'Used by normal OpenAI-compatible paths when account-level mapping does not match',
+        opusModel: 'Default Opus mapping',
+        opusModelPlaceholder: 'e.g., gpt-5.4',
+        sonnetModel: 'Default Sonnet mapping',
+        sonnetModelPlaceholder: 'e.g., gpt-5.3-codex',
+        haikuModel: 'Default Haiku mapping',
+        haikuModelPlaceholder: 'e.g., gpt-5.4-mini',
+        familyModelHint: 'These family mappings apply only to `/v1/messages`; exact mappings override them',
+        exactMappings: 'Exact model mappings',
+        addExactMapping: 'Add mapping',
+        exactMappingsHint: 'Pin specific Claude models to exact OpenAI targets with higher priority than family defaults',
+        claudeModelPlaceholder: 'Claude model, e.g. claude-sonnet-4-5',
+        targetModelPlaceholder: 'Target OpenAI model, e.g. gpt-5.2'
       },
       invalidRequestFallback: {
         title: 'Invalid Request Fallback Group',

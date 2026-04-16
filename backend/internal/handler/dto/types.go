@@ -99,6 +99,13 @@ type Group struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type OpenAIMessagesDispatchModelConfig struct {
+	OpusMappedModel    string            `json:"opus_mapped_model,omitempty"`
+	SonnetMappedModel  string            `json:"sonnet_mapped_model,omitempty"`
+	HaikuMappedModel   string            `json:"haiku_mapped_model,omitempty"`
+	ExactModelMappings map[string]string `json:"exact_model_mappings,omitempty"`
+}
+
 // AdminGroup 是管理员接口使用的 group DTO（包含敏感/内部字段）。
 // 注意：普通用户接口不得返回 model_routing/account_count/account_groups 等内部信息。
 type AdminGroup struct {
@@ -112,7 +119,8 @@ type AdminGroup struct {
 	MCPXMLInject bool `json:"mcp_xml_inject"`
 
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
-	DefaultMappedModel string `json:"default_mapped_model"`
+	DefaultMappedModel          string                             `json:"default_mapped_model"`
+	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig `json:"messages_dispatch_model_config"`
 
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes    []string       `json:"supported_model_scopes"`

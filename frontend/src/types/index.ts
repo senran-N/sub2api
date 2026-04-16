@@ -370,6 +370,13 @@ export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
 
 export type SubscriptionType = 'standard' | 'subscription'
 
+export interface OpenAIMessagesDispatchModelConfig {
+  opus_mapped_model?: string
+  sonnet_mapped_model?: string
+  haiku_mapped_model?: string
+  exact_model_mappings?: Record<string, string>
+}
+
 export interface Group {
   id: number
   name: string
@@ -418,6 +425,7 @@ export interface AdminGroup extends Group {
 
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   default_mapped_model?: string
+  messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
 
   // 分组排序
   sort_order: number
@@ -504,6 +512,7 @@ export interface CreateGroupRequest {
   supported_model_scopes?: string[]
   allow_messages_dispatch?: boolean
   default_mapped_model?: string
+  messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
   require_oauth_only?: boolean
   require_privacy_set?: boolean
   // 从指定分组复制账号
@@ -534,6 +543,7 @@ export interface UpdateGroupRequest {
   supported_model_scopes?: string[]
   allow_messages_dispatch?: boolean
   default_mapped_model?: string
+  messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
   require_oauth_only?: boolean
   require_privacy_set?: boolean
   copy_accounts_from_group_ids?: number[]

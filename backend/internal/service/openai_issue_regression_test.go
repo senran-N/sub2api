@@ -92,7 +92,7 @@ func TestHandleAnthropicBufferedStreamingResponse_RebuildsOutputFromDeltasOnResp
 	}
 
 	svc := &OpenAIGatewayService{}
-	result, err := svc.handleAnthropicBufferedStreamingResponse(resp, c, "gpt-5.4", "gpt-5.4", time.Now())
+	result, err := svc.handleAnthropicBufferedStreamingResponse(resp, c, "gpt-5.4", "gpt-5.4", "gpt-5.4", time.Now())
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, 3, result.Usage.InputTokens)
