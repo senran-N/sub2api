@@ -32,6 +32,18 @@
         </div>
         <Toggle v-model="form.enable_metadata_passthrough" />
       </div>
+
+      <div class="flex items-center justify-between">
+        <div>
+          <label class="settings-gateway-forwarding-card__field-label text-sm font-medium">
+            {{ t('admin.settings.gatewayForwarding.cchSigning') }}
+          </label>
+          <p class="settings-gateway-forwarding-card__description mt-0.5 text-xs">
+            {{ t('admin.settings.gatewayForwarding.cchSigningHint') }}
+          </p>
+        </div>
+        <Toggle v-model="form.enable_cch_signing" />
+      </div>
     </div>
   </div>
 </template>

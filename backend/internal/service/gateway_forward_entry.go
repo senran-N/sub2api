@@ -49,12 +49,12 @@ func (s *GatewayService) resolveForwardPassthroughInput(
 	}
 }
 
-func (s *GatewayService) initializeForwardBetaPolicy(ctx context.Context, c *gin.Context, account *Account) error {
+func (s *GatewayService) initializeForwardBetaPolicy(ctx context.Context, c *gin.Context, account *Account, model string) error {
 	if account == nil || account.Platform != PlatformAnthropic || c == nil {
 		return nil
 	}
 
-	policy := s.evaluateBetaPolicy(ctx, c.GetHeader("anthropic-beta"), account)
+	policy := s.evaluateBetaPolicy(ctx, c.GetHeader("anthropic-beta"), account, model)
 	if policy.blockErr != nil {
 		return policy.blockErr
 	}

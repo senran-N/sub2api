@@ -4513,6 +4513,8 @@ export default {
         fingerprintUnificationHint: '统一共享同一 OAuth 账号的用户的 X-Stainless-* 请求头。关闭后透传客户端原始请求头。',
         metadataPassthrough: 'Metadata 透传',
         metadataPassthroughHint: '透传客户端原始 metadata.user_id，不进行重写。可能提高上游缓存命中率。',
+        cchSigning: 'CCH 签名',
+        cchSigningHint: '在请求改写完成后，将 billing header 的 cch 占位符替换为确定性哈希值。',
       },
       site: {
         title: '站点设置',
@@ -4735,7 +4737,12 @@ export default {
         errorMessagePlaceholder: '拦截时返回的自定义错误消息',
         errorMessageHint: '留空则使用默认错误消息',
         saved: 'Beta 策略设置保存成功',
-        saveFailed: '保存 Beta 策略设置失败'
+        saveFailed: '保存 Beta 策略设置失败',
+        modelWhitelist: '模型白名单',
+        modelWhitelistHint: '每行一个模式。留空则规则对所有模型生效。支持精确匹配和前缀通配符，如 claude-opus-*。',
+        modelPatternPlaceholder: 'claude-opus-*\nclaude-opus-4-1',
+        fallbackAction: '未命中白名单时的处理方式',
+        fallbackErrorMessagePlaceholder: '未命中白名单模型被拦截时返回的自定义错误消息'
       },
       saveSettings: '保存设置',
       saving: '保存中...',

@@ -24,6 +24,7 @@ function createForm(overrides: Record<string, unknown> = {}) {
     allow_ungrouped_key_scheduling: false,
     enable_fingerprint_unification: true,
     enable_metadata_passthrough: false,
+    enable_cch_signing: false,
     ...overrides
   }
 }
@@ -82,8 +83,10 @@ describe('settings gateway cards', () => {
     const toggles = wrapper.findAll('.toggle')
     await toggles[0].setValue(false)
     await toggles[1].setValue(true)
+    await toggles[2].setValue(true)
 
     expect(form.enable_fingerprint_unification).toBe(false)
     expect(form.enable_metadata_passthrough).toBe(true)
+    expect(form.enable_cch_signing).toBe(true)
   })
 })

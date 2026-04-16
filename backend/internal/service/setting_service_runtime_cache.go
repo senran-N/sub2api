@@ -41,6 +41,7 @@ const backendModeDBTimeout = 5 * time.Second
 type cachedGatewayForwardingSettings struct {
 	fingerprintUnification bool
 	metadataPassthrough    bool
+	cchSigning             bool
 	expiresAt              int64
 }
 
@@ -66,10 +67,11 @@ func storeBackendModeCache(enabled bool, ttl time.Duration) {
 	})
 }
 
-func storeGatewayForwardingCache(fingerprintUnification, metadataPassthrough bool, ttl time.Duration) {
+func storeGatewayForwardingCache(fingerprintUnification, metadataPassthrough, cchSigning bool, ttl time.Duration) {
 	gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{
 		fingerprintUnification: fingerprintUnification,
 		metadataPassthrough:    metadataPassthrough,
+		cchSigning:             cchSigning,
 		expiresAt:              time.Now().Add(ttl).UnixNano(),
 	})
 }
@@ -82,7 +84,7 @@ func refreshSettingRuntimeCaches(settings *SystemSettings) {
 	storeBackendModeCache(settings.BackendModeEnabled, backendModeCacheTTL)
 
 	gatewayForwardingSF.Forget("gateway_forwarding")
-	storeGatewayForwardingCache(settings.EnableFingerprintUnification, settings.EnableMetadataPassthrough, gatewayForwardingCacheTTL)
+	storeGatewayForwardingCache(settings.EnableFingerprintUnification, settings.EnableMetadataPassthrough, settings.EnableCCHSigning, gatewayForwardingCacheTTL)
 }
 
 // IsBackendModeEnabled checks if backend mode is enabled.
@@ -126,16 +128,17 @@ func (s *SettingService) IsBackendModeEnabled(ctx context.Context) bool {
 }
 
 // GetGatewayForwardingSettings returns cached gateway forwarding settings.
-func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fingerprintUnification, metadataPassthrough bool) {
+func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fingerprintUnification, metadataPassthrough, cchSigning bool) {
 	if cached, ok := gatewayForwardingCache.Load().(*cachedGatewayForwardingSettings); ok && cached != nil {
 		if time.Now().UnixNano() < cached.expiresAt {
-			return cached.fingerprintUnification, cached.metadataPassthrough
+			return cached.fingerprintUnification, cached.metadataPassthrough, cached.cchSigning
 		}
 	}
 
 	type gatewayForwardingResult struct {
 		fingerprintUnification bool
 		metadataPassthrough    bool
+		cchSigning             bool
 	}
 
 	val, _, _ := gatewayForwardingSF.Do("gateway_forwarding", func() (any, error) {
@@ -144,6 +147,7 @@ func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fing
 				return gatewayForwardingResult{
 					fingerprintUnification: cached.fingerprintUnification,
 					metadataPassthrough:    cached.metadataPassthrough,
+					cchSigning:             cached.cchSigning,
 				}, nil
 			}
 		}
@@ -154,13 +158,15 @@ func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fing
 		values, err := s.settingRepo.GetMultiple(dbCtx, []string{
 			SettingKeyEnableFingerprintUnification,
 			SettingKeyEnableMetadataPassthrough,
+			SettingKeyEnableCCHSigning,
 		})
 		if err != nil {
 			slog.Warn("failed to get gateway forwarding settings", "error", err)
-			storeGatewayForwardingCache(true, false, gatewayForwardingErrorTTL)
+			storeGatewayForwardingCache(true, false, false, gatewayForwardingErrorTTL)
 			return gatewayForwardingResult{
 				fingerprintUnification: true,
 				metadataPassthrough:    false,
+				cchSigning:             false,
 			}, nil
 		}
 
@@ -169,16 +175,18 @@ func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fing
 			fingerprintUnification = value == "true"
 		}
 		metadataPassthrough = values[SettingKeyEnableMetadataPassthrough] == "true"
-		storeGatewayForwardingCache(fingerprintUnification, metadataPassthrough, gatewayForwardingCacheTTL)
+		cchSigning = values[SettingKeyEnableCCHSigning] == "true"
+		storeGatewayForwardingCache(fingerprintUnification, metadataPassthrough, cchSigning, gatewayForwardingCacheTTL)
 		return gatewayForwardingResult{
 			fingerprintUnification: fingerprintUnification,
 			metadataPassthrough:    metadataPassthrough,
+			cchSigning:             cchSigning,
 		}, nil
 	})
 	if result, ok := val.(gatewayForwardingResult); ok {
-		return result.fingerprintUnification, result.metadataPassthrough
+		return result.fingerprintUnification, result.metadataPassthrough, result.cchSigning
 	}
-	return true, false
+	return true, false, false
 }
 
 // GetClaudeCodeVersionBounds 获取 Claude Code 版本号上下限要求。

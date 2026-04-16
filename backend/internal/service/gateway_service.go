@@ -285,7 +285,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 	// Beta policy: evaluate once; block check + cache filter set for buildUpstreamRequest.
 	// Always overwrite the cache to prevent stale values from a previous retry with a different account.
-	if err := s.initializeForwardBetaPolicy(ctx, c, account); err != nil {
+	if err := s.initializeForwardBetaPolicy(ctx, c, account, parsed.Model); err != nil {
 		return nil, err
 	}
 

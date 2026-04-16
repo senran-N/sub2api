@@ -265,3 +265,46 @@ func TestResolveBedrockBetaTokensForRequest_PassesWhenNoBlockRuleMatches(t *test
 		t.Fatal("expected interleaved-thinking token to be present")
 	}
 }
+
+func TestResolveBedrockBetaTokensForRequest_UsesFallbackBlockForNonWhitelistedModels(t *testing.T) {
+	settings := &BetaPolicySettings{
+		Rules: []BetaPolicyRule{
+			{
+				BetaToken:            "interleaved-thinking-2025-05-14",
+				Action:               BetaPolicyActionPass,
+				Scope:                BetaPolicyScopeAll,
+				ModelWhitelist:       []string{"us.anthropic.claude-opus-*"},
+				FallbackAction:       BetaPolicyActionBlock,
+				FallbackErrorMessage: "thinking only allowed for opus",
+			},
+		},
+	}
+	raw, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatalf("marshal settings: %v", err)
+	}
+
+	svc := &GatewayService{
+		settingService: NewSettingService(
+			&betaPolicySettingRepoStub{values: map[string]string{
+				SettingKeyBetaPolicySettings: string(raw),
+			}},
+			&config.Config{},
+		),
+	}
+	account := &Account{Platform: PlatformAnthropic, Type: AccountTypeBedrock}
+
+	_, err = svc.resolveBedrockBetaTokensForRequest(
+		context.Background(),
+		account,
+		"",
+		[]byte(`{"thinking":{"type":"enabled","budget_tokens":10000},"messages":[{"role":"user","content":"hi"}]}`),
+		"us.anthropic.claude-sonnet-4-6-v1",
+	)
+	if err == nil {
+		t.Fatal("expected non-whitelisted model to be blocked by fallback action")
+	}
+	if err.Error() != "thinking only allowed for opus" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

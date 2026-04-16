@@ -133,7 +133,7 @@ func TestGatewayService_InitializeForwardBetaPolicy_CachesFilterSet(t *testing.T
 		),
 	}
 
-	err = svc.initializeForwardBetaPolicy(context.Background(), c, &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth})
+	err = svc.initializeForwardBetaPolicy(context.Background(), c, &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth}, "")
 
 	require.NoError(t, err)
 	value, ok := c.Get(betaPolicyFilterSetKey)
@@ -173,10 +173,55 @@ func TestGatewayService_InitializeForwardBetaPolicy_ReturnsBlockError(t *testing
 		),
 	}
 
-	err = svc.initializeForwardBetaPolicy(context.Background(), c, &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth})
+	err = svc.initializeForwardBetaPolicy(context.Background(), c, &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth}, "")
 
 	require.Error(t, err)
 	require.Equal(t, "thinking blocked", err.Error())
 	_, exists := c.Get(betaPolicyFilterSetKey)
+	require.False(t, exists)
+}
+
+func TestGatewayService_InitializeForwardBetaPolicy_RespectsModelWhitelist(t *testing.T) {
+	settings := &BetaPolicySettings{
+		Rules: []BetaPolicyRule{
+			{
+				BetaToken:      "context-1m-2025-08-07",
+				Action:         BetaPolicyActionFilter,
+				Scope:          BetaPolicyScopeAll,
+				ModelWhitelist: []string{"claude-opus-*"},
+			},
+		},
+	}
+	raw, err := json.Marshal(settings)
+	require.NoError(t, err)
+
+	svc := &GatewayService{
+		settingService: NewSettingService(
+			&betaPolicySettingRepoStub{values: map[string]string{
+				SettingKeyBetaPolicySettings: string(raw),
+			}},
+			&config.Config{},
+		),
+	}
+
+	makeContext := func() *gin.Context {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		return c
+	}
+
+	opusContext := makeContext()
+	err = svc.initializeForwardBetaPolicy(context.Background(), opusContext, &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth}, "claude-opus-4-1")
+	require.NoError(t, err)
+	opusFilterSet, _ := opusContext.Get(betaPolicyFilterSetKey)
+	_, exists := opusFilterSet.(map[string]struct{})["context-1m-2025-08-07"]
+	require.True(t, exists)
+
+	sonnetContext := makeContext()
+	err = svc.initializeForwardBetaPolicy(context.Background(), sonnetContext, &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth}, "claude-sonnet-4-1")
+	require.NoError(t, err)
+	sonnetFilterSet, _ := sonnetContext.Get(betaPolicyFilterSetKey)
+	_, exists = sonnetFilterSet.(map[string]struct{})["context-1m-2025-08-07"]
 	require.False(t, exists)
 }

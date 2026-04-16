@@ -82,7 +82,7 @@ func (s *GatewayService) normalizeForwardOAuthRequestBody(
 	if s.identityService != nil && c != nil && c.Request != nil {
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if err == nil && fp != nil {
-			_, mimicMPT := s.settingService.GetGatewayForwardingSettings(ctx)
+			_, mimicMPT, _ := s.settingService.GetGatewayForwardingSettings(ctx)
 			if !mimicMPT {
 				if metadataUserID := s.buildOAuthMetadataUserID(parsed, account, fp); metadataUserID != "" {
 					normalizeOpts.injectMetadata = true

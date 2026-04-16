@@ -84,6 +84,7 @@ function createSystemSettings(overrides: Partial<SystemSettings> = {}): SystemSe
     allow_ungrouped_key_scheduling: false,
     enable_fingerprint_unification: true,
     enable_metadata_passthrough: false,
+    enable_cch_signing: false,
     ...overrides
   }
 }

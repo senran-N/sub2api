@@ -24,13 +24,19 @@ func (s *GatewayService) buildUpstreamRequest(
 
 	state := s.prepareAnthropicRequestBuildState(ctx, account, body, extractClientHeaders(c))
 	body = state.body
+	if state.fingerprint != nil {
+		body = syncBillingHeaderVersion(body, state.fingerprint.UserAgent)
+	}
+	if state.enableCCH {
+		body = signBillingHeaderCCH(body)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 
-	policyFilterSet := s.getBetaPolicyFilterSet(ctx, c, account)
+	policyFilterSet := s.getBetaPolicyFilterSet(ctx, c, account, modelID)
 	applyAnthropicAuthHeader(req.Header, token, tokenType)
 	applyAllowedClientHeaders(req.Header, state.headers)
 	if state.fingerprint != nil {
@@ -72,6 +78,12 @@ func (s *GatewayService) buildCountTokensRequest(
 
 	state := s.prepareAnthropicRequestBuildState(ctx, account, body, extractClientHeaders(c))
 	body = state.body
+	if state.fingerprint != nil {
+		body = syncBillingHeaderVersion(body, state.fingerprint.UserAgent)
+	}
+	if state.enableCCH {
+		body = signBillingHeaderCCH(body)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -84,7 +96,7 @@ func (s *GatewayService) buildCountTokensRequest(
 		s.identityService.ApplyFingerprint(req, state.fingerprint)
 	}
 	ensureAnthropicBaseHeaders(req, tokenType)
-	s.configureCountTokensBetaHeader(req, body, account, tokenType, modelID, mimicClaudeCode, s.getBetaPolicyFilterSet(ctx, c, account))
+	s.configureCountTokensBetaHeader(req, body, account, tokenType, modelID, mimicClaudeCode, s.getBetaPolicyFilterSet(ctx, c, account, modelID))
 	syncClaudeCodeSessionHeader(req, body, tokenType == "oauth")
 	s.finalizeAnthropicRequestDebug(
 		c,

@@ -18,6 +18,7 @@ type anthropicRequestBuildState struct {
 	fingerprint *Fingerprint
 	enableFP    bool
 	enableMPT   bool
+	enableCCH   bool
 }
 
 func (s *GatewayService) resolveAnthropicUpstreamURL(account *Account, defaultURL, path string) (string, error) {
@@ -75,7 +76,7 @@ func (s *GatewayService) prepareAnthropicRequestBuildState(
 	}
 
 	if s.settingService != nil {
-		state.enableFP, state.enableMPT = s.settingService.GetGatewayForwardingSettings(ctx)
+		state.enableFP, state.enableMPT, state.enableCCH = s.settingService.GetGatewayForwardingSettings(ctx)
 	} else {
 		state.enableFP = true
 	}

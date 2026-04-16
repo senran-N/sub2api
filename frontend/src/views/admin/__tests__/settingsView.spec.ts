@@ -19,6 +19,7 @@ describe('settings feature helpers', () => {
     expect(form.site_name).toBe('Sub2API')
     expect(form.smtp_port).toBe(587)
     expect(form.enable_fingerprint_unification).toBe(true)
+    expect(form.enable_cch_signing).toBe(false)
 
     expect(createDefaultOverloadCooldownSettings()).toEqual({
       enabled: true,

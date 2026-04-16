@@ -86,7 +86,7 @@ export type SettingsCustomMenuFields = Pick<SettingsForm, 'custom_menu_items'>
 
 export type SettingsGatewayForwardingFields = Pick<
   SettingsForm,
-  'enable_fingerprint_unification' | 'enable_metadata_passthrough'
+  'enable_fingerprint_unification' | 'enable_metadata_passthrough' | 'enable_cch_signing'
 >
 
 export type SettingsSiteFields = Pick<
@@ -197,7 +197,8 @@ export function createDefaultSettingsForm(): SettingsForm {
     max_claude_code_version: '',
     allow_ungrouped_key_scheduling: false,
     enable_fingerprint_unification: true,
-    enable_metadata_passthrough: false
+    enable_metadata_passthrough: false,
+    enable_cch_signing: false
   }
 }
 
@@ -373,7 +374,8 @@ export function buildSettingsUpdatePayload(
       max_claude_code_version: form.max_claude_code_version,
       allow_ungrouped_key_scheduling: form.allow_ungrouped_key_scheduling,
       enable_fingerprint_unification: form.enable_fingerprint_unification,
-      enable_metadata_passthrough: form.enable_metadata_passthrough
+      enable_metadata_passthrough: form.enable_metadata_passthrough,
+      enable_cch_signing: form.enable_cch_signing
     }
   }
 }

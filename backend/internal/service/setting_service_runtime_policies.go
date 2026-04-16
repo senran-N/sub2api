@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // GetOverloadCooldownSettings 获取529过载冷却配置
@@ -171,7 +172,10 @@ func (s *SettingService) SetBetaPolicySettings(ctx context.Context, settings *Be
 	}
 
 	for i, rule := range settings.Rules {
-		if rule.BetaToken == "" {
+		settings.Rules[i].BetaToken = strings.TrimSpace(rule.BetaToken)
+		settings.Rules[i].ErrorMessage = strings.TrimSpace(rule.ErrorMessage)
+		settings.Rules[i].FallbackErrorMessage = strings.TrimSpace(rule.FallbackErrorMessage)
+		if settings.Rules[i].BetaToken == "" {
 			return fmt.Errorf("rule[%d]: beta_token cannot be empty", i)
 		}
 		if !validActions[rule.Action] {
@@ -179,6 +183,31 @@ func (s *SettingService) SetBetaPolicySettings(ctx context.Context, settings *Be
 		}
 		if !validScopes[rule.Scope] {
 			return fmt.Errorf("rule[%d]: invalid scope %q", i, rule.Scope)
+		}
+		normalizedWhitelist := make([]string, 0, len(rule.ModelWhitelist))
+		for _, pattern := range rule.ModelWhitelist {
+			pattern = strings.TrimSpace(pattern)
+			if pattern == "" {
+				continue
+			}
+			normalizedWhitelist = append(normalizedWhitelist, pattern)
+		}
+		settings.Rules[i].ModelWhitelist = normalizedWhitelist
+		if len(normalizedWhitelist) == 0 {
+			settings.Rules[i].FallbackAction = ""
+			settings.Rules[i].FallbackErrorMessage = ""
+			continue
+		}
+		if settings.Rules[i].FallbackAction == "" {
+			settings.Rules[i].FallbackAction = BetaPolicyActionPass
+			settings.Rules[i].FallbackErrorMessage = ""
+			continue
+		}
+		if !validActions[settings.Rules[i].FallbackAction] {
+			return fmt.Errorf("rule[%d]: invalid fallback_action %q", i, settings.Rules[i].FallbackAction)
+		}
+		if settings.Rules[i].FallbackAction != BetaPolicyActionBlock {
+			settings.Rules[i].FallbackErrorMessage = ""
 		}
 	}
 

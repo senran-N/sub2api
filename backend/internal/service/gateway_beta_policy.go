@@ -169,7 +169,7 @@ type betaPolicyResult struct {
 	filterSet map[string]struct{}
 }
 
-func (s *GatewayService) evaluateBetaPolicy(ctx context.Context, betaHeader string, account *Account) betaPolicyResult {
+func (s *GatewayService) evaluateBetaPolicy(ctx context.Context, betaHeader string, account *Account, model string) betaPolicyResult {
 	if s.settingService == nil {
 		return betaPolicyResult{}
 	}
@@ -187,11 +187,12 @@ func (s *GatewayService) evaluateBetaPolicy(ctx context.Context, betaHeader stri
 		if !betaPolicyScopeMatches(rule.Scope, isOAuth, isBedrock) {
 			continue
 		}
+		effectiveAction, effectiveErrMsg := resolveRuleAction(rule, model)
 
-		switch rule.Action {
+		switch effectiveAction {
 		case BetaPolicyActionBlock:
 			if result.blockErr == nil && betaHeader != "" && containsBetaToken(betaHeader, rule.BetaToken) {
-				message := rule.ErrorMessage
+				message := effectiveErrMsg
 				if message == "" {
 					message = "beta feature " + rule.BetaToken + " is not allowed"
 				}
@@ -229,7 +230,7 @@ func mergeDropSets(policySet map[string]struct{}, extra ...string) map[string]st
 
 const betaPolicyFilterSetKey = "betaPolicyFilterSet"
 
-func (s *GatewayService) getBetaPolicyFilterSet(ctx context.Context, c *gin.Context, account *Account) map[string]struct{} {
+func (s *GatewayService) getBetaPolicyFilterSet(ctx context.Context, c *gin.Context, account *Account, model string) map[string]struct{} {
 	if c != nil {
 		if value, ok := c.Get(betaPolicyFilterSetKey); ok {
 			if filterSet, ok := value.(map[string]struct{}); ok {
@@ -237,7 +238,7 @@ func (s *GatewayService) getBetaPolicyFilterSet(ctx context.Context, c *gin.Cont
 			}
 		}
 	}
-	return s.evaluateBetaPolicy(ctx, "", account).filterSet
+	return s.evaluateBetaPolicy(ctx, "", account, model).filterSet
 }
 
 func betaPolicyScopeMatches(scope string, isOAuth bool, isBedrock bool) bool {
@@ -253,6 +254,28 @@ func betaPolicyScopeMatches(scope string, isOAuth bool, isBedrock bool) bool {
 	default:
 		return true
 	}
+}
+
+func matchModelWhitelist(model string, whitelist []string) bool {
+	for _, pattern := range whitelist {
+		if matchModelPattern(pattern, model) {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveRuleAction(rule BetaPolicyRule, model string) (action string, errorMessage string) {
+	if len(rule.ModelWhitelist) == 0 {
+		return rule.Action, rule.ErrorMessage
+	}
+	if matchModelWhitelist(model, rule.ModelWhitelist) {
+		return rule.Action, rule.ErrorMessage
+	}
+	if rule.FallbackAction != "" {
+		return rule.FallbackAction, rule.FallbackErrorMessage
+	}
+	return BetaPolicyActionPass, ""
 }
 
 func droppedBetaSet(extra ...string) map[string]struct{} {
@@ -301,20 +324,20 @@ func (s *GatewayService) resolveBedrockBetaTokensForRequest(
 	body []byte,
 	modelID string,
 ) ([]string, error) {
-	policy := s.evaluateBetaPolicy(ctx, betaHeader, account)
+	policy := s.evaluateBetaPolicy(ctx, betaHeader, account, modelID)
 	if policy.blockErr != nil {
 		return nil, policy.blockErr
 	}
 
 	betaTokens := ResolveBedrockBetaTokens(betaHeader, body, modelID)
-	if blockErr := s.checkBetaPolicyBlockForTokens(ctx, betaTokens, account); blockErr != nil {
+	if blockErr := s.checkBetaPolicyBlockForTokens(ctx, betaTokens, account, modelID); blockErr != nil {
 		return nil, blockErr
 	}
 
 	return filterBetaTokens(betaTokens, policy.filterSet), nil
 }
 
-func (s *GatewayService) checkBetaPolicyBlockForTokens(ctx context.Context, tokens []string, account *Account) *BetaBlockedError {
+func (s *GatewayService) checkBetaPolicyBlockForTokens(ctx context.Context, tokens []string, account *Account, model string) *BetaBlockedError {
 	if s.settingService == nil || len(tokens) == 0 {
 		return nil
 	}
@@ -329,7 +352,8 @@ func (s *GatewayService) checkBetaPolicyBlockForTokens(ctx context.Context, toke
 	tokenSet := buildBetaTokenSet(tokens)
 
 	for _, rule := range settings.Rules {
-		if rule.Action != BetaPolicyActionBlock {
+		effectiveAction, effectiveErrMsg := resolveRuleAction(rule, model)
+		if effectiveAction != BetaPolicyActionBlock {
 			continue
 		}
 		if !betaPolicyScopeMatches(rule.Scope, isOAuth, isBedrock) {
@@ -339,7 +363,7 @@ func (s *GatewayService) checkBetaPolicyBlockForTokens(ctx context.Context, toke
 			continue
 		}
 
-		message := rule.ErrorMessage
+		message := effectiveErrMsg
 		if message == "" {
 			message = "beta feature " + rule.BetaToken + " is not allowed"
 		}

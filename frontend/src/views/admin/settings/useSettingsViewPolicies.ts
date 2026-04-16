@@ -64,6 +64,33 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
     return getSettingsBetaDisplayName(token)
   }
 
+  function normalizeBetaPolicyRules(rules: BetaPolicyRule[] | null | undefined): BetaPolicyRule[] {
+    if (!Array.isArray(rules)) {
+      return createDefaultBetaPolicyRules()
+    }
+
+    return rules.map((rule) => {
+      const modelWhitelist = Array.isArray(rule.model_whitelist)
+        ? rule.model_whitelist.map((pattern) => pattern.trim()).filter(Boolean)
+        : []
+      const hasWhitelist = modelWhitelist.length > 0
+      const fallbackAction = hasWhitelist ? (rule.fallback_action ?? 'pass') : undefined
+
+      return {
+        beta_token: rule.beta_token,
+        action: rule.action,
+        scope: rule.scope,
+        error_message: rule.action === 'block' ? rule.error_message?.trim() || undefined : undefined,
+        model_whitelist: modelWhitelist,
+        fallback_action: fallbackAction,
+        fallback_error_message:
+          hasWhitelist && fallbackAction === 'block'
+            ? rule.fallback_error_message?.trim() || undefined
+            : undefined
+      }
+    })
+  }
+
   function confirmAction(message: string): boolean {
     return options.confirm(message)
   }
@@ -236,7 +263,9 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
   async function loadBetaPolicySettings() {
     betaPolicyLoading.value = true
     try {
-      betaPolicyForm.rules = (await adminAPI.settings.getBetaPolicySettings()).rules
+      betaPolicyForm.rules = normalizeBetaPolicyRules(
+        (await adminAPI.settings.getBetaPolicySettings()).rules
+      )
     } catch (error) {
       console.error('Failed to load beta policy settings:', error)
     } finally {
@@ -247,11 +276,13 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
   async function saveBetaPolicySettings() {
     betaPolicySaving.value = true
     try {
+      const normalizedRules = normalizeBetaPolicyRules(betaPolicyForm.rules)
       betaPolicyForm.rules = (
         await adminAPI.settings.updateBetaPolicySettings({
-          rules: betaPolicyForm.rules
+          rules: normalizedRules
         })
       ).rules
+      betaPolicyForm.rules = normalizeBetaPolicyRules(betaPolicyForm.rules)
       options.showSuccess(options.t('admin.settings.betaPolicy.saved'))
     } catch (error) {
       options.showError(

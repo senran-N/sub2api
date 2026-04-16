@@ -4351,6 +4351,8 @@ export default {
         fingerprintUnificationHint: 'Unify X-Stainless-* headers across users sharing the same OAuth account. Disabling passes through each client\'s original headers.',
         metadataPassthrough: 'Metadata Passthrough',
         metadataPassthroughHint: 'Pass through client\'s original metadata.user_id without rewriting. May improve upstream cache hit rates.',
+        cchSigning: 'CCH Signing',
+        cchSigningHint: 'Replace the billing header cch placeholder with a deterministic hash after request mutations.',
       },
       site: {
         title: 'Site Settings',
@@ -4572,7 +4574,12 @@ export default {
         errorMessagePlaceholder: 'Custom error message when blocked',
         errorMessageHint: 'Leave empty for default message',
         saved: 'Beta policy settings saved',
-        saveFailed: 'Failed to save beta policy settings'
+        saveFailed: 'Failed to save beta policy settings',
+        modelWhitelist: 'Model Whitelist',
+        modelWhitelistHint: 'One pattern per line. Leave empty to apply the rule to all models. Supports exact match and wildcard prefix like claude-opus-*.',
+        modelPatternPlaceholder: 'claude-opus-*\nclaude-opus-4-1',
+        fallbackAction: 'Fallback Action',
+        fallbackErrorMessagePlaceholder: 'Custom error message when non-whitelisted models are blocked'
       },
       saveSettings: 'Save Settings',
       saving: 'Saving...',

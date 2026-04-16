@@ -86,7 +86,10 @@ describe('useSettingsViewPolicies', () => {
           beta_token: 'fast-mode-2026-02-01',
           action: 'filter',
           scope: 'oauth',
-          error_message: 'blocked'
+          error_message: 'blocked',
+          model_whitelist: [' claude-opus-* ', '', 'claude-opus-4-1'],
+          fallback_action: 'block',
+          fallback_error_message: '  fallback blocked  '
         }
       ]
     })
@@ -191,6 +194,11 @@ describe('useSettingsViewPolicies', () => {
     expect(state.getBetaDisplayName('fast-mode-2026-02-01')).toBe('Fast Mode')
     expect(state.betaPolicyActionOptions.value).toHaveLength(3)
     expect(state.betaPolicyScopeOptions.value).toHaveLength(4)
+    expect(state.betaPolicyForm.rules[0].model_whitelist).toEqual([
+      'claude-opus-*',
+      'claude-opus-4-1'
+    ])
+    expect(state.betaPolicyForm.rules[0].fallback_error_message).toBe('fallback blocked')
     await state.saveBetaPolicySettings()
     expect(updateBetaPolicySettings).toHaveBeenCalledWith({
       rules: [
@@ -198,7 +206,10 @@ describe('useSettingsViewPolicies', () => {
           beta_token: 'fast-mode-2026-02-01',
           action: 'filter',
           scope: 'oauth',
-          error_message: 'blocked'
+          error_message: undefined,
+          model_whitelist: ['claude-opus-*', 'claude-opus-4-1'],
+          fallback_action: 'block',
+          fallback_error_message: 'fallback blocked'
         }
       ]
     })

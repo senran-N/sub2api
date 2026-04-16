@@ -67,6 +67,47 @@
               {{ t('admin.settings.betaPolicy.errorMessageHint') }}
             </p>
           </div>
+
+          <div class="mt-3">
+            <label class="settings-beta-policy-card__field-label mb-1 block text-xs font-medium">
+              {{ t('admin.settings.betaPolicy.modelWhitelist') }}
+            </label>
+            <textarea
+              :model-value="stringifyModelWhitelist(rule.model_whitelist)"
+              class="input settings-beta-policy-card__textarea"
+              rows="3"
+              :placeholder="t('admin.settings.betaPolicy.modelPatternPlaceholder')"
+              @input="updateModelWhitelist(rule, $event)"
+            ></textarea>
+            <p class="settings-beta-policy-card__hint mt-1 text-xs">
+              {{ t('admin.settings.betaPolicy.modelWhitelistHint') }}
+            </p>
+          </div>
+
+          <div v-if="hasModelWhitelist(rule)" class="mt-3 grid grid-cols-2 gap-4">
+            <div>
+              <label class="settings-beta-policy-card__field-label mb-1 block text-xs font-medium">
+                {{ t('admin.settings.betaPolicy.fallbackAction') }}
+              </label>
+              <Select
+                :model-value="rule.fallback_action ?? 'pass'"
+                :options="actionOptions"
+                @update:model-value="updateFallbackAction(rule, $event as BetaPolicyRule['action'])"
+              />
+            </div>
+
+            <div v-if="rule.fallback_action === 'block'">
+              <label class="settings-beta-policy-card__field-label mb-1 block text-xs font-medium">
+                {{ t('admin.settings.betaPolicy.errorMessage') }}
+              </label>
+              <input
+                v-model="rule.fallback_error_message"
+                type="text"
+                class="input"
+                :placeholder="t('admin.settings.betaPolicy.fallbackErrorMessagePlaceholder')"
+              />
+            </div>
+          </div>
         </div>
 
         <div class="settings-beta-policy-card__footer flex justify-end pt-4">
@@ -123,6 +164,46 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+function stringifyModelWhitelist(patterns?: string[]) {
+  return Array.isArray(patterns) ? patterns.join('\n') : ''
+}
+
+function hasModelWhitelist(rule: BetaPolicyRule) {
+  return Array.isArray(rule.model_whitelist) && rule.model_whitelist.length > 0
+}
+
+function updateModelWhitelist(rule: BetaPolicyRule, event: Event) {
+  const target = event.target as HTMLTextAreaElement | null
+  if (!target) {
+    rule.model_whitelist = []
+    rule.fallback_action = undefined
+    rule.fallback_error_message = undefined
+    return
+  }
+
+  rule.model_whitelist = target.value
+    .split('\n')
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
+
+  if (!hasModelWhitelist(rule)) {
+    rule.fallback_action = undefined
+    rule.fallback_error_message = undefined
+    return
+  }
+
+  if (!rule.fallback_action) {
+    rule.fallback_action = 'pass'
+  }
+}
+
+function updateFallbackAction(rule: BetaPolicyRule, action: BetaPolicyRule['action']) {
+  rule.fallback_action = action
+  if (action !== 'block') {
+    rule.fallback_error_message = undefined
+  }
+}
 </script>
 
 <style scoped>
@@ -172,5 +253,10 @@ const { t } = useI18n()
     var(--theme-settings-beta-policy-token-padding-x);
   background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
   color: var(--theme-page-muted);
+}
+
+.settings-beta-policy-card__textarea {
+  min-height: 5.5rem;
+  resize: vertical;
 }
 </style>

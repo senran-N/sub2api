@@ -100,7 +100,9 @@ describe('settings policy cards', () => {
         beta_token: 'fast-mode-2026-02-01',
         action: 'block',
         scope: 'all',
-        error_message: 'blocked'
+        error_message: 'blocked',
+        model_whitelist: ['claude-opus-*'],
+        fallback_action: 'filter'
       }
     ]
 
@@ -125,6 +127,8 @@ describe('settings policy cards', () => {
 
     expect(wrapper.text()).toContain('FAST-MODE-2026-02-01')
     expect(wrapper.find('input').element.value).toBe('blocked')
+    await wrapper.find('textarea').setValue('claude-opus-*\nclaude-opus-4-1')
+    expect(rules[0].model_whitelist).toEqual(['claude-opus-*', 'claude-opus-4-1'])
 
     await wrapper.find('button.btn-primary').trigger('click')
 

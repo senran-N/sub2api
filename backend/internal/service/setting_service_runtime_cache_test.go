@@ -81,15 +81,17 @@ func TestGetGatewayForwardingSettings_FailOpenOnRepoError(t *testing.T) {
 			require.ElementsMatch(t, []string{
 				SettingKeyEnableFingerprintUnification,
 				SettingKeyEnableMetadataPassthrough,
+				SettingKeyEnableCCHSigning,
 			}, keys)
 			return nil, errors.New("db down")
 		},
 	}
 	svc := NewSettingService(repo, &config.Config{})
 
-	fingerprintUnification, metadataPassthrough := svc.GetGatewayForwardingSettings(context.Background())
+	fingerprintUnification, metadataPassthrough, cchSigning := svc.GetGatewayForwardingSettings(context.Background())
 	require.True(t, fingerprintUnification)
 	require.False(t, metadataPassthrough)
+	require.False(t, cchSigning)
 	require.Equal(t, 1, repo.getMultiCalls)
 }
 
@@ -101,18 +103,21 @@ func TestGetGatewayForwardingSettings_CachesResult(t *testing.T) {
 			return map[string]string{
 				SettingKeyEnableFingerprintUnification: "false",
 				SettingKeyEnableMetadataPassthrough:    "true",
+				SettingKeyEnableCCHSigning:             "true",
 			}, nil
 		},
 	}
 	svc := NewSettingService(repo, &config.Config{})
 
-	fingerprintUnification, metadataPassthrough := svc.GetGatewayForwardingSettings(context.Background())
+	fingerprintUnification, metadataPassthrough, cchSigning := svc.GetGatewayForwardingSettings(context.Background())
 	require.False(t, fingerprintUnification)
 	require.True(t, metadataPassthrough)
+	require.True(t, cchSigning)
 
-	fingerprintUnification, metadataPassthrough = svc.GetGatewayForwardingSettings(context.Background())
+	fingerprintUnification, metadataPassthrough, cchSigning = svc.GetGatewayForwardingSettings(context.Background())
 	require.False(t, fingerprintUnification)
 	require.True(t, metadataPassthrough)
+	require.True(t, cchSigning)
 	require.Equal(t, 1, repo.getMultiCalls)
 }
 
@@ -146,7 +151,7 @@ func TestGetClaudeCodeVersionBounds_CachesResult(t *testing.T) {
 func TestUpdateSettings_InvalidatesGatewayForwardingAndVersionBoundsCaches(t *testing.T) {
 	resetRuntimeSettingCaches(t)
 
-	storeGatewayForwardingCache(true, false, gatewayForwardingCacheTTL)
+	storeGatewayForwardingCache(true, false, false, gatewayForwardingCacheTTL)
 	storeVersionBoundsCache("0.0.1", "0.0.2", versionBoundsCacheTTL)
 
 	repo := &runtimeCacheRepoStub{
@@ -162,14 +167,16 @@ func TestUpdateSettings_InvalidatesGatewayForwardingAndVersionBoundsCaches(t *te
 	err := svc.UpdateSettings(context.Background(), &SystemSettings{
 		EnableFingerprintUnification: false,
 		EnableMetadataPassthrough:    true,
+		EnableCCHSigning:             true,
 		MinClaudeCodeVersion:         "2.0.0",
 		MaxClaudeCodeVersion:         "3.0.0",
 	})
 	require.NoError(t, err)
 
-	fingerprintUnification, metadataPassthrough := svc.GetGatewayForwardingSettings(context.Background())
+	fingerprintUnification, metadataPassthrough, cchSigning := svc.GetGatewayForwardingSettings(context.Background())
 	require.False(t, fingerprintUnification)
 	require.True(t, metadataPassthrough)
+	require.True(t, cchSigning)
 
 	min, max := svc.GetClaudeCodeVersionBounds(context.Background())
 	require.Equal(t, "2.0.0", min)
