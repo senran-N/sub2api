@@ -146,6 +146,21 @@ func TestApplyCodexOAuthTransform_CompactForcesNonStreaming(t *testing.T) {
 	require.True(t, result.Modified)
 }
 
+func TestApplyCodexOAuthTransform_StripsPromptCacheRetention(t *testing.T) {
+	reqBody := map[string]any{
+		"model":                  "gpt-5.1",
+		"prompt_cache_retention": "24h",
+		"input": []any{
+			map[string]any{"role": "user", "content": "hello"},
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, false, false)
+
+	_, exists := reqBody["prompt_cache_retention"]
+	require.False(t, exists)
+}
+
 func TestApplyCodexOAuthTransform_NonContinuationDefaultsStoreFalseAndStripsIDs(t *testing.T) {
 	// 非续链场景：未设置 store 时默认 false，并移除 input 中的 id。
 

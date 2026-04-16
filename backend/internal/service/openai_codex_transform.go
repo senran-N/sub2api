@@ -194,6 +194,7 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 		"top_p",
 		"frequency_penalty",
 		"presence_penalty",
+		"prompt_cache_retention",
 	} {
 		if _, ok := reqBody[key]; ok {
 			delete(reqBody, key)
