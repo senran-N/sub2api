@@ -164,4 +164,18 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "custom/upstream-model")
 		}
 	})
+
+	t.Run("api key accounts preserve official non-codex models", func(t *testing.T) {
+		account := &Account{Type: AccountTypeAPIKey}
+		if got := normalizeOpenAIModelForUpstream(account, "gpt-4.1"); got != "gpt-4.1" {
+			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gpt-4.1")
+		}
+	})
+
+	t.Run("api key accounts preserve arbitrary compatible upstream models", func(t *testing.T) {
+		account := &Account{Type: AccountTypeAPIKey}
+		if got := normalizeOpenAIModelForUpstream(account, "gemini-3-flash-preview"); got != "gemini-3-flash-preview" {
+			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gemini-3-flash-preview")
+		}
+	})
 }
