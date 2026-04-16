@@ -308,6 +308,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	if c != nil {
 		SetOpsLatencyMs(c, OpsOpenAIWSConnPickMsKey, lease.ConnPickDuration().Milliseconds())
 		SetOpsLatencyMs(c, OpsOpenAIWSQueueWaitMsKey, lease.QueueWaitDuration().Milliseconds())
+		SetOpsLatencyMs(c, OpsOpenAIWSPrewarmMsKey, 0)
 		c.Set(OpsOpenAIWSConnReusedKey, lease.Reused())
 		if connID != "" {
 			c.Set(OpsOpenAIWSConnIDKey, connID)
@@ -331,18 +332,13 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		}
 	}
 
-	if err := s.performOpenAIWSGeneratePrewarm(
-		ctx,
-		lease,
-		decision,
-		payload,
-		previousResponseID,
-		reqBody,
-		account,
-		stateStore,
-		groupID,
-	); err != nil {
-		return nil, err
+	if s.isOpenAIWSGeneratePrewarmEnabled() {
+		logOpenAIWSModeInfo(
+			"prewarm_skip account_id=%d conn_id=%s reason=request_path_disabled transport=%s",
+			account.ID,
+			connID,
+			normalizeOpenAIWSLogValue(string(decision.Transport)),
+		)
 	}
 	relayResult, err := s.relayOpenAIWSForwardV2(openAIWSForwardRelayRequest{
 		ctx:                       ctx,

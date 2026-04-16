@@ -783,7 +783,7 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnExplicitC
 	require.Equal(t, "turn_state_first", secondHandshakeHeaders.Get("X-Codex-Turn-State"))
 }
 
-func TestOpenAIGatewayService_Forward_WSv2_GeneratePrewarm(t *testing.T) {
+func TestOpenAIGatewayService_Forward_WSv2_ConfiguredGeneratePrewarmDoesNotBlockRequestPath(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -805,7 +805,6 @@ func TestOpenAIGatewayService_Forward_WSv2_GeneratePrewarm(t *testing.T) {
 
 	captureConn := &openAIWSCaptureConn{
 		events: [][]byte{
-			[]byte(`{"type":"response.completed","response":{"id":"resp_prewarm_1","model":"gpt-5.1","usage":{"input_tokens":0,"output_tokens":0}}}`),
 			[]byte(`{"type":"response.completed","response":{"id":"resp_main_1","model":"gpt-5.1","usage":{"input_tokens":4,"output_tokens":2}}}`),
 		},
 	}
@@ -844,12 +843,12 @@ func TestOpenAIGatewayService_Forward_WSv2_GeneratePrewarm(t *testing.T) {
 	require.NotNil(t, result)
 	require.Equal(t, "resp_main_1", result.RequestID)
 
-	require.Len(t, captureConn.writes, 2, "开启 generate=false 预热后应发送两次 WS 请求")
+	require.Len(t, captureConn.writes, 1, "请求路径不应再同步发送 generate=false 预热")
 	firstWrite := requestToJSONString(captureConn.writes[0])
-	secondWrite := requestToJSONString(captureConn.writes[1])
-	require.True(t, gjson.Get(firstWrite, "generate").Exists())
-	require.False(t, gjson.Get(firstWrite, "generate").Bool())
-	require.False(t, gjson.Get(secondWrite, "generate").Exists())
+	require.False(t, gjson.Get(firstWrite, "generate").Exists())
+	prewarmLatency, ok := c.Get(OpsOpenAIWSPrewarmMsKey)
+	require.True(t, ok)
+	require.EqualValues(t, 0, prewarmLatency)
 }
 
 func TestOpenAIGatewayService_PrewarmReadHonorsParentContext(t *testing.T) {

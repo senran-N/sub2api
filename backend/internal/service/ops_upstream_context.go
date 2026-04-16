@@ -30,6 +30,7 @@ const (
 	// OpenAI WS 关键观测字段
 	OpsOpenAIWSQueueWaitMsKey = "ops_openai_ws_queue_wait_ms"
 	OpsOpenAIWSConnPickMsKey  = "ops_openai_ws_conn_pick_ms"
+	OpsOpenAIWSPrewarmMsKey   = "ops_openai_ws_prewarm_ms"
 	OpsOpenAIWSConnReusedKey  = "ops_openai_ws_conn_reused"
 	OpsOpenAIWSConnIDKey      = "ops_openai_ws_conn_id"
 
