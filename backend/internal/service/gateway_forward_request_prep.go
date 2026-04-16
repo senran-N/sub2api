@@ -70,24 +70,26 @@ func (s *GatewayService) normalizeForwardOAuthRequestBody(
 		systemRewritten = true
 	}
 
-	if !isHaikuModel && s.identityService != nil && c != nil && c.Request != nil {
-		if fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header); err == nil && fp != nil {
-			if attrHeader := buildAttributionHeaderText(body, fp.UserAgent); attrHeader != "" {
-				body = injectAttributionHeaderBlock(body, attrHeader)
-			}
+	var fingerprint *Fingerprint
+	if s.identityService != nil && c != nil && c.Request != nil {
+		if fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header); err == nil {
+			fingerprint = fp
+		}
+	}
+
+	if !isHaikuModel && fingerprint != nil {
+		if attrHeader := buildAttributionHeaderText(body, fingerprint.UserAgent); attrHeader != "" {
+			body = injectAttributionHeaderBlock(body, attrHeader)
 		}
 	}
 
 	normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: !systemRewritten}
-	if s.identityService != nil && c != nil && c.Request != nil {
-		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
-		if err == nil && fp != nil {
-			_, mimicMPT, _ := s.settingService.GetGatewayForwardingSettings(ctx)
-			if !mimicMPT {
-				if metadataUserID := s.buildOAuthMetadataUserID(parsed, account, fp); metadataUserID != "" {
-					normalizeOpts.injectMetadata = true
-					normalizeOpts.metadataUserID = metadataUserID
-				}
+	if fingerprint != nil {
+		_, mimicMPT, _ := s.settingService.GetGatewayForwardingSettings(ctx)
+		if !mimicMPT {
+			if metadataUserID := s.buildOAuthMetadataUserID(parsed, account, fingerprint); metadataUserID != "" {
+				normalizeOpts.injectMetadata = true
+				normalizeOpts.metadataUserID = metadataUserID
 			}
 		}
 	}

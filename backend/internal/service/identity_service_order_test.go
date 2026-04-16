@@ -9,12 +9,14 @@ import (
 )
 
 type identityCacheStub struct {
+	getFingerprintCount int
 	maskedSessionID     string
 	fingerprint         *Fingerprint
 	setFingerprintCount int
 }
 
 func (s *identityCacheStub) GetFingerprint(_ context.Context, _ int64) (*Fingerprint, error) {
+	s.getFingerprintCount++
 	return cloneFingerprintForTest(s.fingerprint), nil
 }
 func (s *identityCacheStub) SetFingerprint(_ context.Context, _ int64, fp *Fingerprint) error {

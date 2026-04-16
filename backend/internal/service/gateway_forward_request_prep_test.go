@@ -1,8 +1,14 @@
 package service
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/domain"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -121,4 +127,62 @@ func TestGatewayService_ResolveForwardProxyURL_UsesProxyForStandardUpstream(t *t
 	}
 
 	require.Equal(t, "socks5://127.0.0.1:1080", svc.resolveForwardProxyURL(account))
+}
+
+func TestGatewayService_NormalizeForwardOAuthRequestBody_ReusesSingleFingerprintLookup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	storeGatewayForwardingCache(true, false, false, time.Minute)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	c.Request.Header.Set("User-Agent", "claude-cli/2.1.88 (external, cli)")
+
+	cache := &identityCacheStub{
+		fingerprint: &Fingerprint{
+			ClientID:  "clientid123",
+			UserAgent: "claude-cli/2.1.88 (external, cli)",
+		},
+	}
+	svc := &GatewayService{
+		identityService: NewIdentityService(cache),
+		settingService:  NewSettingService(&gatewayForwardingRepoStub{}, &config.Config{}),
+	}
+	account := &Account{
+		ID:       123,
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeOAuth,
+		Extra: map[string]any{
+			"account_uuid": "acc-uuid",
+		},
+	}
+	parsed := &ParsedRequest{
+		Model: "claude-sonnet-4-5",
+		Messages: []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{
+						"type": "text",
+						"text": "hello from cli",
+					},
+				},
+			},
+		},
+	}
+	body := []byte(`{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":[{"type":"text","text":"hello from cli"}]}]}`)
+
+	gotBody, gotModel := svc.normalizeForwardOAuthRequestBody(context.Background(), c, account, parsed, body, parsed.Model)
+
+	require.Equal(t, "claude-sonnet-4-5-20250929", gotModel)
+	require.Equal(t, 1, cache.getFingerprintCount)
+	require.Equal(t, buildAttributionHeaderText(body, cache.fingerprint.UserAgent), gjson.GetBytes(gotBody, "system.0.text").String())
+
+	metadataUserID := gjson.GetBytes(gotBody, "metadata.user_id").String()
+	require.NotEmpty(t, metadataUserID)
+	parsedUserID := ParseMetadataUserID(metadataUserID)
+	require.NotNil(t, parsedUserID)
+	require.True(t, parsedUserID.IsNewFormat)
+	require.Equal(t, "clientid123", parsedUserID.DeviceID)
+	require.Equal(t, "acc-uuid", parsedUserID.AccountUUID)
 }
