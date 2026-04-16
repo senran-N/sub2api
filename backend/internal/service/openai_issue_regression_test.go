@@ -74,6 +74,34 @@ func TestHandleChatBufferedStreamingResponse_ForcesJSONContentTypeAndRepairsOutp
 	require.Contains(t, rec.Body.String(), `"content":"hello world"`)
 }
 
+func TestHandleAnthropicBufferedStreamingResponse_RebuildsOutputFromDeltasOnResponseDone(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid-anthropic"}},
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`data: {"type":"response.created","response":{"id":"resp_messages","object":"response","model":"gpt-5.4","status":"in_progress","output":[]}}`,
+			`data: {"type":"response.output_text.delta","delta":"hello world"}`,
+			`data: {"type":"response.done","response":{"id":"resp_messages","object":"response","model":"gpt-5.4","status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":2}}}`,
+			`data: [DONE]`,
+		}, "\n"))),
+	}
+
+	svc := &OpenAIGatewayService{}
+	result, err := svc.handleAnthropicBufferedStreamingResponse(resp, c, "gpt-5.4", "gpt-5.4", time.Now())
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 3, result.Usage.InputTokens)
+	require.Equal(t, 2, result.Usage.OutputTokens)
+	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	require.Equal(t, "gpt-5.4", gjson.GetBytes(rec.Body.Bytes(), "model").String())
+	require.Equal(t, "hello world", gjson.GetBytes(rec.Body.Bytes(), "content.0.text").String())
+}
+
 func TestOpenAIStreamEventIsTerminal_AcceptsIncompleteAndCancelledVariants(t *testing.T) {
 	require.True(t, openAIStreamEventIsTerminal(`{"type":"response.incomplete"}`))
 	require.True(t, openAIStreamEventIsTerminal(`{"type":"response.cancelled"}`))
