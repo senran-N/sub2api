@@ -150,7 +150,6 @@
         <button
           type="button"
           class="btn btn-secondary account-test-modal__footer-button"
-          :disabled="status === 'connecting'"
           @click="handleClose"
         >
           {{ t('common.close') }}
@@ -250,8 +249,6 @@ const getPrimaryActionClasses = () => {
 }
 
 const handleClose = () => {
-  if (status.value === 'connecting') return
-
   cancelActiveRequest()
   emit('close')
 }

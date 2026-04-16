@@ -1,4 +1,4 @@
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Account, AccountUsageInfo, GeminiCredentials, WindowStats } from '@/types'
 import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
@@ -23,15 +23,33 @@ interface QuotaBarInfo {
 
 type Translate = (key: string) => string
 
+interface AccountUsageCellStateOptions {
+  rootRef?: Ref<HTMLElement | null>
+}
+
 export function useAccountUsageCellState(
   props: Required<AccountUsageCellProps>,
-  t: Translate
+  t: Translate,
+  options: AccountUsageCellStateOptions = {}
 ) {
+  const desktopViewportQuery = '(min-width: 1024px)'
   const loading = ref(false)
   const activeQueryLoading = ref(false)
   const error = ref<string | null>(null)
   const usageInfo = ref<AccountUsageInfo | null>(null)
   const linkCopied = ref(false)
+  const isDesktopViewport = ref(
+    typeof window === 'undefined' || typeof window.matchMedia !== 'function'
+      ? true
+      : window.matchMedia(desktopViewportQuery).matches
+  )
+  const hasEnteredViewport = ref(isDesktopViewport.value)
+  const pendingAutoLoad = ref(false)
+  const pendingAutoLoadSource = ref<'passive' | 'active' | undefined>(undefined)
+
+  let desktopViewportMediaQuery: MediaQueryList | null = null
+  let desktopViewportListener: ((event: MediaQueryListEvent) => void) | null = null
+  let visibilityObserver: IntersectionObserver | null = null
 
   const showUsageWindows = computed(() => {
     if (props.account.platform === 'gemini') return true
@@ -73,6 +91,7 @@ export function useAccountUsageCellState(
   const openAIUsageRefreshKey = computed(() => buildOpenAIUsageRefreshKey(props.account))
 
   const shouldAutoLoadUsageOnMount = computed(() => shouldFetchUsage.value)
+  const shouldLazyLoadOnMobile = computed(() => shouldFetchUsage.value && !isDesktopViewport.value)
 
   const hasAntigravityQuotaFromAPI = computed(() => {
     return (
@@ -507,6 +526,59 @@ export function useAccountUsageCellState(
     }
   }
 
+  const flushPendingAutoLoad = () => {
+    if (!pendingAutoLoad.value) return
+    const source = pendingAutoLoadSource.value
+    pendingAutoLoad.value = false
+    pendingAutoLoadSource.value = undefined
+    void loadUsage(source).catch((caughtError) => {
+      console.error('Failed to load deferred usage:', caughtError)
+    })
+  }
+
+  const requestAutoLoad = (source?: 'passive' | 'active') => {
+    if (!shouldFetchUsage.value) return
+    if (shouldLazyLoadOnMobile.value && !hasEnteredViewport.value) {
+      pendingAutoLoad.value = true
+      pendingAutoLoadSource.value = source
+      return
+    }
+    void loadUsage(source).catch((caughtError) => {
+      console.error('Failed to auto load usage:', caughtError)
+    })
+  }
+
+  const detachVisibilityObserver = () => {
+    visibilityObserver?.disconnect()
+    visibilityObserver = null
+  }
+
+  const attachVisibilityObserver = () => {
+    detachVisibilityObserver()
+    if (!shouldLazyLoadOnMobile.value || hasEnteredViewport.value) return
+
+    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') {
+      hasEnteredViewport.value = true
+      flushPendingAutoLoad()
+      return
+    }
+
+    const rootEl = options.rootRef?.value
+    if (!rootEl) return
+
+    visibilityObserver = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      hasEnteredViewport.value = true
+      detachVisibilityObserver()
+      flushPendingAutoLoad()
+    }, {
+      root: null,
+      rootMargin: '200px 0px',
+      threshold: 0.01
+    })
+    visibilityObserver.observe(rootEl)
+  }
+
   const makeQuotaBar = (used: number, limit: number, startKey?: string): QuotaBarInfo => {
     const utilization = limit > 0 ? (used / limit) * 100 : 0
     let resetsAt: string | null = null
@@ -582,19 +654,31 @@ export function useAccountUsageCellState(
   })
 
   onMounted(() => {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      desktopViewportMediaQuery = window.matchMedia(desktopViewportQuery)
+      isDesktopViewport.value = desktopViewportMediaQuery.matches
+      hasEnteredViewport.value = desktopViewportMediaQuery.matches
+      desktopViewportListener = (event: MediaQueryListEvent) => {
+        isDesktopViewport.value = event.matches
+      }
+      if (typeof desktopViewportMediaQuery.addEventListener === 'function') {
+        desktopViewportMediaQuery.addEventListener('change', desktopViewportListener)
+      } else {
+        desktopViewportMediaQuery.addListener(desktopViewportListener)
+      }
+    }
+
     if (!shouldAutoLoadUsageOnMount.value) return
 
     const source = isAnthropicOAuthOrSetupToken.value ? 'passive' : undefined
-    void loadUsage(source)
+    requestAutoLoad(source)
   })
 
   watch(openAIUsageRefreshKey, (nextKey, prevKey) => {
     if (!prevKey || nextKey === prevKey) return
     if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return
 
-    void loadUsage().catch((error) => {
-      console.error('Failed to refresh OpenAI usage:', error)
-    })
+    requestAutoLoad()
   })
 
   watch(
@@ -604,11 +688,45 @@ export function useAccountUsageCellState(
       if (!shouldFetchUsage.value) return
 
       const source = isAnthropicOAuthOrSetupToken.value ? 'passive' : undefined
-      void loadUsage(source).catch((error) => {
-        console.error('Failed to refresh usage after manual refresh:', error)
-      })
+      requestAutoLoad(source)
     }
   )
+
+  watch(
+    [() => options.rootRef?.value ?? null, shouldLazyLoadOnMobile],
+    () => {
+      if (shouldLazyLoadOnMobile.value) {
+        attachVisibilityObserver()
+        return
+      }
+      detachVisibilityObserver()
+    },
+    { immediate: true, flush: 'post' }
+  )
+
+  watch(isDesktopViewport, (isDesktop) => {
+    if (isDesktop) {
+      detachVisibilityObserver()
+      hasEnteredViewport.value = true
+      flushPendingAutoLoad()
+      return
+    }
+    hasEnteredViewport.value = false
+    attachVisibilityObserver()
+  })
+
+  onUnmounted(() => {
+    detachVisibilityObserver()
+    if (desktopViewportMediaQuery && desktopViewportListener) {
+      if (typeof desktopViewportMediaQuery.removeEventListener === 'function') {
+        desktopViewportMediaQuery.removeEventListener('change', desktopViewportListener)
+      } else {
+        desktopViewportMediaQuery.removeListener(desktopViewportListener)
+      }
+    }
+    desktopViewportListener = null
+    desktopViewportMediaQuery = null
+  })
 
   return {
     activeQueryLoading,

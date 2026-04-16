@@ -144,4 +144,33 @@ describe('AccountTestModal', () => {
     expect(preview.exists()).toBe(true)
     expect(preview.attributes('src')).toBe('data:image/png;base64,QUJD')
   })
+
+  it('连接中也允许关闭并中止请求', async () => {
+    global.fetch = vi.fn().mockImplementation(
+      () => new Promise<Response>(() => {})
+    ) as any
+
+    const wrapper = mountModal()
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    const buttons = wrapper.findAll('button')
+    const startButton = buttons.find((button) => button.text().includes('admin.accounts.startTest'))
+    const closeButton = buttons.find((button) => button.text().includes('common.close'))
+    expect(startButton).toBeTruthy()
+    expect(closeButton).toBeTruthy()
+
+    await startButton!.trigger('click')
+    await flushPromises()
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    const [, request] = (global.fetch as any).mock.calls[0]
+    const signal = request.signal as AbortSignal
+    expect(signal.aborted).toBe(false)
+
+    await closeButton!.trigger('click')
+
+    expect(signal.aborted).toBe(true)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
 })

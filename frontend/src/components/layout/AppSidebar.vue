@@ -7,7 +7,10 @@
       { '-translate-x-full lg:translate-x-0': !mobileOpen }
     ]"
   >
-    <div class="app-sidebar__header">
+    <div
+      class="app-sidebar__header"
+      :class="{ 'app-sidebar__header--collapsed': sidebarCollapsed }"
+    >
       <div class="app-sidebar__brand-mark">
         <img
           v-if="settingsLoaded"
@@ -16,15 +19,17 @@
           class="h-full w-full object-contain"
         />
       </div>
-      <transition name="fade">
-        <div v-if="!sidebarCollapsed" class="app-sidebar__brand-copy">
-          <span class="app-sidebar__brand-name">{{ siteName }}</span>
-          <div class="app-sidebar__brand-meta">
-            <VersionBadge :version="siteVersion" />
-            <span class="app-sidebar__theme-tag">{{ activeTheme.label }}</span>
-          </div>
+      <div
+        class="app-sidebar__brand-copy"
+        :class="{ 'app-sidebar__brand-copy--collapsed': sidebarCollapsed }"
+        :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+      >
+        <span class="app-sidebar__brand-name">{{ siteName }}</span>
+        <div class="app-sidebar__brand-meta">
+          <VersionBadge :version="siteVersion" />
+          <span class="app-sidebar__theme-tag">{{ activeTheme.label }}</span>
         </div>
-      </transition>
+      </div>
     </div>
 
     <nav class="app-sidebar__nav scrollbar-hide">
@@ -35,7 +40,10 @@
             :key="item.path"
             :to="item.path"
             class="app-sidebar__link mb-1"
-            :class="{ 'app-sidebar__link--active': isActive(item.path) }"
+            :class="{
+              'app-sidebar__link--active': isActive(item.path),
+              'app-sidebar__link--collapsed': sidebarCollapsed
+            }"
             :title="sidebarCollapsed ? item.label : undefined"
             :id="
               item.path === '/admin/accounts'
@@ -54,24 +62,39 @@
               v-html="getSanitizedCustomIcon(item.path)"
             ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <transition name="fade">
-              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
-            </transition>
+            <span
+              class="app-sidebar__label"
+              :class="{ 'app-sidebar__label--collapsed': sidebarCollapsed }"
+              :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+            >
+              {{ item.label }}
+            </span>
           </router-link>
         </div>
 
         <div v-if="!authStore.isSimpleMode" class="app-sidebar__section">
-          <div v-if="!sidebarCollapsed" class="app-sidebar__section-title">
-            {{ t('nav.myAccount') }}
+          <div
+            class="app-sidebar__section-title"
+            :class="{ 'app-sidebar__section-title--collapsed': sidebarCollapsed }"
+            :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+          >
+            <span
+              class="app-sidebar__section-title-text"
+              :class="{ 'app-sidebar__section-title-text--collapsed': sidebarCollapsed }"
+            >
+              {{ t('nav.myAccount') }}
+            </span>
           </div>
-          <div v-else class="app-sidebar__section-divider"></div>
 
           <router-link
             v-for="item in personalNavItems"
             :key="item.path"
             :to="item.path"
             class="app-sidebar__link mb-1"
-            :class="{ 'app-sidebar__link--active': isActive(item.path) }"
+            :class="{
+              'app-sidebar__link--active': isActive(item.path),
+              'app-sidebar__link--collapsed': sidebarCollapsed
+            }"
             :title="sidebarCollapsed ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
             @click="handleMenuItemClick(item.path)"
@@ -82,9 +105,13 @@
               v-html="getSanitizedCustomIcon(item.path)"
             ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <transition name="fade">
-              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
-            </transition>
+            <span
+              class="app-sidebar__label"
+              :class="{ 'app-sidebar__label--collapsed': sidebarCollapsed }"
+              :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+            >
+              {{ item.label }}
+            </span>
           </router-link>
         </div>
       </template>
@@ -96,7 +123,10 @@
             :key="item.path"
             :to="item.path"
             class="app-sidebar__link mb-1"
-            :class="{ 'app-sidebar__link--active': isActive(item.path) }"
+            :class="{
+              'app-sidebar__link--active': isActive(item.path),
+              'app-sidebar__link--collapsed': sidebarCollapsed
+            }"
             :title="sidebarCollapsed ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
             @click="handleMenuItemClick(item.path)"
@@ -107,9 +137,13 @@
               v-html="getSanitizedCustomIcon(item.path)"
             ></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <transition name="fade">
-              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
-            </transition>
+            <span
+              class="app-sidebar__label"
+              :class="{ 'app-sidebar__label--collapsed': sidebarCollapsed }"
+              :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+            >
+              {{ item.label }}
+            </span>
           </router-link>
         </div>
       </template>
@@ -119,27 +153,35 @@
       <button
         @click="toggleTheme"
         class="app-sidebar__link mb-2 w-full"
+        :class="{ 'app-sidebar__link--collapsed': sidebarCollapsed }"
         :title="sidebarCollapsed ? (isDark ? t('nav.lightMode') : t('nav.darkMode')) : undefined"
       >
         <SunIcon v-if="isDark" class="app-sidebar__theme-icon app-sidebar__theme-icon--light h-5 w-5 flex-shrink-0" />
         <MoonIcon v-else class="h-5 w-5 flex-shrink-0" />
-        <transition name="fade">
-          <span v-if="!sidebarCollapsed">{{
-            isDark ? t('nav.lightMode') : t('nav.darkMode')
-          }}</span>
-        </transition>
+        <span
+          class="app-sidebar__label"
+          :class="{ 'app-sidebar__label--collapsed': sidebarCollapsed }"
+          :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+        >
+          {{ isDark ? t('nav.lightMode') : t('nav.darkMode') }}
+        </span>
       </button>
 
       <button
         @click="toggleSidebar"
         class="app-sidebar__link w-full"
+        :class="{ 'app-sidebar__link--collapsed': sidebarCollapsed }"
         :title="sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
       >
         <ChevronDoubleLeftIcon v-if="!sidebarCollapsed" class="h-5 w-5 flex-shrink-0" />
         <ChevronDoubleRightIcon v-else class="h-5 w-5 flex-shrink-0" />
-        <transition name="fade">
-          <span v-if="!sidebarCollapsed">{{ t('nav.collapse') }}</span>
-        </transition>
+        <span
+          class="app-sidebar__label"
+          :class="{ 'app-sidebar__label--collapsed': sidebarCollapsed }"
+          :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+        >
+          {{ t('nav.collapse') }}
+        </span>
       </button>
     </div>
   </aside>

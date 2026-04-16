@@ -1,5 +1,5 @@
 <template>
-  <div v-if="showUsageWindows">
+  <div ref="rootRef" v-if="showUsageWindows">
     <template
       v-if="
         account.platform === 'anthropic' &&
@@ -312,7 +312,7 @@
     </template>
   </div>
 
-  <div v-else>
+  <div ref="rootRef" v-else>
     <AccountQuotaInfo v-if="account.platform === 'gemini'" :account="account" />
     <div v-else class="space-y-1">
       <div v-if="todayStats" class="mb-0.5 flex items-center">
@@ -371,6 +371,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account, WindowStats } from '@/types'
 import UsageProgressBar from './UsageProgressBar.vue'
@@ -392,6 +393,7 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
+const rootRef = ref<HTMLElement | null>(null)
 const {
   activeQueryLoading,
   aiCreditsDisplay,
@@ -432,7 +434,7 @@ const {
   usageErrorLabel,
   usageInfo,
   validationURL
-} = useAccountUsageCellState(props, t)
+} = useAccountUsageCellState(props, t, { rootRef })
 </script>
 
 <style scoped>

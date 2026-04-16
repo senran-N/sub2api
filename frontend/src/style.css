@@ -23,22 +23,28 @@
     background-position: var(--theme-page-pattern-position);
   }
 
-  /* 自定义滚动条 - 默认隐藏，悬停或滚动时显示 */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
-  }
+  /* Firefox-only scrollbar colors; let WebKit browsers keep their native pseudo-element styling. */
+  @supports (-moz-appearance: none) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+    }
 
-  *:hover,
-  *:focus-within {
-    scrollbar-color: var(--theme-scrollbar-thumb) transparent;
+    *:hover,
+    *:focus-within {
+      scrollbar-color: var(--theme-scrollbar-thumb) transparent;
+    }
+
+    /* Touch devices: always show scrollbar since there's no hover state */
+    @media (hover: none) {
+      * {
+        scrollbar-color: var(--theme-scrollbar-thumb-touch) transparent;
+      }
+    }
   }
 
   /* Touch devices: always show scrollbar since there's no hover state */
   @media (hover: none) {
-    * {
-      scrollbar-color: var(--theme-scrollbar-thumb-touch) transparent;
-    }
     ::-webkit-scrollbar-thumb {
       background: var(--theme-scrollbar-thumb-touch);
     }
@@ -75,19 +81,17 @@
    * 表格滚动容器：始终显示滚动条，不跟随全局悬停策略。
    *
    * 浏览器兼容性说明：
-   * - Chrome 121+ 原生支持 scrollbar-color / scrollbar-width。
-   *   一旦元素匹配了这两个标准属性，::-webkit-scrollbar-* 被完全忽略。
-   *   全局 * { scrollbar-width: thin } 使所有元素都走标准属性，
-   *   因此 Chrome 121+ 只看 scrollbar-color。
-   * - Chrome < 121 不认识标准属性，只看 ::-webkit-scrollbar-*，
-   *   所以保留 ::-webkit-scrollbar-thumb 作为回退。
-   * - Firefox 始终只看 scrollbar-color / scrollbar-width。
+   * - Firefox 使用标准 scrollbar-width / scrollbar-color。
+   * - WebKit 浏览器使用 ::-webkit-scrollbar-*。
+   * - 不在 WebKit 浏览器上设置标准属性，避免 Chrome/Safari 放弃表格的自定义滚动条。
    */
-  .table-wrapper {
-    scrollbar-width: auto;
-    scrollbar-color: var(--theme-scrollbar-table-thumb) transparent;
+  @supports (-moz-appearance: none) {
+    .table-wrapper {
+      scrollbar-width: auto;
+      scrollbar-color: var(--theme-scrollbar-table-thumb) transparent;
+    }
   }
-  /* 旧版 Chrome (< 121) 兼容回退 */
+
   .table-wrapper::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -1791,6 +1795,16 @@
     gap: 0.9rem;
     padding: 0 var(--theme-shell-sidebar-header-padding-x);
     border-bottom: var(--theme-shell-sidebar-header-border);
+    overflow: hidden;
+    transition:
+      padding 0.22s ease,
+      gap 0.22s ease;
+  }
+
+  .app-sidebar__header--collapsed {
+    gap: 0;
+    padding-left: calc(var(--theme-shell-sidebar-header-padding-x) - 0.35rem);
+    padding-right: calc(var(--theme-shell-sidebar-header-padding-x) - 0.35rem);
   }
 
   .app-sidebar__brand-mark {
@@ -1815,6 +1829,20 @@
     flex: 1;
     flex-direction: column;
     gap: 0.35rem;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 14rem;
+    transition:
+      max-width 0.22s ease,
+      opacity 0.14s ease,
+      transform 0.14s ease;
+  }
+
+  .app-sidebar__brand-copy--collapsed {
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-4px);
+    pointer-events: none;
   }
 
   .app-sidebar__brand-name {
@@ -1860,9 +1888,12 @@
   }
 
   .app-sidebar__section-title {
+    position: relative;
     display: flex;
     align-items: center;
     gap: var(--theme-nav-section-marker-gap);
+    min-height: 1.25rem;
+    overflow: hidden;
     margin-bottom: var(--theme-nav-section-title-margin-bottom);
     padding: var(--theme-nav-section-title-padding);
     color: var(--theme-nav-section-label);
@@ -1871,7 +1902,7 @@
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    border-bottom: var(--theme-nav-section-title-border);
+    border-bottom: none;
   }
 
   .app-sidebar__section-title::before {
@@ -1882,18 +1913,51 @@
     border-radius: var(--theme-nav-section-marker-radius);
     background: var(--theme-nav-section-marker-bg);
     flex-shrink: 0;
+    transition:
+      opacity 0.16s ease,
+      transform 0.16s ease;
   }
 
-  .app-sidebar__section-divider {
-    margin: 0.8rem 0.7rem;
+  .app-sidebar__section-title::after {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    top: 50%;
     height: 1px;
     background: var(--theme-page-border);
+    opacity: 0;
+    transform: translateY(-50%);
+    transition: opacity 0.18s ease;
+  }
+
+  .app-sidebar__section-title-text {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition:
+      opacity 0.16s ease,
+      transform 0.16s ease;
+  }
+
+  .app-sidebar__section-title--collapsed::before,
+  .app-sidebar__section-title-text--collapsed {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+
+  .app-sidebar__section-title--collapsed::after {
+    opacity: 1;
+    transition-delay: 0.08s;
   }
 
   .app-sidebar__link {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    overflow: hidden;
     border-radius: var(--theme-nav-item-radius);
     padding: var(--theme-nav-item-padding);
     color: var(--theme-nav-item-text);
@@ -1907,6 +1971,33 @@
       border-color 0.18s ease,
       box-shadow 0.18s ease;
     border: 1px solid transparent;
+  }
+
+  .app-sidebar__link--collapsed {
+    justify-content: center;
+    gap: 0;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .app-sidebar__label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 12rem;
+    transition:
+      max-width 0.2s ease,
+      opacity 0.12s ease,
+      transform 0.12s ease;
+  }
+
+  .app-sidebar__label--collapsed {
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-4px);
+    pointer-events: none;
   }
 
   .app-sidebar__link:hover {
