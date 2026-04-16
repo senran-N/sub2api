@@ -38,12 +38,15 @@ func (s *OpenAIGatewayService) buildOpenAIResponseBindingSelectionAdapter(
 	ctx context.Context,
 	groupID *int64,
 	responseID string,
-	accountID int64,
 	store OpenAIWSStateStore,
 ) func(account *Account, acquired *AcquireResult) *AccountSelectionResult {
 	return func(account *Account, acquired *AcquireResult) *AccountSelectionResult {
+		boundAccountID := int64(0)
+		if account != nil {
+			boundAccountID = account.ID
+		}
 		s.bindCodexChainSuccess(ctx, store, codexChainBinding{
-			AccountID:   accountID,
+			AccountID:   boundAccountID,
 			GroupID:     derefGroupID(groupID),
 			ResponseID:  responseID,
 			ResponseTTL: s.openAIWSResponseStickyTTL(),

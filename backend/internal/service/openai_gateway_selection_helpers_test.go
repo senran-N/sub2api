@@ -189,7 +189,7 @@ func TestNormalizeOpenAIWaitLoadMapAndAccountLoadFallback(t *testing.T) {
 	}
 }
 
-func TestResolveOpenAIStickySessionAccount_DeleteOnLookupMiss(t *testing.T) {
+func TestResolveOpenAIStickySessionAccount_KeepBindingOnLookupMiss(t *testing.T) {
 	cache := &stubGatewayCache{
 		sessionBindings: map[string]int64{
 			"openai:sticky_missing": 404,
@@ -219,8 +219,8 @@ func TestResolveOpenAIStickySessionAccount_DeleteOnLookupMiss(t *testing.T) {
 	if accountID != 0 {
 		t.Fatalf("expected accountID=0 on lookup miss, got %d", accountID)
 	}
-	if cache.deletedSessions["openai:sticky_missing"] != 1 {
-		t.Fatalf("expected sticky key to be deleted once, got %d", cache.deletedSessions["openai:sticky_missing"])
+	if len(cache.deletedSessions) != 0 {
+		t.Fatalf("expected lookup miss to keep sticky binding, got %+v", cache.deletedSessions)
 	}
 }
 
@@ -256,5 +256,49 @@ func TestResolveOpenAIStickySessionAccount_KeepOnLookupMissWhenDisabled(t *testi
 	}
 	if len(cache.deletedSessions) != 0 {
 		t.Fatalf("expected no delete side-effect, got %+v", cache.deletedSessions)
+	}
+}
+
+func TestResolveOpenAIStickySessionAccount_DeleteOnModelUnsupported(t *testing.T) {
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{
+			"openai:sticky_model_unsupported": 501,
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{
+				ID:          501,
+				Platform:    PlatformOpenAI,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-4.1": "gpt-4.1",
+					},
+				},
+			},
+		}},
+		cache: cache,
+	}
+
+	account, accountID := svc.resolveOpenAIStickySessionAccount(
+		context.Background(),
+		nil,
+		"sticky_model_unsupported",
+		"gpt-5.1",
+		nil,
+		0,
+		openAIStickySessionResolvePolicy{},
+	)
+
+	if account != nil {
+		t.Fatal("expected nil account on model mismatch")
+	}
+	if accountID != 0 {
+		t.Fatalf("expected accountID=0 on model mismatch, got %d", accountID)
+	}
+	if cache.deletedSessions["openai:sticky_model_unsupported"] != 1 {
+		t.Fatalf("expected model mismatch to delete sticky key, got %d", cache.deletedSessions["openai:sticky_model_unsupported"])
 	}
 }

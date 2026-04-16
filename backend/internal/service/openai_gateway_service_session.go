@@ -90,3 +90,19 @@ func (s *OpenAIGatewayService) BindStickySession(ctx context.Context, groupID *i
 	}
 	return s.setStickySessionAccountID(ctx, groupID, sessionHash, accountID, s.openAIWSSessionStickyTTL())
 }
+
+// BindStickySessionIfUnbound preserves an existing sticky binding during soft-miss
+// fallback, and only establishes/refreshes a binding when it is missing or already
+// points at the same account.
+func (s *OpenAIGatewayService) BindStickySessionIfUnbound(ctx context.Context, groupID *int64, sessionHash string, accountID int64) error {
+	if sessionHash == "" || accountID <= 0 {
+		return nil
+	}
+
+	currentAccountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash)
+	if err == nil && currentAccountID > 0 && currentAccountID != accountID {
+		return nil
+	}
+
+	return s.BindStickySession(ctx, groupID, sessionHash, accountID)
+}

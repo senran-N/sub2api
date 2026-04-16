@@ -82,7 +82,7 @@ func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_RateLimitedMiss(
 	require.Nil(t, selection, "限额中的账号不应继续命中 previous_response_id 粘连")
 	boundAccountID, getErr := store.GetResponseAccount(ctx, groupID, "resp_prev_rl")
 	require.NoError(t, getErr)
-	require.Zero(t, boundAccountID)
+	require.Equal(t, account.ID, boundAccountID, "短期限流应保留 previous_response_id 绑定")
 }
 
 func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_DBRuntimeRecheckRateLimitedMiss(t *testing.T) {
@@ -134,7 +134,7 @@ func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_DBRuntimeRecheck
 	require.Nil(t, selection, "DB 中已限流的账号不应继续命中 previous_response_id 粘连")
 	boundAccountID, getErr := store.GetResponseAccount(ctx, groupID, "resp_prev_db_rl")
 	require.NoError(t, getErr)
-	require.Zero(t, boundAccountID)
+	require.Equal(t, dbAccount.ID, boundAccountID, "DB recheck 发现短期限流时应保留 previous_response_id 绑定")
 }
 
 func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_OAuthCredentialInvalidMiss(t *testing.T) {
@@ -297,6 +297,9 @@ func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_ForceHTTPIgnored
 	selection, err := svc.SelectAccountByPreviousResponseID(ctx, &groupID, "resp_prev_force_http", "gpt-5.1", nil)
 	require.NoError(t, err)
 	require.Nil(t, selection, "force_http 场景应忽略 previous_response_id 粘连")
+	boundAccountID, getErr := store.GetResponseAccount(ctx, groupID, "resp_prev_force_http")
+	require.NoError(t, getErr)
+	require.Equal(t, account.ID, boundAccountID, "transport soft miss 不应删除 previous_response_id 绑定")
 }
 
 func TestOpenAIGatewayService_SelectAccountByPreviousResponseID_BusyKeepsSticky(t *testing.T) {

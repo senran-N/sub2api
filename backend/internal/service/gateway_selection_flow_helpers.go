@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
@@ -29,31 +28,6 @@ func prefetchedStickyAccountIDFromContext(ctx context.Context, groupID *int64) i
 		return accountID
 	}
 	return 0
-}
-
-// shouldClearStickySession 检查账号是否处于不可调度状态，需要清理粘性会话绑定。
-// 当账号状态为错误、禁用、不可调度、处于临时不可调度期间、
-// OAuth 凭证已明确不可恢复，或请求的模型/账号已处于限流状态时，返回 true。
-func shouldClearStickySession(account *Account, requestedModel string) bool {
-	if account == nil {
-		return false
-	}
-	if account.Status == StatusError || account.Status == StatusDisabled || !account.Schedulable {
-		return true
-	}
-	if account.TempUnschedulableUntil != nil && time.Now().Before(*account.TempUnschedulableUntil) {
-		return true
-	}
-	if account.IsRateLimited() {
-		return true
-	}
-	if oauthSelectionCredentialIssue(account) != "" {
-		return true
-	}
-	if remaining := account.GetRateLimitRemainingTimeWithContext(context.Background(), requestedModel); remaining > 0 {
-		return true
-	}
-	return false
 }
 
 func buildRoutingSet(accountIDs []int64) map[int64]struct{} {
@@ -104,11 +78,21 @@ func (s *GatewayService) tryStickySessionAccount(
 
 	account, err := s.getSchedulableAccount(ctx, accountID)
 	if err != nil {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, stickyBindingDisposition{
+			Outcome: stickyBindingOutcomeSoftMiss,
+			Reason:  "lookup_error",
+		}, accountID, sessionHash, "")
 		return nil, false
 	}
 
-	if shouldClearStickySession(account, requestedModel) {
+	disposition := classifyStickyBindingDisposition(account, requestedModel)
+	switch disposition.Outcome {
+	case stickyBindingOutcomeHardInvalidate:
 		_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
+		return nil, false
+	case stickyBindingOutcomeSoftMiss:
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
 		return nil, false
 	}
 	if !s.isStickyAccountFullySchedulable(ctx, account, groupID, requestedModel, true, platformCheck) {

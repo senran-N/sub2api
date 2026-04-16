@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
-	"math/rand/v2"
+	"hash/fnv"
+	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -131,8 +133,7 @@ func (s *TLSFingerprintProfileService) GetProfileByID(id int64) *tlsfingerprint.
 	return nil
 }
 
-// getRandomProfile 从本地缓存中随机选择一个 Profile
-func (s *TLSFingerprintProfileService) getRandomProfile() *tlsfingerprint.Profile {
+func (s *TLSFingerprintProfileService) getStableProfile(account *Account) *tlsfingerprint.Profile {
 	s.localMu.RLock()
 	defer s.localMu.RUnlock()
 
@@ -140,18 +141,45 @@ func (s *TLSFingerprintProfileService) getRandomProfile() *tlsfingerprint.Profil
 		return nil
 	}
 
-	// 收集所有 profile
-	profiles := make([]*model.TLSFingerprintProfile, 0, len(s.localCache))
-	for _, p := range s.localCache {
-		if p != nil {
-			profiles = append(profiles, p)
+	profileIDs := make([]int64, 0, len(s.localCache))
+	for id, profile := range s.localCache {
+		if profile != nil {
+			profileIDs = append(profileIDs, id)
 		}
 	}
-	if len(profiles) == 0 {
+	if len(profileIDs) == 0 {
 		return nil
 	}
+	sort.Slice(profileIDs, func(i, j int) bool {
+		return profileIDs[i] < profileIDs[j]
+	})
 
-	return profiles[rand.IntN(len(profiles))].ToTLSProfile()
+	selectedID := profileIDs[stableTLSFingerprintProfileIndex(account, len(profileIDs))]
+	profile := s.localCache[selectedID]
+	if profile == nil {
+		return nil
+	}
+	return profile.ToTLSProfile()
+}
+
+func stableTLSFingerprintProfileIndex(account *Account, size int) int {
+	if size <= 1 {
+		return 0
+	}
+
+	hasher := fnv.New64a()
+	if account != nil {
+		if account.ID > 0 {
+			_, _ = hasher.Write([]byte(strconv.FormatInt(account.ID, 10)))
+		} else {
+			_, _ = hasher.Write([]byte(account.Platform))
+			_, _ = hasher.Write([]byte{0})
+			_, _ = hasher.Write([]byte(account.Type))
+			_, _ = hasher.Write([]byte{0})
+			_, _ = hasher.Write([]byte(account.Name))
+		}
+	}
+	return int(hasher.Sum64() % uint64(size))
 }
 
 // ResolveTLSProfile 根据 Account 的配置解析出运行时 TLS Profile
@@ -171,8 +199,7 @@ func (s *TLSFingerprintProfileService) ResolveTLSProfile(account *Account) *tlsf
 		}
 	}
 	if id == -1 {
-		// 随机选择一个 profile
-		if p := s.getRandomProfile(); p != nil {
+		if p := s.getStableProfile(account); p != nil {
 			return p
 		}
 	}

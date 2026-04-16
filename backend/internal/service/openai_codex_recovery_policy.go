@@ -27,6 +27,7 @@ const (
 type CodexRecoveryPolicyInput struct {
 	AccountID                 int64
 	FailureReason             string
+	HasSessionAffinity        bool
 	Reason                    string
 	StatusCode                int
 	TrackCompatibilityMetrics bool
@@ -77,7 +78,7 @@ func (CodexRecoveryPolicy) Apply(reqBody map[string]any, input CodexRecoveryPoli
 	switch decision.Reason {
 	case codexRecoveryReasonFailover:
 		switch {
-		case shouldCodexSwitchAccountOnFailover(decision.StatusCode, decision.FailureReason, decision.Transport):
+		case shouldCodexSwitchAccountOnFailover(decision.StatusCode, decision.FailureReason, decision.Transport, input.HasSessionAffinity):
 			if decision.AccountID <= 0 {
 				decision.SkipReason = "missing_account_id"
 				recordOpenAICodexRecoveryDecision(decision)
@@ -217,10 +218,10 @@ func isCodexImmediateFailoverExhaust(statusCode int, failureReason string, trans
 	}
 }
 
-func shouldCodexSwitchAccountOnFailover(statusCode int, failureReason string, transport OpenAIUpstreamTransport) bool {
+func shouldCodexSwitchAccountOnFailover(statusCode int, failureReason string, transport OpenAIUpstreamTransport, hasSessionAffinity bool) bool {
 	switch normalizeCodexRecoveryFailureReason(failureReason) {
 	case "upstream_rate_limited":
-		return isOpenAIWSSessionWebsocketTransport(transport)
+		return isOpenAIWSSessionWebsocketTransport(transport) && !hasSessionAffinity
 	case "request_timeout", "request_error":
 		return transport == OpenAIUpstreamTransportHTTPSSE
 	case "upstream_5xx":
@@ -337,6 +338,7 @@ func (s *OpenAIGatewayService) ResolveCodexFailoverRecovery(
 	c *gin.Context,
 	account *Account,
 	failoverErr *UpstreamFailoverError,
+	hasSessionAffinity bool,
 ) CodexRecoveryDecision {
 	if failoverErr == nil {
 		return CodexRecoveryDecision{}
@@ -348,6 +350,7 @@ func (s *OpenAIGatewayService) ResolveCodexFailoverRecovery(
 	return CodexRecoveryPolicy{}.Apply(nil, CodexRecoveryPolicyInput{
 		AccountID:                 accountID,
 		FailureReason:             failoverErr.FailureReason,
+		HasSessionAffinity:        hasSessionAffinity,
 		Reason:                    codexRecoveryReasonFailover,
 		StatusCode:                failoverErr.StatusCode,
 		TrackCompatibilityMetrics: true,

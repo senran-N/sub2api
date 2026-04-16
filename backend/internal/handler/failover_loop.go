@@ -76,7 +76,7 @@ func (s *FailoverState) HandleFailoverError(
 		s.ForceCacheBilling = true
 	}
 
-	if shouldExhaustFailoverImmediately(failoverErr) {
+	if shouldExhaustFailoverImmediately(failoverErr, s.hasBoundSession) {
 		s.FailedAccountIDs[accountID] = struct{}{}
 		return FailoverExhausted
 	}
@@ -94,6 +94,11 @@ func (s *FailoverState) HandleFailoverError(
 			return FailoverCanceled
 		}
 		return FailoverContinue
+	}
+
+	if shouldPreserveBoundSessionOnRateLimit(failoverErr, s.hasBoundSession) {
+		s.FailedAccountIDs[accountID] = struct{}{}
+		return FailoverExhausted
 	}
 
 	// 同账号重试用尽，执行临时封禁
@@ -165,16 +170,22 @@ func needForceCacheBilling(hasBoundSession bool, failoverErr *service.UpstreamFa
 	return hasBoundSession || (failoverErr != nil && failoverErr.ForceCacheBilling)
 }
 
-func shouldExhaustFailoverImmediately(failoverErr *service.UpstreamFailoverError) bool {
+func shouldExhaustFailoverImmediately(failoverErr *service.UpstreamFailoverError, hasBoundSession bool) bool {
 	if failoverErr == nil {
 		return false
 	}
 	switch failoverErr.StatusCode {
-	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
+	case http.StatusUnauthorized, http.StatusForbidden:
 		return true
+	case http.StatusTooManyRequests:
+		return !hasBoundSession
 	default:
 		return false
 	}
+}
+
+func shouldPreserveBoundSessionOnRateLimit(failoverErr *service.UpstreamFailoverError, hasBoundSession bool) bool {
+	return hasBoundSession && failoverErr != nil && failoverErr.StatusCode == http.StatusTooManyRequests
 }
 
 // sleepWithContext 等待指定时长，返回 false 表示 context 已取消。

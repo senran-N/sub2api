@@ -1848,6 +1848,16 @@ func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger
 		zap.Int64("session_hash_legacy_dual_write_total", metrics.SessionHashLegacyDualWriteTotal),
 		zap.Float64("session_hash_legacy_read_hit_rate", metrics.SessionHashLegacyReadHitRate),
 		zap.Int64("metadata_legacy_fallback_total", metrics.MetadataLegacyFallbackTotal),
+		zap.Int64("sticky_soft_miss_total", metrics.StickySoftMissTotal),
+		zap.Int64("sticky_hard_invalidate_total", metrics.StickyHardInvalidateTotal),
+		zap.Int64("sticky_lookup_miss_total", metrics.StickyLookupMissTotal),
+		zap.Int64("sticky_transport_soft_miss_total", metrics.StickyTransportSoftMissTotal),
+		zap.Int64("sticky_temporary_soft_miss_total", metrics.StickyTemporarySoftMissTotal),
+		zap.Int64("sticky_model_invalidate_total", metrics.StickyModelInvalidateTotal),
+		zap.Int64("previous_soft_miss_total", metrics.PreviousSoftMissTotal),
+		zap.Int64("previous_hard_invalidate_total", metrics.PreviousHardInvalidateTotal),
+		zap.Int64("previous_lookup_miss_total", metrics.PreviousLookupMissTotal),
+		zap.Int64("previous_transport_soft_miss_total", metrics.PreviousTransportSoftMissTotal),
 	)
 	codexMetrics := runtimeMetrics.OpenAICodexCompatibility
 	codexSummary := codexMetrics.Summary

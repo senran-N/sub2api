@@ -80,8 +80,8 @@ func TestTrySelectRoutedStickyAccount_ClearsMissingBinding(t *testing.T) {
 	require.Equal(t, 1, cache.deletedSessions["session-1"])
 }
 
-func TestTrySelectRoutedStickyAccount_ClearsInvalidBinding(t *testing.T) {
-	t.Run("rate limited account", func(t *testing.T) {
+func TestTrySelectRoutedStickyAccount_InvalidBindingPolicy(t *testing.T) {
+	t.Run("rate limited account keeps binding", func(t *testing.T) {
 		rateLimitedUntil := time.Now().Add(5 * time.Minute)
 		cache := &mockGatewayCacheForPlatform{
 			sessionBindings: map[string]int64{"session-1": 1},
@@ -118,12 +118,11 @@ func TestTrySelectRoutedStickyAccount_ClearsInvalidBinding(t *testing.T) {
 
 		require.False(t, ok)
 		require.Nil(t, result)
-		require.Equal(t, 1, cache.deletedSessions["session-1"])
-		_, exists := cache.sessionBindings["session-1"]
-		require.False(t, exists)
+		require.Zero(t, cache.deletedSessions["session-1"])
+		require.Equal(t, int64(1), cache.sessionBindings["session-1"])
 	})
 
-	t.Run("expired oauth without refresh token", func(t *testing.T) {
+	t.Run("expired oauth without refresh token clears binding", func(t *testing.T) {
 		cache := &mockGatewayCacheForPlatform{
 			sessionBindings: map[string]int64{"session-1": 1},
 		}

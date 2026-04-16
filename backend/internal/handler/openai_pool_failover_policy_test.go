@@ -9,7 +9,7 @@ import (
 )
 
 func TestApplyOpenAIPoolFailoverPolicy_ImmediateExhaustStatuses(t *testing.T) {
-	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests} {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			account := &service.Account{ID: 11}
 			failedAccountIDs := make(map[int64]struct{})
@@ -21,6 +21,7 @@ func TestApplyOpenAIPoolFailoverPolicy_ImmediateExhaustStatuses(t *testing.T) {
 				account,
 				&service.UpstreamFailoverError{StatusCode: status, RetryableOnSameAccount: true},
 				service.CodexRecoveryDecision{},
+				false,
 				sameAccountRetryCount,
 				failedAccountIDs,
 				&switchCount,
@@ -50,6 +51,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetry(t *testing.T) {
 		account,
 		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
 		service.CodexRecoveryDecision{},
+		false,
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -79,6 +81,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SwitchAfterRetryBudget(t *testing.T) {
 		account,
 		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
 		service.CodexRecoveryDecision{},
+		false,
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -108,6 +111,7 @@ func TestApplyOpenAIPoolFailoverPolicy_ExhaustedWhenSwitchBudgetReached(t *testi
 		account,
 		&service.UpstreamFailoverError{StatusCode: http.StatusBadGateway},
 		service.CodexRecoveryDecision{},
+		false,
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -135,6 +139,7 @@ func TestApplyOpenAIPoolFailoverPolicy_SameAccountRetryDoesNotTempUnschedule(t *
 		account,
 		&service.UpstreamFailoverError{StatusCode: http.StatusBadRequest, RetryableOnSameAccount: true},
 		service.CodexRecoveryDecision{},
+		false,
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -164,6 +169,7 @@ func TestApplyOpenAIPoolFailoverPolicy_CodexExhaustDecision(t *testing.T) {
 			ExhaustFailover: true,
 			Reason:          "failover",
 		},
+		false,
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -193,6 +199,7 @@ func TestApplyOpenAIPoolFailoverPolicy_CodexSwitchDecisionOverridesImmediate429E
 			SwitchAccount: true,
 			Reason:        "failover",
 		},
+		true,
 		sameAccountRetryCount,
 		failedAccountIDs,
 		&switchCount,
@@ -208,4 +215,52 @@ func TestApplyOpenAIPoolFailoverPolicy_CodexSwitchDecisionOverridesImmediate429E
 	require.Contains(t, failedAccountIDs, int64(17))
 	require.Empty(t, sameAccountRetryCount)
 	require.Equal(t, 1, recordedSwitches)
+}
+
+func TestApplyOpenAIPoolFailoverPolicy_BoundSession429RetriesThenExhausts(t *testing.T) {
+	account := &service.Account{ID: 18}
+	failedAccountIDs := make(map[int64]struct{})
+	sameAccountRetryCount := make(map[int64]int)
+	switchCount := 0
+	recordedSwitches := 0
+	tempUnschedCalls := 0
+
+	for i := 1; i <= account.GetPoolModeRetryCount(); i++ {
+		decision := applyOpenAIPoolFailoverPolicy(
+			account,
+			&service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests, RetryableOnSameAccount: true},
+			service.CodexRecoveryDecision{},
+			true,
+			sameAccountRetryCount,
+			failedAccountIDs,
+			&switchCount,
+			3,
+			func() { tempUnschedCalls++ },
+			func() { recordedSwitches++ },
+		)
+
+		require.Equal(t, FailoverContinue, decision.Action)
+		require.True(t, decision.SameAccountRetry)
+		require.Equal(t, i, decision.RetryCount)
+	}
+
+	decision := applyOpenAIPoolFailoverPolicy(
+		account,
+		&service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests, RetryableOnSameAccount: true},
+		service.CodexRecoveryDecision{},
+		true,
+		sameAccountRetryCount,
+		failedAccountIDs,
+		&switchCount,
+		3,
+		func() { tempUnschedCalls++ },
+		func() { recordedSwitches++ },
+	)
+
+	require.Equal(t, FailoverExhausted, decision.Action)
+	require.False(t, decision.SameAccountRetry)
+	require.Equal(t, 0, switchCount)
+	require.Contains(t, failedAccountIDs, int64(18))
+	require.Zero(t, recordedSwitches)
+	require.Zero(t, tempUnschedCalls)
 }

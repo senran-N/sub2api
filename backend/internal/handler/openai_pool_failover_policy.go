@@ -14,6 +14,7 @@ func applyOpenAIPoolFailoverPolicy(
 	account *service.Account,
 	failoverErr *service.UpstreamFailoverError,
 	codexDecision service.CodexRecoveryDecision,
+	hasSessionAffinity bool,
 	sameAccountRetryCount map[int64]int,
 	failedAccountIDs map[int64]struct{},
 	switchCount *int,
@@ -38,7 +39,7 @@ func applyOpenAIPoolFailoverPolicy(
 		return decision
 	}
 
-	if !forceSwitchAccount && shouldExhaustFailoverImmediately(failoverErr) {
+	if !forceSwitchAccount && shouldExhaustFailoverImmediately(failoverErr, hasSessionAffinity) {
 		if failedAccountIDs != nil {
 			failedAccountIDs[account.ID] = struct{}{}
 		}
@@ -50,6 +51,13 @@ func applyOpenAIPoolFailoverPolicy(
 		decision.Action = FailoverContinue
 		decision.SameAccountRetry = true
 		decision.RetryCount = sameAccountRetryCount[account.ID]
+		return decision
+	}
+
+	if !forceSwitchAccount && shouldPreserveBoundSessionOnRateLimit(failoverErr, hasSessionAffinity) {
+		if failedAccountIDs != nil {
+			failedAccountIDs[account.ID] = struct{}{}
+		}
 		return decision
 	}
 

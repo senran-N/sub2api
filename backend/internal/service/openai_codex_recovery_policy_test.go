@@ -206,6 +206,21 @@ func TestCodexRecoveryPolicy_Failover(t *testing.T) {
 		require.Equal(t, codexRecoveryActionSwitchAccount, decision.Action)
 	})
 
+	t.Run("keeps_account_on_ws_rate_limit_with_session_affinity", func(t *testing.T) {
+		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
+			AccountID:          145,
+			FailureReason:      "upstream_rate_limited",
+			HasSessionAffinity: true,
+			Reason:             codexRecoveryReasonFailover,
+			StatusCode:         http.StatusTooManyRequests,
+			Transport:          OpenAIUpstreamTransportResponsesWebsocketV2,
+		})
+
+		require.False(t, decision.Applied)
+		require.False(t, decision.SwitchAccount)
+		require.Equal(t, "unsupported_failover_status", decision.SkipReason)
+	})
+
 	t.Run("exhausts_ws_auth_failed_forbidden", func(t *testing.T) {
 		decision := policy.Apply(nil, CodexRecoveryPolicyInput{
 			FailureReason: "auth_failed",

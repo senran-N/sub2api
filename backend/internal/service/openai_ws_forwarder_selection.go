@@ -58,28 +58,55 @@ func (s *OpenAIGatewayService) selectAccountByPreviousResponseIDForScheduler(
 	}
 
 	account, err := s.getSchedulableAccount(ctx, accountID)
-	if err != nil || account == nil {
-		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
+	if err != nil {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, newStickyBindingSoftMiss("lookup_error"), accountID, "", responseID)
+		return nil, nil
+	}
+	if account == nil {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, newStickyBindingSoftMiss("lookup_miss"), accountID, "", responseID)
 		return nil, nil
 	}
 	if s.isOpenAITransportFallbackCooling(account.ID, requiredTransport) {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, newStickyBindingSoftMiss("transport_cooling"), accountID, "", responseID)
 		return nil, nil
 	}
 	// 非 WSv2 场景（如 force_http/全局关闭）不应使用 previous_response_id 粘连，
 	// 以保持“回滚到 HTTP”后的历史行为一致性。
 	if s.getOpenAIWSProtocolResolver().Resolve(account).Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, newStickyBindingSoftMiss("transport_incompatible"), accountID, "", responseID)
 		return nil, nil
 	}
-	if shouldClearStickySession(account, requestedModel) || !isOpenAIAccountBaseEligible(account) {
+	disposition := classifyStickyBindingDisposition(account, requestedModel)
+	switch disposition.Outcome {
+	case stickyBindingOutcomeHardInvalidate:
 		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, disposition, accountID, "", responseID)
+		return nil, nil
+	case stickyBindingOutcomeSoftMiss:
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, disposition, accountID, "", responseID)
+		return nil, nil
+	}
+	if !isOpenAIAccountBaseEligible(account) {
+		disposition = newStickyBindingHardInvalidate("platform_mismatch")
+		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, disposition, accountID, "", responseID)
 		return nil, nil
 	}
 	if !isOpenAIAccountModelEligible(account, requestedModel) {
+		disposition = newStickyBindingHardInvalidate("model_unsupported")
+		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, disposition, accountID, "", responseID)
 		return nil, nil
 	}
-	account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
+	account, disposition = s.recheckStickyBoundOpenAIAccountFromDB(ctx, account, requestedModel)
 	if account == nil {
-		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
+		if disposition.Outcome == stickyBindingOutcomeUsable {
+			disposition = newStickyBindingSoftMiss("db_recheck_miss")
+		}
+		if disposition.Outcome == stickyBindingOutcomeHardInvalidate {
+			_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
+		}
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, disposition, accountID, "", responseID)
 		return nil, nil
 	}
 
@@ -89,7 +116,7 @@ func (s *OpenAIGatewayService) selectAccountByPreviousResponseIDForScheduler(
 		accountID:      accountID,
 		cfg:            cfg,
 		stickyWaitPlan: s.buildOpenAIStickyWaitPlanAdapter(cfg),
-		onSelected:     s.buildOpenAIResponseBindingSelectionAdapter(ctx, groupID, responseID, accountID, store),
+		onSelected:     s.buildOpenAIResponseBindingSelectionAdapter(ctx, groupID, responseID, store),
 	}); ok {
 		return selection, nil
 	}

@@ -224,6 +224,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					account,
 					failoverErr,
 					service.CodexRecoveryDecision{},
+					sessionHash != "",
 					sameAccountRetryCount,
 					failedAccountIDs,
 					&switchCount,

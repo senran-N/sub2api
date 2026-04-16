@@ -202,27 +202,48 @@ func (s *OpenAIGatewayService) resolveOpenAIStickySessionAccount(
 	}
 
 	account, err := s.getSchedulableAccount(ctx, accountID)
-	if err != nil || account == nil {
-		if policy.deleteOnLookupMiss {
-			_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
-		}
+	if err != nil {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, newStickyBindingSoftMiss("lookup_error"), accountID, sessionHash, "")
 		return nil, 0
 	}
-	if shouldClearStickySession(account, requestedModel) {
+	if account == nil {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, newStickyBindingSoftMiss("lookup_miss"), accountID, sessionHash, "")
+		return nil, 0
+	}
+
+	disposition := classifyStickyBindingDisposition(account, requestedModel)
+	switch disposition.Outcome {
+	case stickyBindingOutcomeHardInvalidate:
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
+		return nil, 0
+	case stickyBindingOutcomeSoftMiss:
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
 		return nil, 0
 	}
 	if !isOpenAIAccountBaseEligible(account) {
+		disposition = newStickyBindingHardInvalidate("platform_mismatch")
+		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
 		return nil, 0
 	}
 	if !isOpenAIAccountModelEligible(account, requestedModel) {
+		disposition = newStickyBindingHardInvalidate("model_unsupported")
+		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
 		return nil, 0
 	}
 
 	if policy.recheckOnResolve {
-		account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
+		account, disposition = s.recheckStickyBoundOpenAIAccountFromDB(ctx, account, requestedModel)
 		if account == nil {
-			_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+			if disposition.Outcome == stickyBindingOutcomeUsable {
+				disposition = newStickyBindingSoftMiss("db_recheck_miss")
+			}
+			if disposition.Outcome == stickyBindingOutcomeHardInvalidate {
+				_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+			}
+			recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
 			return nil, 0
 		}
 	}
@@ -232,6 +253,36 @@ func (s *OpenAIGatewayService) resolveOpenAIStickySessionAccount(
 	}
 
 	return account, accountID
+}
+
+func (s *OpenAIGatewayService) recheckStickyBoundOpenAIAccountFromDB(
+	ctx context.Context,
+	account *Account,
+	requestedModel string,
+) (*Account, stickyBindingDisposition) {
+	if account == nil {
+		return nil, newStickyBindingSoftMiss("db_recheck_miss")
+	}
+	if s == nil || s.schedulerSnapshot == nil || s.accountRepo == nil {
+		return account, stickyBindingDisposition{}
+	}
+
+	latest, err := s.accountRepo.GetByID(ctx, account.ID)
+	if err != nil || latest == nil {
+		return nil, newStickyBindingSoftMiss("db_recheck_miss")
+	}
+
+	disposition := classifyStickyBindingDisposition(latest, requestedModel)
+	if disposition.Outcome != stickyBindingOutcomeUsable {
+		return nil, disposition
+	}
+	if !isOpenAIAccountBaseEligible(latest) {
+		return nil, newStickyBindingHardInvalidate("platform_mismatch")
+	}
+	if !isOpenAIAccountModelEligible(latest, requestedModel) {
+		return nil, newStickyBindingHardInvalidate("model_unsupported")
+	}
+	return latest, stickyBindingDisposition{}
 }
 
 func (s *OpenAIGatewayService) buildOpenAIIndexedCandidatePager(
@@ -439,7 +490,7 @@ func (s *OpenAIGatewayService) tryAcquireImmediateOpenAISelection(
 		},
 		bind: func(account *Account) {
 			if req.bindSticky && req.sessionHash != "" {
-				_ = s.BindStickySession(ctx, req.groupID, req.sessionHash, account.ID)
+				_ = s.BindStickySessionIfUnbound(ctx, req.groupID, req.sessionHash, account.ID)
 			}
 		},
 	})
@@ -592,16 +643,27 @@ func (s *OpenAIGatewayService) trySelectOpenAIStickyLoadAwareAccount(
 		return nil, false
 	}
 
+	finalizeDisposition := stickyBindingDisposition{}
 	return s.trySelectResolvedOpenAIStickyAccount(ctx, openAIStickyResolvedSelectionSpec{
 		account:   account,
 		accountID: accountID,
 		cfg:       cfg,
 		finalize: func(account *Account) *Account {
-			return s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
+			verified, disposition := s.recheckStickyBoundOpenAIAccountFromDB(ctx, account, requestedModel)
+			finalizeDisposition = disposition
+			return verified
 		},
 		onSelected: s.buildOpenAIStickyTTLSelectionAdapter(ctx, groupID, sessionHash, stickyTTL),
 		onFinalizeMiss: func() {
-			_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+			disposition := finalizeDisposition
+			if disposition.Outcome == stickyBindingOutcomeUsable {
+				disposition = newStickyBindingSoftMiss("db_recheck_miss")
+			}
+			if disposition.Outcome == stickyBindingOutcomeHardInvalidate {
+				_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+			}
+			recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
+			finalizeDisposition = stickyBindingDisposition{}
 		},
 	})
 }

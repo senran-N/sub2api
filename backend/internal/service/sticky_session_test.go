@@ -20,11 +20,11 @@ import (
 //   - nil 账号：不清理（返回 false）
 //   - 状态为错误或禁用：清理
 //   - 不可调度：清理
-//   - 临时不可调度且未过期：清理
+//   - 临时不可调度且未过期：不清理（soft miss）
 //   - 临时不可调度已过期：不清理
 //   - 正常可调度状态：不清理
 //   - OAuth 凭证已明确不可恢复：清理
-//   - 模型限流（任意时长）：清理
+//   - 模型限流（任意时长）：不清理（soft miss）
 //
 // TestShouldClearStickySession tests the sticky session clearing logic.
 // Verifies correct behavior for various account states including:
@@ -44,9 +44,9 @@ func TestShouldClearStickySession(t *testing.T) {
 		UpdatedAt:                now.UTC().Format(time.RFC3339),
 	}, now.UTC())
 
-	// 短限流时间（有限流即清除粘性会话）
+	// 短限流时间（有限流只 soft miss，不清除粘性会话）
 	shortRateLimitReset := now.Add(5 * time.Second).Format(time.RFC3339)
-	// 长限流时间（有限流即清除粘性会话）
+	// 长限流时间（有限流只 soft miss，不清除粘性会话）
 	longRateLimitReset := now.Add(30 * time.Second).Format(time.RFC3339)
 
 	tests := []struct {
@@ -59,7 +59,7 @@ func TestShouldClearStickySession(t *testing.T) {
 		{name: "status error", account: &Account{Status: StatusError, Schedulable: true}, requestedModel: "", want: true},
 		{name: "status disabled", account: &Account{Status: StatusDisabled, Schedulable: true}, requestedModel: "", want: true},
 		{name: "schedulable false", account: &Account{Status: StatusActive, Schedulable: false}, requestedModel: "", want: true},
-		{name: "temp unschedulable", account: &Account{Status: StatusActive, Schedulable: true, TempUnschedulableUntil: &future}, requestedModel: "", want: true},
+		{name: "temp unschedulable", account: &Account{Status: StatusActive, Schedulable: true, TempUnschedulableUntil: &future}, requestedModel: "", want: false},
 		{name: "temp unschedulable expired", account: &Account{Status: StatusActive, Schedulable: true, TempUnschedulableUntil: &past}, requestedModel: "", want: false},
 		{name: "active schedulable", account: &Account{Status: StatusActive, Schedulable: true}, requestedModel: "", want: false},
 		{
@@ -121,7 +121,7 @@ func TestShouldClearStickySession(t *testing.T) {
 			requestedModel: "gpt-5.1",
 			want:           false,
 		},
-		// 模型限流测试：有限流即清除
+		// 模型限流测试：有限流只 soft miss，不清除
 		{
 			name: "model rate limited short duration",
 			account: &Account{
@@ -136,7 +136,7 @@ func TestShouldClearStickySession(t *testing.T) {
 				},
 			},
 			requestedModel: "claude-sonnet-4",
-			want:           true, // 有限流即清除
+			want:           false,
 		},
 		{
 			name: "model rate limited long duration",
@@ -152,7 +152,7 @@ func TestShouldClearStickySession(t *testing.T) {
 				},
 			},
 			requestedModel: "claude-sonnet-4",
-			want:           true, // 有限流即清除
+			want:           false,
 		},
 		{
 			name: "model rate limited different model",

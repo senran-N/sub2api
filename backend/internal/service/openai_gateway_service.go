@@ -146,6 +146,17 @@ type OpenAICompatibilityFallbackMetricsSnapshot struct {
 	MetadataLegacyFallbackSingleAccountRetryTotal  int64 `json:"metadata_legacy_fallback_single_account_retry_total"`
 	MetadataLegacyFallbackAccountSwitchCountTotal  int64 `json:"metadata_legacy_fallback_account_switch_count_total"`
 	MetadataLegacyFallbackTotal                    int64 `json:"metadata_legacy_fallback_total"`
+
+	StickySoftMissTotal            int64 `json:"sticky_soft_miss_total"`
+	StickyHardInvalidateTotal      int64 `json:"sticky_hard_invalidate_total"`
+	StickyLookupMissTotal          int64 `json:"sticky_lookup_miss_total"`
+	StickyTransportSoftMissTotal   int64 `json:"sticky_transport_soft_miss_total"`
+	StickyTemporarySoftMissTotal   int64 `json:"sticky_temporary_soft_miss_total"`
+	StickyModelInvalidateTotal     int64 `json:"sticky_model_invalidate_total"`
+	PreviousSoftMissTotal          int64 `json:"previous_soft_miss_total"`
+	PreviousHardInvalidateTotal    int64 `json:"previous_hard_invalidate_total"`
+	PreviousLookupMissTotal        int64 `json:"previous_lookup_miss_total"`
+	PreviousTransportSoftMissTotal int64 `json:"previous_transport_soft_miss_total"`
 }
 
 type openAIWSRetryMetrics struct {
@@ -349,6 +360,7 @@ func (s *OpenAIGatewayService) getCodexClientRestrictionDetector() CodexClientRe
 func SnapshotOpenAICompatibilityFallbackMetrics() OpenAICompatibilityFallbackMetricsSnapshot {
 	legacyReadFallbackTotal, legacyReadFallbackHit, legacyDualWriteTotal := openAIStickyCompatStats()
 	isMaxTokensOneHaiku, thinkingEnabled, prefetchedStickyAccount, prefetchedStickyGroup, singleAccountRetry, accountSwitchCount := RequestMetadataFallbackStats()
+	stickyBinding := snapshotOpenAIStickyBindingMetrics()
 
 	readHitRate := float64(0)
 	if legacyReadFallbackTotal > 0 {
@@ -369,6 +381,16 @@ func SnapshotOpenAICompatibilityFallbackMetrics() OpenAICompatibilityFallbackMet
 		MetadataLegacyFallbackSingleAccountRetryTotal:  singleAccountRetry,
 		MetadataLegacyFallbackAccountSwitchCountTotal:  accountSwitchCount,
 		MetadataLegacyFallbackTotal:                    metadataFallbackTotal,
+		StickySoftMissTotal:                            stickyBinding.StickySoftMissTotal,
+		StickyHardInvalidateTotal:                      stickyBinding.StickyHardInvalidateTotal,
+		StickyLookupMissTotal:                          stickyBinding.StickyLookupMissTotal,
+		StickyTransportSoftMissTotal:                   stickyBinding.StickyTransportSoftMissTotal,
+		StickyTemporarySoftMissTotal:                   stickyBinding.StickyTemporarySoftMissTotal,
+		StickyModelInvalidateTotal:                     stickyBinding.StickyModelInvalidateTotal,
+		PreviousSoftMissTotal:                          stickyBinding.PreviousSoftMissTotal,
+		PreviousHardInvalidateTotal:                    stickyBinding.PreviousHardInvalidateTotal,
+		PreviousLookupMissTotal:                        stickyBinding.PreviousLookupMissTotal,
+		PreviousTransportSoftMissTotal:                 stickyBinding.PreviousTransportSoftMissTotal,
 	}
 }
 

@@ -181,6 +181,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimite
 	require.NotNil(t, selection.Account)
 	require.Equal(t, int64(31002), selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	require.Equal(t, int64(31001), cache.sessionBindings["openai:session_hash_rate_limited"], "temporary rate limit should keep sticky binding")
 }
 
 func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_SkipsFreshlyRateLimitedSnapshotCandidate(t *testing.T) {
@@ -229,6 +230,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyDBRuntimeR
 	require.NotNil(t, selection.Account)
 	require.Equal(t, int64(33002), selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	require.Equal(t, int64(33001), cache.sessionBindings["openai:session_hash_db_runtime_recheck"], "db recheck miss should keep sticky binding")
 }
 
 func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_DBRuntimeRecheckSkipsStaleCachedCandidate(t *testing.T) {
@@ -620,6 +622,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionPreferredWSV2Ski
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	require.False(t, decision.StickySessionHit)
 	require.Equal(t, 1, decision.CandidateCount)
+	require.Equal(t, int64(2191), cache.sessionBindings["openai:"+sessionHash], "transport preference mismatch should keep sticky binding")
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
@@ -758,6 +761,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStick
 	require.Equal(t, int64(2202), selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	require.False(t, decision.StickySessionHit)
+	require.Equal(t, int64(2201), cache.sessionBindings["openai:session_hash_ws_only"], "required transport mismatch should keep sticky binding")
 	require.Equal(t, 1, decision.CandidateCount)
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()

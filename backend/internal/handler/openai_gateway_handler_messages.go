@@ -232,6 +232,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					account,
 					failoverErr,
 					service.CodexRecoveryDecision{},
+					sessionHash != "",
 					sameAccountRetryCount,
 					failedAccountIDs,
 					&switchCount,

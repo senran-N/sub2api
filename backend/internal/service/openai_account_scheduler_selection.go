@@ -30,6 +30,7 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		}).SessionStickyAccount
 	}
 	if s.service.isOpenAITransportFallbackCooling(stickyAccountID, req.RequiredTransport) {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, newStickyBindingSoftMiss("transport_cooling"), stickyAccountID, sessionHash, "")
 		return nil, nil
 	}
 
@@ -50,7 +51,7 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, nil
 	}
 	if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
-		_ = s.service.deleteStickySessionAccountID(ctx, req.GroupID, sessionHash)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, newStickyBindingSoftMiss("transport_incompatible"), accountID, sessionHash, "")
 		return nil, nil
 	}
 

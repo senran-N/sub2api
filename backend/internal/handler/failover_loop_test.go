@@ -226,7 +226,6 @@ func TestHandleFailoverError_ImmediateExhaustStatuses(t *testing.T) {
 	}{
 		{name: "401 blocks account switching", statusCode: 401},
 		{name: "403 blocks account switching", statusCode: 403},
-		{name: "429 blocks account switching", statusCode: 429},
 	}
 
 	for _, tt := range tests {
@@ -247,12 +246,13 @@ func TestHandleFailoverError_ImmediateExhaustStatuses(t *testing.T) {
 }
 
 func TestShouldExhaustFailoverImmediately(t *testing.T) {
-	require.False(t, shouldExhaustFailoverImmediately(nil))
-	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(401, false, false)))
-	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(403, false, false)))
-	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(429, false, false)))
-	require.False(t, shouldExhaustFailoverImmediately(newTestFailoverErr(500, false, false)))
-	require.False(t, shouldExhaustFailoverImmediately(newTestFailoverErr(400, true, false)))
+	require.False(t, shouldExhaustFailoverImmediately(nil, false))
+	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(401, false, false), false))
+	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(403, false, false), false))
+	require.True(t, shouldExhaustFailoverImmediately(newTestFailoverErr(429, false, false), false))
+	require.False(t, shouldExhaustFailoverImmediately(newTestFailoverErr(429, false, false), true))
+	require.False(t, shouldExhaustFailoverImmediately(newTestFailoverErr(500, false, false), false))
+	require.False(t, shouldExhaustFailoverImmediately(newTestFailoverErr(400, true, false), false))
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +325,26 @@ func TestHandleFailoverError_SameAccountRetry(t *testing.T) {
 		// 验证等待了 sameAccountRetryDelay (500ms)
 		require.GreaterOrEqual(t, elapsed, 400*time.Millisecond)
 		require.Less(t, elapsed, 2*time.Second)
+	})
+
+	t.Run("bound session 429 retries then exhausts without switching", func(t *testing.T) {
+		mock := &mockTempUnscheduler{}
+		fs := NewFailoverState(3, true)
+		err := newTestFailoverErr(429, true, false)
+
+		for i := 1; i <= maxSameAccountRetries; i++ {
+			action := fs.HandleFailoverError(context.Background(), mock, 100, "openai", err)
+			require.Equal(t, FailoverContinue, action)
+			require.Equal(t, i, fs.SameAccountRetryCount[100])
+			require.Equal(t, 0, fs.SwitchCount)
+			require.Empty(t, mock.calls)
+		}
+
+		action := fs.HandleFailoverError(context.Background(), mock, 100, "openai", err)
+		require.Equal(t, FailoverExhausted, action)
+		require.Equal(t, 0, fs.SwitchCount)
+		require.Empty(t, mock.calls, "session-bound 429 should not temp unschedule or switch account")
+		require.Contains(t, fs.FailedAccountIDs, int64(100))
 	})
 
 	t.Run("达到最大重试次数前均返回FailoverContinue", func(t *testing.T) {

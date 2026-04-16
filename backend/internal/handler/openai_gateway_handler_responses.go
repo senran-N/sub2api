@@ -297,12 +297,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				lastFailoverErr = failoverErr
 				codexFailoverDecision := service.CodexRecoveryDecision{}
 				if profile.NativeClient {
-					codexFailoverDecision = h.gatewayService.ResolveCodexFailoverRecovery(c, account, failoverErr)
+					codexFailoverDecision = h.gatewayService.ResolveCodexFailoverRecovery(c, account, failoverErr, sessionHash != "" || previousResponseID != "")
 				}
 				decision := applyOpenAIPoolFailoverPolicy(
 					account,
 					failoverErr,
 					codexFailoverDecision,
+					sessionHash != "" || previousResponseID != "",
 					sameAccountRetryCount,
 					failedAccountIDs,
 					&switchCount,

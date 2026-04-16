@@ -43,7 +43,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 			return nil, errors.New("no available OpenAI accounts")
 		}
 
-		_ = s.BindStickySession(ctx, groupID, sessionHash, selected.ID)
+		_ = s.BindStickySessionIfUnbound(ctx, groupID, sessionHash, selected.ID)
 		return selected, nil
 	}
 
@@ -63,7 +63,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 		return nil, errors.New("no available OpenAI accounts")
 	}
 
-	_ = s.BindStickySession(ctx, groupID, sessionHash, selected.ID)
+	_ = s.BindStickySessionIfUnbound(ctx, groupID, sessionHash, selected.ID)
 
 	return selected, nil
 }
@@ -78,6 +78,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 		}).SessionStickyAccount
 	}
 	if s.isOpenAITransportFallbackCooling(stickyAccountID, requiredTransport) {
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, newStickyBindingSoftMiss("transport_cooling"), stickyAccountID, sessionHash, "")
 		return nil
 	}
 	account, _ := s.resolveOpenAIStickySessionAccount(
