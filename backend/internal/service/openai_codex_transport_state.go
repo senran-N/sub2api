@@ -44,6 +44,7 @@ type codexTransportStateInput struct {
 	PreferIngressSession  bool
 	PreviousResponseID    string
 	PromptCacheKey        string
+	SessionHash           string
 	StoreDisabled         bool
 	TurnState             string
 }
@@ -68,10 +69,12 @@ func (s *OpenAIGatewayService) resolveCodexTransportState(c *gin.Context, input 
 		recordOpenAICodexTransportWarmup()
 	}
 
-	if input.PreferIngressSession {
+	if propagatedSessionHash := strings.TrimSpace(input.SessionHash); propagatedSessionHash != "" {
+		state.SessionHash = propagatedSessionHash
+	} else if input.PreferIngressSession {
 		state.SessionHash = s.GenerateOpenAIWSIngressSessionHash(c, input.Body)
 	} else {
-		state.SessionHash = s.GenerateSessionHash(c, nil)
+		state.SessionHash = s.GenerateSessionHash(c, input.Body)
 		if state.SessionHash == "" {
 			var legacySessionHash string
 			state.SessionHash, legacySessionHash = openAIWSSessionHashesFromID(input.PromptCacheKey)

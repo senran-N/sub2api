@@ -8,6 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type openAIResolvedSessionHashContextKey struct{}
+
+var openAIResolvedSessionHashKey = openAIResolvedSessionHashContextKey{}
+
 // ExtractSessionID extracts the raw session ID from headers or body without hashing.
 // Used by ForwardAsAnthropic to pass as prompt_cache_key for upstream cache.
 func (s *OpenAIGatewayService) ExtractSessionID(c *gin.Context, body []byte) string {
@@ -74,6 +78,32 @@ func BuildOpenAIWSIngressFallbackSessionSeed(apiKey *APIKey) string {
 
 func (s *OpenAIGatewayService) GenerateOpenAIWSIngressSessionHash(c *gin.Context, body []byte) string {
 	return s.GenerateSessionHashWithFallback(c, body, BuildOpenAIWSIngressFallbackSessionSeed(getOpenAIAPIKeyFromContext(c)))
+}
+
+func withOpenAIResolvedSessionHash(ctx context.Context, sessionHash string) context.Context {
+	if ctx == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(sessionHash)
+	if trimmed == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, openAIResolvedSessionHashKey, trimmed)
+}
+
+func openAIResolvedSessionHashFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	value, _ := ctx.Value(openAIResolvedSessionHashKey).(string)
+	return strings.TrimSpace(value)
+}
+
+func AttachOpenAIResolvedSessionHash(c *gin.Context, sessionHash string) {
+	if c == nil || c.Request == nil {
+		return
+	}
+	c.Request = c.Request.WithContext(withOpenAIResolvedSessionHash(c.Request.Context(), sessionHash))
 }
 
 func resolveOpenAIRequestSessionID(c *gin.Context, body []byte) string {

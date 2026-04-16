@@ -173,7 +173,7 @@ func TestOpenAIBuildOpenAIWSHeadersOAuth_UsesStableUpstreamPersona(t *testing.T)
 		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-acc"},
 	}
 
-	headers, resolution := svc.buildOpenAIWSHeaders(c, account, "token", OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, "", "", "pcache_123")
+	headers, resolution := svc.buildOpenAIWSHeaders(c, nil, account, "token", OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, "", "", "pcache_123")
 	require.Equal(t, codexCLIUserAgent, headers.Get("User-Agent"))
 	require.Equal(t, "codex_cli_rs", headers.Get("originator"))
 	require.Equal(t, openAIWSBetaV2Value, headers.Get("OpenAI-Beta"))
@@ -255,7 +255,7 @@ func TestOpenAIBuildOpenAIWSHeadersOAuthNativeClient_UsesSessionIDOnlyAndCodexHe
 		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-acc"},
 	}
 
-	headers, resolution := svc.buildOpenAIWSHeaders(c, account, "token", OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, "", "", "pcache_123")
+	headers, resolution := svc.buildOpenAIWSHeaders(c, nil, account, "token", OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, "", "", "pcache_123")
 	require.Equal(t, isolateOpenAISessionID(account.ID, "sess-cli"), headers.Get("session_id"))
 	require.Empty(t, headers.Get("conversation_id"))
 	require.Equal(t, isolateOpenAISessionID(account.ID, "sess-cli"), headers.Get("x-client-request-id"))
@@ -384,7 +384,52 @@ func TestOpenAIBuildOpenAIWSHeaders_OAuthPropagatesSanitizedSubagentHeaders(t *t
 		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-acc"},
 	}
 
-	headers, _ := svc.buildOpenAIWSHeaders(c, account, "token", OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, "", "", "pcache_123")
+	headers, _ := svc.buildOpenAIWSHeaders(c, nil, account, "token", OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, "", "", "pcache_123")
 	require.Equal(t, "review", headers.Get(openAICodexMetadataSubagentKey))
 	require.Equal(t, generateSessionUUID("openai_codex_parent_thread:40:parent-thread-header"), headers.Get(openAICodexMetadataParentThreadIDKey))
+}
+
+func TestOpenAIBuildOpenAIWSHeaders_OAuthPropagatesSanitizedBodyMetadata(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.120.0")
+	c.Request.Header.Set("originator", "codex_cli_rs")
+
+	svc := &OpenAIGatewayService{}
+	account := &Account{
+		ID:          41,
+		Type:        AccountTypeOAuth,
+		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-acc"},
+	}
+	body := []byte(`{
+		"model":"gpt-5.4",
+		"prompt_cache_key":"pcache_local",
+		"type":"response.create",
+		"client_metadata":{
+			"x-codex-parent-thread-id":"parent-thread-local",
+			"x-openai-subagent":"review"
+		}
+	}`)
+
+	prepared, err := svc.prepareOpenAIForwardRequest(c, account, body, "gpt-5.4", false, "pcache_local", "", true, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.NotNil(t, prepared)
+
+	headers, resolution := svc.buildOpenAIWSHeaders(
+		c,
+		prepared.body,
+		account,
+		"token",
+		OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2},
+		"",
+		"",
+		prepared.promptCacheKey,
+	)
+	require.Equal(t, "review", headers.Get(openAICodexMetadataSubagentKey))
+	require.Equal(t, generateSessionUUID("openai_codex_parent_thread:41:parent-thread-local"), headers.Get(openAICodexMetadataParentThreadIDKey))
+	require.Equal(t, isolateOpenAISessionID(account.ID, "pcache_local"), headers.Get("session_id"))
+	require.Equal(t, "prompt_cache_key", resolution.SessionSource)
 }

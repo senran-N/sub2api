@@ -90,10 +90,9 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 	preferredConnID := transportState.PreferredConnID
 	storeDisabledConnMode := transportState.StoreDisabledConnMode
 
-	profile := GetCodexRequestProfile(c, firstPayload.rawForHash, s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
-	isCodexCLI := profile.NativeClient
 	wsHeaders, _ := s.buildOpenAIWSHeaders(
 		c,
+		firstPayload.payloadRaw,
 		account,
 		token,
 		wsDecision,
@@ -122,7 +121,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressSessionContext(
 		preferredConnID:       preferredConnID,
 		storeDisabled:         storeDisabled,
 		storeDisabledConnMode: storeDisabledConnMode,
-		isCodexCLI:            isCodexCLI,
+		isCodexCLI:            transportState.TrackCompatibilityMetrics,
 		firstTurnWarmup:       transportState.Warmup,
 		baseAcquireReq: openAIWSAcquireRequest{
 			Account: account,

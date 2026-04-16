@@ -172,6 +172,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	}
 
 	sessionHash := h.gatewayService.GenerateOpenAIWSIngressSessionHash(c, firstMessage)
+	service.AttachOpenAIResolvedSessionHash(c, sessionHash)
 	initialSelectionModel := schedulingModel
 	schedulerCtx := service.WithOpenAICodexTransportPreference(ctx, profile.NativeClient)
 	selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(

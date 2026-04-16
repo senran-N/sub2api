@@ -58,6 +58,7 @@ func (s *OpenAIGatewayService) buildOpenAIResponsesWSURL(account *Account) (stri
 
 func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	c *gin.Context,
+	body []byte,
 	account *Account,
 	token string,
 	decision OpenAIWSProtocolDecision,
@@ -66,8 +67,12 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	promptCacheKey string,
 ) (http.Header, openAIWSSessionHeaderResolution) {
 	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
-	profile := GetCodexRequestProfile(c, nil, forceCodexCLI)
+	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
 	policy := NewCodexNativeMutationPolicy(profile)
+	resolvedPromptCacheKey := strings.TrimSpace(promptCacheKey)
+	if resolvedPromptCacheKey == "" {
+		resolvedPromptCacheKey = strings.TrimSpace(profile.Body.PromptCacheKey)
+	}
 
 	headers := make(http.Header)
 	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
@@ -80,9 +85,9 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	}
 	upstreamTarget.ApplyAuthHeader(headers, token)
 
-	sessionResolution := policy.ResolveSessionHeaders(promptCacheKey)
+	sessionResolution := policy.ResolveSessionHeaders(resolvedPromptCacheKey)
 	if account != nil && account.Type == AccountTypeOAuth {
-		sessionResolution = policy.ResolveOAuthSessionHeaders(promptCacheKey, "", false)
+		sessionResolution = policy.ResolveOAuthSessionHeaders(resolvedPromptCacheKey, "", false)
 	}
 	if acceptLanguage := policy.ResolveAcceptLanguage(); acceptLanguage != "" && (account == nil || account.Type != AccountTypeOAuth) {
 		headers.Set("accept-language", acceptLanguage)
@@ -134,12 +139,12 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 		if windowID := resolveOpenAICodexUpstreamWindowID(account.ID); windowID != "" {
 			headers.Set(openAICodexMetadataWindowIDKey, windowID)
 		}
-		if subagent := resolveOpenAICodexUpstreamSubagent(profile, nil); subagent != "" {
+		if subagent := resolveOpenAICodexUpstreamSubagent(profile, body); subagent != "" {
 			headers.Set(openAICodexMetadataSubagentKey, subagent)
 		} else {
 			headers.Del(openAICodexMetadataSubagentKey)
 		}
-		if parentThreadID := resolveOpenAICodexUpstreamParentThreadID(account.ID, profile, nil); parentThreadID != "" {
+		if parentThreadID := resolveOpenAICodexUpstreamParentThreadID(account.ID, profile, body); parentThreadID != "" {
 			headers.Set(openAICodexMetadataParentThreadIDKey, parentThreadID)
 		} else {
 			headers.Del(openAICodexMetadataParentThreadIDKey)

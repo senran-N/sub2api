@@ -107,11 +107,19 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	hasFunctionCallOutput := openAIWSRequestHasFunctionCallOutput(payload["input"])
 	debugEnabled := isOpenAIWSModeDebugEnabled()
 	payloadBytes := -1
+	var payloadBody []byte
+	resolvePayloadBody := func() []byte {
+		if payloadBody != nil {
+			return payloadBody
+		}
+		payloadBody = payloadAsJSONBytes(payload)
+		return payloadBody
+	}
 	resolvePayloadBytes := func() int {
 		if payloadBytes >= 0 {
 			return payloadBytes
 		}
-		payloadBytes = len(payloadAsJSONBytes(payload))
+		payloadBytes = len(resolvePayloadBody())
 		return payloadBytes
 	}
 	streamValue := "-"
@@ -154,10 +162,12 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	storeDisabled := s.isOpenAIWSStoreDisabledInRequest(reqBody, account)
 	transportState := s.resolveCodexTransportState(c, codexTransportStateInput{
 		AccountID:             account.ID,
+		Body:                  resolvePayloadBody(),
 		HasFunctionCallOutput: hasFunctionCallOutput,
 		LastFailureReason:     lastFailureReason,
 		PreviousResponseID:    previousResponseID,
 		PromptCacheKey:        promptCacheKey,
+		SessionHash:           openAIResolvedSessionHashFromContext(ctx),
 		StoreDisabled:         storeDisabled,
 		TurnState:             turnState,
 	})
@@ -169,7 +179,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	hasExplicitContinuation := transportState.HasExplicitContinuation
 	storeDisabledConnMode := transportState.StoreDisabledConnMode
 	forceNewConn := transportState.ForceNewConn
-	wsHeaders, sessionResolution := s.buildOpenAIWSHeaders(c, account, token, decision, turnState, turnMetadata, promptCacheKey)
+	wsHeaders, sessionResolution := s.buildOpenAIWSHeaders(c, resolvePayloadBody(), account, token, decision, turnState, turnMetadata, promptCacheKey)
 	logOpenAIWSModeDebug(
 		"acquire_start account_id=%d account_type=%s transport=%s preferred_conn_id=%s preferred_conn_source=%s has_previous_response_id=%v has_explicit_continuation=%v session_hash=%s has_turn_state=%v turn_state_len=%d restored_turn_state=%v has_turn_metadata=%v turn_metadata_len=%d store_disabled=%v store_disabled_conn_mode=%s retry_last_reason=%s force_new_conn=%v warmup=%v fallback_cooling=%v header_user_agent=%s header_openai_beta=%s header_originator=%s header_accept_language=%s header_session_id=%s header_conversation_id=%s session_id_source=%s conversation_id_source=%s has_prompt_cache_key=%v has_chatgpt_account_id=%v has_authorization=%v has_session_id=%v has_conversation_id=%v proxy_enabled=%v",
 		account.ID,
@@ -950,12 +960,19 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			return parseErr
 		}
 		nextPayload = s.prepareOpenAIWSClientPayload(account, nextPayload)
-		if nextPayload.promptCacheKey != "" {
-			// ingress 会话在整个客户端 WS 生命周期内复用同一上游连接；
-			// prompt_cache_key 对握手头的更新仅在未来需要重新建连时生效。
-			updatedHeaders, _ := s.buildOpenAIWSHeaders(c, account, token, ingressSession.wsDecision, ingressSession.turnState, strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)), nextPayload.promptCacheKey)
-			ingressSession.baseAcquireReq.Headers = updatedHeaders
-		}
+		// ingress 会话在整个客户端 WS 生命周期内复用同一上游连接；
+		// 后续 turn 的 prompt_cache_key / client_metadata 仅在未来需要重新建连时影响握手头。
+		updatedHeaders, _ := s.buildOpenAIWSHeaders(
+			c,
+			nextPayload.payloadRaw,
+			account,
+			token,
+			ingressSession.wsDecision,
+			ingressSession.turnState,
+			strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)),
+			nextPayload.promptCacheKey,
+		)
+		ingressSession.baseAcquireReq.Headers = updatedHeaders
 		if nextPayload.previousResponseID != "" {
 			expectedPrev := strings.TrimSpace(lastTurnResponseID)
 			chainedFromLast := expectedPrev != "" && nextPayload.previousResponseID == expectedPrev

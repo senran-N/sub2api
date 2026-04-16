@@ -175,6 +175,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 	// Generate session hash (header first; fallback to prompt_cache_key)
 	sessionHash := h.gatewayService.GenerateSessionHash(c, sessionHashBody)
+	service.AttachOpenAIResolvedSessionHash(c, sessionHash)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0

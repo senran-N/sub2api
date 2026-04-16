@@ -94,6 +94,47 @@ func TestResolveCodexTransportState_PrefersPreviousResponseConnection(t *testing
 	require.False(t, state.ForceNewConn)
 }
 
+func TestResolveCodexTransportState_UsesPropagatedSessionHashForHTTPWSStateRestore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Config{}
+	store := NewOpenAIWSStateStore(&stubGatewayCache{})
+	svc := &OpenAIGatewayService{
+		cfg:                cfg,
+		cache:              &stubGatewayCache{},
+		openaiWSStateStore: store,
+	}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	groupID := int64(204)
+	c.Set("api_key", &APIKey{GroupID: &groupID})
+
+	body := []byte(`{"model":"gpt-5.1","input":[{"type":"function_call_output","call_id":"call_1","output":"ok"}]}`)
+	sessionHash := svc.GenerateSessionHash(c, body)
+	require.NotEmpty(t, sessionHash)
+
+	store.BindSessionTurnState(groupID, sessionHash, "turn_state_from_seed", time.Minute)
+	store.BindSessionConn(groupID, sessionHash, "conn_seed_1", time.Minute)
+	store.BindSessionTransport(groupID, sessionHash, OpenAIUpstreamTransportResponsesWebsocketV2, time.Minute)
+
+	state := svc.resolveCodexTransportState(c, codexTransportStateInput{
+		Body:                  body,
+		HasFunctionCallOutput: true,
+		SessionHash:           sessionHash,
+		StoreDisabled:         true,
+	})
+
+	require.Equal(t, sessionHash, state.SessionHash)
+	require.Equal(t, "turn_state_from_seed", state.TurnState)
+	require.True(t, state.TurnStateRestored)
+	require.Equal(t, "conn_seed_1", state.PreferredConnID)
+	require.Equal(t, codexTransportPreferredConnSourceSession, state.PreferredConnSource)
+	require.Equal(t, OpenAIUpstreamTransportResponsesWebsocketV2, state.PreferredTransport)
+	require.Equal(t, codexTransportPreferredTransportSourceSession, state.PreferredTransportSource)
+}
+
 func TestResolveCodexTransportState_IngressFallbackSessionAndWarmup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
