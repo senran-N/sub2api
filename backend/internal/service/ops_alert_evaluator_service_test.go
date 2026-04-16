@@ -222,6 +222,11 @@ func TestComputeRuntimeObservabilityMetric(t *testing.T) {
 				WaitPlanSuccessRate:       0.75,
 				AvgFetchedAccountsPerPage: 50,
 			},
+			OpenAIAccountScheduler: RuntimeOpenAIAccountSchedulerSummary{
+				StickyIntentMissRate:    0.12,
+				NonStickyIntentShare:    0.35,
+				IndexedLoadBalanceShare: 0.27,
+			},
 			Idempotency: RuntimeIdempotencySummary{
 				AvgProcessingDurationMs: 30,
 			},
@@ -237,6 +242,9 @@ func TestComputeRuntimeObservabilityMetric(t *testing.T) {
 		{name: "scheduler_acquire_success_rate", metricType: "scheduler_acquire_success_rate", wantValue: 70, wantOK: true},
 		{name: "scheduler_wait_plan_success_rate", metricType: "scheduler_wait_plan_success_rate", wantValue: 75, wantOK: true},
 		{name: "scheduler_index_page_density", metricType: "scheduler_index_page_density", wantValue: 50, wantOK: true},
+		{name: "openai_scheduler_sticky_intent_miss_rate", metricType: "openai_scheduler_sticky_intent_miss_rate", wantValue: 12, wantOK: true},
+		{name: "openai_scheduler_non_sticky_share", metricType: "openai_scheduler_non_sticky_share", wantValue: 35, wantOK: true},
+		{name: "openai_scheduler_indexed_load_balance_share", metricType: "openai_scheduler_indexed_load_balance_share", wantValue: 27, wantOK: true},
 		{name: "idempotency_processing_avg_ms", metricType: "idempotency_processing_avg_ms", wantValue: 30, wantOK: true},
 		{name: "unknown", metricType: "nope", wantValue: 0, wantOK: false},
 	}
@@ -327,6 +335,50 @@ func TestBuildOpsAlertDescriptionForRuntimeMetrics(t *testing.T) {
 			wantParts: []string{
 				"Idempotency processing averaged 140.25ms",
 				"above the 80.00ms threshold",
+			},
+		},
+		{
+			name: "openai_scheduler_sticky_intent_miss_rate",
+			rule: &OpsAlertRule{
+				MetricType: "openai_scheduler_sticky_intent_miss_rate",
+				Operator:   ">",
+				Threshold:  10,
+			},
+			value:      18.5,
+			windowMins: 3,
+			wantParts: []string{
+				"sticky-intent miss fallback climbed to 18.50%",
+				"above the 10.00% threshold",
+				"indexed snapshot and runtime acquire cost",
+			},
+		},
+		{
+			name: "openai_scheduler_non_sticky_share",
+			rule: &OpsAlertRule{
+				MetricType: "openai_scheduler_non_sticky_share",
+				Operator:   ">",
+				Threshold:  25,
+			},
+			value:      41,
+			windowMins: 3,
+			wantParts: []string{
+				"non-sticky request share reached 41.00%",
+				"above the 25.00% threshold",
+			},
+		},
+		{
+			name: "openai_scheduler_indexed_load_balance_share",
+			rule: &OpsAlertRule{
+				MetricType: "openai_scheduler_indexed_load_balance_share",
+				Operator:   ">",
+				Threshold:  20,
+			},
+			value:      33.3,
+			windowMins: 3,
+			wantParts: []string{
+				"indexed load-balance share reached 33.30%",
+				"above the 20.00% threshold",
+				"instead of cheap sticky hits",
 			},
 		},
 	}

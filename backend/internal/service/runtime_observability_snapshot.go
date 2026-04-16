@@ -23,15 +23,25 @@ type RuntimeCompatibilityFallbackSummary struct {
 
 type RuntimeCodexCompatibilitySummary = OpenAICodexCompatibilitySummarySnapshot
 
+type RuntimeOpenAIAccountSchedulerSummary struct {
+	StickyIntentHitRate     float64 `json:"sticky_intent_hit_rate"`
+	StickyIntentMissRate    float64 `json:"sticky_intent_miss_rate"`
+	NonStickyIntentShare    float64 `json:"non_sticky_intent_share"`
+	IndexedLoadBalanceShare float64 `json:"indexed_load_balance_share"`
+	StickyMissIndexedShare  float64 `json:"sticky_miss_indexed_share"`
+}
+
 type RuntimeObservabilitySummary struct {
-	SchedulingRuntimeKernel     SchedulingRuntimeKernelSummary      `json:"scheduling_runtime_kernel"`
-	Idempotency                 RuntimeIdempotencySummary           `json:"idempotency"`
-	OpenAICompatibilityFallback RuntimeCompatibilityFallbackSummary `json:"openai_compatibility_fallback"`
-	OpenAICodexCompatibility    RuntimeCodexCompatibilitySummary    `json:"openai_codex_compatibility"`
+	SchedulingRuntimeKernel     SchedulingRuntimeKernelSummary       `json:"scheduling_runtime_kernel"`
+	OpenAIAccountScheduler      RuntimeOpenAIAccountSchedulerSummary `json:"openai_account_scheduler"`
+	Idempotency                 RuntimeIdempotencySummary            `json:"idempotency"`
+	OpenAICompatibilityFallback RuntimeCompatibilityFallbackSummary  `json:"openai_compatibility_fallback"`
+	OpenAICodexCompatibility    RuntimeCodexCompatibilitySummary     `json:"openai_codex_compatibility"`
 }
 
 type RuntimeObservabilitySnapshot struct {
 	SchedulingRuntimeKernel     SchedulingRuntimeKernelMetricsSnapshot     `json:"scheduling_runtime_kernel"`
+	OpenAIAccountScheduler      OpenAIAccountSchedulerMetricsSnapshot      `json:"openai_account_scheduler"`
 	Idempotency                 IdempotencyMetricsSnapshot                 `json:"idempotency"`
 	OpenAICompatibilityFallback OpenAICompatibilityFallbackMetricsSnapshot `json:"openai_compatibility_fallback"`
 	OpenAICodexCompatibility    OpenAICodexCompatibilityMetricsSnapshot    `json:"openai_codex_compatibility"`
@@ -40,6 +50,7 @@ type RuntimeObservabilitySnapshot struct {
 
 func buildRuntimeObservabilitySummary(
 	scheduling SchedulingRuntimeKernelMetricsSnapshot,
+	openAIScheduler OpenAIAccountSchedulerMetricsSnapshot,
 	idempotency IdempotencyMetricsSnapshot,
 	compatibility OpenAICompatibilityFallbackMetricsSnapshot,
 	codexCompatibility OpenAICodexCompatibilityMetricsSnapshot,
@@ -56,6 +67,13 @@ func buildRuntimeObservabilitySummary(
 			SessionMissRate:             ratioOfInt64(scheduling.RuntimeSessionMisses, scheduling.RuntimeAcquireAttempts),
 			TotalRuntimeProbes:          scheduling.OrderedRuntimeProbes + scheduling.OrderedWaitPlanProbes,
 		},
+		OpenAIAccountScheduler: RuntimeOpenAIAccountSchedulerSummary{
+			StickyIntentHitRate:     openAIScheduler.StickyIntentHitRate,
+			StickyIntentMissRate:    openAIScheduler.StickyIntentMissRate,
+			NonStickyIntentShare:    openAIScheduler.NonStickyIntentShare,
+			IndexedLoadBalanceShare: openAIScheduler.IndexedLoadBalanceShare,
+			StickyMissIndexedShare:  openAIScheduler.StickyMissIndexedShare,
+		},
 		Idempotency: RuntimeIdempotencySummary{
 			ReplayShare:             ratioOfUint64(idempotency.ReplayTotal, idempotencyEvents),
 			ConflictShare:           ratioOfUint64(idempotency.ConflictTotal, idempotencyEvents),
@@ -71,16 +89,18 @@ func buildRuntimeObservabilitySummary(
 
 func SnapshotRuntimeObservability() RuntimeObservabilitySnapshot {
 	scheduling := SnapshotSchedulingRuntimeKernelMetrics()
+	openAIScheduler := snapshotDefaultOpenAIAccountSchedulerMetrics()
 	idempotency := GetIdempotencyMetricsSnapshot()
 	compatibility := SnapshotOpenAICompatibilityFallbackMetrics()
 	codexCompatibility := SnapshotOpenAICodexCompatibilityMetrics()
 
 	return RuntimeObservabilitySnapshot{
 		SchedulingRuntimeKernel:     scheduling,
+		OpenAIAccountScheduler:      openAIScheduler,
 		Idempotency:                 idempotency,
 		OpenAICompatibilityFallback: compatibility,
 		OpenAICodexCompatibility:    codexCompatibility,
-		Summary:                     buildRuntimeObservabilitySummary(scheduling, idempotency, compatibility, codexCompatibility),
+		Summary:                     buildRuntimeObservabilitySummary(scheduling, openAIScheduler, idempotency, compatibility, codexCompatibility),
 	}
 }
 

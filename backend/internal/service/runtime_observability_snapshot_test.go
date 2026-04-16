@@ -22,6 +22,13 @@ func TestBuildRuntimeObservabilitySummary(t *testing.T) {
 			RuntimeWaitPlanAttempts: 8,
 			RuntimeWaitPlanSuccess:  6,
 		},
+		OpenAIAccountSchedulerMetricsSnapshot{
+			StickyIntentHitRate:     0.8,
+			StickyIntentMissRate:    0.2,
+			NonStickyIntentShare:    0.3,
+			IndexedLoadBalanceShare: 0.25,
+			StickyMissIndexedShare:  0.15,
+		},
 		IdempotencyMetricsSnapshot{
 			ClaimTotal:                20,
 			ReplayTotal:               5,
@@ -53,6 +60,11 @@ func TestBuildRuntimeObservabilitySummary(t *testing.T) {
 	require.InDelta(t, 0.2, summary.SchedulingRuntimeKernel.FinalizeMissRate, 0.0001)
 	require.InDelta(t, 0.1, summary.SchedulingRuntimeKernel.SessionMissRate, 0.0001)
 	require.Equal(t, int64(12), summary.SchedulingRuntimeKernel.TotalRuntimeProbes)
+	require.InDelta(t, 0.8, summary.OpenAIAccountScheduler.StickyIntentHitRate, 0.0001)
+	require.InDelta(t, 0.2, summary.OpenAIAccountScheduler.StickyIntentMissRate, 0.0001)
+	require.InDelta(t, 0.3, summary.OpenAIAccountScheduler.NonStickyIntentShare, 0.0001)
+	require.InDelta(t, 0.25, summary.OpenAIAccountScheduler.IndexedLoadBalanceShare, 0.0001)
+	require.InDelta(t, 0.15, summary.OpenAIAccountScheduler.StickyMissIndexedShare, 0.0001)
 
 	require.InDelta(t, 5.0/28.0, summary.Idempotency.ReplayShare, 0.0001)
 	require.InDelta(t, 3.0/28.0, summary.Idempotency.ConflictShare, 0.0001)

@@ -440,6 +440,12 @@ func computeRuntimeObservabilityMetric(metricType string, snapshot RuntimeObserv
 		return snapshot.Summary.SchedulingRuntimeKernel.WaitPlanSuccessRate * 100, true
 	case "scheduler_index_page_density":
 		return snapshot.Summary.SchedulingRuntimeKernel.AvgFetchedAccountsPerPage, true
+	case "openai_scheduler_sticky_intent_miss_rate":
+		return snapshot.Summary.OpenAIAccountScheduler.StickyIntentMissRate * 100, true
+	case "openai_scheduler_non_sticky_share":
+		return snapshot.Summary.OpenAIAccountScheduler.NonStickyIntentShare * 100, true
+	case "openai_scheduler_indexed_load_balance_share":
+		return snapshot.Summary.OpenAIAccountScheduler.IndexedLoadBalanceShare * 100, true
 	case "idempotency_processing_avg_ms":
 		return snapshot.Summary.Idempotency.AvgProcessingDurationMs, true
 	default:
@@ -509,6 +515,30 @@ func buildOpsAlertDescription(rule *OpsAlertRule, value float64, windowMinutes i
 	case "scheduler_index_page_density":
 		return fmt.Sprintf(
 			"Unified scheduling kernel index page density is %.2f accounts/page over the last %dm (%s), below the %.2f threshold. Candidate pruning is too sparse and the hot path is spending extra probes on thin pages.",
+			value,
+			windowMinutes,
+			scope,
+			rule.Threshold,
+		)
+	case "openai_scheduler_sticky_intent_miss_rate":
+		return fmt.Sprintf(
+			"OpenAI sticky-intent miss fallback climbed to %.2f%% over the last %dm (%s), above the %.2f%% threshold. Sticky-bound requests are being pushed back into load-balance selection too often, which raises indexed snapshot and runtime acquire cost.",
+			value,
+			windowMinutes,
+			scope,
+			rule.Threshold,
+		)
+	case "openai_scheduler_non_sticky_share":
+		return fmt.Sprintf(
+			"OpenAI non-sticky request share reached %.2f%% over the last %dm (%s), above the %.2f%% threshold. Too many requests are entering fresh load-balance selection instead of reusing an existing sticky account.",
+			value,
+			windowMinutes,
+			scope,
+			rule.Threshold,
+		)
+	case "openai_scheduler_indexed_load_balance_share":
+		return fmt.Sprintf(
+			"OpenAI indexed load-balance share reached %.2f%% over the last %dm (%s), above the %.2f%% threshold. The scheduler is spending too much of the hot path in indexed snapshot fallback instead of cheap sticky hits.",
 			value,
 			windowMinutes,
 			scope,

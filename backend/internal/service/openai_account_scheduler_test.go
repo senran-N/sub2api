@@ -163,6 +163,7 @@ func (c *recordingOpenAIConcurrencyCache) GetAccountsLoadBatch(ctx context.Conte
 }
 
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimitedAccountFallsBackToFreshCandidate(t *testing.T) {
+	resetDefaultOpenAIAccountSchedulerMetrics()
 	ctx := context.Background()
 	groupID := int64(10101)
 	rateLimitedUntil := time.Now().Add(30 * time.Minute)
@@ -181,7 +182,20 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimite
 	require.NotNil(t, selection.Account)
 	require.Equal(t, int64(31002), selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	require.True(t, decision.HadStickyIntent)
+	require.True(t, decision.StickyMissFallback)
+	require.Equal(t, openAIAccountScheduleLoadBalanceStrategyIndexedSnapshot, decision.LoadBalanceStrategy)
 	require.Equal(t, int64(31001), cache.sessionBindings["openai:session_hash_rate_limited"], "temporary rate limit should keep sticky binding")
+
+	snapshot := svc.SnapshotOpenAIAccountSchedulerMetrics()
+	require.Equal(t, int64(1), snapshot.SelectTotal)
+	require.Equal(t, int64(1), snapshot.StickyIntentTotal)
+	require.Equal(t, int64(1), snapshot.StickyMissFallbackTotal)
+	require.Equal(t, int64(1), snapshot.LoadBalanceSelectTotal)
+	require.Equal(t, int64(1), snapshot.IndexedLoadBalanceSelectTotal)
+	require.Equal(t, int64(1), snapshot.StickyMissIndexedSelectTotal)
+	require.Zero(t, snapshot.StickyIntentHitRate)
+	require.Equal(t, 1.0, snapshot.StickyIntentMissRate)
 }
 
 func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_SkipsFreshlyRateLimitedSnapshotCandidate(t *testing.T) {
@@ -1560,6 +1574,7 @@ func TestCalcLoadSkewByMoments_Branches(t *testing.T) {
 }
 
 func TestDefaultOpenAIAccountScheduler_ReportSwitchAndSnapshot(t *testing.T) {
+	resetDefaultOpenAIAccountSchedulerMetrics()
 	schedulerAny := newDefaultOpenAIAccountScheduler(&OpenAIGatewayService{}, nil)
 	scheduler, ok := schedulerAny.(*defaultOpenAIAccountScheduler)
 	require.True(t, ok)
@@ -1568,26 +1583,42 @@ func TestDefaultOpenAIAccountScheduler_ReportSwitchAndSnapshot(t *testing.T) {
 	scheduler.ReportResult(1001, true, &ttft)
 	scheduler.ReportSwitch()
 	scheduler.metrics.recordSelect(OpenAIAccountScheduleDecision{
-		Layer:             openAIAccountScheduleLayerLoadBalance,
+		Layer:             openAIAccountScheduleLayerPreviousResponse,
 		LatencyMs:         8,
 		LoadSkew:          0.5,
 		StickyPreviousHit: true,
+		HadStickyIntent:   true,
 	})
 	scheduler.metrics.recordSelect(OpenAIAccountScheduleDecision{
 		Layer:            openAIAccountScheduleLayerSessionSticky,
 		LatencyMs:        6,
 		LoadSkew:         0.2,
 		StickySessionHit: true,
+		HadStickyIntent:  true,
+	})
+	scheduler.metrics.recordSelect(OpenAIAccountScheduleDecision{
+		Layer:               openAIAccountScheduleLayerLoadBalance,
+		LatencyMs:           7,
+		LoadSkew:            0.4,
+		HadStickyIntent:     true,
+		StickyMissFallback:  true,
+		LoadBalanceStrategy: openAIAccountScheduleLoadBalanceStrategyIndexedSnapshot,
 	})
 
 	snapshot := scheduler.SnapshotMetrics()
-	require.Equal(t, int64(2), snapshot.SelectTotal)
+	require.Equal(t, int64(3), snapshot.SelectTotal)
 	require.Equal(t, int64(1), snapshot.StickyPreviousHitTotal)
 	require.Equal(t, int64(1), snapshot.StickySessionHitTotal)
+	require.Equal(t, int64(3), snapshot.StickyIntentTotal)
+	require.Equal(t, int64(1), snapshot.StickyMissFallbackTotal)
 	require.Equal(t, int64(1), snapshot.LoadBalanceSelectTotal)
+	require.Equal(t, int64(1), snapshot.IndexedLoadBalanceSelectTotal)
+	require.Equal(t, int64(1), snapshot.StickyMissIndexedSelectTotal)
 	require.Equal(t, int64(1), snapshot.AccountSwitchTotal)
 	require.Greater(t, snapshot.SchedulerLatencyMsAvg, 0.0)
 	require.Greater(t, snapshot.StickyHitRatio, 0.0)
+	require.InDelta(t, 2.0/3.0, snapshot.StickyIntentHitRate, 0.0001)
+	require.InDelta(t, 1.0/3.0, snapshot.StickyIntentMissRate, 0.0001)
 	require.Greater(t, snapshot.LoadSkewAvg, 0.0)
 }
 
