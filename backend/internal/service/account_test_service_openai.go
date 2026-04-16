@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/openai"
@@ -96,12 +95,6 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
-		if isOAuth && s.accountRepo != nil {
-			if resetAt := (&RateLimitService{}).calculateOpenAI429ResetTime(resp.Header); resetAt != nil {
-				_ = s.accountRepo.SetRateLimited(ctx, account.ID, *resetAt)
-				account.RateLimitResetAt = resetAt
-			}
-		}
 		if s.accountRepo != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
 			authErrMsg := fmt.Sprintf("Authentication failed (%d): %s", resp.StatusCode, string(body))
 			_ = s.accountRepo.SetError(ctx, account.ID, authErrMsg)
@@ -118,12 +111,6 @@ func (s *AccountTestService) handleOpenAIOAuthProbeState(ctx context.Context, ac
 	if updates, err := extractOpenAICodexProbeUpdates(resp); err == nil && len(updates) > 0 {
 		_ = s.accountRepo.UpdateExtra(ctx, account.ID, updates)
 		mergeAccountExtra(account, updates)
-	}
-	if snapshot := ParseCodexRateLimitHeaders(resp.Header); snapshot != nil {
-		if resetAt := codexRateLimitResetAtFromSnapshot(snapshot, time.Now()); resetAt != nil {
-			_ = s.accountRepo.SetRateLimited(ctx, account.ID, *resetAt)
-			account.RateLimitResetAt = resetAt
-		}
 	}
 }
 

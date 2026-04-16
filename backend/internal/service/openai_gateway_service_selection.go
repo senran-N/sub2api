@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
 )
@@ -280,7 +279,6 @@ func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Co
 	if err != nil || latest == nil {
 		return nil
 	}
-	syncOpenAICodexRateLimitFromExtra(ctx, s.accountRepo, latest, time.Now())
 	if !isOpenAIAccountRuntimeEligible(latest, requestedModel) {
 		return nil
 	}
@@ -300,6 +298,5 @@ func (s *OpenAIGatewayService) getSchedulableAccount(ctx context.Context, accoun
 	if err != nil || account == nil {
 		return account, err
 	}
-	syncOpenAICodexRateLimitFromExtra(ctx, s.accountRepo, account, time.Now())
 	return account, nil
 }

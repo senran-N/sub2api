@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 )
@@ -13,10 +12,6 @@ func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int,
 	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
 	if err != nil {
 		return nil, 0, err
-	}
-	now := time.Now()
-	for i := range accounts {
-		syncOpenAICodexRateLimitFromExtra(ctx, s.accountRepo, &accounts[i], now)
 	}
 	return accounts, result.Total, nil
 }

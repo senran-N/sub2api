@@ -38,7 +38,6 @@ func shouldClearStickySession(account *Account, requestedModel string) bool {
 	if account == nil {
 		return false
 	}
-	applyOpenAICodexRateLimitFromExtra(account, time.Now())
 	if account.Status == StatusError || account.Status == StatusDisabled || !account.Schedulable {
 		return true
 	}

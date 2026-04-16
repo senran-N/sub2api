@@ -518,7 +518,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ErrorEventUsageL
 	}
 }
 
-func TestOpenAIGatewayService_UpdateCodexUsageSnapshot_ExhaustedSnapshotSetsRateLimit(t *testing.T) {
+func TestOpenAIGatewayService_UpdateCodexUsageSnapshot_ExhaustedSnapshotOnlyUpdatesExtra(t *testing.T) {
 	repo := &openAICodexSnapshotAsyncRepo{
 		updateExtraCh: make(chan map[string]any, 1),
 		rateLimitCh:   make(chan time.Time, 1),
@@ -532,7 +532,6 @@ func TestOpenAIGatewayService_UpdateCodexUsageSnapshot_ExhaustedSnapshotSetsRate
 		SecondaryResetAfterSeconds: ptrIntWS(1200),
 		SecondaryWindowMinutes:     ptrIntWS(300),
 	}
-	before := time.Now()
 	svc.updateCodexUsageSnapshot(context.Background(), 601, snapshot)
 
 	select {
@@ -544,9 +543,8 @@ func TestOpenAIGatewayService_UpdateCodexUsageSnapshot_ExhaustedSnapshotSetsRate
 
 	select {
 	case resetAt := <-repo.rateLimitCh:
-		require.WithinDuration(t, before.Add(time.Hour), resetAt, 2*time.Second)
-	case <-time.After(2 * time.Second):
-		t.Fatal("等待 codex 100% 自动切换限流超时")
+		t.Fatalf("unexpected runtime rate limit persisted from codex snapshot: %v", resetAt)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 
@@ -616,7 +614,7 @@ func TestOpenAIGatewayService_UpdateCodexUsageSnapshot_ThrottlesExtraWrites(t *t
 func ptrFloat64WS(v float64) *float64 { return &v }
 func ptrIntWS(v int) *int             { return &v }
 
-func TestOpenAIGatewayService_GetSchedulableAccount_ExhaustedCodexExtraSetsRateLimit(t *testing.T) {
+func TestOpenAIGatewayService_GetSchedulableAccount_DoesNotPromoteCodexExtraToRateLimit(t *testing.T) {
 	resetAt := time.Now().Add(6 * 24 * time.Hour)
 	account := Account{
 		ID:          701,
@@ -636,17 +634,15 @@ func TestOpenAIGatewayService_GetSchedulableAccount_ExhaustedCodexExtraSetsRateL
 	fresh, err := svc.getSchedulableAccount(context.Background(), account.ID)
 	require.NoError(t, err)
 	require.NotNil(t, fresh)
-	require.NotNil(t, fresh.RateLimitResetAt)
-	require.WithinDuration(t, resetAt.UTC(), *fresh.RateLimitResetAt, time.Second)
+	require.Nil(t, fresh.RateLimitResetAt)
 	select {
 	case persisted := <-repo.rateLimitCh:
-		require.WithinDuration(t, resetAt.UTC(), persisted, time.Second)
-	case <-time.After(2 * time.Second):
-		t.Fatal("等待旧快照补写限流状态超时")
+		t.Fatalf("unexpected persisted rate limit from codex extra: %v", persisted)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 
-func TestAdminService_ListAccounts_ExhaustedCodexExtraReturnsRateLimitedAccount(t *testing.T) {
+func TestAdminService_ListAccounts_DoesNotPromoteCodexExtraToRateLimit(t *testing.T) {
 	resetAt := time.Now().Add(4 * 24 * time.Hour)
 	repo := &openAICodexExtraListRepo{
 		stubOpenAIAccountRepo: stubOpenAIAccountRepo{accounts: []Account{{
@@ -669,13 +665,11 @@ func TestAdminService_ListAccounts_ExhaustedCodexExtraReturnsRateLimitedAccount(
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
 	require.Len(t, accounts, 1)
-	require.NotNil(t, accounts[0].RateLimitResetAt)
-	require.WithinDuration(t, resetAt.UTC(), *accounts[0].RateLimitResetAt, time.Second)
+	require.Nil(t, accounts[0].RateLimitResetAt)
 	select {
 	case persisted := <-repo.rateLimitCh:
-		require.WithinDuration(t, resetAt.UTC(), persisted, time.Second)
-	case <-time.After(2 * time.Second):
-		t.Fatal("等待列表补写限流状态超时")
+		t.Fatalf("unexpected persisted rate limit from account list codex extra: %v", persisted)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 

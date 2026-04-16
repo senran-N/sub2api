@@ -16,7 +16,6 @@ func isOpenAIAccountRuntimeEligible(account *Account, requestedModel string) boo
 	if account == nil || !account.IsOpenAI() {
 		return false
 	}
-	applyOpenAICodexRateLimitFromExtra(account, time.Now())
 	if !account.IsSchedulable() {
 		return false
 	}

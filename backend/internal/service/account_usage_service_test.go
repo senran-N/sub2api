@@ -94,30 +94,7 @@ func TestExtractOpenAICodexProbeUpdatesAccepts429WithCodexHeaders(t *testing.T) 
 	}
 }
 
-func TestExtractOpenAICodexProbeSnapshotAccepts429WithResetAt(t *testing.T) {
-	t.Parallel()
-
-	headers := make(http.Header)
-	headers.Set("x-codex-primary-used-percent", "100")
-	headers.Set("x-codex-primary-reset-after-seconds", "604800")
-	headers.Set("x-codex-primary-window-minutes", "10080")
-	headers.Set("x-codex-secondary-used-percent", "100")
-	headers.Set("x-codex-secondary-reset-after-seconds", "18000")
-	headers.Set("x-codex-secondary-window-minutes", "300")
-
-	updates, resetAt, err := extractOpenAICodexProbeSnapshot(&http.Response{StatusCode: http.StatusTooManyRequests, Header: headers})
-	if err != nil {
-		t.Fatalf("extractOpenAICodexProbeSnapshot() error = %v", err)
-	}
-	if len(updates) == 0 {
-		t.Fatal("expected codex probe updates from 429 headers")
-	}
-	if resetAt == nil {
-		t.Fatal("expected resetAt from exhausted codex headers")
-	}
-}
-
-func TestAccountUsageService_PersistOpenAICodexProbeSnapshotSetsRateLimit(t *testing.T) {
+func TestAccountUsageService_PersistOpenAICodexProbeSnapshotOnlyUpdatesExtra(t *testing.T) {
 	t.Parallel()
 
 	repo := &accountUsageCodexProbeRepo{
@@ -125,12 +102,11 @@ func TestAccountUsageService_PersistOpenAICodexProbeSnapshotSetsRateLimit(t *tes
 		rateLimitCh:   make(chan time.Time, 1),
 	}
 	svc := &AccountUsageService{accountRepo: repo}
-	resetAt := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)
 
-	svc.persistOpenAICodexProbeSnapshot(context.Background(), 321, map[string]any{
+	svc.persistOpenAICodexProbeSnapshot(321, map[string]any{
 		"codex_7d_used_percent": 100.0,
-		"codex_7d_reset_at":     resetAt.Format(time.RFC3339),
-	}, &resetAt)
+		"codex_7d_reset_at":     time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second).Format(time.RFC3339),
+	})
 
 	select {
 	case updates := <-repo.updateExtraCh:
@@ -143,11 +119,44 @@ func TestAccountUsageService_PersistOpenAICodexProbeSnapshotSetsRateLimit(t *tes
 
 	select {
 	case got := <-repo.rateLimitCh:
-		if got.Before(resetAt.Add(-time.Second)) || got.After(resetAt.Add(time.Second)) {
-			t.Fatalf("rate limit resetAt = %v, want around %v", got, resetAt)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("waiting for codex probe rate limit persistence timed out")
+		t.Fatalf("unexpected rate limit resetAt persisted from probe snapshot: %v", got)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestAccountUsageService_GetOpenAIUsage_DoesNotPromoteCodexExtraToRateLimit(t *testing.T) {
+	t.Parallel()
+
+	resetAt := time.Now().Add(6 * 24 * time.Hour).UTC().Truncate(time.Second)
+	repo := &accountUsageCodexProbeRepo{
+		rateLimitCh: make(chan time.Time, 1),
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Extra: map[string]any{
+			"codex_5h_used_percent": 1.0,
+			"codex_5h_reset_at":     time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second).Format(time.RFC3339),
+			"codex_7d_used_percent": 100.0,
+			"codex_7d_reset_at":     resetAt.Format(time.RFC3339),
+		},
+	}
+
+	usage, err := svc.getOpenAIUsage(context.Background(), account)
+	if err != nil {
+		t.Fatalf("getOpenAIUsage() error = %v", err)
+	}
+	if usage.SevenDay == nil || usage.SevenDay.Utilization != 100.0 {
+		t.Fatalf("expected visible 7d usage snapshot, got %#v", usage.SevenDay)
+	}
+	if account.RateLimitResetAt != nil {
+		t.Fatalf("unexpected runtime rate limit promoted from codex extra: %v", account.RateLimitResetAt)
+	}
+	select {
+	case got := <-repo.rateLimitCh:
+		t.Fatalf("unexpected rate limit persistence from codex extra: %v", got)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 

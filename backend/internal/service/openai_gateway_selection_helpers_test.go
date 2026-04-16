@@ -84,6 +84,33 @@ func TestFilterSchedulableOpenAICandidates_OpenAIReasoningVariantBaseMapping(t *
 	}
 }
 
+func TestFilterSchedulableOpenAICandidates_DoesNotPromoteCodexExtraToRateLimit(t *testing.T) {
+	resetAt := time.Now().Add(6 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	accounts := []Account{
+		{
+			ID:          1,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"codex_5h_used_percent": 1.0,
+				"codex_5h_reset_at":     time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339),
+				"codex_7d_used_percent": 100.0,
+				"codex_7d_reset_at":     resetAt,
+			},
+		},
+	}
+
+	candidates := filterSchedulableOpenAICandidates(accounts, "gpt-5.1", nil)
+	if len(candidates) != 1 {
+		t.Fatalf("expected codex extra to stay informational, got %d candidates", len(candidates))
+	}
+	if candidates[0].RateLimitResetAt != nil {
+		t.Fatalf("unexpected runtime rate limit promoted from codex extra: %v", candidates[0].RateLimitResetAt)
+	}
+}
+
 func TestOpenAIRequestedModelAvailable_OpenAIReasoningVariantBaseMapping(t *testing.T) {
 	accounts := []Account{
 		{

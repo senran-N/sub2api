@@ -106,7 +106,7 @@ func TestShouldClearStickySession(t *testing.T) {
 			want:           false,
 		},
 		{
-			name: "openai codex snapshot rate limited",
+			name: "openai codex snapshot remains sticky-eligible",
 			account: &Account{
 				Platform:    PlatformOpenAI,
 				Type:        AccountTypeOAuth,
@@ -119,7 +119,7 @@ func TestShouldClearStickySession(t *testing.T) {
 				Extra: codexExtra,
 			},
 			requestedModel: "gpt-5.1",
-			want:           true,
+			want:           false,
 		},
 		// 模型限流测试：有限流即清除
 		{
