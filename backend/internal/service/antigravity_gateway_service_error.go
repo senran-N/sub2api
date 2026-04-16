@@ -110,14 +110,14 @@ func (s *AntigravityGatewayService) writeMappedClaudeError(c *gin.Context, accou
 		logger.LegacyPrintf("service.antigravity_gateway", "[antigravity-Forward] upstream_error status=%d body=%s", upstreamStatus, truncateForLog(body, maxBytes))
 	}
 
-	if ptStatus, ptErrType, ptErrMsg, matched := applyErrorPassthroughRule(
+	if passthrough, matched := applyErrorPassthroughRule(
 		c, account.Platform, upstreamStatus, body,
-		0, "", "",
+		http.StatusBadGateway, "upstream_error", "Upstream request failed",
 	); matched {
-		c.JSON(ptStatus, gin.H{
-			"type":  "error",
-			"error": gin.H{"type": ptErrType, "message": ptErrMsg},
-		})
+		c.JSON(passthrough.StatusCode, passthrough.anthropicPayload())
+		if upstreamMsg == "" {
+			upstreamMsg = passthrough.ErrMessage
+		}
 		if upstreamMsg == "" {
 			return fmt.Errorf("upstream error: %d", upstreamStatus)
 		}

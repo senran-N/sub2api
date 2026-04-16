@@ -117,7 +117,7 @@ func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, acc
 		logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini] upstream error %d: %s", upstreamStatus, truncateForLog(body, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes))
 	}
 
-	if status, errType, errMsg, matched := applyErrorPassthroughRule(
+	if passthrough, matched := applyErrorPassthroughRule(
 		c,
 		PlatformGemini,
 		upstreamStatus,
@@ -126,12 +126,9 @@ func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, acc
 		"upstream_error",
 		"Upstream request failed",
 	); matched {
-		c.JSON(status, gin.H{
-			"type":  "error",
-			"error": gin.H{"type": errType, "message": errMsg},
-		})
+		c.JSON(passthrough.StatusCode, passthrough.geminiPayload())
 		if upstreamMsg == "" {
-			upstreamMsg = errMsg
+			upstreamMsg = passthrough.ErrMessage
 		}
 		if upstreamMsg == "" {
 			return fmt.Errorf("upstream error: %d (passthrough rule matched)", upstreamStatus)

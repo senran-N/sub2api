@@ -13,7 +13,7 @@ import (
 
 // compatErrorWriter is the signature for format-specific error writers used by
 // the compat paths (Chat Completions and Anthropic Messages).
-type compatErrorWriter func(c *gin.Context, statusCode int, errType, message string)
+type compatErrorWriter func(c *gin.Context, result passthroughRuleResult)
 
 func (s *OpenAIGatewayService) handleErrorResponse(
 	ctx context.Context,
@@ -48,7 +48,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		)
 	}
 
-	if status, errType, errMsg, matched := applyErrorPassthroughRule(
+	if passthrough, matched := applyErrorPassthroughRule(
 		c,
 		PlatformOpenAI,
 		resp.StatusCode,
@@ -57,14 +57,9 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		"upstream_error",
 		"Upstream request failed",
 	); matched {
-		c.JSON(status, gin.H{
-			"error": gin.H{
-				"type":    errType,
-				"message": errMsg,
-			},
-		})
+		c.JSON(passthrough.StatusCode, passthrough.openAIPayload())
 		if upstreamMsg == "" {
-			upstreamMsg = errMsg
+			upstreamMsg = passthrough.ErrMessage
 		}
 		if upstreamMsg == "" {
 			return nil, fmt.Errorf("upstream error: %d (passthrough rule matched)", resp.StatusCode)
@@ -185,13 +180,13 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 
-	if status, errType, errMsg, matched := applyErrorPassthroughRule(
+	if passthrough, matched := applyErrorPassthroughRule(
 		c, account.Platform, resp.StatusCode, body,
 		http.StatusBadGateway, "api_error", "Upstream request failed",
 	); matched {
-		writeError(c, status, errType, errMsg)
+		writeError(c, passthrough)
 		if upstreamMsg == "" {
-			upstreamMsg = errMsg
+			upstreamMsg = passthrough.ErrMessage
 		}
 		if upstreamMsg == "" {
 			return nil, fmt.Errorf("upstream error: %d (passthrough rule matched)", resp.StatusCode)
@@ -210,7 +205,11 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 			Message:            upstreamMsg,
 			Detail:             upstreamDetail,
 		})
-		writeError(c, http.StatusInternalServerError, "api_error", "Upstream gateway error")
+		writeError(c, passthroughRuleResult{
+			StatusCode: http.StatusInternalServerError,
+			ErrType:    "api_error",
+			ErrMessage: "Upstream gateway error",
+		})
 		if upstreamMsg == "" {
 			return nil, fmt.Errorf("upstream error: %d (not in custom error codes)", resp.StatusCode)
 		}
@@ -257,6 +256,10 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 		errType = "api_error"
 	}
 
-	writeError(c, resp.StatusCode, errType, upstreamMsg)
+	writeError(c, passthroughRuleResult{
+		StatusCode: resp.StatusCode,
+		ErrType:    errType,
+		ErrMessage: upstreamMsg,
+	})
 	return nil, fmt.Errorf("upstream error: %d %s", resp.StatusCode, upstreamMsg)
 }

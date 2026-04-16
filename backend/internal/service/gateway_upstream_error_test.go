@@ -20,6 +20,27 @@ func TestExtractUpstreamErrorCode_UnwrapsNestedJSONString(t *testing.T) {
 	require.Equal(t, "quota_exceeded", code)
 }
 
+func TestExtractUpstreamErrorInfo_UnwrapsNestedStructuredFields(t *testing.T) {
+	body := []byte(`{"error":{"message":"{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"missing_required_parameter\",\"param\":\"instructions\",\"message\":\"nested failure\"}}（traceid: abc123）"}}`)
+
+	info := extractUpstreamErrorInfo(body)
+	require.Equal(t, "nested failure", info.Message)
+	require.Equal(t, "invalid_request_error", info.Type)
+	require.True(t, info.HasCode)
+	require.Equal(t, "missing_required_parameter", info.Code)
+	require.True(t, info.HasParam)
+	require.Equal(t, "instructions", info.Param)
+}
+
+func TestExtractUpstreamErrorInfo_UsesDetailObjectWhenPresent(t *testing.T) {
+	body := []byte(`{"detail":{"code":"deactivated_workspace","message":"workspace disabled"}}`)
+
+	info := extractUpstreamErrorInfo(body)
+	require.Equal(t, "workspace disabled", info.Message)
+	require.True(t, info.HasCode)
+	require.Equal(t, "deactivated_workspace", info.Code)
+}
+
 func TestGatewayServiceShouldFailoverOn400_RecognizesCompatibilityErrors(t *testing.T) {
 	service := &GatewayService{}
 

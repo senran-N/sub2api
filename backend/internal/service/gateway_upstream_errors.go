@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
-	"github.com/tidwall/gjson"
 )
 
 // UpstreamFailoverError indicates an upstream error that should trigger account failover.
@@ -166,42 +165,15 @@ func ExtractUpstreamErrorMessage(body []byte) string {
 }
 
 func extractUpstreamErrorMessage(body []byte) string {
-	if message := gjson.GetBytes(body, "error.message").String(); strings.TrimSpace(message) != "" {
-		inner := strings.TrimSpace(message)
-		if strings.HasPrefix(inner, "{") {
-			if nested := gjson.Get(inner, "error.message").String(); strings.TrimSpace(nested) != "" {
-				return nested
-			}
-		}
-		return message
-	}
-
-	if detail := gjson.GetBytes(body, "detail").String(); strings.TrimSpace(detail) != "" {
-		return detail
-	}
-
-	return gjson.GetBytes(body, "message").String()
+	return extractUpstreamErrorInfo(body).Message
 }
 
 func extractUpstreamErrorCode(body []byte) string {
-	if code := strings.TrimSpace(gjson.GetBytes(body, "error.code").String()); code != "" {
-		return code
-	}
-
-	inner := strings.TrimSpace(gjson.GetBytes(body, "error.message").String())
-	if !strings.HasPrefix(inner, "{") {
+	info := extractUpstreamErrorInfo(body)
+	if !info.HasCode {
 		return ""
 	}
-
-	if code := strings.TrimSpace(gjson.Get(inner, "error.code").String()); code != "" {
-		return code
-	}
-	if lastBrace := strings.LastIndex(inner, "}"); lastBrace >= 0 {
-		if code := strings.TrimSpace(gjson.Get(inner[:lastBrace+1], "error.code").String()); code != "" {
-			return code
-		}
-	}
-	return ""
+	return stringifyUpstreamErrorCode(info.Code)
 }
 
 func isCountTokensUnsupported404(statusCode int, body []byte) bool {
@@ -278,7 +250,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		)
 	}
 
-	if status, errType, errMsg, matched := applyErrorPassthroughRule(
+	if passthrough, matched := applyErrorPassthroughRule(
 		c,
 		account.Platform,
 		resp.StatusCode,
@@ -287,17 +259,11 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		"upstream_error",
 		"Upstream request failed",
 	); matched {
-		c.JSON(status, gin.H{
-			"type": "error",
-			"error": gin.H{
-				"type":    errType,
-				"message": errMsg,
-			},
-		})
+		c.JSON(passthrough.StatusCode, passthrough.anthropicPayload())
 
 		summary := upstreamMsg
 		if summary == "" {
-			summary = errMsg
+			summary = passthrough.ErrMessage
 		}
 		if summary == "" {
 			return nil, fmt.Errorf("upstream error: %d (passthrough rule matched)", resp.StatusCode)
@@ -431,7 +397,7 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 		)
 	}
 
-	if status, errType, errMsg, matched := applyErrorPassthroughRule(
+	if passthrough, matched := applyErrorPassthroughRule(
 		c,
 		account.Platform,
 		resp.StatusCode,
@@ -440,17 +406,11 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 		"upstream_error",
 		"Upstream request failed after retries",
 	); matched {
-		c.JSON(status, gin.H{
-			"type": "error",
-			"error": gin.H{
-				"type":    errType,
-				"message": errMsg,
-			},
-		})
+		c.JSON(passthrough.StatusCode, passthrough.anthropicPayload())
 
 		summary := upstreamMsg
 		if summary == "" {
-			summary = errMsg
+			summary = passthrough.ErrMessage
 		}
 		if summary == "" {
 			return nil, fmt.Errorf("upstream error: %d (retries exhausted, passthrough rule matched)", resp.StatusCode)

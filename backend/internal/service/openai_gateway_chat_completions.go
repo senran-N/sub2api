@@ -162,7 +162,11 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 			Kind:               "request_error",
 			Message:            safeErr,
 		})
-		writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed")
+		writeChatCompletionsError(c, passthroughRuleResult{
+			StatusCode: http.StatusBadGateway,
+			ErrType:    "upstream_error",
+			ErrMessage: "Upstream request failed",
+		})
 		return nil, fmt.Errorf("upstream request failed: %s", safeErr)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -313,7 +317,11 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 	}
 
 	if finalResponse == nil {
-		writeChatCompletionsError(c, http.StatusBadGateway, "api_error", "Upstream stream ended without a terminal response event")
+		writeChatCompletionsError(c, passthroughRuleResult{
+			StatusCode: http.StatusBadGateway,
+			ErrType:    "api_error",
+			ErrMessage: "Upstream stream ended without a terminal response event",
+		})
 		return nil, fmt.Errorf("upstream stream ended without terminal event")
 	}
 	finalResponse = outputCollector.RepairResponse(finalResponse)
@@ -551,11 +559,6 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 }
 
 // writeChatCompletionsError writes an error response in OpenAI Chat Completions format.
-func writeChatCompletionsError(c *gin.Context, statusCode int, errType, message string) {
-	c.JSON(statusCode, gin.H{
-		"error": gin.H{
-			"type":    errType,
-			"message": message,
-		},
-	})
+func writeChatCompletionsError(c *gin.Context, result passthroughRuleResult) {
+	c.JSON(result.StatusCode, result.openAIPayload())
 }
