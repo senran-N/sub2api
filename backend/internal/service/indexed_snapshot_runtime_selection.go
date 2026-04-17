@@ -6,7 +6,7 @@ func executeIndexedRuntimeSelection[T any](
 	ctx context.Context,
 	pager *schedulerIndexedAccountPager,
 	pageSize int,
-	visit func(batch []Account) (bool, *T, error),
+	visit func(batch []*Account) (bool, *T, error),
 	better func(candidate, current *T) bool,
 ) (bool, *T, error) {
 	if pager == nil || visit == nil || better == nil {
@@ -19,7 +19,7 @@ func executeIndexedRuntimeSelection[T any](
 	var best *T
 	scopedFound := false
 	for {
-		batch, hasMore, err := pager.Next(ctx, pageSize)
+		batch, hasMore, err := pager.NextRefs(ctx, pageSize)
 		if err != nil {
 			return scopedFound, best, err
 		}

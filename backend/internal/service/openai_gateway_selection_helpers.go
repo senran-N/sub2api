@@ -71,6 +71,27 @@ func filterSchedulableOpenAICandidates(
 	return candidates
 }
 
+func filterSchedulableOpenAIAccountPointers(
+	accounts []*Account,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+) []*Account {
+	candidates := make([]*Account, 0, len(accounts))
+	for _, account := range accounts {
+		if account == nil {
+			continue
+		}
+		if isOpenAIAccountExcluded(excludedIDs, account.ID) {
+			continue
+		}
+		if !isOpenAIAccountRuntimeEligible(account, requestedModel) {
+			continue
+		}
+		candidates = append(candidates, account)
+	}
+	return candidates
+}
+
 // normalizeOpenAIWaitLoadMap converts nil load map to an empty map for wait-plan scoring.
 func normalizeOpenAIWaitLoadMap(loadMap map[int64]*AccountLoadInfo) map[int64]*AccountLoadInfo {
 	if loadMap != nil {
@@ -360,6 +381,54 @@ func (s *OpenAIGatewayService) filterOpenAIBatchBySnapshotMembership(
 	return filtered
 }
 
+func (s *OpenAIGatewayService) filterOpenAIBatchBySnapshotMembershipFromPointers(
+	ctx context.Context,
+	groupID *int64,
+	accounts []*Account,
+	index SchedulerCapabilityIndex,
+) []*Account {
+	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil {
+		return accounts
+	}
+	accountIDs := make([]int64, 0, len(accounts))
+	for i := range accounts {
+		if accounts[i] != nil {
+			accountIDs = append(accountIDs, accounts[i].ID)
+		}
+	}
+	matches, _, err := s.schedulerSnapshot.MatchSchedulableAccountsCapability(ctx, groupID, PlatformOpenAI, false, index, accountIDs)
+	if err != nil {
+		return accounts
+	}
+	filtered := make([]*Account, 0, len(accounts))
+	for i := range accounts {
+		account := accounts[i]
+		if account != nil && matches[account.ID] {
+			filtered = append(filtered, account)
+		}
+	}
+	return filtered
+}
+
+func (s *OpenAIGatewayService) filterOpenAIBatchByIndexedCapabilitiesFromPointers(
+	ctx context.Context,
+	accounts []*Account,
+	scope openAIIndexedCandidateScope,
+) []*Account {
+	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil {
+		return accounts
+	}
+
+	filtered := accounts
+	if scope.requirePrivacy {
+		filtered = s.filterOpenAIBatchBySnapshotMembershipFromPointers(ctx, scope.groupID, filtered, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexPrivacySet})
+	}
+	if scope.requiredTransport != OpenAIUpstreamTransportAny && scope.requiredTransport != OpenAIUpstreamTransportHTTPSSE {
+		filtered = s.filterOpenAIBatchBySnapshotMembershipFromPointers(ctx, scope.groupID, filtered, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexOpenAIWS})
+	}
+	return filtered
+}
+
 func (s *OpenAIGatewayService) selectBestAccountFromIndexedSnapshot(
 	ctx context.Context,
 	groupID *int64,
@@ -384,8 +453,8 @@ func (s *OpenAIGatewayService) selectBestAccountFromIndexedSnapshot(
 		pager,
 		snapshotPageSizeOrDefault(s.cfg),
 		supported,
-		func(batch []Account) (*Account, error) {
-			candidates := filterSchedulableOpenAICandidates(batch, requestedModel, excludedIDs)
+		func(batch []*Account) (*Account, error) {
+			candidates := filterSchedulableOpenAIAccountPointers(batch, requestedModel, excludedIDs)
 			if len(candidates) == 0 {
 				return nil, nil
 			}
@@ -765,9 +834,9 @@ func (s *OpenAIGatewayService) selectOpenAIAccountWithLoadAwarenessFromIndexedSn
 		ctx,
 		pager,
 		snapshotPageSizeOrDefault(s.cfg),
-		func(batch []Account) (bool, *openAIWaitCandidate, error) {
+		func(batch []*Account) (bool, *openAIWaitCandidate, error) {
 			supported = true
-			candidates := filterSchedulableOpenAICandidates(batch, requestedModel, excludedIDs)
+			candidates := filterSchedulableOpenAIAccountPointers(batch, requestedModel, excludedIDs)
 			if len(candidates) == 0 {
 				return false, nil, nil
 			}

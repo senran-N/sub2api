@@ -174,6 +174,17 @@ func derefAccounts(accounts []*Account) []Account {
 	return out
 }
 
+func refAccounts(accounts []Account) []*Account {
+	if len(accounts) == 0 {
+		return []*Account{}
+	}
+	out := make([]*Account, 0, len(accounts))
+	for i := range accounts {
+		out = append(out, &accounts[i])
+	}
+	return out
+}
+
 func (s *SchedulerSnapshotService) resolveBucket(groupID *int64, platform string, hasForcePlatform bool) (SchedulerBucket, bool) {
 	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
 	mode := s.resolveMode(platform, hasForcePlatform)

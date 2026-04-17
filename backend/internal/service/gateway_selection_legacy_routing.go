@@ -31,6 +31,19 @@ func (s *GatewayService) prefetchSelectionSignals(ctx context.Context, accounts 
 	return s.withRPMPrefetch(ctx, accounts)
 }
 
+func (s *GatewayService) prefetchSelectionSignalsFromPointers(ctx context.Context, accounts []*Account) context.Context {
+	if ctx == nil || len(accounts) == 0 {
+		return ctx
+	}
+	if s == nil {
+		return ctx
+	}
+	if s.rpmCache == nil && (s.sessionLimitCache == nil || s.usageLogRepo == nil) {
+		return ctx
+	}
+	return s.prefetchSelectionSignals(ctx, derefAccounts(accounts))
+}
+
 func (s *GatewayService) tryLegacyRoutedSelection(
 	ctx context.Context,
 	input *legacyRoutedSelectionInput,

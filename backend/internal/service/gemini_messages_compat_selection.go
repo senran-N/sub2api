@@ -125,8 +125,8 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAccountFromIndexedSnapshot
 		pager,
 		snapshotPageSizeOrDefault(s.cfg),
 		supported,
-		func(batch []Account) (*Account, error) {
-			return s.selectBestGeminiAccountFromBatch(ctx, batch, requestedModel, excludedIDs, platform, useMixedScheduling), nil
+		func(batch []*Account) (*Account, error) {
+			return s.selectBestGeminiAccountFromPointerBatch(ctx, batch, requestedModel, excludedIDs, platform, useMixedScheduling), nil
 		},
 		s.isBetterGeminiAccount,
 	)
@@ -156,8 +156,8 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAIStudioAccountFromIndexed
 		pager,
 		snapshotPageSizeOrDefault(s.cfg),
 		true,
-		func(batch []Account) (*Account, error) {
-			return s.selectBestGeminiAIStudioAccountFromBatch(batch), nil
+		func(batch []*Account) (*Account, error) {
+			return s.selectBestGeminiAIStudioAccountFromPointerBatch(batch), nil
 		},
 		s.isBetterGeminiAIStudioAccount,
 	)
@@ -303,10 +303,42 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAccountFromBatch(
 	return selectBestByPriorityAndLastUsed(candidates, preferOAuthAccountTieBreaker)
 }
 
+func (s *GeminiMessagesCompatService) selectBestGeminiAccountFromPointerBatch(
+	ctx context.Context,
+	accounts []*Account,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	platform string,
+	useMixedScheduling bool,
+) *Account {
+	candidates := s.filterSchedulableGeminiCandidatePointers(
+		ctx,
+		accounts,
+		requestedModel,
+		excludedIDs,
+		platform,
+		useMixedScheduling,
+	)
+	return selectBestByPriorityAndLastUsed(candidates, preferOAuthAccountTieBreaker)
+}
+
 func (s *GeminiMessagesCompatService) selectBestGeminiAIStudioAccountFromBatch(accounts []Account) *Account {
 	var selected *Account
 	for i := range accounts {
 		acc := &accounts[i]
+		if !isGeminiSelectionAccountEligible(acc) || acc.Platform != PlatformGemini {
+			continue
+		}
+		if s.isBetterGeminiAIStudioAccount(acc, selected) {
+			selected = acc
+		}
+	}
+	return selected
+}
+
+func (s *GeminiMessagesCompatService) selectBestGeminiAIStudioAccountFromPointerBatch(accounts []*Account) *Account {
+	var selected *Account
+	for _, acc := range accounts {
 		if !isGeminiSelectionAccountEligible(acc) || acc.Platform != PlatformGemini {
 			continue
 		}
@@ -346,6 +378,31 @@ func (s *GeminiMessagesCompatService) filterSchedulableGeminiCandidates(
 	candidates := make([]*Account, 0, len(accounts))
 	for i := range accounts {
 		account := &accounts[i]
+		if _, excluded := excludedIDs[account.ID]; excluded {
+			continue
+		}
+		if !s.isAccountUsableForRequestWithPrecheck(ctx, account, requestedModel, platform, useMixedScheduling, precheckResult) {
+			continue
+		}
+		candidates = append(candidates, account)
+	}
+	return candidates
+}
+
+func (s *GeminiMessagesCompatService) filterSchedulableGeminiCandidatePointers(
+	ctx context.Context,
+	accounts []*Account,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	platform string,
+	useMixedScheduling bool,
+) []*Account {
+	precheckResult := s.buildPreCheckUsageResultMap(ctx, derefAccounts(accounts), requestedModel)
+	candidates := make([]*Account, 0, len(accounts))
+	for _, account := range accounts {
+		if account == nil {
+			continue
+		}
 		if _, excluded := excludedIDs[account.ID]; excluded {
 			continue
 		}

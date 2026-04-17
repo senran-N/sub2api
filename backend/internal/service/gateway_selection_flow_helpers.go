@@ -108,7 +108,7 @@ func (s *GatewayService) forEachIndexedSelectionBatch(
 	pager *schedulerIndexedAccountPager,
 	schedGroup *Group,
 	pageSize int,
-	visit func(pageCtx context.Context, batch []Account) (bool, error),
+	visit func(pageCtx context.Context, batch []*Account) (bool, error),
 ) (bool, error) {
 	if pager == nil || visit == nil {
 		return false, nil
@@ -119,7 +119,7 @@ func (s *GatewayService) forEachIndexedSelectionBatch(
 
 	scopedFound := false
 	for {
-		batch, hasMore, err := pager.Next(ctx, pageSize)
+		batch, hasMore, err := pager.NextRefs(ctx, pageSize)
 		if err != nil {
 			return scopedFound, err
 		}
@@ -131,9 +131,9 @@ func (s *GatewayService) forEachIndexedSelectionBatch(
 		}
 
 		scopedFound = true
-		batch = s.filterSelectionBatchByIndexedCapabilities(ctx, groupID, pager.platform, pager.hasForcePlatform, batch, schedGroup)
+		batch = s.filterSelectionBatchByIndexedCapabilitiesFromPointers(ctx, groupID, pager.platform, pager.hasForcePlatform, batch, schedGroup)
 		if len(batch) > 0 {
-			pageCtx := s.prefetchSelectionSignals(ctx, batch)
+			pageCtx := s.prefetchSelectionSignalsFromPointers(ctx, batch)
 			stop, err := visit(pageCtx, batch)
 			if err != nil {
 				return scopedFound, err
@@ -185,10 +185,10 @@ func (s *GatewayService) selectBestCandidateFromPager(
 	}
 
 	var selected *Account
-	scopedFound, err := s.forEachIndexedSelectionBatch(ctx, groupID, pager, filterParams.schedGroup, pageSize, func(scopedCtx context.Context, batch []Account) (bool, error) {
+	scopedFound, err := s.forEachIndexedSelectionBatch(ctx, groupID, pager, filterParams.schedGroup, pageSize, func(scopedCtx context.Context, batch []*Account) (bool, error) {
 		params := *filterParams
 		params.ctx = scopedCtx
-		candidates := s.filterCandidates(batch, &params)
+		candidates := s.filterCandidatePointers(batch, &params)
 		pageBest := selectBestByPriorityAndLastUsed(candidates, oauthTieBreaker)
 		if s.isBetterSelectionCandidate(pageBest, selected, oauthTieBreaker) {
 			selected = pageBest

@@ -9,17 +9,20 @@ import (
 )
 
 type benchmarkIndexedSelectionCache struct {
-	all      []*Account
-	byID     map[int64]*Account
-	indexes  map[string][]*Account
-	patterns []string
+	all        []*Account
+	allValues  []Account
+	byID       map[int64]*Account
+	indexes    map[string][]*Account
+	indexReady map[string]struct{}
+	patterns   []string
 }
 
 func newBenchmarkIndexedSelectionCache(accounts []Account) *benchmarkIndexedSelectionCache {
 	cache := &benchmarkIndexedSelectionCache{
-		all:     make([]*Account, 0, len(accounts)),
-		byID:    make(map[int64]*Account, len(accounts)),
-		indexes: make(map[string][]*Account),
+		all:        make([]*Account, 0, len(accounts)),
+		byID:       make(map[int64]*Account, len(accounts)),
+		indexes:    make(map[string][]*Account),
+		indexReady: make(map[string]struct{}),
 	}
 	for i := range accounts {
 		account := accounts[i]
@@ -29,11 +32,15 @@ func newBenchmarkIndexedSelectionCache(accounts []Account) *benchmarkIndexedSele
 	}
 
 	deref := derefAccounts(cache.all)
+	cache.allValues = deref
 	cache.indexes[benchmarkCapabilityIndexKey(SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexAll})] = cache.all
 	cache.indexes[benchmarkCapabilityIndexKey(SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexModelAny})] = benchmarkCloneAccountPointers(filterAccountsByCapabilityIndex(deref, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexModelAny}))
 	cache.indexes[benchmarkCapabilityIndexKey(SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexPrivacySet})] = benchmarkCloneAccountPointers(filterAccountsByCapabilityIndex(deref, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexPrivacySet}))
 	cache.indexes[benchmarkCapabilityIndexKey(SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexOpenAIWS})] = benchmarkCloneAccountPointers(filterAccountsByCapabilityIndex(deref, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexOpenAIWS}))
 	cache.patterns = collectCapabilityIndexValues(deref, SchedulerCapabilityIndexModelPattern)
+	for key := range cache.indexes {
+		cache.indexReady[key] = struct{}{}
+	}
 	return cache
 }
 
@@ -49,6 +56,19 @@ func benchmarkCloneAccountPointers(accounts []Account) []*Account {
 
 func benchmarkCapabilityIndexKey(index SchedulerCapabilityIndex) string {
 	return string(index.Kind) + "\x00" + index.Value
+}
+
+func (c *benchmarkIndexedSelectionCache) getOrBuildIndexedAccounts(index SchedulerCapabilityIndex) []*Account {
+	key := benchmarkCapabilityIndexKey(index)
+	if accounts, ok := c.indexes[key]; ok {
+		if _, ready := c.indexReady[key]; ready {
+			return accounts
+		}
+	}
+	accounts := benchmarkCloneAccountPointers(filterAccountsByCapabilityIndex(c.allValues, index))
+	c.indexes[key] = accounts
+	c.indexReady[key] = struct{}{}
+	return accounts
 }
 
 func (c *benchmarkIndexedSelectionCache) GetSnapshot(ctx context.Context, bucket SchedulerBucket) ([]*Account, bool, error) {
@@ -98,9 +118,8 @@ func (c *benchmarkIndexedSelectionCache) SetOutboxWatermark(ctx context.Context,
 
 func (c *benchmarkIndexedSelectionCache) GetCapabilityIndexPage(ctx context.Context, bucket SchedulerBucket, index SchedulerCapabilityIndex, offset, limit int) ([]*Account, bool, bool, error) {
 	accounts := c.indexes[benchmarkCapabilityIndexKey(index)]
-	if index.Kind == SchedulerCapabilityIndexModelExact && len(accounts) == 0 {
-		accounts = benchmarkCloneAccountPointers(filterAccountsByCapabilityIndex(derefAccounts(c.all), index))
-		c.indexes[benchmarkCapabilityIndexKey(index)] = accounts
+	if index.Kind == SchedulerCapabilityIndexModelExact {
+		accounts = c.getOrBuildIndexedAccounts(index)
 	}
 	if offset >= len(accounts) {
 		return []*Account{}, true, false, nil
@@ -117,9 +136,8 @@ func (c *benchmarkIndexedSelectionCache) GetCapabilityIndexPage(ctx context.Cont
 
 func (c *benchmarkIndexedSelectionCache) HasCapabilityIndexMembers(ctx context.Context, bucket SchedulerBucket, index SchedulerCapabilityIndex, accountIDs []int64) (map[int64]bool, bool, error) {
 	accounts := c.indexes[benchmarkCapabilityIndexKey(index)]
-	if len(accounts) == 0 && index.Kind == SchedulerCapabilityIndexModelExact {
-		accounts = benchmarkCloneAccountPointers(filterAccountsByCapabilityIndex(derefAccounts(c.all), index))
-		c.indexes[benchmarkCapabilityIndexKey(index)] = accounts
+	if index.Kind == SchedulerCapabilityIndexModelExact {
+		accounts = c.getOrBuildIndexedAccounts(index)
 	}
 	allowed := make(map[int64]struct{}, len(accounts))
 	for i := range accounts {
@@ -185,6 +203,28 @@ func benchmarkGatewayServiceWithIndexedSnapshot(accounts []Account, cfg *config.
 	return &GatewayService{
 		schedulerSnapshot: &SchedulerSnapshotService{cache: cache},
 		cfg:               clonedCfg,
+	}
+}
+
+func TestBenchmarkIndexedSelectionCache_CachesEmptyExactIndex(t *testing.T) {
+	cache := newBenchmarkIndexedSelectionCache(buildBenchmarkSelectionAccounts(2, PlatformAnthropic, AccountTypeAPIKey))
+	index := SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexModelExact, Value: "claude-sonnet-4-5"}
+	key := benchmarkCapabilityIndexKey(index)
+
+	first := cache.getOrBuildIndexedAccounts(index)
+	second := cache.getOrBuildIndexedAccounts(index)
+
+	if first == nil || second == nil {
+		t.Fatalf("expected empty exact index slices to be cached")
+	}
+	if len(first) != 0 || len(second) != 0 {
+		t.Fatalf("expected empty exact index, got %d and %d entries", len(first), len(second))
+	}
+	if _, ok := cache.indexes[key]; !ok {
+		t.Fatalf("expected exact index entry to be stored")
+	}
+	if _, ok := cache.indexReady[key]; !ok {
+		t.Fatalf("expected exact index entry to be marked ready")
 	}
 }
 

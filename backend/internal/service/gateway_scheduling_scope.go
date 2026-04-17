@@ -444,3 +444,49 @@ func (s *GatewayService) filterCandidates(accounts []Account, params *candidateF
 	}
 	return candidates
 }
+
+func (s *GatewayService) filterCandidatePointers(accounts []*Account, params *candidateFilterParams) []*Account {
+	candidates := make([]*Account, 0, len(accounts))
+	for _, account := range accounts {
+		if account == nil {
+			continue
+		}
+		if params.routingSet != nil {
+			if _, ok := params.routingSet[account.ID]; !ok {
+				continue
+			}
+		}
+		if _, excluded := params.excludedIDs[account.ID]; excluded {
+			continue
+		}
+		if !s.isAccountSchedulableForSelection(account) {
+			continue
+		}
+		if params.schedGroup != nil && params.schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
+			continue
+		}
+		if params.platformFilter != nil && !params.platformFilter(account) {
+			continue
+		}
+		if params.requestedModel != "" && !s.isModelSupportedByAccountWithContext(params.ctx, account, params.requestedModel) {
+			continue
+		}
+		if s.isChannelModelRestrictedForSelection(params.ctx, account, params.requestedModel) {
+			continue
+		}
+		if !s.isAccountSchedulableForModelSelection(params.ctx, account, params.requestedModel) {
+			continue
+		}
+		if !s.isAccountSchedulableForQuota(account) {
+			continue
+		}
+		if !s.isAccountSchedulableForWindowCost(params.ctx, account, false) {
+			continue
+		}
+		if !s.isAccountSchedulableForRPM(params.ctx, account, false) {
+			continue
+		}
+		candidates = append(candidates, account)
+	}
+	return candidates
+}

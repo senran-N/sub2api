@@ -443,9 +443,9 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalancePagedSnapshot(
 		ctx,
 		pager,
 		pageSize,
-		func(accounts []Account) (bool, *openAIAccountCandidateScore, error) {
-			accounts = s.filterBatchByIndexedCapabilities(ctx, req, accounts, schedGroup)
-			prepared := s.prepareLoadBalanceCandidatePage(req, accounts, schedGroup)
+		func(accounts []*Account) (bool, *openAIAccountCandidateScore, error) {
+			accounts = s.filterBatchByIndexedCapabilityPointers(ctx, req, accounts, schedGroup)
+			prepared := s.prepareLoadBalanceCandidatePointers(req, accounts, schedGroup)
 			requestedModelAvailable = requestedModelAvailable || prepared.requestedModelAvailable
 			if len(prepared.filtered) == 0 {
 				return false, nil, nil

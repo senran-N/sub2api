@@ -76,6 +76,46 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
 	return prepared
 }
 
+func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePointers(
+	req OpenAIAccountScheduleRequest,
+	accounts []*Account,
+	schedGroup *Group,
+) openAILoadBalancePreparation {
+	prepared := openAILoadBalancePreparation{
+		filtered: make([]*Account, 0, len(accounts)),
+		loadReq:  make([]AccountWithConcurrency, 0, len(accounts)),
+	}
+
+	for _, account := range accounts {
+		if account == nil || !account.IsOpenAI() {
+			continue
+		}
+		if req.RequestedModel == "" || isOpenAIAccountModelEligible(account, req.RequestedModel) {
+			prepared.requestedModelAvailable = true
+		}
+		if isOpenAIAccountExcluded(req.ExcludedIDs, account.ID) {
+			continue
+		}
+		if schedGroup != nil && schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
+			continue
+		}
+		if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
+			continue
+		}
+		if !isOpenAIAccountRuntimeEligible(account, req.RequestedModel) {
+			continue
+		}
+
+		prepared.filtered = append(prepared.filtered, account)
+		prepared.loadReq = append(prepared.loadReq, AccountWithConcurrency{
+			ID:             account.ID,
+			MaxConcurrency: account.EffectiveLoadFactor(),
+		})
+	}
+
+	return prepared
+}
+
 func (s *defaultOpenAIAccountScheduler) buildIndexedSnapshotPager(
 	ctx context.Context,
 	req OpenAIAccountScheduleRequest,
@@ -102,6 +142,23 @@ func (s *defaultOpenAIAccountScheduler) filterBatchByIndexedCapabilities(
 		return accounts
 	}
 	return s.service.filterOpenAIBatchByIndexedCapabilities(ctx, accounts, openAIIndexedCandidateScope{
+		groupID:           req.GroupID,
+		requestedModel:    req.RequestedModel,
+		requiredTransport: req.RequiredTransport,
+		requirePrivacy:    schedGroup != nil && schedGroup.RequirePrivacySet,
+	})
+}
+
+func (s *defaultOpenAIAccountScheduler) filterBatchByIndexedCapabilityPointers(
+	ctx context.Context,
+	req OpenAIAccountScheduleRequest,
+	accounts []*Account,
+	schedGroup *Group,
+) []*Account {
+	if len(accounts) == 0 || s == nil || s.service == nil {
+		return accounts
+	}
+	return s.service.filterOpenAIBatchByIndexedCapabilitiesFromPointers(ctx, accounts, openAIIndexedCandidateScope{
 		groupID:           req.GroupID,
 		requestedModel:    req.RequestedModel,
 		requiredTransport: req.RequiredTransport,

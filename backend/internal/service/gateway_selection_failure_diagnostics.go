@@ -132,8 +132,8 @@ func (s *GatewayService) collectSelectionFailureStatsFromPager(
 	}
 
 	var stats selectionFailureStats
-	_, err := s.forEachIndexedSelectionBatch(ctx, pager.groupID, pager, schedGroup, pageSize, func(pageCtx context.Context, batch []Account) (bool, error) {
-		pageStats := s.collectSelectionFailureStats(pageCtx, batch, requestedModel, platform, excludedIDs, allowMixedScheduling)
+	_, err := s.forEachIndexedSelectionBatch(ctx, pager.groupID, pager, schedGroup, pageSize, func(pageCtx context.Context, batch []*Account) (bool, error) {
+		pageStats := s.collectSelectionFailureStatsFromPointers(pageCtx, batch, requestedModel, platform, excludedIDs, allowMixedScheduling)
 		stats = mergeSelectionFailureStats(stats, pageStats)
 		return false, nil
 	})
@@ -182,6 +182,64 @@ func (s *GatewayService) collectSelectionFailureStats(
 		case "rpm_limited":
 			stats.RPMLimited++
 			stats.SampleRPMIDs = appendSelectionFailureSampleID(stats.SampleRPMIDs, acc.ID)
+		default:
+			stats.Eligible++
+		}
+	}
+
+	return stats
+}
+
+func (s *GatewayService) collectSelectionFailureStatsFromPointers(
+	ctx context.Context,
+	accounts []*Account,
+	requestedModel string,
+	platform string,
+	excludedIDs map[int64]struct{},
+	allowMixedScheduling bool,
+) selectionFailureStats {
+	stats := selectionFailureStats{
+		Total: len(accounts),
+	}
+
+	for _, acc := range accounts {
+		diagnosis := s.diagnoseSelectionFailure(ctx, acc, requestedModel, platform, excludedIDs, allowMixedScheduling)
+		switch diagnosis.Category {
+		case "excluded":
+			stats.Excluded++
+		case "unschedulable":
+			stats.Unschedulable++
+		case "platform_filtered":
+			stats.PlatformFiltered++
+			if acc != nil {
+				stats.SamplePlatformIDs = appendSelectionFailureSampleID(stats.SamplePlatformIDs, acc.ID)
+			}
+		case "model_unsupported":
+			stats.ModelUnsupported++
+			if acc != nil {
+				stats.SampleMappingIDs = appendSelectionFailureSampleID(stats.SampleMappingIDs, acc.ID)
+			}
+		case "model_rate_limited":
+			stats.ModelRateLimited++
+			if acc != nil {
+				remaining := acc.GetRateLimitRemainingTimeWithContext(ctx, requestedModel).Truncate(time.Second)
+				stats.SampleRateLimitIDs = appendSelectionFailureRateSample(stats.SampleRateLimitIDs, acc.ID, remaining)
+			}
+		case "quota_limited":
+			stats.QuotaLimited++
+			if acc != nil {
+				stats.SampleQuotaIDs = appendSelectionFailureSampleID(stats.SampleQuotaIDs, acc.ID)
+			}
+		case "window_cost_limited":
+			stats.WindowCostLimited++
+			if acc != nil {
+				stats.SampleWindowIDs = appendSelectionFailureSampleID(stats.SampleWindowIDs, acc.ID)
+			}
+		case "rpm_limited":
+			stats.RPMLimited++
+			if acc != nil {
+				stats.SampleRPMIDs = appendSelectionFailureSampleID(stats.SampleRPMIDs, acc.ID)
+			}
 		default:
 			stats.Eligible++
 		}

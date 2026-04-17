@@ -126,14 +126,14 @@ func (s *GatewayService) selectLoadAwareFallbackFromPager(input *loadAwareFallba
 		input.ctx,
 		pager,
 		pageSize,
-		func(batch []Account) (bool, *Account, error) {
-			batch = s.filterSelectionBatchByIndexedCapabilities(input.ctx, input.groupID, pager.platform, pager.hasForcePlatform, batch, schedGroup)
+		func(batch []*Account) (bool, *Account, error) {
+			batch = s.filterSelectionBatchByIndexedCapabilitiesFromPointers(input.ctx, input.groupID, pager.platform, pager.hasForcePlatform, batch, schedGroup)
 			if len(batch) == 0 {
 				return false, nil, nil
 			}
-			pageCtx := s.prefetchSelectionSignals(input.ctx, batch)
+			pageCtx := s.prefetchSelectionSignalsFromPointers(input.ctx, batch)
 
-			candidates := s.filterLoadAwareCandidates(
+			candidates := s.filterLoadAwareCandidatePointers(
 				pageCtx,
 				batch,
 				input.requestedModel,

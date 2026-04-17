@@ -86,6 +86,44 @@ func (s *GatewayService) filterSelectionBatchByIndexedCapabilities(
 	return filtered
 }
 
+func (s *GatewayService) filterSelectionBatchByIndexedCapabilitiesFromPointers(
+	ctx context.Context,
+	groupID *int64,
+	platform string,
+	hasForcePlatform bool,
+	accounts []*Account,
+	schedGroup *Group,
+) []*Account {
+	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil || schedGroup == nil || !schedGroup.RequirePrivacySet {
+		return accounts
+	}
+	accountIDs := make([]int64, 0, len(accounts))
+	for i := range accounts {
+		if accounts[i] != nil {
+			accountIDs = append(accountIDs, accounts[i].ID)
+		}
+	}
+	matches, _, err := s.schedulerSnapshot.MatchSchedulableAccountsCapability(
+		ctx,
+		groupID,
+		platform,
+		hasForcePlatform,
+		SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexPrivacySet},
+		accountIDs,
+	)
+	if err != nil {
+		return accounts
+	}
+	filtered := make([]*Account, 0, len(accounts))
+	for i := range accounts {
+		account := accounts[i]
+		if account != nil && matches[account.ID] {
+			filtered = append(filtered, account)
+		}
+	}
+	return filtered
+}
+
 func (s *GatewayService) loadSelectionAccountsByID(ctx context.Context, accountIDs []int64) []Account {
 	if len(accountIDs) == 0 {
 		return nil

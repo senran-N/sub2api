@@ -57,6 +57,14 @@ func newSchedulerIndexedAccountPager(
 }
 
 func (p *schedulerIndexedAccountPager) Next(ctx context.Context, limit int) ([]Account, bool, error) {
+	page, hasMore, err := p.NextRefs(ctx, limit)
+	if err != nil {
+		return nil, false, err
+	}
+	return derefAccounts(page), hasMore, nil
+}
+
+func (p *schedulerIndexedAccountPager) NextRefs(ctx context.Context, limit int) ([]*Account, bool, error) {
 	if p == nil || p.snapshot == nil || len(p.sources) == 0 {
 		return nil, false, nil
 	}
@@ -65,7 +73,7 @@ func (p *schedulerIndexedAccountPager) Next(ctx context.Context, limit int) ([]A
 	}
 
 	for {
-		batch := make([]Account, 0, limit)
+		batch := make([]*Account, 0, limit)
 		remaining := false
 
 		for i := range p.sources {
@@ -74,7 +82,7 @@ func (p *schedulerIndexedAccountPager) Next(ctx context.Context, limit int) ([]A
 				continue
 			}
 
-			page, _, hasMore, err := p.snapshot.ListSchedulableAccountsByCapabilityPage(
+			page, _, hasMore, err := p.snapshot.listSchedulableAccountPointersByCapabilityPage(
 				ctx,
 				p.groupID,
 				p.platform,
@@ -96,6 +104,9 @@ func (p *schedulerIndexedAccountPager) Next(ctx context.Context, limit int) ([]A
 			}
 
 			for _, account := range page {
+				if account == nil {
+					continue
+				}
 				if _, exists := p.seenAccountIDs[account.ID]; exists {
 					continue
 				}

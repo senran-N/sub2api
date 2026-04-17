@@ -182,6 +182,41 @@ func (s *SchedulerSnapshotService) ListSchedulableAccountsByCapabilityPage(
 	return page, useMixed, hasMore, nil
 }
 
+func (s *SchedulerSnapshotService) listSchedulableAccountPointersByCapabilityPage(
+	ctx context.Context,
+	groupID *int64,
+	platform string,
+	hasForcePlatform bool,
+	index SchedulerCapabilityIndex,
+	offset int,
+	limit int,
+) ([]*Account, bool, bool, error) {
+	bucket, useMixed := s.resolveBucket(groupID, platform, hasForcePlatform)
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = 1
+	}
+
+	if s.cache != nil {
+		if indexed, ok := s.cache.(SchedulerCacheIndexed); ok {
+			accounts, hit, hasMore, err := indexed.GetCapabilityIndexPage(ctx, bucket, index, offset, limit)
+			if err != nil {
+				logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] cache index page read failed: bucket=%s index=%s value=%s offset=%d limit=%d err=%v", bucket.String(), index.Kind, index.Value, offset, limit, err)
+			} else if hit {
+				return accounts, useMixed, hasMore, nil
+			}
+		}
+	}
+
+	page, _, hasMore, err := s.ListSchedulableAccountsByCapabilityPage(ctx, groupID, platform, hasForcePlatform, index, offset, limit)
+	if err != nil {
+		return nil, useMixed, false, err
+	}
+	return refAccounts(page), useMixed, hasMore, nil
+}
+
 func (s *SchedulerSnapshotService) MatchSchedulableAccountsCapability(
 	ctx context.Context,
 	groupID *int64,

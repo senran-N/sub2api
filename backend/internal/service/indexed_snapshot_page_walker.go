@@ -6,7 +6,7 @@ func forEachIndexedSnapshotPage(
 	ctx context.Context,
 	pager *schedulerIndexedAccountPager,
 	pageSize int,
-	visit func(batch []Account) (bool, error),
+	visit func(batch []*Account) (bool, error),
 ) error {
 	if pager == nil || visit == nil {
 		return nil
@@ -16,7 +16,7 @@ func forEachIndexedSnapshotPage(
 	}
 
 	for {
-		batch, hasMore, err := pager.Next(ctx, pageSize)
+		batch, hasMore, err := pager.NextRefs(ctx, pageSize)
 		if err != nil {
 			return err
 		}
