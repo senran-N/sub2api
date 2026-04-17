@@ -21,8 +21,16 @@ const emit = defineEmits<{
   saved: []
 }>()
 
+const defaultMetricThresholds: OpsMetricThresholds = {
+  sla_percent_min: 99.5,
+  ttft_p99_ms_max: 500,
+  request_error_rate_percent_max: 5,
+  upstream_error_rate_percent_max: 5
+}
+
 const loading = ref(false)
 const saving = ref(false)
+let loadSequence = 0
 
 // 运行时设置
 const runtimeSettings = ref<OpsAlertRuntimeSettings | null>(null)
@@ -31,15 +39,11 @@ const emailConfig = ref<EmailNotificationConfig | null>(null)
 // 高级设置
 const advancedSettings = ref<OpsAdvancedSettings | null>(null)
 // 指标阈值配置
-const metricThresholds = ref<OpsMetricThresholds>({
-  sla_percent_min: 99.5,
-  ttft_p99_ms_max: 500,
-  request_error_rate_percent_max: 5,
-  upstream_error_rate_percent_max: 5
-})
+const metricThresholds = ref<OpsMetricThresholds>({ ...defaultMetricThresholds })
 
 // 加载所有配置
 async function loadAllSettings() {
+  const requestSequence = ++loadSequence
   loading.value = true
   try {
     const [runtime, email, advanced, thresholds] = await Promise.all([
@@ -48,23 +52,26 @@ async function loadAllSettings() {
       opsAPI.getAdvancedSettings(),
       opsAPI.getMetricThresholds()
     ])
+    if (requestSequence !== loadSequence) return
     runtimeSettings.value = runtime
     emailConfig.value = email
     advancedSettings.value = advanced
-    // 如果后端返回了阈值，使用后端的值；否则保持默认值
-    if (thresholds && Object.keys(thresholds).length > 0) {
-        metricThresholds.value = {
-          sla_percent_min: thresholds.sla_percent_min ?? 99.5,
-          ttft_p99_ms_max: thresholds.ttft_p99_ms_max ?? 500,
-          request_error_rate_percent_max: thresholds.request_error_rate_percent_max ?? 5,
-          upstream_error_rate_percent_max: thresholds.upstream_error_rate_percent_max ?? 5
+    metricThresholds.value = thresholds && Object.keys(thresholds).length > 0
+      ? {
+          sla_percent_min: thresholds.sla_percent_min ?? defaultMetricThresholds.sla_percent_min,
+          ttft_p99_ms_max: thresholds.ttft_p99_ms_max ?? defaultMetricThresholds.ttft_p99_ms_max,
+          request_error_rate_percent_max: thresholds.request_error_rate_percent_max ?? defaultMetricThresholds.request_error_rate_percent_max,
+          upstream_error_rate_percent_max: thresholds.upstream_error_rate_percent_max ?? defaultMetricThresholds.upstream_error_rate_percent_max
         }
-    }
+      : { ...defaultMetricThresholds }
   } catch (err: unknown) {
+    if (requestSequence !== loadSequence) return
     console.error('[OpsSettingsDialog] Failed to load settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.settings.loadFailed')))
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
 }
 
@@ -72,7 +79,10 @@ async function loadAllSettings() {
 watch(() => props.show, (show) => {
   if (show) {
     loadAllSettings()
+    return
   }
+  loadSequence += 1
+  loading.value = false
 }, { immediate: true })
 
 // 邮件输入

@@ -13,6 +13,7 @@ const appStore = useAppStore()
 
 const loading = ref(false)
 const config = ref<EmailNotificationConfig | null>(null)
+let loadSequence = 0
 
 const showEditor = ref(false)
 const saving = ref(false)
@@ -30,15 +31,20 @@ const severityOptions: Array<{ value: AlertSeverity | ''; label: string }> = [
 ]
 
 async function loadConfig() {
+  const requestSequence = ++loadSequence
   loading.value = true
   try {
     const data = await opsAPI.getEmailNotificationConfig()
+    if (requestSequence !== loadSequence) return
     config.value = data
   } catch (err: unknown) {
+    if (requestSequence !== loadSequence) return
     console.error('[OpsEmailNotificationCard] Failed to load config', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.email.loadFailed')))
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
 }
 
