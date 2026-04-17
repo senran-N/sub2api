@@ -68,8 +68,16 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
   const todayStatsError = ref<string | null>(null)
   const pendingTodayStatsRefresh = ref(false)
   const todayStatsReqSeq = ref(0)
+  const listRefreshReqSeq = ref(0)
   const usageManualRefreshToken = ref(0)
   const isFirstLoad = ref(true)
+
+  const createListRefreshRequest = () => {
+    listRefreshReqSeq.value += 1
+    return listRefreshReqSeq.value
+  }
+
+  const isLatestListRefreshRequest = (requestSeq: number) => requestSeq === listRefreshReqSeq.value
 
   const loadSavedAutoRefresh = () => {
     try {
@@ -104,7 +112,11 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
     }
   }
 
-  const refreshTodayStatsBatch = async () => {
+  const refreshTodayStatsBatch = async (ownerListRequestSeq = listRefreshReqSeq.value) => {
+    if (!isLatestListRefreshRequest(ownerListRequestSeq)) {
+      return
+    }
+
     // Skip when both render targets are hidden: today's metrics card and usage column.
     if (options.hiddenColumns.has('today_stats') && options.hiddenColumns.has('usage')) {
       todayStatsLoading.value = false
@@ -126,20 +138,29 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
 
     try {
       const result = await options.fetchTodayStats(accountIds)
-      if (requestSeq !== todayStatsReqSeq.value) {
+      if (
+        requestSeq !== todayStatsReqSeq.value ||
+        !isLatestListRefreshRequest(ownerListRequestSeq)
+      ) {
         return
       }
 
       todayStatsByAccountId.value = buildAccountTodayStatsMap(accountIds, result.stats ?? {})
     } catch (error) {
-      if (requestSeq !== todayStatsReqSeq.value) {
+      if (
+        requestSeq !== todayStatsReqSeq.value ||
+        !isLatestListRefreshRequest(ownerListRequestSeq)
+      ) {
         return
       }
 
       todayStatsError.value = 'Failed'
       console.error('Failed to load account today stats:', error)
     } finally {
-      if (requestSeq === todayStatsReqSeq.value) {
+      if (
+        requestSeq === todayStatsReqSeq.value &&
+        isLatestListRefreshRequest(ownerListRequestSeq)
+      ) {
         todayStatsLoading.value = false
       }
     }
@@ -151,33 +172,46 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
 
   const load = async () => {
     const requestParams = options.params as Record<string, unknown>
+    const requestSeq = createListRefreshRequest()
     hasPendingListSync.value = false
     resetAutoRefreshCache()
     pendingTodayStatsRefresh.value = false
 
-    if (isFirstLoad.value) {
+    const shouldUseLite = isFirstLoad.value
+    if (shouldUseLite) {
       requestParams.lite = '1'
     }
 
     await options.loadBase()
 
-    if (isFirstLoad.value) {
+    if (!isLatestListRefreshRequest(requestSeq)) {
+      return
+    }
+
+    if (shouldUseLite && isFirstLoad.value) {
       isFirstLoad.value = false
       delete requestParams.lite
     }
 
-    await refreshTodayStatsBatch()
+    await refreshTodayStatsBatch(requestSeq)
   }
 
   const reload = async () => {
+    const requestSeq = createListRefreshRequest()
     hasPendingListSync.value = false
     resetAutoRefreshCache()
     pendingTodayStatsRefresh.value = false
     await options.reloadBase()
-    await refreshTodayStatsBatch()
+
+    if (!isLatestListRefreshRequest(requestSeq)) {
+      return
+    }
+
+    await refreshTodayStatsBatch(requestSeq)
   }
 
   const debouncedReload = () => {
+    createListRefreshRequest()
     hasPendingListSync.value = false
     resetAutoRefreshCache()
     pendingTodayStatsRefresh.value = true
@@ -185,6 +219,7 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
   }
 
   const handlePageChange = (page: number) => {
+    createListRefreshRequest()
     hasPendingListSync.value = false
     resetAutoRefreshCache()
     pendingTodayStatsRefresh.value = true
@@ -192,6 +227,7 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
   }
 
   const handlePageSizeChange = (size: number) => {
+    createListRefreshRequest()
     hasPendingListSync.value = false
     resetAutoRefreshCache()
     pendingTodayStatsRefresh.value = true
@@ -224,6 +260,7 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
       return
     }
 
+    const requestSeq = listRefreshReqSeq.value
     autoRefreshFetching.value = true
     try {
       const result = await options.fetchAccountsIncrementally(
@@ -232,6 +269,10 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
         toRaw(options.params) as Record<string, unknown>,
         { etag: autoRefreshETag.value }
       )
+
+      if (!isLatestListRefreshRequest(requestSeq)) {
+        return
+      }
 
       if (result.etag) {
         autoRefreshETag.value = result.etag
@@ -244,7 +285,7 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
         hasPendingListSync.value = false
       }
 
-      await refreshTodayStatsBatch()
+      await refreshTodayStatsBatch(requestSeq)
     } catch (error) {
       console.error('Auto refresh failed:', error)
     } finally {

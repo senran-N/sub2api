@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, type Ref } from 'vue'
 import type { Account } from '@/types'
 import { useAccountsViewRefresh } from '../accounts/useAccountsViewRefresh'
 
@@ -42,6 +42,47 @@ async function flushMicrotasks() {
   await Promise.resolve()
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
+interface CreateComposableOverrides {
+  loadBase?: (context: { accounts: Ref<Account[]>; call: number }) => Promise<void>
+  reloadBase?: (context: { accounts: Ref<Account[]>; call: number }) => Promise<void>
+  fetchTodayStats?: (accountIds: number[]) => Promise<{
+    stats?: Record<
+      string,
+      {
+        requests: number
+        tokens: number
+        cost: number
+        standard_cost: number
+        user_cost: number
+      }
+    >
+  }>
+  fetchAccountsIncrementally?: () => Promise<{
+    etag?: string | null
+    notModified?: boolean
+    data?: {
+      total?: number
+      pages?: number
+      items?: Account[]
+    } | null
+  }>
+}
+
 describe('useAccountsViewRefresh', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -57,7 +98,7 @@ describe('useAccountsViewRefresh', () => {
     vi.restoreAllMocks()
   })
 
-  function createComposable() {
+  function createComposable(overrides: CreateComposableOverrides = {}) {
     const accounts = ref<Account[]>([])
     const loading = ref(false)
     const params = reactive<Record<string, unknown>>({
@@ -75,35 +116,55 @@ describe('useAccountsViewRefresh', () => {
       pages: 0
     })
     const hiddenColumns = reactive(new Set<string>())
+    let loadBaseCalls = 0
     const loadBase = vi.fn(async () => {
+      loadBaseCalls += 1
+      if (overrides.loadBase) {
+        await overrides.loadBase({ accounts, call: loadBaseCalls })
+        return
+      }
+
       accounts.value = [createAccount({ id: 1 })]
     })
+    let reloadBaseCalls = 0
     const reloadBase = vi.fn(async () => {
+      reloadBaseCalls += 1
+      if (overrides.reloadBase) {
+        await overrides.reloadBase({ accounts, call: reloadBaseCalls })
+        return
+      }
+
       accounts.value = [createAccount({ id: 2 })]
     })
     const debouncedReloadBase = vi.fn()
     const handlePageChangeBase = vi.fn()
     const handlePageSizeChangeBase = vi.fn()
-    const fetchTodayStats = vi.fn(async (accountIds: number[]) => ({
-      stats: {
-        [String(accountIds[0])]: {
-          requests: 1,
-          tokens: 2,
-          cost: 3,
-          standard_cost: 4,
-          user_cost: 5
-        }
-      }
-    }))
-    const fetchAccountsIncrementally = vi.fn(async () => ({
-      etag: 'etag-1',
-      notModified: false,
-      data: {
-        total: 1,
-        pages: 1,
-        items: [createAccount({ id: 1, updated_at: '2026-01-02T00:00:00Z' })]
-      }
-    }))
+    const fetchTodayStats = vi.fn(
+      overrides.fetchTodayStats ??
+        (async (accountIds: number[]) => ({
+          stats: {
+            [String(accountIds[0])]: {
+              requests: 1,
+              tokens: 2,
+              cost: 3,
+              standard_cost: 4,
+              user_cost: 5
+            }
+          }
+        }))
+    )
+    const fetchAccountsIncrementally = vi.fn(
+      overrides.fetchAccountsIncrementally ??
+        (async () => ({
+          etag: 'etag-1',
+          notModified: false,
+          data: {
+            total: 1,
+            pages: 1,
+            items: [createAccount({ id: 1, updated_at: '2026-01-02T00:00:00Z' })]
+          }
+        }))
+    )
     const syncAccountRefs = vi.fn()
 
     const composable = useAccountsViewRefresh({
@@ -207,5 +268,99 @@ describe('useAccountsViewRefresh', () => {
 
     expect(setup.composable.usageManualRefreshToken.value).toBe(2)
     expect(setup.loadBase).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores stale base loads once a newer load starts', async () => {
+    const firstLoad = createDeferred<void>()
+    const secondLoad = createDeferred<void>()
+    const setup = createComposable({
+      loadBase: async ({ accounts, call }) => {
+        if (call === 1) {
+          await firstLoad.promise
+          accounts.value = [createAccount({ id: 11 })]
+          return
+        }
+
+        await secondLoad.promise
+        accounts.value = [createAccount({ id: 22 })]
+      }
+    })
+
+    const firstPromise = setup.composable.load()
+    const secondPromise = setup.composable.load()
+
+    firstLoad.resolve()
+    await flushMicrotasks()
+
+    expect(setup.fetchTodayStats).not.toHaveBeenCalled()
+    expect(setup.params.lite).toBe('1')
+
+    secondLoad.resolve()
+    await Promise.all([firstPromise, secondPromise])
+
+    expect(setup.fetchTodayStats).toHaveBeenCalledTimes(1)
+    expect(setup.fetchTodayStats).toHaveBeenCalledWith([22])
+    expect(setup.accounts.value.map((account) => account.id)).toEqual([22])
+    expect(setup.composable.todayStatsByAccountId.value['22']).toEqual({
+      requests: 1,
+      tokens: 2,
+      cost: 3,
+      standard_cost: 4,
+      user_cost: 5
+    })
+  })
+
+  it('drops stale incremental refresh results after a newer base load starts', async () => {
+    const manualLoad = createDeferred<void>()
+    const incrementalRefresh = createDeferred<{
+      etag: string
+      notModified: boolean
+      data: {
+        total: number
+        pages: number
+        items: Account[]
+      }
+    }>()
+    const setup = createComposable({
+      loadBase: async ({ accounts }) => {
+        await manualLoad.promise
+        accounts.value = [createAccount({ id: 20 })]
+      },
+      fetchAccountsIncrementally: async () => incrementalRefresh.promise
+    })
+
+    setup.accounts.value = [createAccount({ id: 1 })]
+    setup.composable.setAutoRefreshInterval(5)
+    setup.composable.setAutoRefreshEnabled(true)
+
+    await vi.advanceTimersByTimeAsync(6000)
+    await flushMicrotasks()
+
+    const loadPromise = setup.composable.load()
+    manualLoad.resolve()
+    await loadPromise
+
+    incrementalRefresh.resolve({
+      etag: 'etag-2',
+      notModified: false,
+      data: {
+        total: 1,
+        pages: 1,
+        items: [createAccount({ id: 99, updated_at: '2026-01-03T00:00:00Z' })]
+      }
+    })
+    await flushMicrotasks()
+
+    expect(setup.accounts.value.map((account) => account.id)).toEqual([20])
+    expect(setup.fetchTodayStats).toHaveBeenCalledTimes(1)
+    expect(setup.fetchTodayStats).toHaveBeenCalledWith([20])
+    expect(setup.composable.todayStatsByAccountId.value['20']).toEqual({
+      requests: 1,
+      tokens: 2,
+      cost: 3,
+      standard_cost: 4,
+      user_cost: 5
+    })
+    setup.composable.dispose()
   })
 })
