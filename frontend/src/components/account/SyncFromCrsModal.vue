@@ -256,6 +256,7 @@ const syncing = ref(false)
 const previewResult = ref<PreviewFromCRSResult | null>(null)
 const selectedIds = ref(new Set<string>())
 const result = ref<Awaited<ReturnType<typeof adminAPI.accounts.syncFromCrs>> | null>(null)
+let syncFromCrsRequestSequence = 0
 
 const form = reactive({
   base_url: '',
@@ -298,19 +299,32 @@ const getErrorMessage = (error: unknown, fallbackMessage: string) => {
   return error instanceof Error && error.message ? error.message : fallbackMessage
 }
 
+const resetSyncFromCrsState = () => {
+  currentStep.value = 'input'
+  previewResult.value = null
+  selectedIds.value = new Set()
+  result.value = null
+  form.base_url = ''
+  form.username = ''
+  form.password = ''
+  form.sync_proxies = true
+}
+
+const invalidateSyncFromCrsRequests = () => {
+  syncFromCrsRequestSequence += 1
+  previewing.value = false
+  syncing.value = false
+}
+
+const isActiveSyncFromCrsRequest = (requestSequence: number) => (
+  requestSequence === syncFromCrsRequestSequence && props.show
+)
+
 watch(
   () => props.show,
-  (open) => {
-    if (open) {
-      currentStep.value = 'input'
-      previewResult.value = null
-      selectedIds.value = new Set()
-      result.value = null
-      form.base_url = ''
-      form.username = ''
-      form.password = ''
-      form.sync_proxies = true
-    }
+  () => {
+    invalidateSyncFromCrsRequests()
+    resetSyncFromCrsState()
   }
 )
 
@@ -352,21 +366,31 @@ const handlePreview = async () => {
     return
   }
 
+  const requestSequence = ++syncFromCrsRequestSequence
+  const payload = {
+    base_url: form.base_url.trim(),
+    username: form.username.trim(),
+    password: form.password
+  }
   previewing.value = true
   try {
-    const res = await adminAPI.accounts.previewFromCrs({
-      base_url: form.base_url.trim(),
-      username: form.username.trim(),
-      password: form.password
-    })
+    const res = await adminAPI.accounts.previewFromCrs(payload)
+    if (!isActiveSyncFromCrsRequest(requestSequence)) {
+      return
+    }
     previewResult.value = res
     // Auto-select all new accounts
     selectedIds.value = new Set(res.new_accounts.map((a) => a.crs_account_id))
     currentStep.value = 'preview'
   } catch (error) {
+    if (!isActiveSyncFromCrsRequest(requestSequence)) {
+      return
+    }
     appStore.showError(getErrorMessage(error, t('admin.accounts.crsPreviewFailed')))
   } finally {
-    previewing.value = false
+    if (requestSequence === syncFromCrsRequestSequence) {
+      previewing.value = false
+    }
   }
 }
 
@@ -376,15 +400,20 @@ const handleSync = async () => {
     return
   }
 
+  const requestSequence = ++syncFromCrsRequestSequence
+  const payload = {
+    base_url: form.base_url.trim(),
+    username: form.username.trim(),
+    password: form.password,
+    sync_proxies: form.sync_proxies,
+    selected_account_ids: [...selectedIds.value]
+  }
   syncing.value = true
   try {
-    const res = await adminAPI.accounts.syncFromCrs({
-      base_url: form.base_url.trim(),
-      username: form.username.trim(),
-      password: form.password,
-      sync_proxies: form.sync_proxies,
-      selected_account_ids: [...selectedIds.value]
-    })
+    const res = await adminAPI.accounts.syncFromCrs(payload)
+    if (!isActiveSyncFromCrsRequest(requestSequence)) {
+      return
+    }
     result.value = res
     currentStep.value = 'result'
 
@@ -395,9 +424,14 @@ const handleSync = async () => {
     }
     emit('synced')
   } catch (error) {
+    if (!isActiveSyncFromCrsRequest(requestSequence)) {
+      return
+    }
     appStore.showError(getErrorMessage(error, t('admin.accounts.syncFailed')))
   } finally {
-    syncing.value = false
+    if (requestSequence === syncFromCrsRequestSequence) {
+      syncing.value = false
+    }
   }
 }
 </script>
