@@ -111,22 +111,35 @@ const appStore = useAppStore()
 const importing = ref(false)
 const file = ref<File | null>(null)
 const result = ref<AdminDataImportResult | null>(null)
+let importRequestSequence = 0
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const fileName = computed(() => file.value?.name || '')
 
 const errorItems = computed(() => result.value?.errors || [])
 
+const resetImportState = () => {
+  file.value = null
+  result.value = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const invalidateImportRequests = () => {
+  importRequestSequence += 1
+  importing.value = false
+}
+
+const isActiveImportRequest = (requestSequence: number) => (
+  requestSequence === importRequestSequence && props.show
+)
+
 watch(
   () => props.show,
-  (open) => {
-    if (open) {
-      file.value = null
-      result.value = null
-      if (fileInput.value) {
-        fileInput.value.value = ''
-      }
-    }
+  () => {
+    invalidateImportRequests()
+    resetImportState()
   }
 )
 
@@ -136,7 +149,9 @@ const openFilePicker = () => {
 
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement
+  invalidateImportRequests()
   file.value = target.files?.[0] || null
+  result.value = null
 }
 
 const handleClose = () => {
@@ -168,12 +183,21 @@ const handleImport = async () => {
     return
   }
 
+  const requestSequence = ++importRequestSequence
+  const sourceFile = file.value
+  result.value = null
   importing.value = true
   try {
-    const text = await readFileAsText(file.value)
+    const text = await readFileAsText(sourceFile)
+    if (!isActiveImportRequest(requestSequence)) {
+      return
+    }
     const dataPayload = JSON.parse(text)
 
     const res = await adminAPI.proxies.importData({ data: dataPayload })
+    if (!isActiveImportRequest(requestSequence)) {
+      return
+    }
 
     result.value = res
 
@@ -190,13 +214,18 @@ const handleImport = async () => {
       emit('imported')
     }
   } catch (error) {
+    if (!isActiveImportRequest(requestSequence)) {
+      return
+    }
     if (error instanceof SyntaxError) {
       appStore.showError(t('admin.proxies.dataImportParseFailed'))
     } else {
       appStore.showError(resolveErrorMessage(error, t('admin.proxies.dataImportFailed')))
     }
   } finally {
-    importing.value = false
+    if (requestSequence === importRequestSequence) {
+      importing.value = false
+    }
   }
 }
 </script>
