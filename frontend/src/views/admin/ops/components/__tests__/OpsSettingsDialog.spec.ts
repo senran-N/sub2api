@@ -7,6 +7,10 @@ const mockGetAlertRuntimeSettings = vi.fn()
 const mockGetEmailNotificationConfig = vi.fn()
 const mockGetAdvancedSettings = vi.fn()
 const mockGetMetricThresholds = vi.fn()
+const mockUpdateAlertRuntimeSettings = vi.fn()
+const mockUpdateEmailNotificationConfig = vi.fn()
+const mockUpdateAdvancedSettings = vi.fn()
+const mockUpdateMetricThresholds = vi.fn()
 const showError = vi.fn()
 const showSuccess = vi.fn()
 
@@ -16,10 +20,10 @@ vi.mock('@/api/admin/ops', () => ({
     getEmailNotificationConfig: (...args: any[]) => mockGetEmailNotificationConfig(...args),
     getAdvancedSettings: (...args: any[]) => mockGetAdvancedSettings(...args),
     getMetricThresholds: (...args: any[]) => mockGetMetricThresholds(...args),
-    updateAlertRuntimeSettings: vi.fn(),
-    updateEmailNotificationConfig: vi.fn(),
-    updateAdvancedSettings: vi.fn(),
-    updateMetricThresholds: vi.fn(),
+    updateAlertRuntimeSettings: (...args: any[]) => mockUpdateAlertRuntimeSettings(...args),
+    updateEmailNotificationConfig: (...args: any[]) => mockUpdateEmailNotificationConfig(...args),
+    updateAdvancedSettings: (...args: any[]) => mockUpdateAdvancedSettings(...args),
+    updateMetricThresholds: (...args: any[]) => mockUpdateMetricThresholds(...args),
   },
 }))
 
@@ -166,6 +170,10 @@ function makeAdvancedSettings(autoRefreshIntervalSeconds: number) {
 describe('OpsSettingsDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUpdateAlertRuntimeSettings.mockResolvedValue(undefined)
+    mockUpdateEmailNotificationConfig.mockResolvedValue(undefined)
+    mockUpdateAdvancedSettings.mockResolvedValue(undefined)
+    mockUpdateMetricThresholds.mockResolvedValue(undefined)
   })
 
   it('keeps the latest reopen result when settings requests overlap', async () => {
@@ -239,5 +247,69 @@ describe('OpsSettingsDialog', () => {
     expect((inputs[0]?.element as HTMLInputElement).value).toBe('99')
     expect(wrapper.text()).toContain('latest-alert@example.com')
     expect(wrapper.text()).not.toContain('stale-alert@example.com')
+  })
+
+  it('ignores a stale save result after the dialog closes and reopens', async () => {
+    const saveRuntime = deferred<void>()
+    mockGetAlertRuntimeSettings
+      .mockResolvedValueOnce(makeRuntimeSettings(30))
+      .mockResolvedValueOnce(makeRuntimeSettings(99))
+    mockGetEmailNotificationConfig
+      .mockResolvedValueOnce(makeEmailConfig('first@example.com'))
+      .mockResolvedValueOnce(makeEmailConfig('reopen@example.com'))
+    mockGetAdvancedSettings
+      .mockResolvedValueOnce(makeAdvancedSettings(15))
+      .mockResolvedValueOnce(makeAdvancedSettings(45))
+    mockGetMetricThresholds
+      .mockResolvedValueOnce({
+        sla_percent_min: 95,
+        ttft_p99_ms_max: 800,
+        request_error_rate_percent_max: 6,
+        upstream_error_rate_percent_max: 7,
+      })
+      .mockResolvedValueOnce({
+        sla_percent_min: 97.5,
+        ttft_p99_ms_max: 400,
+        request_error_rate_percent_max: 3,
+        upstream_error_rate_percent_max: 4,
+      })
+
+    mockUpdateAlertRuntimeSettings.mockReturnValueOnce(saveRuntime.promise)
+
+    const wrapper = mount(OpsSettingsDialog, {
+      props: {
+        show: true,
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          Select: SelectStub,
+          Toggle: ToggleStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const saveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.save')
+    expect(saveButton).toBeTruthy()
+    await saveButton!.trigger('click')
+    await flushPromises()
+
+    await wrapper.setProps({ show: false })
+    await flushPromises()
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    saveRuntime.resolve()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('reopen@example.com')
+    expect(wrapper.text()).not.toContain('first@example.com')
+    expect(showSuccess).not.toHaveBeenCalledWith('admin.ops.settings.saveSuccess')
+    expect(wrapper.emitted('saved')).toBeFalsy()
+    expect(wrapper.emitted('close')).toBeFalsy()
   })
 })

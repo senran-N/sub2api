@@ -30,7 +30,7 @@ const defaultMetricThresholds: OpsMetricThresholds = {
 
 const loading = ref(false)
 const saving = ref(false)
-let loadSequence = 0
+let settingsRequestSequence = 0
 
 // 运行时设置
 const runtimeSettings = ref<OpsAlertRuntimeSettings | null>(null)
@@ -43,7 +43,7 @@ const metricThresholds = ref<OpsMetricThresholds>({ ...defaultMetricThresholds }
 
 // 加载所有配置
 async function loadAllSettings() {
-  const requestSequence = ++loadSequence
+  const requestSequence = ++settingsRequestSequence
   loading.value = true
   try {
     const [runtime, email, advanced, thresholds] = await Promise.all([
@@ -52,7 +52,7 @@ async function loadAllSettings() {
       opsAPI.getAdvancedSettings(),
       opsAPI.getMetricThresholds()
     ])
-    if (requestSequence !== loadSequence) return
+    if (requestSequence !== settingsRequestSequence) return
     runtimeSettings.value = runtime
     emailConfig.value = email
     advancedSettings.value = advanced
@@ -65,11 +65,11 @@ async function loadAllSettings() {
         }
       : { ...defaultMetricThresholds }
   } catch (err: unknown) {
-    if (requestSequence !== loadSequence) return
+    if (requestSequence !== settingsRequestSequence) return
     console.error('[OpsSettingsDialog] Failed to load settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.settings.loadFailed')))
   } finally {
-    if (requestSequence === loadSequence) {
+    if (requestSequence === settingsRequestSequence) {
       loading.value = false
     }
   }
@@ -81,8 +81,9 @@ watch(() => props.show, (show) => {
     loadAllSettings()
     return
   }
-  loadSequence += 1
+  settingsRequestSequence += 1
   loading.value = false
+  saving.value = false
 }, { immediate: true })
 
 // 邮件输入
@@ -182,6 +183,8 @@ async function saveAllSettings() {
     return
   }
 
+  const requestSequence = ++settingsRequestSequence
+  loading.value = false
   saving.value = true
   try {
     // 无收件人时自动禁用邮件通知
@@ -199,14 +202,18 @@ async function saveAllSettings() {
       advancedSettings.value ? opsAPI.updateAdvancedSettings(advancedSettings.value) : Promise.resolve(),
       opsAPI.updateMetricThresholds(metricThresholds.value)
     ])
+    if (requestSequence !== settingsRequestSequence) return
     appStore.showSuccess(t('admin.ops.settings.saveSuccess'))
     emit('saved')
     emit('close')
   } catch (err: unknown) {
+    if (requestSequence !== settingsRequestSequence) return
     console.error('[OpsSettingsDialog] Failed to save settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.settings.saveFailed')))
   } finally {
-    saving.value = false
+    if (requestSequence === settingsRequestSequence) {
+      saving.value = false
+    }
   }
 }
 </script>
