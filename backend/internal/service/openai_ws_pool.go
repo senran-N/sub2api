@@ -138,10 +138,10 @@ func (p *openAIWSConnPool) Acquire(ctx context.Context, req openAIWSAcquireReque
 	if p != nil {
 		p.metrics.acquireTotal.Add(1)
 	}
-	return p.acquire(ctx, normalizeOpenAIWSAcquireRequest(req), 0)
+	return p.acquire(ctx, normalizeOpenAIWSAcquireRequest(req), 0, time.Now(), 0)
 }
 
-func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireRequest, retry int) (*openAIWSConnLease, error) {
+func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireRequest, retry int, acquireStartedAt time.Time, healthcheckTotal time.Duration) (*openAIWSConnLease, error) {
 	if p == nil || req.Account == nil || req.Account.ID <= 0 {
 		return nil, errors.New("invalid ws acquire request")
 	}
@@ -190,21 +190,26 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 				ap.mu.Unlock()
 				closeOpenAIWSConns(evicted)
 				if p.shouldHealthCheckConn(preferredConn) {
+					healthcheckStartedAt := time.Now()
 					if err := preferredConn.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
+						healthcheckTotal += time.Since(healthcheckStartedAt)
 						preferredConn.close()
 						p.evictConn(accountID, preferredConn.id)
 						if retry < 1 {
-							return p.acquire(ctx, req, retry+1)
+							return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
 						}
 						return nil, err
 					}
+					healthcheckTotal += time.Since(healthcheckStartedAt)
 				}
 				lease := &openAIWSConnLease{
-					pool:      p,
-					accountID: accountID,
-					conn:      preferredConn,
-					connPick:  connPick,
-					reused:    true,
+					pool:            p,
+					accountID:       accountID,
+					conn:            preferredConn,
+					connPick:        connPick,
+					acquireDuration: time.Since(acquireStartedAt),
+					healthcheck:     healthcheckTotal,
+					reused:          true,
 				}
 				p.metrics.acquireReuseTotal.Add(1)
 				p.ensureTargetIdleAsync(accountID)
@@ -227,31 +232,36 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 
 			if err := preferredConn.acquire(ctx); err != nil {
 				if errors.Is(err, errOpenAIWSConnClosed) && retry < 1 {
-					return p.acquire(ctx, req, retry+1)
+					return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
 				}
 				return nil, err
 			}
 			if p.shouldHealthCheckConn(preferredConn) {
+				healthcheckStartedAt := time.Now()
 				if err := preferredConn.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
+					healthcheckTotal += time.Since(healthcheckStartedAt)
 					preferredConn.release()
 					preferredConn.close()
 					p.evictConn(accountID, preferredConn.id)
 					if retry < 1 {
-						return p.acquire(ctx, req, retry+1)
+						return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
 					}
 					return nil, err
 				}
+				healthcheckTotal += time.Since(healthcheckStartedAt)
 			}
 
 			queueWait := time.Since(waitStart)
 			p.metrics.acquireQueueWaitMs.Add(queueWait.Milliseconds())
 			lease := &openAIWSConnLease{
-				pool:      p,
-				accountID: accountID,
-				conn:      preferredConn,
-				queueWait: queueWait,
-				connPick:  connPick,
-				reused:    true,
+				pool:            p,
+				accountID:       accountID,
+				conn:            preferredConn,
+				queueWait:       queueWait,
+				connPick:        connPick,
+				acquireDuration: time.Since(acquireStartedAt),
+				healthcheck:     healthcheckTotal,
+				reused:          true,
 			}
 			p.metrics.acquireReuseTotal.Add(1)
 			p.ensureTargetIdleAsync(accountID)
@@ -265,16 +275,27 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 				ap.mu.Unlock()
 				closeOpenAIWSConns(evicted)
 				if p.shouldHealthCheckConn(conn) {
+					healthcheckStartedAt := time.Now()
 					if err := conn.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
+						healthcheckTotal += time.Since(healthcheckStartedAt)
 						conn.close()
 						p.evictConn(accountID, conn.id)
 						if retry < 1 {
-							return p.acquire(ctx, req, retry+1)
+							return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
 						}
 						return nil, err
 					}
+					healthcheckTotal += time.Since(healthcheckStartedAt)
 				}
-				lease := &openAIWSConnLease{pool: p, accountID: accountID, conn: conn, connPick: connPick, reused: true}
+				lease := &openAIWSConnLease{
+					pool:            p,
+					accountID:       accountID,
+					conn:            conn,
+					connPick:        connPick,
+					acquireDuration: time.Since(acquireStartedAt),
+					healthcheck:     healthcheckTotal,
+					reused:          true,
+				}
 				p.metrics.acquireReuseTotal.Add(1)
 				p.ensureTargetIdleAsync(accountID)
 				return lease, nil
@@ -285,22 +306,33 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 		if best != nil && best.tryAcquire() {
 			connPick := time.Since(pickStartedAt)
 			p.recordConnPickDuration(connPick)
-			ap.mu.Unlock()
-			closeOpenAIWSConns(evicted)
-			if p.shouldHealthCheckConn(best) {
-				if err := best.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
-					best.close()
-					p.evictConn(accountID, best.id)
-					if retry < 1 {
-						return p.acquire(ctx, req, retry+1)
+				ap.mu.Unlock()
+				closeOpenAIWSConns(evicted)
+				if p.shouldHealthCheckConn(best) {
+					healthcheckStartedAt := time.Now()
+					if err := best.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
+						healthcheckTotal += time.Since(healthcheckStartedAt)
+						best.close()
+						p.evictConn(accountID, best.id)
+						if retry < 1 {
+							return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
+						}
+						return nil, err
 					}
-					return nil, err
+					healthcheckTotal += time.Since(healthcheckStartedAt)
 				}
-			}
-			lease := &openAIWSConnLease{pool: p, accountID: accountID, conn: best, connPick: connPick, reused: true}
-			p.metrics.acquireReuseTotal.Add(1)
-			p.ensureTargetIdleAsync(accountID)
-			return lease, nil
+				lease := &openAIWSConnLease{
+					pool:            p,
+					accountID:       accountID,
+					conn:            best,
+					connPick:        connPick,
+					acquireDuration: time.Since(acquireStartedAt),
+					healthcheck:     healthcheckTotal,
+					reused:          true,
+				}
+				p.metrics.acquireReuseTotal.Add(1)
+				p.ensureTargetIdleAsync(accountID)
+				return lease, nil
 		}
 		for _, conn := range ap.conns {
 			if conn == nil || conn == best {
@@ -312,16 +344,27 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 				ap.mu.Unlock()
 				closeOpenAIWSConns(evicted)
 				if p.shouldHealthCheckConn(conn) {
+					healthcheckStartedAt := time.Now()
 					if err := conn.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
+						healthcheckTotal += time.Since(healthcheckStartedAt)
 						conn.close()
 						p.evictConn(accountID, conn.id)
 						if retry < 1 {
-							return p.acquire(ctx, req, retry+1)
+							return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
 						}
 						return nil, err
 					}
+					healthcheckTotal += time.Since(healthcheckStartedAt)
 				}
-				lease := &openAIWSConnLease{pool: p, accountID: accountID, conn: conn, connPick: connPick, reused: true}
+				lease := &openAIWSConnLease{
+					pool:            p,
+					accountID:       accountID,
+					conn:            conn,
+					connPick:        connPick,
+					acquireDuration: time.Since(acquireStartedAt),
+					healthcheck:     healthcheckTotal,
+					reused:          true,
+				}
 				p.metrics.acquireReuseTotal.Add(1)
 				p.ensureTargetIdleAsync(accountID)
 				return lease, nil
@@ -368,7 +411,14 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 				return nil, err
 			}
 		}
-		lease := &openAIWSConnLease{pool: p, accountID: accountID, conn: conn, connPick: connPick}
+		lease := &openAIWSConnLease{
+			pool:            p,
+			accountID:       accountID,
+			conn:            conn,
+			connPick:        connPick,
+			acquireDuration: time.Since(acquireStartedAt),
+			healthcheck:     healthcheckTotal,
+		}
 		p.ensureTargetIdleAsync(accountID)
 		return lease, nil
 	}
@@ -402,25 +452,37 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 
 	if err := target.acquire(ctx); err != nil {
 		if errors.Is(err, errOpenAIWSConnClosed) && retry < 1 {
-			return p.acquire(ctx, req, retry+1)
+			return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
 		}
 		return nil, err
 	}
 	if p.shouldHealthCheckConn(target) {
+		healthcheckStartedAt := time.Now()
 		if err := target.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
+			healthcheckTotal += time.Since(healthcheckStartedAt)
 			target.release()
 			target.close()
 			p.evictConn(accountID, target.id)
 			if retry < 1 {
-				return p.acquire(ctx, req, retry+1)
+				return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
 			}
 			return nil, err
 		}
+		healthcheckTotal += time.Since(healthcheckStartedAt)
 	}
 
 	queueWait := time.Since(waitStart)
 	p.metrics.acquireQueueWaitMs.Add(queueWait.Milliseconds())
-	lease := &openAIWSConnLease{pool: p, accountID: accountID, conn: target, queueWait: queueWait, connPick: connPick, reused: true}
+	lease := &openAIWSConnLease{
+		pool:            p,
+		accountID:       accountID,
+		conn:            target,
+		queueWait:       queueWait,
+		connPick:        connPick,
+		acquireDuration: time.Since(acquireStartedAt),
+		healthcheck:     healthcheckTotal,
+		reused:          true,
+	}
 	p.metrics.acquireReuseTotal.Add(1)
 	p.ensureTargetIdleAsync(accountID)
 	return lease, nil

@@ -306,6 +306,8 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		)
 	}
 	if c != nil {
+		SetOpsLatencyMs(c, OpsWSAcquireMsKey, lease.AcquireDuration().Milliseconds())
+		SetOpsLatencyMs(c, OpsWSHealthcheckMsKey, lease.HealthcheckDuration().Milliseconds())
 		SetOpsLatencyMs(c, OpsOpenAIWSConnPickMsKey, lease.ConnPickDuration().Milliseconds())
 		SetOpsLatencyMs(c, OpsOpenAIWSQueueWaitMsKey, lease.QueueWaitDuration().Milliseconds())
 		SetOpsLatencyMs(c, OpsOpenAIWSPrewarmMsKey, 0)

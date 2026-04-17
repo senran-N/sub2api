@@ -1151,6 +1151,10 @@ export interface OpsErrorDetail extends OpsErrorLog {
   upstream_latency_ms?: number | null
   response_latency_ms?: number | null
   time_to_first_token_ms?: number | null
+  wait_user_ms?: number | null
+  wait_account_ms?: number | null
+  ws_acquire_ms?: number | null
+  ws_healthcheck_ms?: number | null
 
   request_body: string
   request_body_truncated: boolean

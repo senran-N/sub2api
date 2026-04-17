@@ -88,6 +88,10 @@ type OpsErrorLogDetail struct {
 	UpstreamLatencyMs  *int64 `json:"upstream_latency_ms"`
 	ResponseLatencyMs  *int64 `json:"response_latency_ms"`
 	TimeToFirstTokenMs *int64 `json:"time_to_first_token_ms"`
+	WaitUserMs         *int64 `json:"wait_user_ms"`
+	WaitAccountMs      *int64 `json:"wait_account_ms"`
+	WSAcquireMs        *int64 `json:"ws_acquire_ms"`
+	WSHealthcheckMs    *int64 `json:"ws_healthcheck_ms"`
 
 	// Retry context
 	RequestBody          string `json:"request_body"`

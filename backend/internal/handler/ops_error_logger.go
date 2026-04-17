@@ -971,6 +971,10 @@ func applyOpsLatencyFieldsFromContext(c *gin.Context, entry *service.OpsInsertEr
 	entry.UpstreamLatencyMs = getContextLatencyMs(c, service.OpsUpstreamLatencyMsKey)
 	entry.ResponseLatencyMs = getContextLatencyMs(c, service.OpsResponseLatencyMsKey)
 	entry.TimeToFirstTokenMs = getContextLatencyMs(c, service.OpsTimeToFirstTokenMsKey)
+	entry.WaitUserMs = getContextLatencyMs(c, service.OpsWaitUserMsKey)
+	entry.WaitAccountMs = getContextLatencyMs(c, service.OpsWaitAccountMsKey)
+	entry.WSAcquireMs = getContextLatencyMs(c, service.OpsWSAcquireMsKey)
+	entry.WSHealthcheckMs = getContextLatencyMs(c, service.OpsWSHealthcheckMsKey)
 }
 
 func getContextLatencyMs(c *gin.Context, key string) *int64 {

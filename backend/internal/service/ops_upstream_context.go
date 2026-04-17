@@ -27,6 +27,10 @@ const (
 	OpsUpstreamLatencyMsKey  = "ops_upstream_latency_ms"
 	OpsResponseLatencyMsKey  = "ops_response_latency_ms"
 	OpsTimeToFirstTokenMsKey = "ops_time_to_first_token_ms"
+	OpsWaitUserMsKey         = "ops_wait_user_ms"
+	OpsWaitAccountMsKey      = "ops_wait_account_ms"
+	OpsWSAcquireMsKey        = "ops_ws_acquire_ms"
+	OpsWSHealthcheckMsKey    = "ops_ws_healthcheck_ms"
 	// OpenAI WS 关键观测字段
 	OpsOpenAIWSQueueWaitMsKey = "ops_openai_ws_queue_wait_ms"
 	OpsOpenAIWSConnPickMsKey  = "ops_openai_ws_conn_pick_ms"

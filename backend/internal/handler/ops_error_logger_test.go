@@ -87,6 +87,37 @@ func TestAttachOpsRequestBodyToEntry_InvalidJSONKeepsSize(t *testing.T) {
 	require.Equal(t, int64(1), OpsErrorLogSanitizedTotal())
 }
 
+func TestApplyOpsLatencyFieldsFromContext_IncludesStageLatencies(t *testing.T) {
+	resetOpsErrorLoggerStateForTest(t)
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, 11)
+	service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, 12)
+	service.SetOpsLatencyMs(c, service.OpsUpstreamLatencyMsKey, 13)
+	service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, 14)
+	service.SetOpsLatencyMs(c, service.OpsTimeToFirstTokenMsKey, 15)
+	service.SetOpsLatencyMs(c, service.OpsWaitUserMsKey, 16)
+	service.SetOpsLatencyMs(c, service.OpsWaitAccountMsKey, 17)
+	service.SetOpsLatencyMs(c, service.OpsWSAcquireMsKey, 18)
+	service.SetOpsLatencyMs(c, service.OpsWSHealthcheckMsKey, 19)
+
+	entry := &service.OpsInsertErrorLogInput{}
+	applyOpsLatencyFieldsFromContext(c, entry)
+
+	require.EqualValues(t, 11, *entry.AuthLatencyMs)
+	require.EqualValues(t, 12, *entry.RoutingLatencyMs)
+	require.EqualValues(t, 13, *entry.UpstreamLatencyMs)
+	require.EqualValues(t, 14, *entry.ResponseLatencyMs)
+	require.EqualValues(t, 15, *entry.TimeToFirstTokenMs)
+	require.EqualValues(t, 16, *entry.WaitUserMs)
+	require.EqualValues(t, 17, *entry.WaitAccountMs)
+	require.EqualValues(t, 18, *entry.WSAcquireMs)
+	require.EqualValues(t, 19, *entry.WSHealthcheckMs)
+}
+
 func TestEnqueueOpsErrorLog_QueueFullDrop(t *testing.T) {
 	resetOpsErrorLoggerStateForTest(t)
 

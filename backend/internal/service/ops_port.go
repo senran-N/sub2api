@@ -122,6 +122,10 @@ type OpsInsertErrorLogInput struct {
 	UpstreamLatencyMs  *int64
 	ResponseLatencyMs  *int64
 	TimeToFirstTokenMs *int64
+	WaitUserMs         *int64
+	WaitAccountMs      *int64
+	WSAcquireMs        *int64
+	WSHealthcheckMs    *int64
 
 	RequestBodyJSON      *string // sanitized json string (not raw bytes)
 	RequestBodyTruncated bool

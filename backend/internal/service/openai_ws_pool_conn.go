@@ -41,13 +41,15 @@ func (e *openAIWSDialError) Unwrap() error {
 }
 
 type openAIWSConnLease struct {
-	pool      *openAIWSConnPool
-	accountID int64
-	conn      *openAIWSConn
-	queueWait time.Duration
-	connPick  time.Duration
-	reused    bool
-	released  atomic.Bool
+	pool            *openAIWSConnPool
+	accountID       int64
+	conn            *openAIWSConn
+	queueWait       time.Duration
+	connPick        time.Duration
+	acquireDuration time.Duration
+	healthcheck     time.Duration
+	reused          bool
+	released        atomic.Bool
 }
 
 func (l *openAIWSConnLease) activeConn() (*openAIWSConn, error) {
@@ -79,6 +81,20 @@ func (l *openAIWSConnLease) ConnPickDuration() time.Duration {
 		return 0
 	}
 	return l.connPick
+}
+
+func (l *openAIWSConnLease) AcquireDuration() time.Duration {
+	if l == nil {
+		return 0
+	}
+	return l.acquireDuration
+}
+
+func (l *openAIWSConnLease) HealthcheckDuration() time.Duration {
+	if l == nil {
+		return 0
+	}
+	return l.healthcheck
 }
 
 func (l *openAIWSConnLease) Reused() bool {

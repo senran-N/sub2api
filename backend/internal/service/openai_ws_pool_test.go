@@ -1071,6 +1071,8 @@ func TestOpenAIWSConnLease_BasicGetterBranches(t *testing.T) {
 	require.Equal(t, "", nilLease.ConnID())
 	require.Equal(t, time.Duration(0), nilLease.QueueWaitDuration())
 	require.Equal(t, time.Duration(0), nilLease.ConnPickDuration())
+	require.Equal(t, time.Duration(0), nilLease.AcquireDuration())
+	require.Equal(t, time.Duration(0), nilLease.HealthcheckDuration())
 	require.False(t, nilLease.Reused())
 	require.Equal(t, "", nilLease.HandshakeHeader("x-test"))
 	require.False(t, nilLease.IsPrewarmed())
@@ -1079,14 +1081,18 @@ func TestOpenAIWSConnLease_BasicGetterBranches(t *testing.T) {
 
 	conn := newOpenAIWSConn("getter_conn", 1, &openAIWSFakeConn{}, http.Header{"X-Test": []string{"ok"}})
 	lease := &openAIWSConnLease{
-		conn:      conn,
-		queueWait: 3 * time.Millisecond,
-		connPick:  4 * time.Millisecond,
-		reused:    true,
+		conn:            conn,
+		queueWait:       3 * time.Millisecond,
+		connPick:        4 * time.Millisecond,
+		acquireDuration: 9 * time.Millisecond,
+		healthcheck:     2 * time.Millisecond,
+		reused:          true,
 	}
 	require.Equal(t, "getter_conn", lease.ConnID())
 	require.Equal(t, 3*time.Millisecond, lease.QueueWaitDuration())
 	require.Equal(t, 4*time.Millisecond, lease.ConnPickDuration())
+	require.Equal(t, 9*time.Millisecond, lease.AcquireDuration())
+	require.Equal(t, 2*time.Millisecond, lease.HealthcheckDuration())
 	require.True(t, lease.Reused())
 	require.Equal(t, "ok", lease.HandshakeHeader("x-test"))
 	require.False(t, lease.IsPrewarmed())

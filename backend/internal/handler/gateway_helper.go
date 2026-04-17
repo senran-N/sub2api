@@ -312,6 +312,19 @@ func (h *ConcurrencyHelper) waitForSlotWithPing(c *gin.Context, slotType string,
 func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType string, id int64, maxConcurrency int, timeout time.Duration, isStream bool, streamStarted *bool, tryImmediate bool) (func(), error) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
 	defer cancel()
+	waitStartedAt := time.Now()
+	recordWaitLatency := func() {
+		if c == nil {
+			return
+		}
+		waitMs := time.Since(waitStartedAt).Milliseconds()
+		switch slotType {
+		case "user":
+			service.SetOpsLatencyMs(c, service.OpsWaitUserMsKey, waitMs)
+		case "account":
+			service.SetOpsLatencyMs(c, service.OpsWaitAccountMsKey, waitMs)
+		}
+	}
 
 	acquireSlot := func() (*service.AcquireResult, error) {
 		if slotType == "user" {
@@ -323,9 +336,11 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 	if tryImmediate {
 		result, err := acquireSlot()
 		if err != nil {
+			recordWaitLatency()
 			return nil, err
 		}
 		if result.Acquired {
+			recordWaitLatency()
 			return result.ReleaseFunc, nil
 		}
 	}
@@ -377,6 +392,7 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 	for {
 		select {
 		case <-ctx.Done():
+			recordWaitLatency()
 			return nil, &ConcurrencyError{
 				SlotType:  slotType,
 				IsTimeout: true,
@@ -400,10 +416,12 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 			// Try to acquire slot
 			result, err := acquireSlot()
 			if err != nil {
+				recordWaitLatency()
 				return nil, err
 			}
 
 			if result.Acquired {
+				recordWaitLatency()
 				return result.ReleaseFunc, nil
 			}
 			backoff = nextBackoff(backoff)

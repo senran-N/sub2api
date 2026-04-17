@@ -54,6 +54,10 @@ INSERT INTO ops_error_logs (
   upstream_latency_ms,
   response_latency_ms,
   time_to_first_token_ms,
+  wait_user_ms,
+  wait_account_ms,
+  ws_acquire_ms,
+  ws_healthcheck_ms,
   request_body,
   request_body_truncated,
   request_body_bytes,
@@ -62,7 +66,7 @@ INSERT INTO ops_error_logs (
   retry_count,
   created_at
 ) VALUES (
-  $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43
+  $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47
 )`
 
 func NewOpsRepository(db *sql.DB) service.OpsRepository {
@@ -170,6 +174,10 @@ func opsInsertErrorLogArgs(input *service.OpsInsertErrorLogInput) []any {
 		opsNullInt64(input.UpstreamLatencyMs),
 		opsNullInt64(input.ResponseLatencyMs),
 		opsNullInt64(input.TimeToFirstTokenMs),
+		opsNullInt64(input.WaitUserMs),
+		opsNullInt64(input.WaitAccountMs),
+		opsNullInt64(input.WSAcquireMs),
+		opsNullInt64(input.WSHealthcheckMs),
 		opsNullString(input.RequestBodyJSON),
 		input.RequestBodyTruncated,
 		opsNullInt(input.RequestBodyBytes),
@@ -430,6 +438,10 @@ SELECT
   e.upstream_latency_ms,
   e.response_latency_ms,
   e.time_to_first_token_ms,
+  e.wait_user_ms,
+  e.wait_account_ms,
+  e.ws_acquire_ms,
+  e.ws_healthcheck_ms,
   COALESCE(e.request_body::text, ''),
   e.request_body_truncated,
   e.request_body_bytes,
@@ -457,6 +469,10 @@ LIMIT 1`
 	var upstreamLatency sql.NullInt64
 	var responseLatency sql.NullInt64
 	var ttft sql.NullInt64
+	var waitUser sql.NullInt64
+	var waitAccount sql.NullInt64
+	var wsAcquire sql.NullInt64
+	var wsHealthcheck sql.NullInt64
 	var requestBodyBytes sql.NullInt64
 	var requestType sql.NullInt64
 
@@ -507,6 +523,10 @@ LIMIT 1`
 		&upstreamLatency,
 		&responseLatency,
 		&ttft,
+		&waitUser,
+		&waitAccount,
+		&wsAcquire,
+		&wsHealthcheck,
 		&out.RequestBody,
 		&out.RequestBodyTruncated,
 		&requestBodyBytes,
@@ -572,6 +592,22 @@ LIMIT 1`
 	if ttft.Valid {
 		v := ttft.Int64
 		out.TimeToFirstTokenMs = &v
+	}
+	if waitUser.Valid {
+		v := waitUser.Int64
+		out.WaitUserMs = &v
+	}
+	if waitAccount.Valid {
+		v := waitAccount.Int64
+		out.WaitAccountMs = &v
+	}
+	if wsAcquire.Valid {
+		v := wsAcquire.Int64
+		out.WSAcquireMs = &v
+	}
+	if wsHealthcheck.Valid {
+		v := wsHealthcheck.Int64
+		out.WSHealthcheckMs = &v
 	}
 	if requestBodyBytes.Valid {
 		v := int(requestBodyBytes.Int64)
