@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   opsAPI,
   type OpsRuntimeLogConfig,
@@ -41,6 +41,7 @@ const health = ref<OpsSystemLogSinkHealth>({
 
 const runtimeLoading = ref(false)
 const runtimeSaving = ref(false)
+let runtimeConfigRequestSequence = 0
 const runtimeConfig = reactive<OpsRuntimeLogConfig>({
   level: 'info',
   enable_sampling: false,
@@ -240,42 +241,64 @@ const fetchHealth = async () => {
   }
 }
 
-const loadRuntimeConfig = async () => {
+const applyRuntimeConfig = (config: OpsRuntimeLogConfig) => {
+  runtimeConfig.level = config.level
+  runtimeConfig.enable_sampling = config.enable_sampling
+  runtimeConfig.sampling_initial = config.sampling_initial
+  runtimeConfig.sampling_thereafter = config.sampling_thereafter
+  runtimeConfig.caller = config.caller
+  runtimeConfig.stacktrace_level = config.stacktrace_level
+  runtimeConfig.retention_days = config.retention_days
+}
+
+const loadRuntimeConfig = async (requestSequence = ++runtimeConfigRequestSequence) => {
   runtimeLoading.value = true
   try {
     const cfg = await opsAPI.getRuntimeLogConfig()
-    runtimeConfig.level = cfg.level
-    runtimeConfig.enable_sampling = cfg.enable_sampling
-    runtimeConfig.sampling_initial = cfg.sampling_initial
-    runtimeConfig.sampling_thereafter = cfg.sampling_thereafter
-    runtimeConfig.caller = cfg.caller
-    runtimeConfig.stacktrace_level = cfg.stacktrace_level
-    runtimeConfig.retention_days = cfg.retention_days
+    if (requestSequence !== runtimeConfigRequestSequence) {
+      return false
+    }
+
+    applyRuntimeConfig(cfg)
+    return true
   } catch (err: unknown) {
+    if (requestSequence !== runtimeConfigRequestSequence) {
+      return false
+    }
+
     console.error('[OpsSystemLogTable] Failed to load runtime log config', err)
     appStore.showError(resolveRequestErrorMessage(err, '加载日志配置失败'))
+    return false
   } finally {
-    runtimeLoading.value = false
+    if (requestSequence === runtimeConfigRequestSequence) {
+      runtimeLoading.value = false
+    }
   }
 }
 
 const saveRuntimeConfig = async () => {
+  const requestSequence = ++runtimeConfigRequestSequence
+  runtimeLoading.value = false
   runtimeSaving.value = true
   try {
     const saved = await opsAPI.updateRuntimeLogConfig({ ...runtimeConfig })
-    runtimeConfig.level = saved.level
-    runtimeConfig.enable_sampling = saved.enable_sampling
-    runtimeConfig.sampling_initial = saved.sampling_initial
-    runtimeConfig.sampling_thereafter = saved.sampling_thereafter
-    runtimeConfig.caller = saved.caller
-    runtimeConfig.stacktrace_level = saved.stacktrace_level
-    runtimeConfig.retention_days = saved.retention_days
+    if (requestSequence !== runtimeConfigRequestSequence) {
+      return
+    }
+
+    applyRuntimeConfig(saved)
     appStore.showSuccess('日志运行时配置已生效')
   } catch (err: unknown) {
+    if (requestSequence !== runtimeConfigRequestSequence) {
+      return
+    }
+
     console.error('[OpsSystemLogTable] Failed to save runtime log config', err)
     appStore.showError(resolveRequestErrorMessage(err, '保存日志配置失败'))
   } finally {
-    runtimeSaving.value = false
+    if (requestSequence === runtimeConfigRequestSequence) {
+      runtimeSaving.value = false
+    }
   }
 }
 
@@ -283,23 +306,29 @@ const resetRuntimeConfig = async () => {
   const ok = window.confirm('确认回滚为启动配置（env/yaml）并立即生效？')
   if (!ok) return
 
+  const requestSequence = ++runtimeConfigRequestSequence
+  runtimeLoading.value = false
   runtimeSaving.value = true
   try {
     const saved = await opsAPI.resetRuntimeLogConfig()
-    runtimeConfig.level = saved.level
-    runtimeConfig.enable_sampling = saved.enable_sampling
-    runtimeConfig.sampling_initial = saved.sampling_initial
-    runtimeConfig.sampling_thereafter = saved.sampling_thereafter
-    runtimeConfig.caller = saved.caller
-    runtimeConfig.stacktrace_level = saved.stacktrace_level
-    runtimeConfig.retention_days = saved.retention_days
+    if (requestSequence !== runtimeConfigRequestSequence) {
+      return
+    }
+
+    applyRuntimeConfig(saved)
     appStore.showSuccess('已回滚到启动日志配置')
     await fetchHealth()
   } catch (err: unknown) {
+    if (requestSequence !== runtimeConfigRequestSequence) {
+      return
+    }
+
     console.error('[OpsSystemLogTable] Failed to reset runtime log config', err)
     appStore.showError(resolveRequestErrorMessage(err, '回滚日志配置失败'))
   } finally {
-    runtimeSaving.value = false
+    if (requestSequence === runtimeConfigRequestSequence) {
+      runtimeSaving.value = false
+    }
   }
 }
 
@@ -383,6 +412,12 @@ onMounted(async () => {
     filters.platform = props.platformFilter
   }
   await Promise.all([fetchLogs(), fetchHealth(), loadRuntimeConfig()])
+})
+
+onBeforeUnmount(() => {
+  runtimeConfigRequestSequence += 1
+  runtimeLoading.value = false
+  runtimeSaving.value = false
 })
 </script>
 
