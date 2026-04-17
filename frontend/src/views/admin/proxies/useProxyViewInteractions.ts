@@ -40,6 +40,7 @@ export function useProxyViewInteractions(options: ProxyViewInteractionsOptions) 
   const proxyAccounts = ref<ProxyAccountSummary[]>([])
   const accountsLoading = ref(false)
   const deletingProxy = ref<Proxy | null>(null)
+  const accountsRequestSeq = ref(0)
 
   const handleExportData = async () => {
     if (exportingData.value) {
@@ -153,27 +154,42 @@ export function useProxyViewInteractions(options: ProxyViewInteractionsOptions) 
   }
 
   const openAccountsModal = async (proxy: Proxy) => {
+    const requestSeq = accountsRequestSeq.value + 1
+    accountsRequestSeq.value = requestSeq
     accountsProxy.value = proxy
     proxyAccounts.value = []
     accountsLoading.value = true
     showAccountsModal.value = true
 
     try {
-      proxyAccounts.value = await adminAPI.proxies.getProxyAccounts(proxy.id)
+      const accounts = await adminAPI.proxies.getProxyAccounts(proxy.id)
+      if (requestSeq !== accountsRequestSeq.value) {
+        return
+      }
+
+      proxyAccounts.value = accounts
     } catch (error: unknown) {
+      if (requestSeq !== accountsRequestSeq.value) {
+        return
+      }
+
       options.showError(
         resolveRequestErrorMessage(error, options.t('admin.proxies.accountsFailed'))
       )
       console.error('Error loading proxy accounts:', error)
     } finally {
-      accountsLoading.value = false
+      if (requestSeq === accountsRequestSeq.value) {
+        accountsLoading.value = false
+      }
     }
   }
 
   const closeAccountsModal = () => {
+    accountsRequestSeq.value += 1
     showAccountsModal.value = false
     accountsProxy.value = null
     proxyAccounts.value = []
+    accountsLoading.value = false
   }
 
   const copyProxyUrl = (proxy: Proxy) => {

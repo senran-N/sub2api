@@ -49,6 +49,21 @@ function createAccountSummary(
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 function createComposable(selectedIds: number[] = []) {
   const selectedProxyIds = ref(new Set(selectedIds))
   const selectedCount = ref(selectedIds.length)
@@ -237,5 +252,60 @@ describe('useProxyViewInteractions', () => {
     expect(batch.showError).toHaveBeenCalledWith('batch delete blocked')
     expect(accounts.showError).toHaveBeenCalledWith('accounts unavailable')
     expect(consoleSpy).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps proxy accounts modal bound to the latest opened proxy', async () => {
+    const setup = createComposable()
+    const firstRequest = createDeferred<ProxyAccountSummary[]>()
+    const secondRequest = createDeferred<ProxyAccountSummary[]>()
+
+    getProxyAccounts
+      .mockImplementationOnce(() => firstRequest.promise)
+      .mockImplementationOnce(() => secondRequest.promise)
+
+    const firstOpen = setup.composable.openAccountsModal(createProxy({ id: 3, name: 'First' }))
+    const secondOpen = setup.composable.openAccountsModal(createProxy({ id: 4, name: 'Second' }))
+
+    secondRequest.resolve([createAccountSummary({ id: 40, name: 'Second Account' })])
+    await secondOpen
+
+    expect(setup.composable.accountsProxy.value?.id).toBe(4)
+    expect(setup.composable.proxyAccounts.value).toEqual([
+      createAccountSummary({ id: 40, name: 'Second Account' })
+    ])
+    expect(setup.composable.accountsLoading.value).toBe(false)
+
+    firstRequest.resolve([createAccountSummary({ id: 30, name: 'First Account' })])
+    await firstOpen
+
+    expect(setup.composable.accountsProxy.value?.id).toBe(4)
+    expect(setup.composable.proxyAccounts.value).toEqual([
+      createAccountSummary({ id: 40, name: 'Second Account' })
+    ])
+    expect(setup.showError).not.toHaveBeenCalled()
+  })
+
+  it('invalidates proxy accounts requests when the modal closes', async () => {
+    const setup = createComposable()
+    const pendingRequest = createDeferred<ProxyAccountSummary[]>()
+
+    getProxyAccounts.mockImplementationOnce(() => pendingRequest.promise)
+
+    const openPromise = setup.composable.openAccountsModal(createProxy({ id: 6, name: 'Closable' }))
+    expect(setup.composable.showAccountsModal.value).toBe(true)
+    expect(setup.composable.accountsLoading.value).toBe(true)
+
+    setup.composable.closeAccountsModal()
+    expect(setup.composable.showAccountsModal.value).toBe(false)
+    expect(setup.composable.accountsLoading.value).toBe(false)
+    expect(setup.composable.accountsProxy.value).toBeNull()
+
+    pendingRequest.resolve([createAccountSummary({ id: 60, name: 'Should Stay Hidden' })])
+    await openPromise
+
+    expect(setup.composable.showAccountsModal.value).toBe(false)
+    expect(setup.composable.accountsProxy.value).toBeNull()
+    expect(setup.composable.proxyAccounts.value).toEqual([])
+    expect(setup.showError).not.toHaveBeenCalled()
   })
 })
