@@ -454,6 +454,7 @@ const appStore = useAppStore()
 const rules = ref<ErrorPassthroughRule[]>([])
 const loading = ref(false)
 const submitting = ref(false)
+let rulesRequestSequence = 0
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteDialog = ref(false)
@@ -529,18 +530,32 @@ const getActionButtonClasses = (tone: 'info' | 'danger') => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     loadRules()
+    return
   }
+
+  rulesRequestSequence += 1
+  loading.value = false
 }, { immediate: true })
 
 async function loadRules() {
+  const requestSequence = ++rulesRequestSequence
   loading.value = true
   try {
-    rules.value = await adminAPI.errorPassthrough.list()
+    const nextRules = await adminAPI.errorPassthrough.list()
+    if (requestSequence !== rulesRequestSequence || !props.show) {
+      return
+    }
+    rules.value = nextRules
   } catch (error) {
+    if (requestSequence !== rulesRequestSequence || !props.show) {
+      return
+    }
     appStore.showError(resolveRequestErrorMessage(error, t('admin.errorPassthrough.failedToLoad')))
     console.error('Error loading rules:', error)
   } finally {
-    loading.value = false
+    if (requestSequence === rulesRequestSequence) {
+      loading.value = false
+    }
   }
 }
 

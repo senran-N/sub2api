@@ -350,6 +350,7 @@ const appStore = useAppStore()
 
 const profiles = ref<TLSFingerprintProfile[]>([])
 const loading = ref(false)
+let profilesRequestSequence = 0
 const submitting = ref(false)
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
@@ -403,18 +404,32 @@ const getGreaseToggleTrackClasses = (enabled: boolean) => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     loadProfiles()
+    return
   }
+
+  profilesRequestSequence += 1
+  loading.value = false
 }, { immediate: true })
 
 async function loadProfiles() {
+  const requestSequence = ++profilesRequestSequence
   loading.value = true
   try {
-    profiles.value = await adminAPI.tlsFingerprintProfiles.list()
+    const nextProfiles = await adminAPI.tlsFingerprintProfiles.list()
+    if (requestSequence !== profilesRequestSequence || !props.show) {
+      return
+    }
+    profiles.value = nextProfiles
   } catch (error) {
+    if (requestSequence !== profilesRequestSequence || !props.show) {
+      return
+    }
     appStore.showError(resolveRequestErrorMessage(error, t('admin.tlsFingerprintProfiles.loadFailed')))
     console.error('Error loading TLS fingerprint profiles:', error)
   } finally {
-    loading.value = false
+    if (requestSequence === profilesRequestSequence) {
+      loading.value = false
+    }
   }
 }
 

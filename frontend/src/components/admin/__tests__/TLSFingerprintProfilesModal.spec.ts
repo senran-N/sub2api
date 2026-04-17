@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import TLSFingerprintProfilesModal from '../TLSFingerprintProfilesModal.vue'
+import type { TLSFingerprintProfile } from '@/api/admin/tlsFingerprintProfile'
 
 const mockListProfiles = vi.fn()
 const showError = vi.fn()
@@ -58,6 +59,51 @@ const IconStub = defineComponent({
   template: '<span />',
 })
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
+function createProfile(overrides: Partial<TLSFingerprintProfile> = {}): TLSFingerprintProfile {
+  return {
+    id: 1,
+    name: 'Chrome Stable',
+    description: 'stable client',
+    enable_grease: true,
+    cipher_suites: [4865, 4866],
+    curves: [29],
+    point_formats: [],
+    signature_algorithms: [1027],
+    alpn_protocols: ['h2'],
+    supported_versions: [772],
+    key_share_groups: [29],
+    psk_modes: [1],
+    extensions: [0, 10, 11],
+    created_at: '2026-04-17T00:00:00Z',
+    updated_at: '2026-04-17T00:00:00Z',
+    ...overrides
+  }
+}
+
+function mountModal(props: { show?: boolean } = {}) {
+  return mount(TLSFingerprintProfilesModal, {
+    props: {
+      show: props.show ?? true,
+    },
+    global: {
+      stubs: {
+        BaseDialog: BaseDialogStub,
+        ConfirmDialog: ConfirmDialogStub,
+        Icon: IconStub,
+      },
+    },
+  })
+}
+
 describe('TLSFingerprintProfilesModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -74,23 +120,36 @@ describe('TLSFingerprintProfilesModal', () => {
       message: 'generic tls profiles error',
     })
 
-    mount(TLSFingerprintProfilesModal, {
-      props: {
-        show: true,
-      },
-      global: {
-        stubs: {
-          BaseDialog: BaseDialogStub,
-          ConfirmDialog: ConfirmDialogStub,
-          Icon: IconStub,
-        },
-      },
-    })
+    mountModal()
 
     await flushPromises()
 
     expect(showError).toHaveBeenCalledWith('tls profiles detail error')
     expect(consoleSpy).toHaveBeenCalledTimes(1)
     consoleSpy.mockRestore()
+  })
+
+  it('keeps the latest profile list when the modal is reopened before the previous load resolves', async () => {
+    const firstLoad = createDeferred<TLSFingerprintProfile[]>()
+    const secondLoad = createDeferred<TLSFingerprintProfile[]>()
+
+    mockListProfiles
+      .mockImplementationOnce(() => firstLoad.promise)
+      .mockImplementationOnce(() => secondLoad.promise)
+
+    const wrapper = mountModal()
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+
+    secondLoad.resolve([createProfile({ id: 2, name: 'Edge Stable' })])
+    await flushPromises()
+
+    firstLoad.resolve([createProfile({ id: 1, name: 'Old Chrome' })])
+    await flushPromises()
+
+    expect((wrapper.vm as any).profiles).toEqual([
+      expect.objectContaining({ id: 2, name: 'Edge Stable' })
+    ])
+    expect(showError).not.toHaveBeenCalled()
   })
 })
