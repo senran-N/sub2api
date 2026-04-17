@@ -53,7 +53,7 @@ location / {
      -H 'Content-Type: application/json' \
      -H 'session_id: sticky-check-session' \
      -H 'conversation_id: sticky-check-conversation' \
-     -d '{"model":"gpt-4.1","input":"ping","stream":false}'
+     -d '{"model":"<configured-model>","input":"ping","stream":false}'
    ```
 
 2. Confirm the outer proxy actually received the underscore headers. For nginx, temporarily log `$http_session_id` and `$http_conversation_id` or inspect request traces.
