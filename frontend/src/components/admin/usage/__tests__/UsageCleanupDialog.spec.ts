@@ -49,6 +49,18 @@ const BaseDialogStub = defineComponent({
   template: '<div v-if="show"><slot /><slot name="footer" /></div>'
 })
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
+}
+
 describe('UsageCleanupDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -99,5 +111,168 @@ describe('UsageCleanupDialog', () => {
     expect(showErrorMock).toHaveBeenCalledWith('cleanup task detail error')
     expect(consoleSpy).toHaveBeenCalledTimes(1)
     consoleSpy.mockRestore()
+  })
+
+  it('keeps the newest cleanup task page when earlier loads resolve late', async () => {
+    const firstLoad = createDeferred<{
+      items: Array<{ id: number; status: string; created_at: string; filters: Record<string, string>; deleted_rows: number }>
+      total: number
+      page: number
+      page_size: number
+    }>()
+    const secondLoad = createDeferred<{
+      items: Array<{ id: number; status: string; created_at: string; filters: Record<string, string>; deleted_rows: number }>
+      total: number
+      page: number
+      page_size: number
+    }>()
+
+    listCleanupTasksMock
+      .mockReturnValueOnce(firstLoad.promise)
+      .mockReturnValueOnce(secondLoad.promise)
+
+    const wrapper = mount(UsageCleanupDialog, {
+      props: {
+        show: true,
+        filters: {},
+        startDate: '2026-04-01',
+        endDate: '2026-04-11'
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          ConfirmDialog: true,
+          Pagination: true,
+          UsageFilters: true
+        }
+      }
+    })
+
+    await wrapper.find('button.btn.btn-ghost.btn-sm').trigger('click')
+
+    secondLoad.resolve({
+      items: [
+        {
+          id: 22,
+          status: 'running',
+          created_at: '2026-04-17T08:00:00Z',
+          filters: {
+            start_time: '2026-04-01T00:00:00Z',
+            end_time: '2026-04-11T00:00:00Z'
+          },
+          deleted_rows: 7
+        }
+      ],
+      total: 1,
+      page: 1,
+      page_size: 5
+    })
+    await flushPromises()
+
+    firstLoad.resolve({
+      items: [
+        {
+          id: 11,
+          status: 'failed',
+          created_at: '2026-04-16T08:00:00Z',
+          filters: {
+            start_time: '2026-03-01T00:00:00Z',
+            end_time: '2026-03-11T00:00:00Z'
+          },
+          deleted_rows: 99
+        }
+      ],
+      total: 1,
+      page: 1,
+      page_size: 5
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('#22')
+    expect(wrapper.text()).toContain('7')
+    expect(wrapper.text()).not.toContain('#11')
+    expect(wrapper.text()).not.toContain('99')
+  })
+
+  it('ignores stale cleanup task responses after close and reopen', async () => {
+    const firstLoad = createDeferred<{
+      items: Array<{ id: number; status: string; created_at: string; filters: Record<string, string>; deleted_rows: number }>
+      total: number
+      page: number
+      page_size: number
+    }>()
+    const secondLoad = createDeferred<{
+      items: Array<{ id: number; status: string; created_at: string; filters: Record<string, string>; deleted_rows: number }>
+      total: number
+      page: number
+      page_size: number
+    }>()
+
+    listCleanupTasksMock
+      .mockReturnValueOnce(firstLoad.promise)
+      .mockReturnValueOnce(secondLoad.promise)
+
+    const wrapper = mount(UsageCleanupDialog, {
+      props: {
+        show: true,
+        filters: {},
+        startDate: '2026-04-01',
+        endDate: '2026-04-11'
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          ConfirmDialog: true,
+          Pagination: true,
+          UsageFilters: true
+        }
+      }
+    })
+
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+
+    secondLoad.resolve({
+      items: [
+        {
+          id: 33,
+          status: 'succeeded',
+          created_at: '2026-04-17T09:00:00Z',
+          filters: {
+            start_time: '2026-04-10T00:00:00Z',
+            end_time: '2026-04-11T00:00:00Z'
+          },
+          deleted_rows: 3
+        }
+      ],
+      total: 1,
+      page: 1,
+      page_size: 5
+    })
+    await flushPromises()
+
+    firstLoad.resolve({
+      items: [
+        {
+          id: 44,
+          status: 'failed',
+          created_at: '2026-04-15T09:00:00Z',
+          filters: {
+            start_time: '2026-04-01T00:00:00Z',
+            end_time: '2026-04-02T00:00:00Z'
+          },
+          deleted_rows: 55
+        }
+      ],
+      total: 1,
+      page: 1,
+      page_size: 5
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('#33')
+    expect(wrapper.text()).toContain('3')
+    expect(wrapper.text()).not.toContain('#44')
+    expect(wrapper.text()).not.toContain('55')
   })
 })

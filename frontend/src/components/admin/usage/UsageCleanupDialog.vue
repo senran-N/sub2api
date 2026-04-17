@@ -156,6 +156,7 @@ const cancelConfirmVisible = ref(false)
 const canceling = ref(false)
 const cancelTarget = ref<UsageCleanupTask | null>(null)
 let pollTimer: number | null = null
+let tasksRequestSequence = 0
 
 const noop = () => {}
 
@@ -185,6 +186,8 @@ const stopPolling = () => {
 
 const handleClose = () => {
   stopPolling()
+  tasksRequestSequence += 1
+  tasksLoading.value = false
   confirmVisible.value = false
   cancelConfirmVisible.value = false
   canceling.value = false
@@ -238,12 +241,16 @@ const getUserTimezone = () => {
 
 async function loadTasks() {
   if (!props.show) return
+  const requestSequence = ++tasksRequestSequence
   tasksLoading.value = true
   try {
     const res = await adminUsageAPI.listCleanupTasks({
       page: tasksPage.value,
       page_size: tasksPageSize.value
     })
+    if (requestSequence !== tasksRequestSequence || !props.show) {
+      return
+    }
     tasks.value = res.items || []
     tasksTotal.value = res.total || 0
     if (res.page) {
@@ -253,10 +260,15 @@ async function loadTasks() {
       tasksPageSize.value = res.page_size
     }
   } catch (error) {
+    if (requestSequence !== tasksRequestSequence || !props.show) {
+      return
+    }
     console.error('Failed to load cleanup tasks:', error)
     appStore.showError(resolveRequestErrorMessage(error, t('admin.usage.cleanup.loadFailed')))
   } finally {
-    tasksLoading.value = false
+    if (requestSequence === tasksRequestSequence) {
+      tasksLoading.value = false
+    }
   }
 }
 
@@ -378,6 +390,8 @@ watch(
       startPolling()
     } else {
       stopPolling()
+      tasksRequestSequence += 1
+      tasksLoading.value = false
     }
   },
   { immediate: true }
