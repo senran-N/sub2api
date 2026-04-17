@@ -9,6 +9,57 @@ This directory contains files for deploying Sub2API on Linux servers.
 | **Docker Compose** | Quick setup, all-in-one | Not needed (auto-setup) |
 | **Binary Install** | Production servers, systemd | Web-based wizard |
 
+## Reverse Proxy Checklist
+
+If you place Sub2API behind an outer reverse proxy or ingress, treat OpenAI/Codex session headers as required routing signals rather than optional passthrough fields:
+
+- Preserve incoming `session_id` and `conversation_id` end-to-end.
+- Do not strip or rename headers containing underscores.
+- For nginx or OpenResty, enable `underscores_in_headers on;` before proxying requests to Sub2API.
+
+Why this matters:
+
+- `backend/internal/service/openai_gateway_service_session.go` derives the sticky session hash from `session_id` first, then `conversation_id`.
+- `backend/internal/service/openai_gateway_service_request.go` falls back to `conversation_id` and finally a generated ID on some compact paths when those headers are missing.
+- `backend/internal/service/openai_gateway_service_upstream_request.go` and `backend/internal/service/openai_ws_forwarder_request.go` re-emit isolated `session_id` / `conversation_id` upstream for OAuth/Codex HTTP and WebSocket flows.
+
+If an outer proxy drops underscore headers, the same Codex/OpenAI conversation can lose sticky-account affinity and drift onto a different account.
+
+### nginx Example
+
+Put the underscore-header setting at `http` or `server` scope, then forward the headers explicitly:
+
+```nginx
+underscores_in_headers on;
+
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header session_id $http_session_id;
+    proxy_set_header conversation_id $http_conversation_id;
+}
+```
+
+### Verification Steps
+
+1. Send a request through the outer proxy with fixed `session_id` and `conversation_id` values:
+
+   ```bash
+   curl -i https://your.sub2api.host/openai/v1/responses \
+     -H 'Authorization: Bearer <api-key>' \
+     -H 'Content-Type: application/json' \
+     -H 'session_id: sticky-check-session' \
+     -H 'conversation_id: sticky-check-conversation' \
+     -d '{"model":"gpt-4.1","input":"ping","stream":false}'
+   ```
+
+2. Confirm the outer proxy actually received the underscore headers. For nginx, temporarily log `$http_session_id` and `$http_conversation_id` or inspect request traces.
+3. Repeat the same request with the same header values and confirm the scheduler keeps the conversation on the same sticky account instead of drifting after proxy traversal.
+4. If you chain multiple proxies or CDN layers, verify every hop preserves both headers; this repository's `deploy/Caddyfile` only forwards what it receives from the layer in front of it.
+
 ## Files
 
 | File | Description |

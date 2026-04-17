@@ -5,6 +5,14 @@
 # 复制此文件到 /etc/sub2api/config.yaml 并根据需要修改
 #
 # Documentation / 文档: https://github.com/senran-N/sub2api
+#
+# Reverse proxy note / 反向代理提示:
+# If you deploy Sub2API behind nginx/OpenResty/Ingress, preserve session_id and
+# conversation_id headers end-to-end. For nginx, enable `underscores_in_headers on;`
+# or Codex/OpenAI sticky session routing can break.
+# 如果部署在 nginx/OpenResty/Ingress 后面，必须保留 session_id 与
+# conversation_id 两个头；nginx 需开启 `underscores_in_headers on;`，
+# 否则 Codex/OpenAI 粘性会话调度会失效。
 
 # =============================================================================
 # Server Configuration

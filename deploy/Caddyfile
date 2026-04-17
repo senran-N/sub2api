@@ -31,6 +31,9 @@ api.sub2api.com {
 	# 反向代理配置
 	# =========================================================================
 	reverse_proxy localhost:8080 {
+		# OpenAI/Codex 调度依赖下游传入的 session_id / conversation_id。
+		# 如果前面还有 nginx / ingress / CDN，必须保证这些带下划线的头已被保留；
+		# Caddy 只能继续转发自己实际收到的请求头。
 		# 健康检查
 		health_uri /health
 		health_interval 30s
