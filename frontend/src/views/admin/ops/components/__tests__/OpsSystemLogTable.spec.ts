@@ -48,6 +48,32 @@ const PaginationStub = defineComponent({
   template: '<div class="pagination-stub" />',
 })
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function makeLog(id: number, message: string) {
+  return {
+    id,
+    level: 'info',
+    message,
+    created_at: '2026-04-17T00:00:00Z',
+    request_id: '',
+    client_request_id: '',
+    user_id: null,
+    account_id: null,
+    platform: '',
+    model: '',
+    extra: {},
+  }
+}
+
 describe('OpsSystemLogTable', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -91,5 +117,60 @@ describe('OpsSystemLogTable', () => {
     expect(showError).toHaveBeenCalledWith('runtime log config detail error')
     expect(consoleSpy).toHaveBeenCalledTimes(1)
     consoleSpy.mockRestore()
+  })
+
+  it('keeps the latest log query result when searches are triggered back to back', async () => {
+    mockGetRuntimeLogConfig.mockResolvedValue({
+      level: 'info',
+      enable_sampling: false,
+      sampling_initial: 100,
+      sampling_thereafter: 100,
+      caller: true,
+      stacktrace_level: 'error',
+      retention_days: 30,
+    })
+
+    const wrapper = mount(OpsSystemLogTable, {
+      global: {
+        stubs: {
+          Select: SelectStub,
+          Pagination: PaginationStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const slowResponse = deferred<any>()
+    const fastResponse = deferred<any>()
+    mockListSystemLogs
+      .mockReturnValueOnce(slowResponse.promise)
+      .mockReturnValueOnce(fastResponse.promise)
+
+    const queryInput = wrapper.get('input[placeholder="消息/request_id"]')
+    const queryButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '查询')
+
+    expect(queryButton).toBeTruthy()
+    await queryInput.setValue('first')
+    await queryButton!.trigger('click')
+    await queryInput.setValue('second')
+    await queryButton!.trigger('click')
+
+    fastResponse.resolve({
+      items: [makeLog(2, 'second-hit')],
+      total: 1,
+    })
+    await flushPromises()
+
+    slowResponse.resolve({
+      items: [makeLog(1, 'first-hit')],
+      total: 1,
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('second-hit')
+    expect(wrapper.text()).not.toContain('first-hit')
   })
 })

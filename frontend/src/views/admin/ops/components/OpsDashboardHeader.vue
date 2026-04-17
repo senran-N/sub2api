@@ -243,6 +243,7 @@ const totalTokensLabel = computed(() => formatNumber(overview.value?.token_consu
 const realtimeTrafficSummary = ref<OpsRealtimeTrafficSummary | null>(null)
 const realtimeRuntimeObservability = ref<RuntimeObservabilitySnapshot | null>(null)
 const realtimeTrafficLoading = ref(false)
+let realtimeTrafficRequestSequence = 0
 
 function makeZeroRealtimeTrafficSummary(): OpsRealtimeTrafficSummary {
   const now = new Date().toISOString()
@@ -258,25 +259,31 @@ function makeZeroRealtimeTrafficSummary(): OpsRealtimeTrafficSummary {
 }
 
 async function loadRealtimeTrafficSummary() {
-  if (realtimeTrafficLoading.value) return
+  const requestSequence = ++realtimeTrafficRequestSequence
   if (!adminSettingsStore.opsRealtimeMonitoringEnabled) {
     realtimeTrafficSummary.value = makeZeroRealtimeTrafficSummary()
+    realtimeRuntimeObservability.value = null
+    realtimeTrafficLoading.value = false
     return
   }
   realtimeTrafficLoading.value = true
   try {
     const res = await opsAPI.getRealtimeTrafficSummary(realtimeWindow.value, props.platform, props.groupId)
+    if (requestSequence !== realtimeTrafficRequestSequence) return
     if (res && res.enabled === false) {
       adminSettingsStore.setOpsRealtimeMonitoringEnabledLocal(false)
     }
     realtimeTrafficSummary.value = res?.summary ?? null
     realtimeRuntimeObservability.value = res?.runtime_observability ?? null
   } catch (err) {
+    if (requestSequence !== realtimeTrafficRequestSequence) return
     console.error('[OpsDashboardHeader] Failed to load realtime traffic summary', err)
     realtimeTrafficSummary.value = null
     realtimeRuntimeObservability.value = null
   } finally {
-    realtimeTrafficLoading.value = false
+    if (requestSequence === realtimeTrafficRequestSequence) {
+      realtimeTrafficLoading.value = false
+    }
   }
 }
 
@@ -294,6 +301,7 @@ watch(
     if (!enabled) {
       // Keep UI stable when realtime monitoring is turned off.
       realtimeTrafficSummary.value = makeZeroRealtimeTrafficSummary()
+      realtimeRuntimeObservability.value = null
     } else {
       loadRealtimeTrafficSummary()
     }

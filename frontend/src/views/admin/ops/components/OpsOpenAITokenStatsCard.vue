@@ -30,6 +30,7 @@ const { t } = useI18n()
 const loading = ref(false)
 const errorMessage = ref('')
 const response = ref<OpsOpenAITokenStatsResponse | null>(null)
+let loadSequence = 0
 
 const timeRange = ref<OpsOpenAITokenStatsTimeRange>('30d')
 const viewMode = ref<ViewMode>('topn')
@@ -86,6 +87,11 @@ function formatInt(v?: number | null): string {
   return formatNumber(Math.round(v))
 }
 
+function resolveTotalPages(totalCount: number, size: number): number {
+  const normalizedSize = size > 0 ? size : 20
+  return Math.max(1, Math.ceil(Math.max(0, totalCount) / normalizedSize))
+}
+
 function buildParams(): OpsOpenAITokenStatsParams {
   const params: OpsOpenAITokenStatsParams = {
     time_range: timeRange.value,
@@ -103,21 +109,31 @@ function buildParams(): OpsOpenAITokenStatsParams {
 }
 
 async function loadData() {
+  const requestSequence = ++loadSequence
   loading.value = true
   errorMessage.value = ''
   try {
-    response.value = await opsAPI.getOpenAITokenStats(buildParams())
+    let nextResponse = await opsAPI.getOpenAITokenStats(buildParams())
+    if (requestSequence !== loadSequence) return
     // 防御：若 total 变化导致当前页超出最大页，则回退到末页并重新拉取一次。
-    if (viewMode.value === 'pagination' && page.value > totalPages.value) {
-      page.value = totalPages.value
-      response.value = await opsAPI.getOpenAITokenStats(buildParams())
+    if (viewMode.value === 'pagination') {
+      const maxPage = resolveTotalPages(nextResponse?.total ?? 0, pageSize.value)
+      if (page.value > maxPage) {
+        page.value = maxPage
+        nextResponse = await opsAPI.getOpenAITokenStats(buildParams())
+        if (requestSequence !== loadSequence) return
+      }
     }
+    response.value = nextResponse
   } catch (error) {
+    if (requestSequence !== loadSequence) return
     console.error('[OpsOpenAITokenStatsCard] Failed to load data', error)
     response.value = null
     errorMessage.value = getErrorMessage(error, t('admin.ops.openaiTokenStats.failedToLoad'))
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
 }
 

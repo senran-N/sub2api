@@ -28,6 +28,7 @@ const errorMessage = ref('')
 const concurrency = ref<OpsConcurrencyStatsResponse | null>(null)
 const availability = ref<OpsAccountAvailabilityStatsResponse | null>(null)
 const userConcurrency = ref<OpsUserConcurrencyStatsResponse | null>(null)
+let loadSequence = 0
 
 // 用户视图开关
 const showByUser = ref(false)
@@ -408,12 +409,14 @@ const displayTitle = computed(() => {
 type ConcurrencyTone = 'danger' | 'info' | 'neutral' | 'success' | 'warning'
 
 async function loadData() {
+  const requestSequence = ++loadSequence
   loading.value = true
   errorMessage.value = ''
   try {
     if (showByUser.value) {
       // 用户视图模式只加载用户并发数据
       const userData = await opsAPI.getUserConcurrencyStats()
+      if (requestSequence !== loadSequence) return
       userConcurrency.value = userData
     } else {
       // 常规模式加载账号/平台/分组数据
@@ -421,14 +424,18 @@ async function loadData() {
         opsAPI.getConcurrencyStats(props.platformFilter, props.groupIdFilter),
         opsAPI.getAccountAvailabilityStats(props.platformFilter, props.groupIdFilter)
       ])
+      if (requestSequence !== loadSequence) return
       concurrency.value = concData
       availability.value = availData
     }
   } catch (err: unknown) {
+    if (requestSequence !== loadSequence) return
     console.error('[OpsConcurrencyCard] Failed to load data', err)
     errorMessage.value = resolveRequestErrorMessage(err, t('admin.ops.concurrency.loadFailed'))
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
 }
 

@@ -28,6 +28,7 @@ const logs = ref<OpsSystemLog[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+let fetchLogsSequence = 0
 
 const health = ref<OpsSystemLogSinkHealth>({
   queue_depth: 0,
@@ -213,16 +214,21 @@ const buildQuery = (): OpsSystemLogQuery => {
 }
 
 const fetchLogs = async () => {
+  const requestSequence = ++fetchLogsSequence
   loading.value = true
   try {
     const res = await opsAPI.listSystemLogs(buildQuery())
+    if (requestSequence !== fetchLogsSequence) return
     logs.value = res.items || []
     total.value = res.total || 0
   } catch (err: unknown) {
+    if (requestSequence !== fetchLogsSequence) return
     console.error('[OpsSystemLogTable] Failed to fetch logs', err)
     appStore.showError(resolveRequestErrorMessage(err, '系统日志加载失败'))
   } finally {
-    loading.value = false
+    if (requestSequence === fetchLogsSequence) {
+      loading.value = false
+    }
   }
 }
 

@@ -70,6 +70,16 @@ const sampleResponse = {
   top_n: null,
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 describe('OpsOpenAITokenStatsCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -229,5 +239,56 @@ describe('OpsOpenAITokenStatsCard', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('加载失败')
+  })
+
+  it('快速切换过滤条件时保留最新返回结果', async () => {
+    mockGetOpenAITokenStats.mockResolvedValueOnce(sampleResponse)
+
+    const wrapper = mount(OpsOpenAITokenStatsCard, {
+      props: { refreshToken: 0 },
+      global: {
+        stubs: {
+          Select: SelectStub,
+          EmptyState: EmptyStateStub,
+        },
+      },
+    })
+    await flushPromises()
+
+    const slowResponse = deferred<any>()
+    const fastResponse = deferred<any>()
+    mockGetOpenAITokenStats
+      .mockReturnValueOnce(slowResponse.promise)
+      .mockReturnValueOnce(fastResponse.promise)
+
+    await wrapper.setProps({ platformFilter: 'openai' })
+    await wrapper.setProps({ platformFilter: 'anthropic' })
+
+    fastResponse.resolve({
+      ...sampleResponse,
+      platform: 'anthropic',
+      items: [
+        {
+          ...sampleResponse.items[0],
+          model: 'latest-model',
+        },
+      ],
+    })
+    await flushPromises()
+
+    slowResponse.resolve({
+      ...sampleResponse,
+      platform: 'openai',
+      items: [
+        {
+          ...sampleResponse.items[0],
+          model: 'stale-model',
+        },
+      ],
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('latest-model')
+    expect(wrapper.text()).not.toContain('stale-model')
   })
 })
