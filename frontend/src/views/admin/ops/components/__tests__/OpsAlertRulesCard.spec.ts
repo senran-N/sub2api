@@ -93,6 +93,23 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+function makeRule(id: number, name: string) {
+  return {
+    id,
+    name,
+    description: `${name} description`,
+    enabled: true,
+    metric_type: 'error_rate',
+    operator: '>',
+    threshold: 1,
+    window_minutes: 1,
+    sustained_minutes: 2,
+    severity: 'P1',
+    cooldown_minutes: 10,
+    notify_email: true,
+  }
+}
+
 function mountComponent() {
   return mount(OpsAlertRulesCard, {
     global: {
@@ -108,7 +125,9 @@ function mountComponent() {
 describe('OpsAlertRulesCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockListAlertRules.mockResolvedValue([])
     mockGetAllGroups.mockResolvedValue([])
+    mockCreateAlertRule.mockResolvedValue(undefined)
     mockUpdateAlertRule.mockResolvedValue(undefined)
     mockDeleteAlertRule.mockResolvedValue(undefined)
   })
@@ -232,28 +251,124 @@ describe('OpsAlertRulesCard', () => {
     consoleSpy.mockRestore()
   })
 
-  it('首屏加载与手动刷新重叠时保留最新规则列表', async () => {
-    const slowRules = deferred<any[]>()
-    const fastRules = deferred<any[]>()
-    mockListAlertRules.mockReset()
-    mockListAlertRules
-      .mockReturnValueOnce(slowRules.promise)
-      .mockReturnValueOnce(fastRules.promise)
-    mockGetAllGroups.mockResolvedValue([])
+  it('忽略保存前发起且晚返回的旧 refresh 结果，并保持 saving ownership', async () => {
+    const saveResponse = deferred<void>()
+    const staleRefresh = deferred<any[]>()
+    mockListAlertRules.mockResolvedValueOnce([makeRule(1, 'current rule')])
 
     const wrapper = mountComponent()
+    await flushPromises()
 
-    const refreshButton = wrapper.find('.ops-alert-rules-card__refresh')
+    mockListAlertRules.mockReset()
+    mockListAlertRules
+      .mockReturnValueOnce(staleRefresh.promise)
+      .mockResolvedValueOnce([makeRule(2, 'saved rule')])
+    mockUpdateAlertRule.mockReset()
+    mockUpdateAlertRule.mockReturnValueOnce(saveResponse.promise)
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.edit')
+    expect(editButton).toBeTruthy()
+    await editButton!.trigger('click')
+
+    const refreshButton = wrapper.get('.ops-alert-rules-card__refresh')
     await refreshButton.trigger('click')
+
+    const saveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.save')
+    expect(saveButton).toBeTruthy()
+    await saveButton!.trigger('click')
     await flushPromises()
 
-    fastRules.resolve([{ id: 22, name: 'latest rule' }])
+    staleRefresh.resolve([makeRule(99, 'stale rule')])
     await flushPromises()
 
-    slowRules.resolve([{ id: 11, name: 'stale rule' }])
+    const pendingSaveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.saving')
+    expect(pendingSaveButton).toBeTruthy()
+    expect(pendingSaveButton!.attributes('disabled')).toBeDefined()
+    expect(refreshButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('current rule')
+    expect(wrapper.text()).not.toContain('stale rule')
+
+    saveResponse.resolve()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('latest rule')
+    expect(wrapper.text()).toContain('saved rule')
+    expect(wrapper.text()).not.toContain('stale rule')
+  })
+
+  it('批量创建推荐规则后忽略晚返回的旧 refresh 结果', async () => {
+    const staleRefresh = deferred<any[]>()
+    mockListAlertRules.mockResolvedValueOnce([])
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    mockListAlertRules.mockReset()
+    mockListAlertRules
+      .mockReturnValueOnce(staleRefresh.promise)
+      .mockResolvedValueOnce([makeRule(4, 'preset rule')])
+
+    const refreshButton = wrapper.get('.ops-alert-rules-card__refresh')
+    await refreshButton.trigger('click')
+
+    const createAllButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('admin.ops.alertRules.presets.createAll'))
+    expect(createAllButton).toBeTruthy()
+    await createAllButton!.trigger('click')
+    await flushPromises()
+
+    staleRefresh.resolve([makeRule(98, 'stale rule')])
+    await flushPromises()
+
+    expect(mockCreateAlertRule).toHaveBeenCalledTimes(4)
+    expect(wrapper.text()).toContain('preset rule')
+    expect(wrapper.text()).not.toContain('stale rule')
+    expect(refreshButton.attributes('disabled')).toBeUndefined()
+  })
+
+  it('删除规则后忽略晚返回的旧 refresh 结果', async () => {
+    const deleteResponse = deferred<void>()
+    const staleRefresh = deferred<any[]>()
+    mockListAlertRules.mockResolvedValueOnce([makeRule(1, 'current rule')])
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    mockListAlertRules.mockReset()
+    mockListAlertRules
+      .mockReturnValueOnce(staleRefresh.promise)
+      .mockResolvedValueOnce([])
+    mockDeleteAlertRule.mockReset()
+    mockDeleteAlertRule.mockReturnValueOnce(deleteResponse.promise)
+
+    const deleteButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.delete')
+    expect(deleteButton).toBeTruthy()
+    await deleteButton!.trigger('click')
+
+    const refreshButton = wrapper.get('.ops-alert-rules-card__refresh')
+    await refreshButton.trigger('click')
+
+    wrapper.getComponent(ConfirmDialogStub).vm.$emit('confirm')
+
+    staleRefresh.resolve([makeRule(97, 'stale rule')])
+    await flushPromises()
+
+    expect(refreshButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('current rule')
+    expect(wrapper.text()).not.toContain('stale rule')
+
+    deleteResponse.resolve()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('admin.ops.alertRules.emptyState.title')
     expect(wrapper.text()).not.toContain('stale rule')
   })
 })

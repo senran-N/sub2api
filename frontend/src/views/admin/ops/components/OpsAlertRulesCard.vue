@@ -17,22 +17,21 @@ const appStore = useAppStore()
 
 const loading = ref(false)
 const rules = ref<AlertRule[]>([])
-let loadSequence = 0
+let rulesRequestSequence = 0
 
-async function load() {
-  const requestSequence = ++loadSequence
+async function load(requestSequence = ++rulesRequestSequence) {
   loading.value = true
   try {
     const nextRules = await opsAPI.listAlertRules()
-    if (requestSequence !== loadSequence) return
+    if (requestSequence !== rulesRequestSequence) return
     rules.value = nextRules
   } catch (err: unknown) {
-    if (requestSequence !== loadSequence) return
+    if (requestSequence !== rulesRequestSequence) return
     console.error('[OpsAlertRulesCard] Failed to load rules', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.loadFailed')))
     rules.value = []
   } finally {
-    if (requestSequence === loadSequence) {
+    if (requestSequence === rulesRequestSequence) {
       loading.value = false
     }
   }
@@ -50,6 +49,7 @@ const sortedRules = computed(() => {
 const showEditor = ref(false)
 const saving = ref(false)
 const creatingPresets = ref(false)
+const deleting = ref(false)
 const editingId = ref<number | null>(null)
 const draft = ref<AlertRule | null>(null)
 
@@ -482,6 +482,8 @@ async function createRecommendedPresets() {
     return
   }
 
+  const requestSequence = ++rulesRequestSequence
+  loading.value = false
   creatingPresets.value = true
   try {
     const settled = await Promise.allSettled(
@@ -510,7 +512,9 @@ async function createRecommendedPresets() {
       result.failed.push({ preset, detail })
     }
 
-    await load()
+    if (requestSequence !== rulesRequestSequence) return
+    await load(requestSequence)
+    if (requestSequence !== rulesRequestSequence) return
 
     if (result.failed.length === 0) {
       appStore.showSuccess(t('admin.ops.alertRules.presets.createSuccess', { count: result.succeeded.length }))
@@ -530,7 +534,9 @@ async function createRecommendedPresets() {
       })
     )
   } finally {
-    creatingPresets.value = false
+    if (requestSequence === rulesRequestSequence) {
+      creatingPresets.value = false
+    }
   }
 }
 
@@ -570,6 +576,8 @@ async function save() {
     appStore.showError(editorValidation.value.errors[0] || t('admin.ops.alertRules.validation.invalid'))
     return
   }
+  const requestSequence = ++rulesRequestSequence
+  loading.value = false
   saving.value = true
   try {
     if (editingId.value) {
@@ -577,16 +585,21 @@ async function save() {
     } else {
       await opsAPI.createAlertRule(draft.value)
     }
+    if (requestSequence !== rulesRequestSequence) return
     showEditor.value = false
     draft.value = null
     editingId.value = null
-    await load()
+    await load(requestSequence)
+    if (requestSequence !== rulesRequestSequence) return
     appStore.showSuccess(t('admin.ops.alertRules.saveSuccess'))
   } catch (err: unknown) {
+    if (requestSequence !== rulesRequestSequence) return
     console.error('[OpsAlertRulesCard] Failed to save rule', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.saveFailed')))
   } finally {
-    saving.value = false
+    if (requestSequence === rulesRequestSequence) {
+      saving.value = false
+    }
   }
 }
 
@@ -600,15 +613,25 @@ function requestDelete(rule: AlertRule) {
 
 async function confirmDelete() {
   if (!pendingDelete.value?.id) return
+  const requestSequence = ++rulesRequestSequence
+  loading.value = false
+  deleting.value = true
   try {
     await opsAPI.deleteAlertRule(pendingDelete.value.id)
+    if (requestSequence !== rulesRequestSequence) return
     showDeleteConfirm.value = false
     pendingDelete.value = null
-    await load()
+    await load(requestSequence)
+    if (requestSequence !== rulesRequestSequence) return
     appStore.showSuccess(t('admin.ops.alertRules.deleteSuccess'))
   } catch (err: unknown) {
+    if (requestSequence !== rulesRequestSequence) return
     console.error('[OpsAlertRulesCard] Failed to delete rule', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.deleteFailed')))
+  } finally {
+    if (requestSequence === rulesRequestSequence) {
+      deleting.value = false
+    }
   }
 }
 
@@ -627,13 +650,13 @@ function cancelDelete() {
       </div>
 
       <div class="flex items-center gap-2">
-        <button class="btn btn-sm btn-primary" :disabled="loading" @click="openCreate">
+        <button class="btn btn-sm btn-primary" :disabled="loading || saving || creatingPresets || deleting" @click="openCreate">
           {{ t('admin.ops.alertRules.create') }}
         </button>
         <button
           class="ops-alert-rules-card__refresh btn btn-secondary btn-sm flex items-center gap-1.5"
-          :disabled="loading"
-          @click="load"
+          :disabled="loading || saving || creatingPresets || deleting"
+          @click="load()"
         >
           <svg class="h-3.5 w-3.5" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
