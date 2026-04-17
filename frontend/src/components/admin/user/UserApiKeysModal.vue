@@ -125,7 +125,8 @@ const dropdownPosition = ref<{ top: number; left: number } | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
-let loadSequence = 0
+let modalContextSequence = 0
+const keyUpdateRequestSequence = new Map<number, number>()
 
 const selectedKeyForGroup = computed(() => {
   if (groupSelectorKeyId.value === null) return null
@@ -162,11 +163,19 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
   }
 }
 
+const beginModalContext = () => {
+  modalContextSequence += 1
+  keyUpdateRequestSequence.clear()
+  return modalContextSequence
+}
+
 const resetModalState = () => {
-  closeGroupSelector()
+  groupSelectorKeyId.value = null
+  dropdownPosition.value = null
   loading.value = false
   apiKeys.value = []
   allGroups.value = []
+  updatingKeyIds.value.clear()
   groupButtonRefs.value.clear()
 }
 
@@ -174,12 +183,13 @@ watch(
   () => [props.show, props.user?.id] as const,
   ([isVisible, userId]) => {
     if (!isVisible || userId == null) {
-      loadSequence += 1
+      beginModalContext()
       resetModalState()
       return
     }
 
-    const requestSequence = ++loadSequence
+    resetModalState()
+    const requestSequence = beginModalContext()
     void load(userId, requestSequence)
     void loadGroups(requestSequence)
   },
@@ -191,17 +201,17 @@ async function load(userId: number, requestSequence: number) {
   groupButtonRefs.value.clear()
   try {
     const res = await adminAPI.users.getUserApiKeys(userId)
-    if (requestSequence !== loadSequence || !props.show || props.user?.id !== userId) {
+    if (requestSequence !== modalContextSequence || !props.show || props.user?.id !== userId) {
       return
     }
     apiKeys.value = res.items || []
   } catch (error) {
-    if (requestSequence !== loadSequence || !props.show || props.user?.id !== userId) {
+    if (requestSequence !== modalContextSequence || !props.show || props.user?.id !== userId) {
       return
     }
     console.error('Failed to load API keys:', error)
   } finally {
-    if (requestSequence === loadSequence) {
+    if (requestSequence === modalContextSequence) {
       loading.value = false
     }
   }
@@ -210,12 +220,12 @@ async function load(userId: number, requestSequence: number) {
 async function loadGroups(requestSequence: number) {
   try {
     const groups = await adminAPI.groups.getAll()
-    if (requestSequence !== loadSequence || !props.show || props.user == null) {
+    if (requestSequence !== modalContextSequence || !props.show || props.user == null) {
       return
     }
     allGroups.value = groups
   } catch (error) {
-    if (requestSequence !== loadSequence || !props.show || props.user == null) {
+    if (requestSequence !== modalContextSequence || !props.show || props.user == null) {
       return
     }
     console.error('Failed to load groups:', error)
@@ -295,9 +305,20 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
   closeGroupSelector()
   if (key.group_id === newGroupId || (!key.group_id && newGroupId === null)) return
 
+  const modalSequence = modalContextSequence
+  const requestSequence = (keyUpdateRequestSequence.get(key.id) ?? 0) + 1
+  keyUpdateRequestSequence.set(key.id, requestSequence)
   updatingKeyIds.value.add(key.id)
   try {
     const result = await adminAPI.apiKeys.updateApiKeyGroup(key.id, newGroupId)
+    if (
+      modalSequence !== modalContextSequence ||
+      requestSequence !== keyUpdateRequestSequence.get(key.id) ||
+      !props.show ||
+      props.user == null
+    ) {
+      return
+    }
     // Update local data
     const idx = apiKeys.value.findIndex((k) => k.id === key.id)
     if (idx !== -1) {
@@ -309,9 +330,20 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
       appStore.showSuccess(t('admin.users.groupChangedSuccess'))
     }
   } catch (error) {
+    if (
+      modalSequence !== modalContextSequence ||
+      requestSequence !== keyUpdateRequestSequence.get(key.id) ||
+      !props.show ||
+      props.user == null
+    ) {
+      return
+    }
     appStore.showError(getErrorMessage(error, t('admin.users.groupChangeFailed')))
   } finally {
-    updatingKeyIds.value.delete(key.id)
+    if (modalSequence === modalContextSequence && requestSequence === keyUpdateRequestSequence.get(key.id)) {
+      keyUpdateRequestSequence.delete(key.id)
+      updatingKeyIds.value.delete(key.id)
+    }
   }
 }
 
@@ -334,7 +366,9 @@ const handleClickOutside = (event: MouseEvent) => {
 }
 
 const handleClose = () => {
+  beginModalContext()
   closeGroupSelector()
+  updatingKeyIds.value.clear()
   emit('close')
 }
 
@@ -345,6 +379,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  beginModalContext()
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeyDown, true)
   window.removeEventListener('resize', updateGroupSelectorPosition)
