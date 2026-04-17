@@ -33,6 +33,7 @@ const statusCode = ref<number | 'other' | null>(null)
 const phase = ref<string>('')
 const errorOwner = ref<string>('')
 const viewMode = ref<'errors' | 'excluded' | 'all'>('errors')
+let fetchSequence = 0
 
 const modalTitle = computed(() => {
   return props.errorType === 'upstream' ? t('admin.ops.errorDetails.upstreamErrors') : t('admin.ops.errorDetails.requestErrors')
@@ -107,6 +108,8 @@ function close() {
 async function fetchErrorLogs() {
   if (!props.show) return
 
+  const requestSequence = ++fetchSequence
+  const errorType = props.errorType
   loading.value = true
   try {
     const params: Record<string, string | number> = {
@@ -130,17 +133,33 @@ async function fetchErrorLogs() {
     const ownerVal = String(errorOwner.value || '').trim()
     if (ownerVal) params.error_owner = ownerVal
 
-    const res = props.errorType === 'upstream'
+    const res = errorType === 'upstream'
       ? await opsAPI.listUpstreamErrors(params)
       : await opsAPI.listRequestErrors(params)
+    if (
+      requestSequence !== fetchSequence ||
+      !props.show ||
+      props.errorType !== errorType
+    ) {
+      return
+    }
     rows.value = res.items || []
     total.value = res.total || 0
   } catch (err) {
+    if (
+      requestSequence !== fetchSequence ||
+      !props.show ||
+      props.errorType !== errorType
+    ) {
+      return
+    }
     console.error('[OpsErrorDetailsModal] Failed to fetch error logs', err)
     rows.value = []
     total.value = 0
   } finally {
-    loading.value = false
+    if (requestSequence === fetchSequence) {
+      loading.value = false
+    }
   }
 }
 
@@ -154,10 +173,21 @@ function resetFilters() {
   fetchErrorLogs()
 }
 
+let searchTimeout: number | null = null
 watch(
-  () => props.show,
-  (open) => {
-    if (!open) return
+  () => [props.show, props.errorType] as const,
+  ([open]) => {
+    if (!open) {
+      fetchSequence++
+      loading.value = false
+      rows.value = []
+      total.value = 0
+      if (searchTimeout) {
+        window.clearTimeout(searchTimeout)
+        searchTimeout = null
+      }
+      return
+    }
     page.value = 1
     pageSize.value = 10
     resetFilters()
@@ -182,7 +212,6 @@ watch(
   }
 )
 
-let searchTimeout: number | null = null
 watch(
   () => q.value,
   () => {

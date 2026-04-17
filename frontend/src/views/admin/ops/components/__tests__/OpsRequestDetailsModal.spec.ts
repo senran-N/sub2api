@@ -61,6 +61,18 @@ const PaginationStub = defineComponent({
   template: '<div class="pagination-stub" />',
 })
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
+}
+
 const sampleResponse = {
   items: [
     {
@@ -215,5 +227,67 @@ describe('OpsRequestDetailsModal', () => {
     await flushPromises()
 
     expect(showError).toHaveBeenCalledWith('request detail error')
+  })
+
+  it('keeps the latest request details when earlier loads resolve late', async () => {
+    const firstResponse = createDeferred<typeof sampleResponse>()
+    const secondResponse = createDeferred<typeof sampleResponse>()
+
+    mockListRequestDetails
+      .mockReturnValueOnce(firstResponse.promise)
+      .mockReturnValueOnce(secondResponse.promise)
+
+    const wrapper = mount(OpsRequestDetailsModal, {
+      props: {
+        modelValue: true,
+        timeRange: '1h',
+        preset: {
+          title: '请求明细',
+        },
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          Pagination: PaginationStub,
+        },
+      },
+    })
+
+    await wrapper.setProps({ timeRange: '6h' })
+
+    secondResponse.resolve({
+      items: [
+        {
+          kind: 'success',
+          created_at: '2026-04-08T11:00:00.000Z',
+          request_id: 'req_fresh',
+          platform: 'openai',
+          model: 'gpt-5.4',
+          duration_ms: 321,
+          status_code: 200,
+        },
+      ],
+      total: 1,
+    })
+    await flushPromises()
+
+    firstResponse.resolve({
+      items: [
+        {
+          kind: 'success',
+          created_at: '2026-04-08T10:00:00.000Z',
+          request_id: 'req_stale',
+          platform: 'openai',
+          model: 'gpt-4.1',
+          duration_ms: 123,
+          status_code: 200,
+        },
+      ],
+      total: 1,
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('req_fresh')
+    expect(wrapper.text()).not.toContain('req_stale')
   })
 })

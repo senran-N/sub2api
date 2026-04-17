@@ -43,6 +43,7 @@ const items = ref<OpsRequestDetail[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
+let requestSequence = 0
 
 const close = () => emit('update:modelValue', false)
 
@@ -89,6 +90,7 @@ function buildTimeParams(): Pick<OpsRequestDetailsParams, 'start_time' | 'end_ti
 
 const fetchData = async () => {
   if (!props.modelValue) return
+  const currentSequence = ++requestSequence
   loading.value = true
   try {
     const params: OpsRequestDetailsParams = {
@@ -107,26 +109,45 @@ const fetchData = async () => {
     if (typeof props.preset.max_duration_ms === 'number') params.max_duration_ms = props.preset.max_duration_ms
 
     const res = await opsAPI.listRequestDetails(params)
+    if (
+      currentSequence !== requestSequence ||
+      !props.modelValue
+    ) {
+      return
+    }
     items.value = res.items || []
     total.value = res.total || 0
   } catch (e: unknown) {
+    if (
+      currentSequence !== requestSequence ||
+      !props.modelValue
+    ) {
+      return
+    }
     console.error('[OpsRequestDetailsModal] Failed to fetch request details', e)
     appStore.showError(resolveRequestErrorMessage(e, t('admin.ops.requestDetails.failedToLoad')))
     items.value = []
     total.value = 0
   } finally {
-    loading.value = false
+    if (currentSequence === requestSequence) {
+      loading.value = false
+    }
   }
 }
 
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) {
-      page.value = 1
-      pageSize.value = 10
-      void fetchData()
+    if (!open) {
+      requestSequence++
+      loading.value = false
+      items.value = []
+      total.value = 0
+      return
     }
+    page.value = 1
+    pageSize.value = 10
+    void fetchData()
   },
   { immediate: true }
 )
