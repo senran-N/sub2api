@@ -13,7 +13,7 @@ const appStore = useAppStore()
 
 const loading = ref(false)
 const config = ref<EmailNotificationConfig | null>(null)
-let loadSequence = 0
+let configRequestSequence = 0
 
 const showEditor = ref(false)
 const saving = ref(false)
@@ -31,18 +31,18 @@ const severityOptions: Array<{ value: AlertSeverity | ''; label: string }> = [
 ]
 
 async function loadConfig() {
-  const requestSequence = ++loadSequence
+  const requestSequence = ++configRequestSequence
   loading.value = true
   try {
     const data = await opsAPI.getEmailNotificationConfig()
-    if (requestSequence !== loadSequence) return
+    if (requestSequence !== configRequestSequence) return
     config.value = data
   } catch (err: unknown) {
-    if (requestSequence !== loadSequence) return
+    if (requestSequence !== configRequestSequence) return
     console.error('[OpsEmailNotificationCard] Failed to load config', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.email.loadFailed')))
   } finally {
-    if (requestSequence === loadSequence) {
+    if (requestSequence === configRequestSequence) {
       loading.value = false
     }
   }
@@ -54,16 +54,23 @@ async function saveConfig() {
     appStore.showError(editorValidation.value.errors[0] || t('admin.ops.email.validation.invalid'))
     return
   }
+  const requestSequence = ++configRequestSequence
+  loading.value = false
   saving.value = true
   try {
-    config.value = await opsAPI.updateEmailNotificationConfig(draft.value)
+    const savedConfig = await opsAPI.updateEmailNotificationConfig(draft.value)
+    if (requestSequence !== configRequestSequence) return
+    config.value = savedConfig
     showEditor.value = false
     appStore.showSuccess(t('admin.ops.email.saveSuccess'))
   } catch (err: unknown) {
+    if (requestSequence !== configRequestSequence) return
     console.error('[OpsEmailNotificationCard] Failed to save config', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.email.saveFailed')))
   } finally {
-    saving.value = false
+    if (requestSequence === configRequestSequence) {
+      saving.value = false
+    }
   }
 }
 
@@ -197,7 +204,7 @@ onMounted(() => {
       <div class="flex items-center gap-2">
         <button
           class="ops-email-notification-card__refresh flex items-center gap-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="loading"
+          :disabled="loading || saving"
           @click="loadConfig"
         >
           <svg class="h-3.5 w-3.5" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">

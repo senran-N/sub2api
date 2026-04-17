@@ -95,7 +95,7 @@ describe('OpsEmailNotificationCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetEmailNotificationConfig.mockResolvedValue(makeConfig('warning'))
-    mockUpdateEmailNotificationConfig.mockResolvedValue(undefined)
+    mockUpdateEmailNotificationConfig.mockResolvedValue(makeConfig('warning'))
   })
 
   it('prefers backend detail when loading email notification config fails', async () => {
@@ -154,5 +154,104 @@ describe('OpsEmailNotificationCard', () => {
 
     expect(wrapper.text()).toContain('info')
     expect(wrapper.text()).not.toContain('critical')
+  })
+
+  it('keeps save ownership when a stale refresh resolves before save finishes', async () => {
+    const staleRefresh = deferred<any>()
+    const saveResponse = deferred<any>()
+
+    const wrapper = mount(OpsEmailNotificationCard, {
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          Select: SelectStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    mockGetEmailNotificationConfig.mockReset()
+    mockGetEmailNotificationConfig.mockReturnValueOnce(staleRefresh.promise)
+    mockUpdateEmailNotificationConfig.mockReset()
+    mockUpdateEmailNotificationConfig.mockReturnValueOnce(saveResponse.promise)
+
+    const refreshButton = wrapper.get('.ops-email-notification-card__refresh')
+    await refreshButton.trigger('click')
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.edit')
+    expect(editButton).toBeTruthy()
+    await editButton!.trigger('click')
+
+    const saveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.save')
+    expect(saveButton).toBeTruthy()
+    await saveButton!.trigger('click')
+
+    staleRefresh.resolve(makeConfig('critical'))
+    await flushPromises()
+
+    const pendingSaveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.saving')
+    expect(pendingSaveButton).toBeTruthy()
+    expect(pendingSaveButton!.attributes('disabled')).toBeDefined()
+    expect(refreshButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('warning')
+    expect(wrapper.text()).not.toContain('critical')
+
+    saveResponse.resolve(makeConfig('info'))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('info')
+    expect(wrapper.text()).not.toContain('critical')
+  })
+
+  it('ignores a stale refresh after save applies the newer config', async () => {
+    const staleRefresh = deferred<any>()
+    const saveResponse = deferred<any>()
+
+    const wrapper = mount(OpsEmailNotificationCard, {
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          Select: SelectStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    mockGetEmailNotificationConfig.mockReset()
+    mockGetEmailNotificationConfig.mockReturnValueOnce(staleRefresh.promise)
+    mockUpdateEmailNotificationConfig.mockReset()
+    mockUpdateEmailNotificationConfig.mockReturnValueOnce(saveResponse.promise)
+
+    await wrapper.get('.ops-email-notification-card__refresh').trigger('click')
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.edit')
+    expect(editButton).toBeTruthy()
+    await editButton!.trigger('click')
+
+    const saveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.save')
+    expect(saveButton).toBeTruthy()
+    await saveButton!.trigger('click')
+
+    saveResponse.resolve(makeConfig('info'))
+    await flushPromises()
+
+    staleRefresh.resolve(makeConfig('critical'))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('info')
+    expect(wrapper.text()).not.toContain('critical')
+    expect(showSuccess).toHaveBeenCalledWith('admin.ops.email.saveSuccess')
   })
 })

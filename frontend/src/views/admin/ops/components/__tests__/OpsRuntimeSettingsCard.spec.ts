@@ -78,7 +78,8 @@ function makeRuntimeSettings(lockKey: string) {
 describe('OpsRuntimeSettingsCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockUpdateAlertRuntimeSettings.mockResolvedValue(undefined)
+    mockGetAlertRuntimeSettings.mockResolvedValue(makeRuntimeSettings('ops:default'))
+    mockUpdateAlertRuntimeSettings.mockResolvedValue(makeRuntimeSettings('ops:default'))
   })
 
   it('keeps the latest runtime settings when initial load overlaps with refresh', async () => {
@@ -108,5 +109,102 @@ describe('OpsRuntimeSettingsCard', () => {
 
     expect(wrapper.text()).toContain('ops:latest')
     expect(wrapper.text()).not.toContain('ops:stale')
+  })
+
+  it('keeps save ownership when a stale refresh resolves before runtime settings save finishes', async () => {
+    const staleRefresh = deferred<any>()
+    const saveResponse = deferred<any>()
+
+    const wrapper = mount(OpsRuntimeSettingsCard, {
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    mockGetAlertRuntimeSettings.mockReset()
+    mockGetAlertRuntimeSettings.mockReturnValueOnce(staleRefresh.promise)
+    mockUpdateAlertRuntimeSettings.mockReset()
+    mockUpdateAlertRuntimeSettings.mockReturnValueOnce(saveResponse.promise)
+
+    const refreshButton = wrapper.get('.ops-runtime-settings-card__refresh')
+    await refreshButton.trigger('click')
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.edit')
+    expect(editButton).toBeTruthy()
+    await editButton!.trigger('click')
+
+    const saveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.save')
+    expect(saveButton).toBeTruthy()
+    await saveButton!.trigger('click')
+
+    staleRefresh.resolve(makeRuntimeSettings('ops:stale'))
+    await flushPromises()
+
+    const pendingSaveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.saving')
+    expect(pendingSaveButton).toBeTruthy()
+    expect(pendingSaveButton!.attributes('disabled')).toBeDefined()
+    expect(refreshButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('ops:default')
+    expect(wrapper.text()).not.toContain('ops:stale')
+
+    saveResponse.resolve(makeRuntimeSettings('ops:saved'))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ops:saved')
+    expect(wrapper.text()).not.toContain('ops:stale')
+  })
+
+  it('ignores a stale refresh after runtime settings save applies', async () => {
+    const staleRefresh = deferred<any>()
+    const saveResponse = deferred<any>()
+
+    const wrapper = mount(OpsRuntimeSettingsCard, {
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    mockGetAlertRuntimeSettings.mockReset()
+    mockGetAlertRuntimeSettings.mockReturnValueOnce(staleRefresh.promise)
+    mockUpdateAlertRuntimeSettings.mockReset()
+    mockUpdateAlertRuntimeSettings.mockReturnValueOnce(saveResponse.promise)
+
+    await wrapper.get('.ops-runtime-settings-card__refresh').trigger('click')
+
+    const editButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.edit')
+    expect(editButton).toBeTruthy()
+    await editButton!.trigger('click')
+
+    const saveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'common.save')
+    expect(saveButton).toBeTruthy()
+    await saveButton!.trigger('click')
+
+    saveResponse.resolve(makeRuntimeSettings('ops:saved'))
+    await flushPromises()
+
+    staleRefresh.resolve(makeRuntimeSettings('ops:stale'))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ops:saved')
+    expect(wrapper.text()).not.toContain('ops:stale')
+    expect(showSuccess).toHaveBeenCalledWith('admin.ops.runtime.saveSuccess')
   })
 })

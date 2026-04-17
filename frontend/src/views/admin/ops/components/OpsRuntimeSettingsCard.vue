@@ -12,7 +12,7 @@ const appStore = useAppStore()
 
 const loading = ref(false)
 const saving = ref(false)
-let loadSequence = 0
+let alertSettingsRequestSequence = 0
 
 const alertSettings = ref<OpsAlertRuntimeSettings | null>(null)
 
@@ -140,18 +140,18 @@ const alertValidation = computed(() => {
 })
 
 async function loadSettings() {
-  const requestSequence = ++loadSequence
+  const requestSequence = ++alertSettingsRequestSequence
   loading.value = true
   try {
     const nextSettings = await opsAPI.getAlertRuntimeSettings()
-    if (requestSequence !== loadSequence) return
+    if (requestSequence !== alertSettingsRequestSequence) return
     alertSettings.value = nextSettings
   } catch (err: unknown) {
-    if (requestSequence !== loadSequence) return
+    if (requestSequence !== alertSettingsRequestSequence) return
     console.error('[OpsRuntimeSettingsCard] Failed to load runtime settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.runtime.loadFailed')))
   } finally {
-    if (requestSequence === loadSequence) {
+    if (requestSequence === alertSettingsRequestSequence) {
       loading.value = false
     }
   }
@@ -235,16 +235,23 @@ async function saveAlertSettings() {
     return
   }
 
+  const requestSequence = ++alertSettingsRequestSequence
+  loading.value = false
   saving.value = true
   try {
-    alertSettings.value = await opsAPI.updateAlertRuntimeSettings(draftAlert.value)
+    const savedSettings = await opsAPI.updateAlertRuntimeSettings(draftAlert.value)
+    if (requestSequence !== alertSettingsRequestSequence) return
+    alertSettings.value = savedSettings
     showAlertEditor.value = false
     appStore.showSuccess(t('admin.ops.runtime.saveSuccess'))
   } catch (err: unknown) {
+    if (requestSequence !== alertSettingsRequestSequence) return
     console.error('[OpsRuntimeSettingsCard] Failed to save alert runtime settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.runtime.saveFailed')))
   } finally {
-    saving.value = false
+    if (requestSequence === alertSettingsRequestSequence) {
+      saving.value = false
+    }
   }
 }
 
@@ -262,7 +269,7 @@ onMounted(() => {
       </div>
       <button
         class="ops-runtime-settings-card__refresh flex items-center gap-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="loading"
+        :disabled="loading || saving"
         @click="loadSettings"
       >
         <svg class="h-3.5 w-3.5" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
