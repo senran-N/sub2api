@@ -50,6 +50,21 @@ const REGISTRATION_EMAIL_SUFFIX_SEPARATOR_KEYS = new Set([
   'Enter',
   'Tab'
 ])
+
+function createLatestRequestTracker() {
+  let sequence = 0
+
+  return {
+    next() {
+      sequence += 1
+      return sequence
+    },
+    isCurrent(requestSequence: number) {
+      return requestSequence === sequence
+    }
+  }
+}
+
 export function useSettingsViewForm(options: SettingsViewFormOptions) {
   const loading = ref(true)
   const loadFailed = ref(false)
@@ -62,6 +77,8 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
   const registrationEmailSuffixWhitelistDraft = ref('')
   const subscriptionGroups = ref<AdminGroup[]>([])
   const form = reactive(createDefaultSettingsForm())
+  const settingsRequestTracker = createLatestRequestTracker()
+  const subscriptionGroupsRequestTracker = createLatestRequestTracker()
 
   const defaultSubscriptionGroupOptions = computed<DefaultSubscriptionGroupOption[]>(() =>
     subscriptionGroups.value.map((group) => ({
@@ -180,31 +197,47 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
   }
 
   async function loadSettings() {
+    const requestSequence = settingsRequestTracker.next()
     loading.value = true
     loadFailed.value = false
 
     try {
       const settings = await adminAPI.settings.getSettings()
+      if (!settingsRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       registrationEmailSuffixWhitelistTags.value = hydrateSettingsForm(form, settings)
       registrationEmailSuffixWhitelistDraft.value = ''
       smtpPasswordManuallyEdited.value = false
     } catch (error) {
+      if (!settingsRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       loadFailed.value = true
       options.showError(
         `${options.t('admin.settings.failedToLoad')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
-      loading.value = false
+      if (settingsRequestTracker.isCurrent(requestSequence)) {
+        loading.value = false
+      }
     }
   }
 
   async function loadSubscriptionGroups() {
+    const requestSequence = subscriptionGroupsRequestTracker.next()
     try {
       const groups = await adminAPI.groups.getAll()
+      if (!subscriptionGroupsRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       subscriptionGroups.value = groups.filter(
         (group) => group.subscription_type === 'subscription' && group.status === 'active'
       )
     } catch (error) {
+      if (!subscriptionGroupsRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       console.error('Failed to load subscription groups:', error)
       subscriptionGroups.value = []
     }
@@ -219,50 +252,64 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
   }
 
   async function saveSettings() {
-    saving.value = true
+    const payloadResult = buildSettingsUpdatePayload(
+      form,
+      registrationEmailSuffixWhitelistTags.value
+    )
 
-    try {
-      const payloadResult = buildSettingsUpdatePayload(
-        form,
-        registrationEmailSuffixWhitelistTags.value
-      )
-
-      if (!payloadResult.ok) {
-        if (payloadResult.error.code === 'duplicate_default_subscription') {
-          options.showError(
-            options.t('admin.settings.defaults.defaultSubscriptionsDuplicate', {
-              groupId: payloadResult.error.groupId
-            })
-          )
-          return
-        }
-
-        if (payloadResult.error.code === 'purchase_url_required') {
-          options.showError(
-            `${options.t('admin.settings.purchase.url')}: URL is required when purchase is enabled`
-          )
-          return
-        }
-
+    if (!payloadResult.ok) {
+      if (payloadResult.error.code === 'duplicate_default_subscription') {
         options.showError(
-          `${options.t('admin.settings.purchase.url')}: must be an absolute http(s) URL (e.g. https://example.com)`
+          options.t('admin.settings.defaults.defaultSubscriptionsDuplicate', {
+            groupId: payloadResult.error.groupId
+          })
         )
         return
       }
 
+      if (payloadResult.error.code === 'purchase_url_required') {
+        options.showError(
+          `${options.t('admin.settings.purchase.url')}: URL is required when purchase is enabled`
+        )
+        return
+      }
+
+      options.showError(
+        `${options.t('admin.settings.purchase.url')}: must be an absolute http(s) URL (e.g. https://example.com)`
+      )
+      return
+    }
+
+    const requestSequence = settingsRequestTracker.next()
+    loading.value = false
+    loadFailed.value = false
+    saving.value = true
+
+    try {
       const updated = await adminAPI.settings.updateSettings(payloadResult.payload)
+      if (!settingsRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       registrationEmailSuffixWhitelistTags.value = hydrateSettingsForm(form, updated)
       registrationEmailSuffixWhitelistDraft.value = ''
       smtpPasswordManuallyEdited.value = false
       await options.refreshPublicSettings(true)
       await options.refreshAdminSettings(true)
+      if (!settingsRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       options.showSuccess(options.t('admin.settings.settingsSaved'))
     } catch (error) {
+      if (!settingsRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       options.showError(
         `${options.t('admin.settings.failedToSave')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
-      saving.value = false
+      if (settingsRequestTracker.isCurrent(requestSequence)) {
+        saving.value = false
+      }
     }
   }
 

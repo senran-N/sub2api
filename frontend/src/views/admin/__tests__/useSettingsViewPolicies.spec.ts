@@ -45,6 +45,21 @@ vi.mock('@/api', () => ({
   }
 }))
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 describe('useSettingsViewPolicies', () => {
   beforeEach(() => {
     getAdminApiKey.mockReset()
@@ -214,5 +229,68 @@ describe('useSettingsViewPolicies', () => {
       ]
     })
     expect(showSuccess).toHaveBeenCalledWith('admin.settings.betaPolicy.saved')
+  })
+
+  it('keeps admin api key state bound to the latest action', async () => {
+    const firstLoad = createDeferred<{ exists: boolean; masked_key: string }>()
+    const createRequest = createDeferred<{ key: string }>()
+
+    getAdminApiKey.mockReset().mockReturnValueOnce(firstLoad.promise)
+    regenerateAdminApiKey.mockReset().mockReturnValueOnce(createRequest.promise)
+
+    const showSuccess = vi.fn()
+    const state = useSettingsViewPolicies({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess,
+      confirm: vi.fn(() => true),
+      copyToClipboard: vi.fn().mockResolvedValue(true)
+    })
+
+    const loadPromise = state.loadAdminApiKey()
+    const createPromise = state.createAdminApiKey()
+
+    createRequest.resolve({ key: 'abcdefghijklmnopqrstuvwxyz' })
+    await createPromise
+
+    firstLoad.resolve({ exists: true, masked_key: 'stale-mask' })
+    await loadPromise
+
+    expect(state.newAdminApiKey.value).toBe('abcdefghijklmnopqrstuvwxyz')
+    expect(state.adminApiKeyMasked.value).toBe('abcdefghij...wxyz')
+    expect(showSuccess).toHaveBeenCalledWith('admin.settings.adminApiKey.keyGenerated')
+    expect(state.adminApiKeyOperating.value).toBe(false)
+  })
+
+  it('does not let a stale overload settings load overwrite a newer save', async () => {
+    const firstLoad = createDeferred<{ enabled: boolean; cooldown_minutes: number }>()
+    const saveRequest = createDeferred<{ enabled: boolean; cooldown_minutes: number }>()
+
+    getOverloadCooldownSettings.mockReset().mockReturnValueOnce(firstLoad.promise)
+    updateOverloadCooldownSettings.mockReset().mockReturnValueOnce(saveRequest.promise)
+
+    const showSuccess = vi.fn()
+    const state = useSettingsViewPolicies({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess,
+      confirm: vi.fn(() => true),
+      copyToClipboard: vi.fn().mockResolvedValue(true)
+    })
+
+    const loadPromise = state.loadOverloadCooldownSettings()
+    state.overloadCooldownForm.cooldown_minutes = 42
+    const savePromise = state.saveOverloadCooldownSettings()
+
+    saveRequest.resolve({ enabled: true, cooldown_minutes: 42 })
+    await savePromise
+
+    firstLoad.resolve({ enabled: true, cooldown_minutes: 15 })
+    await loadPromise
+
+    expect(state.overloadCooldownForm.cooldown_minutes).toBe(42)
+    expect(showSuccess).toHaveBeenCalledWith('admin.settings.overloadCooldown.saved')
+    expect(state.overloadCooldownLoading.value).toBe(false)
+    expect(state.overloadCooldownSaving.value).toBe(false)
   })
 })

@@ -22,6 +22,20 @@ interface SettingsViewPoliciesOptions {
   copyToClipboard: (text: string, successMessage?: string) => Promise<boolean>
 }
 
+function createLatestRequestTracker() {
+  let sequence = 0
+
+  return {
+    next() {
+      sequence += 1
+      return sequence
+    },
+    isCurrent(requestSequence: number) {
+      return requestSequence === sequence
+    }
+  }
+}
+
 export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
   const adminApiKeyLoading = ref(true)
   const adminApiKeyExists = ref(false)
@@ -46,6 +60,11 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
   const betaPolicyForm = reactive({
     rules: createDefaultBetaPolicyRules() as BetaPolicyRule[]
   })
+  const adminApiKeyRequestTracker = createLatestRequestTracker()
+  const overloadCooldownRequestTracker = createLatestRequestTracker()
+  const streamTimeoutRequestTracker = createLatestRequestTracker()
+  const rectifierRequestTracker = createLatestRequestTracker()
+  const betaPolicyRequestTracker = createLatestRequestTracker()
 
   const betaPolicyActionOptions = computed(() => [
     { value: 'pass', label: options.t('admin.settings.betaPolicy.actionPass') },
@@ -96,30 +115,49 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
   }
 
   async function loadAdminApiKey() {
+    const requestSequence = adminApiKeyRequestTracker.next()
     adminApiKeyLoading.value = true
     try {
       const status = await adminAPI.settings.getAdminApiKey()
+      if (!adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       adminApiKeyExists.value = status.exists
       adminApiKeyMasked.value = status.masked_key
     } catch (error) {
+      if (!adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       console.error('Failed to load admin API key status:', error)
     } finally {
-      adminApiKeyLoading.value = false
+      if (adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        adminApiKeyLoading.value = false
+      }
     }
   }
 
   async function createAdminApiKey() {
+    const requestSequence = adminApiKeyRequestTracker.next()
+    adminApiKeyLoading.value = false
     adminApiKeyOperating.value = true
     try {
       const result = await adminAPI.settings.regenerateAdminApiKey()
+      if (!adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       newAdminApiKey.value = result.key
       adminApiKeyExists.value = true
       adminApiKeyMasked.value = maskSettingsApiKey(result.key)
       options.showSuccess(options.t('admin.settings.adminApiKey.keyGenerated'))
     } catch (error) {
+      if (!adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       options.showError(resolveRequestErrorMessage(error, options.t('common.unknownError')))
     } finally {
-      adminApiKeyOperating.value = false
+      if (adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        adminApiKeyOperating.value = false
+      }
     }
   }
 
@@ -135,17 +173,27 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
       return
     }
 
+    const requestSequence = adminApiKeyRequestTracker.next()
+    adminApiKeyLoading.value = false
     adminApiKeyOperating.value = true
     try {
       await adminAPI.settings.deleteAdminApiKey()
+      if (!adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       adminApiKeyExists.value = false
       adminApiKeyMasked.value = ''
       newAdminApiKey.value = ''
       options.showSuccess(options.t('admin.settings.adminApiKey.keyDeleted'))
     } catch (error) {
+      if (!adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       options.showError(resolveRequestErrorMessage(error, options.t('common.unknownError')))
     } finally {
-      adminApiKeyOperating.value = false
+      if (adminApiKeyRequestTracker.isCurrent(requestSequence)) {
+        adminApiKeyOperating.value = false
+      }
     }
   }
 
@@ -157,85 +205,132 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
   }
 
   async function loadOverloadCooldownSettings() {
+    const requestSequence = overloadCooldownRequestTracker.next()
     overloadCooldownLoading.value = true
     try {
-      Object.assign(overloadCooldownForm, await adminAPI.settings.getOverloadCooldownSettings())
+      const settings = await adminAPI.settings.getOverloadCooldownSettings()
+      if (!overloadCooldownRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
+      Object.assign(overloadCooldownForm, settings)
     } catch (error) {
+      if (!overloadCooldownRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       console.error('Failed to load overload cooldown settings:', error)
     } finally {
-      overloadCooldownLoading.value = false
+      if (overloadCooldownRequestTracker.isCurrent(requestSequence)) {
+        overloadCooldownLoading.value = false
+      }
     }
   }
 
   async function saveOverloadCooldownSettings() {
+    const requestSequence = overloadCooldownRequestTracker.next()
+    overloadCooldownLoading.value = false
     overloadCooldownSaving.value = true
     try {
-      Object.assign(
-        overloadCooldownForm,
-        await adminAPI.settings.updateOverloadCooldownSettings({
-          enabled: overloadCooldownForm.enabled,
-          cooldown_minutes: overloadCooldownForm.cooldown_minutes
-        })
-      )
+      const settings = await adminAPI.settings.updateOverloadCooldownSettings({
+        enabled: overloadCooldownForm.enabled,
+        cooldown_minutes: overloadCooldownForm.cooldown_minutes
+      })
+      if (!overloadCooldownRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
+      Object.assign(overloadCooldownForm, settings)
       options.showSuccess(options.t('admin.settings.overloadCooldown.saved'))
     } catch (error) {
+      if (!overloadCooldownRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       options.showError(
         `${options.t('admin.settings.overloadCooldown.saveFailed')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
-      overloadCooldownSaving.value = false
+      if (overloadCooldownRequestTracker.isCurrent(requestSequence)) {
+        overloadCooldownSaving.value = false
+      }
     }
   }
 
   async function loadStreamTimeoutSettings() {
+    const requestSequence = streamTimeoutRequestTracker.next()
     streamTimeoutLoading.value = true
     try {
-      Object.assign(streamTimeoutForm, await adminAPI.settings.getStreamTimeoutSettings())
+      const settings = await adminAPI.settings.getStreamTimeoutSettings()
+      if (!streamTimeoutRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
+      Object.assign(streamTimeoutForm, settings)
     } catch (error) {
+      if (!streamTimeoutRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       console.error('Failed to load stream timeout settings:', error)
     } finally {
-      streamTimeoutLoading.value = false
+      if (streamTimeoutRequestTracker.isCurrent(requestSequence)) {
+        streamTimeoutLoading.value = false
+      }
     }
   }
 
   async function saveStreamTimeoutSettings() {
+    const requestSequence = streamTimeoutRequestTracker.next()
+    streamTimeoutLoading.value = false
     streamTimeoutSaving.value = true
     try {
-      Object.assign(
-        streamTimeoutForm,
-        await adminAPI.settings.updateStreamTimeoutSettings({
-          enabled: streamTimeoutForm.enabled,
-          action: streamTimeoutForm.action,
-          temp_unsched_minutes: streamTimeoutForm.temp_unsched_minutes,
-          threshold_count: streamTimeoutForm.threshold_count,
-          threshold_window_minutes: streamTimeoutForm.threshold_window_minutes
-        })
-      )
+      const settings = await adminAPI.settings.updateStreamTimeoutSettings({
+        enabled: streamTimeoutForm.enabled,
+        action: streamTimeoutForm.action,
+        temp_unsched_minutes: streamTimeoutForm.temp_unsched_minutes,
+        threshold_count: streamTimeoutForm.threshold_count,
+        threshold_window_minutes: streamTimeoutForm.threshold_window_minutes
+      })
+      if (!streamTimeoutRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
+      Object.assign(streamTimeoutForm, settings)
       options.showSuccess(options.t('admin.settings.streamTimeout.saved'))
     } catch (error) {
+      if (!streamTimeoutRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       options.showError(
         `${options.t('admin.settings.streamTimeout.saveFailed')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
-      streamTimeoutSaving.value = false
+      if (streamTimeoutRequestTracker.isCurrent(requestSequence)) {
+        streamTimeoutSaving.value = false
+      }
     }
   }
 
   async function loadRectifierSettings() {
+    const requestSequence = rectifierRequestTracker.next()
     rectifierLoading.value = true
     try {
       const settings = await adminAPI.settings.getRectifierSettings()
+      if (!rectifierRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       Object.assign(rectifierForm, settings, {
         apikey_signature_patterns: sanitizeRectifierPatterns(settings.apikey_signature_patterns)
       })
     } catch (error) {
+      if (!rectifierRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       console.error('Failed to load rectifier settings:', error)
     } finally {
-      rectifierLoading.value = false
+      if (rectifierRequestTracker.isCurrent(requestSequence)) {
+        rectifierLoading.value = false
+      }
     }
   }
 
   async function saveRectifierSettings() {
+    const requestSequence = rectifierRequestTracker.next()
+    rectifierLoading.value = false
     rectifierSaving.value = true
     try {
       const updated = await adminAPI.settings.updateRectifierSettings({
@@ -247,49 +342,74 @@ export function useSettingsViewPolicies(options: SettingsViewPoliciesOptions) {
           rectifierForm.apikey_signature_patterns
         )
       })
+      if (!rectifierRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       Object.assign(rectifierForm, updated, {
         apikey_signature_patterns: sanitizeRectifierPatterns(updated.apikey_signature_patterns)
       })
       options.showSuccess(options.t('admin.settings.rectifier.saved'))
     } catch (error) {
+      if (!rectifierRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       options.showError(
         `${options.t('admin.settings.rectifier.saveFailed')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
-      rectifierSaving.value = false
+      if (rectifierRequestTracker.isCurrent(requestSequence)) {
+        rectifierSaving.value = false
+      }
     }
   }
 
   async function loadBetaPolicySettings() {
+    const requestSequence = betaPolicyRequestTracker.next()
     betaPolicyLoading.value = true
     try {
-      betaPolicyForm.rules = normalizeBetaPolicyRules(
-        (await adminAPI.settings.getBetaPolicySettings()).rules
-      )
+      const settings = await adminAPI.settings.getBetaPolicySettings()
+      if (!betaPolicyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
+      betaPolicyForm.rules = normalizeBetaPolicyRules(settings.rules)
     } catch (error) {
+      if (!betaPolicyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       console.error('Failed to load beta policy settings:', error)
     } finally {
-      betaPolicyLoading.value = false
+      if (betaPolicyRequestTracker.isCurrent(requestSequence)) {
+        betaPolicyLoading.value = false
+      }
     }
   }
 
   async function saveBetaPolicySettings() {
+    const requestSequence = betaPolicyRequestTracker.next()
+    betaPolicyLoading.value = false
     betaPolicySaving.value = true
     try {
       const normalizedRules = normalizeBetaPolicyRules(betaPolicyForm.rules)
-      betaPolicyForm.rules = (
-        await adminAPI.settings.updateBetaPolicySettings({
-          rules: normalizedRules
-        })
-      ).rules
+      const updated = await adminAPI.settings.updateBetaPolicySettings({
+        rules: normalizedRules
+      })
+      if (!betaPolicyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
+      betaPolicyForm.rules = updated.rules
       betaPolicyForm.rules = normalizeBetaPolicyRules(betaPolicyForm.rules)
       options.showSuccess(options.t('admin.settings.betaPolicy.saved'))
     } catch (error) {
+      if (!betaPolicyRequestTracker.isCurrent(requestSequence)) {
+        return
+      }
       options.showError(
         `${options.t('admin.settings.betaPolicy.saveFailed')}: ${resolveRequestErrorMessage(error, options.t('common.unknownError'))}`
       )
     } finally {
-      betaPolicySaving.value = false
+      if (betaPolicyRequestTracker.isCurrent(requestSequence)) {
+        betaPolicySaving.value = false
+      }
     }
   }
 

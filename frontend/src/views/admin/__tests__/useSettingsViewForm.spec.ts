@@ -27,6 +27,21 @@ vi.mock('@/api', () => ({
   }
 }))
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 function createSystemSettings(overrides: Partial<SystemSettings> = {}): SystemSettings {
   return {
     registration_enabled: true,
@@ -234,5 +249,92 @@ describe('useSettingsViewForm', () => {
         smtp_password: 'secret'
       })
     )
+  })
+
+  it('keeps the latest settings load and subscription groups results', async () => {
+    const firstSettings = createDeferred<SystemSettings>()
+    const secondSettings = createDeferred<SystemSettings>()
+    const firstGroups = createDeferred<AdminGroup[]>()
+    const secondGroups = createDeferred<AdminGroup[]>()
+
+    getSettings
+      .mockReset()
+      .mockReturnValueOnce(firstSettings.promise)
+      .mockReturnValueOnce(secondSettings.promise)
+    getAllGroups
+      .mockReset()
+      .mockReturnValueOnce(firstGroups.promise)
+      .mockReturnValueOnce(secondGroups.promise)
+
+    const state = useSettingsViewForm({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess: vi.fn(),
+      refreshPublicSettings: vi.fn().mockResolvedValue(undefined),
+      refreshAdminSettings: vi.fn().mockResolvedValue(undefined),
+      copyToClipboard: vi.fn().mockResolvedValue(true)
+    })
+
+    const firstLoad = state.loadSettings()
+    const secondLoad = state.loadSettings()
+    const firstGroupsLoad = state.loadSubscriptionGroups()
+    const secondGroupsLoad = state.loadSubscriptionGroups()
+
+    secondSettings.resolve(createSystemSettings({ site_name: 'Latest Settings' }))
+    await secondLoad
+
+    firstSettings.resolve(createSystemSettings({ site_name: 'Stale Settings' }))
+    await firstLoad
+
+    secondGroups.resolve([createGroup({ id: 11, name: 'Latest Group' })])
+    await secondGroupsLoad
+
+    firstGroups.resolve([createGroup({ id: 12, name: 'Stale Group' })])
+    await firstGroupsLoad
+
+    expect(state.form.site_name).toBe('Latest Settings')
+    expect(state.defaultSubscriptionGroupOptions.value).toEqual([
+      expect.objectContaining({
+        value: 11,
+        label: 'Latest Group'
+      })
+    ])
+  })
+
+  it('does not let a stale settings load overwrite a newer save', async () => {
+    const pendingLoad = createDeferred<SystemSettings>()
+    const saveResponse = createDeferred<SystemSettings>()
+
+    getSettings.mockReset().mockReturnValueOnce(pendingLoad.promise)
+    updateSettings.mockReset().mockReturnValueOnce(saveResponse.promise)
+
+    const showSuccess = vi.fn()
+    const refreshPublicSettings = vi.fn().mockResolvedValue(undefined)
+    const refreshAdminSettings = vi.fn().mockResolvedValue(undefined)
+    const state = useSettingsViewForm({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess,
+      refreshPublicSettings,
+      refreshAdminSettings,
+      copyToClipboard: vi.fn().mockResolvedValue(true)
+    })
+
+    const loadPromise = state.loadSettings()
+    state.form.site_name = 'Saved Name'
+    const savePromise = state.saveSettings()
+
+    saveResponse.resolve(createSystemSettings({ site_name: 'Saved Name' }))
+    await savePromise
+
+    pendingLoad.resolve(createSystemSettings({ site_name: 'Stale Name' }))
+    await loadPromise
+
+    expect(state.form.site_name).toBe('Saved Name')
+    expect(showSuccess).toHaveBeenCalledWith('admin.settings.settingsSaved')
+    expect(refreshPublicSettings).toHaveBeenCalledWith(true)
+    expect(refreshAdminSettings).toHaveBeenCalledWith(true)
+    expect(state.loading.value).toBe(false)
+    expect(state.saving.value).toBe(false)
   })
 })
