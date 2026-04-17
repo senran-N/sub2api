@@ -156,4 +156,61 @@ describe('UserAllowedGroupsModal', () => {
     expect((wrapper.find('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(true)
     expect((wrapper.find('input[type="number"]').element as HTMLInputElement).value).toBe('2.5')
   })
+
+  it('ignores a stale save result after the modal closes and reopens', async () => {
+    const saveRequest = createDeferred<Record<string, never>>()
+    mockListGroups
+      .mockResolvedValueOnce({ items: [createGroup()] })
+      .mockResolvedValueOnce({ items: [createGroup({ id: 2, name: 'Exclusive B' })] })
+    mockUpdateUser.mockReturnValueOnce(saveRequest.promise)
+
+    const wrapper = mount(UserAllowedGroupsModal, {
+      props: {
+        show: true,
+        user: {
+          id: 9,
+          email: 'first@example.com',
+          allowed_groups: [],
+          group_rates: {}
+        }
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          PlatformIcon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const saveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('common.save'))
+    expect(saveButton).toBeTruthy()
+    await saveButton!.trigger('click')
+    await flushPromises()
+
+    await wrapper.setProps({ show: false })
+    await flushPromises()
+    await wrapper.setProps({
+      show: true,
+      user: {
+        id: 10,
+        email: 'second@example.com',
+        allowed_groups: [2],
+        group_rates: { 2: 1.8 }
+      }
+    })
+    await flushPromises()
+
+    saveRequest.resolve({})
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Exclusive B')
+    expect(wrapper.text()).not.toContain('Exclusive A')
+    expect(showSuccessMock).not.toHaveBeenCalledWith('admin.users.groupConfigUpdated')
+    expect(wrapper.emitted('success')).toBeFalsy()
+    expect(wrapper.emitted('close')).toBeFalsy()
+  })
 })

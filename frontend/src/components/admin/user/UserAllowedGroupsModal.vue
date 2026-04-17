@@ -205,7 +205,7 @@ const groupConfigs = ref<GroupRateConfig[]>([])
 const originalGroupRates = ref<Record<number, number>>({}) // 记录原始专属倍率，用于检测删除
 const loading = ref(false)
 const submitting = ref(false)
-let loadSequence = 0
+let groupConfigRequestSequence = 0
 
 // 分离专属分组和公开分组
 const exclusiveGroups = computed(() => groups.value.filter((g) => g.is_exclusive))
@@ -233,8 +233,9 @@ watch(
   () => [props.show, props.user?.id] as const,
   ([isVisible, userId]) => {
     if (!isVisible || userId == null) {
-      loadSequence += 1
+      groupConfigRequestSequence += 1
       loading.value = false
+      submitting.value = false
       groups.value = []
       groupConfigs.value = []
       originalGroupRates.value = {}
@@ -250,11 +251,11 @@ async function load() {
   const user = props.user
   if (!user) return
 
-  const requestSequence = ++loadSequence
+  const requestSequence = ++groupConfigRequestSequence
   loading.value = true
   try {
     const res = await adminAPI.groups.list(1, 1000)
-    if (requestSequence !== loadSequence || !props.show || props.user?.id !== user.id) {
+    if (requestSequence !== groupConfigRequestSequence || !props.show || props.user?.id !== user.id) {
       return
     }
 
@@ -280,13 +281,13 @@ async function load() {
       isSelected: g.is_exclusive ? userAllowedGroups.includes(g.id) : true,
     }))
   } catch (error) {
-    if (requestSequence !== loadSequence || !props.show || props.user?.id !== user.id) {
+    if (requestSequence !== groupConfigRequestSequence || !props.show || props.user?.id !== user.id) {
       return
     }
     console.error('Failed to load groups:', error)
     appStore.showError(resolveRequestErrorMessage(error, t('admin.users.failedToLoadGroups')))
   } finally {
-    if (requestSequence === loadSequence) {
+    if (requestSequence === groupConfigRequestSequence) {
       loading.value = false
     }
   }
@@ -313,6 +314,8 @@ const updateCustomRate = (groupId: number, value: string) => {
 
 const handleSave = async () => {
   if (!props.user) return
+  const requestSequence = ++groupConfigRequestSequence
+  loading.value = false
   submitting.value = true
 
   try {
@@ -339,15 +342,23 @@ const handleSave = async () => {
       allowed_groups: allowedGroups,
       group_rates: Object.keys(groupRates).length > 0 ? groupRates : undefined,
     })
+    if (requestSequence !== groupConfigRequestSequence) {
+      return
+    }
 
     appStore.showSuccess(t('admin.users.groupConfigUpdated'))
     emit('success')
     emit('close')
   } catch (error) {
+    if (requestSequence !== groupConfigRequestSequence) {
+      return
+    }
     console.error('Failed to update user group config:', error)
     appStore.showError(resolveRequestErrorMessage(error, t('admin.users.failedToUpdateAllowedGroups')))
   } finally {
-    submitting.value = false
+    if (requestSequence === groupConfigRequestSequence) {
+      submitting.value = false
+    }
   }
 }
 </script>
