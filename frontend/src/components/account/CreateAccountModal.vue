@@ -2602,6 +2602,11 @@ const emit = defineEmits<{
   created: []
 }>()
 
+interface CreateRequestContext {
+  platform: AccountPlatform
+  requestSequence: number
+}
+
 const appStore = useAppStore()
 
 // OAuth composables
@@ -2876,6 +2881,23 @@ const presetMappings = computed(() => getPresetMappingsByPlatform(form.platform)
 const tempUnschedPresets = computed(() => buildAccountTempUnschedPresets(t))
 
 const form = reactive<CreateAccountForm>(createDefaultCreateAccountForm())
+let createRequestSequence = 0
+
+const beginCreateRequestContext = (platform: AccountPlatform = form.platform): CreateRequestContext => ({
+  platform,
+  requestSequence: ++createRequestSequence
+})
+
+const invalidateCreateRequests = () => {
+  createRequestSequence += 1
+  submitting.value = false
+}
+
+const isActiveCreateRequest = (requestContext: CreateRequestContext) => (
+  requestContext.requestSequence === createRequestSequence &&
+  props.show &&
+  form.platform === requestContext.platform
+)
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
@@ -2950,6 +2972,7 @@ watch(
         clearAntigravityModelState()
       }
     } else {
+      invalidateCreateRequests()
       resetForm()
     }
   }
@@ -2982,6 +3005,8 @@ watch(
 watch(
   () => form.platform,
   (newPlatform) => {
+    invalidateCreateRequests()
+    resetMixedChannelState()
     // Reset base URL based on platform
     apiKeyBaseUrl.value = getDefaultBaseURL(newPlatform)
     // Clear model-related settings
@@ -3196,7 +3221,10 @@ const withAntigravityConfirmFlag = (payload: CreateAccountRequest): CreateAccoun
   return cloned
 }
 
-const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<void>): Promise<boolean> => {
+const ensureAntigravityMixedChannelConfirmed = async (
+  onConfirm: () => Promise<void>,
+  requestContext: CreateRequestContext
+): Promise<boolean> => {
   if (!needsMixedChannelCheck(form.platform)) {
     return true
   }
@@ -3209,43 +3237,69 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
       platform: form.platform,
       group_ids: form.group_ids
     })
+    if (!isActiveCreateRequest(requestContext)) {
+      return false
+    }
     if (!result.has_risk) {
       return true
     }
     openMixedChannelDialog({
       response: result,
       onConfirm: async () => {
+        if (!isActiveCreateRequest(requestContext)) {
+          return
+        }
         antigravityMixedChannelConfirmed.value = true
         await onConfirm()
       }
     })
     return false
   } catch (error: any) {
+    if (!isActiveCreateRequest(requestContext)) {
+      return false
+    }
     appStore.showError(resolveCreateAccountErrorMessage(error))
     return false
   }
 }
 
-const submitCreateAccount = async (payload: CreateAccountRequest) => {
+const submitCreateAccount = async (
+  payload: CreateAccountRequest,
+  requestContext: CreateRequestContext
+) => {
+  if (!isActiveCreateRequest(requestContext)) {
+    return
+  }
   submitting.value = true
   try {
     await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
+    if (!isActiveCreateRequest(requestContext)) {
+      return
+    }
     notifyAccountCreated()
     finalizeCreatedAndClose()
   } catch (error: any) {
+    if (!isActiveCreateRequest(requestContext)) {
+      return
+    }
     if (error.response?.status === 409 && error.response?.data?.error === 'mixed_channel_warning' && needsMixedChannelCheck(form.platform)) {
       openMixedChannelDialog({
         message: error.response?.data?.message,
         onConfirm: async () => {
+          if (!isActiveCreateRequest(requestContext)) {
+            return
+          }
           antigravityMixedChannelConfirmed.value = true
-          await submitCreateAccount(payload)
+          await submitCreateAccount(payload, requestContext)
         }
       })
       return
     }
     appStore.showError(resolveCreateAccountErrorMessage(error))
   } finally {
-    submitting.value = false
+    if (requestContext.requestSequence === createRequestSequence) {
+      submitting.value = false
+    }
   }
 }
 
@@ -3367,19 +3421,26 @@ const resetForm = () => {
 }
 
 const handleClose = () => {
+  invalidateCreateRequests()
   resetMixedChannelState()
   emit('close')
 }
 
 // Helper function to create account with mixed channel warning handling
-const doCreateAccount = async (payload: CreateAccountRequest) => {
-  const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
-    await submitCreateAccount(payload)
-  })
-  if (!canContinue) {
+const doCreateAccount = async (
+  payload: CreateAccountRequest,
+  requestContext: CreateRequestContext
+) => {
+  if (!isActiveCreateRequest(requestContext)) {
     return
   }
-  await submitCreateAccount(payload)
+  const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
+    await submitCreateAccount(payload, requestContext)
+  }, requestContext)
+  if (!canContinue || !isActiveCreateRequest(requestContext)) {
+    return
+  }
+  await submitCreateAccount(payload, requestContext)
 }
 
 // Handle mixed channel warning confirmation
@@ -3390,11 +3451,14 @@ const handleMixedChannelConfirm = async () => {
     return
   }
   clearMixedChannelDialog()
+  const confirmRequestSequence = createRequestSequence
   submitting.value = true
   try {
     await action()
   } finally {
-    submitting.value = false
+    if (confirmRequestSequence === createRequestSequence) {
+      submitting.value = false
+    }
   }
 }
 
@@ -3485,7 +3549,10 @@ const handleBatchCreateOutcome = (options: {
   successCount: number
   errors: string[]
   setError: (message: string) => void
-}) => {
+}, requestContext: CreateRequestContext) => {
+  if (!isActiveCreateRequest(requestContext)) {
+    return
+  }
   const outcome = resolveBatchCreateOutcome({
     failedCount: options.failedCount,
     successCount: options.successCount,
@@ -3520,8 +3587,12 @@ const createOAuthAccount = async (options: {
   type: AccountType
   credentials: Record<string, unknown>
   extra?: Record<string, unknown>
-}) =>
-  adminAPI.accounts.create(
+}, requestContext: CreateRequestContext) => {
+  if (!isActiveCreateRequest(requestContext)) {
+    return
+  }
+
+  await adminAPI.accounts.create(
     buildCreateAccountRequest({
       common: options.commonPayload,
       name: options.name,
@@ -3531,8 +3602,12 @@ const createOAuthAccount = async (options: {
       extra: options.extra
     })
   )
+}
 
-const createBatchCompletionHandler = (errorRef: { value: string }) => (result: {
+const createBatchCompletionHandler = (
+  errorRef: { value: string },
+  requestContext: CreateRequestContext
+) => (result: {
   failedCount: number
   successCount: number
   errors: string[]
@@ -3544,7 +3619,7 @@ const createBatchCompletionHandler = (errorRef: { value: string }) => (result: {
     setError: (message) => {
       errorRef.value = message
     }
-  })
+  }, requestContext)
 }
 
 const resolveCurrentOAuthState = (
@@ -3657,10 +3732,14 @@ const handleSubmit = async () => {
     if (!ensureCreateAccountName()) {
       return
     }
+    const requestContext = beginCreateRequestContext()
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
+      if (!isActiveCreateRequest(requestContext)) {
+        return
+      }
       step.value = 2
-    })
-    if (!canContinue) {
+    }, requestContext)
+    if (!canContinue || !isActiveCreateRequest(requestContext)) {
       return
     }
     step.value = 2
@@ -3673,16 +3752,24 @@ const handleSubmit = async () => {
 
   // For Bedrock type, create directly
   if (form.platform === 'anthropic' && accountCategory.value === 'bedrock') {
+    const requestContext = beginCreateRequestContext()
     const credentials = buildBedrockCreateCredentials()
     if (!credentials) {
       return
     }
-    await createAccountAndFinish('anthropic', 'bedrock' as AccountType, credentials)
+    await createAccountAndFinish(
+      'anthropic',
+      'bedrock' as AccountType,
+      credentials,
+      undefined,
+      requestContext
+    )
     return
   }
 
   // For Antigravity upstream type, create directly
   if (form.platform === 'antigravity' && antigravityAccountType.value === 'upstream') {
+    const requestContext = beginCreateRequestContext()
     const credentials = buildAntigravityUpstreamCreateCredentials()
     if (!credentials) {
       return
@@ -3691,7 +3778,8 @@ const handleSubmit = async () => {
       form.platform,
       'apikey',
       credentials,
-      buildCurrentAntigravityExtra()
+      buildCurrentAntigravityExtra(),
+      requestContext
     )
     return
   }
@@ -3710,6 +3798,7 @@ const handleSubmit = async () => {
     platform: form.platform
   })
 
+  const requestContext = beginCreateRequestContext()
   await doCreateAccount(
     buildCreateAccountRequest({
       common: buildCurrentCreateSharedPayload(),
@@ -3718,12 +3807,15 @@ const handleSubmit = async () => {
       type: form.type,
       credentials,
       extra
-    })
+    }),
+    requestContext
   )
 }
 
 const goBackToBasicInfo = () => {
+  invalidateCreateRequests()
   step.value = 1
+  resetMixedChannelState()
   resetOAuthClientsState(true)
 }
 
@@ -3774,8 +3866,12 @@ const createAccountAndFinish = async (
   platform: AccountPlatform,
   type: AccountType,
   credentials: Record<string, unknown>,
-  extra?: Record<string, unknown>
+  extra: Record<string, unknown> | undefined,
+  requestContext: CreateRequestContext
 ) => {
+  if (!isActiveCreateRequest(requestContext)) {
+    return
+  }
   if (
     !applyTempUnschedCredentialsState(credentials, {
       tempUnschedEnabled: tempUnschedEnabled.value,
@@ -3812,7 +3908,8 @@ const createAccountAndFinish = async (
       type,
       credentials,
       extra: finalExtra
-    })
+    }),
+    requestContext
   )
 }
 
@@ -3822,10 +3919,15 @@ const buildAnthropicOAuthExtra = (tokenInfo: Record<string, unknown>) =>
 const createAnthropicOAuthAccountFromTokenInfo = async (options: {
   commonPayload: ReturnType<typeof buildCurrentCreateSharedPayload>
   index?: number
+  requestContext: CreateRequestContext
   tempUnschedPayload?: ReturnType<typeof buildTempUnschedRules>
   tokenInfo: Record<string, unknown>
   total?: number
 }) => {
+  if (!isActiveCreateRequest(options.requestContext)) {
+    return
+  }
+
   await adminAPI.accounts.create(
     buildCreateAnthropicOAuthAccountPayload({
       common: options.commonPayload,
@@ -3844,6 +3946,7 @@ const createAnthropicOAuthAccountFromTokenInfo = async (options: {
 const handleOpenAIExchange = async (authCode: string) => {
   const oauthClient = openaiOAuth
   if (!authCode.trim() || !oauthClient.sessionId.value) return
+  const requestContext = beginCreateRequestContext()
 
   await runOAuthExchangeFlow(
     oauthClient,
@@ -3860,6 +3963,7 @@ const handleOpenAIExchange = async (authCode: string) => {
         form.proxy_id
       )
       if (!tokenInfo) return
+      if (!isActiveCreateRequest(requestContext)) return
 
       const credentials = oauthClient.buildCredentials(tokenInfo)
       const oauthExtra = oauthClient.buildExtraInfo(tokenInfo) as Record<string, unknown> | undefined
@@ -3893,13 +3997,17 @@ const handleOpenAIExchange = async (authCode: string) => {
       await createOAuthAccount({
         commonPayload,
         ...target
-      })
+      }, requestContext)
+      if (!isActiveCreateRequest(requestContext)) return
       notifyAccountCreated()
 
       finalizeCreatedAndClose()
     },
     resolveOAuthAuthErrorMessage,
-    appStore.showError
+    appStore.showError,
+    {
+      isActive: () => isActiveCreateRequest(requestContext)
+    }
   )
 }
 
@@ -3911,20 +4019,31 @@ const OPENAI_MOBILE_RT_CLIENT_ID = 'app_LlGpXReQgckcGGUo2JrYvtJK'
 const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string) => {
   const oauthClient = openaiOAuth
   const commonPayload = buildCurrentCreateSharedPayload()
+  const requestContext = beginCreateRequestContext()
   await runBatchCreateFlow({
     rawInput: refreshTokenInput,
     emptyInputMessage: t('admin.accounts.oauth.openai.pleaseEnterRefreshToken'),
     loadingRef: oauthClient.loading,
     errorRef: oauthClient.error,
-    onComplete: createBatchCompletionHandler(oauthClient.error),
+    isActive: () => isActiveCreateRequest(requestContext),
+    onComplete: createBatchCompletionHandler(oauthClient.error, requestContext),
     processEntry: async (refreshToken, index, refreshTokens) => {
+      if (!isActiveCreateRequest(requestContext)) {
+        return null
+      }
       const tokenInfo = await oauthClient.validateRefreshToken(
         refreshToken,
         form.proxy_id,
         clientId
       )
       if (!tokenInfo) {
+        if (!isActiveCreateRequest(requestContext)) {
+          return null
+        }
         return consumeValidationFailureMessage(oauthClient.error)
+      }
+      if (!isActiveCreateRequest(requestContext)) {
+        return null
       }
 
       const credentials = oauthClient.buildCredentials(tokenInfo)
@@ -3952,7 +4071,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
       await createOAuthAccount({
         commonPayload,
         ...target
-      })
+      }, requestContext)
 
       return null
     },
@@ -3969,16 +4088,27 @@ const handleOpenAIValidateMobileRT = (rt: string) => handleOpenAIBatchRT(rt, OPE
 // Antigravity 手动 RT 批量验证和创建
 const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
   const commonPayload = buildCurrentCreateSharedPayload()
+  const requestContext = beginCreateRequestContext()
   await runBatchCreateFlow({
     rawInput: refreshTokenInput,
     emptyInputMessage: t('admin.accounts.oauth.antigravity.pleaseEnterRefreshToken'),
     loadingRef: antigravityOAuth.loading,
     errorRef: antigravityOAuth.error,
-    onComplete: createBatchCompletionHandler(antigravityOAuth.error),
+    isActive: () => isActiveCreateRequest(requestContext),
+    onComplete: createBatchCompletionHandler(antigravityOAuth.error, requestContext),
     processEntry: async (refreshToken, index, refreshTokens) => {
+      if (!isActiveCreateRequest(requestContext)) {
+        return null
+      }
       const tokenInfo = await antigravityOAuth.validateRefreshToken(refreshToken, form.proxy_id)
       if (!tokenInfo) {
+        if (!isActiveCreateRequest(requestContext)) {
+          return null
+        }
         return consumeValidationFailureMessage(antigravityOAuth.error)
+      }
+      if (!isActiveCreateRequest(requestContext)) {
+        return null
       }
 
       const credentials = antigravityOAuth.buildCredentials(tokenInfo)
@@ -3992,6 +4122,9 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           extra: buildCurrentAntigravityExtra()
         })
       )
+      if (!isActiveCreateRequest(requestContext)) {
+        return null
+      }
       await adminAPI.accounts.create(createPayload)
       return null
     },
@@ -4002,6 +4135,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
 // Gemini OAuth 授权码兑换
 const handleGeminiExchange = async (authCode: string) => {
   if (!authCode.trim() || !geminiOAuth.sessionId.value) return
+  const requestContext = beginCreateRequestContext()
 
   await runOAuthExchangeFlow(
     geminiOAuth,
@@ -4020,19 +4154,24 @@ const handleGeminiExchange = async (authCode: string) => {
         tierId: geminiSelectedTier.value
       })
       if (!tokenInfo) return
+      if (!isActiveCreateRequest(requestContext)) return
 
       const credentials = geminiOAuth.buildCredentials(tokenInfo)
       const extra = geminiOAuth.buildExtraInfo(tokenInfo)
-      await createAccountAndFinish('gemini', 'oauth', credentials, extra)
+      await createAccountAndFinish('gemini', 'oauth', credentials, extra, requestContext)
     },
     resolveOAuthAuthErrorMessage,
-    appStore.showError
+    appStore.showError,
+    {
+      isActive: () => isActiveCreateRequest(requestContext)
+    }
   )
 }
 
 // Antigravity OAuth 授权码兑换
 const handleAntigravityExchange = async (authCode: string) => {
   if (!authCode.trim() || !antigravityOAuth.sessionId.value) return
+  const requestContext = beginCreateRequestContext()
 
   await runOAuthExchangeFlow(
     antigravityOAuth,
@@ -4049,6 +4188,7 @@ const handleAntigravityExchange = async (authCode: string) => {
         proxyId: form.proxy_id
       })
       if (!tokenInfo) return
+      if (!isActiveCreateRequest(requestContext)) return
 
       const credentials = buildCreateAntigravityOAuthCredentials({
         interceptWarmupRequests: interceptWarmupRequests.value,
@@ -4056,16 +4196,20 @@ const handleAntigravityExchange = async (authCode: string) => {
         tokenInfo: antigravityOAuth.buildCredentials(tokenInfo)
       })
       const extra = buildCurrentAntigravityExtra()
-      await createAccountAndFinish('antigravity', 'oauth', credentials, extra)
+      await createAccountAndFinish('antigravity', 'oauth', credentials, extra, requestContext)
     },
     resolveOAuthAuthErrorMessage,
-    appStore.showError
+    appStore.showError,
+    {
+      isActive: () => isActiveCreateRequest(requestContext)
+    }
   )
 }
 
 // Anthropic OAuth 授权码兑换
 const handleAnthropicExchange = async (authCode: string) => {
   if (!authCode.trim() || !oauth.sessionId.value) return
+  const requestContext = beginCreateRequestContext()
 
   await runOAuthExchangeFlow(
     oauth,
@@ -4088,11 +4232,15 @@ const handleAnthropicExchange = async (authCode: string) => {
           interceptWarmupRequests: interceptWarmupRequests.value,
           tokenInfo,
           extra: buildAnthropicOAuthExtra(tokenInfo)
-        })
+        }),
+        requestContext
       )
     },
     resolveOAuthAuthErrorMessage,
-    appStore.showError
+    appStore.showError,
+    {
+      isActive: () => isActiveCreateRequest(requestContext)
+    }
   )
 }
 
@@ -4116,6 +4264,7 @@ const handleExchangeCode = async () => {
 
 const handleCookieAuth = async (sessionKey: string) => {
   try {
+    const requestContext = beginCreateRequestContext()
     const keys = oauth.parseSessionKeys(sessionKey)
 
     if (keys.length === 0) {
@@ -4138,7 +4287,11 @@ const handleCookieAuth = async (sessionKey: string) => {
           emptyInputMessage: t('admin.accounts.oauth.pleaseEnterSessionKey'),
           loadingRef: oauth.loading,
           errorRef: oauth.error,
+          isActive: () => isActiveCreateRequest(requestContext),
           onComplete: ({ successCount, failedCount, errors }) => {
+            if (!isActiveCreateRequest(requestContext)) {
+              return
+            }
             if (successCount > 0) {
               appStore.showSuccess(t('admin.accounts.oauth.successCreated', { count: successCount }))
               emit('created')
@@ -4153,6 +4306,9 @@ const handleCookieAuth = async (sessionKey: string) => {
           },
           processEntry: async (key, index, allKeys) => {
             try {
+              if (!isActiveCreateRequest(requestContext)) {
+                return null
+              }
               const tokenInfo = await adminAPI.accounts.exchangeCode(
                 resolveAnthropicExchangeEndpoint(addMethod.value as 'oauth' | 'setup-token', 'cookie'),
                 {
@@ -4161,16 +4317,23 @@ const handleCookieAuth = async (sessionKey: string) => {
                   ...getCurrentProxyConfig()
                 }
               )
+              if (!isActiveCreateRequest(requestContext)) {
+                return null
+              }
 
               await createAnthropicOAuthAccountFromTokenInfo({
                 commonPayload,
                 index,
+                requestContext,
                 tempUnschedPayload,
                 tokenInfo,
                 total: allKeys.length
               })
               return null
             } catch (error: any) {
+              if (!isActiveCreateRequest(requestContext)) {
+                return null
+              }
               return t('admin.accounts.oauth.keyAuthFailed', {
                 index: index + 1,
                 error: resolveOAuthAuthErrorMessage(error)
@@ -4180,7 +4343,10 @@ const handleCookieAuth = async (sessionKey: string) => {
         })
       },
       resolveOAuthAuthErrorMessage,
-      appStore.showError
+      appStore.showError,
+      {
+        isActive: () => isActiveCreateRequest(requestContext)
+      }
     )
   } catch (error: any) {
     oauth.error.value = error.response?.data?.detail || t('admin.accounts.oauth.cookieAuthFailed')

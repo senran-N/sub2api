@@ -99,6 +99,7 @@ export interface RunBatchCreateFlowOptions {
   emptyInputMessage: string
   loadingRef: { value: boolean }
   errorRef: { value: string }
+  isActive?: () => boolean
   onComplete?: (result: {
     failedCount: number
     successCount: number
@@ -117,6 +118,11 @@ export async function runBatchCreateFlow(options: RunBatchCreateFlowOptions) {
     return
   }
 
+  const isActive = () => options.isActive?.() ?? true
+  if (!isActive()) {
+    return
+  }
+
   options.loadingRef.value = true
   options.errorRef.value = ''
 
@@ -126,8 +132,14 @@ export async function runBatchCreateFlow(options: RunBatchCreateFlowOptions) {
 
   try {
     for (let index = 0; index < entries.length; index++) {
+      if (!isActive()) {
+        return
+      }
       try {
         const entryError = await options.processEntry(entries[index], index, entries)
+        if (!isActive()) {
+          return
+        }
         if (entryError) {
           failedCount++
           errors.push(`#${index + 1}: ${entryError}`)
@@ -141,13 +153,21 @@ export async function runBatchCreateFlow(options: RunBatchCreateFlowOptions) {
           : error instanceof Error
             ? error.message
             : 'Unknown error'
+        if (!isActive()) {
+          return
+        }
         errors.push(`#${index + 1}: ${message}`)
       }
     }
 
+    if (!isActive()) {
+      return
+    }
     options.onComplete?.({ failedCount, successCount, errors })
   } finally {
-    options.loadingRef.value = false
+    if (isActive()) {
+      options.loadingRef.value = false
+    }
   }
 }
 
@@ -179,18 +199,31 @@ export async function runOAuthExchangeFlow(
   stateRefs: { loading: { value: boolean }; error: { value: string } },
   action: () => Promise<void>,
   resolveErrorMessage: (error: unknown) => string,
-  showError: (message: string) => void
+  showError: (message: string) => void,
+  options?: {
+    isActive?: () => boolean
+  }
 ) {
+  const isActive = () => options?.isActive?.() ?? true
+  if (!isActive()) {
+    return
+  }
+
   stateRefs.loading.value = true
   stateRefs.error.value = ''
 
   try {
     await action()
   } catch (error) {
+    if (!isActive()) {
+      return
+    }
     stateRefs.error.value = resolveErrorMessage(error)
     showError(stateRefs.error.value)
   } finally {
-    stateRefs.loading.value = false
+    if (isActive()) {
+      stateRefs.loading.value = false
+    }
   }
 }
 

@@ -15,6 +15,17 @@ import {
   shouldExtractOAuthCallback
 } from '../oauthAuthorizationFlowHelpers'
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
+}
+
 describe('oauthAuthorizationFlowHelpers', () => {
   it('resolves platform-specific oauth key prefixes', () => {
     expect(resolveOAuthKeyPrefix('openai')).toBe('admin.accounts.oauth.openai')
@@ -148,5 +159,63 @@ describe('oauthAuthorizationFlowHelpers', () => {
       successCount: 1,
       errors: ['#2: bad token']
     })
+  })
+
+  it('does not complete or clear loading when batch flow becomes inactive mid-flight', async () => {
+    const loadingRef = { value: false }
+    const errorRef = { value: '' }
+    const onComplete = vi.fn()
+    const entryRequest = createDeferred<string | null>()
+    let active = true
+
+    const flow = runBatchCreateFlow({
+      rawInput: 'first',
+      emptyInputMessage: 'missing',
+      loadingRef,
+      errorRef,
+      isActive: () => active,
+      onComplete,
+      processEntry: async () => entryRequest.promise
+    })
+
+    expect(loadingRef.value).toBe(true)
+
+    active = false
+    entryRequest.resolve(null)
+    await flow
+
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(loadingRef.value).toBe(true)
+    expect(errorRef.value).toBe('')
+  })
+
+  it('does not surface errors or clear loading when oauth exchange becomes inactive', async () => {
+    const stateRefs = {
+      loading: { value: false },
+      error: { value: '' }
+    }
+    const showError = vi.fn()
+    const exchangeRequest = createDeferred<void>()
+    let active = true
+
+    const flow = runOAuthExchangeFlow(
+      stateRefs,
+      async () => exchangeRequest.promise,
+      (error) => (error instanceof Error ? error.message : 'unknown'),
+      showError,
+      {
+        isActive: () => active
+      }
+    )
+
+    expect(stateRefs.loading.value).toBe(true)
+
+    active = false
+    exchangeRequest.reject(new Error('stale exchange failed'))
+    await flow
+
+    expect(stateRefs.error.value).toBe('')
+    expect(stateRefs.loading.value).toBe(true)
+    expect(showError).not.toHaveBeenCalled()
   })
 })
