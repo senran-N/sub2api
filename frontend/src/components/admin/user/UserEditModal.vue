@@ -3,7 +3,7 @@
     :show="show"
     :title="t('admin.users.editUser')"
     width="normal"
-    @close="$emit('close')"
+    @close="handleClose"
   >
     <form v-if="user" id="edit-user-form" @submit.prevent="handleUpdateUser" class="space-y-5">
       <div>
@@ -47,7 +47,7 @@
     </form>
     <template #footer>
       <div class="flex justify-end gap-3">
-        <button @click="$emit('close')" type="button" class="btn btn-secondary">{{ t('common.cancel') }}</button>
+        <button @click="handleClose" type="button" class="btn btn-secondary">{{ t('common.cancel') }}</button>
         <button type="submit" form="edit-user-form" :disabled="submitting" class="btn btn-primary">
           {{ submitting ? t('admin.users.updating') : t('common.update') }}
         </button>
@@ -84,6 +84,7 @@ const { copyToClipboard } = useClipboard()
 
 const submitting = ref(false)
 const passwordCopied = ref(false)
+let updateRequestSequence = 0
 const form = reactive({
   email: '',
   password: '',
@@ -106,6 +107,18 @@ watch(() => props.user, (user) => {
     passwordCopied.value = false
   }
 }, { immediate: true })
+
+watch(
+  () => [props.show, props.user?.id] as const,
+  ([isVisible, userId]) => {
+    updateRequestSequence += 1
+    submitting.value = false
+    if (!isVisible || userId == null) {
+      passwordCopied.value = false
+    }
+  },
+  { immediate: true }
+)
 
 const generatePassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'
@@ -137,33 +150,54 @@ const handleUpdateUser = async () => {
     return
   }
 
+  const requestSequence = ++updateRequestSequence
+  const userId = props.user.id
   submitting.value = true
+  const data: Record<string, unknown> = {
+    email: form.email,
+    username: form.username,
+    notes: form.notes,
+    concurrency: form.concurrency
+  }
+  const password = form.password.trim()
+  const customAttributes = { ...form.customAttributes }
   try {
-    const data: Record<string, unknown> = {
-      email: form.email,
-      username: form.username,
-      notes: form.notes,
-      concurrency: form.concurrency
+    if (password) {
+      data.password = password
     }
 
-    if (form.password.trim()) {
-      data.password = form.password.trim()
+    await adminAPI.users.update(userId, data)
+    if (requestSequence !== updateRequestSequence || !props.show || props.user?.id !== userId) {
+      return
     }
 
-    await adminAPI.users.update(props.user.id, data)
-
-    if (Object.keys(form.customAttributes).length > 0) {
-      await adminAPI.userAttributes.updateUserAttributeValues(props.user.id, form.customAttributes)
+    if (Object.keys(customAttributes).length > 0) {
+      await adminAPI.userAttributes.updateUserAttributeValues(userId, customAttributes)
+      if (requestSequence !== updateRequestSequence || !props.show || props.user?.id !== userId) {
+        return
+      }
     }
 
     appStore.showSuccess(t('admin.users.userUpdated'))
     emit('success')
     emit('close')
   } catch (error) {
+    if (requestSequence !== updateRequestSequence || !props.show || props.user?.id !== userId) {
+      return
+    }
     appStore.showError(resolveErrorMessage(error, t('admin.users.failedToUpdate')))
   } finally {
-    submitting.value = false
+    if (requestSequence === updateRequestSequence) {
+      submitting.value = false
+    }
   }
+}
+
+const handleClose = () => {
+  updateRequestSequence += 1
+  submitting.value = false
+  passwordCopied.value = false
+  emit('close')
 }
 </script>
 

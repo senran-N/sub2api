@@ -1,5 +1,5 @@
 <template>
-  <BaseDialog :show="show" :title="operation === 'add' ? t('admin.users.deposit') : t('admin.users.withdraw')" width="narrow" @close="$emit('close')">
+  <BaseDialog :show="show" :title="operation === 'add' ? t('admin.users.deposit') : t('admin.users.withdraw')" width="narrow" @close="handleClose">
     <form v-if="user" id="balance-form" @submit.prevent="handleBalanceSubmit" class="space-y-5">
       <div class="user-balance-modal__summary flex items-center gap-3">
         <div class="user-balance-modal__avatar flex h-10 w-10 items-center justify-center">
@@ -36,7 +36,7 @@
     </form>
     <template #footer>
       <div class="flex justify-end gap-3">
-        <button @click="$emit('close')" class="btn btn-secondary">{{ t('common.cancel') }}</button>
+        <button @click="handleClose" class="btn btn-secondary">{{ t('common.cancel') }}</button>
         <button
           type="submit"
           form="balance-form"
@@ -72,13 +72,27 @@ const appStore = useAppStore()
 
 const submitting = ref(false)
 const form = reactive({ amount: 0, notes: '' })
+let balanceRequestSequence = 0
 
-watch(() => props.show, (visible) => {
-  if (visible) {
-    form.amount = 0
-    form.notes = ''
-  }
-})
+const resetForm = () => {
+  form.amount = 0
+  form.notes = ''
+}
+
+watch(
+  () => [props.show, props.user?.id, props.operation] as const,
+  ([visible, userId]) => {
+    balanceRequestSequence += 1
+    submitting.value = false
+    if (!visible || userId == null) {
+      resetForm()
+      return
+    }
+
+    resetForm()
+  },
+  { immediate: true }
+)
 
 const formatBalance = (value: number) => {
   if (value === 0) return '0.00'
@@ -111,18 +125,38 @@ const handleBalanceSubmit = async () => {
     appStore.showError(t('admin.users.insufficientBalance'))
     return
   }
+  const requestSequence = ++balanceRequestSequence
+  const userId = props.user.id
+  const amount = form.amount
+  const notes = form.notes
+  const operation = props.operation
   submitting.value = true
   try {
-    await adminAPI.users.updateBalance(props.user.id, form.amount, props.operation, form.notes)
+    await adminAPI.users.updateBalance(userId, amount, operation, notes)
+    if (requestSequence !== balanceRequestSequence || !props.show || props.user?.id !== userId) {
+      return
+    }
     appStore.showSuccess(t('common.success'))
     emit('success')
     emit('close')
   } catch (error) {
+    if (requestSequence !== balanceRequestSequence || !props.show || props.user?.id !== userId) {
+      return
+    }
     console.error('Failed to update balance:', error)
     appStore.showError(resolveErrorMessage(error, t('common.error')))
   } finally {
-    submitting.value = false
+    if (requestSequence === balanceRequestSequence) {
+      submitting.value = false
+    }
   }
+}
+
+const handleClose = () => {
+  balanceRequestSequence += 1
+  submitting.value = false
+  resetForm()
+  emit('close')
 }
 </script>
 
