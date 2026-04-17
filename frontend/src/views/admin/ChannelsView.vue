@@ -466,6 +466,9 @@ const form = reactive(createDefaultChannelFormState())
 
 let abortController: AbortController | null = null
 let searchTimeout: ReturnType<typeof setTimeout>
+let groupsRequestSequence = 0
+let conflictChannelsRequestSequence = 0
+let dialogRequestSequence = 0
 
 const activePlatforms = computed(() => getActiveChannelPlatforms(form.platforms))
 
@@ -568,21 +571,38 @@ async function loadChannels() {
 }
 
 async function loadGroups() {
+  const requestSequence = ++groupsRequestSequence
   groupsLoading.value = true
   try {
-    allGroups.value = await adminAPI.groups.getAll()
+    const groups = await adminAPI.groups.getAll()
+    if (requestSequence !== groupsRequestSequence) {
+      return
+    }
+    allGroups.value = groups
   } catch (error) {
+    if (requestSequence !== groupsRequestSequence) {
+      return
+    }
     console.error('Error loading groups:', error)
   } finally {
-    groupsLoading.value = false
+    if (requestSequence === groupsRequestSequence) {
+      groupsLoading.value = false
+    }
   }
 }
 
 async function loadAllChannelsForConflict() {
+  const requestSequence = ++conflictChannelsRequestSequence
   try {
     const response = await adminAPI.channels.list(1, 1000)
+    if (requestSequence !== conflictChannelsRequestSequence) {
+      return
+    }
     allChannelsForConflict.value = response.items || []
   } catch {
+    if (requestSequence !== conflictChannelsRequestSequence) {
+      return
+    }
     allChannelsForConflict.value = channels.value
   }
 }
@@ -612,13 +632,19 @@ function resetForm() {
 }
 
 async function openCreateDialog() {
+  const requestSequence = ++dialogRequestSequence
   editingChannel.value = null
   resetForm()
   await Promise.all([loadGroups(), loadAllChannelsForConflict()])
+  if (requestSequence !== dialogRequestSequence || editingChannel.value !== null) {
+    return
+  }
   showDialog.value = true
 }
 
 async function openEditDialog(channel: Channel) {
+  const requestSequence = ++dialogRequestSequence
+  const channelId = channel.id
   editingChannel.value = channel
   form.name = channel.name
   form.description = channel.description || ''
@@ -626,11 +652,15 @@ async function openEditDialog(channel: Channel) {
   form.restrict_models = channel.restrict_models || false
   form.billing_model_source = channel.billing_model_source || 'channel_mapped'
   await Promise.all([loadGroups(), loadAllChannelsForConflict()])
+  if (requestSequence !== dialogRequestSequence || editingChannel.value?.id !== channelId) {
+    return
+  }
   form.platforms = buildChannelSectionsFromAPI(channel, allGroups.value, platformOrder)
   showDialog.value = true
 }
 
 function closeDialog() {
+  dialogRequestSequence += 1
   showDialog.value = false
   editingChannel.value = null
   resetForm()
