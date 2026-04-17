@@ -66,6 +66,15 @@ function createGroup(overrides: Partial<AdminGroup> = {}): AdminGroup {
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
 describe('useGroupsViewData', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -188,6 +197,87 @@ describe('useGroupsViewData', () => {
 
     await state.loadGroups()
     expect(showError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the latest usage and capacity summaries when overlapping summary requests resolve out of order', async () => {
+    const firstUsage = createDeferred<Array<{ group_id: number; today_cost: number; total_cost: number }>>()
+    const secondUsage = createDeferred<Array<{ group_id: number; today_cost: number; total_cost: number }>>()
+    const firstCapacity = createDeferred<Array<{
+      group_id: number
+      concurrency_used: number
+      concurrency_max: number
+      sessions_used: number
+      sessions_max: number
+      rpm_used: number
+      rpm_max: number
+    }>>()
+    const secondCapacity = createDeferred<Array<{
+      group_id: number
+      concurrency_used: number
+      concurrency_max: number
+      sessions_used: number
+      sessions_max: number
+      rpm_used: number
+      rpm_max: number
+    }>>()
+
+    getUsageSummary
+      .mockImplementationOnce(() => firstUsage.promise)
+      .mockImplementationOnce(() => secondUsage.promise)
+    getCapacitySummary
+      .mockImplementationOnce(() => firstCapacity.promise)
+      .mockImplementationOnce(() => secondCapacity.promise)
+
+    const state = useGroupsViewData({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess: vi.fn()
+    })
+
+    const usageLoadOne = state.loadUsageSummary()
+    const usageLoadTwo = state.loadUsageSummary()
+    const capacityLoadOne = state.loadCapacitySummary()
+    const capacityLoadTwo = state.loadCapacitySummary()
+
+    secondUsage.resolve([{ group_id: 1, today_cost: 4.5, total_cost: 20 }])
+    secondCapacity.resolve([
+      {
+        group_id: 1,
+        concurrency_used: 4,
+        concurrency_max: 10,
+        sessions_used: 2,
+        sessions_max: 4,
+        rpm_used: 80,
+        rpm_max: 100
+      }
+    ])
+    await Promise.resolve()
+
+    firstUsage.resolve([{ group_id: 1, today_cost: 1.2, total_cost: 9.8 }])
+    firstCapacity.resolve([
+      {
+        group_id: 1,
+        concurrency_used: 2,
+        concurrency_max: 10,
+        sessions_used: 1,
+        sessions_max: 4,
+        rpm_used: 50,
+        rpm_max: 100
+      }
+    ])
+
+    await Promise.all([usageLoadOne, usageLoadTwo, capacityLoadOne, capacityLoadTwo])
+
+    expect(state.usageMap.value.get(1)).toEqual({ today_cost: 4.5, total_cost: 20 })
+    expect(state.capacityMap.value.get(1)).toEqual({
+      concurrencyUsed: 4,
+      concurrencyMax: 10,
+      sessionsUsed: 2,
+      sessionsMax: 4,
+      rpmUsed: 80,
+      rpmMax: 100
+    })
+    expect(state.usageLoading.value).toBe(false)
   })
 
   it('surfaces shared request details for sort order failures', async () => {

@@ -47,23 +47,43 @@ export function useGroupsViewData(options: GroupsViewDataOptions) {
 
   let abortController: AbortController | null = null
   let searchTimeout: ReturnType<typeof setTimeout> | null = null
+  let usageSummarySequence = 0
+  let capacitySummarySequence = 0
 
   const loadUsageSummary = async () => {
+    const requestSequence = ++usageSummarySequence
     usageLoading.value = true
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-      usageMap.value = mapGroupUsageSummary(await adminAPI.groups.getUsageSummary(timezone))
+      const usageSummary = await adminAPI.groups.getUsageSummary(timezone)
+      if (requestSequence !== usageSummarySequence) {
+        return
+      }
+      usageMap.value = mapGroupUsageSummary(usageSummary)
     } catch (error) {
+      if (requestSequence !== usageSummarySequence) {
+        return
+      }
       console.error('Error loading group usage summary:', error)
     } finally {
-      usageLoading.value = false
+      if (requestSequence === usageSummarySequence) {
+        usageLoading.value = false
+      }
     }
   }
 
   const loadCapacitySummary = async () => {
+    const requestSequence = ++capacitySummarySequence
     try {
-      capacityMap.value = mapGroupCapacitySummary(await adminAPI.groups.getCapacitySummary())
+      const capacitySummary = await adminAPI.groups.getCapacitySummary()
+      if (requestSequence !== capacitySummarySequence) {
+        return
+      }
+      capacityMap.value = mapGroupCapacitySummary(capacitySummary)
     } catch (error) {
+      if (requestSequence !== capacitySummarySequence) {
+        return
+      }
       console.error('Error loading group capacity summary:', error)
     }
   }
@@ -76,6 +96,8 @@ export function useGroupsViewData(options: GroupsViewDataOptions) {
     const currentController = new AbortController()
     abortController = currentController
     loading.value = true
+    usageSummarySequence += 1
+    capacitySummarySequence += 1
 
     try {
       const response = await adminAPI.groups.list(
