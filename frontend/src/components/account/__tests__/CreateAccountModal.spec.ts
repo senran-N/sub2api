@@ -178,10 +178,10 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
   return wrapper.findAll('button').find((button) => button.text().includes(text))
 }
 
-function mountModal() {
+function mountModal(show = true) {
   return mount(CreateAccountModal, {
     props: {
-      show: true,
+      show,
       proxies: [],
       groups: []
     },
@@ -309,5 +309,119 @@ describe('CreateAccountModal', () => {
     expect(showErrorMock).not.toHaveBeenCalled()
     expect(wrapper.emitted('created')).toBeFalsy()
     expect(wrapper.emitted('close')).toBeFalsy()
+  })
+
+  it('keeps the reopened modal TLS fingerprint profiles when the first load resolves late', async () => {
+    const staleProfiles = createDeferred<Array<{ id: number; name: string }>>()
+    const freshProfiles = createDeferred<Array<{ id: number; name: string }>>()
+    listTlsFingerprintProfilesMock
+      .mockReturnValueOnce(staleProfiles.promise)
+      .mockReturnValueOnce(freshProfiles.promise)
+
+    const wrapper = mountModal(false)
+
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    expect(listTlsFingerprintProfilesMock).toHaveBeenCalledTimes(1)
+
+    await wrapper.setProps({ show: false })
+    await flushPromises()
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    expect(listTlsFingerprintProfilesMock).toHaveBeenCalledTimes(2)
+
+    freshProfiles.resolve([{ id: 2, name: 'Fresh Profile' }])
+    await flushPromises()
+
+    expect((wrapper.vm as any).tlsFingerprintProfiles).toEqual([
+      { id: 2, name: 'Fresh Profile' }
+    ])
+
+    staleProfiles.resolve([{ id: 1, name: 'Stale Profile' }])
+    await flushPromises()
+
+    expect((wrapper.vm as any).tlsFingerprintProfiles).toEqual([
+      { id: 2, name: 'Fresh Profile' }
+    ])
+  })
+
+  it('ignores stale Gemini capabilities after switching away and back', async () => {
+    const staleCapabilities = createDeferred<{ ai_studio_oauth_enabled: boolean } | null>()
+    const freshCapabilities = createDeferred<{ ai_studio_oauth_enabled: boolean } | null>()
+    geminiCapabilitiesMock
+      .mockReturnValueOnce(staleCapabilities.promise)
+      .mockReturnValueOnce(freshCapabilities.promise)
+
+    const wrapper = mountModal()
+
+    const geminiButton = findButtonByText(wrapper, 'Gemini')
+    expect(geminiButton).toBeTruthy()
+    await geminiButton!.trigger('click')
+    await flushPromises()
+
+    expect(geminiCapabilitiesMock).toHaveBeenCalledTimes(1)
+
+    const openAIButton = findButtonByText(wrapper, 'OpenAI')
+    expect(openAIButton).toBeTruthy()
+    await openAIButton!.trigger('click')
+    await flushPromises()
+
+    await geminiButton!.trigger('click')
+    await flushPromises()
+
+    expect(geminiCapabilitiesMock).toHaveBeenCalledTimes(2)
+
+    freshCapabilities.resolve({ ai_studio_oauth_enabled: false })
+    await flushPromises()
+
+    expect((wrapper.vm as any).geminiAIStudioOAuthEnabled).toBe(false)
+
+    staleCapabilities.resolve({ ai_studio_oauth_enabled: true })
+    await flushPromises()
+
+    expect((wrapper.vm as any).geminiAIStudioOAuthEnabled).toBe(false)
+  })
+
+  it('keeps the latest Antigravity default mappings after platform switches', async () => {
+    const staleMappings = createDeferred<Array<{ from: string; to: string }>>()
+    const freshMappings = createDeferred<Array<{ from: string; to: string }>>()
+    fetchAntigravityDefaultMappingsMock
+      .mockReturnValueOnce(staleMappings.promise)
+      .mockReturnValueOnce(freshMappings.promise)
+
+    const wrapper = mountModal()
+
+    const antigravityButton = findButtonByText(wrapper, 'Antigravity')
+    expect(antigravityButton).toBeTruthy()
+    await antigravityButton!.trigger('click')
+    await flushPromises()
+
+    expect(fetchAntigravityDefaultMappingsMock).toHaveBeenCalledTimes(1)
+
+    const openAIButton = findButtonByText(wrapper, 'OpenAI')
+    expect(openAIButton).toBeTruthy()
+    await openAIButton!.trigger('click')
+    await flushPromises()
+
+    await antigravityButton!.trigger('click')
+    await flushPromises()
+
+    expect(fetchAntigravityDefaultMappingsMock).toHaveBeenCalledTimes(2)
+
+    freshMappings.resolve([{ from: 'fresh-model', to: 'models/fresh' }])
+    await flushPromises()
+
+    expect((wrapper.vm as any).antigravityModelMappings).toEqual([
+      { from: 'fresh-model', to: 'models/fresh' }
+    ])
+
+    staleMappings.resolve([{ from: 'stale-model', to: 'models/stale' }])
+    await flushPromises()
+
+    expect((wrapper.vm as any).antigravityModelMappings).toEqual([
+      { from: 'fresh-model', to: 'models/fresh' }
+    ])
   })
 })

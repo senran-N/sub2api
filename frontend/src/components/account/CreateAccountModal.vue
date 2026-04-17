@@ -2882,6 +2882,9 @@ const tempUnschedPresets = computed(() => buildAccountTempUnschedPresets(t))
 
 const form = reactive<CreateAccountForm>(createDefaultCreateAccountForm())
 let createRequestSequence = 0
+let tlsFingerprintProfilesRequestSequence = 0
+let antigravityDefaultMappingsRequestSequence = 0
+let geminiCapabilitiesRequestSequence = 0
 
 const beginCreateRequestContext = (platform: AccountPlatform = form.platform): CreateRequestContext => ({
   platform,
@@ -2898,6 +2901,48 @@ const isActiveCreateRequest = (requestContext: CreateRequestContext) => (
   props.show &&
   form.platform === requestContext.platform
 )
+
+const beginTlsFingerprintProfilesRequest = () => ++tlsFingerprintProfilesRequestSequence
+
+const invalidateTlsFingerprintProfilesRequests = () => {
+  tlsFingerprintProfilesRequestSequence += 1
+}
+
+const isActiveTlsFingerprintProfilesRequest = (requestSequence: number) => (
+  requestSequence === tlsFingerprintProfilesRequestSequence &&
+  props.show
+)
+
+const beginAntigravityDefaultMappingsRequest = () => ++antigravityDefaultMappingsRequestSequence
+
+const invalidateAntigravityDefaultMappingsRequests = () => {
+  antigravityDefaultMappingsRequestSequence += 1
+}
+
+const isActiveAntigravityDefaultMappingsRequest = (requestSequence: number) => (
+  requestSequence === antigravityDefaultMappingsRequestSequence &&
+  props.show &&
+  form.platform === 'antigravity'
+)
+
+const beginGeminiCapabilitiesRequest = () => ++geminiCapabilitiesRequestSequence
+
+const invalidateGeminiCapabilitiesRequests = () => {
+  geminiCapabilitiesRequestSequence += 1
+}
+
+const isActiveGeminiCapabilitiesRequest = (requestSequence: number) => (
+  requestSequence === geminiCapabilitiesRequestSequence &&
+  props.show &&
+  form.platform === 'gemini' &&
+  accountCategory.value === 'oauth-based'
+)
+
+const invalidateCreateModalAsyncLoads = () => {
+  invalidateTlsFingerprintProfilesRequests()
+  invalidateAntigravityDefaultMappingsRequests()
+  invalidateGeminiCapabilitiesRequests()
+}
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
@@ -2928,18 +2973,45 @@ const canExchangeCode = computed(() => {
   )
 })
 
-const loadAntigravityDefaultMappings = () =>
-  fetchAntigravityDefaultMappings().then((mappings) => {
-    antigravityModelMappings.value = [...mappings]
-  })
+const loadTlsFingerprintProfiles = async () => {
+  const requestSequence = beginTlsFingerprintProfilesRequest()
+  tlsFingerprintProfiles.value = []
+
+  try {
+    const profiles = await adminAPI.tlsFingerprintProfiles.list()
+    if (!isActiveTlsFingerprintProfilesRequest(requestSequence)) {
+      return
+    }
+    tlsFingerprintProfiles.value = profiles.map((profile) => ({
+      id: profile.id,
+      name: profile.name
+    }))
+  } catch {
+    if (!isActiveTlsFingerprintProfilesRequest(requestSequence)) {
+      return
+    }
+    tlsFingerprintProfiles.value = []
+  }
+}
+
+const loadAntigravityDefaultMappings = async () => {
+  const requestSequence = beginAntigravityDefaultMappingsRequest()
+  const mappings = await fetchAntigravityDefaultMappings()
+  if (!isActiveAntigravityDefaultMappingsRequest(requestSequence)) {
+    return
+  }
+  antigravityModelMappings.value = [...mappings]
+}
 
 const applyAntigravityModelDefaults = () => {
   antigravityModelRestrictionMode.value = 'mapping'
   antigravityWhitelistModels.value = []
+  antigravityModelMappings.value = []
   void loadAntigravityDefaultMappings()
 }
 
 const clearAntigravityModelState = () => {
+  invalidateAntigravityDefaultMappingsRequests()
   antigravityModelRestrictionMode.value = 'mapping'
   antigravityWhitelistModels.value = []
   antigravityModelMappings.value = []
@@ -2960,10 +3032,7 @@ watch(
   () => props.show,
   (newVal) => {
     if (newVal) {
-      // Load TLS fingerprint profiles
-      adminAPI.tlsFingerprintProfiles.list()
-        .then(profiles => { tlsFingerprintProfiles.value = profiles.map(p => ({ id: p.id, name: p.name })) })
-        .catch(() => { tlsFingerprintProfiles.value = [] })
+      void loadTlsFingerprintProfiles()
       // Modal opened - fill related models
       allowedModels.value = [...getModelsByPlatform(form.platform)]
       if (form.platform === 'antigravity') {
@@ -2973,6 +3042,7 @@ watch(
       }
     } else {
       invalidateCreateRequests()
+      invalidateCreateModalAsyncLoads()
       resetForm()
     }
   }
@@ -3380,11 +3450,16 @@ async function syncGeminiAIStudioOAuthAvailability(
   category: typeof accountCategory.value
 ) {
   if (!show || platform !== 'gemini' || category !== 'oauth-based') {
+    invalidateGeminiCapabilitiesRequests()
     geminiAIStudioOAuthEnabled.value = false
     return
   }
 
+  const requestSequence = beginGeminiCapabilitiesRequest()
   const capabilities = await geminiOAuth.getCapabilities()
+  if (!isActiveGeminiCapabilitiesRequest(requestSequence)) {
+    return
+  }
   geminiAIStudioOAuthEnabled.value = !!capabilities?.ai_studio_oauth_enabled
   if (!geminiAIStudioOAuthEnabled.value && geminiOAuthType.value === 'ai_studio') {
     geminiOAuthType.value = 'code_assist'
@@ -3422,6 +3497,7 @@ const resetForm = () => {
 
 const handleClose = () => {
   invalidateCreateRequests()
+  invalidateCreateModalAsyncLoads()
   resetMixedChannelState()
   emit('close')
 }
