@@ -24,6 +24,7 @@ export interface TokenInfo {
 
 export function useAccountOAuth() {
   const appStore = useAppStore()
+  let requestSequence = 0
 
   // State
   const authUrl = ref('')
@@ -35,6 +36,7 @@ export function useAccountOAuth() {
 
   // Reset state
   const resetState = () => {
+    requestSequence += 1
     authUrl.value = ''
     authCode.value = ''
     sessionId.value = ''
@@ -43,11 +45,15 @@ export function useAccountOAuth() {
     error.value = ''
   }
 
+  const beginRequest = () => ++requestSequence
+  const isActiveRequest = (requestId: number) => requestId === requestSequence
+
   // Generate auth URL
   const generateAuthUrl = async (
     addMethod: AddMethod,
     proxyId?: number | null
   ): Promise<boolean> => {
+    const requestId = beginRequest()
     loading.value = true
     authUrl.value = ''
     sessionId.value = ''
@@ -61,15 +67,23 @@ export function useAccountOAuth() {
           : '/admin/accounts/generate-setup-token-url'
 
       const response = await adminAPI.accounts.generateAuthUrl(endpoint, proxyConfig)
+      if (!isActiveRequest(requestId)) {
+        return false
+      }
       authUrl.value = response.auth_url
       sessionId.value = response.session_id
       return true
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return false
+      }
       error.value = resolveRequestErrorMessage(err, 'Failed to generate auth URL')
       appStore.showError(error.value)
       return false
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 
@@ -83,6 +97,7 @@ export function useAccountOAuth() {
       return null
     }
 
+    const requestId = beginRequest()
     loading.value = true
     error.value = ''
 
@@ -99,13 +114,21 @@ export function useAccountOAuth() {
         ...proxyConfig
       })
 
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       return tokenInfo as TokenInfo
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       error.value = resolveRequestErrorMessage(err, 'Failed to exchange auth code')
       appStore.showError(error.value)
       return null
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 
@@ -120,6 +143,7 @@ export function useAccountOAuth() {
       return null
     }
 
+    const requestId = beginRequest()
     loading.value = true
     error.value = ''
 
@@ -136,12 +160,20 @@ export function useAccountOAuth() {
         ...proxyConfig
       })
 
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       return tokenInfo as TokenInfo
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       error.value = resolveRequestErrorMessage(err, 'Cookie authorization failed')
       return null
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 

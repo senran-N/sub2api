@@ -277,28 +277,17 @@ const getErrorMessage = (error: unknown, fallbackMessage: string) => {
   return fallbackMessage
 }
 
-watch(
-  () => props.show,
-  (newVal) => {
-    if (newVal && props.account) {
-      if (
-        isAnthropic.value &&
-        (props.account.type === 'oauth' || props.account.type === 'setup-token')
-      ) {
-        addMethod.value = props.account.type as AddMethod
-      }
-      if (isGemini.value) {
-        geminiOAuthType.value =
-          accountCredentials.value.oauth_type === 'google_one'
-            ? 'google_one'
-            : accountCredentials.value.oauth_type === 'ai_studio'
-              ? 'ai_studio'
-              : 'code_assist'
-      }
-    } else {
-      resetState()
-    }
-  }
+let reauthorizeRequestSequence = 0
+
+const invalidateReauthorizeRequests = () => {
+  reauthorizeRequestSequence += 1
+  return reauthorizeRequestSequence
+}
+
+const isActiveReauthorizeRequest = (requestSequence: number, accountId: Account['id']) => (
+  requestSequence === reauthorizeRequestSequence &&
+  props.show &&
+  props.account?.id === accountId
 )
 
 const resetState = () => {
@@ -311,7 +300,40 @@ const resetState = () => {
   oauthFlowRef.value?.reset()
 }
 
+const syncAccountState = () => {
+  resetState()
+  if (!props.show || !props.account) {
+    return
+  }
+
+  if (
+    isAnthropic.value &&
+    (props.account.type === 'oauth' || props.account.type === 'setup-token')
+  ) {
+    addMethod.value = props.account.type as AddMethod
+  }
+  if (isGemini.value) {
+    geminiOAuthType.value =
+      accountCredentials.value.oauth_type === 'google_one'
+        ? 'google_one'
+        : accountCredentials.value.oauth_type === 'ai_studio'
+          ? 'ai_studio'
+          : 'code_assist'
+  }
+}
+
+watch(
+  () => [props.show, props.account?.id] as const,
+  () => {
+    invalidateReauthorizeRequests()
+    syncAccountState()
+  },
+  { immediate: true }
+)
+
 const handleClose = () => {
+  invalidateReauthorizeRequests()
+  resetState()
   emit('close')
 }
 
@@ -333,7 +355,14 @@ const handleGenerateUrl = async () => {
 }
 
 const handleExchangeCode = async () => {
-  if (!props.account) return
+  const account = props.account
+  if (!account) return
+
+  const requestSequence = ++reauthorizeRequestSequence
+  const accountId = account.id
+  const accountProxyId = account.proxy_id
+  const accountCredentialsSnapshot = (account.credentials ?? {}) as Record<string, unknown>
+  const addMethodSnapshot = addMethod.value
 
   const authCode = oauthFlowRef.value?.authCode || ''
   if (!authCode.trim()) return
@@ -353,26 +382,30 @@ const handleExchangeCode = async () => {
       authCode.trim(),
       sessionId,
       stateToUse,
-      props.account.proxy_id
+      accountProxyId
     )
     if (!tokenInfo) return
+    if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
     const credentials = oauthClient.buildCredentials(tokenInfo)
     const extra = oauthClient.buildExtraInfo(tokenInfo)
 
     try {
-      await adminAPI.accounts.update(props.account.id, {
+      await adminAPI.accounts.update(accountId, {
         type: 'oauth',
         credentials,
         extra
       })
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
-      const updatedAccount = await adminAPI.accounts.clearError(props.account.id)
+      const updatedAccount = await adminAPI.accounts.clearError(accountId)
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
       handleClose()
     } catch (error) {
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
       oauthClient.error.value = getErrorMessage(error, t('admin.accounts.oauth.authFailed'))
       appStore.showError(oauthClient.error.value)
     }
@@ -388,24 +421,28 @@ const handleExchangeCode = async () => {
       code: authCode.trim(),
       sessionId,
       state: stateToUse,
-      proxyId: props.account.proxy_id,
+      proxyId: accountProxyId,
       oauthType: geminiOAuthType.value,
-      tierId: typeof accountCredentials.value.tier_id === 'string' ? accountCredentials.value.tier_id : undefined
+      tierId: typeof accountCredentialsSnapshot.tier_id === 'string' ? accountCredentialsSnapshot.tier_id : undefined
     })
     if (!tokenInfo) return
+    if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
     const credentials = geminiOAuth.buildCredentials(tokenInfo)
 
     try {
-      await adminAPI.accounts.update(props.account.id, {
+      await adminAPI.accounts.update(accountId, {
         type: 'oauth',
         credentials
       })
-      const updatedAccount = await adminAPI.accounts.clearError(props.account.id)
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
+      const updatedAccount = await adminAPI.accounts.clearError(accountId)
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
       handleClose()
     } catch (error) {
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
       geminiOAuth.error.value = getErrorMessage(error, t('admin.accounts.oauth.authFailed'))
       appStore.showError(geminiOAuth.error.value)
     }
@@ -421,22 +458,26 @@ const handleExchangeCode = async () => {
       code: authCode.trim(),
       sessionId,
       state: stateToUse,
-      proxyId: props.account.proxy_id
+      proxyId: accountProxyId
     })
     if (!tokenInfo) return
+    if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
     const credentials = antigravityOAuth.buildCredentials(tokenInfo)
 
     try {
-      await adminAPI.accounts.update(props.account.id, {
+      await adminAPI.accounts.update(accountId, {
         type: 'oauth',
         credentials
       })
-      const updatedAccount = await adminAPI.accounts.clearError(props.account.id)
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
+      const updatedAccount = await adminAPI.accounts.clearError(accountId)
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
       handleClose()
     } catch (error) {
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
       antigravityOAuth.error.value = getErrorMessage(error, t('admin.accounts.oauth.authFailed'))
       appStore.showError(antigravityOAuth.error.value)
     }
@@ -448,9 +489,9 @@ const handleExchangeCode = async () => {
     claudeOAuth.error.value = ''
 
     try {
-      const proxyConfig = props.account.proxy_id ? { proxy_id: props.account.proxy_id } : {}
+      const proxyConfig = accountProxyId ? { proxy_id: accountProxyId } : {}
       const endpoint =
-        addMethod.value === 'oauth'
+        addMethodSnapshot === 'oauth'
           ? '/admin/accounts/exchange-code'
           : '/admin/accounts/exchange-setup-token-code'
 
@@ -459,39 +500,51 @@ const handleExchangeCode = async () => {
         code: authCode.trim(),
         ...proxyConfig
       })
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
       const extra = claudeOAuth.buildExtraInfo(tokenInfo)
 
-      await adminAPI.accounts.update(props.account.id, {
-        type: addMethod.value,
+      await adminAPI.accounts.update(accountId, {
+        type: addMethodSnapshot,
         credentials: tokenInfo,
         extra
       })
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
-      const updatedAccount = await adminAPI.accounts.clearError(props.account.id)
+      const updatedAccount = await adminAPI.accounts.clearError(accountId)
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
       appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
       emit('reauthorized', updatedAccount)
       handleClose()
     } catch (error) {
+      if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
       claudeOAuth.error.value = getErrorMessage(error, t('admin.accounts.oauth.authFailed'))
       appStore.showError(claudeOAuth.error.value)
     } finally {
-      claudeOAuth.loading.value = false
+      if (isActiveReauthorizeRequest(requestSequence, accountId)) {
+        claudeOAuth.loading.value = false
+      }
     }
   }
 }
 
 const handleCookieAuth = async (sessionKey: string) => {
-  if (!props.account || isOpenAI.value) return
+  const account = props.account
+  if (!account || isOpenAI.value) return
+
+  const requestSequence = ++reauthorizeRequestSequence
+  const accountId = account.id
+  const accountProxyId = account.proxy_id
+  const addMethodSnapshot = addMethod.value
 
   claudeOAuth.loading.value = true
   claudeOAuth.error.value = ''
 
   try {
-    const proxyConfig = props.account.proxy_id ? { proxy_id: props.account.proxy_id } : {}
+    const proxyConfig = accountProxyId ? { proxy_id: accountProxyId } : {}
     const endpoint =
-      addMethod.value === 'oauth'
+      addMethodSnapshot === 'oauth'
         ? '/admin/accounts/cookie-auth'
         : '/admin/accounts/setup-token-cookie-auth'
 
@@ -500,25 +553,31 @@ const handleCookieAuth = async (sessionKey: string) => {
       code: sessionKey.trim(),
       ...proxyConfig
     })
+    if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
     const extra = claudeOAuth.buildExtraInfo(tokenInfo)
 
-    await adminAPI.accounts.update(props.account.id, {
-      type: addMethod.value,
+    await adminAPI.accounts.update(accountId, {
+      type: addMethodSnapshot,
       credentials: tokenInfo,
       extra
     })
+    if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
-    const updatedAccount = await adminAPI.accounts.clearError(props.account.id)
+    const updatedAccount = await adminAPI.accounts.clearError(accountId)
+    if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
 
     appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
     emit('reauthorized', updatedAccount)
     handleClose()
   } catch (error) {
+    if (!isActiveReauthorizeRequest(requestSequence, accountId)) return
     claudeOAuth.error.value = getErrorMessage(error, t('admin.accounts.oauth.cookieAuthFailed'))
     appStore.showError(claudeOAuth.error.value)
   } finally {
-    claudeOAuth.loading.value = false
+    if (isActiveReauthorizeRequest(requestSequence, accountId)) {
+      claudeOAuth.loading.value = false
+    }
   }
 }
 </script>

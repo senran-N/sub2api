@@ -33,6 +33,15 @@ vi.mock('@/api/admin', () => ({
 
 import { useAntigravityOAuth } from '@/composables/useAntigravityOAuth'
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
 describe('useAntigravityOAuth', () => {
   beforeEach(() => {
     showError.mockReset()
@@ -64,6 +73,28 @@ describe('useAntigravityOAuth', () => {
     await expect(oauth.validateRefreshToken('rt-token')).resolves.toBeNull()
 
     expect(oauth.error.value).toBe('network down')
+    expect(showError).not.toHaveBeenCalled()
+  })
+
+  it('ignores stale auth-url responses after reset', async () => {
+    const oauth = useAntigravityOAuth()
+    const deferred = createDeferred<{ auth_url: string; session_id: string; state: string }>()
+    generateAuthUrl.mockReturnValueOnce(deferred.promise)
+
+    const request = oauth.generateAuthUrl(null)
+    oauth.resetState()
+
+    deferred.resolve({
+      auth_url: 'https://stale.example/auth',
+      session_id: 'stale-session',
+      state: 'stale-state'
+    })
+
+    await expect(request).resolves.toBe(false)
+    expect(oauth.authUrl.value).toBe('')
+    expect(oauth.sessionId.value).toBe('')
+    expect(oauth.state.value).toBe('')
+    expect(oauth.loading.value).toBe(false)
     expect(showError).not.toHaveBeenCalled()
   })
 })

@@ -26,6 +26,7 @@ export interface OpenAITokenInfo {
 export function useOpenAIOAuth() {
   const appStore = useAppStore()
   const endpointPrefix = '/admin/openai'
+  let requestSequence = 0
 
   // State
   const authUrl = ref('')
@@ -36,6 +37,7 @@ export function useOpenAIOAuth() {
 
   // Reset state
   const resetState = () => {
+    requestSequence += 1
     authUrl.value = ''
     sessionId.value = ''
     oauthState.value = ''
@@ -43,11 +45,15 @@ export function useOpenAIOAuth() {
     error.value = ''
   }
 
+  const beginRequest = () => ++requestSequence
+  const isActiveRequest = (requestId: number) => requestId === requestSequence
+
   // Generate auth URL for OpenAI OAuth
   const generateAuthUrl = async (
     proxyId?: number | null,
     redirectUri?: string
   ): Promise<boolean> => {
+    const requestId = beginRequest()
     loading.value = true
     authUrl.value = ''
     sessionId.value = ''
@@ -67,6 +73,9 @@ export function useOpenAIOAuth() {
         `${endpointPrefix}/generate-auth-url`,
         payload
       )
+      if (!isActiveRequest(requestId)) {
+        return false
+      }
       authUrl.value = response.auth_url
       sessionId.value = response.session_id
       try {
@@ -77,11 +86,16 @@ export function useOpenAIOAuth() {
       }
       return true
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return false
+      }
       error.value = resolveRequestErrorMessage(err, 'Failed to generate OpenAI auth URL')
       appStore.showError(error.value)
       return false
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 
@@ -97,6 +111,7 @@ export function useOpenAIOAuth() {
       return null
     }
 
+    const requestId = beginRequest()
     loading.value = true
     error.value = ''
 
@@ -111,13 +126,21 @@ export function useOpenAIOAuth() {
       }
 
       const tokenInfo = await adminAPI.accounts.exchangeCode(`${endpointPrefix}/exchange-code`, payload)
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       return tokenInfo as OpenAITokenInfo
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       error.value = resolveRequestErrorMessage(err, 'Failed to exchange OpenAI auth code')
       appStore.showError(error.value)
       return null
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 
@@ -133,6 +156,7 @@ export function useOpenAIOAuth() {
       return null
     }
 
+    const requestId = beginRequest()
     loading.value = true
     error.value = ''
 
@@ -144,13 +168,21 @@ export function useOpenAIOAuth() {
         `${endpointPrefix}/refresh-token`,
         clientId
       )
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       return tokenInfo as OpenAITokenInfo
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       error.value = resolveRequestErrorMessage(err, 'Failed to validate refresh token')
       appStore.showError(error.value)
       return null
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 

@@ -12,6 +12,7 @@ import { resolveRequestErrorMessage } from '@/utils/requestError'
 export function useAntigravityOAuth() {
   const appStore = useAppStore()
   const { t } = useI18n()
+  let requestSequence = 0
 
   const authUrl = ref('')
   const sessionId = ref('')
@@ -20,6 +21,7 @@ export function useAntigravityOAuth() {
   const error = ref('')
 
   const resetState = () => {
+    requestSequence += 1
     authUrl.value = ''
     sessionId.value = ''
     state.value = ''
@@ -27,7 +29,11 @@ export function useAntigravityOAuth() {
     error.value = ''
   }
 
+  const beginRequest = () => ++requestSequence
+  const isActiveRequest = (requestId: number) => requestId === requestSequence
+
   const generateAuthUrl = async (proxyId: number | null | undefined): Promise<boolean> => {
+    const requestId = beginRequest()
     loading.value = true
     authUrl.value = ''
     sessionId.value = ''
@@ -39,6 +45,9 @@ export function useAntigravityOAuth() {
       if (proxyId) payload.proxy_id = proxyId
 
       const response = await adminAPI.antigravity.generateAuthUrl(payload)
+      if (!isActiveRequest(requestId)) {
+        return false
+      }
       authUrl.value = response.auth_url
       sessionId.value = response.session_id
       state.value = response.state
@@ -51,7 +60,9 @@ export function useAntigravityOAuth() {
       appStore.showError(error.value)
       return false
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 
@@ -67,6 +78,7 @@ export function useAntigravityOAuth() {
       return null
     }
 
+    const requestId = beginRequest()
     loading.value = true
     error.value = ''
 
@@ -78,8 +90,15 @@ export function useAntigravityOAuth() {
       }
       if (params.proxyId) payload.proxy_id = params.proxyId
 
-      return await adminAPI.antigravity.exchangeCode(payload)
+      const tokenInfo = await adminAPI.antigravity.exchangeCode(payload)
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
+      return tokenInfo
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       error.value = resolveRequestErrorMessage(
         err,
         t('admin.accounts.oauth.antigravity.failedToExchangeCode')
@@ -87,7 +106,9 @@ export function useAntigravityOAuth() {
       appStore.showError(error.value)
       return null
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 
@@ -100,15 +121,23 @@ export function useAntigravityOAuth() {
       return null
     }
 
+    const requestId = beginRequest()
     loading.value = true
     error.value = ''
 
     try {
-      return await adminAPI.antigravity.refreshAntigravityToken(
+      const tokenInfo = await adminAPI.antigravity.refreshAntigravityToken(
         refreshToken.trim(),
         proxyId
       )
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
+      return tokenInfo
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       error.value = resolveRequestErrorMessage(
         err,
         t('admin.accounts.oauth.antigravity.failedToValidateRT')
@@ -117,7 +146,9 @@ export function useAntigravityOAuth() {
       // appStore.showError(error.value)
       return null
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 

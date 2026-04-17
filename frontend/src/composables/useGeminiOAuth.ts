@@ -21,6 +21,7 @@ export interface GeminiTokenInfo {
 export function useGeminiOAuth() {
   const appStore = useAppStore()
   const { t } = useI18n()
+  let requestSequence = 0
 
   const authUrl = ref('')
   const sessionId = ref('')
@@ -29,6 +30,7 @@ export function useGeminiOAuth() {
   const error = ref('')
 
   const resetState = () => {
+    requestSequence += 1
     authUrl.value = ''
     sessionId.value = ''
     state.value = ''
@@ -36,12 +38,16 @@ export function useGeminiOAuth() {
     error.value = ''
   }
 
+  const beginRequest = () => ++requestSequence
+  const isActiveRequest = (requestId: number) => requestId === requestSequence
+
   const generateAuthUrl = async (
     proxyId: number | null | undefined,
     projectId?: string | null,
     oauthType?: string,
     tierId?: string
   ): Promise<boolean> => {
+    const requestId = beginRequest()
     loading.value = true
     authUrl.value = ''
     sessionId.value = ''
@@ -58,6 +64,9 @@ export function useGeminiOAuth() {
       if (trimmedTierID) payload.tier_id = trimmedTierID
 
       const response = await adminAPI.gemini.generateAuthUrl(payload as any)
+      if (!isActiveRequest(requestId)) {
+        return false
+      }
       authUrl.value = response.auth_url
       sessionId.value = response.session_id
       state.value = response.state
@@ -70,7 +79,9 @@ export function useGeminiOAuth() {
       appStore.showError(error.value)
       return false
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 
@@ -88,6 +99,7 @@ export function useGeminiOAuth() {
       return null
     }
 
+    const requestId = beginRequest()
     loading.value = true
     error.value = ''
 
@@ -103,8 +115,14 @@ export function useGeminiOAuth() {
       if (trimmedTierID) payload.tier_id = trimmedTierID
 
       const tokenInfo = await adminAPI.gemini.exchangeCode(payload as any)
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       return tokenInfo as GeminiTokenInfo
     } catch (err: unknown) {
+      if (!isActiveRequest(requestId)) {
+        return null
+      }
       const errorMessage = resolveRequestErrorMessage(err, '')
       if (errorMessage.includes('missing project_id')) {
         error.value = t('admin.accounts.oauth.gemini.missingProjectId')
@@ -114,7 +132,9 @@ export function useGeminiOAuth() {
       appStore.showError(error.value)
       return null
     } finally {
-      loading.value = false
+      if (isActiveRequest(requestId)) {
+        loading.value = false
+      }
     }
   }
 

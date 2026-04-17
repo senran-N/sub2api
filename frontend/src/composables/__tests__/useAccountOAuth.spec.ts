@@ -23,6 +23,15 @@ vi.mock('@/api/admin', () => ({
 
 import { useAccountOAuth } from '@/composables/useAccountOAuth'
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
 describe('useAccountOAuth', () => {
   beforeEach(() => {
     showError.mockReset()
@@ -56,5 +65,25 @@ describe('useAccountOAuth', () => {
 
     expect(oauth.error.value).toBe('network down')
     expect(showError).toHaveBeenCalledWith('network down')
+  })
+
+  it('ignores stale auth-url responses after reset', async () => {
+    const oauth = useAccountOAuth()
+    const deferred = createDeferred<{ auth_url: string; session_id: string }>()
+    generateAuthUrl.mockReturnValueOnce(deferred.promise)
+
+    const request = oauth.generateAuthUrl('oauth')
+    oauth.resetState()
+
+    deferred.resolve({
+      auth_url: 'https://stale.example/auth',
+      session_id: 'stale-session'
+    })
+
+    await expect(request).resolves.toBe(false)
+    expect(oauth.authUrl.value).toBe('')
+    expect(oauth.sessionId.value).toBe('')
+    expect(oauth.loading.value).toBe(false)
+    expect(showError).not.toHaveBeenCalled()
   })
 })

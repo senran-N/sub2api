@@ -30,6 +30,15 @@ vi.mock('@/api/admin', () => ({
 
 import { useOpenAIOAuth } from '@/composables/useOpenAIOAuth'
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
 describe('useOpenAIOAuth', () => {
   beforeEach(() => {
     showError.mockReset()
@@ -89,5 +98,26 @@ describe('useOpenAIOAuth', () => {
 
     expect(oauth.error.value).toBe('network down')
     expect(showError).toHaveBeenCalledWith('network down')
+  })
+
+  it('ignores stale auth-url responses after reset', async () => {
+    const oauth = useOpenAIOAuth()
+    const deferred = createDeferred<{ auth_url: string; session_id: string }>()
+    generateAuthUrl.mockReturnValueOnce(deferred.promise)
+
+    const request = oauth.generateAuthUrl()
+    oauth.resetState()
+
+    deferred.resolve({
+      auth_url: 'https://stale.example/auth?state=old-state',
+      session_id: 'stale-session'
+    })
+
+    await expect(request).resolves.toBe(false)
+    expect(oauth.authUrl.value).toBe('')
+    expect(oauth.sessionId.value).toBe('')
+    expect(oauth.oauthState.value).toBe('')
+    expect(oauth.loading.value).toBe(false)
+    expect(showError).not.toHaveBeenCalled()
   })
 })
