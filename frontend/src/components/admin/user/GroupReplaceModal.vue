@@ -1,5 +1,5 @@
 <template>
-  <BaseDialog :show="show" :title="t('admin.users.replaceGroupTitle')" width="narrow" @close="$emit('close')">
+  <BaseDialog :show="show" :title="t('admin.users.replaceGroupTitle')" width="narrow" @close="handleClose">
     <div v-if="oldGroup" class="space-y-4">
       <p class="group-replace-modal__description text-sm">
         {{ t('admin.users.replaceGroupHint', { old: oldGroup.name }) }}
@@ -94,6 +94,7 @@ const appStore = useAppStore()
 
 const selectedGroupId = ref<number | null>(null)
 const submitting = ref(false)
+let replaceRequestSequence = 0
 
 const getErrorMessage = (error: unknown, fallbackMessage: string) => {
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -116,25 +117,65 @@ const availableGroups = computed(() => {
 })
 
 watch(() => props.show, (v) => {
-  if (v) {
+  if (!v) {
+    replaceRequestSequence += 1
+    submitting.value = false
+    selectedGroupId.value = null
+    return
+  }
+
+  selectedGroupId.value = null
+}, { immediate: true })
+
+watch(
+  () => [props.user?.id, props.oldGroup?.id] as const,
+  () => {
+    replaceRequestSequence += 1
+    submitting.value = false
     selectedGroupId.value = null
   }
-})
+)
 
 const handleReplace = async () => {
   if (!props.user || !props.oldGroup || !selectedGroupId.value) return
+  const requestSequence = ++replaceRequestSequence
   submitting.value = true
 
   try {
     const result = await adminAPI.users.replaceGroup(props.user.id, props.oldGroup.id, selectedGroupId.value)
+    if (
+      requestSequence !== replaceRequestSequence ||
+      !props.show ||
+      props.user == null ||
+      props.oldGroup == null
+    ) {
+      return
+    }
     appStore.showSuccess(t('admin.users.replaceGroupSuccess', { count: result.migrated_keys }))
     emit('success')
     emit('close')
   } catch (error) {
+    if (
+      requestSequence !== replaceRequestSequence ||
+      !props.show ||
+      props.user == null ||
+      props.oldGroup == null
+    ) {
+      return
+    }
     appStore.showError(getErrorMessage(error, t('admin.users.replaceGroupFailed')))
   } finally {
-    submitting.value = false
+    if (requestSequence === replaceRequestSequence) {
+      submitting.value = false
+    }
   }
+}
+
+const handleClose = () => {
+  replaceRequestSequence += 1
+  submitting.value = false
+  selectedGroupId.value = null
+  emit('close')
 }
 </script>
 
