@@ -167,6 +167,7 @@ const appStore = useAppStore()
 const loading = ref(false)
 const resetting = ref(false)
 const status = ref<TempUnschedulableStatus | null>(null)
+let tempUnschedStatusRequestSequence = 0
 
 const state = computed(() => status.value?.state || null)
 
@@ -212,47 +213,82 @@ const remainingText = computed(() => {
   return t('admin.accounts.tempUnschedulable.remainingHoursMinutes', { hours, minutes: rest })
 })
 
-const loadStatus = async () => {
-  if (!props.account) return
+const invalidateTempUnschedStatusRequests = () => {
+  tempUnschedStatusRequestSequence += 1
+  loading.value = false
+  resetting.value = false
+  status.value = null
+}
+
+const isActiveTempUnschedStatusRequest = (requestSequence: number, accountId: Account['id']) => (
+  requestSequence === tempUnschedStatusRequestSequence &&
+  props.show &&
+  props.account?.id === accountId
+)
+
+const loadStatus = async (accountId: Account['id'], requestSequence: number) => {
   loading.value = true
   try {
-    status.value = await adminAPI.accounts.getTempUnschedulableStatus(props.account.id)
+    const nextStatus = await adminAPI.accounts.getTempUnschedulableStatus(accountId)
+    if (!isActiveTempUnschedStatusRequest(requestSequence, accountId)) {
+      return
+    }
+    status.value = nextStatus
   } catch (error) {
+    if (!isActiveTempUnschedStatusRequest(requestSequence, accountId)) {
+      return
+    }
     appStore.showError(getErrorMessage(error, t('admin.accounts.tempUnschedulable.failedToLoad')))
     status.value = null
   } finally {
-    loading.value = false
+    if (isActiveTempUnschedStatusRequest(requestSequence, accountId)) {
+      loading.value = false
+    }
   }
 }
 
 const handleClose = () => {
+  invalidateTempUnschedStatusRequests()
   emit('close')
 }
 
 const handleReset = async () => {
   if (!props.account) return
+  const accountId = props.account.id
+  const requestSequence = ++tempUnschedStatusRequestSequence
   resetting.value = true
   try {
-    const updated = await adminAPI.accounts.recoverState(props.account.id)
+    const updated = await adminAPI.accounts.recoverState(accountId)
+    if (!isActiveTempUnschedStatusRequest(requestSequence, accountId)) {
+      return
+    }
     appStore.showSuccess(t('admin.accounts.recoverStateSuccess'))
     emit('reset', updated)
     handleClose()
   } catch (error) {
+    if (!isActiveTempUnschedStatusRequest(requestSequence, accountId)) {
+      return
+    }
     appStore.showError(getErrorMessage(error, t('admin.accounts.recoverStateFailed')))
   } finally {
-    resetting.value = false
+    if (isActiveTempUnschedStatusRequest(requestSequence, accountId)) {
+      resetting.value = false
+    }
   }
 }
 
 watch(
-  () => [props.show, props.account?.id],
-  ([visible]) => {
-    if (visible && props.account) {
-      loadStatus()
+  () => [props.show, props.account?.id] as const,
+  ([visible, accountId]) => {
+    if (visible && accountId != null) {
+      const requestSequence = ++tempUnschedStatusRequestSequence
+      void loadStatus(accountId, requestSequence)
       return
     }
-    status.value = null
-  }
+
+    invalidateTempUnschedStatusRequests()
+  },
+  { immediate: true }
 )
 </script>
 
