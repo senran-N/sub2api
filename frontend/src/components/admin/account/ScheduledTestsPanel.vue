@@ -505,6 +505,8 @@ const showDeleteConfirm = ref(false)
 const deletingPlan = ref<ScheduledTestPlan | null>(null)
 const editingPlanId = ref<number | null>(null)
 const updating = ref(false)
+let plansRequestSequence = 0
+let resultsRequestSequence = 0
 const editForm = reactive({
   model_id: '' as string,
   cron_expression: '' as string,
@@ -572,33 +574,66 @@ const resetNewPlan = () => {
   newPlan.auto_recover = false
 }
 
+const invalidatePlansRequest = () => {
+  plansRequestSequence += 1
+  loading.value = false
+}
+
+const invalidateResultsRequest = () => {
+  resultsRequestSequence += 1
+  loadingResults.value = false
+}
+
+const resetResultsState = () => {
+  invalidateResultsRequest()
+  results.value = []
+  expandedPlanId.value = null
+  expandedResultIds.clear()
+}
+
+const resetPanelState = () => {
+  invalidatePlansRequest()
+  resetResultsState()
+  plans.value = []
+  showAddForm.value = false
+  showDeleteConfirm.value = false
+  deletingPlan.value = null
+  editingPlanId.value = null
+}
+
 // Load plans when dialog opens
 watch(
-  () => props.show,
-  async (visible) => {
-    if (visible && props.accountId) {
-      await loadPlans()
+  [() => props.show, () => props.accountId],
+  async ([visible, accountId]) => {
+    if (visible && accountId) {
+      resetResultsState()
+      await loadPlans(accountId)
     } else {
-      plans.value = []
-      results.value = []
-      expandedPlanId.value = null
-      expandedResultIds.clear()
-      showAddForm.value = false
-      showDeleteConfirm.value = false
+      resetPanelState()
     }
   },
   { immediate: true }
 )
 
-async function loadPlans() {
-  if (!props.accountId) return
+async function loadPlans(accountId = props.accountId) {
+  if (!accountId) return
+  const requestSequence = ++plansRequestSequence
   loading.value = true
   try {
-    plans.value = await adminAPI.scheduledTests.listByAccount(props.accountId)
+    const nextPlans = await adminAPI.scheduledTests.listByAccount(accountId)
+    if (requestSequence !== plansRequestSequence || !props.show || props.accountId !== accountId) {
+      return
+    }
+    plans.value = nextPlans
   } catch (error: any) {
+    if (requestSequence !== plansRequestSequence || !props.show || props.accountId !== accountId) {
+      return
+    }
     appStore.showError(resolveRequestErrorMessage(error, 'Failed to load plans'))
   } finally {
-    loading.value = false
+    if (requestSequence === plansRequestSequence) {
+      loading.value = false
+    }
   }
 }
 
@@ -701,22 +736,39 @@ const handleDelete = async () => {
 
 const toggleExpand = async (planId: number) => {
   if (expandedPlanId.value === planId) {
-    expandedPlanId.value = null
-    results.value = []
-    expandedResultIds.clear()
+    resetResultsState()
     return
   }
 
   expandedPlanId.value = planId
+  const requestSequence = ++resultsRequestSequence
   expandedResultIds.clear()
+  results.value = []
   loadingResults.value = true
   try {
-    results.value = await adminAPI.scheduledTests.listResults(planId, 20)
+    const nextResults = await adminAPI.scheduledTests.listResults(planId, 20)
+    if (
+      requestSequence !== resultsRequestSequence ||
+      !props.show ||
+      expandedPlanId.value !== planId
+    ) {
+      return
+    }
+    results.value = nextResults
   } catch (error: any) {
+    if (
+      requestSequence !== resultsRequestSequence ||
+      !props.show ||
+      expandedPlanId.value !== planId
+    ) {
+      return
+    }
     appStore.showError(resolveRequestErrorMessage(error, 'Failed to load results'))
     results.value = []
   } finally {
-    loadingResults.value = false
+    if (requestSequence === resultsRequestSequence) {
+      loadingResults.value = false
+    }
   }
 }
 
