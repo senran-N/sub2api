@@ -36,6 +36,8 @@ interface AccountsViewActionsOptions {
 }
 
 export function useAccountsViewActions(options: AccountsViewActionsOptions) {
+  let scheduleRequestSeq = 0
+
   const handleEdit = (account: Account) => {
     options.edAcc.value = account
     options.showEdit.value = true
@@ -208,22 +210,33 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
   }
 
   const handleSchedule = async (account: Account) => {
+    const requestSeq = scheduleRequestSeq + 1
+    scheduleRequestSeq = requestSeq
     options.scheduleAcc.value = account
     options.scheduleModelOptions.value = []
     options.showSchedulePanel.value = true
 
     try {
       const models = await adminAPI.accounts.getAvailableModels(account.id)
+      if (requestSeq !== scheduleRequestSeq) {
+        return
+      }
+
       options.scheduleModelOptions.value = models.map((model: ClaudeModel) => ({
         value: model.id,
         label: model.display_name || model.id
       }))
     } catch {
+      if (requestSeq !== scheduleRequestSeq) {
+        return
+      }
+
       options.scheduleModelOptions.value = []
     }
   }
 
   const closeSchedulePanel = () => {
+    scheduleRequestSeq += 1
     options.showSchedulePanel.value = false
     options.scheduleAcc.value = null
     options.scheduleModelOptions.value = []

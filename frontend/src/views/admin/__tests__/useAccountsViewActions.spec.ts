@@ -78,6 +78,21 @@ function createAccount(overrides: Partial<Account> = {}): Account {
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 function createComposable(selectedIds: number[] = [1, 2]) {
   const showEdit = ref(false)
   const showTempUnsched = ref(false)
@@ -142,6 +157,7 @@ function createComposable(selectedIds: number[] = [1, 2]) {
     showDeleteDialog,
     showSchedulePanel,
     deletingAcc,
+    scheduleAcc,
     scheduleModelOptions,
     togglingSchedulable,
     clearSelection,
@@ -249,6 +265,59 @@ describe('useAccountsViewActions', () => {
     expect(setup.scheduleModelOptions.value).toEqual([
       { value: 'claude-1', label: 'Claude 1' }
     ])
+  })
+
+  it('keeps schedule model options bound to the latest selected account', async () => {
+    const setup = createComposable()
+    const firstRequest = createDeferred<Array<{ id: string; display_name?: string }>>()
+    const secondRequest = createDeferred<Array<{ id: string; display_name?: string }>>()
+
+    getAvailableModels
+      .mockImplementationOnce(() => firstRequest.promise)
+      .mockImplementationOnce(() => secondRequest.promise)
+
+    const firstOpen = setup.composable.handleSchedule(createAccount({ id: 31, name: 'First' }))
+    const secondOpen = setup.composable.handleSchedule(createAccount({ id: 32, name: 'Second' }))
+
+    secondRequest.resolve([{ id: 'claude-new', display_name: 'Claude New' }])
+    await secondOpen
+
+    expect(setup.showSchedulePanel.value).toBe(true)
+    expect(setup.scheduleAcc.value?.id).toBe(32)
+    expect(setup.scheduleModelOptions.value).toEqual([
+      { value: 'claude-new', label: 'Claude New' }
+    ])
+
+    firstRequest.resolve([{ id: 'claude-old', display_name: 'Claude Old' }])
+    await firstOpen
+
+    expect(setup.scheduleAcc.value?.id).toBe(32)
+    expect(setup.scheduleModelOptions.value).toEqual([
+      { value: 'claude-new', label: 'Claude New' }
+    ])
+  })
+
+  it('invalidates schedule model loads when the panel closes', async () => {
+    const setup = createComposable()
+    const pendingRequest = createDeferred<Array<{ id: string; display_name?: string }>>()
+
+    getAvailableModels.mockImplementationOnce(() => pendingRequest.promise)
+
+    const openPromise = setup.composable.handleSchedule(createAccount({ id: 41, name: 'Closable' }))
+    expect(setup.showSchedulePanel.value).toBe(true)
+    expect(setup.scheduleAcc.value?.id).toBe(41)
+
+    setup.composable.closeSchedulePanel()
+    expect(setup.showSchedulePanel.value).toBe(false)
+    expect(setup.scheduleAcc.value).toBeNull()
+    expect(setup.scheduleModelOptions.value).toEqual([])
+
+    pendingRequest.resolve([{ id: 'claude-hidden', display_name: 'Claude Hidden' }])
+    await openPromise
+
+    expect(setup.showSchedulePanel.value).toBe(false)
+    expect(setup.scheduleAcc.value).toBeNull()
+    expect(setup.scheduleModelOptions.value).toEqual([])
   })
 
   it('confirms delete and reloads', async () => {
