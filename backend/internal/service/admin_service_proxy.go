@@ -217,6 +217,19 @@ func (s *adminServiceImpl) TestProxy(ctx context.Context, id int64) (*ProxyTestR
 		return nil, err
 	}
 
+	if s.proxyProber == nil {
+		message := "代理探测服务未配置"
+		s.saveProxyLatency(ctx, id, &ProxyLatencyInfo{
+			Success:   false,
+			Message:   message,
+			UpdatedAt: time.Now(),
+		})
+		return &ProxyTestResult{
+			Success: false,
+			Message: message,
+		}, nil
+	}
+
 	proxyURL := proxy.URL()
 	exitInfo, latencyMs, err := s.proxyProber.ProbeProxy(ctx, proxyURL)
 	if err != nil {
