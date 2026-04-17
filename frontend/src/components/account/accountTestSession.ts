@@ -118,6 +118,7 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
   const getAuthToken = options.getAuthToken ?? (() => localStorage.getItem(AUTH_TOKEN_KEY))
 
   let activeRequestController: AbortController | null = null
+  let modelLoadRequestSequence = 0
 
   const supportsGeminiImageTest = computed(() => {
     const modelId = selectedModelId.value.toLowerCase()
@@ -192,23 +193,43 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
     generatedImages.value = []
   }
 
-  async function loadAvailableModels() {
-    if (!options.account.value) return
-
-    loadingModels.value = true
+  function resetModelState() {
+    availableModels.value = []
     selectedModelId.value = ''
+  }
+
+  function invalidateModelLoads() {
+    modelLoadRequestSequence += 1
+    loadingModels.value = false
+  }
+
+  async function loadAvailableModels() {
+    const account = options.account.value
+    if (!account) return
+
+    const requestSequence = ++modelLoadRequestSequence
+    loadingModels.value = true
+    resetModelState()
 
     try {
-      const models = await adminAPI.accounts.getAvailableModels(options.account.value.id)
+      const models = await adminAPI.accounts.getAvailableModels(account.id)
+      if (
+        requestSequence !== modelLoadRequestSequence ||
+        !options.show.value ||
+        options.account.value?.id !== account.id
+      ) {
+        return
+      }
+
       availableModels.value =
-        options.account.value.platform === 'gemini' ||
-        options.account.value.platform === 'antigravity'
+        account.platform === 'gemini' ||
+        account.platform === 'antigravity'
           ? sortTestModels(models)
           : models
 
       if (availableModels.value.length === 0) return
 
-      if (options.account.value.platform === 'gemini') {
+      if (account.platform === 'gemini') {
         selectedModelId.value = availableModels.value[0].id
         return
       }
@@ -218,11 +239,19 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
       )
       selectedModelId.value = sonnetModel?.id || availableModels.value[0].id
     } catch (error) {
+      if (
+        requestSequence !== modelLoadRequestSequence ||
+        !options.show.value ||
+        options.account.value?.id !== account.id
+      ) {
+        return
+      }
       console.error('Failed to load available models:', error)
-      availableModels.value = []
-      selectedModelId.value = ''
+      resetModelState()
     } finally {
-      loadingModels.value = false
+      if (requestSequence === modelLoadRequestSequence) {
+        loadingModels.value = false
+      }
     }
   }
 
@@ -380,16 +409,16 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
   }
 
   watch(
-    () => options.show.value,
-    async (isVisible) => {
-      if (isVisible && options.account.value) {
-        testPrompt.value = ''
-        resetState()
-        await loadAvailableModels()
-        return
-      }
-
+    [() => options.show.value, () => options.account.value?.id],
+    async ([isVisible, accountId]) => {
+      invalidateModelLoads()
       cancelActiveRequest()
+      testPrompt.value = ''
+      resetState()
+      resetModelState()
+      if (isVisible && accountId) {
+        await loadAvailableModels()
+      }
     },
     { immediate: true }
   )
@@ -401,6 +430,7 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
   })
 
   onBeforeUnmount(() => {
+    invalidateModelLoads()
     cancelActiveRequest()
   })
 
