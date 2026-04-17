@@ -269,6 +269,8 @@ const pageSize = ref(10)
 const batchFactor = ref<number | null>(null)
 
 let searchTimeout: ReturnType<typeof setTimeout>
+let entriesRequestSequence = 0
+let searchUsersRequestSequence = 0
 
 const joinClassNames = (...classNames: Array<string | false | null | undefined>) => {
   return classNames.filter(Boolean).join(' ')
@@ -333,18 +335,43 @@ const cloneEntries = (entries: GroupRateMultiplierEntry[]): LocalEntry[] => {
   return entries.map(e => ({ ...e }))
 }
 
-async function loadEntries() {
-  if (!props.group) return
+const invalidateEntriesRequest = () => {
+  entriesRequestSequence += 1
+  loading.value = false
+}
+
+const invalidateSearchUsersRequest = () => {
+  searchUsersRequestSequence += 1
+}
+
+const resetSearchState = () => {
+  invalidateSearchUsersRequest()
+  searchResults.value = []
+  showDropdown.value = false
+}
+
+async function loadEntries(groupId = props.group?.id) {
+  if (!groupId) return
+  const requestSequence = ++entriesRequestSequence
   loading.value = true
   try {
-    serverEntries.value = await adminAPI.groups.getGroupRateMultipliers(props.group.id)
-    localEntries.value = cloneEntries(serverEntries.value)
+    const nextEntries = await adminAPI.groups.getGroupRateMultipliers(groupId)
+    if (requestSequence !== entriesRequestSequence || !props.show || props.group?.id !== groupId) {
+      return
+    }
+    serverEntries.value = nextEntries
+    localEntries.value = cloneEntries(nextEntries)
     adjustPage()
   } catch (error) {
+    if (requestSequence !== entriesRequestSequence || !props.show || props.group?.id !== groupId) {
+      return
+    }
     appStore.showError(t('admin.groups.failedToLoad'))
     console.error('Error loading group rate multipliers:', error)
   } finally {
-    loading.value = false
+    if (requestSequence === entriesRequestSequence) {
+      loading.value = false
+    }
   }
 }
 
@@ -355,16 +382,20 @@ const adjustPage = () => {
   }
 }
 
-watch(() => props.show, (val) => {
-  if (val && props.group) {
+watch([() => props.show, () => props.group?.id], ([visible, groupId]) => {
+  if (visible && groupId) {
     currentPage.value = 1
     batchFactor.value = null
     searchQuery.value = ''
-    searchResults.value = []
+    resetSearchState()
     selectedUser.value = null
     newRate.value = null
-    loadEntries()
+    loadEntries(groupId)
+    return
   }
+
+  invalidateEntriesRequest()
+  resetSearchState()
 }, { immediate: true })
 
 const handlePageSizeChange = (newSize: number) => {
@@ -376,22 +407,29 @@ const handleSearchUsers = () => {
   clearTimeout(searchTimeout)
   selectedUser.value = null
   if (!searchQuery.value.trim()) {
-    searchResults.value = []
-    showDropdown.value = false
+    resetSearchState()
     return
   }
+  const requestSequence = ++searchUsersRequestSequence
   searchTimeout = setTimeout(async () => {
     try {
       const res = await adminAPI.users.list(1, 10, { search: searchQuery.value.trim() })
+      if (requestSequence !== searchUsersRequestSequence || !props.show) {
+        return
+      }
       searchResults.value = res.items
       showDropdown.value = true
     } catch {
+      if (requestSequence !== searchUsersRequestSequence || !props.show) {
+        return
+      }
       searchResults.value = []
     }
   }, 300)
 }
 
 const selectUser = (user: AdminUser) => {
+  invalidateSearchUsersRequest()
   selectedUser.value = user
   searchQuery.value = user.email
   showDropdown.value = false
@@ -417,6 +455,7 @@ const handleAddLocal = () => {
     localEntries.value.push(entry)
   }
   searchQuery.value = ''
+  resetSearchState()
   selectedUser.value = null
   newRate.value = null
   adjustPage()
@@ -482,6 +521,8 @@ const handleSave = async () => {
 
 // 关闭时如果有未保存修改，先恢复
 const handleClose = () => {
+  invalidateEntriesRequest()
+  resetSearchState()
   if (isDirty.value) {
     localEntries.value = cloneEntries(serverEntries.value)
   }
