@@ -48,6 +48,10 @@ export function useProxyListData(options: ProxyListDataOptions) {
       options.pagination.total = response.total
       options.pagination.pages = response.pages
     } catch (error) {
+      if (abortController !== currentAbortController || currentAbortController.signal.aborted) {
+        return
+      }
+
       if (isAbortError(error)) {
         return
       }

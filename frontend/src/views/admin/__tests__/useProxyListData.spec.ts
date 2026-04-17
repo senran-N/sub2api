@@ -31,6 +31,21 @@ function createProxy(overrides: Partial<Proxy> = {}): Proxy {
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 function createComposable() {
   const proxies = ref<Proxy[]>([])
   const loading = ref(false)
@@ -158,5 +173,36 @@ describe('useProxyListData', () => {
     listProxies.mockRejectedValueOnce({ name: 'AbortError' })
     await setup.composable.loadProxies()
     expect(setup.showError).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores stale non-abort failures from superseded requests', async () => {
+    const setup = createComposable()
+    const firstRequest = createDeferred<never>()
+    const secondRequest = createDeferred<{
+      items: Proxy[]
+      total: number
+      pages: number
+    }>()
+
+    listProxies
+      .mockImplementationOnce(() => firstRequest.promise)
+      .mockImplementationOnce(() => secondRequest.promise)
+
+    const firstLoad = setup.composable.loadProxies()
+    const secondLoad = setup.composable.loadProxies()
+
+    secondRequest.resolve({
+      items: [createProxy({ id: 9 })],
+      total: 1,
+      pages: 1
+    })
+    await secondLoad
+
+    firstRequest.reject(new Error('stale load failed'))
+    await firstLoad
+
+    expect(setup.showError).not.toHaveBeenCalled()
+    expect(setup.proxies.value.map((proxy) => proxy.id)).toEqual([9])
+    expect(setup.loading.value).toBe(false)
   })
 })

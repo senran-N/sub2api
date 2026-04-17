@@ -29,16 +29,38 @@ interface ProxyTestingActionsOptions {
   showInfo: (message: string) => void
 }
 
-function addPendingId(target: Ref<Set<number>>, proxyId: number) {
+function addPendingId(
+  target: Ref<Set<number>>,
+  pendingCounts: Map<number, number>,
+  proxyId: number
+) {
+  const nextCount = (pendingCounts.get(proxyId) ?? 0) + 1
+  pendingCounts.set(proxyId, nextCount)
+
+  if (nextCount > 1) {
+    return
+  }
+
   const next = new Set(target.value)
   next.add(proxyId)
   target.value = next
 }
 
-function removePendingId(target: Ref<Set<number>>, proxyId: number) {
-  const next = new Set(target.value)
-  next.delete(proxyId)
-  target.value = next
+function removePendingId(
+  target: Ref<Set<number>>,
+  pendingCounts: Map<number, number>,
+  proxyId: number
+) {
+  const currentCount = pendingCounts.get(proxyId) ?? 0
+  if (currentCount <= 1) {
+    pendingCounts.delete(proxyId)
+    const next = new Set(target.value)
+    next.delete(proxyId)
+    target.value = next
+    return
+  }
+
+  pendingCounts.set(proxyId, currentCount - 1)
 }
 
 export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
@@ -49,6 +71,19 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
   const showQualityReportDialog = ref(false)
   const qualityReportProxy = ref<Proxy | null>(null)
   const qualityReport = ref<ProxyQualityCheckResult | null>(null)
+  const testingPendingCounts = new Map<number, number>()
+  const qualityPendingCounts = new Map<number, number>()
+  const testingRequestSeqById = new Map<number, number>()
+  const qualityRequestSeqById = new Map<number, number>()
+
+  const createRequestSeq = (target: Map<number, number>, proxyId: number) => {
+    const nextSeq = (target.get(proxyId) ?? 0) + 1
+    target.set(proxyId, nextSeq)
+    return nextSeq
+  }
+
+  const isLatestRequest = (target: Map<number, number>, proxyId: number, requestSeq: number) =>
+    target.get(proxyId) === requestSeq
 
   const withProxy = (proxyId: number, callback: (proxy: Proxy) => void) => {
     const target = options.proxies.value.find((proxy) => proxy.id === proxyId)
@@ -60,10 +95,15 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
   }
 
   const runProxyTest = async (proxyId: number, notify: boolean) => {
-    addPendingId(testingProxyIds, proxyId)
+    const requestSeq = createRequestSeq(testingRequestSeqById, proxyId)
+    addPendingId(testingProxyIds, testingPendingCounts, proxyId)
 
     try {
       const result = await adminAPI.proxies.testProxy(proxyId)
+      if (!isLatestRequest(testingRequestSeqById, proxyId, requestSeq)) {
+        return result
+      }
+
       withProxy(proxyId, (proxy) => {
         applyProxyLatencyResult(proxy, result)
       })
@@ -81,6 +121,10 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
 
       return result
     } catch (error: unknown) {
+      if (!isLatestRequest(testingRequestSeqById, proxyId, requestSeq)) {
+        return null
+      }
+
       const message = resolveRequestErrorMessage(error, options.t('admin.proxies.failedToTest'))
 
       withProxy(proxyId, (proxy) => {
@@ -94,7 +138,7 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
       console.error('Error testing proxy:', error)
       return null
     } finally {
-      removePendingId(testingProxyIds, proxyId)
+      removePendingId(testingProxyIds, testingPendingCounts, proxyId)
     }
   }
 
@@ -103,17 +147,22 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
   }
 
   const handleQualityCheck = async (proxy: Proxy) => {
-    addPendingId(qualityCheckingProxyIds, proxy.id)
+    const requestSeq = createRequestSeq(qualityRequestSeqById, proxy.id)
+    addPendingId(qualityCheckingProxyIds, qualityPendingCounts, proxy.id)
 
     try {
       const result = await adminAPI.proxies.checkProxyQuality(proxy.id)
+      if (!isLatestRequest(qualityRequestSeqById, proxy.id, requestSeq)) {
+        return
+      }
 
       withProxy(proxy.id, (target) => {
         applyProxyConnectivityFromQualityResult(target, result)
         applyProxyQualityResult(target, result)
       })
 
-      qualityReportProxy.value = proxy
+      qualityReportProxy.value =
+        options.proxies.value.find((target) => target.id === proxy.id) ?? proxy
       qualityReport.value = result
       showQualityReportDialog.value = true
 
@@ -124,6 +173,10 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
         })
       )
     } catch (error: unknown) {
+      if (!isLatestRequest(qualityRequestSeqById, proxy.id, requestSeq)) {
+        return
+      }
+
       const message = resolveRequestErrorMessage(
         error,
         options.t('admin.proxies.qualityCheckFailed')
@@ -131,7 +184,7 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
       options.showError(message)
       console.error('Error checking proxy quality:', error)
     } finally {
-      removePendingId(qualityCheckingProxyIds, proxy.id)
+      removePendingId(qualityCheckingProxyIds, qualityPendingCounts, proxy.id)
     }
   }
 
@@ -150,21 +203,23 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
       while (index < ids.length) {
         const current = ids[index]
         index += 1
-        addPendingId(qualityCheckingProxyIds, current)
+        const requestSeq = createRequestSeq(qualityRequestSeqById, current)
+        addPendingId(qualityCheckingProxyIds, qualityPendingCounts, current)
 
         try {
           const result = await adminAPI.proxies.checkProxyQuality(current)
-
-          withProxy(current, (proxy) => {
-            applyProxyConnectivityFromQualityResult(proxy, result)
-            applyProxyQualityResult(proxy, result)
-          })
+          if (isLatestRequest(qualityRequestSeqById, current, requestSeq)) {
+            withProxy(current, (proxy) => {
+              applyProxyConnectivityFromQualityResult(proxy, result)
+              applyProxyQualityResult(proxy, result)
+            })
+          }
 
           recordProxyBatchQualityResult(summary, result)
         } catch {
           summary.failed += 1
         } finally {
-          removePendingId(qualityCheckingProxyIds, current)
+          removePendingId(qualityCheckingProxyIds, qualityPendingCounts, current)
         }
       }
     }
@@ -185,9 +240,10 @@ export function useProxyTestingActions(options: ProxyTestingActionsOptions) {
     const result: Proxy[] = []
     let page = 1
     let totalPages = 1
+    const batchFilters = { ...options.getBatchFilters() }
 
     while (page <= totalPages) {
-      const response = await adminAPI.proxies.list(page, pageSize, options.getBatchFilters())
+      const response = await adminAPI.proxies.list(page, pageSize, batchFilters)
       result.push(...response.items)
       totalPages = response.pages || 1
       page += 1

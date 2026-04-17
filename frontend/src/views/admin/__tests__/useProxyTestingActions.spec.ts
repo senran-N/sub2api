@@ -58,6 +58,21 @@ function createQualityResult(
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 function createComposable(options: {
   proxies?: Proxy[]
   selectedIds?: number[]
@@ -232,5 +247,88 @@ describe('useProxyTestingActions', () => {
     expect(batchTest.showError).toHaveBeenCalledWith('batch list unavailable')
     expect(batchQuality.showError).toHaveBeenCalledWith('batch quality blocked')
     expect(consoleSpy).toHaveBeenCalledTimes(4)
+  })
+
+  it('keeps per-proxy testing pending until the newest request finishes and applies only the latest result', async () => {
+    const setup = createComposable()
+    const firstRequest = createDeferred<{
+      success: boolean
+      message: string
+      latency_ms: number
+    }>()
+    const secondRequest = createDeferred<{
+      success: boolean
+      message: string
+      latency_ms: number
+    }>()
+
+    testProxy
+      .mockImplementationOnce(() => firstRequest.promise)
+      .mockImplementationOnce(() => secondRequest.promise)
+
+    const firstRun = setup.composable.handleTestConnection(setup.proxies.value[0])
+    const secondRun = setup.composable.handleTestConnection(setup.proxies.value[0])
+
+    expect(setup.composable.testingProxyIds.value.has(1)).toBe(true)
+
+    firstRequest.resolve({
+      success: true,
+      message: 'old',
+      latency_ms: 45
+    })
+    await firstRun
+
+    expect(setup.composable.testingProxyIds.value.has(1)).toBe(true)
+    expect(setup.proxies.value[0].latency_ms).toBeUndefined()
+    expect(setup.showSuccess).not.toHaveBeenCalled()
+
+    secondRequest.resolve({
+      success: true,
+      message: 'new',
+      latency_ms: 67
+    })
+    await secondRun
+
+    expect(setup.composable.testingProxyIds.value.has(1)).toBe(false)
+    expect(setup.proxies.value[0].latency_ms).toBe(67)
+    expect(setup.showSuccess).toHaveBeenCalledTimes(1)
+    expect(setup.showSuccess).toHaveBeenCalledWith(
+      'admin.proxies.proxyWorkingWithLatency:{"latency":67}'
+    )
+  })
+
+  it('keeps per-proxy quality checking pending until the newest request finishes and applies only the latest report', async () => {
+    const setup = createComposable()
+    const firstRequest = createDeferred<ProxyQualityCheckResult>()
+    const secondRequest = createDeferred<ProxyQualityCheckResult>()
+
+    checkProxyQuality
+      .mockImplementationOnce(() => firstRequest.promise)
+      .mockImplementationOnce(() => secondRequest.promise)
+
+    const firstRun = setup.composable.handleQualityCheck(setup.proxies.value[0])
+    const secondRun = setup.composable.handleQualityCheck(setup.proxies.value[0])
+
+    expect(setup.composable.qualityCheckingProxyIds.value.has(1)).toBe(true)
+
+    firstRequest.resolve(createQualityResult(1, { score: 52, grade: 'D' }))
+    await firstRun
+
+    expect(setup.composable.qualityCheckingProxyIds.value.has(1)).toBe(true)
+    expect(setup.composable.showQualityReportDialog.value).toBe(false)
+    expect(setup.proxies.value[0].quality_score).toBeUndefined()
+    expect(setup.showSuccess).not.toHaveBeenCalled()
+
+    secondRequest.resolve(createQualityResult(1, { score: 96, grade: 'A' }))
+    await secondRun
+
+    expect(setup.composable.qualityCheckingProxyIds.value.has(1)).toBe(false)
+    expect(setup.composable.showQualityReportDialog.value).toBe(true)
+    expect(setup.composable.qualityReport?.value?.score).toBe(96)
+    expect(setup.proxies.value[0].quality_score).toBe(96)
+    expect(setup.showSuccess).toHaveBeenCalledTimes(1)
+    expect(setup.showSuccess).toHaveBeenCalledWith(
+      'admin.proxies.qualityCheckDone:{"score":96,"grade":"A"}'
+    )
   })
 })
