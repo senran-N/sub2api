@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import BulkEditAccountModal from '../BulkEditAccountModal.vue'
 import ModelWhitelistSelector from '../ModelWhitelistSelector.vue'
@@ -49,6 +50,39 @@ vi.mock('vue-i18n', async () => {
   }
 })
 
+const BaseDialogStub = defineComponent({
+  name: 'BaseDialogStub',
+  props: {
+    show: { type: Boolean, default: false }
+  },
+  template: '<div v-if="show"><slot /><slot name="footer" /></div>'
+})
+
+const ConfirmDialogStub = defineComponent({
+  name: 'ConfirmDialogStub',
+  props: {
+    show: { type: Boolean, default: false },
+    message: { type: String, default: '' }
+  },
+  emits: ['confirm', 'cancel'],
+  template: `
+    <div v-if="show" data-testid="mixed-channel-confirm">
+      <span>{{ message }}</span>
+      <button type="button" data-testid="mixed-channel-confirm-action" @click="$emit('confirm')">confirm</button>
+      <button type="button" data-testid="mixed-channel-cancel-action" @click="$emit('cancel')">cancel</button>
+    </div>
+  `
+})
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
 function mountModal(extraProps: Record<string, unknown> = {}) {
   return mount(BulkEditAccountModal, {
     props: {
@@ -62,8 +96,8 @@ function mountModal(extraProps: Record<string, unknown> = {}) {
     } as any,
     global: {
       stubs: {
-        BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' },
-        ConfirmDialog: true,
+        BaseDialog: BaseDialogStub,
+        ConfirmDialog: ConfirmDialogStub,
         Select: {
           props: ['modelValue', 'options'],
           emits: ['update:modelValue'],
@@ -326,5 +360,76 @@ describe('BulkEditAccountModal', () => {
       }
     })
     expect(showErrorMock).toHaveBeenCalledWith('bulk detail error')
+  })
+
+  it('切换选中账号上下文后忽略旧 precheck warning', async () => {
+    const precheckRequest = createDeferred<{ has_risk: boolean; message: string }>()
+    vi.mocked(adminAPI.accounts.checkMixedChannelRisk).mockReturnValueOnce(precheckRequest.promise as any)
+
+    const wrapper = mountModal({
+      selectedPlatforms: ['anthropic'],
+      selectedTypes: ['oauth'],
+      groups: [{ id: 101, name: 'Risk Group' }]
+    })
+
+    await wrapper.get('#bulk-edit-groups-enabled').setValue(true)
+    await wrapper.get('[data-testid="bulk-edit-group-selector"]').trigger('click')
+    await wrapper.get('#bulk-edit-base-url-enabled').setValue(true)
+    await wrapper.get('#bulk-edit-base-url').setValue('https://proxy.example.com')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.setProps({
+      accountIds: [9, 10],
+      selectedPlatforms: ['openai'],
+      selectedTypes: ['oauth']
+    })
+    await flushPromises()
+
+    precheckRequest.resolve({
+      has_risk: true,
+      message: 'stale mixed warning'
+    })
+    await flushPromises()
+
+    expect(showErrorMock).not.toHaveBeenCalled()
+    expect(adminAPI.accounts.bulkUpdate).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="mixed-channel-confirm"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('stale mixed warning')
+  })
+
+  it('close-reopen 后忽略旧 submit success 与 close', async () => {
+    const bulkUpdateRequest = createDeferred<{ success: number; failed: number; results: any[] }>()
+    vi.mocked(adminAPI.accounts.bulkUpdate).mockReturnValueOnce(bulkUpdateRequest.promise as any)
+
+    const wrapper = mountModal()
+
+    await wrapper.get('#bulk-edit-base-url-enabled').setValue(true)
+    await wrapper.get('#bulk-edit-base-url').setValue('https://proxy.example.com')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.setProps({ show: false })
+    await flushPromises()
+    await wrapper.setProps({
+      show: true,
+      accountIds: [7, 8],
+      selectedPlatforms: ['openai'],
+      selectedTypes: ['oauth']
+    })
+    await flushPromises()
+
+    bulkUpdateRequest.resolve({
+      success: 2,
+      failed: 0,
+      results: []
+    })
+    await flushPromises()
+
+    expect(showSuccessMock).not.toHaveBeenCalled()
+    expect(showErrorMock).not.toHaveBeenCalled()
+    expect(wrapper.emitted('updated')).toBeFalsy()
+    expect(wrapper.emitted('close')).toBeFalsy()
+    expect(wrapper.find('#bulk-edit-account-form').exists()).toBe(true)
   })
 })

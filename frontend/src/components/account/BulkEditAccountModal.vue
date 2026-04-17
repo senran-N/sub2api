@@ -1020,6 +1020,7 @@ const bulkRpmStrategy = ref<'tiered' | 'sticky_exempt'>('tiered')
 const bulkRpmStickyBuffer = ref<number | null>(null)
 const userMsgQueueMode = ref<string | null>(null)
 const umqModeOptions = computed(() => buildAccountUmqModeOptions(t))
+let bulkEditRequestSequence = 0
 
 // Common HTTP error codes
 const commonErrorCodes = [
@@ -1135,6 +1136,16 @@ const clearMixedChannelState = () => {
   pendingUpdatesForConfirm.value = null
   mixedChannelConfirmed.value = false
 }
+
+const invalidateBulkEditRequests = () => {
+  bulkEditRequestSequence += 1
+  submitting.value = false
+  clearMixedChannelState()
+}
+
+const isActiveBulkEditRequest = (requestSequence: number) => (
+  requestSequence === bulkEditRequestSequence && props.show
+)
 
 const resetBulkEditFormState = () => {
   enableBaseUrl.value = false
@@ -1399,20 +1410,28 @@ const canPreCheck = () =>
   needsMixedChannelCheck(props.selectedPlatforms[0])
 
 const handleClose = () => {
-  clearMixedChannelState()
+  invalidateBulkEditRequests()
   emit('close')
 }
 
 // 预检查：提交前调接口检测，有风险就弹窗阻止，返回 false 表示需要用户确认
-const preCheckMixedChannelRisk = async (built: Record<string, unknown>): Promise<boolean> => {
+const preCheckMixedChannelRisk = async (
+  built: Record<string, unknown>,
+  requestSequence: number
+): Promise<boolean> => {
   if (!canPreCheck()) return true
   if (mixedChannelConfirmed.value) return true
 
   try {
+    const platform = props.selectedPlatforms[0]
+    const selectedGroupIds = [...groupIds.value]
     const result = await adminAPI.accounts.checkMixedChannelRisk({
-      platform: props.selectedPlatforms[0],
-      group_ids: groupIds.value
+      platform,
+      group_ids: selectedGroupIds
     })
+    if (!isActiveBulkEditRequest(requestSequence)) {
+      return false
+    }
     if (!result.has_risk) return true
 
     pendingUpdatesForConfirm.value = built
@@ -1420,6 +1439,9 @@ const preCheckMixedChannelRisk = async (built: Record<string, unknown>): Promise
     showMixedChannelWarning.value = true
     return false
   } catch (error: any) {
+    if (!isActiveBulkEditRequest(requestSequence)) {
+      return false
+    }
     appStore.showError(resolveRequestErrorMessage(error, t('admin.accounts.bulkEdit.failed')))
     return false
   }
@@ -1442,15 +1464,24 @@ const handleSubmit = async () => {
     return
   }
 
-  const canContinue = await preCheckMixedChannelRisk(built)
-  if (!canContinue) return
+  const requestSequence = ++bulkEditRequestSequence
+  const canContinue = await preCheckMixedChannelRisk(built, requestSequence)
+  if (!canContinue || !isActiveBulkEditRequest(requestSequence)) return
 
-  await submitBulkUpdate(built)
+  await submitBulkUpdate(built, requestSequence, mixedChannelConfirmed.value)
 }
 
-const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
+const submitBulkUpdate = async (
+  baseUpdates: Record<string, unknown>,
+  requestSequence: number,
+  confirmMixedChannelRisk = mixedChannelConfirmed.value
+) => {
+  if (!isActiveBulkEditRequest(requestSequence)) {
+    return
+  }
+
   // 无论是预检查确认还是 409 兜底确认，只要 mixedChannelConfirmed 为 true 就带上 flag
-  const updates = mixedChannelConfirmed.value
+  const updates = confirmMixedChannelRisk
     ? { ...baseUpdates, confirm_mixed_channel_risk: true }
     : baseUpdates
 
@@ -1458,6 +1489,9 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
 
   try {
     const res = await adminAPI.accounts.bulkUpdate(props.accountIds, updates)
+    if (!isActiveBulkEditRequest(requestSequence)) {
+      return
+    }
     const success = res.success || 0
     const failed = res.failed || 0
 
@@ -1475,6 +1509,9 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
       handleClose()
     }
   } catch (error: any) {
+    if (!isActiveBulkEditRequest(requestSequence)) {
+      return
+    }
     // 兜底：多平台混合场景下，预检查跳过，由后端 409 触发确认框
     if (error.status === 409 && error.error === 'mixed_channel_warning') {
       pendingUpdatesForConfirm.value = baseUpdates
@@ -1485,21 +1522,25 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
       console.error('Error bulk updating accounts:', error)
     }
   } finally {
-    submitting.value = false
+    if (requestSequence === bulkEditRequestSequence) {
+      submitting.value = false
+    }
   }
 }
 
 const handleMixedChannelConfirm = async () => {
+  if (!props.show || !pendingUpdatesForConfirm.value) {
+    return
+  }
+
+  const requestSequence = ++bulkEditRequestSequence
   showMixedChannelWarning.value = false
   mixedChannelConfirmed.value = true
-  if (pendingUpdatesForConfirm.value) {
-    await submitBulkUpdate(pendingUpdatesForConfirm.value)
-  }
+  await submitBulkUpdate(pendingUpdatesForConfirm.value, requestSequence, true)
 }
 
 const handleMixedChannelCancel = () => {
-  showMixedChannelWarning.value = false
-  pendingUpdatesForConfirm.value = null
+  clearMixedChannelState()
 }
 
 // Reset form when modal closes
@@ -1507,8 +1548,24 @@ watch(
   () => props.show,
   (newShow) => {
     if (!newShow) {
+      invalidateBulkEditRequests()
       resetBulkEditFormState()
     }
+  }
+)
+
+watch(
+  () => [
+    props.accountIds.join(','),
+    props.selectedPlatforms.join(','),
+    props.selectedTypes.join(',')
+  ] as const,
+  () => {
+    if (!props.show) {
+      return
+    }
+    invalidateBulkEditRequests()
+    resetBulkEditFormState()
   }
 )
 </script>
