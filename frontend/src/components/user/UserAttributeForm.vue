@@ -112,30 +112,52 @@ const emit = defineEmits<Emits>()
 const loading = ref(false)
 const attributes = ref<UserAttributeDefinition[]>([])
 const localValues = ref<UserAttributeValuesMap>({})
+let attributesLoadSequence = 0
+let userValuesLoadSequence = 0
+
+const syncLocalValues = (values: UserAttributeValuesMap) => {
+  localValues.value = { ...values }
+}
 
 const loadAttributes = async () => {
+  const requestSequence = ++attributesLoadSequence
   loading.value = true
   try {
-    attributes.value = await adminAPI.userAttributes.listEnabledDefinitions()
+    const definitions = await adminAPI.userAttributes.listEnabledDefinitions()
+    if (requestSequence !== attributesLoadSequence) {
+      return
+    }
+    attributes.value = definitions
   } catch (error) {
+    if (requestSequence !== attributesLoadSequence) {
+      return
+    }
     console.error('Failed to load attributes:', error)
   } finally {
-    loading.value = false
+    if (requestSequence === attributesLoadSequence) {
+      loading.value = false
+    }
   }
 }
 
-const loadUserValues = async () => {
-  if (!props.userId) return
+const loadUserValues = async (userId: number) => {
+  const requestSequence = ++userValuesLoadSequence
 
   try {
-    const values = await adminAPI.userAttributes.getUserAttributeValues(props.userId)
+    const values = await adminAPI.userAttributes.getUserAttributeValues(userId)
+    if (requestSequence !== userValuesLoadSequence || props.userId !== userId) {
+      return
+    }
     const valuesMap: UserAttributeValuesMap = {}
     values.forEach(v => {
       valuesMap[v.attribute_id] = v.value
     })
-    localValues.value = { ...valuesMap }
+    syncLocalValues(valuesMap)
     emit('update:modelValue', localValues.value)
   } catch (error) {
+    if (requestSequence !== userValuesLoadSequence || props.userId !== userId) {
+      return
+    }
     console.error('Failed to load user attribute values:', error)
   }
 }
@@ -178,18 +200,20 @@ const toggleMultiSelectOption = (attrId: number, optionValue: string) => {
   emitChange()
 }
 
-watch(() => props.modelValue, (newVal) => {
-  if (newVal && Object.keys(newVal).length > 0) {
-    localValues.value = { ...newVal }
-  }
-}, { immediate: true })
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    syncLocalValues(newVal ?? {})
+  },
+  { immediate: true }
+)
 
 watch(() => props.userId, (newUserId) => {
+  userValuesLoadSequence += 1
+  syncLocalValues({})
+  emit('update:modelValue', {})
   if (newUserId) {
-    loadUserValues()
-  } else {
-    // Reset for new user
-    localValues.value = {}
+    void loadUserValues(newUserId)
   }
 }, { immediate: true })
 
