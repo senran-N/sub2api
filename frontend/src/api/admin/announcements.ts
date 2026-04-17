@@ -53,11 +53,17 @@ export async function getReadStatus(
   id: number,
   page: number = 1,
   pageSize: number = 20,
-  search: string = ''
+  search: string = '',
+  options?: {
+    signal?: AbortSignal
+  }
 ): Promise<BasePaginationResponse<AnnouncementUserReadStatus>> {
   const { data } = await apiClient.get<BasePaginationResponse<AnnouncementUserReadStatus>>(
     `/admin/announcements/${id}/read-status`,
-    { params: { page, page_size: pageSize, search } }
+    {
+      params: { page, page_size: pageSize, search },
+      signal: options?.signal
+    }
   )
   return data
 }

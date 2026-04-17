@@ -114,17 +114,29 @@ let currentController: AbortController | null = null
 async function load() {
   if (!props.show || !props.announcementId) return
 
-  if (currentController) currentController.abort()
-  currentController = new AbortController()
+  currentController?.abort()
+  const controller = new AbortController()
+  currentController = controller
+  const announcementId = props.announcementId
 
   try {
     loading.value = true
     const res = await adminAPI.announcements.getReadStatus(
-      props.announcementId,
+      announcementId,
       pagination.page,
       pagination.page_size,
-      search.value
+      search.value,
+      { signal: controller.signal }
     )
+
+    if (
+      currentController !== controller ||
+      controller.signal.aborted ||
+      !props.show ||
+      props.announcementId !== announcementId
+    ) {
+      return
+    }
 
     items.value = res.items
     pagination.total = res.total
@@ -132,11 +144,15 @@ async function load() {
     pagination.page = res.page
     pagination.page_size = res.page_size
   } catch (error: any) {
-    if (currentController.signal.aborted || error?.name === 'AbortError') return
+    if (currentController !== controller || controller.signal.aborted || error?.name === 'AbortError') {
+      return
+    }
     console.error('Failed to load read status:', error)
     appStore.showError(resolveRequestErrorMessage(error, t('admin.announcements.failedToLoadReadStatus')))
   } finally {
-    loading.value = false
+    if (currentController === controller) {
+      loading.value = false
+    }
   }
 }
 
@@ -167,7 +183,12 @@ function handleClose() {
 watch(
   () => props.show,
   (v) => {
-    if (!v) return
+    if (!v) {
+      currentController?.abort()
+      currentController = null
+      loading.value = false
+      return
+    }
     pagination.page = 1
     load()
   },
