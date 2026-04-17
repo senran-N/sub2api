@@ -23,6 +23,21 @@ vi.mock('@/api', () => ({
   }
 }))
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 describe('useBackupViewConfig', () => {
   beforeEach(() => {
     getS3Config.mockReset()
@@ -109,5 +124,124 @@ describe('useBackupViewConfig', () => {
     await config.loadS3Config()
 
     expect(showError).toHaveBeenCalledWith('backup-config-failed')
+  })
+
+  it('keeps the latest S3 config request authoritative across save reloads', async () => {
+    const firstLoad = createDeferred<{
+      endpoint: string
+      region: string
+      bucket: string
+      access_key_id: string
+      secret_access_key: string
+      prefix: string
+      force_path_style: boolean
+    }>()
+    const reloadAfterSave = createDeferred<{
+      endpoint: string
+      region: string
+      bucket: string
+      access_key_id: string
+      secret_access_key: string
+      prefix: string
+      force_path_style: boolean
+    }>()
+
+    getS3Config.mockReset()
+    getS3Config
+      .mockImplementationOnce(() => firstLoad.promise)
+      .mockImplementationOnce(() => reloadAfterSave.promise)
+
+    const config = useBackupViewConfig({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess: vi.fn()
+    })
+
+    const staleLoadPromise = config.loadS3Config()
+    config.s3Form.value.endpoint = 'https://next.example.com'
+    const savePromise = config.saveS3Config()
+
+    firstLoad.resolve({
+      endpoint: 'https://stale.example.com',
+      region: 'auto',
+      bucket: 'stale-bucket',
+      access_key_id: 'STALE',
+      secret_access_key: '',
+      prefix: 'stale/',
+      force_path_style: false
+    })
+    reloadAfterSave.resolve({
+      endpoint: 'https://next.example.com',
+      region: 'us-east-1',
+      bucket: 'fresh-bucket',
+      access_key_id: 'FRESH',
+      secret_access_key: '',
+      prefix: 'fresh/',
+      force_path_style: true
+    })
+
+    await Promise.all([staleLoadPromise, savePromise])
+
+    expect(config.s3Form.value).toEqual({
+      endpoint: 'https://next.example.com',
+      region: 'us-east-1',
+      bucket: 'fresh-bucket',
+      access_key_id: 'FRESH',
+      secret_access_key: '',
+      prefix: 'fresh/',
+      force_path_style: true
+    })
+    expect(config.s3SecretConfigured.value).toBe(true)
+  })
+
+  it('keeps the latest schedule load authoritative', async () => {
+    const firstLoad = createDeferred<{
+      enabled: boolean
+      cron_expr: string
+      retain_days: number
+      retain_count: number
+    }>()
+    const secondLoad = createDeferred<{
+      enabled: boolean
+      cron_expr: string
+      retain_days: number
+      retain_count: number
+    }>()
+
+    getSchedule.mockReset()
+    getSchedule
+      .mockImplementationOnce(() => firstLoad.promise)
+      .mockImplementationOnce(() => secondLoad.promise)
+
+    const config = useBackupViewConfig({
+      t: (key: string) => key,
+      showError: vi.fn(),
+      showSuccess: vi.fn()
+    })
+
+    const firstPromise = config.loadSchedule()
+    const secondPromise = config.loadSchedule()
+
+    secondLoad.resolve({
+      enabled: false,
+      cron_expr: '0 3 * * *',
+      retain_days: 30,
+      retain_count: 3
+    })
+    firstLoad.resolve({
+      enabled: true,
+      cron_expr: '0 1 * * *',
+      retain_days: 7,
+      retain_count: 7
+    })
+
+    await Promise.all([firstPromise, secondPromise])
+
+    expect(config.scheduleForm.value).toEqual({
+      enabled: false,
+      cron_expr: '0 3 * * *',
+      retain_days: 30,
+      retain_count: 3
+    })
   })
 })

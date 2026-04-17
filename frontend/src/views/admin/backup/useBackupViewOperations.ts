@@ -27,6 +27,9 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
 
   const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null)
   const restoringPollingTimer = ref<ReturnType<typeof setInterval> | null>(null)
+  let backupsRequestSequence = 0
+  let backupPollingRequestSequence = 0
+  let restorePollingRequestSequence = 0
 
   const updateRecordInList = (updated: BackupRecord) => {
     const index = backups.value.findIndex((record) => record.id === updated.id)
@@ -36,6 +39,7 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
   }
 
   const stopPolling = () => {
+    backupPollingRequestSequence += 1
     if (pollingTimer.value) {
       clearInterval(pollingTimer.value)
       pollingTimer.value = null
@@ -43,36 +47,62 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
   }
 
   const stopRestorePolling = () => {
+    restorePollingRequestSequence += 1
     if (restoringPollingTimer.value) {
       clearInterval(restoringPollingTimer.value)
       restoringPollingTimer.value = null
     }
   }
 
-  const loadBackups = async () => {
+  const loadBackups = async (requestSequence = ++backupsRequestSequence) => {
     loadingBackups.value = true
     try {
       const result = await adminAPI.backup.listBackups()
+      if (requestSequence !== backupsRequestSequence) {
+        return false
+      }
+
       backups.value = result.items || []
+      return true
     } catch (error) {
+      if (requestSequence !== backupsRequestSequence) {
+        return false
+      }
+
       options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
+      return false
     } finally {
-      loadingBackups.value = false
+      if (requestSequence === backupsRequestSequence) {
+        loadingBackups.value = false
+      }
     }
   }
 
   const startPolling = (backupId: string) => {
     stopPolling()
+    const requestSequence = ++backupPollingRequestSequence
     let count = 0
     pollingTimer.value = setInterval(async () => {
       if (count++ >= BACKUP_MAX_POLL_COUNT) {
+        if (requestSequence !== backupPollingRequestSequence) {
+          return
+        }
+
         stopPolling()
         creatingBackup.value = false
         options.showWarning(options.t('admin.backup.operations.backupRunning'))
         return
       }
       try {
+        const listRequestSequence = backupsRequestSequence
         const record = await adminAPI.backup.getBackup(backupId)
+        if (
+          requestSequence !== backupPollingRequestSequence ||
+          listRequestSequence !== backupsRequestSequence
+        ) {
+          return
+        }
+
         updateRecordInList(record)
         if (record.status === 'completed' || record.status === 'failed') {
           stopPolling()
@@ -92,16 +122,29 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
 
   const startRestorePolling = (backupId: string) => {
     stopRestorePolling()
+    const requestSequence = ++restorePollingRequestSequence
     let count = 0
     restoringPollingTimer.value = setInterval(async () => {
       if (count++ >= BACKUP_MAX_POLL_COUNT) {
+        if (requestSequence !== restorePollingRequestSequence) {
+          return
+        }
+
         stopRestorePolling()
         restoringId.value = ''
         options.showWarning(options.t('admin.backup.operations.restoreRunning'))
         return
       }
       try {
+        const listRequestSequence = backupsRequestSequence
         const record = await adminAPI.backup.getBackup(backupId)
+        if (
+          requestSequence !== restorePollingRequestSequence ||
+          listRequestSequence !== backupsRequestSequence
+        ) {
+          return
+        }
+
         updateRecordInList(record)
         if (record.restore_status === 'completed' || record.restore_status === 'failed') {
           stopRestorePolling()
@@ -140,7 +183,11 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
       return
     }
 
-    void loadBackups().then(() => {
+    void loadBackups().then((didApply) => {
+      if (!didApply) {
+        return
+      }
+
       resumeActiveOperations()
     })
   }
@@ -210,13 +257,19 @@ export function useBackupViewOperations(options: BackupViewOperationsOptions) {
 
   const initialize = async () => {
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    await loadBackups()
-    resumeActiveOperations()
+    const didApply = await loadBackups()
+    if (didApply) {
+      resumeActiveOperations()
+    }
   }
 
   const dispose = () => {
     stopPolling()
     stopRestorePolling()
+    backupsRequestSequence += 1
+    loadingBackups.value = false
+    creatingBackup.value = false
+    restoringId.value = ''
     document.removeEventListener('visibilitychange', handleVisibilityChange)
   }
 

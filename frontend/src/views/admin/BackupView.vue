@@ -62,7 +62,8 @@ const {
   saveS3Config,
   testS3,
   loadSchedule,
-  saveSchedule
+  saveSchedule,
+  dispose: disposeConfig
 } = useBackupViewConfig({
   t,
   showError: appStore.showError,
@@ -99,6 +100,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  disposeConfig()
   dispose()
 })
 </script>

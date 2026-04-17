@@ -31,6 +31,21 @@ vi.mock('@/api', () => ({
   }
 }))
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 function createRecord(overrides: Partial<BackupRecord> = {}): BackupRecord {
   return {
     id: 'b_1',
@@ -145,5 +160,79 @@ describe('useBackupViewOperations', () => {
     })
     await operations.downloadBackup('b_1')
     expect(showError).toHaveBeenCalledWith('download-failed')
+  })
+
+  it('keeps the latest backup list request authoritative', async () => {
+    const firstLoad = createDeferred<{ items: BackupRecord[] }>()
+    const secondLoad = createDeferred<{ items: BackupRecord[] }>()
+    listBackups.mockReset()
+    listBackups
+      .mockImplementationOnce(() => firstLoad.promise)
+      .mockImplementationOnce(() => secondLoad.promise)
+
+    const operations = useBackupViewOperations({
+      t: (key: string) => key,
+      showSuccess: vi.fn(),
+      showError: vi.fn(),
+      showWarning: vi.fn(),
+      confirm: vi.fn(() => true),
+      prompt: vi.fn(() => 'secret'),
+      openUrl: vi.fn()
+    })
+
+    const firstPromise = operations.loadBackups()
+    const secondPromise = operations.loadBackups()
+
+    secondLoad.resolve({ items: [createRecord({ id: 'latest', status: 'completed' })] })
+    firstLoad.resolve({ items: [createRecord({ id: 'stale', status: 'failed' })] })
+
+    await Promise.all([firstPromise, secondPromise])
+
+    expect(operations.backups.value.map((record) => record.id)).toEqual(['latest'])
+    expect(operations.loadingBackups.value).toBe(false)
+  })
+
+  it('ignores stale poll results after a newer backup list refresh applies', async () => {
+    const refreshedList = createDeferred<{ items: BackupRecord[] }>()
+    listBackups.mockReset()
+    listBackups
+      .mockResolvedValueOnce({
+        items: [createRecord({ id: 'b_2', status: 'running', progress: 'uploading' })]
+      })
+      .mockImplementationOnce(() => refreshedList.promise)
+
+    const firstPoll = createDeferred<BackupRecord>()
+    getBackup.mockReset()
+    getBackup.mockImplementationOnce(() => firstPoll.promise)
+
+    const operations = useBackupViewOperations({
+      t: (key: string) => key,
+      showSuccess: vi.fn(),
+      showError: vi.fn(),
+      showWarning: vi.fn(),
+      confirm: vi.fn(() => true),
+      prompt: vi.fn(() => 'secret'),
+      openUrl: vi.fn()
+    })
+
+    await operations.initialize()
+    await vi.advanceTimersByTimeAsync(2000)
+
+    const refreshPromise = operations.loadBackups()
+    refreshedList.resolve({
+      items: [createRecord({ id: 'b_2', status: 'completed', progress: 'done' })]
+    })
+    await refreshPromise
+
+    expect(operations.backups.value).toEqual([
+      createRecord({ id: 'b_2', status: 'completed', progress: 'done' })
+    ])
+
+    firstPoll.resolve(createRecord({ id: 'b_2', status: 'running', progress: 'uploading' }))
+    await Promise.resolve()
+
+    expect(operations.backups.value).toEqual([
+      createRecord({ id: 'b_2', status: 'completed', progress: 'done' })
+    ])
   })
 })

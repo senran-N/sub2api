@@ -21,9 +21,16 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
   const scheduleForm = ref(createDefaultBackupScheduleConfig())
   const savingSchedule = ref(false)
 
-  const loadS3Config = async () => {
+  let s3RequestSequence = 0
+  let scheduleRequestSequence = 0
+
+  const loadS3Config = async (requestSequence = ++s3RequestSequence) => {
     try {
       const config = await adminAPI.backup.getS3Config()
+      if (requestSequence !== s3RequestSequence) {
+        return false
+      }
+
       s3Form.value = {
         endpoint: config.endpoint || '',
         region: config.region || 'auto',
@@ -34,21 +41,38 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
         force_path_style: config.force_path_style
       }
       s3SecretConfigured.value = Boolean(config.access_key_id)
+      return true
     } catch (error) {
+      if (requestSequence !== s3RequestSequence) {
+        return false
+      }
+
       options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
+      return false
     }
   }
 
   const saveS3Config = async () => {
+    const requestSequence = ++s3RequestSequence
     savingS3.value = true
     try {
       await adminAPI.backup.updateS3Config(s3Form.value)
+      if (requestSequence !== s3RequestSequence) {
+        return
+      }
+
       options.showSuccess(options.t('admin.backup.s3.saved'))
-      await loadS3Config()
+      await loadS3Config(requestSequence)
     } catch (error) {
+      if (requestSequence !== s3RequestSequence) {
+        return
+      }
+
       options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
-      savingS3.value = false
+      if (requestSequence === s3RequestSequence) {
+        savingS3.value = false
+      }
     }
   }
 
@@ -68,30 +92,59 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
     }
   }
 
-  const loadSchedule = async () => {
+  const loadSchedule = async (requestSequence = ++scheduleRequestSequence) => {
     try {
       const config = await adminAPI.backup.getSchedule()
+      if (requestSequence !== scheduleRequestSequence) {
+        return false
+      }
+
       scheduleForm.value = {
         enabled: config.enabled,
         cron_expr: config.cron_expr || '0 2 * * *',
         retain_days: config.retain_days || 14,
         retain_count: config.retain_count || 10
       }
+      return true
     } catch (error) {
+      if (requestSequence !== scheduleRequestSequence) {
+        return false
+      }
+
       options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
+      return false
     }
   }
 
   const saveSchedule = async () => {
+    const requestSequence = ++scheduleRequestSequence
     savingSchedule.value = true
     try {
       await adminAPI.backup.updateSchedule(scheduleForm.value)
+      if (requestSequence !== scheduleRequestSequence) {
+        return
+      }
+
       options.showSuccess(options.t('admin.backup.schedule.saved'))
     } catch (error) {
+      if (requestSequence !== scheduleRequestSequence) {
+        return
+      }
+
       options.showError(resolveRequestErrorMessage(error, options.t('errors.networkError')))
     } finally {
-      savingSchedule.value = false
+      if (requestSequence === scheduleRequestSequence) {
+        savingSchedule.value = false
+      }
     }
+  }
+
+  const dispose = () => {
+    s3RequestSequence += 1
+    scheduleRequestSequence += 1
+    savingS3.value = false
+    savingSchedule.value = false
+    testingS3.value = false
   }
 
   return {
@@ -105,6 +158,7 @@ export function useBackupViewConfig(options: BackupViewConfigOptions) {
     saveS3Config,
     testS3,
     loadSchedule,
-    saveSchedule
+    saveSchedule,
+    dispose
   }
 }
