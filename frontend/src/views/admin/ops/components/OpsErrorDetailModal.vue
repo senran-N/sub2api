@@ -336,6 +336,8 @@ const correlatedUpstreamLoading = ref(false)
 const correlatedUpstreamErrors = computed<OpsErrorDetail[]>(() => correlatedUpstream.value)
 
 const expandedUpstreamDetailIds = ref(new Set<number>())
+let detailRequestSequence = 0
+let correlatedUpstreamSequence = 0
 
 function getUpstreamResponsePreview(ev: OpsErrorDetail): string {
   const upstreamPayload = resolveUpstreamPayload(ev)
@@ -351,6 +353,7 @@ function toggleUpstreamDetail(id: number) {
 }
 
 async function fetchCorrelatedUpstreamErrors(requestErrorId: number) {
+  const requestSequence = ++correlatedUpstreamSequence
   correlatedUpstreamLoading.value = true
   try {
     const res = await opsAPI.listRequestErrorUpstreamErrors(
@@ -358,12 +361,30 @@ async function fetchCorrelatedUpstreamErrors(requestErrorId: number) {
       { page: 1, page_size: 100, view: 'all' },
       { include_detail: true }
     )
+    if (
+      requestSequence !== correlatedUpstreamSequence ||
+      !props.show ||
+      props.errorType !== 'request' ||
+      props.errorId !== requestErrorId
+    ) {
+      return
+    }
     correlatedUpstream.value = res.items || []
   } catch (err) {
+    if (
+      requestSequence !== correlatedUpstreamSequence ||
+      !props.show ||
+      props.errorType !== 'request' ||
+      props.errorId !== requestErrorId
+    ) {
+      return
+    }
     console.error('[OpsErrorDetailModal] Failed to load correlated upstream errors', err)
     correlatedUpstream.value = []
   } finally {
-    correlatedUpstreamLoading.value = false
+    if (requestSequence === correlatedUpstreamSequence) {
+      correlatedUpstreamLoading.value = false
+    }
   }
 }
 
@@ -381,34 +402,62 @@ function prettyJSON(raw?: string): string {
 }
 
 async function fetchDetail(id: number) {
+  const requestSequence = ++detailRequestSequence
+  const detailType = props.errorType === 'upstream' ? 'upstream' : 'request'
   loading.value = true
+  detail.value = null
   try {
-    const kind = props.errorType || (detail.value?.phase === 'upstream' ? 'upstream' : 'request')
-    const d = kind === 'upstream' ? await opsAPI.getUpstreamErrorDetail(id) : await opsAPI.getRequestErrorDetail(id)
+    const d = detailType === 'upstream' ? await opsAPI.getUpstreamErrorDetail(id) : await opsAPI.getRequestErrorDetail(id)
+    if (
+      requestSequence !== detailRequestSequence ||
+      !props.show ||
+      props.errorId !== id ||
+      (props.errorType === 'upstream' ? 'upstream' : 'request') !== detailType
+    ) {
+      return
+    }
     detail.value = d
   } catch (err: unknown) {
+    if (
+      requestSequence !== detailRequestSequence ||
+      !props.show ||
+      props.errorId !== id ||
+      (props.errorType === 'upstream' ? 'upstream' : 'request') !== detailType
+    ) {
+      return
+    }
     detail.value = null
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.failedToLoadErrorDetail')))
   } finally {
-    loading.value = false
+    if (requestSequence === detailRequestSequence) {
+      loading.value = false
+    }
   }
 }
 
 watch(
-  () => [props.show, props.errorId] as const,
-  ([show, id]) => {
-    if (!show) {
+  () => [props.show, props.errorId, props.errorType] as const,
+  ([show, id, errorType]) => {
+    if (!show || typeof id !== 'number' || id <= 0) {
+      detailRequestSequence++
+      correlatedUpstreamSequence++
+      loading.value = false
+      correlatedUpstreamLoading.value = false
       detail.value = null
+      correlatedUpstream.value = []
+      expandedUpstreamDetailIds.value = new Set()
       return
     }
-    if (typeof id === 'number' && id > 0) {
-      expandedUpstreamDetailIds.value = new Set()
-      fetchDetail(id)
-      if (props.errorType === 'request') {
-        fetchCorrelatedUpstreamErrors(id)
-      } else {
-        correlatedUpstream.value = []
-      }
+
+    expandedUpstreamDetailIds.value = new Set()
+    correlatedUpstream.value = []
+    correlatedUpstreamLoading.value = false
+    fetchDetail(id)
+
+    if (errorType === 'request') {
+      fetchCorrelatedUpstreamErrors(id)
+    } else {
+      correlatedUpstreamSequence++
     }
   },
   { immediate: true }

@@ -42,6 +42,18 @@ const BaseDialogStub = defineComponent({
   template: '<div v-if="show"><slot /></div>'
 })
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
+}
+
 describe('OpsErrorDetailModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -129,5 +141,127 @@ describe('OpsErrorDetailModal', () => {
     expect(wrapper.text()).toContain('44ms')
     expect(wrapper.text()).toContain('52ms')
     expect(wrapper.text()).toContain('144ms')
+  })
+
+  it('keeps the newest request detail when earlier loads resolve late', async () => {
+    const firstDetail = createDeferred<Record<string, unknown>>()
+    const secondDetail = createDeferred<Record<string, unknown>>()
+
+    getRequestErrorDetailMock
+      .mockReturnValueOnce(firstDetail.promise)
+      .mockReturnValueOnce(secondDetail.promise)
+
+    const wrapper = mount(OpsErrorDetailModal, {
+      props: {
+        show: true,
+        errorId: 101,
+        errorType: 'request'
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          Icon: true
+        }
+      }
+    })
+
+    await wrapper.setProps({ errorId: 202 })
+
+    secondDetail.resolve({
+      id: 202,
+      created_at: '2026-04-17T11:00:00Z',
+      phase: 'request',
+      error_owner: 'platform',
+      status_code: 502,
+      request_id: 'req_fresh',
+      message: 'fresh detail',
+      request_type: 1,
+      error_body: '{"error":"fresh"}'
+    })
+    await flushPromises()
+
+    firstDetail.resolve({
+      id: 101,
+      created_at: '2026-04-17T10:00:00Z',
+      phase: 'request',
+      error_owner: 'platform',
+      status_code: 500,
+      request_id: 'req_stale',
+      message: 'stale detail',
+      request_type: 1,
+      error_body: '{"error":"stale"}'
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('req_fresh')
+    expect(wrapper.text()).toContain('fresh detail')
+    expect(wrapper.text()).not.toContain('req_stale')
+    expect(wrapper.text()).not.toContain('stale detail')
+  })
+
+  it('keeps correlated upstream errors aligned with the latest request detail', async () => {
+    const firstUpstreamErrors = createDeferred<{ items: Array<Record<string, unknown>> }>()
+    const secondUpstreamErrors = createDeferred<{ items: Array<Record<string, unknown>> }>()
+
+    getRequestErrorDetailMock.mockImplementation(async (id: number) => ({
+      id,
+      created_at: '2026-04-17T12:00:00Z',
+      phase: 'request',
+      error_owner: 'platform',
+      status_code: 502,
+      request_id: `req_${id}`,
+      message: `detail ${id}`,
+      request_type: 1,
+      error_body: '{"error":"detail"}'
+    }))
+
+    listRequestErrorUpstreamErrorsMock
+      .mockReturnValueOnce(firstUpstreamErrors.promise)
+      .mockReturnValueOnce(secondUpstreamErrors.promise)
+
+    const wrapper = mount(OpsErrorDetailModal, {
+      props: {
+        show: true,
+        errorId: 301,
+        errorType: 'request'
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+    await wrapper.setProps({ errorId: 302 })
+    await flushPromises()
+
+    secondUpstreamErrors.resolve({
+      items: [
+        {
+          id: 2,
+          status_code: 503,
+          request_id: 'upstream_fresh',
+          message: 'fresh upstream detail'
+        }
+      ]
+    })
+    await flushPromises()
+
+    firstUpstreamErrors.resolve({
+      items: [
+        {
+          id: 1,
+          status_code: 500,
+          request_id: 'upstream_stale',
+          message: 'stale upstream detail'
+        }
+      ]
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('fresh upstream detail')
+    expect(wrapper.text()).not.toContain('stale upstream detail')
   })
 })
