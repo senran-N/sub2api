@@ -108,6 +108,32 @@
         </div>
       </div>
 
+      <div v-if="timingEntries.length" class="ops-error-detail-modal__panel">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="ops-error-detail-modal__title text-sm font-black uppercase tracking-wider">
+            {{ t('admin.ops.errorDetail.timings') }}
+          </h3>
+          <div class="ops-error-detail-modal__subtitle text-xs">
+            {{ t('admin.ops.errorDetail.timingsHint') }}
+          </div>
+        </div>
+
+        <div class="ops-error-detail-modal__timing-grid mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div
+            v-for="entry in timingEntries"
+            :key="entry.key"
+            class="ops-error-detail-modal__timing-card"
+          >
+            <div class="ops-error-detail-modal__summary-kicker text-[11px] font-bold uppercase tracking-wider">
+              {{ entry.label }}
+            </div>
+            <div class="ops-error-detail-modal__timing-value mt-2 text-xl font-semibold">
+              {{ entry.value }}ms
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Response content (client request -> error_body; upstream -> upstream_error_detail/message) -->
       <div class="ops-error-detail-modal__panel">
         <h3 class="ops-error-detail-modal__title text-sm font-black uppercase tracking-wider">{{ t('admin.ops.errorDetail.responseBody') }}</h3>
@@ -223,6 +249,43 @@ const requestId = computed(() => detail.value?.request_id || detail.value?.clien
 
 const primaryResponseBody = computed(() => {
   return resolvePrimaryResponseBody(detail.value, props.errorType)
+})
+
+type TimingEntry = {
+  key: string
+  label: string
+  value: number
+}
+
+const timingEntries = computed<TimingEntry[]>(() => {
+  const current = detail.value
+  if (!current) {
+    return []
+  }
+
+  const definitions = [
+    { key: 'auth_latency_ms', label: t('admin.ops.errorDetail.auth'), value: current.auth_latency_ms },
+    { key: 'routing_latency_ms', label: t('admin.ops.errorDetail.routing'), value: current.routing_latency_ms },
+    { key: 'wait_user_ms', label: t('admin.ops.errorDetail.waitUser'), value: current.wait_user_ms },
+    { key: 'wait_account_ms', label: t('admin.ops.errorDetail.waitAccount'), value: current.wait_account_ms },
+    { key: 'ws_acquire_ms', label: t('admin.ops.errorDetail.wsAcquire'), value: current.ws_acquire_ms },
+    { key: 'ws_healthcheck_ms', label: t('admin.ops.errorDetail.wsHealthcheck'), value: current.ws_healthcheck_ms },
+    { key: 'upstream_latency_ms', label: t('admin.ops.errorDetail.upstream'), value: current.upstream_latency_ms },
+    { key: 'response_latency_ms', label: t('admin.ops.errorDetail.response'), value: current.response_latency_ms },
+    { key: 'time_to_first_token_ms', label: t('admin.ops.errorDetail.firstToken'), value: current.time_to_first_token_ms }
+  ]
+
+  return definitions.flatMap((definition) => {
+    if (typeof definition.value !== 'number' || Number.isNaN(definition.value)) {
+      return []
+    }
+
+    return [{
+      key: definition.key,
+      label: definition.label,
+      value: definition.value
+    }]
+  })
 })
 
 
@@ -397,14 +460,30 @@ const statusClass = computed(() => {
 
 .ops-error-detail-modal__summary-card,
 .ops-error-detail-modal__panel,
-.ops-error-detail-modal__item {
+.ops-error-detail-modal__item,
+.ops-error-detail-modal__timing-card {
   padding: var(--theme-ops-panel-padding);
   border-radius: var(--theme-select-panel-radius);
   background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
 }
 
-.ops-error-detail-modal__item {
+.ops-error-detail-modal__item,
+.ops-error-detail-modal__timing-card {
   border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.ops-error-detail-modal__timing-card {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 58%, transparent);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--theme-accent-soft) 52%, var(--theme-surface)) 0%,
+      color-mix(in srgb, var(--theme-surface-soft) 92%, var(--theme-surface)) 100%
+    );
+}
+
+.ops-error-detail-modal__timing-value {
+  color: color-mix(in srgb, var(--theme-accent) 72%, var(--theme-page-text));
 }
 
 .ops-error-detail-modal__summary-arrow {
