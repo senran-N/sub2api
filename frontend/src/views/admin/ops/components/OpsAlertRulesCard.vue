@@ -17,17 +17,24 @@ const appStore = useAppStore()
 
 const loading = ref(false)
 const rules = ref<AlertRule[]>([])
+let loadSequence = 0
 
 async function load() {
+  const requestSequence = ++loadSequence
   loading.value = true
   try {
-    rules.value = await opsAPI.listAlertRules()
+    const nextRules = await opsAPI.listAlertRules()
+    if (requestSequence !== loadSequence) return
+    rules.value = nextRules
   } catch (err: unknown) {
+    if (requestSequence !== loadSequence) return
     console.error('[OpsAlertRulesCard] Failed to load rules', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.alertRules.loadFailed')))
     rules.value = []
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
 }
 

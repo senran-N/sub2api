@@ -83,6 +83,16 @@ const SelectStub = defineComponent({
   template: '<div class="select-stub" />',
 })
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function mountComponent() {
   return mount(OpsAlertRulesCard, {
     global: {
@@ -220,5 +230,30 @@ describe('OpsAlertRulesCard', () => {
     expect(showError).toHaveBeenCalledWith('alert rules detail error')
     expect(consoleSpy).toHaveBeenCalledTimes(1)
     consoleSpy.mockRestore()
+  })
+
+  it('首屏加载与手动刷新重叠时保留最新规则列表', async () => {
+    const slowRules = deferred<any[]>()
+    const fastRules = deferred<any[]>()
+    mockListAlertRules.mockReset()
+    mockListAlertRules
+      .mockReturnValueOnce(slowRules.promise)
+      .mockReturnValueOnce(fastRules.promise)
+    mockGetAllGroups.mockResolvedValue([])
+
+    const wrapper = mountComponent()
+
+    const refreshButton = wrapper.find('.ops-alert-rules-card__refresh')
+    await refreshButton.trigger('click')
+    await flushPromises()
+
+    fastRules.resolve([{ id: 22, name: 'latest rule' }])
+    await flushPromises()
+
+    slowRules.resolve([{ id: 11, name: 'stale rule' }])
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('latest rule')
+    expect(wrapper.text()).not.toContain('stale rule')
   })
 })

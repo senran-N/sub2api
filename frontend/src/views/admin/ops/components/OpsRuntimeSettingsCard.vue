@@ -12,6 +12,7 @@ const appStore = useAppStore()
 
 const loading = ref(false)
 const saving = ref(false)
+let loadSequence = 0
 
 const alertSettings = ref<OpsAlertRuntimeSettings | null>(null)
 
@@ -139,14 +140,20 @@ const alertValidation = computed(() => {
 })
 
 async function loadSettings() {
+  const requestSequence = ++loadSequence
   loading.value = true
   try {
-    alertSettings.value = await opsAPI.getAlertRuntimeSettings()
+    const nextSettings = await opsAPI.getAlertRuntimeSettings()
+    if (requestSequence !== loadSequence) return
+    alertSettings.value = nextSettings
   } catch (err: unknown) {
+    if (requestSequence !== loadSequence) return
     console.error('[OpsRuntimeSettingsCard] Failed to load runtime settings', err)
     appStore.showError(resolveRequestErrorMessage(err, t('admin.ops.runtime.loadFailed')))
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
 }
 
