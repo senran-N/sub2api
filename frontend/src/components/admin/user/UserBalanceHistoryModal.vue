@@ -183,6 +183,7 @@ const total = ref(0)
 const totalRecharged = ref(0)
 const pageSize = 15
 const typeFilter = ref('')
+let requestSequence = 0
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize) || 1)
 
@@ -199,31 +200,60 @@ const typeOptions = computed(() => [
 ])
 
 // Watch modal open
-watch(() => props.show, (v) => {
-  if (v && props.user) {
+const resetHistoryState = () => {
+  loading.value = false
+  history.value = []
+  currentPage.value = 1
+  total.value = 0
+  totalRecharged.value = 0
+  typeFilter.value = ''
+}
+
+watch(
+  () => [props.show, props.user?.id] as const,
+  ([isVisible, userId]) => {
+    if (!isVisible || userId == null) {
+      requestSequence += 1
+      resetHistoryState()
+      return
+    }
+
     typeFilter.value = ''
-    loadHistory(1)
-  }
-}, { immediate: true })
+    void loadHistory(1)
+  },
+  { immediate: true }
+)
 
 async function loadHistory(page: number) {
-  if (!props.user) return
+  const user = props.user
+  if (!user) return
+
+  const currentSequence = ++requestSequence
+  const selectedType = typeFilter.value || undefined
   loading.value = true
   currentPage.value = page
   try {
     const res = await adminAPI.users.getUserBalanceHistory(
-      props.user.id,
+      user.id,
       page,
       pageSize,
-      typeFilter.value || undefined
+      selectedType
     )
+    if (currentSequence !== requestSequence || !props.show || props.user?.id !== user.id) {
+      return
+    }
     history.value = res.items || []
     total.value = res.total || 0
     totalRecharged.value = res.total_recharged || 0
   } catch (error) {
+    if (currentSequence !== requestSequence || !props.show || props.user?.id !== user.id) {
+      return
+    }
     console.error('Failed to load balance history:', error)
   } finally {
-    loading.value = false
+    if (currentSequence === requestSequence) {
+      loading.value = false
+    }
   }
 }
 

@@ -48,6 +48,27 @@ const BaseDialogStub = defineComponent({
   template: '<div v-if="show" class="base-dialog-stub"><slot /></div>',
 })
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
+function createApiKey(id: number, name: string) {
+  return {
+    id,
+    name,
+    status: 'active',
+    key: 'sk-' + '1234567890abcdef1234567890',
+    created_at: '2026-04-17T00:00:00Z',
+    group_id: null,
+    group: null
+  }
+}
+
 describe('UserApiKeysModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -79,5 +100,50 @@ describe('UserApiKeysModal', () => {
 
     expect(mockGetUserApiKeys).toHaveBeenCalledWith(7)
     expect(mockGetAllGroups).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the latest user api keys when requests resolve out of order', async () => {
+    const firstKeys = createDeferred<{ items: ReturnType<typeof createApiKey>[] }>()
+    const secondKeys = createDeferred<{ items: ReturnType<typeof createApiKey>[] }>()
+    mockGetUserApiKeys
+      .mockImplementationOnce(() => firstKeys.promise)
+      .mockImplementationOnce(() => secondKeys.promise)
+
+    const wrapper = mount(UserApiKeysModal, {
+      props: {
+        show: true,
+        user: {
+          id: 7,
+          email: 'ops@example.com',
+          username: 'ops-user'
+        }
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await wrapper.setProps({
+      user: {
+        id: 8,
+        email: 'beta@example.com',
+        username: 'beta-user'
+      }
+    })
+
+    secondKeys.resolve({ items: [createApiKey(2, 'Beta key')] })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Beta key')
+    expect(wrapper.text()).not.toContain('Alpha key')
+
+    firstKeys.resolve({ items: [createApiKey(1, 'Alpha key')] })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Beta key')
+    expect(wrapper.text()).not.toContain('Alpha key')
   })
 })

@@ -205,6 +205,7 @@ const groupConfigs = ref<GroupRateConfig[]>([])
 const originalGroupRates = ref<Record<number, number>>({}) // 记录原始专属倍率，用于检测删除
 const loading = ref(false)
 const submitting = ref(false)
+let loadSequence = 0
 
 // 分离专属分组和公开分组
 const exclusiveGroups = computed(() => groups.value.filter((g) => g.is_exclusive))
@@ -229,25 +230,40 @@ const getGroupCardClasses = (scope: 'exclusive' | 'public', selected: boolean) =
 }
 
 watch(
-  () => props.show,
-  (v) => {
-    if (v && props.user) {
-      load()
+  () => [props.show, props.user?.id] as const,
+  ([isVisible, userId]) => {
+    if (!isVisible || userId == null) {
+      loadSequence += 1
+      loading.value = false
+      groups.value = []
+      groupConfigs.value = []
+      originalGroupRates.value = {}
+      return
     }
+
+    void load()
   },
   { immediate: true }
 )
 
 async function load() {
+  const user = props.user
+  if (!user) return
+
+  const requestSequence = ++loadSequence
   loading.value = true
   try {
     const res = await adminAPI.groups.list(1, 1000)
+    if (requestSequence !== loadSequence || !props.show || props.user?.id !== user.id) {
+      return
+    }
+
     // 只显示标准类型且活跃的分组
     groups.value = res.items.filter((g) => g.subscription_type === 'standard' && g.status === 'active')
 
     // 初始化配置
-    const userAllowedGroups = props.user?.allowed_groups || []
-    const userGroupRates = props.user?.group_rates || {}
+    const userAllowedGroups = user.allowed_groups || []
+    const userGroupRates = user.group_rates || {}
 
     // 保存原始专属倍率，用于检测删除操作
     originalGroupRates.value = { ...userGroupRates }
@@ -264,10 +280,15 @@ async function load() {
       isSelected: g.is_exclusive ? userAllowedGroups.includes(g.id) : true,
     }))
   } catch (error) {
+    if (requestSequence !== loadSequence || !props.show || props.user?.id !== user.id) {
+      return
+    }
     console.error('Failed to load groups:', error)
     appStore.showError(resolveRequestErrorMessage(error, t('admin.users.failedToLoadGroups')))
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
 }
 

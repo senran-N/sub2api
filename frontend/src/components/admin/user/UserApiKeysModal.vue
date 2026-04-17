@@ -125,6 +125,7 @@ const dropdownPosition = ref<{ top: number; left: number } | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
+let loadSequence = 0
 
 const selectedKeyForGroup = computed(() => {
   if (groupSelectorKeyId.value === null) return null
@@ -161,34 +162,62 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
   }
 }
 
-watch(() => props.show, (v) => {
-  if (v && props.user) {
-    load()
-    loadGroups()
-  } else {
-    closeGroupSelector()
-  }
-}, { immediate: true })
+const resetModalState = () => {
+  closeGroupSelector()
+  loading.value = false
+  apiKeys.value = []
+  allGroups.value = []
+  groupButtonRefs.value.clear()
+}
 
-async function load() {
-  if (!props.user) return
+watch(
+  () => [props.show, props.user?.id] as const,
+  ([isVisible, userId]) => {
+    if (!isVisible || userId == null) {
+      loadSequence += 1
+      resetModalState()
+      return
+    }
+
+    const requestSequence = ++loadSequence
+    void load(userId, requestSequence)
+    void loadGroups(requestSequence)
+  },
+  { immediate: true }
+)
+
+async function load(userId: number, requestSequence: number) {
   loading.value = true
   groupButtonRefs.value.clear()
   try {
-    const res = await adminAPI.users.getUserApiKeys(props.user.id)
+    const res = await adminAPI.users.getUserApiKeys(userId)
+    if (requestSequence !== loadSequence || !props.show || props.user?.id !== userId) {
+      return
+    }
     apiKeys.value = res.items || []
   } catch (error) {
+    if (requestSequence !== loadSequence || !props.show || props.user?.id !== userId) {
+      return
+    }
     console.error('Failed to load API keys:', error)
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
 }
 
-async function loadGroups() {
+async function loadGroups(requestSequence: number) {
   try {
     const groups = await adminAPI.groups.getAll()
+    if (requestSequence !== loadSequence || !props.show || props.user == null) {
+      return
+    }
     allGroups.value = groups
   } catch (error) {
+    if (requestSequence !== loadSequence || !props.show || props.user == null) {
+      return
+    }
     console.error('Failed to load groups:', error)
   }
 }
