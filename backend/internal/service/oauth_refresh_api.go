@@ -53,7 +53,12 @@ func NewOAuthRefreshAPI(accountRepo AccountRepository, tokenCache GeminiTokenCac
 
 func (api *OAuthRefreshAPI) getLocalLock(cacheKey string) *sync.Mutex {
 	val, _ := api.localLocks.LoadOrStore(cacheKey, &sync.Mutex{})
-	return val.(*sync.Mutex)
+	mutex, ok := val.(*sync.Mutex)
+	if !ok || mutex == nil {
+		mutex = &sync.Mutex{}
+		api.localLocks.Store(cacheKey, mutex)
+	}
+	return mutex
 }
 
 // RefreshIfNeeded 在分布式锁保护下按需刷新 OAuth token

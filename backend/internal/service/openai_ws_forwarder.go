@@ -132,7 +132,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		turnState = strings.TrimSpace(c.GetHeader(openAIWSTurnStateHeader))
 		turnMetadata = strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader))
 	}
-	if account != nil && account.Type == AccountTypeOAuth {
+	if account.Type == AccountTypeOAuth {
 		turnMetadata = resolveOpenAICodexUpstreamTurnMetadata(account.ID, turnMetadata)
 	}
 	setOpenAIWSTurnMetadata(payload, turnMetadata)

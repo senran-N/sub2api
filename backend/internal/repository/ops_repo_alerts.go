@@ -816,56 +816,6 @@ func scanOpsAlertEvent(row opsAlertEventRow) (*service.OpsAlertEvent, error) {
 	return &ev, nil
 }
 
-func buildOpsAlertEventsWhere(filter *service.OpsAlertEventFilter) (string, []any) {
-	clauses := []string{"1=1"}
-	args := []any{}
-
-	if filter == nil {
-		return "WHERE " + strings.Join(clauses, " AND "), args
-	}
-
-	if status := strings.TrimSpace(filter.Status); status != "" {
-		args = append(args, status)
-		clauses = append(clauses, "status = $"+itoa(len(args)))
-	}
-	if severity := strings.TrimSpace(filter.Severity); severity != "" {
-		args = append(args, severity)
-		clauses = append(clauses, "severity = $"+itoa(len(args)))
-	}
-	if filter.EmailSent != nil {
-		args = append(args, *filter.EmailSent)
-		clauses = append(clauses, "email_sent = $"+itoa(len(args)))
-	}
-	if filter.StartTime != nil && !filter.StartTime.IsZero() {
-		args = append(args, *filter.StartTime)
-		clauses = append(clauses, "fired_at >= $"+itoa(len(args)))
-	}
-	if filter.EndTime != nil && !filter.EndTime.IsZero() {
-		args = append(args, *filter.EndTime)
-		clauses = append(clauses, "fired_at < $"+itoa(len(args)))
-	}
-
-	// Cursor pagination (descending by fired_at, then id)
-	if filter.BeforeFiredAt != nil && !filter.BeforeFiredAt.IsZero() && filter.BeforeID != nil && *filter.BeforeID > 0 {
-		args = append(args, *filter.BeforeFiredAt)
-		tsArg := "$" + itoa(len(args))
-		args = append(args, *filter.BeforeID)
-		idArg := "$" + itoa(len(args))
-		clauses = append(clauses, fmt.Sprintf("(fired_at < %s OR (fired_at = %s AND id < %s))", tsArg, tsArg, idArg))
-	}
-	// Dimensions are stored in JSONB. We filter best-effort without requiring GIN indexes.
-	if platform := strings.TrimSpace(filter.Platform); platform != "" {
-		args = append(args, platform)
-		clauses = append(clauses, "(dimensions->>'platform') = $"+itoa(len(args)))
-	}
-	if filter.GroupID != nil && *filter.GroupID > 0 {
-		args = append(args, fmt.Sprintf("%d", *filter.GroupID))
-		clauses = append(clauses, "(dimensions->>'group_id') = $"+itoa(len(args)))
-	}
-
-	return "WHERE " + strings.Join(clauses, " AND "), args
-}
-
 func opsNullJSONMap(v map[string]any) (any, error) {
 	if v == nil {
 		return sql.NullString{}, nil

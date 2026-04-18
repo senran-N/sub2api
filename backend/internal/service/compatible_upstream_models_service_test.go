@@ -128,10 +128,14 @@ func TestCompatibleUpstreamModelsServiceDiscoverGroupModelsDeduplicates(t *testi
 			},
 		},
 	}
+	respA := newJSONResponse(http.StatusOK, `{"data":[{"id":"gpt-5"},{"id":"gpt-5-mini"}]}`)
+	t.Cleanup(func() { _ = respA.Body.Close() })
+	respB := newJSONResponse(http.StatusOK, `{"data":[{"id":"gpt-5-mini"},{"id":"gpt-5-nano"}]}`)
+	t.Cleanup(func() { _ = respB.Body.Close() })
 	upstream := &queuedHTTPUpstream{
 		responses: []*http.Response{
-			newJSONResponse(http.StatusOK, `{"data":[{"id":"gpt-5"},{"id":"gpt-5-mini"}]}`),
-			newJSONResponse(http.StatusOK, `{"data":[{"id":"gpt-5-mini"},{"id":"gpt-5-nano"}]}`),
+			respA,
+			respB,
 		},
 	}
 	svc := NewCompatibleUpstreamModelsService(repo, upstream, &config.Config{}, nil)

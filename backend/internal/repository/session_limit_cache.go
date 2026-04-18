@@ -458,6 +458,7 @@ func (c *sessionLimitCache) IsSessionActive(ctx context.Context, accountID int64
 
 // ========== 5h窗口费用缓存实现 ==========
 
+//nolint:unused // 保留给 integration test 直接验证 Redis 时间语义，避免复制实现到测试侧。
 func (c *sessionLimitCache) currentUnixSecond(ctx context.Context) (int64, error) {
 	serverTime, err := c.rdb.Time(ctx).Result()
 	if err != nil {

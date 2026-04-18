@@ -116,7 +116,7 @@ func (h *UserHandler) List(c *gin.Context) {
 		loadInfo, loadErr = h.concurrencyService.GetUsersLoadBatch(c.Request.Context(), usersConcurrency)
 		if loadErr != nil {
 			if ginErr := c.Error(loadErr); ginErr != nil {
-				ginErr.SetType(gin.ErrorTypePrivate)
+				_ = ginErr.SetType(gin.ErrorTypePrivate)
 			}
 			loadInfo = nil
 		}

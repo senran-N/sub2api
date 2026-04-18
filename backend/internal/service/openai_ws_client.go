@@ -89,7 +89,7 @@ func (d *coderOpenAIWSClientDialer) Dial(
 		opts.HTTPClient = proxyClient
 	}
 
-	conn, resp, err := coderws.Dial(ctx, targetURL, opts)
+	conn, resp, err := coderws.Dial(ctx, targetURL, opts) //nolint:bodyclose // coder/websocket documents that callers never need to close the handshake response body.
 	if err != nil {
 		status := 0
 		respHeaders := http.Header(nil)

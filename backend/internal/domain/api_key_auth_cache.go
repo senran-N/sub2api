@@ -35,27 +35,27 @@ type APIKeyAuthUserSnapshot struct {
 
 // APIKeyAuthGroupSnapshot is the group subset needed by API key auth.
 type APIKeyAuthGroupSnapshot struct {
-	ID                              int64              `json:"id"`
-	Name                            string             `json:"name"`
-	Platform                        string             `json:"platform"`
-	Status                          string             `json:"status"`
-	SubscriptionType                string             `json:"subscription_type"`
-	RateMultiplier                  float64            `json:"rate_multiplier"`
-	DailyLimitUSD                   *float64           `json:"daily_limit_usd,omitempty"`
-	WeeklyLimitUSD                  *float64           `json:"weekly_limit_usd,omitempty"`
-	MonthlyLimitUSD                 *float64           `json:"monthly_limit_usd,omitempty"`
-	ImagePrice1K                    *float64           `json:"image_price_1k,omitempty"`
-	ImagePrice2K                    *float64           `json:"image_price_2k,omitempty"`
-	ImagePrice4K                    *float64           `json:"image_price_4k,omitempty"`
-	ClaudeCodeOnly                  bool               `json:"claude_code_only"`
-	FallbackGroupID                 *int64             `json:"fallback_group_id,omitempty"`
-	FallbackGroupIDOnInvalidRequest *int64             `json:"fallback_group_id_on_invalid_request,omitempty"`
-	ModelRouting                    map[string][]int64 `json:"model_routing,omitempty"`
-	ModelRoutingEnabled             bool               `json:"model_routing_enabled"`
-	MCPXMLInject                    bool               `json:"mcp_xml_inject"`
-	SupportedModelScopes            []string           `json:"supported_model_scopes,omitempty"`
-	AllowMessagesDispatch           bool               `json:"allow_messages_dispatch"`
-	DefaultMappedModel              string             `json:"default_mapped_model,omitempty"`
+	ID                              int64                             `json:"id"`
+	Name                            string                            `json:"name"`
+	Platform                        string                            `json:"platform"`
+	Status                          string                            `json:"status"`
+	SubscriptionType                string                            `json:"subscription_type"`
+	RateMultiplier                  float64                           `json:"rate_multiplier"`
+	DailyLimitUSD                   *float64                          `json:"daily_limit_usd,omitempty"`
+	WeeklyLimitUSD                  *float64                          `json:"weekly_limit_usd,omitempty"`
+	MonthlyLimitUSD                 *float64                          `json:"monthly_limit_usd,omitempty"`
+	ImagePrice1K                    *float64                          `json:"image_price_1k,omitempty"`
+	ImagePrice2K                    *float64                          `json:"image_price_2k,omitempty"`
+	ImagePrice4K                    *float64                          `json:"image_price_4k,omitempty"`
+	ClaudeCodeOnly                  bool                              `json:"claude_code_only"`
+	FallbackGroupID                 *int64                            `json:"fallback_group_id,omitempty"`
+	FallbackGroupIDOnInvalidRequest *int64                            `json:"fallback_group_id_on_invalid_request,omitempty"`
+	ModelRouting                    map[string][]int64                `json:"model_routing,omitempty"`
+	ModelRoutingEnabled             bool                              `json:"model_routing_enabled"`
+	MCPXMLInject                    bool                              `json:"mcp_xml_inject"`
+	SupportedModelScopes            []string                          `json:"supported_model_scopes,omitempty"`
+	AllowMessagesDispatch           bool                              `json:"allow_messages_dispatch"`
+	DefaultMappedModel              string                            `json:"default_mapped_model,omitempty"`
 	MessagesDispatchModelConfig     OpenAIMessagesDispatchModelConfig `json:"messages_dispatch_model_config,omitempty"`
 }
 

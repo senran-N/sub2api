@@ -47,10 +47,6 @@ func newOpenAIResponsesUpstreamTargetWithOptions(base, authMode, endpointOverrid
 	}
 }
 
-func newOpenAIPassthroughUpstreamTarget(base, rawRequestPath string) openAIResponsesUpstreamTarget {
-	return newOpenAIPassthroughUpstreamTargetWithOptions(base, rawRequestPath, "", "", "")
-}
-
 func newOpenAIPassthroughUpstreamTargetWithOptions(base, rawRequestPath, authMode, responsesOverride, chatOverride string) openAIResponsesUpstreamTarget {
 	normalizedBase := strings.TrimSpace(base)
 	if normalizedBase == "" {

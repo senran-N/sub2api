@@ -20,13 +20,6 @@ func (p *gatewaySelectionPlan) routingEnabled() bool {
 	return p != nil && len(p.routingAccountIDs) > 0
 }
 
-func (p *gatewaySelectionPlan) allowsAccountForPlatform(account *Account) bool {
-	if p == nil || p.stickyPlatformCheck == nil {
-		return false
-	}
-	return p.stickyPlatformCheck(account)
-}
-
 func (p *gatewaySelectionPlan) newCandidateFilterParams(
 	ctx context.Context,
 	requestedModel string,

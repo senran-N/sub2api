@@ -34,6 +34,7 @@ func (s *GatewayService) buildLegacySelectionInput(
 	}
 }
 
+//nolint:unused // 保留为多平台调度回归测试的直接入口，避免测试绕过生产作用域构造。
 func buildGatewayDirectSelectionScope(
 	ctx context.Context,
 	groupID *int64,
@@ -71,6 +72,8 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 }
 
 // selectAccountForModelWithPlatform 选择单平台账户（完全隔离）
+//
+//nolint:unused // 保留给多平台调度测试直接验证单平台选择边界。
 func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, platform string) (*Account, error) {
 	scope := buildGatewayDirectSelectionScope(ctx, groupID, platform, true, false)
 	return s.selectAccountWithLegacyScheduling(s.buildLegacySelectionInput(scope, sessionHash, requestedModel, excludedIDs, nil, true))
@@ -78,6 +81,8 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 
 // selectAccountWithMixedScheduling 选择账户（支持混合调度）
 // 查询原生平台账户 + 启用 mixed_scheduling 的 antigravity 账户
+//
+//nolint:unused // 保留给混合调度回归测试直接覆盖 legacy 选择入口。
 func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, nativePlatform string) (*Account, error) {
 	scope := buildGatewayDirectSelectionScope(ctx, groupID, nativePlatform, false, true)
 	return s.selectAccountWithLegacyScheduling(s.buildLegacySelectionInput(scope, sessionHash, requestedModel, excludedIDs, nil, true))

@@ -15,10 +15,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/pkg/logger"
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/senran-N/sub2api/internal/pkg/logger"
+	"github.com/senran-N/sub2api/internal/service"
 )
 
 type OpsWSProxyConfig struct {
@@ -33,8 +33,8 @@ const (
 	envOpsWSOriginPolicy   = "OPS_WS_ORIGIN_POLICY"
 	// These caps stay env-only on purpose: they are deployment-scoped circuit breakers
 	// for the admin realtime channel and should not expand the main config surface.
-	envOpsWSMaxConns       = "OPS_WS_MAX_CONNS"
-	envOpsWSMaxConnsPerIP  = "OPS_WS_MAX_CONNS_PER_IP"
+	envOpsWSMaxConns      = "OPS_WS_MAX_CONNS"
+	envOpsWSMaxConnsPerIP = "OPS_WS_MAX_CONNS_PER_IP"
 )
 
 const (

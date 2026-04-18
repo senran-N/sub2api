@@ -230,7 +230,7 @@ func (d *HTTPProxyDialer) DialTLSContext(ctx context.Context, network, addr stri
 
 	// Step 3: Read CONNECT response
 	br := bufio.NewReader(conn)
-	resp, err := http.ReadResponse(br, req)
+	resp, err := http.ReadResponse(br, req) //nolint:bodyclose // CONNECT response body is bound to the tunnel conn; closing it would tear down the TLS tunnel before handshake.
 	if err != nil {
 		_ = conn.Close()
 		slog.Debug("tls_fingerprint_http_proxy_read_response_failed", "error", err)

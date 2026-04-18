@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ func newOpsRealtimeTestRouter(handler *OpsHandler) *gin.Engine {
 
 func TestOpsRealtimeTrafficDisabledIncludesRuntimeObservability(t *testing.T) {
 	settingRepo := newTestSettingRepo()
-	require.NoError(t, settingRepo.Set(nil, service.SettingKeyOpsRealtimeMonitoringEnabled, "false"))
+	require.NoError(t, settingRepo.Set(context.TODO(), service.SettingKeyOpsRealtimeMonitoringEnabled, "false"))
 
 	svc := service.NewOpsService(nil, settingRepo, &config.Config{
 		Ops: config.OpsConfig{Enabled: true},

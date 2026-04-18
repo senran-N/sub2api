@@ -18,6 +18,20 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+func dialOpenAIWSClient(t *testing.T, wsURL string) *coderws.Conn {
+	t.Helper()
+
+	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancelDial()
+
+	clientConn, dialResp, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsURL, "http"), nil)
+	if dialResp != nil && dialResp.Body != nil {
+		_ = dialResp.Body.Close()
+	}
+	require.NoError(t, err)
+	return clientConn
+}
+
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossTurns(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -116,9 +130,14 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 	defer wsServer.Close()
 
 	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
+	clientConn, dialResp, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
 	cancelDial()
 	require.NoError(t, err)
+	if dialResp != nil && dialResp.Body != nil {
+		defer func() {
+			_ = dialResp.Body.Close()
+		}()
+	}
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -324,9 +343,14 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_RewritesDefaultF
 	defer wsServer.Close()
 
 	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
+	clientConn, dialResp, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
 	cancelDial()
 	require.NoError(t, err)
+	if dialResp != nil && dialResp.Body != nil {
+		defer func() {
+			_ = dialResp.Body.Close()
+		}()
+	}
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -463,9 +487,14 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_DedicatedModeDoe
 
 	runSingleTurnSession := func(expectedResponseID string) {
 		dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-		clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
+		clientConn, dialResp, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
 		cancelDial()
 		require.NoError(t, err)
+		if dialResp != nil && dialResp.Body != nil {
+			defer func() {
+				_ = dialResp.Body.Close()
+			}()
+		}
 		defer func() {
 			_ = clientConn.CloseNow()
 		}()
@@ -591,9 +620,14 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PassthroughModeR
 	defer wsServer.Close()
 
 	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
+	clientConn, dialResp, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
 	cancelDial()
 	require.NoError(t, err)
+	if dialResp != nil && dialResp.Body != nil {
+		defer func() {
+			_ = dialResp.Body.Close()
+		}()
+	}
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -708,18 +742,15 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ModeOffReturnsPo
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
 
 	writeCtx, cancelWrite := context.WithTimeout(context.Background(), 3*time.Second)
-	err = clientConn.Write(writeCtx, coderws.MessageText, []byte(`{"type":"response.create","model":"gpt-5.1","stream":false}`))
+	writeErr := clientConn.Write(writeCtx, coderws.MessageText, []byte(`{"type":"response.create","model":"gpt-5.1","stream":false}`))
 	cancelWrite()
-	require.NoError(t, err)
+	require.NoError(t, writeErr)
 
 	select {
 	case serverErr := <-serverErrCh:
@@ -821,10 +852,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledPre
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -968,10 +996,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledPre
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -1109,10 +1134,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreEnabledSkip
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -1241,10 +1263,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledPre
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -1373,10 +1392,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledFun
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -1505,10 +1521,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledFun
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -1649,10 +1662,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PreflightPingFai
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -1791,10 +1801,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledStr
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -1954,10 +1961,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_WriteFailBeforeD
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -2101,10 +2105,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PreviousResponse
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -2252,10 +2253,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledStr
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -2408,10 +2406,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PreviousResponse
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
@@ -2533,18 +2528,15 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_RejectsMessageID
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 	defer func() {
 		_ = clientConn.CloseNow()
 	}()
 
 	writeCtx, cancelWrite := context.WithTimeout(context.Background(), 3*time.Second)
-	err = clientConn.Write(writeCtx, coderws.MessageText, []byte(`{"type":"response.create","model":"gpt-5.1","stream":false,"previous_response_id":"msg_123456"}`))
+	writeErr := clientConn.Write(writeCtx, coderws.MessageText, []byte(`{"type":"response.create","model":"gpt-5.1","stream":false,"previous_response_id":"msg_123456"}`))
 	cancelWrite()
-	require.NoError(t, err)
+	require.NoError(t, writeErr)
 
 	select {
 	case serverErr := <-serverErrCh:
@@ -2789,15 +2781,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ClientDisconnect
 	}))
 	defer wsServer.Close()
 
-	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
-	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
-	cancelDial()
-	require.NoError(t, err)
+	clientConn := dialOpenAIWSClient(t, wsServer.URL)
 
 	writeCtx, cancelWrite := context.WithTimeout(context.Background(), 3*time.Second)
-	err = clientConn.Write(writeCtx, coderws.MessageText, []byte(`{"type":"response.create","model":"custom-original-model","stream":false,"service_tier":"flex"}`))
+	writeErr := clientConn.Write(writeCtx, coderws.MessageText, []byte(`{"type":"response.create","model":"custom-original-model","stream":false,"service_tier":"flex"}`))
 	cancelWrite()
-	require.NoError(t, err)
+	require.NoError(t, writeErr)
 	// 立即关闭客户端，模拟客户端在 relay 期间断连。
 	require.NoError(t, clientConn.CloseNow(), "模拟 ingress 客户端提前断连")
 

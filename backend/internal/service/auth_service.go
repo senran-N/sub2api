@@ -897,7 +897,7 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	// 检查Token是否过期
 	if time.Now().After(data.ExpiresAt) {
 		// 删除过期Token
-		s.deleteRefreshTokenDetached(tokenHash)
+		_ = s.deleteRefreshTokenDetached(tokenHash)
 		return nil, ErrRefreshTokenExpired
 	}
 
@@ -906,7 +906,7 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			// 用户已删除，撤销整个Token家族
-			s.deleteTokenFamilyDetached(data.FamilyID)
+			_ = s.deleteTokenFamilyDetached(data.FamilyID)
 			return nil, ErrRefreshTokenInvalid
 		}
 		logger.LegacyPrintf("service.auth", "[Auth] Database error getting user for token refresh: %v", err)
@@ -916,14 +916,14 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	// 检查用户状态
 	if !user.IsActive() {
 		// 用户被禁用，撤销整个Token家族
-		s.deleteTokenFamilyDetached(data.FamilyID)
+		_ = s.deleteTokenFamilyDetached(data.FamilyID)
 		return nil, ErrUserNotActive
 	}
 
 	// 检查TokenVersion（密码更改后所有Token失效）
 	if data.TokenVersion != user.TokenVersion {
 		// TokenVersion不匹配，撤销整个Token家族
-		s.deleteTokenFamilyDetached(data.FamilyID)
+		_ = s.deleteTokenFamilyDetached(data.FamilyID)
 		return nil, ErrTokenRevoked
 	}
 

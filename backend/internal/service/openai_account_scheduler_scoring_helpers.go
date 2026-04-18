@@ -77,7 +77,12 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAILoadBalancedCandidates(
 			loadInfo = &AccountLoadInfo{AccountID: account.ID}
 		}
 
-		errorRate, ttft, hasTTFT := s.stats.snapshot(account.ID)
+		errorRate := 0.0
+		ttft := 0.0
+		hasTTFT := false
+		if s != nil && s.stats != nil {
+			errorRate, ttft, hasTTFT = s.stats.snapshot(account.ID)
+		}
 		cooling := s != nil && s.service != nil && s.service.isOpenAITransportFallbackCooling(account.ID, requiredTransport)
 		scoreCtx.observe(account, loadInfo, ttft, hasTTFT)
 		candidates = append(candidates, openAIAccountCandidateScore{

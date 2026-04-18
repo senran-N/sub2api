@@ -60,6 +60,8 @@ func shuffleCandidatesByPriority(candidates []*Account) {
 }
 
 // filterByMinPriority 过滤出优先级最小的账号集合
+//
+//nolint:unused // 保留给 layered scheduling tests 直接验证排序阶段语义。
 func filterByMinPriority(accounts []accountWithLoad) []accountWithLoad {
 	if len(accounts) == 0 {
 		return accounts
@@ -80,6 +82,8 @@ func filterByMinPriority(accounts []accountWithLoad) []accountWithLoad {
 }
 
 // filterByMinLoadRate 过滤出负载率最低的账号集合
+//
+//nolint:unused // 保留给 layered scheduling tests 直接验证负载过滤阶段语义。
 func filterByMinLoadRate(accounts []accountWithLoad) []accountWithLoad {
 	if len(accounts) == 0 {
 		return accounts
@@ -101,6 +105,8 @@ func filterByMinLoadRate(accounts []accountWithLoad) []accountWithLoad {
 
 // selectByLRU 从集合中选择最久未用的账号
 // 如果有多个账号具有相同的最小 LastUsedAt，则随机选择一个
+//
+//nolint:unused // 保留给 layered scheduling tests 直接验证 LRU 选择语义。
 func selectByLRU(accounts []accountWithLoad, preferOAuth bool) *accountWithLoad {
 	if len(accounts) == 0 {
 		return nil

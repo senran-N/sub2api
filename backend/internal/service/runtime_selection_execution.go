@@ -24,27 +24,27 @@ const (
 func tryAcquireRuntimeSelectionDetailed(
 	ctx context.Context,
 	spec runtimeAcquireSelectionSpec,
-) (*AccountSelectionResult, error, string, bool) {
+) (*AccountSelectionResult, string, error, bool) {
 	account := spec.account
 	if account == nil {
-		return nil, nil, "", false
+		return nil, "", nil, false
 	}
 	if spec.prepare != nil {
 		account = spec.prepare(account)
 	}
 	if account == nil || spec.acquire == nil {
-		return nil, nil, "", false
+		return nil, "", nil, false
 	}
 	defaultSchedulingRuntimeKernelStats.runtimeAcquireAttempts.Add(1)
 
 	result, err := spec.acquire(account)
 	if err != nil {
 		defaultSchedulingRuntimeKernelStats.runtimeAcquireErrors.Add(1)
-		return nil, err, runtimeAcquireMissUnavailable, false
+		return nil, runtimeAcquireMissUnavailable, err, false
 	}
 	if result == nil || !result.Acquired {
 		defaultSchedulingRuntimeKernelStats.runtimeAcquireMisses.Add(1)
-		return nil, nil, runtimeAcquireMissUnavailable, false
+		return nil, runtimeAcquireMissUnavailable, nil, false
 	}
 
 	selected := account
@@ -56,30 +56,30 @@ func tryAcquireRuntimeSelectionDetailed(
 			result.ReleaseFunc()
 		}
 		defaultSchedulingRuntimeKernelStats.runtimeFinalizeMisses.Add(1)
-		return nil, nil, runtimeAcquireMissFinalize, false
+		return nil, runtimeAcquireMissFinalize, nil, false
 	}
 	if spec.allowSession != nil && !spec.allowSession(selected) {
 		if result.ReleaseFunc != nil {
 			result.ReleaseFunc()
 		}
 		defaultSchedulingRuntimeKernelStats.runtimeSessionMisses.Add(1)
-		return nil, nil, runtimeAcquireMissSession, false
+		return nil, runtimeAcquireMissSession, nil, false
 	}
 	if spec.bind != nil {
 		spec.bind(selected)
 	}
 	defaultSchedulingRuntimeKernelStats.runtimeAcquireSuccess.Add(1)
 	if spec.onAcquired != nil {
-		return spec.onAcquired(selected, result), nil, "", true
+		return spec.onAcquired(selected, result), "", nil, true
 	}
-	return newAcquiredAccountSelection(selected, result.ReleaseFunc), nil, "", true
+	return newAcquiredAccountSelection(selected, result.ReleaseFunc), "", nil, true
 }
 
 func tryAcquireRuntimeSelection(
 	ctx context.Context,
 	spec runtimeAcquireSelectionSpec,
 ) (*AccountSelectionResult, error, bool) {
-	result, err, _, ok := tryAcquireRuntimeSelectionDetailed(ctx, spec)
+	result, _, err, ok := tryAcquireRuntimeSelectionDetailed(ctx, spec)
 	return result, err, ok
 }
 

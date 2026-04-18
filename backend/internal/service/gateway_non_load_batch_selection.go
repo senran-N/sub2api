@@ -37,7 +37,7 @@ func (s *GatewayService) selectAccountWithoutLoadBatch(
 			return nil, err
 		}
 
-		result, _, missReason, ok := tryAcquireRuntimeSelectionDetailed(ctx, s.buildGatewayRuntimeAcquireSpec(
+		result, missReason, _, ok := tryAcquireRuntimeSelectionDetailed(ctx, s.buildGatewayRuntimeAcquireSpec(
 			ctx,
 			account,
 			sessionHash,

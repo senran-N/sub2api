@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
 	coderws "github.com/coder/websocket"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 

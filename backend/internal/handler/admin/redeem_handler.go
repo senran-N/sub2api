@@ -402,7 +402,10 @@ func buildRedeemCodeStats(codes []service.RedeemCode) gin.H {
 
 	for _, code := range codes {
 		if _, exists := byType[code.Type]; exists {
-			byType[code.Type] = byType[code.Type].(int) + 1
+			count, ok := byType[code.Type].(int)
+			if ok {
+				byType[code.Type] = count + 1
+			}
 		}
 
 		switch code.Status {

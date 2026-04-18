@@ -40,12 +40,6 @@ func newJSONResponse(status int, body string) *http.Response {
 	}
 }
 
-func newJSONResponseWithHeader(status int, body, key, value string) *http.Response {
-	resp := newJSONResponse(status, body)
-	resp.Header.Set(key, value)
-	return resp
-}
-
 func newAccountTestContext() (*gin.Context, *httptest.ResponseRecorder) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

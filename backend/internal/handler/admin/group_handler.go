@@ -106,10 +106,10 @@ type CreateGroupRequest struct {
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes []string `json:"supported_model_scopes"`
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
-	AllowMessagesDispatch       bool                                 `json:"allow_messages_dispatch"`
-	RequireOAuthOnly            bool                                 `json:"require_oauth_only"`
-	RequirePrivacySet           bool                                 `json:"require_privacy_set"`
-	DefaultMappedModel          string                               `json:"default_mapped_model"`
+	AllowMessagesDispatch       bool                                  `json:"allow_messages_dispatch"`
+	RequireOAuthOnly            bool                                  `json:"require_oauth_only"`
+	RequirePrivacySet           bool                                  `json:"require_privacy_set"`
+	DefaultMappedModel          string                                `json:"default_mapped_model"`
 	MessagesDispatchModelConfig dto.OpenAIMessagesDispatchModelConfig `json:"messages_dispatch_model_config"`
 	// 从指定分组复制账号（创建后自动绑定）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
@@ -141,10 +141,10 @@ type UpdateGroupRequest struct {
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes *[]string `json:"supported_model_scopes"`
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
-	AllowMessagesDispatch       *bool                                 `json:"allow_messages_dispatch"`
-	RequireOAuthOnly            *bool                                 `json:"require_oauth_only"`
-	RequirePrivacySet           *bool                                 `json:"require_privacy_set"`
-	DefaultMappedModel          *string                               `json:"default_mapped_model"`
+	AllowMessagesDispatch       *bool                                  `json:"allow_messages_dispatch"`
+	RequireOAuthOnly            *bool                                  `json:"require_oauth_only"`
+	RequirePrivacySet           *bool                                  `json:"require_privacy_set"`
+	DefaultMappedModel          *string                                `json:"default_mapped_model"`
 	MessagesDispatchModelConfig *dto.OpenAIMessagesDispatchModelConfig `json:"messages_dispatch_model_config"`
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
@@ -266,7 +266,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 			HaikuMappedModel:   req.MessagesDispatchModelConfig.HaikuMappedModel,
 			ExactModelMappings: req.MessagesDispatchModelConfig.ExactModelMappings,
 		},
-		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
+		CopyAccountsFromGroupIDs: req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

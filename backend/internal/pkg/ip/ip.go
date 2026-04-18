@@ -110,6 +110,8 @@ func matchesCompiledRules(parsedIP net.IP, rules *CompiledIPRules) bool {
 }
 
 // isPrivateIP 检查 IP 是否为私有地址。
+//
+//nolint:unused // 保留给同包测试覆盖私网判断语义，避免暴露无必要导出 API。
 func isPrivateIP(ipStr string) bool {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {

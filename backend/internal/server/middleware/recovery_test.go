@@ -9,9 +9,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/response"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 

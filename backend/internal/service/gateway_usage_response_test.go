@@ -27,7 +27,8 @@ func TestRewriteCacheCreationJSON_RewritesToOneHourBucket(t *testing.T) {
 	changed := rewriteCacheCreationJSON(usageObject, "1h")
 
 	require.True(t, changed)
-	cacheCreation := usageObject["cache_creation"].(map[string]any)
+	cacheCreation, ok := usageObject["cache_creation"].(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, float64(0), cacheCreation["ephemeral_5m_input_tokens"])
 	require.Equal(t, float64(25), cacheCreation["ephemeral_1h_input_tokens"])
 }

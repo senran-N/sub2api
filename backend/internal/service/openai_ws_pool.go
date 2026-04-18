@@ -306,33 +306,33 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 		if best != nil && best.tryAcquire() {
 			connPick := time.Since(pickStartedAt)
 			p.recordConnPickDuration(connPick)
-				ap.mu.Unlock()
-				closeOpenAIWSConns(evicted)
-				if p.shouldHealthCheckConn(best) {
-					healthcheckStartedAt := time.Now()
-					if err := best.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
-						healthcheckTotal += time.Since(healthcheckStartedAt)
-						best.close()
-						p.evictConn(accountID, best.id)
-						if retry < 1 {
-							return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
-						}
-						return nil, err
-					}
+			ap.mu.Unlock()
+			closeOpenAIWSConns(evicted)
+			if p.shouldHealthCheckConn(best) {
+				healthcheckStartedAt := time.Now()
+				if err := best.pingWithTimeout(openAIWSConnHealthCheckTO); err != nil {
 					healthcheckTotal += time.Since(healthcheckStartedAt)
+					best.close()
+					p.evictConn(accountID, best.id)
+					if retry < 1 {
+						return p.acquire(ctx, req, retry+1, acquireStartedAt, healthcheckTotal)
+					}
+					return nil, err
 				}
-				lease := &openAIWSConnLease{
-					pool:            p,
-					accountID:       accountID,
-					conn:            best,
-					connPick:        connPick,
-					acquireDuration: time.Since(acquireStartedAt),
-					healthcheck:     healthcheckTotal,
-					reused:          true,
-				}
-				p.metrics.acquireReuseTotal.Add(1)
-				p.ensureTargetIdleAsync(accountID)
-				return lease, nil
+				healthcheckTotal += time.Since(healthcheckStartedAt)
+			}
+			lease := &openAIWSConnLease{
+				pool:            p,
+				accountID:       accountID,
+				conn:            best,
+				connPick:        connPick,
+				acquireDuration: time.Since(acquireStartedAt),
+				healthcheck:     healthcheckTotal,
+				reused:          true,
+			}
+			p.metrics.acquireReuseTotal.Add(1)
+			p.ensureTargetIdleAsync(accountID)
+			return lease, nil
 		}
 		for _, conn := range ap.conns {
 			if conn == nil || conn == best {

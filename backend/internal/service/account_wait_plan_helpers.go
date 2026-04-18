@@ -63,7 +63,7 @@ func tryAcquireOrBuildStickyWaitPlan(
 
 	result, _, ok := trySelectStickyRuntimeSelection(stickyRuntimeSelectionSpec{
 		tryAcquire: func() (*AccountSelectionResult, string, bool) {
-			result, acquireErr, missReason, ok := tryAcquireRuntimeSelectionDetailed(ctx, runtimeAcquireSelectionSpec{
+			result, missReason, acquireErr, ok := tryAcquireRuntimeSelectionDetailed(ctx, runtimeAcquireSelectionSpec{
 				account: account,
 				acquire: func(account *Account) (*AcquireResult, error) {
 					return acquireFn(ctx, accountID, account.Concurrency)

@@ -53,6 +53,7 @@ func buildAvailableAccountLoads(candidates []*Account, loadMap map[int64]*Accoun
 	return available
 }
 
+//nolint:unused // 保留给同包测试直接验证候选集裁剪行为。
 func removeAccountWithLoadByID(available []accountWithLoad, accountID int64) []accountWithLoad {
 	filtered := make([]accountWithLoad, 0, max(0, len(available)-1))
 	for _, acc := range available {

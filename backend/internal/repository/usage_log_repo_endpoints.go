@@ -299,61 +299,6 @@ func (r *usageLogRepository) getEndpointStatsByColumnWithFilters(ctx context.Con
 	return results, nil
 }
 
-func (r *usageLogRepository) getEndpointPathStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8) (results []EndpointStat, err error) {
-	query := fmt.Sprintf(`
-		SELECT
-			CONCAT(
-				COALESCE(NULLIF(TRIM(inbound_endpoint), ''), 'unknown'),
-				' -> ',
-				COALESCE(NULLIF(TRIM(upstream_endpoint), ''), 'unknown')
-			) AS endpoint,
-			COUNT(*) AS requests,
-			COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens), 0) AS total_tokens,
-			COALESCE(SUM(total_cost), 0) as cost,
-			%s
-		FROM usage_logs
-		WHERE created_at >= $1 AND created_at < $2
-	`, usageLogActualCostAggregateExpr("", userID, apiKeyID, accountID))
-
-	args := []any{startTime, endTime}
-	extraConditions, args := appendUsageLogScopedConditions(nil, args, usageLogScopedFilters{
-		UserID:      userID,
-		APIKeyID:    apiKeyID,
-		AccountID:   accountID,
-		GroupID:     groupID,
-		Model:       model,
-		RequestType: requestType,
-		Stream:      stream,
-		BillingType: billingType,
-	}, usageLogScopedFilterOptions{IncludeModel: true})
-	query = appendConditionsToQuery(query, extraConditions)
-	query += " GROUP BY endpoint ORDER BY requests DESC"
-
-	rows, err := r.sql.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-			results = nil
-		}
-	}()
-
-	results = make([]EndpointStat, 0)
-	for rows.Next() {
-		var row EndpointStat
-		if err := rows.Scan(&row.Endpoint, &row.Requests, &row.TotalTokens, &row.Cost, &row.ActualCost); err != nil {
-			return nil, err
-		}
-		results = append(results, row)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return results, nil
-}
-
 // GetEndpointStatsWithFilters returns inbound endpoint statistics with optional filters.
 func (r *usageLogRepository) GetEndpointStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8) ([]EndpointStat, error) {
 	return r.getEndpointStatsByColumnWithFilters(ctx, "inbound_endpoint", startTime, endTime, userID, apiKeyID, accountID, groupID, model, requestType, stream, billingType)

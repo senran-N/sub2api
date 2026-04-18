@@ -306,7 +306,7 @@ func getContextInt64(c *gin.Context, key string) (int64, bool) {
 }
 
 func (h *OpenAIGatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
-	h.submitUsageRecordTaskWithParent(nil, task)
+	h.submitUsageRecordTaskWithParent(context.TODO(), task)
 }
 
 func (h *OpenAIGatewayHandler) submitUsageRecordTaskWithParent(parent context.Context, task service.UsageRecordTask) {
@@ -408,7 +408,7 @@ func (h *OpenAIGatewayHandler) handleStreamingAwareError(c *gin.Context, status 
 			errorEvent := "event: error\ndata: " + `{"error":{"type":` + strconv.Quote(errType) + `,"message":` + strconv.Quote(message) + `}}` + "\n\n"
 			if _, err := fmt.Fprint(c.Writer, errorEvent); err != nil {
 				if ginErr := c.Error(err); ginErr != nil {
-					ginErr.SetType(gin.ErrorTypePrivate)
+					_ = ginErr.SetType(gin.ErrorTypePrivate)
 				}
 			}
 			flusher.Flush()

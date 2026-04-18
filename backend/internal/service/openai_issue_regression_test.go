@@ -192,7 +192,9 @@ func TestPrepareOpenAIForwardRequest_OfficialCodexPreservesReasoningMinimal(t *t
 	require.NoError(t, err)
 	require.NotNil(t, prepared)
 	require.Equal(t, "minimal", gjson.GetBytes(prepared.body, "reasoning.effort").String())
-	require.Equal(t, "minimal", prepared.reqBody["reasoning"].(map[string]any)["effort"])
+	reasoning, ok := prepared.reqBody["reasoning"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "minimal", reasoning["effort"])
 }
 
 func TestPrepareOpenAIForwardRequest_OfficialCodexPreservesNativeModelIdentifier(t *testing.T) {

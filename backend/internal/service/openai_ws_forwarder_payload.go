@@ -63,7 +63,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSIngressPayloadMeta(
 		meta.hasFunctionCallOutput = gjson.GetBytes(payload, `input.#(type=="function_call_output")`).Exists()
 	}
 
-	if !(account != nil && account.Type == AccountTypeOAuth && !s.isOpenAIWSStoreRecoveryAllowed(account)) &&
+	if (account == nil || account.Type != AccountTypeOAuth || s.isOpenAIWSStoreRecoveryAllowed(account)) &&
 		bytes.Contains(payload, openAIWSIngressPayloadStoreKey) {
 		storeValue := gjson.GetBytes(payload, "store")
 		if storeValue.Exists() && (storeValue.Type == gjson.True || storeValue.Type == gjson.False) {
@@ -326,20 +326,6 @@ func openAIWSPayloadStringFromRaw(payload []byte, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(gjson.GetBytes(payload, key).String())
-}
-
-func openAIWSPayloadBoolFromRaw(payload []byte, key string, defaultValue bool) bool {
-	if len(payload) == 0 || strings.TrimSpace(key) == "" {
-		return defaultValue
-	}
-	value := gjson.GetBytes(payload, key)
-	if !value.Exists() {
-		return defaultValue
-	}
-	if value.Type != gjson.True && value.Type != gjson.False {
-		return defaultValue
-	}
-	return value.Bool()
 }
 
 func openAIWSSessionHashesFromID(sessionID string) (string, string) {

@@ -244,7 +244,9 @@ func TestWaitForSlotWithPingTimeout_AccountAndUserAcquire(t *testing.T) {
 		require.False(t, streamStarted)
 		waitAccountMs, ok := c.Get(service.OpsWaitAccountMsKey)
 		require.True(t, ok)
-		require.GreaterOrEqual(t, waitAccountMs.(int64), int64(0))
+		waitAccountValue, ok := waitAccountMs.(int64)
+		require.True(t, ok)
+		require.GreaterOrEqual(t, waitAccountValue, int64(0))
 		release()
 		require.GreaterOrEqual(t, cache.accountAcquireCalls, 2)
 		require.GreaterOrEqual(t, cache.accountReleaseCalls, 1)
@@ -258,7 +260,9 @@ func TestWaitForSlotWithPingTimeout_AccountAndUserAcquire(t *testing.T) {
 		require.NotNil(t, release)
 		waitUserMs, ok := c.Get(service.OpsWaitUserMsKey)
 		require.True(t, ok)
-		require.GreaterOrEqual(t, waitUserMs.(int64), int64(0))
+		waitUserValue, ok := waitUserMs.(int64)
+		require.True(t, ok)
+		require.GreaterOrEqual(t, waitUserValue, int64(0))
 		release()
 		require.GreaterOrEqual(t, cache.userAcquireCalls, 2)
 		require.GreaterOrEqual(t, cache.userReleaseCalls, 1)
@@ -282,7 +286,9 @@ func TestWaitForSlotWithPingTimeout_TimeoutAndStreamPing(t *testing.T) {
 		require.True(t, cErr.IsTimeout)
 		waitAccountMs, ok := c.Get(service.OpsWaitAccountMsKey)
 		require.True(t, ok)
-		require.GreaterOrEqual(t, waitAccountMs.(int64), int64(0))
+		waitAccountValue, ok := waitAccountMs.(int64)
+		require.True(t, ok)
+		require.GreaterOrEqual(t, waitAccountValue, int64(0))
 	})
 
 	t.Run("stream_mode_sends_ping_before_timeout", func(t *testing.T) {
@@ -313,7 +319,9 @@ func TestWaitForSlotWithPingTimeout_AcquireError(t *testing.T) {
 	require.Contains(t, err.Error(), "redis unavailable")
 	waitAccountMs, ok := c.Get(service.OpsWaitAccountMsKey)
 	require.True(t, ok)
-	require.GreaterOrEqual(t, waitAccountMs.(int64), int64(0))
+	waitAccountValue, ok := waitAccountMs.(int64)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, waitAccountValue, int64(0))
 }
 
 func TestAcquireAccountSlotWithWaitTimeout_ImmediateAttemptBeforeBackoff(t *testing.T) {

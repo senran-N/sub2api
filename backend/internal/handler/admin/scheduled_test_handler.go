@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 // ScheduledTestHandler handles admin scheduled-test-plan management.

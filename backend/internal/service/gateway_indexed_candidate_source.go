@@ -1,29 +1,9 @@
 package service
 
-import (
-	"context"
-
-	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
-)
+import "context"
 
 func (s *GatewayService) shouldUseIndexedCandidateSource() bool {
 	return s != nil && s.schedulerSnapshot != nil
-}
-
-func (s *GatewayService) hasForcedSelectionPlatform(ctx context.Context, allowForcePlatform bool) bool {
-	if !allowForcePlatform {
-		return false
-	}
-	_, ok := forcePlatformFromContext(ctx)
-	return ok
-}
-
-func forcePlatformFromContext(ctx context.Context) (string, bool) {
-	if ctx == nil {
-		return "", false
-	}
-	forcePlatform, ok := ctx.Value(ctxkey.ForcePlatform).(string)
-	return forcePlatform, ok && forcePlatform != ""
 }
 
 func (s *GatewayService) buildGatewayIndexedCandidatePager(
@@ -49,41 +29,6 @@ func (s *GatewayService) buildGatewayIndexedCandidatePager(
 		}
 	}
 	return newSchedulerIndexedAccountPager(s.schedulerSnapshot, groupID, platform, hasForcePlatform, sources), nil
-}
-
-func (s *GatewayService) filterSelectionBatchByIndexedCapabilities(
-	ctx context.Context,
-	groupID *int64,
-	platform string,
-	hasForcePlatform bool,
-	accounts []Account,
-	schedGroup *Group,
-) []Account {
-	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil || schedGroup == nil || !schedGroup.RequirePrivacySet {
-		return accounts
-	}
-	accountIDs := make([]int64, 0, len(accounts))
-	for i := range accounts {
-		accountIDs = append(accountIDs, accounts[i].ID)
-	}
-	matches, _, err := s.schedulerSnapshot.MatchSchedulableAccountsCapability(
-		ctx,
-		groupID,
-		platform,
-		hasForcePlatform,
-		SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexPrivacySet},
-		accountIDs,
-	)
-	if err != nil {
-		return accounts
-	}
-	filtered := make([]Account, 0, len(accounts))
-	for i := range accounts {
-		if matches[accounts[i].ID] {
-			filtered = append(filtered, accounts[i])
-		}
-	}
-	return filtered
 }
 
 func (s *GatewayService) filterSelectionBatchByIndexedCapabilitiesFromPointers(

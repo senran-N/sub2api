@@ -215,13 +215,17 @@ func TestGatewayService_InitializeForwardBetaPolicy_RespectsModelWhitelist(t *te
 	err = svc.initializeForwardBetaPolicy(context.Background(), opusContext, &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth}, "claude-opus-4-1")
 	require.NoError(t, err)
 	opusFilterSet, _ := opusContext.Get(betaPolicyFilterSetKey)
-	_, exists := opusFilterSet.(map[string]struct{})["context-1m-2025-08-07"]
+	opusFilters, ok := opusFilterSet.(map[string]struct{})
+	require.True(t, ok)
+	_, exists := opusFilters["context-1m-2025-08-07"]
 	require.True(t, exists)
 
 	sonnetContext := makeContext()
 	err = svc.initializeForwardBetaPolicy(context.Background(), sonnetContext, &Account{Platform: PlatformAnthropic, Type: AccountTypeOAuth}, "claude-sonnet-4-1")
 	require.NoError(t, err)
 	sonnetFilterSet, _ := sonnetContext.Get(betaPolicyFilterSetKey)
-	_, exists = sonnetFilterSet.(map[string]struct{})["context-1m-2025-08-07"]
+	sonnetFilters, ok := sonnetFilterSet.(map[string]struct{})
+	require.True(t, ok)
+	_, exists = sonnetFilters["context-1m-2025-08-07"]
 	require.False(t, exists)
 }

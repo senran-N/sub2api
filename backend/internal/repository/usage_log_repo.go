@@ -94,13 +94,6 @@ func safeDateFormat(granularity string) string {
 	return "YYYY-MM-DD"
 }
 
-// appendRawUsageLogModelWhereCondition keeps direct model filters on the raw model column for backward
-// compatibility with historical rows. Requested/upstream analytics must use
-// resolveModelDimensionExpression instead.
-func appendRawUsageLogModelWhereCondition(conditions []string, args []any, model string) ([]string, []any) {
-	return appendRawUsageLogModelWhereConditionWithColumn(conditions, args, rawUsageLogModelColumn, model)
-}
-
 func appendRawUsageLogModelWhereConditionWithColumn(conditions []string, args []any, column string, model string) ([]string, []any) {
 	if strings.TrimSpace(model) == "" {
 		return conditions, args
@@ -108,18 +101,6 @@ func appendRawUsageLogModelWhereConditionWithColumn(conditions []string, args []
 	conditions = append(conditions, fmt.Sprintf("%s = $%d", column, len(args)+1))
 	args = append(args, model)
 	return conditions, args
-}
-
-// appendRawUsageLogModelQueryFilter keeps direct model filters on the raw model column for backward
-// compatibility with historical rows. Requested/upstream analytics must use
-// resolveModelDimensionExpression instead.
-func appendRawUsageLogModelQueryFilter(query string, args []any, model string) (string, []any) {
-	if strings.TrimSpace(model) == "" {
-		return query, args
-	}
-	query += fmt.Sprintf(" AND %s = $%d", rawUsageLogModelColumn, len(args)+1)
-	args = append(args, model)
-	return query, args
 }
 
 type usageLogRepository struct {
@@ -250,10 +231,6 @@ func buildWhere(conditions []string) string {
 	return "WHERE " + strings.Join(conditions, " AND ")
 }
 
-func appendRequestTypeOrStreamWhereCondition(conditions []string, args []any, requestType *int16, stream *bool) ([]string, []any) {
-	return appendRequestTypeOrStreamWhereConditionWithColumns(conditions, args, "request_type", "stream", "openai_ws_mode", requestType, stream)
-}
-
 func appendRequestTypeOrStreamWhereConditionWithColumns(conditions []string, args []any, requestTypeColumn, streamColumn, openAIWSModeColumn string, requestType *int16, stream *bool) ([]string, []any) {
 	if requestType != nil {
 		condition, conditionArgs := buildRequestTypeFilterConditionWithColumns(len(args)+1, requestTypeColumn, streamColumn, openAIWSModeColumn, *requestType)
@@ -266,20 +243,6 @@ func appendRequestTypeOrStreamWhereConditionWithColumns(conditions []string, arg
 		args = append(args, *stream)
 	}
 	return conditions, args
-}
-
-func appendRequestTypeOrStreamQueryFilter(query string, args []any, requestType *int16, stream *bool) (string, []any) {
-	if requestType != nil {
-		condition, conditionArgs := buildRequestTypeFilterCondition(len(args)+1, *requestType)
-		query += " AND " + condition
-		args = append(args, conditionArgs...)
-		return query, args
-	}
-	if stream != nil {
-		query += fmt.Sprintf(" AND stream = $%d", len(args)+1)
-		args = append(args, *stream)
-	}
-	return query, args
 }
 
 // buildRequestTypeFilterCondition 在 request_type 过滤时兼容 legacy 字段，避免历史数据漏查。

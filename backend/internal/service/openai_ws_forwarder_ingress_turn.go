@@ -257,14 +257,14 @@ func (s *OpenAIGatewayService) relayOpenAIWSIngressTurn(
 					clientDisconnected,
 				)
 			}
-				return &OpenAIForwardResult{
-					RequestID:       responseID,
-					Usage:           usage,
-					Model:           originalModel,
-					UpstreamModel:   forwardedModel,
-					ServiceTier:     extractOpenAIServiceTierFromBody(payload),
-					ReasoningEffort: extractOpenAIReasoningEffortFromBody(payload, originalModel),
-					Stream:          reqStream,
+			return &OpenAIForwardResult{
+				RequestID:       responseID,
+				Usage:           usage,
+				Model:           originalModel,
+				UpstreamModel:   forwardedModel,
+				ServiceTier:     extractOpenAIServiceTierFromBody(payload),
+				ReasoningEffort: extractOpenAIReasoningEffortFromBody(payload, originalModel),
+				Stream:          reqStream,
 				OpenAIWSMode:    true,
 				ResponseHeaders: lease.HandshakeHeaders(),
 				Duration:        time.Since(turnStart),

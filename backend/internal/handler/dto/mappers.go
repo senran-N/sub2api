@@ -133,11 +133,11 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		return nil
 	}
 	out := &AdminGroup{
-		Group:                   groupFromServiceBase(g),
-		ModelRouting:            g.ModelRouting,
-		ModelRoutingEnabled:     g.ModelRoutingEnabled,
-		MCPXMLInject:            g.MCPXMLInject,
-		DefaultMappedModel:      g.DefaultMappedModel,
+		Group:               groupFromServiceBase(g),
+		ModelRouting:        g.ModelRouting,
+		ModelRoutingEnabled: g.ModelRoutingEnabled,
+		MCPXMLInject:        g.MCPXMLInject,
+		DefaultMappedModel:  g.DefaultMappedModel,
 		MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
 			OpusMappedModel:    g.MessagesDispatchModelConfig.OpusMappedModel,
 			SonnetMappedModel:  g.MessagesDispatchModelConfig.SonnetMappedModel,

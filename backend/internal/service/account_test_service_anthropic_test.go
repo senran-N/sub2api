@@ -17,6 +17,7 @@ func TestAccountTestService_AnthropicUpstreamUsesModelMappingAndEndpointOverride
 	ctx, _ := newAccountTestContext()
 
 	resp := newJSONResponse(http.StatusOK, "")
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	resp.Body = io.NopCloser(strings.NewReader("data: {\"type\":\"message_stop\"}\n\n"))
 
 	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
@@ -58,6 +59,7 @@ func TestAccountTestService_AnthropicUpstreamProbeAppliesWildcardModelMapping(t 
 	ctx, _ := newAccountTestContext()
 
 	resp := newJSONResponse(http.StatusOK, "")
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	resp.Body = io.NopCloser(strings.NewReader("data: {\"type\":\"message_stop\"}\n\n"))
 
 	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
@@ -93,6 +95,7 @@ func TestAccountTestService_AnthropicUpstreamProbeUsesReasoningVariantBaseMappin
 	ctx, _ := newAccountTestContext()
 
 	resp := newJSONResponse(http.StatusOK, "")
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	resp.Body = io.NopCloser(strings.NewReader("data: {\"type\":\"message_stop\"}\n\n"))
 
 	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
@@ -127,8 +130,12 @@ func TestAccountTestService_AnthropicOAuthProbeUsesClaudeNormalization(t *testin
 	gin.SetMode(gin.TestMode)
 	ctx, _ := newAccountTestContext()
 
-	resp := newJSONResponse(http.StatusOK, "")
-	resp.Body = io.NopCloser(strings.NewReader("data: {\"type\":\"message_stop\"}\n\n"))
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("data: {\"type\":\"message_stop\"}\n\n")),
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
 
 	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
 	svc := &AccountTestService{
@@ -160,6 +167,7 @@ func TestAccountTestService_BedrockProbeUsesResolvedRuntimeModelID(t *testing.T)
 	ctx, _ := newAccountTestContext()
 
 	resp := newJSONResponse(http.StatusOK, `{"content":[{"text":"ok"}]}`)
+	t.Cleanup(func() { _ = resp.Body.Close() })
 
 	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
 	svc := &AccountTestService{

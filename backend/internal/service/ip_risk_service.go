@@ -244,8 +244,8 @@ func (s *IPRiskService) checkAbuseIPDB(ctx context.Context, exitIP string) (int,
 
 	var abuseResp struct {
 		Data struct {
-			AbuseConfidenceScore int `json:"abuseConfidenceScore"`
-			TotalReports         int `json:"totalReports"`
+			AbuseConfidenceScore int  `json:"abuseConfidenceScore"`
+			TotalReports         int  `json:"totalReports"`
 			IsPublic             bool `json:"isPublic"`
 		} `json:"data"`
 	}
@@ -377,9 +377,10 @@ func (s *IPRiskService) computeFraudScore(result *IPRiskResult) int {
 	}
 
 	// DNS leak contribution
-	if result.DNSLeakRisk == "possible" {
+	switch result.DNSLeakRisk {
+	case "possible":
 		score += 10
-	} else if result.DNSLeakRisk == "detected" {
+	case "detected":
 		score += 20
 	}
 

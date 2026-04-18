@@ -54,7 +54,6 @@ func NewSchedulerSnapshotService(
 }
 
 func (s *SchedulerSnapshotService) ListSchedulableAccounts(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, bool, error) {
-	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
 	bucket, useMixed := s.resolveBucket(groupID, platform, hasForcePlatform)
 
 	if s.cache != nil {

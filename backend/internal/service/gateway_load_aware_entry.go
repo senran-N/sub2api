@@ -12,7 +12,6 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	if err != nil {
 		return nil, err
 	}
-	ctx = scope.ctx
 	group := scope.group
 	groupID = scope.groupID
 	stickyAccountID := scope.stickyAccountID

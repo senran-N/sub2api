@@ -114,6 +114,17 @@ func (s *OpsAggregationService) Stop() {
 	})
 }
 
+func runRedisLeaderLockRelease(script *redis.Script, client *redis.Client, key string, holder string, timeout time.Duration) {
+	if script == nil || client == nil || key == "" || holder == "" {
+		return
+	}
+
+	releaseCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	_, _ = script.Run(releaseCtx, client, []string{key}, holder).Result()
+}
+
 func (s *OpsAggregationService) hourlyLoop() {
 	// First run immediately.
 	s.aggregateHourly()

@@ -292,9 +292,7 @@ func normalizeCompatibleUpstreamModels(items []map[string]any) []CompatibleUpstr
 			CreatedAt:   strings.TrimSpace(firstStringField(item, "created_at", "createdAt")),
 			OwnedBy:     strings.TrimSpace(firstStringField(item, "owned_by", "ownedBy")),
 		}
-		if strings.HasPrefix(model.ID, "models/") {
-			model.ID = strings.TrimPrefix(model.ID, "models/")
-		}
+		model.ID = strings.TrimPrefix(model.ID, "models/")
 		if model.ID == "" {
 			continue
 		}

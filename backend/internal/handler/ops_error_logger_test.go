@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 

@@ -260,7 +260,7 @@ func (h *AccountHandler) applyRuntimeMetrics(item *AccountWithConcurrency, metri
 	if item == nil || item.Account == nil {
 		return
 	}
-	accountID := item.Account.ID
+	accountID := item.ID
 	if count, ok := metrics.ConcurrencyCounts[accountID]; ok {
 		item.CurrentConcurrency = count
 	}
@@ -558,7 +558,7 @@ func (h *AccountHandler) Test(c *gin.Context) {
 	if h.rateLimitService != nil {
 		if _, err := h.rateLimitService.RecoverAccountAfterSuccessfulTest(c.Request.Context(), accountID); err != nil {
 			if ginErr := c.Error(err); ginErr != nil {
-				ginErr.SetType(gin.ErrorTypePrivate)
+				_ = ginErr.SetType(gin.ErrorTypePrivate)
 			}
 		}
 	}

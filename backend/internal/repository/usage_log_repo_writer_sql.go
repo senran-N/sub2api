@@ -116,63 +116,63 @@ func buildSequentialPlaceholdersSQL(start, count int) string {
 }
 
 func appendUsageLogPreparedCTEValueRow(builder *strings.Builder, args []any, argPos *int, prepared usageLogInsertPrepared, includeInputIndex bool, inputIndex int) []any {
-	builder.WriteString("(")
+	_, _ = builder.WriteString("(")
 	if includeInputIndex {
-		builder.WriteString("$")
-		builder.WriteString(strconv.Itoa(*argPos))
+		_, _ = builder.WriteString("$")
+		_, _ = builder.WriteString(strconv.Itoa(*argPos))
 		args = append(args, inputIndex)
 		*argPos = *argPos + 1
 		if len(prepared.args) > 0 {
-			builder.WriteString(",")
+			_, _ = builder.WriteString(",")
 		}
 	}
 	for i, arg := range prepared.args {
 		if i > 0 {
-			builder.WriteString(",")
+			_, _ = builder.WriteString(",")
 		}
-		builder.WriteString("$")
-		builder.WriteString(strconv.Itoa(*argPos))
+		_, _ = builder.WriteString("$")
+		_, _ = builder.WriteString(strconv.Itoa(*argPos))
 		if i < len(usageLogInsertArgTypes) {
-			builder.WriteString("::")
-			builder.WriteString(usageLogInsertArgTypes[i])
+			_, _ = builder.WriteString("::")
+			_, _ = builder.WriteString(usageLogInsertArgTypes[i])
 		}
 		args = append(args, arg)
 		*argPos = *argPos + 1
 	}
-	builder.WriteString(")")
+	_, _ = builder.WriteString(")")
 	return args
 }
 
 func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usageLogInsertPrepared) (string, []any) {
 	var query strings.Builder
-	query.WriteString(`
+	_, _ = query.WriteString(`
 		WITH input (
 			input_idx,
 			`)
-	query.WriteString(usageLogInsertColumnsSQL)
-	query.WriteString(`
+	_, _ = query.WriteString(usageLogInsertColumnsSQL)
+	_, _ = query.WriteString(`
 		) AS (VALUES `)
 
 	args := make([]any, 0, len(keys)*(len(usageLogInsertColumnNames)+1))
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
-			query.WriteString(",")
+			_, _ = query.WriteString(",")
 		}
 		args = appendUsageLogPreparedCTEValueRow(&query, args, &argPos, preparedByKey[key], true, idx)
 	}
-	query.WriteString(`
+	_, _ = query.WriteString(`
 		),
 		inserted AS (
 			INSERT INTO usage_logs (
 				`)
-	query.WriteString(usageLogInsertColumnsSQL)
-	query.WriteString(`
+	_, _ = query.WriteString(usageLogInsertColumnsSQL)
+	_, _ = query.WriteString(`
 			)
 			SELECT
 				`)
-	query.WriteString(usageLogInsertColumnsSQL)
-	query.WriteString(`
+	_, _ = query.WriteString(usageLogInsertColumnsSQL)
+	_, _ = query.WriteString(`
 			FROM input
 			ON CONFLICT (request_id, api_key_id) DO NOTHING
 			RETURNING request_id, api_key_id, id, created_at
@@ -213,33 +213,33 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 
 func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (string, []any) {
 	var query strings.Builder
-	query.WriteString(`
+	_, _ = query.WriteString(`
 		WITH input (
 			`)
-	query.WriteString(usageLogInsertColumnsSQL)
-	query.WriteString(`
+	_, _ = query.WriteString(usageLogInsertColumnsSQL)
+	_, _ = query.WriteString(`
 		) AS (VALUES `)
 
 	args := make([]any, 0, len(preparedList)*len(usageLogInsertColumnNames))
 	argPos := 1
 	for idx, prepared := range preparedList {
 		if idx > 0 {
-			query.WriteString(",")
+			_, _ = query.WriteString(",")
 		}
 		args = appendUsageLogPreparedCTEValueRow(&query, args, &argPos, prepared, false, 0)
 	}
 
-	query.WriteString(`
+	_, _ = query.WriteString(`
 		)
 		INSERT INTO usage_logs (
 			`)
-	query.WriteString(usageLogInsertColumnsSQL)
-	query.WriteString(`
+	_, _ = query.WriteString(usageLogInsertColumnsSQL)
+	_, _ = query.WriteString(`
 		)
 		SELECT
 			`)
-	query.WriteString(usageLogInsertColumnsSQL)
-	query.WriteString(`
+	_, _ = query.WriteString(usageLogInsertColumnsSQL)
+	_, _ = query.WriteString(`
 		FROM input
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`)

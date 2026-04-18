@@ -186,7 +186,7 @@ func (p *GeminiTokenProvider) markTempUnschedulable(account *Account, refreshErr
 	now := time.Now()
 	until := now.Add(tokenRefreshTempUnschedDuration)
 	reason := "token refresh failed on request path: " + refreshErr.Error()
-	writeCtx, cancel := newTempUnschedWriteContext(nil)
+	writeCtx, cancel := newTempUnschedWriteContext(context.TODO())
 	defer cancel()
 
 	if err := p.accountRepo.SetTempUnschedulable(writeCtx, account.ID, until, reason); err != nil {

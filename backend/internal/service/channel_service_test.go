@@ -189,8 +189,6 @@ func makeStandardChannelRepo(ch Channel, groupPlatforms map[int64]string) *chann
 
 func testChannelStringPtr(v string) *string { return &v }
 
-func testChannelBoolPtr(v bool) *bool { return &v }
-
 func TestChannelServiceGetChannelForGroupReturnsClone(t *testing.T) {
 	ch := Channel{
 		ID:       1,

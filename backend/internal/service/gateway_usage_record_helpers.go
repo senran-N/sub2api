@@ -131,7 +131,7 @@ func buildGatewayUsageLog(ctx context.Context, input usageLogBuildInput) usageLo
 		AccountID:             input.Account.ID,
 		RequestID:             requestID,
 		Model:                 input.Result.Model,
-		RequestedModel:        input.ChannelUsageFields.OriginalModel,
+		RequestedModel:        input.OriginalModel,
 		UpstreamModel:         optionalNonEqualStringPtr(input.Result.UpstreamModel, input.Result.Model),
 		ReasoningEffort:       input.Result.ReasoningEffort,
 		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),

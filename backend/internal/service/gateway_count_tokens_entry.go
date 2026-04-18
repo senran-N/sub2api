@@ -22,7 +22,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 
 	body, reqModel, shouldMimicClaudeCode := s.prepareCountTokensRequestBody(ctx, c, account, parsed)
 
-	resp, respBody, err := s.executeCountTokensUpstream(ctx, c, account, body, reqModel, shouldMimicClaudeCode)
+	resp, respBody, err := s.executeCountTokensUpstream(ctx, c, account, body, reqModel, shouldMimicClaudeCode) //nolint:bodyclose // executeCountTokensUpstream fully buffers and closes the upstream body before returning.
 	if err != nil {
 		return err
 	}

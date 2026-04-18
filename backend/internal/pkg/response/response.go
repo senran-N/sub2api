@@ -6,9 +6,9 @@ import (
 	"math"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/util/logredact"
-	"github.com/gin-gonic/gin"
 )
 
 // Response 标准API响应格式

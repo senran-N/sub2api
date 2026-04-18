@@ -336,51 +336,6 @@ func (s *OpenAIGatewayService) buildOpenAIIndexedCandidatePager(
 	return newSchedulerIndexedAccountPager(s.schedulerSnapshot, scope.groupID, PlatformOpenAI, false, sources), nil
 }
 
-func (s *OpenAIGatewayService) filterOpenAIBatchByIndexedCapabilities(
-	ctx context.Context,
-	accounts []Account,
-	scope openAIIndexedCandidateScope,
-) []Account {
-	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil {
-		return accounts
-	}
-
-	filtered := accounts
-	if scope.requirePrivacy {
-		filtered = s.filterOpenAIBatchBySnapshotMembership(ctx, scope.groupID, filtered, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexPrivacySet})
-	}
-	if scope.requiredTransport != OpenAIUpstreamTransportAny && scope.requiredTransport != OpenAIUpstreamTransportHTTPSSE {
-		filtered = s.filterOpenAIBatchBySnapshotMembership(ctx, scope.groupID, filtered, SchedulerCapabilityIndex{Kind: SchedulerCapabilityIndexOpenAIWS})
-	}
-	return filtered
-}
-
-func (s *OpenAIGatewayService) filterOpenAIBatchBySnapshotMembership(
-	ctx context.Context,
-	groupID *int64,
-	accounts []Account,
-	index SchedulerCapabilityIndex,
-) []Account {
-	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil {
-		return accounts
-	}
-	accountIDs := make([]int64, 0, len(accounts))
-	for i := range accounts {
-		accountIDs = append(accountIDs, accounts[i].ID)
-	}
-	matches, _, err := s.schedulerSnapshot.MatchSchedulableAccountsCapability(ctx, groupID, PlatformOpenAI, false, index, accountIDs)
-	if err != nil {
-		return accounts
-	}
-	filtered := make([]Account, 0, len(accounts))
-	for i := range accounts {
-		if matches[accounts[i].ID] {
-			filtered = append(filtered, accounts[i])
-		}
-	}
-	return filtered
-}
-
 func (s *OpenAIGatewayService) filterOpenAIBatchBySnapshotMembershipFromPointers(
 	ctx context.Context,
 	groupID *int64,
@@ -575,7 +530,7 @@ func (s *OpenAIGatewayService) trySelectResolvedOpenAIStickyAccount(
 
 	result, _, ok := trySelectStickyRuntimeSelection(stickyRuntimeSelectionSpec{
 		tryAcquire: func() (*AccountSelectionResult, string, bool) {
-			result, acquireErr, missReason, ok := tryAcquireRuntimeSelectionDetailed(ctx, runtimeAcquireSelectionSpec{
+			result, missReason, acquireErr, ok := tryAcquireRuntimeSelectionDetailed(ctx, runtimeAcquireSelectionSpec{
 				account: spec.account,
 				acquire: func(account *Account) (*AcquireResult, error) {
 					return acquireAccountSlotWithConcurrencyService(ctx, s.concurrencyService, spec.accountID, account.Concurrency)

@@ -85,6 +85,7 @@ func (s *GatewayService) resolveStickyAccountID(ctx context.Context, groupID *in
 	return accountID
 }
 
+//nolint:unused // 保留给 load-aware 调度回归测试直接校验准备态，不改热路径调用方式。
 func (s *GatewayService) prepareLoadAwareSchedulingState(
 	ctx context.Context,
 	groupID *int64,

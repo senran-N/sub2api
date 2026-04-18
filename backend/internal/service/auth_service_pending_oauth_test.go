@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/senran-N/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 

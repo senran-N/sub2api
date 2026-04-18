@@ -3,9 +3,9 @@ package middleware
 import (
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 

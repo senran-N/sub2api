@@ -132,23 +132,6 @@ func (s *defaultOpenAIAccountScheduler) buildIndexedSnapshotPager(
 	})
 }
 
-func (s *defaultOpenAIAccountScheduler) filterBatchByIndexedCapabilities(
-	ctx context.Context,
-	req OpenAIAccountScheduleRequest,
-	accounts []Account,
-	schedGroup *Group,
-) []Account {
-	if len(accounts) == 0 || s == nil || s.service == nil {
-		return accounts
-	}
-	return s.service.filterOpenAIBatchByIndexedCapabilities(ctx, accounts, openAIIndexedCandidateScope{
-		groupID:           req.GroupID,
-		requestedModel:    req.RequestedModel,
-		requiredTransport: req.RequiredTransport,
-		requirePrivacy:    schedGroup != nil && schedGroup.RequirePrivacySet,
-	})
-}
-
 func (s *defaultOpenAIAccountScheduler) filterBatchByIndexedCapabilityPointers(
 	ctx context.Context,
 	req OpenAIAccountScheduleRequest,

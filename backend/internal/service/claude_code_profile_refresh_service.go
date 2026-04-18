@@ -9,7 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +24,7 @@ import (
 )
 
 const attributionSearchWindowBytes = 4096
+const nativeClaudeCodePackagePrefix = "@anthropic-ai/claude-code-"
 
 type ClaudeCodeProfileSyncService struct {
 	cfg      *config.Config
@@ -38,10 +42,35 @@ type npmLatestPackage struct {
 	} `json:"dist"`
 }
 
+type claudeCodePackageManifest struct {
+	Name                 string            `json:"name"`
+	OptionalDependencies map[string]string `json:"optionalDependencies"`
+}
+
+type claudeCodeSourceAsset struct {
+	Path    string
+	Content string
+}
+
+type claudeCodeNativePackageCandidate struct {
+	Name    string
+	Version string
+}
+
+type claudeCodePackageAssets struct {
+	PackageJSON             string
+	Manifest                claudeCodePackageManifest
+	Sources                 []claudeCodeSourceAsset
+	NativePackageCandidates []claudeCodeNativePackageCandidate
+}
+
 var (
-	reBetaToken   = regexp.MustCompile(`(?:oauth|claude-code|interleaved-thinking|fine-grained-tool-streaming|token-counting|context-1m|fast-mode|redact-thinking|token-efficient-tools|effort|task-budgets|prompt-caching-scope|structured-outputs|web-search|advanced-tool-use|tool-search-tool|summarize-connector-text|afk-mode|cli-internal|advisor-tool|mcp-servers|files-api|environments|ccr-byoc)-\d{4}-\d{2}-\d{2}|claude-code-\d{8}`)
-	reXAppLiteral = regexp.MustCompile(`["']x-app["']\s*:\s*["']([^"']+)["']`)
-	rePackageName = regexp.MustCompile(`"name"\s*:\s*"([^"]+)"`)
+	reBetaToken            = regexp.MustCompile(`(?:oauth|claude-code|interleaved-thinking|fine-grained-tool-streaming|token-counting|context-1m|fast-mode|redact-thinking|token-efficient-tools|effort|task-budgets|prompt-caching-scope|structured-outputs|web-search|advanced-tool-use|tool-search-tool|summarize-connector-text|afk-mode|cli-internal|advisor-tool|mcp-servers|files-api|environments|ccr-byoc|compact|managed-agents|skills)-\d{4}-\d{2}-\d{2}|claude-code-\d{8}`)
+	reXAppLiteral          = regexp.MustCompile(`["']x-app["']\s*:\s*["']([^"']+)["']`)
+	rePackageName          = regexp.MustCompile(`"name"\s*:\s*"([^"]+)"`)
+	reNativePackageLiteral = regexp.MustCompile(`@anthropic-ai/claude-code-(?:darwin|linux|win32)-(?:x64|arm64)(?:-musl)?`)
+	reNativePackagePrefix  = regexp.MustCompile(`PACKAGE_PREFIX\s*=\s*["'](@anthropic-ai/claude-code)["']`)
+	reNativePackageSuffix  = regexp.MustCompile(`PACKAGE_PREFIX\s*\+\s*["'](-(?:darwin|linux|win32)-(?:x64|arm64)(?:-musl)?)["']`)
 
 	// Dynamic system prompt extraction: match strings starting with known
 	// prefixes that can evolve across versions, rather than hardcoding full text.
@@ -50,9 +79,10 @@ var (
 	reSystemPrompt = regexp.MustCompile(`"(You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK[^"]{0,300})"|"(You are Claude Code, Anthropic's official CLI for Claude[^"]{0,300})"|"(You are a Claude agent, built on Anthropic's Claude Agent SDK[^"]{0,300})"`)
 
 	// Attribution fingerprint extraction patterns.
-	reAttributionAnchor  = regexp.MustCompile(`cc_entrypoint`)
-	reAttributionHexSalt = regexp.MustCompile(`["']([0-9a-f]{8,24})["']`)
-	reAttributionIntArr  = regexp.MustCompile(`\[\s*(\d{1,3}(?:\s*,\s*\d{1,3}){1,9})\s*\]`)
+	reAttributionAnchor   = regexp.MustCompile(`cc_entrypoint`)
+	reAttributionHexSalt  = regexp.MustCompile(`["']([0-9a-f]{8,24})["']`)
+	reAttributionIntArr   = regexp.MustCompile(`\[\s*(\d{1,3}(?:\s*,\s*\d{1,3}){1,9})\s*\]`)
+	reBinarySnippetAnchor = regexp.MustCompile(`cc_entrypoint|X-Stainless-Package-Version|You are Claude Code|You are a Claude agent|["']x-app["']`)
 )
 
 func NewClaudeCodeProfileSyncService(cfg *config.Config) *ClaudeCodeProfileSyncService {
@@ -123,7 +153,7 @@ func (s *ClaudeCodeProfileSyncService) refreshOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	profile, err := s.fetchAndBuildProfile(ctx, latest)
+	profile, err := s.fetchAndBuildProfile(ctx, conf, latest)
 	if err != nil {
 		return err
 	}
@@ -137,8 +167,17 @@ func (s *ClaudeCodeProfileSyncService) refreshOnce(ctx context.Context) error {
 }
 
 func (s *ClaudeCodeProfileSyncService) fetchLatestPackage(ctx context.Context, conf resolvedClaudeCodeSyncConfig) (*npmLatestPackage, error) {
+	return s.fetchPackageRelease(ctx, conf, conf.PackageName, "")
+}
+
+func (s *ClaudeCodeProfileSyncService) fetchPackageRelease(ctx context.Context, conf resolvedClaudeCodeSyncConfig, packageName, version string) (*npmLatestPackage, error) {
 	base := strings.TrimRight(conf.RegistryURL, "/")
-	endpoint := base + "/" + url.PathEscape(conf.PackageName) + "/latest"
+	endpoint := base + "/" + url.PathEscape(packageName)
+	if strings.TrimSpace(version) == "" {
+		endpoint += "/latest"
+	} else {
+		endpoint += "/" + url.PathEscape(version)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -162,36 +201,72 @@ func (s *ClaudeCodeProfileSyncService) fetchLatestPackage(ctx context.Context, c
 	return &latest, nil
 }
 
-// maxTarballSize limits the decompressed tarball to 64 MiB to prevent OOM from
-// malicious gzip bombs or oversized packages.
-const maxTarballSize = 64 << 20
+// maxTarballSize limits the compressed tarball body to 128 MiB.
+// Claude Code native packages are already around 70 MiB compressed in 2.1.114,
+// so the older 64 MiB limit would reject legitimate releases.
+const maxTarballSize = 128 << 20
 
-func (s *ClaudeCodeProfileSyncService) fetchAndBuildProfile(ctx context.Context, latest *npmLatestPackage) (claude.MimicProfile, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latest.Dist.Tarball, nil)
+func (s *ClaudeCodeProfileSyncService) fetchAndBuildProfile(ctx context.Context, conf resolvedClaudeCodeSyncConfig, latest *npmLatestPackage) (claude.MimicProfile, error) {
+	assets, err := s.fetchPackageAssets(ctx, latest)
 	if err != nil {
 		return claude.MimicProfile{}, err
 	}
+	if profile, buildErr := buildClaudeCodeProfile(latest, assets); buildErr == nil {
+		return profile, nil
+	} else if len(assets.NativePackageCandidates) == 0 {
+		return claude.MimicProfile{}, buildErr
+	}
+
+	var lastErr error
+	for _, candidate := range preferredNativePackageCandidates(assets.NativePackageCandidates) {
+		nativeVersion := strings.TrimSpace(candidate.Version)
+		if nativeVersion == "" {
+			nativeVersion = latest.Version
+		}
+		nativePkg, err := s.fetchPackageRelease(ctx, conf, candidate.Name, nativeVersion)
+		if err != nil {
+			lastErr = fmt.Errorf("fetch native package metadata %s@%s: %w", candidate.Name, nativeVersion, err)
+			continue
+		}
+		nativeAssets, err := s.fetchPackageAssets(ctx, nativePkg)
+		if err != nil {
+			lastErr = fmt.Errorf("extract native package %s@%s: %w", candidate.Name, nativePkg.Version, err)
+			continue
+		}
+		profile, err := buildClaudeCodeProfile(latest, mergeClaudeCodePackageAssets(assets, nativeAssets))
+		if err == nil {
+			return profile, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return claude.MimicProfile{}, lastErr
+	}
+	return claude.MimicProfile{}, fmt.Errorf("failed to extract Claude Code runtime traits from npm package")
+}
+
+func (s *ClaudeCodeProfileSyncService) fetchPackageAssets(ctx context.Context, pkg *npmLatestPackage) (claudeCodePackageAssets, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pkg.Dist.Tarball, nil)
+	if err != nil {
+		return claudeCodePackageAssets{}, err
+	}
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return claude.MimicProfile{}, err
+		return claudeCodePackageAssets{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return claude.MimicProfile{}, fmt.Errorf("tarball returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return claudeCodePackageAssets{}, fmt.Errorf("tarball returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	// Wrap with a size limit to guard against gzip bombs.
+	// Wrap with a compressed-size limit so we can still process native packages
+	// without holding their full binaries in memory.
 	limitedBody := io.LimitReader(resp.Body, maxTarballSize)
-	files, err := extractClaudeCodePackageFiles(limitedBody)
+	assets, err := extractClaudeCodePackageAssets(limitedBody)
 	if err != nil {
-		return claude.MimicProfile{}, err
+		return claudeCodePackageAssets{}, err
 	}
-	// Build profile, then clear extracted content so large strings are GC-eligible.
-	profile, buildErr := buildClaudeCodeProfile(latest, files)
-	for k := range files {
-		delete(files, k)
-	}
-	return profile, buildErr
+	return assets, nil
 }
 
 type resolvedClaudeCodeSyncConfig struct {
@@ -233,7 +308,11 @@ func (s *ClaudeCodeProfileSyncService) syncConfig() resolvedClaudeCodeSyncConfig
 }
 
 func buildClaudeCodeProfileHTTPClient(cfg *config.Config) *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	baseTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok || baseTransport == nil {
+		baseTransport = (&http.Transport{}).Clone()
+	}
+	transport := baseTransport.Clone()
 	timeout := 20 * time.Second
 	if cfg != nil && strings.TrimSpace(cfg.Update.ProxyURL) != "" {
 		if proxyURL, err := url.Parse(strings.TrimSpace(cfg.Update.ProxyURL)); err == nil {
@@ -249,84 +328,112 @@ func buildClaudeCodeProfileHTTPClient(cfg *config.Config) *http.Client {
 	}
 }
 
-// maxExtractedFileSize limits any single file extracted from the tarball to 32 MiB.
-const maxExtractedFileSize = 32 << 20
+// Per-file extraction limits keep wrapper sources small while still allowing one
+// native Claude binary to be scanned in a streaming fashion.
+const (
+	maxPackageJSONSize         = 1 << 20
+	maxTextSourceSize          = 8 << 20
+	maxNativeBinarySize        = 256 << 20
+	maxBinaryRunBufferBytes    = 128 << 10
+	maxBinarySnippetBytes      = 2 << 20
+	binarySnippetContextBytes  = 8 << 10
+	binarySnippetAnchorContext = 8 << 10
+	binarySnippetTokenContext  = 256
+)
 
-func extractClaudeCodePackageFiles(r io.Reader) (map[string]string, error) {
+func extractClaudeCodePackageAssets(r io.Reader) (claudeCodePackageAssets, error) {
 	gzReader, err := gzip.NewReader(r)
 	if err != nil {
-		return nil, err
+		return claudeCodePackageAssets{}, err
 	}
 	defer func() { _ = gzReader.Close() }()
 
 	tarReader := tar.NewReader(gzReader)
-	targets := map[string]struct{}{
-		"package/cli.js":       {},
-		"package/package.json": {},
-	}
-	files := make(map[string]string, len(targets))
+	var assets claudeCodePackageAssets
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return claudeCodePackageAssets{}, err
 		}
-		if _, ok := targets[header.Name]; !ok {
-			continue
+		switch {
+		case header.Name == "package/package.json":
+			content, readErr := readTarEntryString(tarReader, header.Size, maxPackageJSONSize)
+			if readErr != nil {
+				return claudeCodePackageAssets{}, readErr
+			}
+			assets.PackageJSON = content
+			assets.Manifest = parseClaudeCodePackageManifest(content)
+			assets.NativePackageCandidates = manifestNativePackageCandidates(assets.Manifest.OptionalDependencies)
+		case isClaudeCodeTextSourcePath(header.Name):
+			content, readErr := readTarEntryString(tarReader, header.Size, maxTextSourceSize)
+			if readErr != nil {
+				return claudeCodePackageAssets{}, readErr
+			}
+			if strings.TrimSpace(content) != "" {
+				assets.Sources = append(assets.Sources, claudeCodeSourceAsset{Path: header.Name, Content: content})
+			}
+		case isClaudeCodeNativeBinaryPath(header.Name):
+			content, readErr := extractRelevantTextFromBinary(tarReader, header.Size)
+			if readErr != nil {
+				return claudeCodePackageAssets{}, readErr
+			}
+			if strings.TrimSpace(content) != "" {
+				assets.Sources = append(assets.Sources, claudeCodeSourceAsset{Path: header.Name, Content: content})
+			}
 		}
-		if header.Size > maxExtractedFileSize {
-			return nil, fmt.Errorf("file %s too large: %d bytes (limit %d)", header.Name, header.Size, maxExtractedFileSize)
-		}
-		content, readErr := io.ReadAll(io.LimitReader(tarReader, maxExtractedFileSize))
-		if readErr != nil {
-			return nil, readErr
-		}
-		files[header.Name] = string(content)
 	}
-	if files["package/cli.js"] == "" {
-		return nil, fmt.Errorf("required file missing from tarball: package/cli.js")
+	if strings.TrimSpace(assets.PackageJSON) == "" {
+		return claudeCodePackageAssets{}, fmt.Errorf("required file missing from tarball: package/package.json")
 	}
-	return files, nil
+	assets.NativePackageCandidates = mergeManifestAndSourceNativePackageCandidates(
+		assets.NativePackageCandidates,
+		sourceNativePackageCandidates(assets.Sources),
+	)
+	if len(assets.Sources) == 0 && len(assets.NativePackageCandidates) == 0 {
+		return claudeCodePackageAssets{}, fmt.Errorf("no Claude Code source assets found in tarball")
+	}
+	return assets, nil
 }
 
-func buildClaudeCodeProfile(latest *npmLatestPackage, files map[string]string) (claude.MimicProfile, error) {
-	cliBundle := files["package/cli.js"]
-	if strings.TrimSpace(cliBundle) == "" {
-		return claude.MimicProfile{}, fmt.Errorf("cli bundle is empty")
+func buildClaudeCodeProfile(latest *npmLatestPackage, assets claudeCodePackageAssets) (claude.MimicProfile, error) {
+	combinedSource := combineClaudeCodeSources(assets.Sources)
+	if strings.TrimSpace(combinedSource) == "" {
+		return claude.MimicProfile{}, fmt.Errorf("claude code source corpus is empty")
 	}
 
 	profile := claude.BuiltinMimicProfile()
 	profile.Source = "npm:" + latest.Version
-	profile.PackageName = resolveClaudeCodePackageName(latest.Name, files["package/package.json"])
+	profile.PackageName = resolveClaudeCodePackageName(latest.Name, assets.PackageJSON)
 	profile.PackageVersion = latest.Version
 	profile.UserAgent = "claude-cli/" + latest.Version + " (external, cli)"
-	profile.OAuthBeta = findBetaToken(cliBundle, "oauth-")
-	profile.ClaudeCodeBeta = findBetaToken(cliBundle, "claude-code-")
-	profile.InterleavedThinkingBeta = findBetaToken(cliBundle, "interleaved-thinking-")
-	profile.FineGrainedToolStreamingBeta = findBetaToken(cliBundle, "fine-grained-tool-streaming-")
-	profile.TokenCountingBeta = findBetaToken(cliBundle, "token-counting-")
-	profile.Context1MBeta = findBetaToken(cliBundle, "context-1m-")
-	profile.FastModeBeta = findBetaToken(cliBundle, "fast-mode-")
-	profile.SystemPromptPrefixes = extractSystemPromptPrefixes(cliBundle)
+	profile.OAuthBeta = findBetaToken(combinedSource, "oauth-")
+	profile.ClaudeCodeBeta = findBetaToken(combinedSource, "claude-code-")
+	profile.InterleavedThinkingBeta = findBetaToken(combinedSource, "interleaved-thinking-")
+	profile.FineGrainedToolStreamingBeta = findBetaToken(combinedSource, "fine-grained-tool-streaming-")
+	profile.TokenCountingBeta = findBetaToken(combinedSource, "token-counting-")
+	profile.Context1MBeta = findBetaToken(combinedSource, "context-1m-")
+	profile.FastModeBeta = findBetaToken(combinedSource, "fast-mode-")
+	profile.SystemPromptPrefixes = extractSystemPromptPrefixes(combinedSource)
 	if len(profile.SystemPromptPrefixes) == 0 {
-		return claude.MimicProfile{}, fmt.Errorf("failed to extract Claude Code system prompts from cli bundle")
+		return claude.MimicProfile{}, fmt.Errorf("failed to extract Claude Code system prompts from package assets")
 	}
 	profile.SystemPrompt = profile.SystemPromptPrefixes[0]
-	profile.XApp = parseXApp(cliBundle)
+	profile.XApp = parseXApp(combinedSource)
 	if profile.OAuthBeta == "" || profile.ClaudeCodeBeta == "" || profile.InterleavedThinkingBeta == "" || profile.XApp == "" {
-		return claude.MimicProfile{}, fmt.Errorf("failed to extract required Claude Code runtime traits from cli bundle")
+		return claude.MimicProfile{}, fmt.Errorf("failed to extract required Claude Code runtime traits from package assets")
 	}
 
-	// Extract attribution fingerprint salt and indices from the CLI bundle.
-	if salt, indices, ok := extractAttributionParams(cliBundle); ok {
+	// Extract attribution fingerprint salt and indices from the extracted source corpus.
+	if salt, indices, ok := extractAttributionParams(combinedSource); ok {
 		profile.AttributionSalt = salt
 		profile.AttributionIndices = indices
 	}
 
-	// Extract SDK package version (X-Stainless-Package-Version) from the bundled SDK.
-	if sdkVersion := extractSDKVersion(cliBundle); sdkVersion != "" {
+	// Extract SDK package version (X-Stainless-Package-Version) from the extracted source corpus.
+	if sdkVersion := extractSDKVersion(combinedSource); sdkVersion != "" {
 		profile.SDKVersion = sdkVersion
 	}
 
@@ -345,6 +452,390 @@ func buildClaudeCodeProfile(latest *npmLatestPackage, files map[string]string) (
 	return profile, nil
 }
 
+func readTarEntryString(r io.Reader, size int64, limit int64) (string, error) {
+	if size > limit {
+		return "", fmt.Errorf("file too large: %d bytes (limit %d)", size, limit)
+	}
+	content, err := io.ReadAll(io.LimitReader(r, limit))
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+func parseClaudeCodePackageManifest(packageJSON string) claudeCodePackageManifest {
+	var manifest claudeCodePackageManifest
+	_ = json.Unmarshal([]byte(packageJSON), &manifest)
+	return manifest
+}
+
+func manifestNativePackageCandidates(optionalDependencies map[string]string) []claudeCodeNativePackageCandidate {
+	if len(optionalDependencies) == 0 {
+		return nil
+	}
+	out := make([]claudeCodeNativePackageCandidate, 0, len(optionalDependencies))
+	for packageName, version := range optionalDependencies {
+		if strings.HasPrefix(packageName, nativeClaudeCodePackagePrefix) {
+			out = append(out, claudeCodeNativePackageCandidate{
+				Name:    packageName,
+				Version: strings.TrimSpace(version),
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Version < out[j].Version
+	})
+	return out
+}
+
+func sourceNativePackageCandidates(sources []claudeCodeSourceAsset) []claudeCodeNativePackageCandidate {
+	if len(sources) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	out := make([]claudeCodeNativePackageCandidate, 0)
+	for _, source := range sources {
+		content := source.Content
+		if strings.TrimSpace(content) == "" {
+			continue
+		}
+		for _, match := range reNativePackageLiteral.FindAllString(content, -1) {
+			name := strings.TrimSpace(match)
+			if name == "" {
+				continue
+			}
+			if _, exists := seen[name]; exists {
+				continue
+			}
+			seen[name] = struct{}{}
+			out = append(out, claudeCodeNativePackageCandidate{Name: name})
+		}
+
+		prefix := strings.TrimSuffix(nativeClaudeCodePackagePrefix, "-")
+		if match := reNativePackagePrefix.FindStringSubmatch(content); len(match) >= 2 {
+			if candidatePrefix := strings.TrimSpace(match[1]); candidatePrefix != "" {
+				prefix = candidatePrefix
+			}
+		}
+		for _, match := range reNativePackageSuffix.FindAllStringSubmatch(content, -1) {
+			if len(match) < 2 {
+				continue
+			}
+			suffix := strings.TrimSpace(match[1])
+			if suffix == "" {
+				continue
+			}
+			name := prefix + suffix
+			if _, exists := seen[name]; exists {
+				continue
+			}
+			seen[name] = struct{}{}
+			out = append(out, claudeCodeNativePackageCandidate{Name: name})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Version < out[j].Version
+	})
+	return out
+}
+
+func mergeManifestAndSourceNativePackageCandidates(existing, inferred []claudeCodeNativePackageCandidate) []claudeCodeNativePackageCandidate {
+	if len(existing) == 0 {
+		return append([]claudeCodeNativePackageCandidate(nil), inferred...)
+	}
+	if len(inferred) == 0 {
+		return existing
+	}
+	out := append([]claudeCodeNativePackageCandidate(nil), existing...)
+	seen := make(map[string]struct{}, len(existing))
+	for _, candidate := range existing {
+		seen[candidate.Name] = struct{}{}
+	}
+	for _, candidate := range inferred {
+		if _, exists := seen[candidate.Name]; exists {
+			continue
+		}
+		seen[candidate.Name] = struct{}{}
+		out = append(out, candidate)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Version < out[j].Version
+	})
+	return out
+}
+
+func preferredNativePackageCandidates(candidates []claudeCodeNativePackageCandidate) []claudeCodeNativePackageCandidate {
+	if len(candidates) <= 1 {
+		return append([]claudeCodeNativePackageCandidate(nil), candidates...)
+	}
+	exactHost := hostClaudeCodeNativePackageName()
+	sameOSPrefix := hostClaudeCodeNativeOSPrefix()
+	ordered := append([]claudeCodeNativePackageCandidate(nil), candidates...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		leftScore := nativePackageCandidateScore(ordered[i].Name, exactHost, sameOSPrefix)
+		rightScore := nativePackageCandidateScore(ordered[j].Name, exactHost, sameOSPrefix)
+		if leftScore != rightScore {
+			return leftScore < rightScore
+		}
+		if ordered[i].Name != ordered[j].Name {
+			return ordered[i].Name < ordered[j].Name
+		}
+		return ordered[i].Version < ordered[j].Version
+	})
+	return ordered
+}
+
+func nativePackageCandidateScore(packageName, exactHost, sameOSPrefix string) int {
+	switch {
+	case exactHost != "" && packageName == exactHost:
+		return 0
+	case exactHost != "" && strings.HasPrefix(packageName, exactHost+"-"):
+		return 1
+	case sameOSPrefix != "" && strings.HasPrefix(packageName, sameOSPrefix):
+		return 2
+	default:
+		return 3
+	}
+}
+
+func hostClaudeCodeNativePackageName() string {
+	hostOS := runtime.GOOS
+	switch hostOS {
+	case "windows":
+		hostOS = "win32"
+	case "darwin", "linux":
+	default:
+		return ""
+	}
+
+	hostArch := runtime.GOARCH
+	switch hostArch {
+	case "amd64":
+		hostArch = "x64"
+	case "arm64":
+	default:
+		return ""
+	}
+	return nativeClaudeCodePackagePrefix + hostOS + "-" + hostArch
+}
+
+func hostClaudeCodeNativeOSPrefix() string {
+	hostOS := runtime.GOOS
+	switch hostOS {
+	case "windows":
+		hostOS = "win32"
+	case "darwin", "linux":
+	default:
+		return ""
+	}
+	return nativeClaudeCodePackagePrefix + hostOS + "-"
+}
+
+func mergeClaudeCodePackageAssets(base, extra claudeCodePackageAssets) claudeCodePackageAssets {
+	merged := base
+	if strings.TrimSpace(merged.PackageJSON) == "" {
+		merged.PackageJSON = extra.PackageJSON
+		merged.Manifest = extra.Manifest
+	}
+	sourceSeen := make(map[string]struct{}, len(base.Sources)+len(extra.Sources))
+	merged.Sources = merged.Sources[:0]
+	for _, source := range append(append([]claudeCodeSourceAsset(nil), base.Sources...), extra.Sources...) {
+		key := source.Path + "\x00" + source.Content
+		if _, exists := sourceSeen[key]; exists {
+			continue
+		}
+		sourceSeen[key] = struct{}{}
+		merged.Sources = append(merged.Sources, source)
+	}
+	candidateSeen := make(map[string]struct{}, len(base.NativePackageCandidates)+len(extra.NativePackageCandidates))
+	merged.NativePackageCandidates = merged.NativePackageCandidates[:0]
+	for _, candidate := range append(append([]claudeCodeNativePackageCandidate(nil), base.NativePackageCandidates...), extra.NativePackageCandidates...) {
+		key := candidate.Name + "\x00" + candidate.Version
+		if _, exists := candidateSeen[key]; exists {
+			continue
+		}
+		candidateSeen[key] = struct{}{}
+		merged.NativePackageCandidates = append(merged.NativePackageCandidates, candidate)
+	}
+	sort.Slice(merged.NativePackageCandidates, func(i, j int) bool {
+		if merged.NativePackageCandidates[i].Name != merged.NativePackageCandidates[j].Name {
+			return merged.NativePackageCandidates[i].Name < merged.NativePackageCandidates[j].Name
+		}
+		return merged.NativePackageCandidates[i].Version < merged.NativePackageCandidates[j].Version
+	})
+	return merged
+}
+
+func combineClaudeCodeSources(sources []claudeCodeSourceAsset) string {
+	if len(sources) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	for _, source := range sources {
+		if strings.TrimSpace(source.Content) == "" {
+			continue
+		}
+		if builder.Len() > 0 {
+			_ = builder.WriteByte('\n')
+		}
+		_, _ = builder.WriteString(source.Content)
+	}
+	return builder.String()
+}
+
+func isClaudeCodeTextSourcePath(name string) bool {
+	if !strings.HasPrefix(name, "package/") {
+		return false
+	}
+	ext := strings.ToLower(path.Ext(name))
+	switch ext {
+	case ".js", ".mjs", ".cjs":
+		return true
+	default:
+		return false
+	}
+}
+
+func isClaudeCodeNativeBinaryPath(name string) bool {
+	if !strings.HasPrefix(name, "package/") {
+		return false
+	}
+	base := strings.ToLower(path.Base(name))
+	return base == "claude" || base == "claude.exe"
+}
+
+func isPrintableBinaryTextByte(b byte) bool {
+	return b >= 0x20 && b <= 0x7e
+}
+
+func extractRelevantTextFromBinary(r io.Reader, size int64) (string, error) {
+	if size > maxNativeBinarySize {
+		return "", fmt.Errorf("native binary too large: %d bytes (limit %d)", size, maxNativeBinarySize)
+	}
+	collector := newBinarySnippetCollector(maxBinarySnippetBytes)
+	buf := make([]byte, 32<<10)
+	run := make([]byte, 0, maxBinaryRunBufferBytes)
+	flushRun := func(content []byte) {
+		if len(content) == 0 {
+			return
+		}
+		collector.CollectString(string(content))
+	}
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			for _, b := range buf[:n] {
+				if isPrintableBinaryTextByte(b) {
+					run = append(run, b)
+					if len(run) > maxBinaryRunBufferBytes {
+						processLen := len(run) - binarySnippetContextBytes
+						if processLen > 0 {
+							flushRun(run[:processLen])
+							tailStart := processLen - binarySnippetContextBytes
+							if tailStart < 0 {
+								tailStart = 0
+							}
+							run = append([]byte(nil), run[tailStart:]...)
+						}
+					}
+					continue
+				}
+				flushRun(run)
+				run = run[:0]
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	flushRun(run)
+	return collector.String(), nil
+}
+
+type binarySnippetCollector struct {
+	maxBytes int
+	size     int
+	seen     map[string]struct{}
+	snippets []string
+}
+
+func newBinarySnippetCollector(maxBytes int) *binarySnippetCollector {
+	return &binarySnippetCollector{
+		maxBytes: maxBytes,
+		seen:     make(map[string]struct{}),
+	}
+}
+
+func (c *binarySnippetCollector) CollectString(source string) {
+	if c == nil || c.size >= c.maxBytes || strings.TrimSpace(source) == "" {
+		return
+	}
+	c.collectMatches(source, reBetaToken, binarySnippetTokenContext, binarySnippetTokenContext)
+	c.collectMatches(source, reBinarySnippetAnchor, binarySnippetAnchorContext, binarySnippetAnchorContext)
+}
+
+func (c *binarySnippetCollector) collectMatches(source string, re *regexp.Regexp, before, after int) {
+	if c == nil || c.size >= c.maxBytes {
+		return
+	}
+	for _, match := range re.FindAllStringIndex(source, -1) {
+		start := match[0] - before
+		if start < 0 {
+			start = 0
+		}
+		end := match[1] + after
+		if end > len(source) {
+			end = len(source)
+		}
+		c.addSnippet(source[start:end])
+		if c.size >= c.maxBytes {
+			return
+		}
+	}
+}
+
+func (c *binarySnippetCollector) addSnippet(snippet string) {
+	if c == nil || c.size >= c.maxBytes {
+		return
+	}
+	snippet = strings.TrimSpace(snippet)
+	if snippet == "" {
+		return
+	}
+	if _, exists := c.seen[snippet]; exists {
+		return
+	}
+	remaining := c.maxBytes - c.size
+	if remaining <= 0 {
+		return
+	}
+	if len(snippet) > remaining {
+		snippet = snippet[:remaining]
+	}
+	c.seen[snippet] = struct{}{}
+	c.snippets = append(c.snippets, snippet)
+	c.size += len(snippet)
+}
+
+func (c *binarySnippetCollector) String() string {
+	if c == nil || len(c.snippets) == 0 {
+		return ""
+	}
+	return strings.Join(c.snippets, "\n")
+}
+
 func parseXApp(source string) string {
 	match := reXAppLiteral.FindStringSubmatch(source)
 	if len(match) >= 2 {
@@ -355,21 +846,47 @@ func parseXApp(source string) string {
 
 func findBetaToken(source, prefix string) string {
 	matches := reBetaToken.FindAllString(source, -1)
-	var token string
+	var (
+		token        string
+		tokenVersion string
+	)
 	for _, match := range matches {
 		candidate := strings.TrimSpace(match)
 		if !strings.HasPrefix(candidate, prefix) {
 			continue
 		}
-		if token == "" {
-			token = candidate
+		version, ok := betaTokenVersionKey(candidate, prefix)
+		if !ok {
+			if token == "" {
+				token = candidate
+			}
 			continue
 		}
-		if token != candidate {
-			return ""
+		if token == "" || version > tokenVersion {
+			token = candidate
+			tokenVersion = version
 		}
 	}
 	return token
+}
+
+// betaTokenVersionKey normalizes supported beta token date suffixes into
+// YYYYMMDD so lexical comparison selects the newest bundle token.
+func betaTokenVersionKey(token, prefix string) (string, bool) {
+	if !strings.HasPrefix(token, prefix) {
+		return "", false
+	}
+	version := strings.TrimSpace(strings.TrimPrefix(token, prefix))
+	version = strings.ReplaceAll(version, "-", "")
+	if len(version) != 8 {
+		return "", false
+	}
+	for _, ch := range version {
+		if ch < '0' || ch > '9' {
+			return "", false
+		}
+	}
+	return version, true
 }
 
 func extractSystemPromptPrefixes(source string) []string {

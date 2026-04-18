@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/senran-N/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
