@@ -424,4 +424,38 @@ describe('CreateAccountModal', () => {
       { from: 'fresh-model', to: 'models/fresh' }
     ])
   })
+
+  it('creates a Grok session account with session_token credentials', async () => {
+    const wrapper = mountModal()
+
+    await wrapper.get('[data-tour="account-form-name"]').setValue('Grok Session Account')
+    const grokButton = findButtonByText(wrapper, 'Grok')
+    expect(grokButton).toBeTruthy()
+    await grokButton!.trigger('click')
+    await flushPromises()
+
+    const sessionButton = findButtonByText(wrapper, 'admin.accounts.types.grokSession')
+    expect(sessionButton).toBeTruthy()
+    await sessionButton!.trigger('click')
+    await flushPromises()
+
+    const sessionInput = wrapper.get(
+      'input[placeholder="admin.accounts.grok.sessionTokenPlaceholder"]'
+    )
+    await sessionInput.setValue('grok-session-token')
+
+    await wrapper.get('#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(createAccountMock).toHaveBeenCalledTimes(1)
+    expect(createAccountMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'grok',
+        type: 'session',
+        credentials: {
+          session_token: 'grok-session-token'
+        }
+      })
+    )
+  })
 })

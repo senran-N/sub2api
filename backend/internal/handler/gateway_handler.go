@@ -21,7 +21,6 @@ import (
 	pkghttputil "github.com/senran-N/sub2api/internal/pkg/httputil"
 	"github.com/senran-N/sub2api/internal/pkg/ip"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
-	"github.com/senran-N/sub2api/internal/pkg/openai"
 	"github.com/senran-N/sub2api/internal/pkg/timezone"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
@@ -897,48 +896,28 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // For compatible OpenAI/Anthropic upstreams, it prefers live upstream discovery.
 // Otherwise it falls back to configured model_mapping and built-in defaults.
 func (h *GatewayHandler) Models(c *gin.Context) {
-	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	groupID, platform := resolveGatewayModelListingContext(c)
 
-	var groupID *int64
-	var platform string
-
-	if apiKey != nil && apiKey.Group != nil {
-		groupID = &apiKey.Group.ID
-		platform = apiKey.Group.Platform
-	}
-	if forcedPlatform, ok := middleware2.GetForcePlatformFromContext(c); ok && strings.TrimSpace(forcedPlatform) != "" {
-		platform = forcedPlatform
-	}
-
-	if h.compatibleUpstreamModelsService != nil && (platform == service.PlatformOpenAI || platform == service.PlatformAnthropic) {
+	if h.compatibleUpstreamModelsService != nil && platform == service.PlatformAnthropic {
 		discoveredModels, err := h.compatibleUpstreamModelsService.DiscoverGroupModels(c.Request.Context(), groupID, platform)
 		if err == nil && len(discoveredModels) > 0 {
 			c.JSON(http.StatusOK, gin.H{
 				"object": "list",
-				"data":   buildCompatibleGatewayModels(discoveredModels, platform),
+				"data":   buildNativeGatewayDiscoveredModels(discoveredModels),
 			})
 			return
 		}
 	}
 
-	// Get available models from account configurations (without platform filter)
-	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, "")
-
-	if len(availableModels) > 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"object": "list",
-			"data":   buildMappedGatewayModels(availableModels, platform),
-		})
-		return
-	}
-
-	// Fallback to default models
-	if platform == service.PlatformOpenAI {
-		c.JSON(http.StatusOK, gin.H{
-			"object": "list",
-			"data":   openai.DefaultModels,
-		})
-		return
+	if h.gatewayService != nil {
+		availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, platform)
+		if len(availableModels) > 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"object": "list",
+				"data":   buildNativeGatewayMappedModels(availableModels),
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -947,22 +926,7 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	})
 }
 
-func buildCompatibleGatewayModels(models []service.CompatibleUpstreamModel, platform string) any {
-	if platform == service.PlatformOpenAI {
-		result := make([]openai.Model, 0, len(models))
-		for _, model := range models {
-			result = append(result, openai.Model{
-				ID:          model.ID,
-				Object:      model.Object,
-				Created:     model.Created,
-				OwnedBy:     model.OwnedBy,
-				Type:        model.Type,
-				DisplayName: model.DisplayName,
-			})
-		}
-		return result
-	}
-
+func buildNativeGatewayDiscoveredModels(models []service.CompatibleUpstreamModel) any {
 	result := make([]claude.Model, 0, len(models))
 	for _, model := range models {
 		result = append(result, claude.Model{
@@ -975,20 +939,7 @@ func buildCompatibleGatewayModels(models []service.CompatibleUpstreamModel, plat
 	return result
 }
 
-func buildMappedGatewayModels(modelIDs []string, platform string) any {
-	if platform == service.PlatformOpenAI {
-		models := make([]openai.Model, 0, len(modelIDs))
-		for _, modelID := range modelIDs {
-			models = append(models, openai.Model{
-				ID:          modelID,
-				Object:      "model",
-				Type:        "model",
-				DisplayName: modelID,
-			})
-		}
-		return models
-	}
-
+func buildNativeGatewayMappedModels(modelIDs []string) any {
 	models := make([]claude.Model, 0, len(modelIDs))
 	for _, modelID := range modelIDs {
 		models = append(models, claude.Model{

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -44,16 +45,32 @@ func extractOpenAIRequestedModelUnavailable(err error) string {
 }
 
 func openAIRequestedModelAvailable(accounts []Account, requestedModel string) bool {
+	return openAIRequestedModelAvailableForPlatformWithContext(context.TODO(), accounts, requestedModel, PlatformOpenAI)
+}
+
+func openAIRequestedModelAvailableForPlatform(accounts []Account, requestedModel string, platform string) bool {
+	return openAIRequestedModelAvailableForPlatformWithContext(context.TODO(), accounts, requestedModel, platform)
+}
+
+func openAIRequestedModelAvailableForPlatformWithContext(
+	ctx context.Context,
+	accounts []Account,
+	requestedModel string,
+	platform string,
+) bool {
 	model := strings.TrimSpace(requestedModel)
 	if model == "" {
 		return true
 	}
+	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
+		return defaultGrokAccountSelector.RequestedModelAvailableWithContext(ctx, accounts, model)
+	}
 	for i := range accounts {
 		account := &accounts[i]
-		if !account.IsOpenAI() {
+		if !isOpenAISelectionPlatformAccount(account, platform) {
 			continue
 		}
-		if isOpenAIAccountModelEligible(account, model) {
+		if isCompatibleGatewayAccountModelEligible(account, model, platform) {
 			return true
 		}
 	}

@@ -35,7 +35,7 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 ## Features
 
 - **Multi-Account Management** - Support multiple upstream account types (OAuth, API Key)
-- **OpenAI-Compatible Passthrough** - OpenAI-compatible upstreams such as xAI/Grok can reuse the OpenAI account flow, including multimodal endpoints for images, audio, videos, embeddings, moderations, and realtime client secrets
+- **Compatible Protocol Layer** - OpenAI and Grok are independent providers that share a compatible HTTP/streaming foundation for multimodal endpoints such as images, audio, videos, embeddings, moderations, and realtime client secrets
 - **API Key Distribution** - Generate and manage API Keys for users
 - **Precise Billing** - Token-level usage tracking and cost calculation
 - **Smart Scheduling** - Intelligent account selection with sticky sessions

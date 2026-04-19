@@ -22,6 +22,7 @@ const (
 const (
 	PlatformAnthropic   = domain.PlatformAnthropic
 	PlatformOpenAI      = domain.PlatformOpenAI
+	PlatformGrok        = domain.PlatformGrok
 	PlatformGemini      = domain.PlatformGemini
 	PlatformAntigravity = domain.PlatformAntigravity
 )
@@ -32,6 +33,7 @@ const (
 	AccountTypeSetupToken = domain.AccountTypeSetupToken // Setup Token类型账号（inference only scope）
 	AccountTypeAPIKey     = domain.AccountTypeAPIKey     // API Key类型账号
 	AccountTypeUpstream   = domain.AccountTypeUpstream   // 上游透传类型账号（通过 Base URL + API Key 连接上游）
+	AccountTypeSession    = domain.AccountTypeSession    // Session类型账号（用于 Grok Web Session 等非 OAuth Web 会话）
 	AccountTypeBedrock    = domain.AccountTypeBedrock    // AWS Bedrock 类型账号（通过 SigV4 签名或 API Key 连接 Bedrock，由 credentials.auth_mode 区分）
 )
 
@@ -132,11 +134,16 @@ const (
 	SettingKeyGeminiQuotaPolicy = "gemini_quota_policy"
 
 	// Model fallback settings
-	SettingKeyEnableModelFallback      = "enable_model_fallback"
-	SettingKeyFallbackModelAnthropic   = "fallback_model_anthropic"
-	SettingKeyFallbackModelOpenAI      = "fallback_model_openai"
-	SettingKeyFallbackModelGemini      = "fallback_model_gemini"
-	SettingKeyFallbackModelAntigravity = "fallback_model_antigravity"
+	SettingKeyEnableModelFallback          = "enable_model_fallback"
+	SettingKeyFallbackModelAnthropic       = "fallback_model_anthropic"
+	SettingKeyFallbackModelOpenAI          = "fallback_model_openai"
+	SettingKeyFallbackModelGrok            = "fallback_model_grok"
+	SettingKeyFallbackModelGemini          = "fallback_model_gemini"
+	SettingKeyFallbackModelAntigravity     = "fallback_model_antigravity"
+	SettingKeyGrokImageOutputFormat        = "grok_image_output_format"
+	SettingKeyGrokVideoOutputFormat        = "grok_video_output_format"
+	SettingKeyGrokMediaProxyEnabled        = "grok_media_proxy_enabled"
+	SettingKeyGrokMediaCacheRetentionHours = "grok_media_cache_retention_hours"
 
 	// Request identity patch (Claude -> Gemini systemInstruction injection)
 	SettingKeyEnableIdentityPatch = "enable_identity_patch"

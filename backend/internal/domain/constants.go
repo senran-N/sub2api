@@ -20,6 +20,7 @@ const (
 const (
 	PlatformAnthropic   = "anthropic"
 	PlatformOpenAI      = "openai"
+	PlatformGrok        = "grok"
 	PlatformGemini      = "gemini"
 	PlatformAntigravity = "antigravity"
 )
@@ -30,6 +31,7 @@ const (
 	AccountTypeSetupToken = "setup-token" // Setup Token类型账号（inference only scope）
 	AccountTypeAPIKey     = "apikey"      // API Key类型账号
 	AccountTypeUpstream   = "upstream"    // 上游透传类型账号（通过 Base URL + API Key 连接上游）
+	AccountTypeSession    = "session"     // Session类型账号（用于 Grok Web Session 等非 OAuth Web 会话）
 	AccountTypeBedrock    = "bedrock"     // AWS Bedrock 类型账号（通过 SigV4 签名或 API Key 连接 Bedrock，由 credentials.auth_mode 区分）
 )
 

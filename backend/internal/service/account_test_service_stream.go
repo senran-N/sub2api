@@ -178,8 +178,8 @@ func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader)
 	}
 }
 
-// processOpenAIStream processes the SSE stream from OpenAI Responses API
-func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader) error {
+// processCompatibleResponsesStream processes the SSE stream from compatible Responses APIs.
+func (s *AccountTestService) processCompatibleResponsesStream(c *gin.Context, body io.Reader) error {
 	reader := bufio.NewReader(body)
 
 	for {

@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/pkg/claude"
-	"github.com/senran-N/sub2api/internal/util/urlvalidator"
 )
 
 const (
@@ -33,6 +32,7 @@ type AccountTestService struct {
 	accountRepo               AccountRepository
 	geminiTokenProvider       *GeminiTokenProvider
 	antigravityGatewayService *AntigravityGatewayService
+	grokAccountStateService   *GrokAccountStateService
 	httpUpstream              HTTPUpstream
 	cfg                       *config.Config
 	tlsFPProfileService       *TLSFingerprintProfileService
@@ -51,6 +51,7 @@ func NewAccountTestService(
 		accountRepo:               accountRepo,
 		geminiTokenProvider:       geminiTokenProvider,
 		antigravityGatewayService: antigravityGatewayService,
+		grokAccountStateService:   NewGrokAccountStateService(accountRepo),
 		httpUpstream:              httpUpstream,
 		cfg:                       cfg,
 		tlsFPProfileService:       tlsFPProfileService,
@@ -61,18 +62,7 @@ func (s *AccountTestService) validateUpstreamBaseURL(raw string) (string, error)
 	if s.cfg == nil {
 		return "", errors.New("config is not available")
 	}
-	if !s.cfg.Security.URLAllowlist.Enabled {
-		return urlvalidator.ValidateURLFormat(raw, s.cfg.Security.URLAllowlist.AllowInsecureHTTP)
-	}
-	normalized, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-		AllowedHosts:     s.cfg.Security.URLAllowlist.UpstreamHosts,
-		RequireAllowlist: true,
-		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
-	})
-	if err != nil {
-		return "", err
-	}
-	return normalized, nil
+	return validateCompatibleUpstreamBaseURL(s.cfg, raw)
 }
 
 // generateSessionString generates a Claude Code style session string.
@@ -137,7 +127,7 @@ func createTestPayload(modelID string, prompt string) (map[string]any, error) {
 
 // TestAccountConnection tests an account's connection by sending a test request
 // All account types use full Claude Code client characteristics, only auth header differs
-// modelID is optional - if empty, defaults to claude.DefaultTestModel
+// modelID is optional; when empty each platform probe selects its own default test model.
 func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int64, modelID string, prompt string) error {
 	ctx := c.Request.Context()
 
@@ -148,8 +138,12 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	}
 
 	// Route to platform-specific test method
-	if account.IsOpenAI() {
-		return s.testOpenAIAccountConnection(c, account, modelID, prompt)
+	if NormalizeCompatibleGatewayPlatform(account.Platform) == PlatformGrok {
+		return s.testGrokAccountConnection(c, account, modelID, prompt)
+	}
+
+	if account.IsCompatibleGatewayPlatformAccount() {
+		return s.testCompatibleGatewayAccountConnection(c, account, modelID, prompt)
 	}
 
 	if account.IsGemini() {
@@ -161,6 +155,20 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	}
 
 	return s.testClaudeAccountConnection(c, account, modelID, prompt)
+}
+
+func (s *AccountTestService) testCompatibleGatewayAccountConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
+	platform := ""
+	if account != nil {
+		platform = account.Platform
+	}
+	if account == nil || !account.IsCompatibleGatewayPlatformAccount() {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported compatible platform: %s", platform))
+	}
+	if account.Type == AccountTypeSession {
+		return s.sendErrorAndEnd(c, compatibleGatewayUnsupportedSessionTestError(account.Platform))
+	}
+	return s.testCompatibleGatewayAPIKeyConnection(c, account, modelID, prompt)
 }
 
 // testClaudeAccountConnection tests an Anthropic Claude account's connection

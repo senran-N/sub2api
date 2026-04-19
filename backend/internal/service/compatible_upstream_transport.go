@@ -11,20 +11,20 @@ func applyCompatibleAuthHeaders(header http.Header, token, authMode string) {
 		return
 	}
 
-	header.Del(openAIUpstreamAuthHeaderAuthorization)
-	header.Del(openAIUpstreamAuthHeaderAPIKey)
+	header.Del(compatibleUpstreamAuthHeaderAuthorization)
+	header.Del(compatibleUpstreamAuthHeaderAPIKey)
 	header.Del("x-api-key")
 
 	switch normalizeCompatibleAuthMode(authMode) {
 	case UpstreamAuthModeXAPIKey:
 		header.Set("x-api-key", token)
 	case UpstreamAuthModeAPIKey:
-		header.Set(openAIUpstreamAuthHeaderAPIKey, token)
+		header.Set(compatibleUpstreamAuthHeaderAPIKey, token)
 	case UpstreamAuthModeDual:
-		header.Set(openAIUpstreamAuthHeaderAuthorization, "Bearer "+token)
+		header.Set(compatibleUpstreamAuthHeaderAuthorization, "Bearer "+token)
 		header.Set("x-api-key", token)
 	default:
-		header.Set(openAIUpstreamAuthHeaderAuthorization, "Bearer "+token)
+		header.Set(compatibleUpstreamAuthHeaderAuthorization, "Bearer "+token)
 	}
 }
 

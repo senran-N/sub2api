@@ -71,6 +71,17 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	hasAnyMapping := false
 
 	for _, acc := range accounts {
+		if acc.Platform == PlatformGrok {
+			models := GrokAvailableModelIDsForAccount(&acc)
+			if len(models) > 0 {
+				hasAnyMapping = true
+			}
+			for _, model := range models {
+				modelSet[model] = struct{}{}
+			}
+			continue
+		}
+
 		mapping := acc.GetModelMapping()
 		if len(mapping) > 0 {
 			hasAnyMapping = true

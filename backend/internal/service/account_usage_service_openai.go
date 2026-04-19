@@ -119,7 +119,7 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 		return nil, fmt.Errorf("no access token available")
 	}
 
-	payload := createOpenAITestPayload(openaipkg.DefaultTestModel, true, "")
+	payload := createCompatibleGatewayTestPayload(openaipkg.DefaultTestModel, true, "")
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("marshal openai probe payload: %w", err)

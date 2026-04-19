@@ -25,8 +25,8 @@ export const MAX_POOL_MODE_RETRY_COUNT = 10
 export const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com'
 export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com'
 export const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
+export const DEFAULT_GROK_BASE_URL = 'https://api.x.ai'
 export const DEFAULT_ANTIGRAVITY_BASE_URL = 'https://cloudcode-pa.googleapis.com'
-export const OPENAI_COMPATIBLE_XAI_BASE_URL = 'https://api.x.ai'
 
 export function applyInterceptWarmup(
   credentials: Record<string, unknown>,
@@ -46,6 +46,12 @@ export function getDefaultBaseURL(platform: AccountPlatform): string {
   }
   if (platform === 'gemini') {
     return DEFAULT_GEMINI_BASE_URL
+  }
+  if (platform === 'grok') {
+    return DEFAULT_GROK_BASE_URL
+  }
+  if (platform === 'antigravity') {
+    return DEFAULT_ANTIGRAVITY_BASE_URL
   }
   return DEFAULT_ANTHROPIC_BASE_URL
 }

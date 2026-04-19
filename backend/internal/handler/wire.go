@@ -74,6 +74,10 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 	return NewSettingHandler(settingService, buildInfo.Version)
 }
 
+func ProvideCompatibleGatewayPassthroughRuntime(handler *OpenAIGatewayHandler) compatibleGatewayPassthroughRuntime {
+	return handler
+}
+
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
@@ -85,25 +89,27 @@ func ProvideHandlers(
 	announcementHandler *AnnouncementHandler,
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
-	openaiGatewayHandler *OpenAIGatewayHandler,
+	compatibleGatewayHandler *CompatibleGatewayHandler,
+	grokGatewayHandler *GrokGatewayHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
 	return &Handlers{
-		Auth:          authHandler,
-		User:          userHandler,
-		APIKey:        apiKeyHandler,
-		Usage:         usageHandler,
-		Redeem:        redeemHandler,
-		Subscription:  subscriptionHandler,
-		Announcement:  announcementHandler,
-		Admin:         adminHandlers,
-		Gateway:       gatewayHandler,
-		OpenAIGateway: openaiGatewayHandler,
-		Setting:       settingHandler,
-		Totp:          totpHandler,
+		Auth:              authHandler,
+		User:              userHandler,
+		APIKey:            apiKeyHandler,
+		Usage:             usageHandler,
+		Redeem:            redeemHandler,
+		Subscription:      subscriptionHandler,
+		Announcement:      announcementHandler,
+		Admin:             adminHandlers,
+		Gateway:           gatewayHandler,
+		CompatibleGateway: compatibleGatewayHandler,
+		GrokGateway:       grokGatewayHandler,
+		Setting:           settingHandler,
+		Totp:              totpHandler,
 	}
 }
 
@@ -119,37 +125,42 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementHandler,
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,
+	NewCompatibleGatewayTextHandler,
+	NewCompatibleGatewayRuntimeHandler,
+	NewCompatibleGatewayHandler,
+	NewGrokGatewayHandler,
 	NewTotpHandler,
 	ProvideSettingHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
-	admin.NewUserHandler,
-	admin.NewGroupHandler,
-	admin.NewAccountHandler,
+	admin.ProvideUserHandler,
+	admin.ProvideGroupHandler,
+	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,
 	admin.NewDataManagementHandler,
 	admin.NewBackupHandler,
 	admin.NewOAuthHandler,
-	admin.NewOpenAIOAuthHandler,
+	admin.ProvideOpenAIOAuthHandler,
 	admin.NewGeminiOAuthHandler,
 	admin.NewAntigravityOAuthHandler,
-	admin.NewProxyHandler,
-	admin.NewRedeemHandler,
+	admin.ProvideProxyHandler,
+	admin.ProvideRedeemHandler,
 	admin.NewPromoHandler,
 	admin.NewSettingHandler,
 	admin.NewOpsHandler,
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
-	admin.NewUsageHandler,
+	admin.ProvideUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
 	admin.NewTLSFingerprintProfileHandler,
-	admin.NewAdminAPIKeyHandler,
+	admin.ProvideAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
 	admin.NewChannelHandler,
 
 	// AdminHandlers and Handlers constructors
+	ProvideCompatibleGatewayPassthroughRuntime,
 	ProvideAdminHandlers,
 	ProvideHandlers,
 )

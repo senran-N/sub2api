@@ -8,6 +8,9 @@ const (
 	// ForcePlatform 强制平台（用于 /antigravity 路由），由 middleware.ForcePlatform 设置
 	ForcePlatform Key = "ctx_force_platform"
 
+	// GrokSessionTextRuntimeAllowed 标识当前请求允许 Grok session 账号进入 provider-owned 文本运行时选择。
+	GrokSessionTextRuntimeAllowed Key = "ctx_grok_session_text_runtime_allowed"
+
 	// RequestID 为服务端生成/透传的请求 ID。
 	RequestID Key = "ctx_request_id"
 

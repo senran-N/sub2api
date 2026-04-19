@@ -204,6 +204,10 @@ func (h *OpenAIGatewayHandler) Passthrough(c *gin.Context) {
 			fallbackModel = channelUsage.ChannelMappedModel
 		}
 		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
+		forwardModelHint := defaultMappedModel
+		if forwardModelHint == "" {
+			forwardModelHint = schedulingModel
+		}
 		result, err := h.gatewayService.ForwardCompatiblePassthrough(
 			c.Request.Context(),
 			c,
@@ -230,6 +234,14 @@ func (h *OpenAIGatewayHandler) Passthrough(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
+				h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
+					Account:        account,
+					RequestedModel: reqModel,
+					UpstreamModel:  forwardModelHint,
+					StatusCode:     failoverErr.StatusCode,
+					Endpoint:       inboundEndpoint,
+					Err:            failoverErr,
+				})
 				lastFailoverErr = failoverErr
 				decision := applyOpenAIPoolFailoverPolicy(
 					account,
@@ -275,6 +287,14 @@ func (h *OpenAIGatewayHandler) Passthrough(c *gin.Context) {
 
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
+			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
+				Account:        account,
+				RequestedModel: reqModel,
+				UpstreamModel:  forwardModelHint,
+				StatusCode:     c.Writer.Status(),
+				Endpoint:       inboundEndpoint,
+				Err:            err,
+			})
 			reqLog.Warn("openai_passthrough.forward_failed",
 				zap.Int64("account_id", account.ID),
 				zap.Bool("fallback_error_response_written", wroteFallback),
@@ -285,8 +305,23 @@ func (h *OpenAIGatewayHandler) Passthrough(c *gin.Context) {
 
 		if result != nil {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
+			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
+				Account:        account,
+				RequestedModel: reqModel,
+				UpstreamModel:  forwardModelHint,
+				Result:         result,
+				StatusCode:     c.Writer.Status(),
+				Endpoint:       inboundEndpoint,
+			})
 		} else {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, nil)
+			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
+				Account:        account,
+				RequestedModel: reqModel,
+				UpstreamModel:  forwardModelHint,
+				StatusCode:     c.Writer.Status(),
+				Endpoint:       inboundEndpoint,
+			})
 		}
 
 		userAgent := c.GetHeader("User-Agent")

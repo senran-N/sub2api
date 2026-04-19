@@ -12,6 +12,7 @@ import (
 
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	pkghttputil "github.com/senran-N/sub2api/internal/pkg/httputil"
 	"github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
@@ -113,8 +114,10 @@ func TestOpenAIHandleStreamingAwareError_NonStreaming(t *testing.T) {
 }
 
 func TestResolveOpenAIMessagesDispatchMappedModel(t *testing.T) {
+	baseCtx := context.Background()
 	apiKey := &service.APIKey{
 		Group: &service.Group{
+			Platform: service.PlatformOpenAI,
 			MessagesDispatchModelConfig: service.OpenAIMessagesDispatchModelConfig{
 				SonnetMappedModel: "gpt-5.2",
 				ExactModelMappings: map[string]string{
@@ -124,9 +127,14 @@ func TestResolveOpenAIMessagesDispatchMappedModel(t *testing.T) {
 		},
 	}
 
-	require.Equal(t, "gpt-5.4", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-opus-4-6"))
-	require.Equal(t, "gpt-5.2", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
-	require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(nil, "claude-opus-4-6"))
+	require.Equal(t, "gpt-5.4", resolveOpenAIMessagesDispatchMappedModel(baseCtx, apiKey, "claude-opus-4-6"))
+	require.Equal(t, "gpt-5.2", resolveOpenAIMessagesDispatchMappedModel(baseCtx, apiKey, "claude-sonnet-4-5-20250929"))
+	require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(baseCtx, nil, "claude-opus-4-6"))
+
+	grokCtx := context.WithValue(baseCtx, ctxkey.ForcePlatform, service.PlatformGrok)
+	require.Equal(t, service.PlatformGrok, compatibleGatewayMessagesDispatchPlatform(grokCtx, apiKey))
+	require.False(t, compatibleGatewayUsesOpenAIMessagesDispatch(grokCtx, apiKey))
+	require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(grokCtx, apiKey, "claude-opus-4-6"))
 }
 
 func TestReadRequestBodyWithPrealloc(t *testing.T) {

@@ -1254,6 +1254,52 @@ func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates m
 	return nil
 }
 
+func (r *accountRepository) UpdateGrokRuntimeState(ctx context.Context, id int64, runtimeState map[string]any) error {
+	if len(runtimeState) == 0 {
+		return nil
+	}
+
+	payload, err := json.Marshal(runtimeState)
+	if err != nil {
+		return err
+	}
+
+	client := clientFromContext(ctx, r.client)
+	result, err := client.ExecContext(
+		ctx,
+		`UPDATE accounts
+		SET extra = jsonb_set(
+			COALESCE(extra, '{}'::jsonb),
+			'{grok}',
+			COALESCE(
+				CASE
+					WHEN jsonb_typeof(COALESCE(extra, '{}'::jsonb)->'grok') = 'object' THEN COALESCE(extra, '{}'::jsonb)->'grok'
+					ELSE '{}'::jsonb
+				END,
+				'{}'::jsonb
+			) || jsonb_build_object('runtime_state', $1::jsonb),
+			true
+		),
+		updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL`,
+		string(payload), id,
+	)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAccountNotFound
+	}
+
+	r.syncSchedulerAccountSnapshot(ctx, id)
+	return nil
+}
+
 func shouldEnqueueSchedulerOutboxForExtraUpdates(updates map[string]any) bool {
 	if len(updates) == 0 {
 		return false

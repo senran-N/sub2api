@@ -16,7 +16,7 @@ func (s *OpenAIGatewayService) buildOpenAIResponsesWSURL(account *Account) (stri
 		return "", errors.New("account is nil")
 	}
 	var targetURL string
-	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
+	upstreamTarget := newCompatibleResponsesUpstreamTarget(openaiPlatformAPIURL)
 	switch account.Type {
 	case AccountTypeOAuth:
 		targetURL = chatgptCodexURL
@@ -29,7 +29,7 @@ func (s *OpenAIGatewayService) buildOpenAIResponsesWSURL(account *Account) (stri
 			if err != nil {
 				return "", err
 			}
-			upstreamTarget = newOpenAIResponsesUpstreamTargetWithOptions(
+			upstreamTarget = newCompatibleResponsesUpstreamTargetWithOptions(
 				validatedURL,
 				account.GetCompatibleAuthMode(""),
 				account.GetCompatibleEndpointOverride("responses"),
@@ -75,9 +75,9 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	}
 
 	headers := make(http.Header)
-	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
+	upstreamTarget := newCompatibleResponsesUpstreamTarget(openaiPlatformAPIURL)
 	if account != nil && (account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream) {
-		upstreamTarget = newOpenAIResponsesUpstreamTargetWithOptions(
+		upstreamTarget = newCompatibleResponsesUpstreamTargetWithOptions(
 			account.GetOpenAIBaseURL(),
 			account.GetCompatibleAuthMode(""),
 			account.GetCompatibleEndpointOverride("responses"),

@@ -24,7 +24,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 	policy := NewCodexNativeMutationPolicy(profile)
 
 	var targetURL string
-	upstreamTarget := newOpenAIResponsesUpstreamTarget(openaiPlatformAPIURL)
+	upstreamTarget := newCompatibleResponsesUpstreamTarget(openaiPlatformAPIURL)
 	switch account.Type {
 	case AccountTypeOAuth:
 		targetURL = chatgptCodexURL
@@ -37,7 +37,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(
 			if err != nil {
 				return nil, err
 			}
-			upstreamTarget = newOpenAIResponsesUpstreamTargetWithOptions(
+			upstreamTarget = newCompatibleResponsesUpstreamTargetWithOptions(
 				validatedURL,
 				account.GetCompatibleAuthMode(""),
 				account.GetCompatibleEndpointOverride("responses"),

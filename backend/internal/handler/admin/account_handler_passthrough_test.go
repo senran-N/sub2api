@@ -66,3 +66,53 @@ func TestAccountHandler_Create_AnthropicAPIKeyPassthroughExtraForwarded(t *testi
 	require.NotNil(t, created.Extra)
 	require.Equal(t, true, created.Extra["anthropic_passthrough"])
 }
+
+func TestAccountHandler_Create_GrokSessionAccepted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	adminSvc := newStubAdminService()
+	handler := NewAccountHandler(
+		adminSvc,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+
+	router := gin.New()
+	router.POST("/api/v1/admin/accounts", handler.Create)
+
+	body := map[string]any{
+		"name":     "grok-session-1",
+		"platform": "grok",
+		"type":     "session",
+		"credentials": map[string]any{
+			"session_token": "sess-xxx",
+		},
+		"concurrency": 1,
+		"priority":    1,
+	}
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts", bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, adminSvc.createdAccounts, 1)
+
+	created := adminSvc.createdAccounts[0]
+	require.Equal(t, "grok", created.Platform)
+	require.Equal(t, "session", created.Type)
+}

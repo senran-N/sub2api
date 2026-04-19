@@ -10,7 +10,7 @@ import {
   type TempUnschedRulePayload
 } from './credentialsBuilder'
 
-export type CreateAccountCategory = 'oauth-based' | 'apikey' | 'bedrock'
+export type CreateAccountCategory = 'oauth-based' | 'apikey' | 'upstream' | 'session' | 'bedrock'
 export type AntigravityAccountType = 'oauth' | 'upstream'
 export type GeminiOAuthType = 'code_assist' | 'google_one' | 'ai_studio'
 

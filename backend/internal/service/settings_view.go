@@ -50,11 +50,16 @@ type SystemSettings struct {
 	DefaultSubscriptions []DefaultSubscriptionSetting
 
 	// Model fallback configuration
-	EnableModelFallback      bool   `json:"enable_model_fallback"`
-	FallbackModelAnthropic   string `json:"fallback_model_anthropic"`
-	FallbackModelOpenAI      string `json:"fallback_model_openai"`
-	FallbackModelGemini      string `json:"fallback_model_gemini"`
-	FallbackModelAntigravity string `json:"fallback_model_antigravity"`
+	EnableModelFallback          bool   `json:"enable_model_fallback"`
+	FallbackModelAnthropic       string `json:"fallback_model_anthropic"`
+	FallbackModelOpenAI          string `json:"fallback_model_openai"`
+	FallbackModelGrok            string `json:"fallback_model_grok"`
+	FallbackModelGemini          string `json:"fallback_model_gemini"`
+	FallbackModelAntigravity     string `json:"fallback_model_antigravity"`
+	GrokImageOutputFormat        string `json:"grok_image_output_format"`
+	GrokVideoOutputFormat        string `json:"grok_video_output_format"`
+	GrokMediaProxyEnabled        bool   `json:"grok_media_proxy_enabled"`
+	GrokMediaCacheRetentionHours int    `json:"grok_media_cache_retention_hours"`
 
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`

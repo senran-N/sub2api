@@ -203,6 +203,23 @@ func TestSettingService_UpdateSettings_DefaultsFrontendTheme(t *testing.T) {
 	require.Equal(t, "factory", repo.updates[SettingKeyFrontendTheme])
 }
 
+func TestSettingService_UpdateSettings_NormalizesGrokMediaSettings(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		GrokImageOutputFormat:        "BASE64",
+		GrokVideoOutputFormat:        "invalid",
+		GrokMediaProxyEnabled:        false,
+		GrokMediaCacheRetentionHours: -4,
+	})
+	require.NoError(t, err)
+	require.Equal(t, GrokMediaOutputFormatBase64, repo.updates[SettingKeyGrokImageOutputFormat])
+	require.Equal(t, GrokMediaOutputFormatLocalURL, repo.updates[SettingKeyGrokVideoOutputFormat])
+	require.Equal(t, "false", repo.updates[SettingKeyGrokMediaProxyEnabled])
+	require.Equal(t, "72", repo.updates[SettingKeyGrokMediaCacheRetentionHours])
+}
+
 func TestParseDefaultSubscriptions_NormalizesValues(t *testing.T) {
 	got := parseDefaultSubscriptions(`[{"group_id":11,"validity_days":30},{"group_id":11,"validity_days":60},{"group_id":0,"validity_days":10},{"group_id":12,"validity_days":99999}]`)
 	require.Equal(t, []DefaultSubscriptionSetting{

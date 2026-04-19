@@ -48,6 +48,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { buildAdminAccountTypeOptions, buildAdminPlatformOptions } from '@/components/admin/platformOptions'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
@@ -82,21 +83,13 @@ function updateFilter(key: AccountFilterKey, value: string | number | boolean | 
   })
 }
 
-const platformOptions = computed<SelectOption[]>(() => [
-  { value: '', label: t('admin.accounts.allPlatforms') },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' }
-])
+const platformOptions = computed<SelectOption[]>(() =>
+  buildAdminPlatformOptions(t, {
+    allLabel: t('admin.accounts.allPlatforms')
+  })
+)
 
-const typeOptions = computed<SelectOption[]>(() => [
-  { value: '', label: t('admin.accounts.allTypes') },
-  { value: 'oauth', label: t('admin.accounts.oauthType') },
-  { value: 'setup-token', label: t('admin.accounts.setupToken') },
-  { value: 'apikey', label: t('admin.accounts.apiKey') },
-  { value: 'bedrock', label: 'AWS Bedrock' }
-])
+const typeOptions = computed<SelectOption[]>(() => buildAdminAccountTypeOptions(t))
 
 const statusOptions = computed<SelectOption[]>(() => [
   { value: '', label: t('admin.accounts.allStatus') },

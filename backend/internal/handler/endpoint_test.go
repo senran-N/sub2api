@@ -86,6 +86,8 @@ func TestDeriveUpstreamEndpoint(t *testing.T) {
 		{"openai passthrough images", EndpointImages, "/v1/images/generations", service.PlatformOpenAI, EndpointResponses},
 		{"openai passthrough audio", EndpointAudioTranscribe, "/v1/audio/transcriptions", service.PlatformOpenAI, EndpointResponses},
 		{"openai passthrough videos", EndpointVideos, "/v1/videos/job_123", service.PlatformOpenAI, EndpointResponses},
+		{"grok from messages", EndpointMessages, "/grok/v1/messages", service.PlatformGrok, EndpointResponses},
+		{"grok responses compact", EndpointResponses, "/grok/v1/responses/compact", service.PlatformGrok, "/v1/responses/compact"},
 
 		// Antigravity — uses inbound to pick Claude vs Gemini upstream.
 		{"antigravity claude", EndpointMessages, "/antigravity/v1/messages", service.PlatformAntigravity, EndpointMessages},
@@ -202,8 +204,31 @@ func TestGetUpstreamEndpoint_OpenAIPassthroughCompatibleEndpoints(t *testing.T) 
 	}
 }
 
+func TestGetUpstreamEndpoint_GrokPassthroughCompatibleEndpoints(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: "/grok/v1/images/generations", want: EndpointImages},
+		{path: "/grok/v1/chat/completions", want: EndpointChatCompletions},
+		{path: "/grok/v1/videos/job_123", want: EndpointVideos},
+	}
+
+	for _, tt := range tests {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, tt.path, nil)
+		c.Set(ctxKeyInboundEndpoint, NormalizeInboundEndpoint(c.Request.URL.Path))
+		c.Set("openai_passthrough", true)
+
+		got := GetUpstreamEndpoint(c, service.PlatformGrok)
+		require.Equal(t, tt.want, got)
+	}
+}
+
 func TestGuessPlatformFromPath(t *testing.T) {
 	require.Equal(t, service.PlatformOpenAI, guessPlatformFromPath("/v1/chat/completions"))
 	require.Equal(t, service.PlatformOpenAI, guessPlatformFromPath("/openai/v1/responses/compact"))
+	require.Equal(t, service.PlatformGrok, guessPlatformFromPath("/grok/v1/messages"))
 	require.Equal(t, service.PlatformGemini, guessPlatformFromPath("/v1beta/models/gemini:generateContent"))
 }

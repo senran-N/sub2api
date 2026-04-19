@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildOpenAICompatibleBaseUrlPresets,
+  buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
   buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
@@ -27,27 +27,35 @@ describe('accountModalShared', () => {
   it('resolves platform-specific hints, placeholders, presets, and oauth titles', () => {
     expect(resolveAccountBaseUrlHint('openai', t)).toBe('admin.accounts.openai.baseUrlHint')
     expect(resolveAccountBaseUrlHint('gemini', t)).toBe('admin.accounts.gemini.baseUrlHint')
+    expect(resolveAccountBaseUrlHint('grok', t)).toBe('admin.accounts.grok.baseUrlHint')
     expect(resolveAccountBaseUrlHint('anthropic', t)).toBe('admin.accounts.baseUrlHint')
     expect(resolveAccountBaseUrlPlaceholder('openai', t)).toBe(
       'admin.accounts.openai.baseUrlPlaceholder'
     )
+    expect(resolveAccountBaseUrlPlaceholder('grok', t)).toBe('https://api.x.ai')
     expect(resolveAccountBaseUrlPlaceholder('antigravity', t)).toBe(
       'https://cloudcode-pa.googleapis.com'
     )
 
     expect(resolveAccountApiKeyHint('openai', t)).toBe('admin.accounts.openai.apiKeyHint')
     expect(resolveAccountApiKeyHint('gemini', t)).toBe('admin.accounts.gemini.apiKeyHint')
+    expect(resolveAccountApiKeyHint('grok', t)).toBe('admin.accounts.grok.apiKeyHint')
     expect(resolveAccountApiKeyPlaceholder('openai', t)).toBe(
       'admin.accounts.openai.apiKeyPlaceholder'
     )
     expect(resolveAccountApiKeyPlaceholder('gemini', t)).toBe('AIza...')
-    expect(buildOpenAICompatibleBaseUrlPresets(t)).toEqual([
+    expect(resolveAccountApiKeyPlaceholder('grok', t)).toBe(
+      'admin.accounts.grok.apiKeyPlaceholder'
+    )
+    expect(buildCompatibleBaseUrlPresets('openai', t)).toEqual([
       {
         label: 'admin.accounts.openai.baseUrlPresets.official',
         value: 'https://api.openai.com'
-      },
+      }
+    ])
+    expect(buildCompatibleBaseUrlPresets('grok', t)).toEqual([
       {
-        label: 'admin.accounts.openai.baseUrlPresets.xai',
+        label: 'admin.accounts.grok.baseUrlPresets.official',
         value: 'https://api.x.ai'
       }
     ])

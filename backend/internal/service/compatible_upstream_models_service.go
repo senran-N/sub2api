@@ -243,7 +243,7 @@ func compatibleModelsEndpointURL(account *Account, baseURL string) string {
 		}
 	}
 	if account != nil && account.Platform == PlatformOpenAI {
-		return buildOpenAIModelsURL(baseURL)
+		return buildCompatibleModelsURL(baseURL)
 	}
 	return resolveCompatibleEndpointURL(baseURL, "/v1/models", "")
 }

@@ -1652,6 +1652,7 @@ export default {
         anthropic: 'Anthropic',
         openai: 'OpenAI',
         gemini: 'Gemini',
+        grok: 'Grok',
         antigravity: 'Antigravity'
       },
       saving: '保存中...',
@@ -2211,6 +2212,7 @@ export default {
         openai: 'OpenAI',
         anthropic: 'Anthropic',
         gemini: 'Gemini',
+        grok: 'Grok',
         antigravity: 'Antigravity'
       },
       types: {
@@ -2221,6 +2223,10 @@ export default {
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
         antigravityApikey: '通过 Base URL + API Key 连接',
+        session: 'Session',
+        grokApiKey: 'xAI 官方 API Key',
+        grokUpstream: '通过 Base URL + API Key 对接兼容上游',
+        grokSession: 'Grok Web Session 账号',
         upstream: '对接上游',
         upstreamDesc: '通过 Base URL + API Key 连接上游',
         api_key: 'API Key',
@@ -2422,13 +2428,12 @@ export default {
       apiKeyHint: '您的 Claude Console API Key',
       // OpenAI specific hints
       openai: {
-        baseUrlHint: '默认使用官方 OpenAI API；接入 xAI/Grok 时可直接切换为 https://api.x.ai',
-        baseUrlPlaceholder: 'https://api.openai.com 或 https://api.x.ai',
-        apiKeyHint: '填写 OpenAI 或 xAI/Grok 的 API Key',
-        apiKeyPlaceholder: 'OpenAI / xAI API Key',
+        baseUrlHint: '默认使用官方 OpenAI API，只有在需要兼容上游时才修改。',
+        baseUrlPlaceholder: 'https://api.openai.com',
+        apiKeyHint: '填写 OpenAI API Key。',
+        apiKeyPlaceholder: 'OpenAI API Key',
         baseUrlPresets: {
-          official: 'OpenAI 官方',
-          xai: 'xAI / Grok'
+          official: 'OpenAI 官方'
         },
         oauthPassthrough: '自动透传（仅替换认证）',
         oauthPassthroughDesc:
@@ -2455,6 +2460,18 @@ export default {
         codexCLIOnly: '仅允许 Codex 官方客户端',
         codexCLIOnlyDesc: '仅对 OpenAI OAuth 生效。开启后仅允许 Codex 官方客户端家族访问；关闭后完全绕过并保持原逻辑。',
         modelRestrictionDisabledByPassthrough: '已开启自动透传：模型白名单/映射不会生效。'
+      },
+      grok: {
+        baseUrlHint: '默认使用 xAI Grok 官方 API 地址。',
+        apiKeyHint: '官方或兼容 Grok 上游都使用 xAI Grok API Key。',
+        apiKeyPlaceholder: 'xai-...',
+        baseUrlPresets: {
+          official: 'xAI 官方'
+        },
+        sessionToken: 'Session Token',
+        sessionTokenPlaceholder: '粘贴 Grok Web Session Token',
+        sessionTokenHint: '用于 Grok Web Session 账号以及基于等级的调度。',
+        sessionTokenRequired: '请输入 Session Token。'
       },
       anthropic: {
         apiKeyPassthrough: '自动透传（仅替换认证）',

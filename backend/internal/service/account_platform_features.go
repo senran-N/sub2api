@@ -237,6 +237,10 @@ func (a *Account) IsOpenAI() bool {
 	return a.Platform == PlatformOpenAI
 }
 
+func (a *Account) IsCompatibleGatewayPlatformAccount() bool {
+	return a != nil && IsCompatibleGatewayPlatform(a.Platform)
+}
+
 func (a *Account) IsAnthropic() bool {
 	return a.Platform == PlatformAnthropic
 }
@@ -250,7 +254,21 @@ func (a *Account) IsOpenAIApiKey() bool {
 }
 
 func (a *Account) IsOpenAICompatibleUpstream() bool {
-	return a != nil && a.IsOpenAI() && (a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream)
+	return a != nil && a.IsCompatibleGatewayPlatformAccount() && (a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream)
+}
+
+func (a *Account) SupportsCompatibleGatewaySharedRuntime() bool {
+	if a == nil || !a.IsCompatibleGatewayPlatformAccount() {
+		return false
+	}
+	switch NormalizeCompatibleGatewayPlatform(a.Platform) {
+	case PlatformOpenAI:
+		return a.Type == AccountTypeOAuth || a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream
+	case PlatformGrok:
+		return a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream
+	default:
+		return false
+	}
 }
 
 func (a *Account) SupportsOpenAIPassthroughHTTP() bool {
@@ -258,7 +276,7 @@ func (a *Account) SupportsOpenAIPassthroughHTTP() bool {
 }
 
 func (a *Account) GetOpenAIBaseURL() string {
-	if !a.IsOpenAI() {
+	if !a.IsCompatibleGatewayPlatformAccount() {
 		return ""
 	}
 	if a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream {
@@ -266,7 +284,7 @@ func (a *Account) GetOpenAIBaseURL() string {
 			return baseURL
 		}
 	}
-	return "https://api.openai.com"
+	return CompatibleGatewayDefaultBaseURL(a.Platform)
 }
 
 func (a *Account) GetOpenAIAccessToken() string {
@@ -291,7 +309,7 @@ func (a *Account) GetOpenAIIDToken() string {
 }
 
 func (a *Account) GetOpenAIApiKey() string {
-	if !a.IsOpenAI() || (a.Type != AccountTypeAPIKey && a.Type != AccountTypeUpstream) {
+	if !a.IsCompatibleGatewayPlatformAccount() || (a.Type != AccountTypeAPIKey && a.Type != AccountTypeUpstream) {
 		return ""
 	}
 	return a.GetCredential("api_key")
@@ -393,14 +411,16 @@ func (a *Account) IsOveragesEnabled() bool {
 }
 
 func (a *Account) IsOpenAIPassthroughEnabled() bool {
-	if a == nil || !a.IsOpenAI() || a.Extra == nil {
+	if a == nil || !a.IsCompatibleGatewayPlatformAccount() || a.Extra == nil {
 		return false
 	}
 	if enabled, ok := a.Extra["openai_passthrough"].(bool); ok {
 		return enabled
 	}
-	if enabled, ok := a.Extra["openai_oauth_passthrough"].(bool); ok {
-		return enabled
+	if a.IsOpenAI() {
+		if enabled, ok := a.Extra["openai_oauth_passthrough"].(bool); ok {
+			return enabled
+		}
 	}
 	return false
 }

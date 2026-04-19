@@ -550,8 +550,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				}
 			}
 
-			fallbackPlatform := guessPlatformFromPath(c.Request.URL.Path)
-			platform := resolveOpsPlatform(apiKey, fallbackPlatform)
+			platform := resolveOpsPlatform(c, apiKey)
 
 			requestID := c.Writer.Header().Get("X-Request-Id")
 			if requestID == "" {
@@ -765,8 +764,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			accountID = &v
 		}
 
-		fallbackPlatform := guessPlatformFromPath(c.Request.URL.Path)
-		platform := resolveOpsPlatform(apiKey, fallbackPlatform)
+		platform := resolveOpsPlatform(c, apiKey)
 
 		requestID := c.Writer.Header().Get("X-Request-Id")
 		if requestID == "" {
@@ -1058,16 +1056,29 @@ func parseOpsErrorResponse(body []byte) parsedOpsError {
 	return parsedOpsError{Message: truncateString(string(body), 1024)}
 }
 
-func resolveOpsPlatform(apiKey *service.APIKey, fallback string) string {
+func resolveOpsPlatform(c *gin.Context, apiKey *service.APIKey) string {
+	if c != nil && c.Request != nil {
+		if forced, ok := c.Request.Context().Value(ctxkey.ForcePlatform).(string); ok && strings.TrimSpace(forced) != "" {
+			return strings.TrimSpace(forced)
+		}
+		if group, ok := c.Request.Context().Value(ctxkey.Group).(*service.Group); ok && service.IsGroupContextValid(group) && strings.TrimSpace(group.Platform) != "" {
+			return strings.TrimSpace(group.Platform)
+		}
+	}
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform != "" {
 		return apiKey.Group.Platform
 	}
-	return fallback
+	if c != nil && c.Request != nil && c.Request.URL != nil {
+		return guessPlatformFromPath(c.Request.URL.Path)
+	}
+	return ""
 }
 
 func guessPlatformFromPath(path string) string {
 	p := strings.ToLower(path)
 	switch {
+	case strings.HasPrefix(p, "/grok/"):
+		return service.PlatformGrok
 	case strings.HasPrefix(p, "/antigravity/"):
 		return service.PlatformAntigravity
 	case strings.HasPrefix(p, "/v1beta/"):

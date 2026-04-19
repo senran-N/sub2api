@@ -136,6 +136,31 @@
           </button>
           <button
             type="button"
+            @click="form.platform = 'grok'"
+            :class="[
+              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
+              form.platform === 'grok'
+                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--grok'
+                : 'create-account-modal__platform-button--idle'
+            ]"
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="1.75"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"
+              />
+            </svg>
+            Grok
+          </button>
+          <button
+            type="button"
             @click="form.platform = 'antigravity'"
             :class="[
               'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
@@ -240,6 +265,66 @@
             <div>
               <span class="create-account-modal__choice-title block text-sm font-medium">API Key</span>
               <span class="create-account-modal__choice-description text-xs">{{ t('admin.accounts.types.responsesApi') }}</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Account Type Selection (Grok) -->
+      <div v-if="form.platform === 'grok'">
+        <label class="input-label">{{ t('admin.accounts.accountType') }}</label>
+        <div class="mt-2 grid grid-cols-1 gap-3 xl:grid-cols-3" data-tour="account-form-type">
+          <button
+            type="button"
+            @click="accountCategory = 'apikey'"
+            :class="getChoiceCardClasses(accountCategory === 'apikey', 'purple')"
+          >
+            <div :class="getChoiceIconClasses(accountCategory === 'apikey', 'purple')">
+              <Icon name="key" size="sm" />
+            </div>
+            <div>
+              <span class="create-account-modal__choice-title block text-sm font-medium">
+                API Key
+              </span>
+              <span class="create-account-modal__choice-description text-xs">
+                {{ t('admin.accounts.types.grokApiKey') }}
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            @click="accountCategory = 'upstream'"
+            :class="getChoiceCardClasses(accountCategory === 'upstream', 'blue')"
+          >
+            <div :class="getChoiceIconClasses(accountCategory === 'upstream', 'blue')">
+              <Icon name="cloud" size="sm" />
+            </div>
+            <div>
+              <span class="create-account-modal__choice-title block text-sm font-medium">
+                Upstream
+              </span>
+              <span class="create-account-modal__choice-description text-xs">
+                {{ t('admin.accounts.types.grokUpstream') }}
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            @click="accountCategory = 'session'"
+            :class="getChoiceCardClasses(accountCategory === 'session', 'emerald')"
+          >
+            <div :class="getChoiceIconClasses(accountCategory === 'session', 'emerald')">
+              <Icon name="user" size="sm" />
+            </div>
+            <div>
+              <span class="create-account-modal__choice-title block text-sm font-medium">
+                Session
+              </span>
+              <span class="create-account-modal__choice-description text-xs">
+                {{ t('admin.accounts.types.grokSession') }}
+              </span>
             </div>
           </button>
         </div>
@@ -684,14 +769,14 @@
         </div>
       </div>
 
-      <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
-      <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
+      <!-- Compatible credentials (API Key / Upstream, excluding Antigravity which has its own fields) -->
+      <div v-if="showCompatibleCredentialsForm" class="space-y-4">
         <div>
           <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
             <label class="input-label mb-0">{{ t('admin.accounts.baseUrl') }}</label>
-            <div v-if="form.platform === 'openai'" class="flex flex-wrap gap-2">
+            <div v-if="compatibleBaseUrlPresets.length > 0" class="flex flex-wrap gap-2">
               <button
-                v-for="preset in openAICompatibleBaseUrlPresets"
+                v-for="preset in compatibleBaseUrlPresets"
                 :key="preset.value"
                 type="button"
                 :class="getPresetMappingChipClasses('success')"
@@ -1266,8 +1351,23 @@
         </div>
       </div>
 
+      <!-- Grok session credentials -->
+      <div v-if="form.platform === 'grok' && form.type === 'session'" class="space-y-4">
+        <div>
+          <label class="input-label">{{ t('admin.accounts.grok.sessionToken') }}</label>
+          <input
+            v-model="grokSessionToken"
+            type="password"
+            required
+            class="input font-mono"
+            :placeholder="t('admin.accounts.grok.sessionTokenPlaceholder')"
+          />
+          <p class="input-hint">{{ t('admin.accounts.grok.sessionTokenHint') }}</p>
+        </div>
+      </div>
+
       <!-- API Key / Bedrock 账号配额限制 -->
-      <div v-if="form.type === 'apikey' || form.type === 'bedrock'" class="form-section space-y-4">
+      <div v-if="showQuotaLimitSection" class="form-section space-y-4">
         <div class="mb-3">
           <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaLimit') }}</h3>
           <p class="create-account-modal__choice-description mt-1 text-xs">
@@ -2478,7 +2578,7 @@ import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import {
-  buildOpenAICompatibleBaseUrlPresets,
+  buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
   buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
@@ -2498,6 +2598,7 @@ import {
   type CreateAccountForm
 } from '@/components/account/accountModalShared'
 import {
+  type CreateAccountCategory,
   buildCreateAccountRequest,
   buildCreateAccountSharedPayload,
   buildCreateApiKeyCredentials,
@@ -2586,8 +2687,8 @@ const apiKeyPlaceholder = computed(() => {
   return resolveAccountApiKeyPlaceholder(form.platform, t)
 })
 
-const openAICompatibleBaseUrlPresets = computed(() => {
-  return buildOpenAICompatibleBaseUrlPresets(t)
+const compatibleBaseUrlPresets = computed(() => {
+  return buildCompatibleBaseUrlPresets(form.platform, t)
 })
 
 interface Props {
@@ -2651,13 +2752,31 @@ const currentOAuthState = computed(() => {
 // Refs
 const oauthFlowRef = ref<OAuthFlowExposed | null>(null)
 
+const getDefaultAccountCategoryForPlatform = (
+  platform: AccountPlatform
+): CreateAccountCategory => {
+  switch (platform) {
+    case 'grok':
+      return 'apikey'
+    case 'anthropic':
+    case 'openai':
+    case 'gemini':
+    case 'antigravity':
+    default:
+      return 'oauth-based'
+  }
+}
+
 // State
 const step = ref(1)
 const submitting = ref(false)
-const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock'>('oauth-based') // UI selection for account category
+const accountCategory = ref<CreateAccountCategory>(
+  getDefaultAccountCategoryForPlatform('anthropic')
+) // UI selection for account category
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref(getDefaultBaseURL('anthropic'))
 const apiKeyValue = ref('')
+const grokSessionToken = ref('')
 const editQuotaLimit = ref<number | null>(null)
 const editQuotaDailyLimit = ref<number | null>(null)
 const editQuotaWeeklyLimit = ref<number | null>(null)
@@ -2782,6 +2901,29 @@ const openAIWSModeConcurrencyHintKey = computed(() =>
 const isOpenAIModelRestrictionDisabled = computed(() =>
   form.platform === 'openai' && openaiPassthroughEnabled.value
 )
+
+const showCompatibleCredentialsForm = computed(() => {
+  if (form.platform === 'anthropic') {
+    return accountCategory.value === 'apikey'
+  }
+  if (form.platform === 'openai') {
+    return accountCategory.value === 'apikey'
+  }
+  if (form.platform === 'gemini') {
+    return accountCategory.value === 'apikey'
+  }
+  if (form.platform === 'grok') {
+    return accountCategory.value === 'apikey' || accountCategory.value === 'upstream'
+  }
+  return false
+})
+
+const showQuotaLimitSection = computed(() => {
+  if (form.platform === 'anthropic' && accountCategory.value === 'bedrock') {
+    return true
+  }
+  return showCompatibleCredentialsForm.value
+})
 
 const mixedChannelWarningMessageText = computed(() => {
   return resolveMixedChannelWarningMessage({
@@ -3050,17 +3192,27 @@ watch(
 
 // Sync form.type based on accountCategory, addMethod, and platform-specific type
 watch(
-  [accountCategory, addMethod, antigravityAccountType],
-  ([category, method, agType]) => {
+  [accountCategory, addMethod, antigravityAccountType, () => form.platform],
+  ([category, method, agType, platform]) => {
     // Antigravity upstream 类型（实际创建为 apikey）
-    if (form.platform === 'antigravity' && agType === 'upstream') {
+    if (platform === 'antigravity' && agType === 'upstream') {
       form.type = 'apikey'
       return
     }
     // Bedrock 类型
-    if (form.platform === 'anthropic' && category === 'bedrock') {
+    if (platform === 'anthropic' && category === 'bedrock') {
       form.type = 'bedrock' as AccountType
       return
+    }
+    if (platform === 'grok') {
+      if (category === 'session') {
+        form.type = 'session'
+        return
+      }
+      if (category === 'upstream') {
+        form.type = 'upstream'
+        return
+      }
     }
     if (category === 'oauth-based') {
       form.type = method as AccountType // 'oauth' or 'setup-token'
@@ -3079,17 +3231,19 @@ watch(
     resetMixedChannelState()
     // Reset base URL based on platform
     apiKeyBaseUrl.value = getDefaultBaseURL(newPlatform)
+    apiKeyValue.value = ''
+    grokSessionToken.value = ''
     // Clear model-related settings
     allowedModels.value = []
     modelMappings.value = []
     if (newPlatform === 'antigravity') {
       applyAntigravityModelDefaults()
-      accountCategory.value = 'oauth-based'
       antigravityAccountType.value = 'oauth'
     } else {
       clearAntigravityModelState()
       allowOverages.value = false
     }
+    accountCategory.value = getDefaultAccountCategoryForPlatform(newPlatform)
     resetBedrockCredentialState()
     // Reset Anthropic/Antigravity-specific settings when switching to other platforms
     if (newPlatform !== 'anthropic' && newPlatform !== 'antigravity') {
@@ -3114,6 +3268,9 @@ watch(
     }
     if (platform !== 'anthropic' || category !== 'apikey') {
       anthropicPassthroughEnabled.value = false
+    }
+    if (platform !== 'grok' || category !== 'session') {
+      grokSessionToken.value = ''
     }
   }
 )
@@ -3470,10 +3627,11 @@ async function syncGeminiAIStudioOAuthAvailability(
 const resetForm = () => {
   step.value = 1
   resetCreateAccountForm(form)
-  accountCategory.value = 'oauth-based'
+  accountCategory.value = getDefaultAccountCategoryForPlatform(form.platform)
   addMethod.value = 'oauth'
   apiKeyBaseUrl.value = getDefaultBaseURL('anthropic')
   apiKeyValue.value = ''
+  grokSessionToken.value = ''
   resetQuotaResetState()
   modelMappings.value = []
   modelRestrictionMode.value = 'whitelist'
@@ -3860,6 +4018,24 @@ const handleSubmit = async () => {
     return
   }
 
+  if (form.platform === 'grok' && accountCategory.value === 'session') {
+    const sessionToken = grokSessionToken.value.trim()
+    if (!sessionToken) {
+      appStore.showError(t('admin.accounts.grok.sessionTokenRequired'))
+      return
+    }
+
+    const requestContext = beginCreateRequestContext()
+    await createAccountAndFinish(
+      form.platform,
+      'session',
+      { session_token: sessionToken },
+      undefined,
+      requestContext
+    )
+    return
+  }
+
   // For apikey type, create directly
   const credentials = buildApiKeyCreateCredentials()
   if (!credentials) {
@@ -3875,17 +4051,7 @@ const handleSubmit = async () => {
   })
 
   const requestContext = beginCreateRequestContext()
-  await doCreateAccount(
-    buildCreateAccountRequest({
-      common: buildCurrentCreateSharedPayload(),
-      name: form.name,
-      platform: form.platform,
-      type: form.type,
-      credentials,
-      extra
-    }),
-    requestContext
-  )
+  await createAccountAndFinish(form.platform, form.type, credentials, extra, requestContext)
 }
 
 const goBackToBasicInfo = () => {
@@ -3959,7 +4125,7 @@ const createAccountAndFinish = async (
     return
   }
   const finalExtra =
-    type === 'apikey' || type === 'bedrock'
+    type === 'apikey' || type === 'upstream' || type === 'bedrock'
       ? (() => {
           const quotaExtra = buildAccountQuotaExtra(extra, {
             dailyResetHour: editDailyResetHour.value,

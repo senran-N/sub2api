@@ -29,6 +29,17 @@ func TestAccount_IsOpenAIPassthroughEnabled(t *testing.T) {
 		require.True(t, account.IsOpenAIPassthroughEnabled())
 	})
 
+	t.Run("Grok 兼容平台支持通用透传开关", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformGrok,
+			Type:     AccountTypeAPIKey,
+			Extra: map[string]any{
+				"openai_passthrough": true,
+			},
+		}
+		require.True(t, account.IsOpenAIPassthroughEnabled())
+	})
+
 	t.Run("非OpenAI账号始终关闭", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformAnthropic,
@@ -94,6 +105,17 @@ func TestAccount_SupportsOpenAIPassthroughHTTP(t *testing.T) {
 		require.True(t, account.SupportsOpenAIPassthroughHTTP())
 	})
 
+	t.Run("grok passthrough account", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformGrok,
+			Type:     AccountTypeAPIKey,
+			Extra: map[string]any{
+				"openai_passthrough": true,
+			},
+		}
+		require.True(t, account.SupportsOpenAIPassthroughHTTP())
+	})
+
 	t.Run("oauth passthrough account is excluded from generic http passthrough", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
@@ -103,6 +125,32 @@ func TestAccount_SupportsOpenAIPassthroughHTTP(t *testing.T) {
 			},
 		}
 		require.False(t, account.SupportsOpenAIPassthroughHTTP())
+	})
+}
+
+func TestAccount_SupportsCompatibleGatewaySharedRuntime(t *testing.T) {
+	t.Run("openai oauth account", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Type:     AccountTypeOAuth,
+		}
+		require.True(t, account.SupportsCompatibleGatewaySharedRuntime())
+	})
+
+	t.Run("grok api key account", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformGrok,
+			Type:     AccountTypeAPIKey,
+		}
+		require.True(t, account.SupportsCompatibleGatewaySharedRuntime())
+	})
+
+	t.Run("grok session account stays provider owned", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformGrok,
+			Type:     AccountTypeSession,
+		}
+		require.False(t, account.SupportsCompatibleGatewaySharedRuntime())
 	})
 }
 

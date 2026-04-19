@@ -1616,6 +1616,7 @@ export default {
         anthropic: 'Anthropic',
         openai: 'OpenAI',
         gemini: 'Gemini',
+        grok: 'Grok',
         antigravity: 'Antigravity'
       },
       deleteConfirm:
@@ -2031,6 +2032,7 @@ export default {
         claude: 'Claude',
         openai: 'OpenAI',
         gemini: 'Gemini',
+        grok: 'Grok',
         antigravity: 'Antigravity'
       },
       types: {
@@ -2041,6 +2043,10 @@ export default {
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
         antigravityApikey: 'Connect via Base URL + API Key',
+        session: 'Session',
+        grokApiKey: 'Official xAI API key',
+        grokUpstream: 'Compatible upstream via Base URL + API key',
+        grokSession: 'Grok Web session account',
         upstream: 'Upstream',
         upstreamDesc: 'Connect via Base URL + API Key'
       },
@@ -2272,13 +2278,12 @@ export default {
       apiKeyHint: 'Your Claude Console API Key',
       // OpenAI specific hints
       openai: {
-        baseUrlHint: 'Defaults to the official OpenAI API; switch to https://api.x.ai for xAI/Grok',
-        baseUrlPlaceholder: 'https://api.openai.com or https://api.x.ai',
-        apiKeyHint: 'Use an OpenAI or xAI/Grok API key',
-        apiKeyPlaceholder: 'OpenAI / xAI API Key',
+        baseUrlHint: 'Leave the default official OpenAI API endpoint unless you need a compatible upstream.',
+        baseUrlPlaceholder: 'https://api.openai.com',
+        apiKeyHint: 'Use an OpenAI API key.',
+        apiKeyPlaceholder: 'OpenAI API Key',
         baseUrlPresets: {
-          official: 'OpenAI Official',
-          xai: 'xAI / Grok'
+          official: 'OpenAI Official'
         },
         oauthPassthrough: 'Auto passthrough (auth only)',
         oauthPassthroughDesc:
@@ -2308,6 +2313,18 @@ export default {
         codexCLIOnlyDesc:
           'Only applies to OpenAI OAuth. When enabled, only Codex official client families are allowed; when disabled, the gateway bypasses this restriction and keeps existing behavior.',
         modelRestrictionDisabledByPassthrough: 'Automatic passthrough is enabled: model whitelist/mapping will not take effect.'
+      },
+      grok: {
+        baseUrlHint: 'Defaults to the official xAI Grok API endpoint.',
+        apiKeyHint: 'Use an xAI Grok API key for official or compatible Grok upstreams.',
+        apiKeyPlaceholder: 'xai-...',
+        baseUrlPresets: {
+          official: 'xAI Official'
+        },
+        sessionToken: 'Session Token',
+        sessionTokenPlaceholder: 'Paste the Grok Web session token',
+        sessionTokenHint: 'Used for Grok Web session accounts and tier-aware scheduling.',
+        sessionTokenRequired: 'Session token is required.'
       },
       anthropic: {
         apiKeyPassthrough: 'Auto passthrough (auth only)',

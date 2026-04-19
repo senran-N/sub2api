@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 )
 
 func TestFilterSchedulableOpenAICandidates(t *testing.T) {
@@ -111,6 +113,137 @@ func TestFilterSchedulableOpenAICandidates_DoesNotPromoteCodexExtraToRateLimit(t
 	}
 }
 
+func TestFilterSchedulableOpenAICandidatesForPlatform_Grok(t *testing.T) {
+	accounts := []Account{
+		{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true},
+		{ID: 2, Platform: PlatformGrok, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true},
+		{ID: 3, Platform: PlatformGrok, Type: AccountTypeAPIKey, Status: StatusDisabled, Schedulable: true},
+	}
+
+	candidates := filterSchedulableOpenAICandidatesForPlatform(accounts, "grok-3", nil, PlatformGrok)
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 grok candidate, got %d", len(candidates))
+	}
+	if candidates[0].ID != 2 {
+		t.Fatalf("expected grok account 2, got %d", candidates[0].ID)
+	}
+}
+
+func TestFilterSchedulableOpenAICandidatesForPlatform_GrokExcludesSessionFromSharedRuntime(t *testing.T) {
+	accounts := []Account{
+		{
+			ID:          10,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeSession,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "basic",
+					},
+				},
+			},
+		},
+		{
+			ID:          11,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+				},
+			},
+		},
+	}
+
+	candidates := filterSchedulableOpenAICandidatesForPlatform(accounts, "grok-4-fast-reasoning", nil, PlatformGrok)
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 shared-runtime grok candidate, got %d", len(candidates))
+	}
+	if candidates[0].ID != 11 {
+		t.Fatalf("expected grok api-key account 11, got %d", candidates[0].ID)
+	}
+}
+
+func TestFilterSchedulableOpenAICandidatesForPlatform_GrokSessionAllowedForTextRuntime(t *testing.T) {
+	accounts := []Account{
+		{
+			ID:          10,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeSession,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+				},
+			},
+		},
+	}
+
+	candidates := filterSchedulableOpenAICandidatesForPlatformWithContext(
+		WithGrokSessionTextRuntimeAllowed(context.Background()),
+		accounts,
+		"grok-4-fast-reasoning",
+		nil,
+		PlatformGrok,
+	)
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 text-runtime grok session candidate, got %d", len(candidates))
+	}
+	if candidates[0].ID != 10 {
+		t.Fatalf("expected grok session account 10, got %d", candidates[0].ID)
+	}
+}
+
+func TestFilterSchedulableOpenAICandidatesForPlatform_GrokCapabilityAware(t *testing.T) {
+	accounts := []Account{
+		{
+			ID:          20,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"capabilities": map[string]any{
+						"operations": []any{"chat"},
+					},
+				},
+			},
+		},
+		{
+			ID:          21,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"capabilities": map[string]any{
+						"operations": []any{"image"},
+					},
+				},
+			},
+		},
+	}
+
+	candidates := filterSchedulableOpenAICandidatesForPlatform(accounts, "grok-imagine-image", nil, PlatformGrok)
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 image-capable grok candidate, got %d", len(candidates))
+	}
+	if candidates[0].ID != 21 {
+		t.Fatalf("expected image-capable grok account 21, got %d", candidates[0].ID)
+	}
+}
+
 func TestOpenAIRequestedModelAvailable_OpenAIReasoningVariantBaseMapping(t *testing.T) {
 	accounts := []Account{
 		{
@@ -126,6 +259,68 @@ func TestOpenAIRequestedModelAvailable_OpenAIReasoningVariantBaseMapping(t *test
 
 	if !openAIRequestedModelAvailable(accounts, "gpt-5.4-xhigh") {
 		t.Fatal("expected reasoning variant to be considered available via base-model mapping")
+	}
+}
+
+func TestOpenAIRequestedModelAvailableForPlatform_Grok(t *testing.T) {
+	accounts := []Account{
+		{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+		{ID: 2, Platform: PlatformGrok, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true},
+	}
+
+	if !openAIRequestedModelAvailableForPlatform(accounts, "grok-3", PlatformGrok) {
+		t.Fatal("expected grok model availability check to use grok accounts")
+	}
+}
+
+func TestOpenAIRequestedModelAvailableForPlatform_GrokSessionOnlyIsUnavailableToSharedRuntime(t *testing.T) {
+	accounts := []Account{
+		{
+			ID:          2,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeSession,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+				},
+			},
+		},
+	}
+
+	if openAIRequestedModelAvailableForPlatform(accounts, "grok-4-fast-reasoning", PlatformGrok) {
+		t.Fatal("expected grok session-only model availability to stay false until shared runtime owns session transport")
+	}
+}
+
+func TestOpenAIRequestedModelAvailableForPlatform_GrokSessionOnlyIsAvailableForTextRuntime(t *testing.T) {
+	accounts := []Account{
+		{
+			ID:          2,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeSession,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+				},
+			},
+		},
+	}
+
+	if !openAIRequestedModelAvailableForPlatformWithContext(
+		WithGrokSessionTextRuntimeAllowed(context.Background()),
+		accounts,
+		"grok-4-fast-reasoning",
+		PlatformGrok,
+	) {
+		t.Fatal("expected grok session-only model availability on text runtime routes")
 	}
 }
 
@@ -300,5 +495,53 @@ func TestResolveOpenAIStickySessionAccount_DeleteOnModelUnsupported(t *testing.T
 	}
 	if cache.deletedSessions["openai:sticky_model_unsupported"] != 1 {
 		t.Fatalf("expected model mismatch to delete sticky key, got %d", cache.deletedSessions["openai:sticky_model_unsupported"])
+	}
+}
+
+func TestResolveOpenAIStickySessionAccount_DeleteOnGrokTierMismatch(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxkey.ForcePlatform, PlatformGrok)
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{
+			"openai:sticky_model_unsupported": 601,
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{
+				ID:          601,
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusActive,
+				Schedulable: true,
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"tier": map[string]any{
+							"normalized": "basic",
+						},
+					},
+				},
+			},
+		}},
+		cache: cache,
+	}
+
+	account, accountID := svc.resolveOpenAIStickySessionAccount(
+		ctx,
+		nil,
+		"sticky_model_unsupported",
+		"grok-4-fast-reasoning",
+		nil,
+		0,
+		openAIStickySessionResolvePolicy{},
+	)
+
+	if account != nil {
+		t.Fatal("expected nil account on grok tier mismatch")
+	}
+	if accountID != 0 {
+		t.Fatalf("expected accountID=0 on grok tier mismatch, got %d", accountID)
+	}
+	if cache.deletedSessions["openai:sticky_model_unsupported"] != 1 {
+		t.Fatalf("expected grok tier mismatch to delete sticky key, got %d", cache.deletedSessions["openai:sticky_model_unsupported"])
 	}
 }

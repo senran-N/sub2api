@@ -174,6 +174,15 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyFallbackModelGemini] = settings.FallbackModelGemini
 	updates[SettingKeyFallbackModelAntigravity] = settings.FallbackModelAntigravity
 
+	// Grok media settings
+	settings.GrokImageOutputFormat = normalizeGrokImageOutputFormat(settings.GrokImageOutputFormat)
+	settings.GrokVideoOutputFormat = normalizeGrokVideoOutputFormat(settings.GrokVideoOutputFormat)
+	settings.GrokMediaCacheRetentionHours = normalizeGrokMediaCacheRetentionHours(settings.GrokMediaCacheRetentionHours)
+	updates[SettingKeyGrokImageOutputFormat] = settings.GrokImageOutputFormat
+	updates[SettingKeyGrokVideoOutputFormat] = settings.GrokVideoOutputFormat
+	updates[SettingKeyGrokMediaProxyEnabled] = strconv.FormatBool(settings.GrokMediaProxyEnabled)
+	updates[SettingKeyGrokMediaCacheRetentionHours] = strconv.Itoa(settings.GrokMediaCacheRetentionHours)
+
 	// Identity patch configuration (Claude -> Gemini)
 	updates[SettingKeyEnableIdentityPatch] = strconv.FormatBool(settings.EnableIdentityPatch)
 	updates[SettingKeyIdentityPatchPrompt] = settings.IdentityPatchPrompt
@@ -281,11 +290,15 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeySMTPPort:                         "587",
 		SettingKeySMTPUseTLS:                       "false",
 		// Model fallback defaults
-		SettingKeyEnableModelFallback:      "false",
-		SettingKeyFallbackModelAnthropic:   "claude-3-5-sonnet-20241022",
-		SettingKeyFallbackModelOpenAI:      "gpt-4o",
-		SettingKeyFallbackModelGemini:      "gemini-2.5-pro",
-		SettingKeyFallbackModelAntigravity: "gemini-2.5-pro",
+		SettingKeyEnableModelFallback:          "false",
+		SettingKeyFallbackModelAnthropic:       "claude-3-5-sonnet-20241022",
+		SettingKeyFallbackModelOpenAI:          "gpt-4o",
+		SettingKeyFallbackModelGemini:          "gemini-2.5-pro",
+		SettingKeyFallbackModelAntigravity:     "gemini-2.5-pro",
+		SettingKeyGrokImageOutputFormat:        GrokMediaOutputFormatLocalURL,
+		SettingKeyGrokVideoOutputFormat:        GrokMediaOutputFormatLocalURL,
+		SettingKeyGrokMediaProxyEnabled:        "true",
+		SettingKeyGrokMediaCacheRetentionHours: strconv.Itoa(defaultGrokMediaCacheRetentionHours),
 		// Identity patch defaults
 		SettingKeyEnableIdentityPatch: "true",
 		SettingKeyIdentityPatchPrompt: "",
@@ -406,8 +419,13 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.EnableModelFallback = settings[SettingKeyEnableModelFallback] == "true"
 	result.FallbackModelAnthropic = s.getStringOrDefault(settings, SettingKeyFallbackModelAnthropic, "claude-3-5-sonnet-20241022")
 	result.FallbackModelOpenAI = s.getStringOrDefault(settings, SettingKeyFallbackModelOpenAI, "gpt-4o")
+	result.FallbackModelGrok = s.getStringOrDefault(settings, SettingKeyFallbackModelGrok, "grok-3")
 	result.FallbackModelGemini = s.getStringOrDefault(settings, SettingKeyFallbackModelGemini, "gemini-2.5-pro")
 	result.FallbackModelAntigravity = s.getStringOrDefault(settings, SettingKeyFallbackModelAntigravity, "gemini-2.5-pro")
+	result.GrokImageOutputFormat = normalizeGrokImageOutputFormat(settings[SettingKeyGrokImageOutputFormat])
+	result.GrokVideoOutputFormat = normalizeGrokVideoOutputFormat(settings[SettingKeyGrokVideoOutputFormat])
+	result.GrokMediaProxyEnabled = !isFalseSettingValue(settings[SettingKeyGrokMediaProxyEnabled])
+	result.GrokMediaCacheRetentionHours = parseGrokMediaCacheRetentionHours(settings[SettingKeyGrokMediaCacheRetentionHours])
 
 	// Identity patch settings (default: enabled, to preserve existing behavior)
 	if v, ok := settings[SettingKeyEnableIdentityPatch]; ok && v != "" {

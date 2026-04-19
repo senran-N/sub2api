@@ -21,6 +21,10 @@ func ProvideLifecycleRegistry() *LifecycleRegistry {
 	return NewLifecycleRegistry()
 }
 
+func ProvideOAuthRefreshAPI(accountRepo AccountRepository, tokenCache GeminiTokenCache) *OAuthRefreshAPI {
+	return NewOAuthRefreshAPI(accountRepo, tokenCache)
+}
+
 // ProvidePricingService creates and initializes PricingService
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient, lifecycle *LifecycleRegistry) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
@@ -431,6 +435,15 @@ var ProviderSet = wire.NewSet(
 	NewIPRiskService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
+	NewGrokAccountStateService,
+	ProvideCompatibleGatewayTextRuntime,
+	ProvideGrokCompatibleRuntime,
+	NewGrokTierService,
+	ProvideGrokQuotaSyncService,
+	ProvideGrokCapabilityProbeService,
+	NewGrokSessionRuntime,
+	NewGrokTextRuntime,
+	ProvideGrokGatewayService,
 	NewOAuthService,
 	NewOpenAIOAuthService,
 	NewGeminiOAuthService,
@@ -438,7 +451,7 @@ var ProviderSet = wire.NewSet(
 	NewCompositeTokenCacheInvalidator,
 	wire.Bind(new(TokenCacheInvalidator), new(*CompositeTokenCacheInvalidator)),
 	NewAntigravityOAuthService,
-	NewOAuthRefreshAPI,
+	ProvideOAuthRefreshAPI,
 	ProvideGeminiTokenProvider,
 	NewGeminiMessagesCompatService,
 	ProvideAntigravityTokenProvider,

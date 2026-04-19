@@ -8,6 +8,21 @@ type openAILoadBalancePreparation struct {
 	requestedModelAvailable bool
 }
 
+func isCompatibleGatewayRequestedModelAvailableForScheduling(
+	ctx context.Context,
+	account *Account,
+	requestedModel string,
+	platform string,
+) bool {
+	if requestedModel == "" {
+		return true
+	}
+	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
+		return defaultGrokAccountSelector.IsRuntimeEligibleWithContext(ctx, account, requestedModel)
+	}
+	return isCompatibleGatewayAccountModelEligible(account, requestedModel, platform)
+}
+
 func normalizeOpenAISchedulerTopK(configuredTopK int, candidateCount int) int {
 	if configuredTopK > candidateCount {
 		configuredTopK = candidateCount
@@ -26,20 +41,22 @@ func selectionDecisionTopK(configuredTopK int, candidateCount int) int {
 }
 
 func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidates(
-	_ context.Context,
+	ctx context.Context,
 	req OpenAIAccountScheduleRequest,
 	accounts []Account,
 	schedGroup *Group,
 ) ([]*Account, []AccountWithConcurrency) {
-	prepared := s.prepareLoadBalanceCandidatePage(req, accounts, schedGroup)
+	prepared := s.prepareLoadBalanceCandidatePage(ctx, req, accounts, schedGroup)
 	return prepared.filtered, prepared.loadReq
 }
 
 func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
+	ctx context.Context,
 	req OpenAIAccountScheduleRequest,
 	accounts []Account,
 	schedGroup *Group,
 ) openAILoadBalancePreparation {
+	platform := resolveOpenAISelectionPlatform(ctx)
 	prepared := openAILoadBalancePreparation{
 		filtered: make([]*Account, 0, len(accounts)),
 		loadReq:  make([]AccountWithConcurrency, 0, len(accounts)),
@@ -47,10 +64,10 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
 
 	for i := range accounts {
 		account := &accounts[i]
-		if !account.IsOpenAI() {
+		if !isOpenAISelectionPlatformAccount(account, platform) {
 			continue
 		}
-		if req.RequestedModel == "" || isOpenAIAccountModelEligible(account, req.RequestedModel) {
+		if isCompatibleGatewayRequestedModelAvailableForScheduling(ctx, account, req.RequestedModel, platform) {
 			prepared.requestedModelAvailable = true
 		}
 		if isOpenAIAccountExcluded(req.ExcludedIDs, account.ID) {
@@ -62,7 +79,7 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
 		if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
 			continue
 		}
-		if !isOpenAIAccountRuntimeEligible(account, req.RequestedModel) {
+		if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, account, req.RequestedModel, platform) {
 			continue
 		}
 
@@ -77,20 +94,22 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
 }
 
 func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePointers(
+	ctx context.Context,
 	req OpenAIAccountScheduleRequest,
 	accounts []*Account,
 	schedGroup *Group,
 ) openAILoadBalancePreparation {
+	platform := resolveOpenAISelectionPlatform(ctx)
 	prepared := openAILoadBalancePreparation{
 		filtered: make([]*Account, 0, len(accounts)),
 		loadReq:  make([]AccountWithConcurrency, 0, len(accounts)),
 	}
 
 	for _, account := range accounts {
-		if account == nil || !account.IsOpenAI() {
+		if !isOpenAISelectionPlatformAccount(account, platform) {
 			continue
 		}
-		if req.RequestedModel == "" || isOpenAIAccountModelEligible(account, req.RequestedModel) {
+		if isCompatibleGatewayRequestedModelAvailableForScheduling(ctx, account, req.RequestedModel, platform) {
 			prepared.requestedModelAvailable = true
 		}
 		if isOpenAIAccountExcluded(req.ExcludedIDs, account.ID) {
@@ -102,7 +121,7 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePointers(
 		if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
 			continue
 		}
-		if !isOpenAIAccountRuntimeEligible(account, req.RequestedModel) {
+		if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, account, req.RequestedModel, platform) {
 			continue
 		}
 

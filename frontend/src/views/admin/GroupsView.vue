@@ -204,6 +204,7 @@ import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { buildAdminPlatformOptions } from '@/components/admin/platformOptions'
 import {
   addCopyAccountsGroupSelection,
   buildCopyAccountsGroupOptions,
@@ -262,20 +263,18 @@ const exclusiveOptions = computed(() => [
   { value: 'false', label: t('admin.groups.nonExclusive') }
 ])
 
-const platformOptions = computed(() => [
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' }
-])
+const platformOptions = computed(() =>
+  buildAdminPlatformOptions(t, {
+    labelPrefix: 'admin.groups.platforms'
+  })
+)
 
-const platformFilterOptions = computed(() => [
-  { value: '', label: t('admin.groups.allPlatforms') },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' }
-])
+const platformFilterOptions = computed(() =>
+  buildAdminPlatformOptions(t, {
+    allLabel: t('admin.groups.allPlatforms'),
+    labelPrefix: 'admin.groups.platforms'
+  })
+)
 
 const editStatusOptions = computed(() => [
   { value: 'active', label: t('admin.accounts.status.active') },

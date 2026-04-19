@@ -99,7 +99,7 @@ type CreateAccountRequest struct {
 	Name                    string         `json:"name" binding:"required"`
 	Notes                   *string        `json:"notes"`
 	Platform                string         `json:"platform" binding:"required"`
-	Type                    string         `json:"type" binding:"required,oneof=oauth setup-token apikey upstream bedrock"`
+	Type                    string         `json:"type" binding:"required,oneof=oauth setup-token apikey upstream bedrock session"`
 	Credentials             map[string]any `json:"credentials" binding:"required"`
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
@@ -118,7 +118,7 @@ type CreateAccountRequest struct {
 type UpdateAccountRequest struct {
 	Name                    string         `json:"name"`
 	Notes                   *string        `json:"notes"`
-	Type                    string         `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream bedrock"`
+	Type                    string         `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream bedrock session"`
 	Credentials             map[string]any `json:"credentials"`
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
@@ -1645,23 +1645,34 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
-	// Handle OpenAI accounts
-	if account.IsOpenAI() {
+	// Handle OpenAI-compatible accounts with OpenAI-shaped model payloads.
+	if service.IsCompatibleGatewayPlatform(account.Platform) {
 		// OpenAI 自动透传会绕过常规模型改写，测试/模型列表也应回落到默认模型集。
-		if account.IsOpenAIPassthroughEnabled() {
+		if account.Platform == service.PlatformOpenAI && account.IsOpenAIPassthroughEnabled() {
 			response.Success(c, openai.DefaultModels)
 			return
 		}
 
-		mapping := account.GetModelMapping()
-		if len(mapping) == 0 {
-			response.Success(c, openai.DefaultModels)
+		modelIDs := make([]string, 0)
+		if account.Platform == service.PlatformGrok {
+			modelIDs = service.GrokAvailableModelIDsForAccount(account)
+		} else {
+			mapping := account.GetModelMapping()
+			for requestedModel := range mapping {
+				modelIDs = append(modelIDs, requestedModel)
+			}
+		}
+		if len(modelIDs) == 0 {
+			if account.Platform == service.PlatformOpenAI {
+				response.Success(c, openai.DefaultModels)
+				return
+			}
+			response.Success(c, []openai.Model{})
 			return
 		}
 
-		// Return mapped models
 		var models []openai.Model
-		for requestedModel := range mapping {
+		for _, requestedModel := range modelIDs {
 			var found bool
 			for _, dm := range openai.DefaultModels {
 				if dm.ID == requestedModel {
@@ -1785,7 +1796,7 @@ func (h *AccountHandler) discoverCompatibleAccountModels(ctx context.Context, ac
 		return nil, nil, false
 	}
 
-	if account.Platform == service.PlatformOpenAI {
+	if service.IsCompatibleGatewayPlatform(account.Platform) {
 		result := make([]openai.Model, 0, len(models))
 		for _, model := range models {
 			result = append(result, openai.Model{

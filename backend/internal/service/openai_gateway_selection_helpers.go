@@ -8,12 +8,32 @@ import (
 	"github.com/senran-N/sub2api/internal/config"
 )
 
-func isOpenAIAccountBaseEligible(account *Account) bool {
-	return account != nil && account.IsOpenAI() && account.IsSchedulable()
+func resolveOpenAISelectionPlatform(ctx context.Context) string {
+	return ResolveCompatibleGatewayPlatform(ctx, PlatformOpenAI)
 }
 
-func isOpenAIAccountRuntimeEligible(account *Account, requestedModel string) bool {
-	if account == nil || !account.IsOpenAI() {
+func isOpenAISelectionPlatformAccount(account *Account, platform string) bool {
+	if account == nil {
+		return false
+	}
+	return NormalizeCompatibleGatewayPlatform(account.Platform) == ResolveCompatibleGatewayPlatform(context.TODO(), platform)
+}
+
+func isOpenAIAccountBaseEligibleForPlatform(account *Account, platform string) bool {
+	return isOpenAISelectionPlatformAccount(account, platform) && account.IsSchedulable()
+}
+
+func isOpenAIAccountRuntimeEligibleForPlatformWithContext(
+	ctx context.Context,
+	account *Account,
+	requestedModel string,
+	platform string,
+) bool {
+	switch ResolveCompatibleGatewayPlatform(context.TODO(), platform) {
+	case PlatformGrok:
+		return defaultGrokAccountSelector.IsRuntimeEligibleWithContext(ctx, account, requestedModel)
+	}
+	if account == nil || !isOpenAISelectionPlatformAccount(account, platform) {
 		return false
 	}
 	if !account.IsSchedulable() {
@@ -22,7 +42,7 @@ func isOpenAIAccountRuntimeEligible(account *Account, requestedModel string) boo
 	if oauthSelectionCredentialIssue(account) != "" {
 		return false
 	}
-	if requestedModel != "" && !isOpenAIAccountModelEligible(account, requestedModel) {
+	if requestedModel != "" && !isCompatibleGatewayAccountModelEligible(account, requestedModel, platform) {
 		return false
 	}
 	return true
@@ -42,6 +62,15 @@ func isOpenAIAccountModelEligible(account *Account, requestedModel string) bool 
 	return matched && strings.TrimSpace(mappedModel) != ""
 }
 
+func isCompatibleGatewayAccountModelEligible(account *Account, requestedModel string, platform string) bool {
+	switch ResolveCompatibleGatewayPlatform(context.TODO(), platform) {
+	case PlatformGrok:
+		return defaultGrokAccountSelector.IsModelEligible(account, requestedModel)
+	default:
+		return isOpenAIAccountModelEligible(account, requestedModel)
+	}
+}
+
 // isOpenAIAccountExcluded reports whether the account is in exclusion set.
 func isOpenAIAccountExcluded(excludedIDs map[int64]struct{}, accountID int64) bool {
 	if excludedIDs == nil {
@@ -57,13 +86,35 @@ func filterSchedulableOpenAICandidates(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 ) []*Account {
+	return filterSchedulableOpenAICandidatesForPlatformWithContext(context.TODO(), accounts, requestedModel, excludedIDs, PlatformOpenAI)
+}
+
+func filterSchedulableOpenAICandidatesForPlatform(
+	accounts []Account,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	platform string,
+) []*Account {
+	return filterSchedulableOpenAICandidatesForPlatformWithContext(context.TODO(), accounts, requestedModel, excludedIDs, platform)
+}
+
+func filterSchedulableOpenAICandidatesForPlatformWithContext(
+	ctx context.Context,
+	accounts []Account,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	platform string,
+) []*Account {
+	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
+		return defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, excludedIDs)
+	}
 	candidates := make([]*Account, 0, len(accounts))
 	for i := range accounts {
 		account := &accounts[i]
 		if isOpenAIAccountExcluded(excludedIDs, account.ID) {
 			continue
 		}
-		if !isOpenAIAccountRuntimeEligible(account, requestedModel) {
+		if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, account, requestedModel, platform) {
 			continue
 		}
 		candidates = append(candidates, account)
@@ -71,11 +122,16 @@ func filterSchedulableOpenAICandidates(
 	return candidates
 }
 
-func filterSchedulableOpenAIAccountPointers(
+func filterSchedulableOpenAIAccountPointersForPlatformWithContext(
+	ctx context.Context,
 	accounts []*Account,
 	requestedModel string,
 	excludedIDs map[int64]struct{},
+	platform string,
 ) []*Account {
+	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
+		return defaultGrokAccountSelector.FilterSchedulableAccountPointersWithContext(ctx, accounts, requestedModel, excludedIDs)
+	}
 	candidates := make([]*Account, 0, len(accounts))
 	for _, account := range accounts {
 		if account == nil {
@@ -84,7 +140,7 @@ func filterSchedulableOpenAIAccountPointers(
 		if isOpenAIAccountExcluded(excludedIDs, account.ID) {
 			continue
 		}
-		if !isOpenAIAccountRuntimeEligible(account, requestedModel) {
+		if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, account, requestedModel, platform) {
 			continue
 		}
 		candidates = append(candidates, account)
@@ -208,6 +264,7 @@ func (s *OpenAIGatewayService) resolveOpenAIStickySessionAccount(
 	if sessionHash == "" {
 		return nil, 0
 	}
+	platform := resolveOpenAISelectionPlatform(ctx)
 
 	accountID := stickyAccountID
 	if accountID <= 0 {
@@ -242,14 +299,20 @@ func (s *OpenAIGatewayService) resolveOpenAIStickySessionAccount(
 		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
 		return nil, 0
 	}
-	if !isOpenAIAccountBaseEligible(account) {
+	if !isOpenAIAccountBaseEligibleForPlatform(account, platform) {
 		disposition = newStickyBindingHardInvalidate("platform_mismatch")
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
 		return nil, 0
 	}
-	if !isOpenAIAccountModelEligible(account, requestedModel) {
+	if !isCompatibleGatewayAccountModelEligible(account, requestedModel, platform) {
 		disposition = newStickyBindingHardInvalidate("model_unsupported")
+		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
+		return nil, 0
+	}
+	if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, account, requestedModel, platform) {
+		disposition = newStickyBindingHardInvalidate("runtime_unsupported")
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindSession, disposition, accountID, sessionHash, "")
 		return nil, 0
@@ -287,6 +350,7 @@ func (s *OpenAIGatewayService) recheckStickyBoundOpenAIAccountFromDB(
 	if s == nil || s.schedulerSnapshot == nil || s.accountRepo == nil {
 		return account, stickyBindingDisposition{}
 	}
+	platform := resolveOpenAISelectionPlatform(ctx)
 
 	latest, err := s.accountRepo.GetByID(ctx, account.ID)
 	if err != nil || latest == nil {
@@ -297,11 +361,14 @@ func (s *OpenAIGatewayService) recheckStickyBoundOpenAIAccountFromDB(
 	if disposition.Outcome != stickyBindingOutcomeUsable {
 		return nil, disposition
 	}
-	if !isOpenAIAccountBaseEligible(latest) {
+	if !isOpenAIAccountBaseEligibleForPlatform(latest, platform) {
 		return nil, newStickyBindingHardInvalidate("platform_mismatch")
 	}
-	if !isOpenAIAccountModelEligible(latest, requestedModel) {
+	if !isCompatibleGatewayAccountModelEligible(latest, requestedModel, platform) {
 		return nil, newStickyBindingHardInvalidate("model_unsupported")
+	}
+	if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, latest, requestedModel, platform) {
+		return nil, newStickyBindingHardInvalidate("runtime_unsupported")
 	}
 	return latest, stickyBindingDisposition{}
 }
@@ -313,12 +380,13 @@ func (s *OpenAIGatewayService) buildOpenAIIndexedCandidatePager(
 	if s == nil || s.schedulerSnapshot == nil {
 		return nil, nil
 	}
+	platform := resolveOpenAISelectionPlatform(ctx)
 
 	sources, err := buildRequestedModelCapabilitySources(
 		ctx,
 		s.schedulerSnapshot,
 		scope.groupID,
-		PlatformOpenAI,
+		platform,
 		false,
 		scope.requestedModel,
 	)
@@ -333,7 +401,7 @@ func (s *OpenAIGatewayService) buildOpenAIIndexedCandidatePager(
 			sources = []SchedulerCapabilityIndex{{Kind: SchedulerCapabilityIndexPrivacySet}}
 		}
 	}
-	return newSchedulerIndexedAccountPager(s.schedulerSnapshot, scope.groupID, PlatformOpenAI, false, sources), nil
+	return newSchedulerIndexedAccountPager(s.schedulerSnapshot, scope.groupID, platform, false, sources), nil
 }
 
 func (s *OpenAIGatewayService) filterOpenAIBatchBySnapshotMembershipFromPointers(
@@ -345,13 +413,14 @@ func (s *OpenAIGatewayService) filterOpenAIBatchBySnapshotMembershipFromPointers
 	if len(accounts) == 0 || s == nil || s.schedulerSnapshot == nil {
 		return accounts
 	}
+	platform := resolveOpenAISelectionPlatform(ctx)
 	accountIDs := make([]int64, 0, len(accounts))
 	for i := range accounts {
 		if accounts[i] != nil {
 			accountIDs = append(accountIDs, accounts[i].ID)
 		}
 	}
-	matches, _, err := s.schedulerSnapshot.MatchSchedulableAccountsCapability(ctx, groupID, PlatformOpenAI, false, index, accountIDs)
+	matches, _, err := s.schedulerSnapshot.MatchSchedulableAccountsCapability(ctx, groupID, platform, false, index, accountIDs)
 	if err != nil {
 		return accounts
 	}
@@ -390,6 +459,7 @@ func (s *OpenAIGatewayService) selectBestAccountFromIndexedSnapshot(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 ) (*Account, bool, error) {
+	platform := resolveOpenAISelectionPlatform(ctx)
 	pager, err := s.buildOpenAIIndexedCandidatePager(ctx, openAIIndexedCandidateScope{
 		groupID:           groupID,
 		requestedModel:    requestedModel,
@@ -409,7 +479,7 @@ func (s *OpenAIGatewayService) selectBestAccountFromIndexedSnapshot(
 		snapshotPageSizeOrDefault(s.cfg),
 		supported,
 		func(batch []*Account) (*Account, error) {
-			candidates := filterSchedulableOpenAIAccountPointers(batch, requestedModel, excludedIDs)
+			candidates := filterSchedulableOpenAIAccountPointersForPlatformWithContext(ctx, batch, requestedModel, excludedIDs, platform)
 			if len(candidates) == 0 {
 				return nil, nil
 			}
@@ -771,6 +841,7 @@ func (s *OpenAIGatewayService) selectOpenAIAccountWithLoadAwarenessFromIndexedSn
 	excludedIDs map[int64]struct{},
 	cfg config.GatewaySchedulingConfig,
 ) (*AccountSelectionResult, bool, error) {
+	platform := resolveOpenAISelectionPlatform(ctx)
 	pager, err := s.buildOpenAIIndexedCandidatePager(ctx, openAIIndexedCandidateScope{
 		groupID:           groupID,
 		requestedModel:    requestedModel,
@@ -791,7 +862,7 @@ func (s *OpenAIGatewayService) selectOpenAIAccountWithLoadAwarenessFromIndexedSn
 		snapshotPageSizeOrDefault(s.cfg),
 		func(batch []*Account) (bool, *openAIWaitCandidate, error) {
 			supported = true
-			candidates := filterSchedulableOpenAIAccountPointers(batch, requestedModel, excludedIDs)
+			candidates := filterSchedulableOpenAIAccountPointersForPlatformWithContext(ctx, batch, requestedModel, excludedIDs, platform)
 			if len(candidates) == 0 {
 				return false, nil, nil
 			}

@@ -1,0 +1,560 @@
+package service
+
+import (
+	"bufio"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/pkg/apicompat"
+	"github.com/tidwall/gjson"
+)
+
+type grokSessionResponseDelta struct {
+	token      string
+	reasoning  bool
+	completion bool
+	errorText  string
+}
+
+type grokSessionResponsesState struct {
+	responseID           string
+	model                string
+	sequenceNumber       int
+	reasoningOpened      bool
+	reasoningOutputIndex int
+	reasoningItemID      string
+	messageOpened        bool
+	messageOutputIndex   int
+	messageItemID        string
+	accumulator          *apicompat.BufferedResponseAccumulator
+}
+
+var errGrokSessionTextStreamHandled = errors.New("grok session text stream already handled")
+
+type grokSessionResponsesCallbacks struct {
+	onEvent         func(apicompat.ResponsesStreamEvent) error
+	onStreamFailure func(string, apicompat.ResponsesStreamEvent) error
+}
+
+func relayGrokSessionResponses(c *gin.Context, upstream io.Reader, model string, stream bool) error {
+	if c == nil {
+		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "request context is nil")
+	}
+	if !stream {
+		finalResponse, err := collectGrokSessionResponses(upstream, model, nil)
+		if err != nil {
+			return err
+		}
+		c.JSON(http.StatusOK, finalResponse)
+		return nil
+	}
+
+	streamWriter, streamFlusher, err := openGrokSessionSSEWriter(c)
+	if err != nil {
+		return err
+	}
+
+	_, err = collectGrokSessionResponses(upstream, model, &grokSessionResponsesCallbacks{
+		onEvent: func(event apicompat.ResponsesStreamEvent) error {
+			return writeGrokSessionResponsesEvent(streamWriter, streamFlusher, event)
+		},
+		onStreamFailure: func(message string, failedEvent apicompat.ResponsesStreamEvent) error {
+			return writeGrokSessionResponsesEvent(streamWriter, streamFlusher, failedEvent)
+		},
+	})
+	if errors.Is(err, errGrokSessionTextStreamHandled) {
+		return nil
+	}
+	return err
+}
+
+func relayGrokSessionChatCompletions(c *gin.Context, upstream io.Reader, model string, stream bool, includeUsage bool) error {
+	if c == nil {
+		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "request context is nil")
+	}
+	if !stream {
+		finalResponse, err := collectGrokSessionResponses(upstream, model, nil)
+		if err != nil {
+			return err
+		}
+		c.JSON(http.StatusOK, apicompat.ResponsesToChatCompletions(finalResponse, strings.TrimSpace(model)))
+		return nil
+	}
+
+	streamWriter, streamFlusher, err := openGrokSessionSSEWriter(c)
+	if err != nil {
+		return err
+	}
+
+	state := apicompat.NewResponsesEventToChatState()
+	state.Model = strings.TrimSpace(model)
+	state.IncludeUsage = includeUsage
+
+	_, err = collectGrokSessionResponses(upstream, model, &grokSessionResponsesCallbacks{
+		onEvent: func(event apicompat.ResponsesStreamEvent) error {
+			return writeGrokSessionChatChunks(streamWriter, streamFlusher, state, event)
+		},
+		onStreamFailure: func(message string, _ apicompat.ResponsesStreamEvent) error {
+			payload, marshalErr := json.Marshal(passthroughRuleResult{
+				StatusCode: http.StatusBadGateway,
+				ErrType:    "api_error",
+				ErrMessage: message,
+			}.openAIPayload())
+			if marshalErr != nil {
+				return marshalErr
+			}
+			if err := writeGrokSessionStreamPayload(streamWriter, streamFlusher, "data: "+string(payload)+"\n\n"); err != nil {
+				return err
+			}
+			return writeGrokSessionStreamPayload(streamWriter, streamFlusher, "data: [DONE]\n\n")
+		},
+	})
+	if errors.Is(err, errGrokSessionTextStreamHandled) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if finalChunks := apicompat.FinalizeResponsesChatStream(state); len(finalChunks) > 0 {
+		if err := writeGrokSessionChatChunkBatch(streamWriter, streamFlusher, finalChunks); err != nil {
+			return err
+		}
+	}
+	return writeGrokSessionStreamPayload(streamWriter, streamFlusher, "data: [DONE]\n\n")
+}
+
+func relayGrokSessionAnthropic(c *gin.Context, upstream io.Reader, model string, stream bool) error {
+	if c == nil {
+		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "request context is nil")
+	}
+	if !stream {
+		finalResponse, err := collectGrokSessionResponses(upstream, model, nil)
+		if err != nil {
+			return err
+		}
+		c.JSON(http.StatusOK, apicompat.ResponsesToAnthropic(finalResponse, strings.TrimSpace(model)))
+		return nil
+	}
+
+	streamWriter, streamFlusher, err := openGrokSessionSSEWriter(c)
+	if err != nil {
+		return err
+	}
+
+	state := apicompat.NewResponsesEventToAnthropicState()
+	state.Model = strings.TrimSpace(model)
+
+	_, err = collectGrokSessionResponses(upstream, model, &grokSessionResponsesCallbacks{
+		onEvent: func(event apicompat.ResponsesStreamEvent) error {
+			return writeGrokSessionAnthropicEvents(streamWriter, streamFlusher, state, event)
+		},
+		onStreamFailure: func(message string, _ apicompat.ResponsesStreamEvent) error {
+			payload, marshalErr := json.Marshal(passthroughRuleResult{
+				StatusCode: http.StatusBadGateway,
+				ErrType:    "api_error",
+				ErrMessage: message,
+			}.anthropicPayload())
+			if marshalErr != nil {
+				return marshalErr
+			}
+			return writeGrokSessionStreamPayload(streamWriter, streamFlusher, "event: error\ndata: "+string(payload)+"\n\n")
+		},
+	})
+	if errors.Is(err, errGrokSessionTextStreamHandled) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if finalEvents := apicompat.FinalizeResponsesAnthropicStream(state); len(finalEvents) > 0 {
+		if err := writeGrokSessionAnthropicEventBatch(streamWriter, streamFlusher, finalEvents); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func collectGrokSessionResponses(
+	upstream io.Reader,
+	model string,
+	callbacks *grokSessionResponsesCallbacks,
+) (*apicompat.ResponsesResponse, error) {
+	if upstream == nil {
+		return nil, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
+	}
+
+	state := grokSessionResponsesState{
+		responseID:  newGrokSessionResponseID("resp"),
+		model:       strings.TrimSpace(model),
+		accumulator: apicompat.NewBufferedResponseAccumulator(),
+	}
+	if state.model == "" {
+		state.model = "grok"
+	}
+
+	scanner := bufio.NewScanner(upstream)
+	scanBuf := getSSEScannerBuf64K()
+	scanner.Buffer(scanBuf[:0], defaultMaxLineSize)
+	defer putSSEScannerBuf64K(scanBuf)
+
+	var (
+		sawDelta       bool
+		sawCompletion  bool
+		createdEmitted bool
+	)
+
+	emitCreated := func() error {
+		if createdEmitted || callbacks == nil || callbacks.onEvent == nil {
+			return nil
+		}
+		createdEmitted = true
+		return callbacks.onEvent(state.nextCreatedEvent())
+	}
+	emitEvent := func(event apicompat.ResponsesStreamEvent) error {
+		if callbacks == nil || callbacks.onEvent == nil {
+			return nil
+		}
+		return callbacks.onEvent(event)
+	}
+	handleStreamFailure := func(message string) error {
+		if callbacks == nil || callbacks.onStreamFailure == nil || !createdEmitted {
+			return newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", message)
+		}
+		if strings.TrimSpace(message) == "" {
+			message = "Upstream stream ended without a response"
+		}
+		if err := callbacks.onStreamFailure(message, state.nextFailedEvent(message)); err != nil {
+			return err
+		}
+		return errGrokSessionTextStreamHandled
+	}
+
+	for scanner.Scan() {
+		delta, ok := parseGrokSessionResponseDelta(scanner.Text())
+		if !ok {
+			continue
+		}
+		if delta.errorText != "" {
+			return nil, handleStreamFailure(delta.errorText)
+		}
+
+		if delta.token != "" {
+			sawDelta = true
+			if err := emitCreated(); err != nil {
+				return nil, err
+			}
+			if delta.reasoning {
+				if !state.reasoningOpened {
+					if err := emitEvent(state.openReasoningItemEvent()); err != nil {
+						return nil, err
+					}
+				}
+				event := state.nextReasoningDeltaEvent(delta.token)
+				state.accumulator.ProcessEvent(&event)
+				if err := emitEvent(event); err != nil {
+					return nil, err
+				}
+			} else {
+				if !state.messageOpened {
+					if err := emitEvent(state.openMessageItemEvent()); err != nil {
+						return nil, err
+					}
+				}
+				event := state.nextOutputTextDeltaEvent(delta.token)
+				state.accumulator.ProcessEvent(&event)
+				if err := emitEvent(event); err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		if delta.completion {
+			sawCompletion = true
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		if callbacks != nil && callbacks.onStreamFailure != nil && createdEmitted {
+			return nil, handleStreamFailure("stream read error")
+		}
+		return nil, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "stream read error")
+	}
+
+	if !sawDelta && !sawCompletion {
+		return nil, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
+	}
+
+	finalResponse := state.finalResponse()
+	if err := emitCreated(); err != nil {
+		return nil, err
+	}
+	if err := emitEvent(state.nextCompletedEvent(finalResponse)); err != nil {
+		return nil, err
+	}
+	return finalResponse, nil
+}
+
+func parseGrokSessionResponseDelta(line string) (grokSessionResponseDelta, bool) {
+	payload, ok := normalizeGrokSessionResponseLine(line)
+	if !ok {
+		return grokSessionResponseDelta{}, false
+	}
+
+	if errText := strings.TrimSpace(gjson.Get(payload, "error.message").String()); errText != "" {
+		return grokSessionResponseDelta{errorText: sanitizeUpstreamErrorMessage(errText)}, true
+	}
+	if errText := strings.TrimSpace(gjson.Get(payload, "message").String()); errText != "" && !gjson.Get(payload, "result.response").Exists() {
+		return grokSessionResponseDelta{errorText: sanitizeUpstreamErrorMessage(errText)}, true
+	}
+
+	responsePath := gjson.Get(payload, "result.response")
+	if !responsePath.Exists() {
+		return grokSessionResponseDelta{}, false
+	}
+
+	finalMetadata := responsePath.Get("finalMetadata")
+	completion := responsePath.Get("isSoftStop").Bool() || (finalMetadata.Exists() && finalMetadata.Type != gjson.Null)
+	token := responsePath.Get("token").String()
+	reasoning := responsePath.Get("isThinking").Bool()
+	if token == "" && !completion {
+		return grokSessionResponseDelta{}, false
+	}
+
+	return grokSessionResponseDelta{
+		token:      token,
+		reasoning:  reasoning,
+		completion: completion,
+	}, true
+}
+
+func normalizeGrokSessionResponseLine(line string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, ":") || strings.HasPrefix(trimmed, "event:") {
+		return "", false
+	}
+	if strings.HasPrefix(trimmed, "data:") {
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
+	}
+	if trimmed == "" || trimmed == "[DONE]" {
+		return "", false
+	}
+	if !gjson.Valid(trimmed) {
+		return "", false
+	}
+	return trimmed, true
+}
+
+func openGrokSessionSSEWriter(c *gin.Context) (*bufio.Writer, http.Flusher, error) {
+	if c == nil {
+		return nil, nil, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "request context is nil")
+	}
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return nil, nil, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "streaming not supported")
+	}
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	return bufio.NewWriterSize(c.Writer, 4*1024), flusher, nil
+}
+
+func writeGrokSessionStreamPayload(writer *bufio.Writer, flusher http.Flusher, payload string) error {
+	if writer == nil || flusher == nil {
+		return fmt.Errorf("stream writer is not configured")
+	}
+	if _, err := writer.WriteString(payload); err != nil {
+		return err
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	flusher.Flush()
+	return nil
+}
+
+func writeGrokSessionResponsesEvent(writer *bufio.Writer, flusher http.Flusher, event apicompat.ResponsesStreamEvent) error {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	return writeGrokSessionStreamPayload(writer, flusher, "data: "+string(payload)+"\n\n")
+}
+
+func writeGrokSessionChatChunks(
+	writer *bufio.Writer,
+	flusher http.Flusher,
+	state *apicompat.ResponsesEventToChatState,
+	event apicompat.ResponsesStreamEvent,
+) error {
+	return writeGrokSessionChatChunkBatch(writer, flusher, apicompat.ResponsesEventToChatChunks(&event, state))
+}
+
+func writeGrokSessionChatChunkBatch(writer *bufio.Writer, flusher http.Flusher, chunks []apicompat.ChatCompletionsChunk) error {
+	for _, chunk := range chunks {
+		sse, err := apicompat.ChatChunkToSSE(chunk)
+		if err != nil {
+			return err
+		}
+		if err := writeGrokSessionStreamPayload(writer, flusher, sse); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeGrokSessionAnthropicEvents(
+	writer *bufio.Writer,
+	flusher http.Flusher,
+	state *apicompat.ResponsesEventToAnthropicState,
+	event apicompat.ResponsesStreamEvent,
+) error {
+	return writeGrokSessionAnthropicEventBatch(writer, flusher, apicompat.ResponsesEventToAnthropicEvents(&event, state))
+}
+
+func writeGrokSessionAnthropicEventBatch(writer *bufio.Writer, flusher http.Flusher, events []apicompat.AnthropicStreamEvent) error {
+	for _, event := range events {
+		sse, err := apicompat.ResponsesAnthropicEventToSSE(event)
+		if err != nil {
+			return err
+		}
+		if err := writeGrokSessionStreamPayload(writer, flusher, sse); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *grokSessionResponsesState) nextCreatedEvent() apicompat.ResponsesStreamEvent {
+	return s.nextEvent("response.created", &apicompat.ResponsesStreamEvent{
+		Response: &apicompat.ResponsesResponse{
+			ID:     s.responseID,
+			Object: "response",
+			Model:  s.model,
+			Status: "in_progress",
+			Output: []apicompat.ResponsesOutput{},
+		},
+	})
+}
+
+func (s *grokSessionResponsesState) openReasoningItemEvent() apicompat.ResponsesStreamEvent {
+	if !s.reasoningOpened {
+		s.reasoningOpened = true
+		s.reasoningOutputIndex = 0
+		s.reasoningItemID = newGrokSessionResponseID("item_reasoning")
+	}
+	return s.nextEvent("response.output_item.added", &apicompat.ResponsesStreamEvent{
+		OutputIndex: s.reasoningOutputIndex,
+		Item: &apicompat.ResponsesOutput{
+			Type:   "reasoning",
+			ID:     s.reasoningItemID,
+			Status: "in_progress",
+		},
+	})
+}
+
+func (s *grokSessionResponsesState) openMessageItemEvent() apicompat.ResponsesStreamEvent {
+	if !s.messageOpened {
+		s.messageOpened = true
+		if s.reasoningOpened {
+			s.messageOutputIndex = 1
+		}
+		s.messageItemID = newGrokSessionResponseID("item_message")
+	}
+	return s.nextEvent("response.output_item.added", &apicompat.ResponsesStreamEvent{
+		OutputIndex: s.messageOutputIndex,
+		Item: &apicompat.ResponsesOutput{
+			Type:   "message",
+			ID:     s.messageItemID,
+			Role:   "assistant",
+			Status: "in_progress",
+		},
+	})
+}
+
+func (s *grokSessionResponsesState) nextReasoningDeltaEvent(token string) apicompat.ResponsesStreamEvent {
+	if !s.reasoningOpened {
+		s.reasoningOpened = true
+		s.reasoningOutputIndex = 0
+		s.reasoningItemID = newGrokSessionResponseID("item_reasoning")
+	}
+	return s.nextEvent("response.reasoning_summary_text.delta", &apicompat.ResponsesStreamEvent{
+		OutputIndex:  s.reasoningOutputIndex,
+		SummaryIndex: 0,
+		Delta:        token,
+		ItemID:       s.reasoningItemID,
+	})
+}
+
+func (s *grokSessionResponsesState) nextOutputTextDeltaEvent(token string) apicompat.ResponsesStreamEvent {
+	if !s.messageOpened {
+		s.messageOpened = true
+		if s.reasoningOpened {
+			s.messageOutputIndex = 1
+		}
+		s.messageItemID = newGrokSessionResponseID("item_message")
+	}
+	return s.nextEvent("response.output_text.delta", &apicompat.ResponsesStreamEvent{
+		OutputIndex:  s.messageOutputIndex,
+		ContentIndex: 0,
+		Delta:        token,
+		ItemID:       s.messageItemID,
+	})
+}
+
+func (s *grokSessionResponsesState) nextCompletedEvent(resp *apicompat.ResponsesResponse) apicompat.ResponsesStreamEvent {
+	return s.nextEvent("response.completed", &apicompat.ResponsesStreamEvent{
+		Response: resp,
+	})
+}
+
+func (s *grokSessionResponsesState) nextFailedEvent(message string) apicompat.ResponsesStreamEvent {
+	return s.nextEvent("response.failed", &apicompat.ResponsesStreamEvent{
+		Response: &apicompat.ResponsesResponse{
+			ID:     s.responseID,
+			Object: "response",
+			Model:  s.model,
+			Status: "failed",
+			Output: []apicompat.ResponsesOutput{},
+			Error: &apicompat.ResponsesError{
+				Code:    "api_error",
+				Message: message,
+			},
+		},
+	})
+}
+
+func (s *grokSessionResponsesState) nextEvent(eventType string, template *apicompat.ResponsesStreamEvent) apicompat.ResponsesStreamEvent {
+	event := apicompat.ResponsesStreamEvent{Type: eventType}
+	if template != nil {
+		event = *template
+		event.Type = eventType
+	}
+	event.SequenceNumber = s.sequenceNumber
+	s.sequenceNumber++
+	return event
+}
+
+func (s *grokSessionResponsesState) finalResponse() *apicompat.ResponsesResponse {
+	response := &apicompat.ResponsesResponse{
+		ID:     s.responseID,
+		Object: "response",
+		Model:  s.model,
+		Status: "completed",
+		Output: s.accumulator.BuildOutput(),
+	}
+	s.accumulator.SupplementResponseOutput(response)
+	return response
+}
+
+func newGrokSessionResponseID(prefix string) string {
+	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+}

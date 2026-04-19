@@ -98,7 +98,7 @@ func DeriveUpstreamEndpoint(inbound, rawRequestPath, platform string) string {
 	inbound = strings.TrimSpace(inbound)
 
 	switch platform {
-	case service.PlatformOpenAI:
+	case service.PlatformOpenAI, service.PlatformGrok:
 		// OpenAI forwards everything to the Responses API.
 		// Preserve subresource suffix (e.g. /v1/responses/compact).
 		if suffix := responsesSubpathSuffix(rawRequestPath); suffix != "" {
@@ -197,7 +197,7 @@ func GetUpstreamEndpoint(c *gin.Context, platform string) string {
 	if c != nil && c.Request != nil && c.Request.URL != nil {
 		rawPath = c.Request.URL.Path
 	}
-	if platform == service.PlatformOpenAI && isOpenAIPassthroughRequest(c) {
+	if service.IsCompatibleGatewayPlatform(platform) && isOpenAIPassthroughRequest(c) {
 		return deriveOpenAICompatiblePassthroughEndpoint(inbound, rawPath)
 	}
 	return DeriveUpstreamEndpoint(inbound, rawPath, platform)

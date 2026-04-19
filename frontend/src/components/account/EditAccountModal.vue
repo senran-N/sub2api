@@ -26,14 +26,14 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
-      <!-- API Key fields (only for apikey type) -->
-      <div v-if="account.type === 'apikey'" class="space-y-4">
+      <!-- Compatible API credentials (API Key / Upstream) -->
+      <div v-if="showCompatibleCredentialsForm" class="space-y-4">
         <div>
           <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
             <label class="input-label mb-0">{{ t('admin.accounts.baseUrl') }}</label>
-            <div v-if="account.platform === 'openai'" class="flex flex-wrap gap-2">
+            <div v-if="compatibleBaseUrlPresets.length > 0" class="flex flex-wrap gap-2">
               <button
-                v-for="preset in openAICompatibleBaseUrlPresets"
+                v-for="preset in compatibleBaseUrlPresets"
                 :key="preset.value"
                 type="button"
                 :class="getPresetMappingChipClasses('success')"
@@ -502,25 +502,15 @@
         </template>
       </div>
 
-      <!-- Upstream fields (only for upstream type) -->
-      <div v-if="account.type === 'upstream'" class="space-y-4">
+      <!-- Grok session credentials -->
+      <div v-if="account.type === 'session'" class="space-y-4">
         <div>
-          <label class="input-label">{{ t('admin.accounts.upstream.baseUrl') }}</label>
+          <label class="input-label">{{ t('admin.accounts.grok.sessionToken') }}</label>
           <input
-            v-model="editBaseUrl"
-            type="text"
-            class="input"
-            placeholder="https://cloudcode-pa.googleapis.com"
-          />
-          <p class="input-hint">{{ t('admin.accounts.upstream.baseUrlHint') }}</p>
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.accounts.upstream.apiKey') }}</label>
-          <input
-            v-model="editApiKey"
+            v-model="editSessionToken"
             type="password"
             class="input font-mono"
-            placeholder="sk-..."
+            :placeholder="t('admin.accounts.grok.sessionTokenPlaceholder')"
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
         </div>
@@ -1062,8 +1052,8 @@
         </div>
       </div>
 
-      <!-- API Key / Bedrock 账号配额限制 -->
-      <div v-if="account?.type === 'apikey' || account?.type === 'bedrock'" class="form-section space-y-4">
+      <!-- Compatible API / Bedrock 账号配额限制 -->
+      <div v-if="showQuotaLimitSection" class="form-section space-y-4">
         <div class="mb-3">
           <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaLimit') }}</h3>
           <p class="edit-account-modal__muted mt-1 text-xs">
@@ -1592,7 +1582,7 @@ import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import {
-  buildOpenAICompatibleBaseUrlPresets,
+  buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
   buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
@@ -1683,8 +1673,8 @@ const apiKeyPlaceholder = computed(() => {
   return resolveAccountApiKeyPlaceholder(props.account?.platform, t)
 })
 
-const openAICompatibleBaseUrlPresets = computed(() => {
-  return buildOpenAICompatibleBaseUrlPresets(t)
+const compatibleBaseUrlPresets = computed(() => {
+  return buildCompatibleBaseUrlPresets(props.account?.platform, t)
 })
 
 const antigravityPresetMappings = computed(() => getPresetMappingsByPlatform('antigravity'))
@@ -1694,6 +1684,7 @@ const bedrockPresets = computed(() => getPresetMappingsByPlatform('bedrock'))
 const submitting = ref(false)
 const editBaseUrl = ref(getDefaultBaseURL('anthropic'))
 const editApiKey = ref('')
+const editSessionToken = ref('')
 // Bedrock credentials
 const editBedrockAccessKeyId = ref('')
 const editBedrockSecretAccessKey = ref('')
@@ -1793,6 +1784,29 @@ const openAIWSModeConcurrencyHintKey = computed(() =>
 const isOpenAIModelRestrictionDisabled = computed(() =>
   props.account?.platform === 'openai' && openaiPassthroughEnabled.value
 )
+
+const showCompatibleCredentialsForm = computed(() => {
+  const account = props.account
+  if (!account) {
+    return false
+  }
+  if (account.platform === 'antigravity') {
+    return false
+  }
+  return account.type === 'apikey' || account.type === 'upstream'
+})
+
+const showQuotaLimitSection = computed(() => {
+  const account = props.account
+  if (!account) {
+    return false
+  }
+  return (
+    account.type === 'apikey' ||
+    account.type === 'upstream' ||
+    account.type === 'bedrock'
+  )
+})
 
 // Computed: current preset mappings based on platform
 const presetMappings = computed(() => getPresetMappingsByPlatform(props.account?.platform || 'anthropic'))
@@ -1948,8 +1962,18 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
+  const platformDefaultUrl = getDefaultBaseURL(newAccount.platform)
   interceptWarmupRequests.value = credentials?.intercept_warmup_requests === true
   autoPauseOnExpired.value = newAccount.auto_pause_on_expired === true
+  editBaseUrl.value = platformDefaultUrl
+  editApiKey.value = ''
+  editSessionToken.value = ''
+  resetModelRestrictionState()
+  poolModeEnabled.value = false
+  poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT
+  customErrorCodesEnabled.value = false
+  selectedErrorCodes.value = []
+  customErrorCodeInput.value = null
 
   // Load mixed scheduling setting (only for antigravity accounts)
   mixedScheduling.value = false
@@ -1971,8 +1995,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     anthropicPassthroughEnabled.value = extra?.anthropic_passthrough === true
   }
 
-  // Load quota limit for apikey/bedrock accounts (bedrock quota is also loaded in its own branch above)
-  if (newAccount.type === 'apikey' || newAccount.type === 'bedrock') {
+  // Load quota limit for compatible key/upstream and bedrock accounts.
+  if (
+    newAccount.type === 'apikey' ||
+    newAccount.type === 'upstream' ||
+    newAccount.type === 'bedrock'
+  ) {
     const quotaVal = extra?.quota_limit as number | undefined
     editQuotaLimit.value = (quotaVal && quotaVal > 0) ? quotaVal : null
     const dailyVal = extra?.quota_daily_limit as number | undefined
@@ -2014,10 +2042,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   tempUnschedEnabled.value = tempUnschedState.enabled
   tempUnschedRules.value = tempUnschedState.rules
 
-  // Initialize API Key fields for apikey type
-  if (newAccount.type === 'apikey' && newAccount.credentials) {
+  // Initialize compatible API key/upstream fields.
+  if (
+    (newAccount.type === 'apikey' || newAccount.type === 'upstream') &&
+    newAccount.credentials
+  ) {
     const credentials = newAccount.credentials as Record<string, unknown>
-    const platformDefaultUrl = getDefaultBaseURL(newAccount.platform)
     editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
 
     applyModelRestrictionState(credentials.model_mapping)
@@ -2062,11 +2092,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     editQuotaWeeklyLimit.value = typeof bedrockExtra.quota_weekly_limit === 'number' ? bedrockExtra.quota_weekly_limit : null
 
     applyModelRestrictionState(bedrockCreds.model_mapping)
-  } else if (newAccount.type === 'upstream' && newAccount.credentials) {
-    const credentials = newAccount.credentials as Record<string, unknown>
-    editBaseUrl.value = (credentials.base_url as string) || ''
+  } else if (newAccount.type === 'session') {
+    editSessionToken.value = ''
   } else {
-    const platformDefaultUrl = getDefaultBaseURL(newAccount.platform)
     editBaseUrl.value = platformDefaultUrl
 
     // Load model mappings for OpenAI OAuth accounts
@@ -2081,7 +2109,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     customErrorCodesEnabled.value = false
     selectedErrorCodes.value = []
   }
-  editApiKey.value = ''
 }
 
 watch(
@@ -2438,15 +2465,63 @@ const handleSubmit = async () => {
       updatePayload.credentials = newCredentials
     } else if (props.account.type === 'upstream') {
       const currentCredentials = getAccountCredentials()
-      const newCredentials: Record<string, unknown> = { ...currentCredentials }
-
-      newCredentials.base_url = editBaseUrl.value.trim()
+      const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
+      const newCredentials: Record<string, unknown> = {
+        ...currentCredentials,
+        base_url: newBaseUrl
+      }
 
       if (editApiKey.value.trim()) {
         newCredentials.api_key = editApiKey.value.trim()
+      } else if (currentCredentials.api_key) {
+        newCredentials.api_key = currentCredentials.api_key
+      } else {
+        appStore.showError(t('admin.accounts.apiKeyIsRequired'))
+        return
+      }
+
+      replaceBuiltModelMapping(
+        newCredentials,
+        modelRestrictionMode.value,
+        allowedModels.value,
+        modelMappings.value
+      )
+
+      if (poolModeEnabled.value) {
+        newCredentials.pool_mode = true
+        newCredentials.pool_mode_retry_count = normalizePoolModeRetryCount(poolModeRetryCount.value)
+      } else {
+        delete newCredentials.pool_mode
+        delete newCredentials.pool_mode_retry_count
+      }
+
+      if (customErrorCodesEnabled.value) {
+        newCredentials.custom_error_codes_enabled = true
+        newCredentials.custom_error_codes = [...selectedErrorCodes.value]
+      } else {
+        delete newCredentials.custom_error_codes_enabled
+        delete newCredentials.custom_error_codes
       }
 
       // Add intercept warmup requests setting
+      if (!applySharedEditCredentialsState(newCredentials)) {
+        return
+      }
+
+      updatePayload.credentials = newCredentials
+    } else if (props.account.type === 'session') {
+      const currentCredentials = getAccountCredentials()
+      const newCredentials: Record<string, unknown> = { ...currentCredentials }
+
+      if (editSessionToken.value.trim()) {
+        newCredentials.session_token = editSessionToken.value.trim()
+      } else if (currentCredentials.session_token) {
+        newCredentials.session_token = currentCredentials.session_token
+      } else {
+        appStore.showError(t('admin.accounts.grok.sessionTokenRequired'))
+        return
+      }
+
       if (!applySharedEditCredentialsState(newCredentials)) {
         return
       }
@@ -2589,8 +2664,12 @@ const handleSubmit = async () => {
       })
     }
 
-    // For apikey/bedrock accounts, handle quota_limit in extra
-    if (props.account.type === 'apikey' || props.account.type === 'bedrock') {
+    // For compatible key/upstream and bedrock accounts, handle quota_limit in extra.
+    if (
+      props.account.type === 'apikey' ||
+      props.account.type === 'upstream' ||
+      props.account.type === 'bedrock'
+    ) {
       const currentExtra = getPendingExtra(updatePayload)
       updatePayload.extra = buildAccountQuotaExtra(currentExtra, {
         dailyResetHour: editDailyResetHour.value,

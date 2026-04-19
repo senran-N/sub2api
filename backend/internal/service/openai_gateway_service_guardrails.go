@@ -281,8 +281,18 @@ func isOpenAIPoolModeRetryableStatus(statusCode int) bool {
 	return false
 }
 
-// GetAccessToken gets the access token for an OpenAI account
+// GetAccessToken gets the auth token for a compatible-gateway account.
 func (s *OpenAIGatewayService) GetAccessToken(ctx context.Context, account *Account) (string, string, error) {
+	if account == nil {
+		return "", "", errors.New("account is nil")
+	}
+	if account.IsCompatibleGatewayPlatformAccount() && !account.SupportsCompatibleGatewaySharedRuntime() {
+		return "", "", fmt.Errorf(
+			"unsupported compatible shared runtime account type for %s: %s",
+			NormalizeCompatibleGatewayPlatform(account.Platform),
+			account.Type,
+		)
+	}
 	switch account.Type {
 	case AccountTypeOAuth:
 		if s.openAITokenProvider != nil {

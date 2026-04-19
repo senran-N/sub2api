@@ -837,6 +837,70 @@ func (s *AccountRepoSuite) TestUpdateExtra_SchedulerRelevantStillEnqueuesOutbox(
 	s.Require().Equal(1, count)
 }
 
+func (s *AccountRepoSuite) TestUpdateGrokRuntimeState_PreservesNestedGrokStateAndSkipsOutbox() {
+	account := mustCreateAccount(s.T(), s.client, &service.Account{
+		Name:     "acc-grok-runtime-state",
+		Platform: service.PlatformGrok,
+		Type:     service.AccountTypeAPIKey,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "basic",
+				},
+				"quota_windows": map[string]any{
+					"auto": map[string]any{
+						"remaining": 9,
+						"total":     20,
+					},
+				},
+				"sync_state": map[string]any{
+					"last_sync_at": "2026-04-19T00:00:00Z",
+				},
+			},
+		},
+	})
+	cacheRecorder := &schedulerCacheRecorder{
+		accounts: map[int64]*service.Account{
+			account.ID: {
+				ID:       account.ID,
+				Platform: account.Platform,
+				Status:   service.StatusDisabled,
+				Extra:    map[string]any{},
+			},
+		},
+	}
+	s.repo.schedulerCache = cacheRecorder
+
+	_, err := s.repo.sql.ExecContext(s.ctx, "TRUNCATE scheduler_outbox")
+	s.Require().NoError(err)
+
+	runtimeState := map[string]any{
+		"last_request_at":              "2026-04-19T10:00:00Z",
+		"last_request_status_code":     200,
+		"last_request_protocol_family": "responses",
+		"last_outcome":                 "success",
+	}
+	s.Require().NoError(s.repo.UpdateGrokRuntimeState(s.ctx, account.ID, runtimeState))
+
+	got, err := s.repo.GetByID(s.ctx, account.ID)
+	s.Require().NoError(err)
+
+	grokExtra, ok := got.Extra["grok"].(map[string]any)
+	s.Require().True(ok)
+	s.Require().Equal("basic", grokExtra["tier"].(map[string]any)["normalized"])
+	s.Require().Equal("2026-04-19T00:00:00Z", grokExtra["sync_state"].(map[string]any)["last_sync_at"])
+	s.Require().Equal(9, int(grokExtra["quota_windows"].(map[string]any)["auto"].(map[string]any)["remaining"].(float64)))
+	s.Require().Equal("success", grokExtra["runtime_state"].(map[string]any)["last_outcome"])
+
+	var outboxCount int
+	s.Require().NoError(scanSingleRow(s.ctx, s.repo.sql, "SELECT COUNT(*) FROM scheduler_outbox", nil, &outboxCount))
+	s.Require().Zero(outboxCount)
+	s.Require().Len(cacheRecorder.setAccounts, 1)
+	s.Require().NotNil(cacheRecorder.accounts[account.ID])
+	s.Require().Equal(service.StatusActive, cacheRecorder.accounts[account.ID].Status)
+	s.Require().Equal("success", cacheRecorder.accounts[account.ID].Extra["grok"].(map[string]any)["runtime_state"].(map[string]any)["last_outcome"])
+}
+
 // --- GetByCRSAccountID ---
 
 func (s *AccountRepoSuite) TestGetByCRSAccountID() {

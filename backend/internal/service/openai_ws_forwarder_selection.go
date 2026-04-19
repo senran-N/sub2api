@@ -86,13 +86,13 @@ func (s *OpenAIGatewayService) selectAccountByPreviousResponseIDForScheduler(
 		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, disposition, accountID, "", responseID)
 		return nil, nil
 	}
-	if !isOpenAIAccountBaseEligible(account) {
+	if !isOpenAIAccountBaseEligibleForPlatform(account, resolveOpenAISelectionPlatform(ctx)) {
 		disposition = newStickyBindingHardInvalidate("platform_mismatch")
 		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
 		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, disposition, accountID, "", responseID)
 		return nil, nil
 	}
-	if !isOpenAIAccountModelEligible(account, requestedModel) {
+	if !isCompatibleGatewayAccountModelEligible(account, requestedModel, resolveOpenAISelectionPlatform(ctx)) {
 		disposition = newStickyBindingHardInvalidate("model_unsupported")
 		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
 		recordOpenAIStickyBindingDisposition(ctx, stickyBindingKindPreviousResponse, disposition, accountID, "", responseID)

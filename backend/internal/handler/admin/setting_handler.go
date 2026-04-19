@@ -117,6 +117,10 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		FallbackModelOpenAI:                  settings.FallbackModelOpenAI,
 		FallbackModelGemini:                  settings.FallbackModelGemini,
 		FallbackModelAntigravity:             settings.FallbackModelAntigravity,
+		GrokImageOutputFormat:                settings.GrokImageOutputFormat,
+		GrokVideoOutputFormat:                settings.GrokVideoOutputFormat,
+		GrokMediaProxyEnabled:                settings.GrokMediaProxyEnabled,
+		GrokMediaCacheRetentionHours:         settings.GrokMediaCacheRetentionHours,
 		EnableIdentityPatch:                  settings.EnableIdentityPatch,
 		IdentityPatchPrompt:                  settings.IdentityPatchPrompt,
 		OpsMonitoringEnabled:                 opsEnabled && settings.OpsMonitoringEnabled,
@@ -186,11 +190,15 @@ type UpdateSettingsRequest struct {
 	DefaultSubscriptions []dto.DefaultSubscriptionSetting `json:"default_subscriptions"`
 
 	// Model fallback configuration
-	EnableModelFallback      bool   `json:"enable_model_fallback"`
-	FallbackModelAnthropic   string `json:"fallback_model_anthropic"`
-	FallbackModelOpenAI      string `json:"fallback_model_openai"`
-	FallbackModelGemini      string `json:"fallback_model_gemini"`
-	FallbackModelAntigravity string `json:"fallback_model_antigravity"`
+	EnableModelFallback          bool   `json:"enable_model_fallback"`
+	FallbackModelAnthropic       string `json:"fallback_model_anthropic"`
+	FallbackModelOpenAI          string `json:"fallback_model_openai"`
+	FallbackModelGemini          string `json:"fallback_model_gemini"`
+	FallbackModelAntigravity     string `json:"fallback_model_antigravity"`
+	GrokImageOutputFormat        string `json:"grok_image_output_format"`
+	GrokVideoOutputFormat        string `json:"grok_video_output_format"`
+	GrokMediaProxyEnabled        *bool  `json:"grok_media_proxy_enabled"`
+	GrokMediaCacheRetentionHours *int   `json:"grok_media_cache_retention_hours"`
 
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`
@@ -584,12 +592,26 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelOpenAI:              req.FallbackModelOpenAI,
 		FallbackModelGemini:              req.FallbackModelGemini,
 		FallbackModelAntigravity:         req.FallbackModelAntigravity,
-		EnableIdentityPatch:              req.EnableIdentityPatch,
-		IdentityPatchPrompt:              req.IdentityPatchPrompt,
-		MinClaudeCodeVersion:             req.MinClaudeCodeVersion,
-		MaxClaudeCodeVersion:             req.MaxClaudeCodeVersion,
-		AllowUngroupedKeyScheduling:      req.AllowUngroupedKeyScheduling,
-		BackendModeEnabled:               req.BackendModeEnabled,
+		GrokImageOutputFormat:            req.GrokImageOutputFormat,
+		GrokVideoOutputFormat:            req.GrokVideoOutputFormat,
+		GrokMediaProxyEnabled: func() bool {
+			if req.GrokMediaProxyEnabled != nil {
+				return *req.GrokMediaProxyEnabled
+			}
+			return previousSettings.GrokMediaProxyEnabled
+		}(),
+		GrokMediaCacheRetentionHours: func() int {
+			if req.GrokMediaCacheRetentionHours != nil {
+				return *req.GrokMediaCacheRetentionHours
+			}
+			return previousSettings.GrokMediaCacheRetentionHours
+		}(),
+		EnableIdentityPatch:         req.EnableIdentityPatch,
+		IdentityPatchPrompt:         req.IdentityPatchPrompt,
+		MinClaudeCodeVersion:        req.MinClaudeCodeVersion,
+		MaxClaudeCodeVersion:        req.MaxClaudeCodeVersion,
+		AllowUngroupedKeyScheduling: req.AllowUngroupedKeyScheduling,
+		BackendModeEnabled:          req.BackendModeEnabled,
 		OpsMonitoringEnabled: func() bool {
 			if req.OpsMonitoringEnabled != nil {
 				return *req.OpsMonitoringEnabled
@@ -700,6 +722,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelOpenAI:                  updatedSettings.FallbackModelOpenAI,
 		FallbackModelGemini:                  updatedSettings.FallbackModelGemini,
 		FallbackModelAntigravity:             updatedSettings.FallbackModelAntigravity,
+		GrokImageOutputFormat:                updatedSettings.GrokImageOutputFormat,
+		GrokVideoOutputFormat:                updatedSettings.GrokVideoOutputFormat,
+		GrokMediaProxyEnabled:                updatedSettings.GrokMediaProxyEnabled,
+		GrokMediaCacheRetentionHours:         updatedSettings.GrokMediaCacheRetentionHours,
 		EnableIdentityPatch:                  updatedSettings.EnableIdentityPatch,
 		IdentityPatchPrompt:                  updatedSettings.IdentityPatchPrompt,
 		OpsMonitoringEnabled:                 updatedSettings.OpsMonitoringEnabled,
@@ -752,6 +778,18 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.FrontendURL != after.FrontendURL {
 		changed = append(changed, "frontend_url")
+	}
+	if before.GrokImageOutputFormat != after.GrokImageOutputFormat {
+		changed = append(changed, "grok_image_output_format")
+	}
+	if before.GrokVideoOutputFormat != after.GrokVideoOutputFormat {
+		changed = append(changed, "grok_video_output_format")
+	}
+	if before.GrokMediaProxyEnabled != after.GrokMediaProxyEnabled {
+		changed = append(changed, "grok_media_proxy_enabled")
+	}
+	if before.GrokMediaCacheRetentionHours != after.GrokMediaCacheRetentionHours {
+		changed = append(changed, "grok_media_cache_retention_hours")
 	}
 	if before.TotpEnabled != after.TotpEnabled {
 		changed = append(changed, "totp_enabled")

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
 
@@ -148,6 +149,123 @@ func TestPrepareLoadBalanceCandidates_SkipsRuntimeUnsafeAccounts(t *testing.T) {
 	require.Equal(t, int64(201), loadReq[0].ID)
 	require.Equal(t, int64(203), loadReq[1].ID)
 	require.Nil(t, accounts[0].RateLimitResetAt)
+}
+
+func TestPrepareLoadBalanceCandidates_GrokUsesGrokSelectorForAvailabilityAndFiltering(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxkey.ForcePlatform, PlatformGrok)
+	req := OpenAIAccountScheduleRequest{
+		RequestedModel:    "grok-4-fast-reasoning",
+		RequiredTransport: OpenAIUpstreamTransportAny,
+	}
+	accounts := []Account{
+		{
+			ID:          301,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeSession,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "basic",
+					},
+				},
+			},
+		},
+		{
+			ID:          302,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 2,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+				},
+			},
+		},
+		{ID: 303, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 3},
+	}
+
+	scheduler := &defaultOpenAIAccountScheduler{service: &OpenAIGatewayService{}}
+	prepared := scheduler.prepareLoadBalanceCandidatePage(ctx, req, accounts, nil)
+
+	require.True(t, prepared.requestedModelAvailable)
+	require.Len(t, prepared.filtered, 1)
+	require.Equal(t, int64(302), prepared.filtered[0].ID)
+	require.Len(t, prepared.loadReq, 1)
+	require.Equal(t, int64(302), prepared.loadReq[0].ID)
+}
+
+func TestPrepareLoadBalanceCandidates_GrokSessionOnlyDoesNotAdvertiseRequestedModelAvailability(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxkey.ForcePlatform, PlatformGrok)
+	req := OpenAIAccountScheduleRequest{
+		RequestedModel:    "grok-4-fast-reasoning",
+		RequiredTransport: OpenAIUpstreamTransportAny,
+	}
+	accounts := []Account{
+		{
+			ID:          401,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeSession,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+				},
+			},
+		},
+	}
+
+	scheduler := &defaultOpenAIAccountScheduler{service: &OpenAIGatewayService{}}
+	prepared := scheduler.prepareLoadBalanceCandidatePage(ctx, req, accounts, nil)
+
+	require.False(t, prepared.requestedModelAvailable)
+	require.Empty(t, prepared.filtered)
+	require.Empty(t, prepared.loadReq)
+}
+
+func TestPrepareLoadBalanceCandidates_GrokSessionTextRoutesAdvertiseAvailability(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxkey.ForcePlatform, PlatformGrok)
+	ctx = WithGrokSessionTextRuntimeAllowed(ctx)
+	req := OpenAIAccountScheduleRequest{
+		RequestedModel:    "grok-4-fast-reasoning",
+		RequiredTransport: OpenAIUpstreamTransportAny,
+	}
+	accounts := []Account{
+		{
+			ID:          401,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeSession,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+				},
+			},
+		},
+	}
+
+	scheduler := &defaultOpenAIAccountScheduler{service: &OpenAIGatewayService{}}
+	prepared := scheduler.prepareLoadBalanceCandidatePage(ctx, req, accounts, nil)
+
+	require.True(t, prepared.requestedModelAvailable)
+	require.Len(t, prepared.filtered, 1)
+	require.Equal(t, int64(401), prepared.filtered[0].ID)
+	require.Len(t, prepared.loadReq, 1)
+	require.Equal(t, int64(401), prepared.loadReq[0].ID)
 }
 
 func TestLoadSchedulerAccountLoads(t *testing.T) {

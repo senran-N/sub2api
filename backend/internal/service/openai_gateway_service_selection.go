@@ -55,7 +55,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 	selected := s.selectBestAccount(ctx, accounts, requestedModel, excludedIDs)
 	if selected == nil {
 		if requestedModel != "" {
-			if !openAIRequestedModelAvailable(accounts, requestedModel) {
+			if !openAIRequestedModelAvailableForPlatformWithContext(ctx, accounts, requestedModel, resolveOpenAISelectionPlatform(ctx)) {
 				return nil, newOpenAIRequestedModelUnavailableError(requestedModel)
 			}
 			return nil, ErrNoAvailableAccounts
@@ -185,9 +185,9 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		return nil, ErrNoAvailableAccounts
 	}
 
-	candidates := filterSchedulableOpenAICandidates(accounts, requestedModel, excludedIDs)
+	candidates := filterSchedulableOpenAICandidatesForPlatformWithContext(ctx, accounts, requestedModel, excludedIDs, resolveOpenAISelectionPlatform(ctx))
 	if len(candidates) == 0 {
-		if requestedModel != "" && !openAIRequestedModelAvailable(accounts, requestedModel) {
+		if requestedModel != "" && !openAIRequestedModelAvailableForPlatformWithContext(ctx, accounts, requestedModel, resolveOpenAISelectionPlatform(ctx)) {
 			return nil, newOpenAIRequestedModelUnavailableError(requestedModel)
 		}
 		return nil, ErrNoAvailableAccounts
@@ -227,8 +227,9 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 }
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64) ([]Account, error) {
+	platform := resolveOpenAISelectionPlatform(ctx)
 	if s.schedulerSnapshot != nil {
-		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, PlatformOpenAI, false)
+		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, false)
 		return accounts, err
 	}
 
@@ -237,11 +238,11 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 		err      error
 	)
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
+		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
 	} else if groupID != nil {
-		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, PlatformOpenAI)
+		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
 	} else {
-		accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatform(ctx, PlatformOpenAI)
+		accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatform(ctx, platform)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
@@ -262,7 +263,7 @@ func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccount(ctx context.
 		}
 		fresh = current
 	}
-	if !isOpenAIAccountRuntimeEligible(fresh, requestedModel) {
+	if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, fresh, requestedModel, resolveOpenAISelectionPlatform(ctx)) {
 		return nil
 	}
 	return fresh
@@ -280,7 +281,7 @@ func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Co
 	if err != nil || latest == nil {
 		return nil
 	}
-	if !isOpenAIAccountRuntimeEligible(latest, requestedModel) {
+	if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, latest, requestedModel, resolveOpenAISelectionPlatform(ctx)) {
 		return nil
 	}
 	return latest

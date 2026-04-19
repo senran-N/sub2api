@@ -138,8 +138,8 @@ const metaModels = [
   'codellama-70b-instruct', 'codellama-34b-instruct', 'codellama-13b-instruct'
 ]
 
-// xAI Grok
-const xaiModels = [
+// Grok
+const grokModels = [
   'grok-4', 'grok-4-0709',
   'grok-3-beta', 'grok-3-mini-beta', 'grok-3-fast-beta',
   'grok-2', 'grok-2-vision', 'grok-2-image',
@@ -225,7 +225,7 @@ const allModelsList: string[] = [
   ...deepseekModels,
   ...mistralModels,
   ...metaModels,
-  ...xaiModels,
+  ...grokModels,
   ...cohereModels,
   ...yiModels,
   ...moonshotModels,
@@ -295,6 +295,14 @@ const geminiPresetMappings: PresetMapping[] = [
   { label: '2.5 Image', from: 'gemini-2.5-flash-image', to: 'gemini-2.5-flash-image', tone: 'info' },
   { label: '2.5 Pro', from: 'gemini-2.5-pro', to: 'gemini-2.5-pro', tone: 'brand-purple' },
   { label: '3.1 Image', from: 'gemini-3.1-flash-image', to: 'gemini-3.1-flash-image', tone: 'info' }
+]
+
+const grokPresetMappings: PresetMapping[] = [
+  { label: 'Grok 4', from: 'grok-4', to: 'grok-4', tone: 'accent' },
+  { label: 'Grok 3 Beta', from: 'grok-3-beta', to: 'grok-3-beta', tone: 'info' },
+  { label: 'Grok 3 Mini', from: 'grok-3-mini-beta', to: 'grok-3-mini-beta', tone: 'success' },
+  { label: 'Grok Vision', from: 'grok-2-vision', to: 'grok-2-vision', tone: 'brand-purple' },
+  { label: 'Grok Image', from: 'grok-2-image', to: 'grok-2-image', tone: 'warning' }
 ]
 
 // Antigravity 预设映射（支持通配符）
@@ -383,13 +391,14 @@ export function getModelsByPlatform(platform: string): string[] {
     case 'anthropic':
     case 'claude': return claudeModels
     case 'gemini': return geminiModels
+    case 'grok': return grokModels
     case 'antigravity': return antigravityModels
     case 'zhipu': return zhipuModels
     case 'qwen': return qwenModels
     case 'deepseek': return deepseekModels
     case 'mistral': return mistralModels
     case 'meta': return metaModels
-    case 'xai': return xaiModels
+    case 'xai': return grokModels
     case 'cohere': return cohereModels
     case 'yi': return yiModels
     case 'moonshot': return moonshotModels
@@ -407,6 +416,7 @@ export function getModelsByPlatform(platform: string): string[] {
 export function getPresetMappingsByPlatform(platform: string) {
   if (platform === 'openai') return openaiPresetMappings
   if (platform === 'gemini') return geminiPresetMappings
+  if (platform === 'grok') return grokPresetMappings
   if (platform === 'antigravity') return antigravityPresetMappings
   if (platform === 'bedrock') return bedrockPresetMappings
   return anthropicPresetMappings

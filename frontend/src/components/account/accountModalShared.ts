@@ -8,8 +8,8 @@ import {
   DEFAULT_ANTHROPIC_BASE_URL,
   DEFAULT_ANTIGRAVITY_BASE_URL,
   DEFAULT_GEMINI_BASE_URL,
+  DEFAULT_GROK_BASE_URL,
   DEFAULT_OPENAI_BASE_URL,
-  OPENAI_COMPATIBLE_XAI_BASE_URL,
   type TempUnschedRuleForm
 } from './credentialsBuilder'
 import {
@@ -158,6 +158,9 @@ export function resolveAccountBaseUrlHint(platform: AccountPlatform | null | und
   if (platform === 'gemini') {
     return t('admin.accounts.gemini.baseUrlHint')
   }
+  if (platform === 'grok') {
+    return t('admin.accounts.grok.baseUrlHint')
+  }
   return t('admin.accounts.baseUrlHint')
 }
 
@@ -170,6 +173,9 @@ export function resolveAccountBaseUrlPlaceholder(
   }
   if (platform === 'gemini') {
     return DEFAULT_GEMINI_BASE_URL
+  }
+  if (platform === 'grok') {
+    return DEFAULT_GROK_BASE_URL
   }
   if (platform === 'antigravity') {
     return DEFAULT_ANTIGRAVITY_BASE_URL
@@ -184,6 +190,9 @@ export function resolveAccountApiKeyHint(platform: AccountPlatform | null | unde
   if (platform === 'gemini') {
     return t('admin.accounts.gemini.apiKeyHint')
   }
+  if (platform === 'grok') {
+    return t('admin.accounts.grok.apiKeyHint')
+  }
   return t('admin.accounts.apiKeyHint')
 }
 
@@ -197,23 +206,36 @@ export function resolveAccountApiKeyPlaceholder(
   if (platform === 'gemini') {
     return 'AIza...'
   }
+  if (platform === 'grok') {
+    return t('admin.accounts.grok.apiKeyPlaceholder')
+  }
   if (platform === 'antigravity') {
     return 'sk-...'
   }
   return 'sk-ant-...'
 }
 
-export function buildOpenAICompatibleBaseUrlPresets(t: Translate): AccountBaseUrlPreset[] {
-  return [
-    {
-      label: t('admin.accounts.openai.baseUrlPresets.official'),
-      value: DEFAULT_OPENAI_BASE_URL
-    },
-    {
-      label: t('admin.accounts.openai.baseUrlPresets.xai'),
-      value: OPENAI_COMPATIBLE_XAI_BASE_URL
-    }
-  ]
+export function buildCompatibleBaseUrlPresets(
+  platform: AccountPlatform | null | undefined,
+  t: Translate
+): AccountBaseUrlPreset[] {
+  if (platform === 'openai') {
+    return [
+      {
+        label: t('admin.accounts.openai.baseUrlPresets.official'),
+        value: DEFAULT_OPENAI_BASE_URL
+      }
+    ]
+  }
+  if (platform === 'grok') {
+    return [
+      {
+        label: t('admin.accounts.grok.baseUrlPresets.official'),
+        value: DEFAULT_GROK_BASE_URL
+      }
+    ]
+  }
+  return []
 }
 
 export function resolveCreateAccountOAuthStepTitle(

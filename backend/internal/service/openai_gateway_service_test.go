@@ -16,6 +16,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
 
@@ -410,6 +411,89 @@ func TestOpenAISelectAccountWithLoadAwareness_FiltersUnschedulableWhenNoConcurre
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
+}
+
+func TestOpenAIGatewayService_SelectAccountForModel_ForcePlatformGrok(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxkey.ForcePlatform, PlatformGrok)
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{
+			accounts: []Account{
+				{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Priority: 0},
+				{ID: 2, Platform: PlatformGrok, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Priority: 5},
+			},
+		},
+	}
+
+	account, err := svc.SelectAccountForModel(ctx, nil, "", "grok-3")
+	require.NoError(t, err)
+	require.NotNil(t, account)
+	require.Equal(t, int64(2), account.ID)
+	require.Equal(t, PlatformGrok, account.Platform)
+}
+
+func TestOpenAIGatewayService_SelectAccountForModel_GrokSessionRequiresTextRuntimeFlag(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxkey.ForcePlatform, PlatformGrok)
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{
+			accounts: []Account{
+				{
+					ID:          2,
+					Platform:    PlatformGrok,
+					Type:        AccountTypeSession,
+					Status:      StatusActive,
+					Schedulable: true,
+					Priority:    5,
+					Extra: map[string]any{
+						"grok": map[string]any{
+							"tier": map[string]any{
+								"normalized": "heavy",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	account, err := svc.SelectAccountForModel(ctx, nil, "", "grok-4-fast-reasoning")
+	require.Nil(t, account)
+	require.ErrorIs(t, err, ErrOpenAIRequestedModelUnavailable)
+}
+
+func TestOpenAIGatewayService_SelectAccountForModel_GrokSessionAllowedOnTextRuntime(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxkey.ForcePlatform, PlatformGrok)
+	ctx = WithGrokSessionTextRuntimeAllowed(ctx)
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{
+			accounts: []Account{
+				{
+					ID:          2,
+					Platform:    PlatformGrok,
+					Type:        AccountTypeSession,
+					Status:      StatusActive,
+					Schedulable: true,
+					Priority:    5,
+					Extra: map[string]any{
+						"grok": map[string]any{
+							"tier": map[string]any{
+								"normalized": "heavy",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	account, err := svc.SelectAccountForModel(ctx, nil, "", "grok-4-fast-reasoning")
+	require.NoError(t, err)
+	require.NotNil(t, account)
+	require.Equal(t, int64(2), account.ID)
+	require.Equal(t, PlatformGrok, account.Platform)
+	require.Equal(t, AccountTypeSession, account.Type)
 }
 
 func TestOpenAISelectAccountForModelWithExclusions_StickyUnschedulableClearsSession(t *testing.T) {
@@ -1801,11 +1885,11 @@ func TestOpenAIChatCompletionsPathDetection(t *testing.T) {
 	require.False(t, isOpenAIChatCompletionsPath("/v1/responses"))
 }
 
-func TestNormalizeOpenAICompatiblePassthroughRequestPath(t *testing.T) {
-	require.Equal(t, "/v1/images/generations", normalizeOpenAICompatiblePassthroughRequestPath("/v1/images/generations"))
-	require.Equal(t, "/v1/videos/job_123", normalizeOpenAICompatiblePassthroughRequestPath("/v1/videos/job_123/"))
-	require.Equal(t, "/v1/responses/compact", normalizeOpenAICompatiblePassthroughRequestPath("/responses/compact"))
-	require.Equal(t, "/v1/chat/completions", normalizeOpenAICompatiblePassthroughRequestPath("/chat/completions"))
+func TestNormalizeCompatiblePassthroughRequestPath(t *testing.T) {
+	require.Equal(t, "/v1/images/generations", normalizeCompatiblePassthroughRequestPath("/v1/images/generations"))
+	require.Equal(t, "/v1/videos/job_123", normalizeCompatiblePassthroughRequestPath("/v1/videos/job_123/"))
+	require.Equal(t, "/v1/responses/compact", normalizeCompatiblePassthroughRequestPath("/responses/compact"))
+	require.Equal(t, "/v1/chat/completions", normalizeCompatiblePassthroughRequestPath("/chat/completions"))
 }
 
 func TestOpenAIForwardAsChatCompletionsAPIKeyPassthroughPreservesProtocol(t *testing.T) {
@@ -2007,10 +2091,10 @@ func TestOpenAIBuildUpstreamRequestPreservesCompactPathForAPIKeyBaseURL(t *testi
 	require.Equal(t, "https://example.com/v1/responses/compact", req.URL.String())
 }
 
-func TestBuildOpenAIResponsesURLSupportsAzureResponsesEndpoint(t *testing.T) {
-	target := newOpenAIResponsesUpstreamTarget("https://demo.cognitiveservices.azure.com/openai?api-version=2025-04-01-preview")
+func TestBuildCompatibleResponsesURLSupportsAzureResponsesEndpoint(t *testing.T) {
+	target := newCompatibleResponsesUpstreamTarget("https://demo.cognitiveservices.azure.com/openai?api-version=2025-04-01-preview")
 	require.Equal(t, "https://demo.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview", target.URL)
-	require.Equal(t, openAIUpstreamAuthHeaderAPIKey, target.AuthHeader)
+	require.Equal(t, compatibleUpstreamAuthHeaderAPIKey, target.AuthHeader)
 }
 
 func TestOpenAIBuildUpstreamRequestUsesAzureAPIKeyHeader(t *testing.T) {

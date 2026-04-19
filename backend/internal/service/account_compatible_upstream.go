@@ -29,7 +29,7 @@ func (a *Account) isCompatibleAPIKeyAccount() bool {
 		return false
 	}
 	switch a.Platform {
-	case PlatformOpenAI, PlatformAnthropic:
+	case PlatformOpenAI, PlatformGrok, PlatformAnthropic:
 		return a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream
 	default:
 		return false
@@ -41,7 +41,7 @@ func (a *Account) DefaultCompatibleAuthMode() string {
 		return ""
 	}
 	switch a.Platform {
-	case PlatformOpenAI:
+	case PlatformOpenAI, PlatformGrok:
 		baseURL := a.GetOpenAIBaseURL()
 		if isAzureOpenAIResponsesBaseURL(baseURL) {
 			return UpstreamAuthModeAPIKey
@@ -75,7 +75,7 @@ func (a *Account) GetCompatibleBaseURL() string {
 		return ""
 	}
 	switch a.Platform {
-	case PlatformOpenAI:
+	case PlatformOpenAI, PlatformGrok:
 		if a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream {
 			return a.GetOpenAIBaseURL()
 		}
@@ -92,7 +92,7 @@ func (a *Account) GetCompatibleAPIKey() string {
 		return ""
 	}
 	switch a.Platform {
-	case PlatformOpenAI:
+	case PlatformOpenAI, PlatformGrok:
 		return a.GetOpenAIApiKey()
 	case PlatformAnthropic:
 		if a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream {

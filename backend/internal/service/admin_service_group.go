@@ -104,7 +104,7 @@ func (s *adminServiceImpl) filterOAuthOnlyGroupAccountIDs(ctx context.Context, p
 
 func groupPlatformSupportsOAuthOnly(platform string) bool {
 	switch platform {
-	case PlatformOpenAI, PlatformAntigravity, PlatformAnthropic, PlatformGemini:
+	case PlatformOpenAI, PlatformGrok, PlatformAntigravity, PlatformAnthropic, PlatformGemini:
 		return true
 	default:
 		return false

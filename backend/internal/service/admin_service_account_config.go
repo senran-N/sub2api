@@ -93,6 +93,8 @@ func (s *adminServiceImpl) buildAccountForCreate(input *CreateAccountInput) (*Ac
 		LoadFactor:         loadFactor,
 	}
 
+	account.Extra = normalizePlatformAccountExtra(nil, account.Extra, account.Platform, account.Type)
+
 	if account.Extra != nil {
 		if err := ValidateQuotaResetConfig(account.Extra); err != nil {
 			return nil, err
@@ -121,12 +123,13 @@ func applyMutableAccountExtra(account *Account, inputExtra map[string]any, wasOv
 		return nil
 	}
 
+	normalizedExtra := cloneAnyMap(inputExtra)
 	for _, key := range []string{"quota_used", "quota_daily_used", "quota_daily_start", "quota_weekly_used", "quota_weekly_start"} {
 		if v, ok := account.Extra[key]; ok {
-			inputExtra[key] = v
+			normalizedExtra[key] = v
 		}
 	}
-	account.Extra = inputExtra
+	account.Extra = normalizePlatformAccountExtra(account.Extra, normalizedExtra, account.Platform, account.Type)
 
 	if account.Platform == PlatformAntigravity && wasOveragesEnabled && !account.IsOveragesEnabled() {
 		delete(account.Extra, "antigravity_credits_overages")

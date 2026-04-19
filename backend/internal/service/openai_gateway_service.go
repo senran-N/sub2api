@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -12,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
-	"github.com/tidwall/sjson"
 )
 
 const (
@@ -396,116 +393,11 @@ func SnapshotOpenAICompatibilityFallbackMetrics() OpenAICompatibilityFallbackMet
 
 // Forward forwards request to OpenAI API
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte, defaultMappedModel string) (*OpenAIForwardResult, error) {
-	startTime := time.Now()
+	return s.CompatibleTextRuntime().ForwardResponses(ctx, c, account, body, defaultMappedModel)
+}
 
-	restrictionResult := s.detectCodexClientRestriction(c, account)
-	apiKeyID := getAPIKeyIDFromContext(c)
-	logCodexCLIOnlyDetection(ctx, c, account, apiKeyID, restrictionResult, body)
-	if restrictionResult.Enabled && !restrictionResult.Matched {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": gin.H{
-				"type":    "forbidden_error",
-				"message": "This account only allows Codex official clients",
-			},
-		})
-		return nil, errors.New("codex_cli_only restriction: only codex official clients are allowed")
-	}
-
-	originalBody := body
-	forceCodexCLI := s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
-	profile := GetCodexRequestProfile(c, body, forceCodexCLI)
-	reqMeta := getOpenAIRequestMeta(c, body)
-	reqModel, reqStream, promptCacheKey := reqMeta.Model, reqMeta.Stream, reqMeta.PromptCacheKey
-
-	isCodexCLI := profile.NativeClient
-	wsDecision := s.getOpenAIWSProtocolResolver().ResolveWithProfile(account, profile)
-	clientTransport := GetOpenAIClientTransport(c)
-	// 仅允许 WS 入站请求走 WS 上游，避免出现 HTTP -> WS 协议混用。
-	wsDecision = resolveOpenAIWSDecisionByClientTransport(wsDecision, clientTransport)
-	if c != nil {
-		c.Set("openai_ws_transport_decision", string(wsDecision.Transport))
-		c.Set("openai_ws_transport_reason", wsDecision.Reason)
-	}
-	if wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocketV2 {
-		logOpenAIWSModeDebug(
-			"selected account_id=%d account_type=%s transport=%s reason=%s model=%s stream=%v",
-			account.ID,
-			account.Type,
-			normalizeOpenAIWSLogValue(string(wsDecision.Transport)),
-			normalizeOpenAIWSLogValue(wsDecision.Reason),
-			reqModel,
-			reqStream,
-		)
-	}
-	// 当前仅支持 WSv2；WSv1 命中时直接返回错误，避免出现“配置可开但行为不确定”。
-	if wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
-		if c != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": gin.H{
-					"type":    "invalid_request_error",
-					"message": "OpenAI WSv1 is temporarily unsupported. Please enable responses_websockets_v2.",
-				},
-			})
-		}
-		return nil, errors.New("openai ws v1 is temporarily unsupported; use ws v2")
-	}
-	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
-	if passthroughEnabled {
-		forwardBody := originalBody
-		mappedModel := resolveOpenAIForwardModel(account, reqModel, defaultMappedModel)
-		mappedModel = normalizeOpenAIModelForUpstream(account, mappedModel)
-		if mappedModel != "" && mappedModel != reqModel {
-			var patchErr error
-			forwardBody, patchErr = sjson.SetBytes(originalBody, "model", mappedModel)
-			if patchErr != nil {
-				return nil, fmt.Errorf("patch passthrough model: %w", patchErr)
-			}
-		}
-		// 透传分支只需要轻量提取字段，避免热路径全量 Unmarshal。
-		var reasoningEffort *string
-		if reqMeta.ReasoningPresent {
-			if reqMeta.ReasoningEffort == "" {
-				reasoningEffort = nil
-			} else {
-				value := reqMeta.ReasoningEffort
-				reasoningEffort = &value
-			}
-		} else if reqMeta.ReasoningEffort != "" {
-			value := reqMeta.ReasoningEffort
-			reasoningEffort = &value
-		} else {
-			reasoningEffort = extractOpenAIReasoningEffortFromBody(body, reqModel)
-		}
-		result, err := s.forwardOpenAIPassthrough(ctx, c, account, forwardBody, reqModel, reasoningEffort, reqStream, startTime)
-		if err != nil {
-			return nil, err
-		}
-		if result != nil && mappedModel != "" && mappedModel != reqModel {
-			result.UpstreamModel = mappedModel
-		}
-		return result, nil
-	}
-
-	prepared, err := s.prepareOpenAIForwardRequest(c, account, body, reqModel, reqStream, promptCacheKey, defaultMappedModel, isCodexCLI, wsDecision)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get access token
-	token, _, err := s.GetAccessToken(ctx, account)
-	if err != nil {
-		return nil, err
-	}
-
-	// Capture upstream request body for ops retry of this attempt.
-	setOpsUpstreamRequestBody(c, prepared.body)
-
-	// 命中 WS 时仅走 WebSocket Mode；不再自动回退 HTTP。
-	if wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocketV2 {
-		return s.forwardPreparedOpenAIWS(ctx, c, account, prepared, token, wsDecision, startTime, isCodexCLI)
-	}
-
-	return s.forwardPreparedOpenAIHTTP(ctx, c, account, prepared, token, startTime, isCodexCLI)
+func (s *OpenAIGatewayService) CompatibleTextRuntime() *CompatibleGatewayTextRuntime {
+	return NewCompatibleGatewayTextRuntime(s)
 }
 
 func IsOpenAIResponsesCompactPathForTest(c *gin.Context) bool {

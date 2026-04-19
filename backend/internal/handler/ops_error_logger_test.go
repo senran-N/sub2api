@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
@@ -224,6 +226,32 @@ func TestOpsCaptureWriterPool_ResetOnRelease(t *testing.T) {
 	defer releaseOpsCaptureWriter(reused)
 
 	require.Zero(t, reused.buf.Len(), "writer should be reset before reuse")
+}
+
+func TestResolveOpsPlatform_PrefersForcePlatformThenGroupThenPath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/messages", nil)
+
+	group := &service.Group{
+		ID:       11,
+		Platform: service.PlatformGrok,
+		Status:   service.StatusActive,
+		Hydrated: true,
+	}
+	ctx := context.WithValue(c.Request.Context(), ctxkey.Group, group)
+	c.Request = c.Request.WithContext(ctx)
+
+	require.Equal(t, service.PlatformGrok, resolveOpsPlatform(c, nil))
+
+	ctx = context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, service.PlatformOpenAI)
+	c.Request = c.Request.WithContext(ctx)
+	require.Equal(t, service.PlatformOpenAI, resolveOpsPlatform(c, nil))
+
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/messages", nil)
+	require.Equal(t, service.PlatformGrok, resolveOpsPlatform(c, nil))
 }
 
 func TestOpsErrorLoggerMiddleware_DoesNotBreakOuterMiddlewares(t *testing.T) {

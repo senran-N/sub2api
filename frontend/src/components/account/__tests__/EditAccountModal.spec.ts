@@ -111,6 +111,39 @@ function buildAccount() {
   } as any
 }
 
+function buildGrokUpstreamAccount() {
+  return {
+    ...buildAccount(),
+    name: 'Grok Upstream',
+    platform: 'grok',
+    type: 'upstream',
+    credentials: {
+      api_key: 'xai-upstream-key',
+      base_url: 'https://grok-proxy.example',
+      model_mapping: {
+        'grok-4': 'grok-4'
+      },
+      pool_mode: true,
+      pool_mode_retry_count: 5
+    },
+    extra: {
+      quota_limit: 42
+    }
+  } as any
+}
+
+function buildGrokSessionAccount() {
+  return {
+    ...buildAccount(),
+    name: 'Grok Session',
+    platform: 'grok',
+    type: 'session',
+    credentials: {
+      session_token: 'grok-session-existing'
+    }
+  } as any
+}
+
 function mountModal(account = buildAccount()) {
   return mount(EditAccountModal, {
     props: {
@@ -185,17 +218,52 @@ describe('EditAccountModal', () => {
     expect(showErrorMock).toHaveBeenCalledWith('edit detail error')
   })
 
-  it('applies the xAI preset onto the OpenAI-compatible base URL field', async () => {
-    const wrapper = mountModal()
-    const baseUrlInput = wrapper.get('input[placeholder="admin.accounts.openai.baseUrlPlaceholder"]')
-    const xaiPreset = wrapper
+  it('applies the Grok official preset onto the Grok upstream base URL field', async () => {
+    const wrapper = mountModal(buildGrokUpstreamAccount())
+    const baseUrlInput = wrapper.get('input[placeholder="https://api.x.ai"]')
+    const grokPreset = wrapper
       .findAll('button')
-      .find((button) => button.text() === 'admin.accounts.openai.baseUrlPresets.xai')
+      .find((button) => button.text() === 'admin.accounts.grok.baseUrlPresets.official')
 
-    expect(xaiPreset).toBeTruthy()
+    expect(grokPreset).toBeTruthy()
 
-    await xaiPreset!.trigger('click')
+    await grokPreset!.trigger('click')
 
     expect((baseUrlInput.element as HTMLInputElement).value).toBe('https://api.x.ai')
+  })
+
+  it('preserves the existing Grok session token when the edit field is left blank', async () => {
+    const wrapper = mountModal(buildGrokSessionAccount())
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.session_token).toBe(
+      'grok-session-existing'
+    )
+  })
+
+  it('hydrates Grok upstream settings and keeps the existing API key on save', async () => {
+    const account = buildGrokUpstreamAccount()
+    const wrapper = mountModal(account)
+
+    const baseUrlInput = wrapper.get('input[placeholder="https://api.x.ai"]')
+    expect((baseUrlInput.element as HTMLInputElement).value).toBe('https://grok-proxy.example')
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials).toMatchObject({
+      api_key: 'xai-upstream-key',
+      base_url: 'https://grok-proxy.example',
+      model_mapping: {
+        'grok-4': 'grok-4'
+      },
+      pool_mode: true,
+      pool_mode_retry_count: 5
+    })
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.quota_limit).toBe(42)
   })
 })

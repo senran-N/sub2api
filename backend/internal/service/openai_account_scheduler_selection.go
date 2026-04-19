@@ -384,7 +384,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalanceFullScan(
 
 	filtered, loadReq := s.prepareLoadBalanceCandidates(ctx, req, accounts, schedGroup)
 	if len(filtered) == 0 {
-		if req.RequestedModel != "" && !openAIRequestedModelAvailable(accounts, req.RequestedModel) {
+		if req.RequestedModel != "" && !openAIRequestedModelAvailableForPlatformWithContext(ctx, accounts, req.RequestedModel, resolveOpenAISelectionPlatform(ctx)) {
 			return nil, 0, 0, 0, openAIAccountScheduleLoadBalanceStrategyFullScan, newOpenAIRequestedModelUnavailableError(req.RequestedModel)
 		}
 		return nil, 0, 0, 0, openAIAccountScheduleLoadBalanceStrategyFullScan, errors.New("no available OpenAI accounts")
@@ -445,7 +445,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalancePagedSnapshot(
 		pageSize,
 		func(accounts []*Account) (bool, *openAIAccountCandidateScore, error) {
 			accounts = s.filterBatchByIndexedCapabilityPointers(ctx, req, accounts, schedGroup)
-			prepared := s.prepareLoadBalanceCandidatePointers(req, accounts, schedGroup)
+			prepared := s.prepareLoadBalanceCandidatePointers(ctx, req, accounts, schedGroup)
 			requestedModelAvailable = requestedModelAvailable || prepared.requestedModelAvailable
 			if len(prepared.filtered) == 0 {
 				return false, nil, nil

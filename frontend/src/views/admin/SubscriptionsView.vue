@@ -168,6 +168,7 @@ import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { buildAdminPlatformOptions } from '@/components/admin/platformOptions'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import {
   buildSubscriptionGroupOptions
@@ -323,13 +324,11 @@ const groupOptions = computed(() => [
   ...groups.value.map((g) => ({ value: g.id.toString(), label: g.name }))
 ])
 
-const platformFilterOptions = computed(() => [
-  { value: '', label: t('admin.subscriptions.allPlatforms') },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' }
-])
+const platformFilterOptions = computed(() =>
+  buildAdminPlatformOptions(t, {
+    allLabel: t('admin.subscriptions.allPlatforms')
+  })
+)
 
 // Group options for assign (only subscription type groups)
 const subscriptionGroupOptions = computed(() => buildSubscriptionGroupOptions(groups.value))

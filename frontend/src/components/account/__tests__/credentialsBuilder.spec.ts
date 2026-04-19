@@ -59,7 +59,8 @@ describe('getDefaultBaseURL', () => {
     expect(getDefaultBaseURL('anthropic')).toBe('https://api.anthropic.com')
     expect(getDefaultBaseURL('openai')).toBe('https://api.openai.com')
     expect(getDefaultBaseURL('gemini')).toBe('https://generativelanguage.googleapis.com')
-    expect(getDefaultBaseURL('antigravity')).toBe('https://api.anthropic.com')
+    expect(getDefaultBaseURL('grok')).toBe('https://api.x.ai')
+    expect(getDefaultBaseURL('antigravity')).toBe('https://cloudcode-pa.googleapis.com')
   })
 })
 

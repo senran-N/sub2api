@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/grok"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,7 +69,7 @@ func TestAccountTestService_OpenAISuccessPersistsSnapshotFromHeaders(t *testing.
 		Credentials: map[string]any{"access_token": "test-token"},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
+	err := svc.testCompatibleGatewayAPIKeyConnection(ctx, account, "gpt-5.4", "")
 	require.NoError(t, err)
 	require.NotEmpty(t, repo.updatedExtra)
 	require.Equal(t, 42.0, repo.updatedExtra["codex_5h_used_percent"])
@@ -99,7 +100,7 @@ func TestAccountTestService_OpenAI429PersistsSnapshotWithoutRateLimit(t *testing
 		Credentials: map[string]any{"access_token": "test-token"},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
+	err := svc.testCompatibleGatewayAPIKeyConnection(ctx, account, "gpt-5.4", "")
 	require.Error(t, err)
 	require.NotEmpty(t, repo.updatedExtra)
 	require.Equal(t, 100.0, repo.updatedExtra["codex_5h_used_percent"])
@@ -125,10 +126,214 @@ func TestAccountTestService_OpenAI401MarksAccountAsAuthFailed(t *testing.T) {
 		Credentials: map[string]any{"access_token": "test-token"},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
+	err := svc.testCompatibleGatewayAPIKeyConnection(ctx, account, "gpt-5.4", "")
 	require.Error(t, err)
 	require.Equal(t, int64(87), repo.setErrorID)
 	require.Equal(t, `Authentication failed (401): {"detail":"Unauthorized"}`, repo.setErrorMsg)
+}
+
+func TestAccountTestService_GrokAPIKeyUsesCompatibleProbeDefaults(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: [DONE]\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	account := &Account{
+		ID:          86,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "xai-test-key",
+		},
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "basic",
+					"source":     "manual",
+				},
+				"quota_windows": map[string]any{
+					grok.QuotaWindowAuto: map[string]any{
+						"remaining": 9,
+						"total":     20,
+					},
+				},
+				"capabilities": map[string]any{
+					"video": false,
+				},
+				"sync_state": map[string]any{
+					"last_sync_at": "2026-04-19T00:00:00Z",
+				},
+			},
+		},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{account.ID: account},
+		},
+	}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://api.x.ai/v1/responses", upstream.requests[0].URL.String())
+	require.Equal(t, "Bearer xai-test-key", upstream.requests[0].Header.Get("Authorization"))
+	require.Equal(t, grok.DefaultTestModel, requestBodyModel(t, upstream.requests[0]))
+	require.NotEmpty(t, repo.updatedExtra)
+
+	grokExtra := grokExtraMap(repo.updatedExtra)
+	require.Equal(t, AccountTypeAPIKey, grokExtra["auth_mode"])
+	require.Equal(t, "basic", getNestedGrokValue(grokExtra, "tier", "normalized"))
+	require.Equal(t, "manual", getNestedGrokValue(grokExtra, "tier", "source"))
+	require.Equal(t, "2026-04-19T00:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_sync_at"))
+	require.NotEmpty(t, getNestedGrokValue(grokExtra, "sync_state", "last_probe_at"))
+	require.NotEmpty(t, getNestedGrokValue(grokExtra, "sync_state", "last_probe_ok_at"))
+	require.Equal(t, 200, grokParseInt(getNestedGrokValue(grokExtra, "sync_state", "last_probe_status_code")))
+	_, hasProbeError := grokNestedMap(grokExtra["sync_state"])["last_probe_error"]
+	require.False(t, hasProbeError)
+
+	quotaWindows := grokQuotaWindowsMap(grokExtra["quota_windows"])
+	require.Equal(t, 9, grokParseInt(getNestedGrokValue(quotaWindows, grok.QuotaWindowAuto, "remaining")))
+	require.Equal(t, 20, grokParseInt(getNestedGrokValue(quotaWindows, grok.QuotaWindowAuto, "total")))
+
+	capabilities := grokNestedMap(grokExtra["capabilities"])
+	require.Equal(t, false, capabilities["video"])
+	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(capabilities["operations"]))
+	require.ElementsMatch(t, []string{grok.DefaultTestModel}, grokParseStringSlice(capabilities["models"]))
+}
+
+func TestAccountTestService_GrokSessionProbeUsesProviderOwnedTransport(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, recorder := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, `{"conversationId":"conv_123"}`)
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	account := &Account{
+		ID:          85,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"session_token": "grok-session-token",
+		},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{account.ID: account},
+		},
+	}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+	}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[0].URL.String())
+	require.Equal(t, "sso=grok-session-token", upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, grokSessionModeAuto, requestBodyModeID(t, upstream.requests[0]))
+	require.Contains(t, recorder.Body.String(), "test_complete")
+	require.NotEmpty(t, repo.updatedExtra)
+
+	grokExtra := grokExtraMap(repo.updatedExtra)
+	require.Equal(t, AccountTypeSession, grokExtra["auth_mode"])
+	require.NotEmpty(t, getNestedGrokValue(grokExtra, "sync_state", "last_probe_at"))
+	require.NotEmpty(t, getNestedGrokValue(grokExtra, "sync_state", "last_probe_ok_at"))
+	require.Equal(t, 200, grokParseInt(getNestedGrokValue(grokExtra, "sync_state", "last_probe_status_code")))
+
+	capabilities := grokNestedMap(grokExtra["capabilities"])
+	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(capabilities["operations"]))
+	require.ElementsMatch(t, []string{grok.DefaultTestModel}, grokParseStringSlice(capabilities["models"]))
+}
+
+func TestAccountTestService_GrokProbeFailurePersistsNormalizedState(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusUnauthorized, `{"detail":"Unauthorized"}`)
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	account := &Account{
+		ID:          84,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "xai-test-key",
+		},
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "super",
+					"source":     "sync",
+				},
+				"quota_windows": map[string]any{
+					grok.QuotaWindowAuto: map[string]any{
+						"remaining": 7,
+						"total":     50,
+					},
+				},
+				"capabilities": map[string]any{
+					"models": []any{"grok-imagine-video"},
+				},
+				"sync_state": map[string]any{
+					"last_sync_at":     "2026-04-19T00:00:00Z",
+					"last_probe_ok_at": "2026-04-18T00:00:00Z",
+				},
+			},
+		},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{account.ID: account},
+		},
+	}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "grok-3-fast", "")
+	require.Error(t, err)
+	require.Equal(t, int64(84), repo.setErrorID)
+	require.Contains(t, repo.setErrorMsg, "Authentication failed (401)")
+	require.NotEmpty(t, repo.updatedExtra)
+
+	grokExtra := grokExtraMap(repo.updatedExtra)
+	require.Equal(t, AccountTypeAPIKey, grokExtra["auth_mode"])
+	require.Equal(t, "super", getNestedGrokValue(grokExtra, "tier", "normalized"))
+	require.Equal(t, "sync", getNestedGrokValue(grokExtra, "tier", "source"))
+	require.Equal(t, "2026-04-19T00:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_sync_at"))
+	require.Equal(t, "2026-04-18T00:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_ok_at"))
+	require.NotEmpty(t, getNestedGrokValue(grokExtra, "sync_state", "last_probe_at"))
+	require.NotEmpty(t, getNestedGrokValue(grokExtra, "sync_state", "last_probe_error_at"))
+	require.Equal(t, 401, grokParseInt(getNestedGrokValue(grokExtra, "sync_state", "last_probe_status_code")))
+	require.Contains(t, getStringFromMaps(grokNestedMap(grokExtra["sync_state"]), nil, "last_probe_error"), "API returned 401")
+
+	quotaWindows := grokQuotaWindowsMap(grokExtra["quota_windows"])
+	require.Equal(t, 7, grokParseInt(getNestedGrokValue(quotaWindows, grok.QuotaWindowAuto, "remaining")))
+	require.Equal(t, 50, grokParseInt(getNestedGrokValue(quotaWindows, grok.QuotaWindowAuto, "total")))
+
+	capabilities := grokNestedMap(grokExtra["capabilities"])
+	require.ElementsMatch(t, []string{"grok-imagine-video"}, grokParseStringSlice(capabilities["models"]))
 }
 
 func TestAccountTestService_OpenAIAzureAPIKeyUsesResponsesEndpointAndAPIKeyHeader(t *testing.T) {
@@ -158,7 +363,7 @@ func TestAccountTestService_OpenAIAzureAPIKeyUsesResponsesEndpointAndAPIKeyHeade
 		},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
+	err := svc.testCompatibleGatewayAPIKeyConnection(ctx, account, "gpt-5.4", "")
 	require.NoError(t, err)
 	require.Len(t, upstream.requests, 1)
 	require.Equal(t, "https://demo.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview", upstream.requests[0].URL.String())
@@ -195,7 +400,7 @@ func TestAccountTestService_OpenAIAPIKeyProbeAppliesWildcardModelMapping(t *test
 		},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4-mini", "")
+	err := svc.testCompatibleGatewayAPIKeyConnection(ctx, account, "gpt-5.4-mini", "")
 	require.NoError(t, err)
 	require.Len(t, upstream.requests, 1)
 	require.Equal(t, "gpt-5.3-codex", requestBodyModel(t, upstream.requests[0]))
@@ -230,7 +435,7 @@ func TestAccountTestService_OpenAIAPIKeyProbeUsesReasoningVariantBaseMapping(t *
 		},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4-xhigh", "")
+	err := svc.testCompatibleGatewayAPIKeyConnection(ctx, account, "gpt-5.4-xhigh", "")
 	require.NoError(t, err)
 	require.Len(t, upstream.requests, 1)
 	require.Equal(t, "gpt-5.3-codex-xhigh", requestBodyModel(t, upstream.requests[0]))
@@ -245,8 +450,27 @@ func requestBodyModel(t *testing.T, req *http.Request) string {
 	require.NoError(t, err)
 
 	var payload struct {
-		Model string `json:"model"`
+		Model     string `json:"model"`
+		ModelName string `json:"modelName"`
 	}
 	require.NoError(t, json.Unmarshal(body, &payload))
-	return payload.Model
+	if payload.Model != "" {
+		return payload.Model
+	}
+	return payload.ModelName
+}
+
+func requestBodyModeID(t *testing.T, req *http.Request) string {
+	t.Helper()
+	require.NotNil(t, req)
+	require.NotNil(t, req.Body)
+
+	body, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+
+	var payload struct {
+		ModeID string `json:"modeId"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload))
+	return payload.ModeID
 }

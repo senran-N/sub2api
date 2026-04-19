@@ -32,8 +32,8 @@ func (s *GatewayService) isModelSupportedByAccountWithContext(ctx context.Contex
 		}
 		return true
 	}
-	if account.Platform == PlatformOpenAI {
-		return isOpenAIAccountModelEligible(account, requestedModel)
+	if account.Platform == PlatformOpenAI || account.Platform == PlatformGrok {
+		return isCompatibleGatewayAccountModelEligible(account, requestedModel, account.Platform)
 	}
 	return s.isModelSupportedByAccount(account, requestedModel)
 }
@@ -53,8 +53,8 @@ func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedMo
 		_, ok := ResolveBedrockModelID(account, requestedModel)
 		return ok
 	}
-	if account.Platform == PlatformOpenAI {
-		return isOpenAIAccountModelEligible(account, requestedModel)
+	if account.Platform == PlatformOpenAI || account.Platform == PlatformGrok {
+		return isCompatibleGatewayAccountModelEligible(account, requestedModel, account.Platform)
 	}
 	if account.Platform == PlatformAnthropic {
 		if resolvedModel, source := resolveAnthropicCompatForwardModel(account, requestedModel); source != "" {

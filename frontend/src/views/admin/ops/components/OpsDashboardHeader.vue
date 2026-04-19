@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { buildAdminPlatformOptions } from '@/components/admin/platformOptions'
 import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -113,13 +114,11 @@ const customEndTimeInput = ref('')
 
 const groups = ref<Array<{ id: number; name: string; platform: string }>>([])
 
-const platformOptions = computed(() => [
-  { value: '', label: t('common.all') },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' }
-])
+const platformOptions = computed(() =>
+  buildAdminPlatformOptions(t, {
+    allLabel: t('common.all')
+  })
+)
 
 const timeRangeOptions = computed(() => [
   { value: '5m', label: t('admin.ops.timeRange.5m') },

@@ -56,7 +56,7 @@ func claudeMessagesDispatchFamily(model string) string {
 }
 
 func (g *Group) ResolveMessagesDispatchModel(requestedModel string) string {
-	if g == nil {
+	if g == nil || NormalizeCompatibleGatewayPlatform(g.Platform) != PlatformOpenAI {
 		return ""
 	}
 	requestedModel = strings.TrimSpace(requestedModel)
@@ -91,7 +91,7 @@ func (g *Group) ResolveMessagesDispatchModel(requestedModel string) string {
 }
 
 func sanitizeGroupMessagesDispatchFields(g *Group) {
-	if g == nil || g.Platform == PlatformOpenAI {
+	if g == nil || NormalizeCompatibleGatewayPlatform(g.Platform) == PlatformOpenAI {
 		return
 	}
 	g.AllowMessagesDispatch = false

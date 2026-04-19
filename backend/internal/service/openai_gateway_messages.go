@@ -2,19 +2,16 @@ package service
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/apicompat"
-	"github.com/senran-N/sub2api/internal/pkg/claude"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
@@ -34,212 +31,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
-	startTime := time.Now()
-
-	// 1. Parse Anthropic request
-	var anthropicReq apicompat.AnthropicRequest
-	if err := json.Unmarshal(body, &anthropicReq); err != nil {
-		return nil, fmt.Errorf("parse anthropic request: %w", err)
-	}
-	originalModel := anthropicReq.Model
-	applyOpenAICompatModelNormalization(&anthropicReq)
-	normalizedModel := anthropicReq.Model
-	clientStream := anthropicReq.Stream // client's original stream preference
-
-	// 2. Convert Anthropic → Responses
-	responsesReq, err := apicompat.AnthropicToResponses(&anthropicReq)
-	if err != nil {
-		return nil, fmt.Errorf("convert anthropic to responses: %w", err)
-	}
-
-	// Upstream always uses streaming (upstream may not support sync mode).
-	// The client's original preference determines the response format.
-	responsesReq.Stream = true
-	isStream := true
-
-	// 2b. Handle BetaFastMode → service_tier: "priority"
-	if containsBetaToken(c.GetHeader("anthropic-beta"), claude.FastModeBetaToken()) {
-		responsesReq.ServiceTier = "priority"
-	}
-
-	// 3. Model mapping
-	billingModel := resolveOpenAIForwardModel(account, normalizedModel, defaultMappedModel)
-	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
-	responsesReq.Model = upstreamModel
-
-	logger.L().Debug("openai messages: model mapping applied",
-		zap.Int64("account_id", account.ID),
-		zap.String("original_model", originalModel),
-		zap.String("normalized_model", normalizedModel),
-		zap.String("billing_model", billingModel),
-		zap.String("upstream_model", upstreamModel),
-		zap.Bool("stream", isStream),
-	)
-
-	// 4. Marshal Responses request body, then apply OAuth codex transform
-	responsesBody, err := json.Marshal(responsesReq)
-	if err != nil {
-		return nil, fmt.Errorf("marshal responses request: %w", err)
-	}
-	responsesBody, err = ensureOpenAIResponsesPromptCacheKey(responsesBody, promptCacheKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if account.Type == AccountTypeOAuth {
-		var reqBody map[string]any
-		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
-			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
-		}
-		codexResult := applyCodexOAuthTransform(reqBody, false, false)
-		if codexResult.PromptCacheKey != "" {
-			promptCacheKey = codexResult.PromptCacheKey
-		}
-		if promptCacheKey != "" {
-			reqBody["prompt_cache_key"] = promptCacheKey
-		}
-		if rewriteOpenAICodexBodyIdentityMap(account.ID, reqBody) {
-			if value, ok := reqBody["prompt_cache_key"].(string); ok {
-				promptCacheKey = strings.TrimSpace(value)
-			}
-		}
-		if s.cfg != nil {
-			if forcedTemplateText := strings.TrimSpace(s.cfg.Gateway.ForcedCodexInstructionsTemplate); forcedTemplateText != "" {
-				existingInstructions, _ := reqBody["instructions"].(string)
-				if _, err := applyForcedCodexInstructionsTemplate(reqBody, forcedTemplateText, forcedCodexInstructionsTemplateData{
-					ExistingInstructions: existingInstructions,
-					OriginalModel:        originalModel,
-					NormalizedModel:      normalizedModel,
-					BillingModel:         billingModel,
-					UpstreamModel:        upstreamModel,
-				}); err != nil {
-					return nil, err
-				}
-			}
-		}
-		// OAuth codex transform forces stream=true upstream, so always use
-		// the streaming response handler regardless of what the client asked.
-		isStream = true
-		responsesBody, err = json.Marshal(reqBody)
-		if err != nil {
-			return nil, fmt.Errorf("remarshal after codex transform: %w", err)
-		}
-	}
-
-	// 5. Get access token
-	token, _, err := s.GetAccessToken(ctx, account)
-	if err != nil {
-		return nil, fmt.Errorf("get access token: %w", err)
-	}
-
-	// 6. Build upstream request
-	upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, responsesBody, token, isStream, promptCacheKey)
-	if err != nil {
-		return nil, fmt.Errorf("build upstream request: %w", err)
-	}
-
-	// Override session_id with a deterministic UUID derived from the isolated
-	// session key, ensuring different API keys produce different upstream sessions.
-	setOpenAICompatPromptCacheSessionID(c, account, upstreamReq, promptCacheKey)
-
-	// 7. Send request
-	proxyURL := ""
-	if account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
-	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
-	if err != nil {
-		safeErr := sanitizeUpstreamErrorMessage(err.Error())
-		setOpsUpstreamError(c, 0, safeErr, "")
-		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-			Platform:           account.Platform,
-			AccountID:          account.ID,
-			AccountName:        account.Name,
-			UpstreamStatusCode: 0,
-			Kind:               "request_error",
-			Message:            safeErr,
-		})
-		writeAnthropicError(c, passthroughRuleResult{
-			StatusCode: http.StatusBadGateway,
-			ErrType:    "api_error",
-			ErrMessage: "Upstream request failed",
-		})
-		return nil, fmt.Errorf("upstream request failed: %s", safeErr)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// 8. Handle error response with failover
-	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-		_ = resp.Body.Close()
-		resp.Body = io.NopCloser(bytes.NewReader(respBody))
-
-		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
-		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
-		if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
-			upstreamDetail := ""
-			if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
-				maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
-				if maxBytes <= 0 {
-					maxBytes = 2048
-				}
-				upstreamDetail = truncateString(string(respBody), maxBytes)
-			}
-			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-				Platform:           account.Platform,
-				AccountID:          account.ID,
-				AccountName:        account.Name,
-				UpstreamStatusCode: resp.StatusCode,
-				UpstreamRequestID:  resp.Header.Get("x-request-id"),
-				Kind:               "failover",
-				Message:            upstreamMsg,
-				Detail:             upstreamDetail,
-			})
-			if s.rateLimitService != nil {
-				s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
-			}
-			return nil, &UpstreamFailoverError{
-				StatusCode:             resp.StatusCode,
-				ResponseBody:           respBody,
-				FailureReason:          classifyOpenAIHTTPFailoverReason(resp.StatusCode),
-				RetryableOnSameAccount: account.IsPoolMode() && (isOpenAIPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
-			}
-		}
-		// Non-failover error: return Anthropic-formatted error to client
-		return s.handleAnthropicErrorResponse(resp, c, account)
-	}
-
-	// 9. Handle normal response
-	// Upstream is always streaming; choose response format based on client preference.
-	var result *OpenAIForwardResult
-	var handleErr error
-	if clientStream {
-		result, handleErr = s.handleAnthropicStreamingResponse(resp, c, originalModel, billingModel, upstreamModel, startTime)
-	} else {
-		// Client wants JSON: buffer the streaming response and assemble a JSON reply.
-		result, handleErr = s.handleAnthropicBufferedStreamingResponse(resp, c, originalModel, billingModel, upstreamModel, startTime)
-	}
-
-	// Propagate ServiceTier and ReasoningEffort to result for billing
-	if handleErr == nil && result != nil {
-		if responsesReq.ServiceTier != "" {
-			st := responsesReq.ServiceTier
-			result.ServiceTier = &st
-		}
-		if responsesReq.Reasoning != nil && responsesReq.Reasoning.Effort != "" {
-			re := responsesReq.Reasoning.Effort
-			result.ReasoningEffort = &re
-		}
-	}
-
-	// Extract and save Codex usage snapshot from response headers (for OAuth accounts)
-	if handleErr == nil && account.Type == AccountTypeOAuth {
-		if snapshot := ParseCodexRateLimitHeaders(resp.Header); snapshot != nil {
-			s.updateCodexUsageSnapshot(ctx, account.ID, snapshot)
-		}
-	}
-
-	return result, handleErr
+	return s.CompatibleTextRuntime().ForwardMessages(ctx, c, account, body, promptCacheKey, defaultMappedModel)
 }
 
 func ensureOpenAIResponsesPromptCacheKey(body []byte, promptCacheKey string) ([]byte, error) {
