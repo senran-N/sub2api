@@ -77,14 +77,30 @@ const { pause: pauseClock, resume: resumeClock } = useIntervalFn(
   { immediate: false },
 )
 
-if (props.resetsAt) {
+const resetTimestamp = computed(() => {
+  if (!props.resetsAt) {
+    return null
+  }
+
+  const timestamp = new Date(props.resetsAt).getTime()
+  return Number.isFinite(timestamp) ? timestamp : null
+})
+
+const effectiveUtilization = computed(() => {
+  if (resetTimestamp.value != null && resetTimestamp.value <= now.value.getTime()) {
+    return 0
+  }
+  return props.utilization
+})
+
+if (resetTimestamp.value != null) {
   resumeClock()
 }
 
 watch(
-  () => props.resetsAt,
+  resetTimestamp,
   (value) => {
-    if (value) {
+    if (value != null) {
       now.value = new Date()
       resumeClock()
       return
@@ -98,10 +114,10 @@ const joinClassNames = (...classNames: Array<string | false | null | undefined>)
 }
 
 const getUtilizationTone = (): UtilizationTone => {
-  if (props.utilization >= 100) {
+  if (effectiveUtilization.value >= 100) {
     return 'danger'
   }
-  if (props.utilization >= 80) {
+  if (effectiveUtilization.value >= 80) {
     return 'warning'
   }
   return 'success'
@@ -122,9 +138,9 @@ const barClass = computed(() => {
 })
 
 const textClass = computed(() => {
-  const tone = props.utilization >= 100
+  const tone = effectiveUtilization.value >= 100
     ? 'danger'
-    : props.utilization >= 80
+    : effectiveUtilization.value >= 80
       ? 'warning'
       : 'neutral'
 
@@ -134,10 +150,10 @@ const textClass = computed(() => {
   )
 })
 
-const barWidth = computed(() => `${Math.min(props.utilization, 100)}%`)
+const barWidth = computed(() => `${Math.min(effectiveUtilization.value, 100)}%`)
 
 const displayPercent = computed(() => {
-  const percent = Math.round(props.utilization)
+  const percent = Math.round(effectiveUtilization.value)
   return percent > 999 ? '>999%' : `${percent}%`
 })
 
@@ -145,20 +161,19 @@ const shouldShowResetTime = computed(() => {
   if (props.resetsAt) {
     return true
   }
-  return Boolean(props.showNowWhenIdle && props.utilization <= 0)
+  return Boolean(props.showNowWhenIdle && effectiveUtilization.value <= 0)
 })
 
 const formatResetTime = computed(() => {
-  if (props.showNowWhenIdle && props.utilization <= 0) {
+  if (props.showNowWhenIdle && effectiveUtilization.value <= 0) {
     return '现在'
   }
 
-  if (!props.resetsAt) {
+  if (resetTimestamp.value == null) {
     return '-'
   }
 
-  const date = new Date(props.resetsAt)
-  const diffMs = date.getTime() - now.value.getTime()
+  const diffMs = resetTimestamp.value - now.value.getTime()
 
   if (diffMs <= 0) {
     return '现在'

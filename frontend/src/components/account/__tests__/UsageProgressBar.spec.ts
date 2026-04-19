@@ -66,4 +66,24 @@ describe('UsageProgressBar', () => {
     expect(wrapper.text()).toContain('2h 30m')
     expect(wrapper.text()).not.toContain('现在')
   })
+
+  it('窗口重置时间过去后会把显示利用率归零', async () => {
+    const wrapper = mount(UsageProgressBar, {
+      props: {
+        label: '5h',
+        utilization: 42,
+        resetsAt: '2026-03-17T00:01:00Z',
+        showNowWhenIdle: true,
+        color: 'indigo'
+      }
+    })
+
+    expect(wrapper.text()).toContain('42%')
+    expect(wrapper.text()).toContain('1m')
+
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(wrapper.text()).toContain('0%')
+    expect(wrapper.text()).toContain('现在')
+  })
 })
