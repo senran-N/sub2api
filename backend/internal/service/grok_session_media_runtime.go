@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -113,6 +114,13 @@ type grokSessionUploadedAsset struct {
 	FileID     string
 	FileURI    string
 	ContentURL string
+}
+
+type grokSessionImageCardChunk struct {
+	Key       string
+	ImageURL  string
+	Progress  int
+	Moderated bool
 }
 
 type grokSessionVideoReference struct {
@@ -300,10 +308,146 @@ func (r *GrokSessionMediaRuntime) handleImageGeneration(
 	canonicalModel string,
 	body []byte,
 ) bool {
+	responseBody, _, err := r.buildSessionImageGenerationResponse(c, account, requestedModel, canonicalModel, body)
+	if err != nil {
+		r.writeMediaRuntimeError(c, err)
+		return true
+	}
+	c.Data(http.StatusOK, "application/json", responseBody)
+	return true
+}
+
+func (r *GrokSessionMediaRuntime) handleImageEdit(
+	c *gin.Context,
+	account *Account,
+	requestedModel string,
+	canonicalModel string,
+	body []byte,
+) bool {
+	responseBody, _, err := r.buildSessionImageEditResponse(c, account, requestedModel, canonicalModel, body)
+	if err != nil {
+		r.writeMediaRuntimeError(c, err)
+		return true
+	}
+	c.Data(http.StatusOK, "application/json", responseBody)
+	return true
+}
+
+func (r *GrokSessionMediaRuntime) buildChatImageCompletion(
+	c *gin.Context,
+	account *Account,
+	requestedModel string,
+	canonicalModel string,
+	requestPath string,
+	body []byte,
+) (string, string, error) {
+	if grokSessionImageRouteIsEdit(requestPath) {
+		responseBody, reasoning, err := r.buildSessionImageEditResponseWithPath(c, account, requestedModel, canonicalModel, requestPath, body)
+		if err != nil {
+			return "", "", err
+		}
+		content, err := grokChatImageContentFromResponse(responseBody)
+		return content, reasoning, err
+	}
+
+	responseBody, reasoning, err := r.buildSessionImageGenerationResponseWithPath(c, account, requestedModel, canonicalModel, requestPath, body)
+	if err != nil {
+		return "", "", err
+	}
+	content, err := grokChatImageContentFromResponse(responseBody)
+	return content, reasoning, err
+}
+
+func (r *GrokSessionMediaRuntime) buildChatVideoCompletion(
+	c *gin.Context,
+	account *Account,
+	requestedModel string,
+	canonicalModel string,
+	body []byte,
+) (string, string, error) {
+	if c == nil || c.Request == nil {
+		return "", "", errors.New("grok session request context is missing")
+	}
+
+	req, err := parseGrokSessionVideoCreateRequest(body, firstNonEmpty(canonicalModel, requestedModel))
+	if err != nil {
+		return "", "", err
+	}
+
+	reasoningUpdates := make([]string, 0, 4)
+	lastProgress := -1
+	artifact, err := r.generateSessionVideo(c.Request.Context(), account, req, func(progress int) {
+		progress = clampGrokSessionMediaProgress(progress)
+		if progress <= lastProgress {
+			return
+		}
+		lastProgress = progress
+		appendGrokSessionReasoningUpdate(&reasoningUpdates, buildGrokSessionVideoProgressReason(progress))
+	})
+	if err != nil {
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
+		return "", "", err
+	}
+
+	content := strings.TrimSpace(artifact.VideoURL)
+	if r.mediaAssets != nil {
+		assetRecord, assetErr := r.mediaAssets.UpsertRemoteAssetRecord(
+			c.Request.Context(),
+			account,
+			"video",
+			requestedModel,
+			canonicalModel,
+			"",
+			artifact.AssetID,
+			artifact.VideoURL,
+		)
+		if assetErr != nil {
+			r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, assetErr)
+			return "", "", assetErr
+		}
+		if assetRecord != nil {
+			content, _, assetErr = r.mediaAssets.RenderExistingAssetValue(c, assetRecord.AssetID, "video")
+			if assetErr != nil {
+				r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, assetErr)
+				return "", "", assetErr
+			}
+		}
+	}
+	if strings.TrimSpace(content) == "" {
+		err = errors.New("grok session video generation returned no playable content")
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
+		return "", "", err
+	}
+
+	r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, nil)
+	return content, strings.Join(reasoningUpdates, "\n"), nil
+}
+
+func (r *GrokSessionMediaRuntime) buildSessionImageGenerationResponse(
+	c *gin.Context,
+	account *Account,
+	requestedModel string,
+	canonicalModel string,
+	body []byte,
+) ([]byte, string, error) {
+	return r.buildSessionImageGenerationResponseWithPath(c, account, requestedModel, canonicalModel, c.Request.URL.Path, body)
+}
+
+func (r *GrokSessionMediaRuntime) buildSessionImageGenerationResponseWithPath(
+	c *gin.Context,
+	account *Account,
+	requestedModel string,
+	canonicalModel string,
+	requestPath string,
+	body []byte,
+) ([]byte, string, error) {
+	if c == nil || c.Request == nil {
+		return nil, "", errors.New("grok session request context is missing")
+	}
+
 	req, err := parseGrokSessionImageGenerationRequest(body, firstNonEmpty(canonicalModel, requestedModel))
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
-		return true
+		return nil, "", err
 	}
 
 	modeID := resolveGrokSessionMediaModeID(req.Model)
@@ -313,8 +457,7 @@ func (r *GrokSessionMediaRuntime) handleImageGeneration(
 		Message: "Drawing: " + strings.TrimSpace(req.Prompt),
 	})
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
-		return true
+		return nil, "", err
 	}
 
 	payload["disableTextFollowUps"] = true
@@ -327,8 +470,7 @@ func (r *GrokSessionMediaRuntime) handleImageGeneration(
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusInternalServerError, "api_error", "Failed to build Grok image generation request")
-		return true
+		return nil, "", errors.New("Failed to build Grok image generation request")
 	}
 
 	resp, target, err := r.doSessionJSONRequest(
@@ -340,66 +482,73 @@ func (r *GrokSessionMediaRuntime) handleImageGeneration(
 		0,
 	)
 	if err != nil {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
-		r.writeMediaRuntimeError(c, err)
-		return true
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	imageURLs, err := collectGrokSessionImageURLs(resp, target, c.Request.URL.Path)
+	imageURLs, reasoning, err := collectGrokSessionImageURLsWithReasoning(resp, target, requestPath, req.N)
 	if err != nil {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
-		r.writeMediaRuntimeError(c, err)
-		return true
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 	if len(imageURLs) == 0 {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, errors.New("grok session image generation returned no images"))
-		writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Grok session image generation returned no images")
-		return true
+		err = errors.New("grok session image generation returned no images")
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 
 	responseBody, err := marshalGrokSessionImageResponse(imageURLs, r.now())
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusInternalServerError, "api_error", "Failed to build Grok image response")
-		return true
+		return nil, "", errors.New("Failed to build Grok image response")
 	}
 	if r.mediaAssets != nil {
 		responseBody, _, _ = r.mediaAssets.RewriteResponse(c, account, responseBody, "image", req.ResponseFormat, requestedModel, canonicalModel, "")
 	}
-	r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, nil)
-	c.Data(http.StatusOK, "application/json", responseBody)
-	return true
+	r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, nil)
+	return responseBody, reasoning, nil
 }
 
-func (r *GrokSessionMediaRuntime) handleImageEdit(
+func (r *GrokSessionMediaRuntime) buildSessionImageEditResponse(
 	c *gin.Context,
 	account *Account,
 	requestedModel string,
 	canonicalModel string,
 	body []byte,
-) bool {
+) ([]byte, string, error) {
+	return r.buildSessionImageEditResponseWithPath(c, account, requestedModel, canonicalModel, c.Request.URL.Path, body)
+}
+
+func (r *GrokSessionMediaRuntime) buildSessionImageEditResponseWithPath(
+	c *gin.Context,
+	account *Account,
+	requestedModel string,
+	canonicalModel string,
+	requestPath string,
+	body []byte,
+) ([]byte, string, error) {
+	if c == nil || c.Request == nil {
+		return nil, "", errors.New("grok session request context is missing")
+	}
+
 	req, err := parseGrokSessionImageEditRequest(c, body, firstNonEmpty(canonicalModel, requestedModel))
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
-		return true
+		return nil, "", err
 	}
 	if req.HasMask {
-		writeCompatibleGatewayMediaError(c, http.StatusBadRequest, "invalid_request_error", "Grok session image edit does not support mask uploads")
-		return true
+		return nil, "", errors.New("Grok session image edit does not support mask uploads")
 	}
 
 	uploaded, err := r.uploadSessionMediaInputs(c.Request.Context(), account, req.InputImages)
 	if err != nil {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
-		r.writeMediaRuntimeError(c, err)
-		return true
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 	imageReferences := collectGrokSessionUploadedContentURLs(uploaded)
 	if len(imageReferences) == 0 {
 		err = errors.New("grok session image edit has no uploaded image references")
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
-		r.writeMediaRuntimeError(c, err)
-		return true
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 
 	postID, err := r.createSessionMediaPost(
@@ -410,9 +559,8 @@ func (r *GrokSessionMediaRuntime) handleImageEdit(
 		"",
 	)
 	if err != nil {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
-		r.writeMediaRuntimeError(c, err)
-		return true
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 
 	modeID := resolveGrokSessionMediaModeID(req.Model)
@@ -422,8 +570,7 @@ func (r *GrokSessionMediaRuntime) handleImageEdit(
 		Message: strings.TrimSpace(req.Prompt),
 	})
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
-		return true
+		return nil, "", err
 	}
 
 	payload["modelName"] = grokSessionImageEditModelName
@@ -448,8 +595,7 @@ func (r *GrokSessionMediaRuntime) handleImageEdit(
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusInternalServerError, "api_error", "Failed to build Grok image edit request")
-		return true
+		return nil, "", errors.New("Failed to build Grok image edit request")
 	}
 
 	resp, target, err := r.doSessionJSONRequest(
@@ -461,35 +607,31 @@ func (r *GrokSessionMediaRuntime) handleImageEdit(
 		0,
 	)
 	if err != nil {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
-		r.writeMediaRuntimeError(c, err)
-		return true
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	imageURLs, err := collectGrokSessionImageURLs(resp, target, c.Request.URL.Path)
+	imageURLs, reasoning, err := collectGrokSessionImageURLsWithReasoning(resp, target, requestPath, req.N)
 	if err != nil {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
-		r.writeMediaRuntimeError(c, err)
-		return true
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 	if len(imageURLs) == 0 {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, errors.New("grok session image edit returned no images"))
-		writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Grok session image edit returned no images")
-		return true
+		err = errors.New("grok session image edit returned no images")
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
+		return nil, "", err
 	}
 
 	responseBody, err := marshalGrokSessionImageResponse(imageURLs, r.now())
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusInternalServerError, "api_error", "Failed to build Grok image response")
-		return true
+		return nil, "", errors.New("Failed to build Grok image response")
 	}
 	if r.mediaAssets != nil {
 		responseBody, _, _ = r.mediaAssets.RewriteResponse(c, account, responseBody, "image", req.ResponseFormat, requestedModel, canonicalModel, "")
 	}
-	r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, nil)
-	c.Data(http.StatusOK, "application/json", responseBody)
-	return true
+	r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, nil)
+	return responseBody, reasoning, nil
 }
 
 func (r *GrokSessionMediaRuntime) runVideoJob(account *Account, record *GrokVideoJobRecord, req grokSessionVideoCreateRequest) {
@@ -522,7 +664,7 @@ func (r *GrokSessionMediaRuntime) runVideoJob(account *Account, record *GrokVide
 		PollAfter:        &pollAfter,
 	})
 
-	artifact, err := r.generateSessionVideo(ctx, account, req)
+	artifact, err := r.generateSessionVideo(ctx, account, req, nil)
 	if err != nil {
 		r.persistSessionMediaRuntimeFeedback(ctx, account, firstNonEmpty(record.CanonicalModel, record.RequestedModel, req.Model), "/v1/videos", err)
 		r.failVideoJob(ctx, record.JobID, grokSessionMediaFeedbackCode(err), sanitizeUpstreamErrorMessage(err.Error()))
@@ -566,6 +708,7 @@ func (r *GrokSessionMediaRuntime) generateSessionVideo(
 	ctx context.Context,
 	account *Account,
 	req grokSessionVideoCreateRequest,
+	progress func(int),
 ) (*grokSessionVideoArtifact, error) {
 	var (
 		reference    *grokSessionVideoReference
@@ -645,7 +788,7 @@ func (r *GrokSessionMediaRuntime) generateSessionVideo(
 			return nil, err
 		}
 
-		artifact, err = collectGrokSessionVideoArtifact(resp, target, totalSegments, index)
+		artifact, err = collectGrokSessionVideoArtifact(resp, target, totalSegments, index, progress)
 		_ = resp.Body.Close()
 		if err != nil {
 			return nil, err
@@ -1085,6 +1228,32 @@ func (r *GrokSessionMediaRuntime) createSessionMediaPost(
 }
 
 func collectGrokSessionImageURLs(resp *http.Response, target grokTransportTarget, requestPath string) ([]string, error) {
+	return collectGrokSessionImageURLsWithProgress(resp, target, requestPath, 0, nil)
+}
+
+func collectGrokSessionImageURLsWithReasoning(
+	resp *http.Response,
+	target grokTransportTarget,
+	requestPath string,
+	totalImages int,
+) ([]string, string, error) {
+	reasoningUpdates := make([]string, 0, 4)
+	imageURLs, err := collectGrokSessionImageURLsWithProgress(resp, target, requestPath, totalImages, func(progress int, completed int, total int) {
+		appendGrokSessionReasoningUpdate(&reasoningUpdates, buildGrokSessionImageProgressReason(progress, completed, total))
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return imageURLs, strings.Join(reasoningUpdates, "\n"), nil
+}
+
+func collectGrokSessionImageURLsWithProgress(
+	resp *http.Response,
+	target grokTransportTarget,
+	requestPath string,
+	totalImages int,
+	progress func(progress int, completed int, total int),
+) ([]string, error) {
 	if resp == nil || resp.Body == nil {
 		return nil, errors.New("grok session response is empty")
 	}
@@ -1097,6 +1266,7 @@ func collectGrokSessionImageURLs(resp *http.Response, target grokTransportTarget
 
 	imageURLs := make([]string, 0, 4)
 	seen := make(map[string]struct{})
+	progressMap := make(map[string]int)
 
 	appendURL := func(raw string) {
 		value := strings.TrimSpace(raw)
@@ -1108,6 +1278,25 @@ func collectGrokSessionImageURLs(resp *http.Response, target grokTransportTarget
 		}
 		seen[value] = struct{}{}
 		imageURLs = append(imageURLs, value)
+	}
+	recordProgress := func(key string, value int) {
+		if progress == nil || totalImages <= 0 {
+			return
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			key = fmt.Sprintf("image-%d", len(progressMap))
+		}
+		next := clampGrokSessionMediaProgress(value)
+		if current, ok := progressMap[key]; ok && next < current {
+			next = current
+		}
+		progressMap[key] = next
+		progress(
+			computeGrokSessionAggregateProgress(progressMap, totalImages),
+			countGrokSessionCompletedProgress(progressMap),
+			totalImages,
+		)
 	}
 
 	for scanner.Scan() {
@@ -1124,13 +1313,27 @@ func collectGrokSessionImageURLs(resp *http.Response, target grokTransportTarget
 			}
 		}
 
-		appendURL(strings.TrimSpace(gjson.GetBytes(raw, "result.response.streamingImageGenerationResponse.imageUrl").String()))
+		stream := gjson.GetBytes(raw, "result.response.streamingImageGenerationResponse")
+		if stream.Exists() {
+			recordProgress(
+				firstNonEmpty(
+					strings.TrimSpace(stream.Get("assetId").String()),
+					strings.TrimSpace(stream.Get("imageUrl").String()),
+				),
+				int(stream.Get("progress").Int()),
+			)
+			appendURL(strings.TrimSpace(stream.Get("imageUrl").String()))
+		}
 
-		if assetID := strings.TrimSpace(gjson.GetBytes(raw, "result.response.streamingImageGenerationResponse.assetId").String()); assetID != "" && userID != "" {
+		if assetID := strings.TrimSpace(stream.Get("assetId").String()); assetID != "" && userID != "" {
 			appendURL(resolveGrokSessionUploadedAssetURL(assetID, "", userID))
 		}
-		for _, imageURL := range extractGrokSessionImageCardURLs(raw) {
-			appendURL(imageURL)
+		for _, chunk := range extractGrokSessionImageCardChunks(raw) {
+			recordProgress(chunk.Key, chunk.Progress)
+			if chunk.Moderated || chunk.Progress < 100 {
+				continue
+			}
+			appendURL(chunk.ImageURL)
 		}
 
 		for _, value := range gjson.GetBytes(raw, "result.response.modelResponse.generatedImageUrls").Array() {
@@ -1154,6 +1357,27 @@ func collectGrokSessionImageURLs(resp *http.Response, target grokTransportTarget
 }
 
 func extractGrokSessionImageCardURLs(raw []byte) []string {
+	chunks := extractGrokSessionImageCardChunks(raw)
+	if len(chunks) == 0 {
+		return nil
+	}
+
+	urls := make([]string, 0, len(chunks))
+	seen := make(map[string]struct{}, len(chunks))
+	for _, chunk := range chunks {
+		if chunk.Moderated || chunk.Progress < 100 || chunk.ImageURL == "" {
+			continue
+		}
+		if _, ok := seen[chunk.ImageURL]; ok {
+			continue
+		}
+		seen[chunk.ImageURL] = struct{}{}
+		urls = append(urls, chunk.ImageURL)
+	}
+	return urls
+}
+
+func extractGrokSessionImageCardChunks(raw []byte) []grokSessionImageCardChunk {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -1173,8 +1397,7 @@ func extractGrokSessionImageCardURLs(raw []byte) []string {
 		return nil
 	}
 
-	urls := make([]string, 0, len(payloads))
-	seen := make(map[string]struct{}, len(payloads))
+	chunks := make([]grokSessionImageCardChunk, 0, len(payloads))
 	for _, payload := range payloads {
 		if !gjson.ValidBytes(payload) {
 			continue
@@ -1186,25 +1409,22 @@ func extractGrokSessionImageCardURLs(raw []byte) []string {
 		if imageURL == "" {
 			continue
 		}
-		progress := gjson.GetBytes(payload, "image_chunk.progress")
-		if progress.Exists() && progress.Type == gjson.Number && progress.Int() < 100 {
-			continue
-		}
-		if gjson.GetBytes(payload, "image_chunk.moderated").Bool() {
-			continue
-		}
 
 		resolved := absolutizeGrokSessionAssetURL(imageURL)
 		if resolved == "" {
 			continue
 		}
-		if _, ok := seen[resolved]; ok {
-			continue
-		}
-		seen[resolved] = struct{}{}
-		urls = append(urls, resolved)
+		chunks = append(chunks, grokSessionImageCardChunk{
+			Key: firstNonEmpty(
+				strings.TrimSpace(gjson.GetBytes(payload, "id").String()),
+				resolved,
+			),
+			ImageURL:  resolved,
+			Progress:  clampGrokSessionMediaProgress(int(gjson.GetBytes(payload, "image_chunk.progress").Int())),
+			Moderated: gjson.GetBytes(payload, "image_chunk.moderated").Bool(),
+		})
 	}
-	return urls
+	return chunks
 }
 
 func collectGrokSessionVideoArtifact(
@@ -1212,6 +1432,7 @@ func collectGrokSessionVideoArtifact(
 	target grokTransportTarget,
 	totalSegments int,
 	index int,
+	progress func(int),
 ) (*grokSessionVideoArtifact, error) {
 	if resp == nil || resp.Body == nil {
 		return nil, errors.New("grok session response is empty")
@@ -1246,8 +1467,9 @@ func collectGrokSessionVideoArtifact(
 				artifact.VideoPostID,
 			)
 			if progressValue := stream.Get("progress"); progressValue.Exists() && totalSegments > 0 {
-				_ = index // reserved for future progress persistence
-				_ = progressValue.Int()
+				if progress != nil {
+					progress(scaleGrokSessionSegmentProgress(index, totalSegments, int(progressValue.Int())))
+				}
 			}
 			if rawURL := strings.TrimSpace(stream.Get("videoUrl").String()); rawURL != "" {
 				artifact.VideoURL = absolutizeGrokSessionAssetURL(rawURL)
@@ -1279,6 +1501,9 @@ func collectGrokSessionVideoArtifact(
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
+	if progress != nil && totalSegments > 0 && (artifact.VideoURL != "" || artifact.AssetID != "" || artifact.VideoPostID != "") {
+		progress(scaleGrokSessionSegmentProgress(index, totalSegments, 100))
+	}
 
 	if artifact.VideoURL == "" {
 		return nil, errors.New("grok session video generation returned no final video URL")
@@ -1287,6 +1512,85 @@ func collectGrokSessionVideoArtifact(
 		artifact.VideoPostID = firstNonEmpty(artifact.AssetID, uuid.NewString())
 	}
 	return artifact, nil
+}
+
+func clampGrokSessionMediaProgress(value int) int {
+	if value < 0 {
+		return 0
+	}
+	if value > 100 {
+		return 100
+	}
+	return value
+}
+
+func computeGrokSessionAggregateProgress(progressMap map[string]int, total int) int {
+	if total <= 0 {
+		return 100
+	}
+	if len(progressMap) == 0 {
+		return 0
+	}
+	values := make([]int, 0, len(progressMap))
+	for _, value := range progressMap {
+		values = append(values, clampGrokSessionMediaProgress(value))
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(values)))
+	if len(values) > total {
+		values = values[:total]
+	}
+	sum := 0
+	for _, value := range values {
+		sum += value
+	}
+	return clampGrokSessionMediaProgress(sum / total)
+}
+
+func countGrokSessionCompletedProgress(progressMap map[string]int) int {
+	completed := 0
+	for _, value := range progressMap {
+		if clampGrokSessionMediaProgress(value) >= 100 {
+			completed++
+		}
+	}
+	return completed
+}
+
+func appendGrokSessionReasoningUpdate(updates *[]string, value string) {
+	if updates == nil {
+		return
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	if length := len(*updates); length > 0 && (*updates)[length-1] == value {
+		return
+	}
+	*updates = append(*updates, value)
+}
+
+func buildGrokSessionImageProgressReason(progress int, completed int, total int) string {
+	reason := fmt.Sprintf("图片正在生成 %d%%", clampGrokSessionMediaProgress(progress))
+	if total > 0 {
+		reason += fmt.Sprintf(" (%d/%d)", completed, total)
+	}
+	return reason
+}
+
+func buildGrokSessionVideoProgressReason(progress int) string {
+	return fmt.Sprintf("视频正在生成 %d%%", clampGrokSessionMediaProgress(progress))
+}
+
+func scaleGrokSessionSegmentProgress(index int, totalSegments int, progress int) int {
+	if totalSegments <= 0 {
+		return clampGrokSessionMediaProgress(progress)
+	}
+	if index < 0 {
+		index = 0
+	}
+	scaled := int(((float64(index) + (float64(clampGrokSessionMediaProgress(progress)) / 100.0)) / float64(totalSegments)) * 100.0)
+	return clampGrokSessionMediaProgress(scaled)
 }
 
 func parseGrokSessionImageGenerationRequest(body []byte, defaultModel string) (grokSessionImageGenerationRequest, error) {

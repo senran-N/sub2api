@@ -368,6 +368,164 @@ func TestGrokGatewayServiceHandleChatCompletions_RoutesVideoModelsThroughMediaSe
 	require.Contains(t, content, "/grok/media/assets/")
 }
 
+func TestGrokGatewayServiceHandleChatCompletions_SessionImageStreamEmitsReasoningProgress(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","stream":true,"messages":[{"role":"user","content":"paint a lighthouse"}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"streamingImageGenerationResponse":{"progress":25}}}}`,
+				`{"result":{"response":{"streamingImageGenerationResponse":{"progress":100,"imageUrl":"https://media.example/image.png"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokSessionMediaAccount(44, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			}),
+		},
+	}
+	svc := NewGrokGatewayService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, nil)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+	require.Len(t, upstream.requests, 1)
+	require.Contains(t, upstream.requests[0].URL.String(), "/rest/app-chat/conversations/new")
+
+	chunks := decodeChatCompletionsSSEChunks(t, rec.Body.String())
+	require.Len(t, chunks, 5)
+	require.Equal(t, "assistant", chunks[0].Choices[0].Delta.Role)
+	require.NotNil(t, chunks[1].Choices[0].Delta.ReasoningContent)
+	require.Equal(t, "图片正在生成 25% (0/1)", *chunks[1].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[2].Choices[0].Delta.ReasoningContent)
+	require.Equal(t, "图片正在生成 100% (1/1)", *chunks[2].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[3].Choices[0].Delta.Content)
+	require.Equal(t, "![image](https://media.example/image.png)", *chunks[3].Choices[0].Delta.Content)
+	require.NotNil(t, chunks[4].Choices[0].FinishReason)
+	require.Equal(t, "stop", *chunks[4].Choices[0].FinishReason)
+}
+
+func TestGrokGatewayServiceHandleChatCompletions_SessionImageIncludesReasoningContent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","messages":[{"role":"user","content":"paint a lighthouse"}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"streamingImageGenerationResponse":{"progress":25}}}}`,
+				`{"result":{"response":{"streamingImageGenerationResponse":{"progress":100,"imageUrl":"https://media.example/image.png"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokSessionMediaAccount(45, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			}),
+		},
+	}
+	svc := NewGrokGatewayService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, nil)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response apicompat.ChatCompletionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Choices, 1)
+	require.Equal(t, "图片正在生成 25% (0/1)\n图片正在生成 100% (1/1)", response.Choices[0].Message.ReasoningContent)
+
+	var content string
+	require.NoError(t, json.Unmarshal(response.Choices[0].Message.Content, &content))
+	require.Equal(t, "![image](https://media.example/image.png)", content)
+}
+
+func TestGrokGatewayServiceHandleChatCompletions_SessionVideoStreamEmitsReasoningProgress(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-imagine-video","stream":true,"messages":[{"role":"user","content":"launch sequence"}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"post":{"id":"post_123"}}`),
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"streamingVideoGenerationResponse":{"progress":20}}}}`,
+				`{"result":{"response":{"streamingVideoGenerationResponse":{"progress":100,"videoUrl":"https://media.example/video.mp4","videoPostId":"post_123"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokSessionMediaAccount(46, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			}),
+		},
+	}
+	svc := NewGrokGatewayService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, nil)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+	require.Len(t, upstream.requests, 2)
+	require.Equal(t, "https://grok.com/rest/media/post/create", upstream.requests[0].URL.String())
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[1].URL.String())
+
+	chunks := decodeChatCompletionsSSEChunks(t, rec.Body.String())
+	require.Len(t, chunks, 5)
+	require.Equal(t, "assistant", chunks[0].Choices[0].Delta.Role)
+	require.NotNil(t, chunks[1].Choices[0].Delta.ReasoningContent)
+	require.Equal(t, "视频正在生成 20%", *chunks[1].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[2].Choices[0].Delta.ReasoningContent)
+	require.Equal(t, "视频正在生成 100%", *chunks[2].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[3].Choices[0].Delta.Content)
+	require.Equal(t, "https://media.example/video.mp4", *chunks[3].Choices[0].Delta.Content)
+	require.NotNil(t, chunks[4].Choices[0].FinishReason)
+	require.Equal(t, "stop", *chunks[4].Choices[0].FinishReason)
+}
+
 func TestGrokGatewayServiceHandleMessages_UsesCompatibleAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

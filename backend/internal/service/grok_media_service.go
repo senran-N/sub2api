@@ -266,6 +266,15 @@ func (s *GrokMediaService) selectCompatibleAccount(ctx context.Context, groupID 
 	if selected == nil {
 		return nil, errors.New("no compatible grok media accounts")
 	}
+	if s.gatewayService != nil {
+		hydrated, err := s.gatewayService.hydrateSelectedAccount(ctx, selected)
+		if err != nil {
+			return nil, err
+		}
+		if hydrated != nil {
+			selected = hydrated
+		}
+	}
 	return selected, nil
 }
 
