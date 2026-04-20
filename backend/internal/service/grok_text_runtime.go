@@ -178,6 +178,10 @@ func (r *GrokTextRuntime) prepareTextRequest(
 	if selected == nil {
 		return nil, true, newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok accounts")
 	}
+	selected, err = r.hydrateSelectedAccount(ctx, selected)
+	if err != nil {
+		return nil, true, err
+	}
 	if selected.SupportsCompatibleGatewaySharedRuntime() {
 		return &grokTextPreparation{
 			protocolFamily: protocolFamily,
@@ -213,6 +217,24 @@ func (r *GrokTextRuntime) prepareTextRequest(
 		target:         target,
 		payload:        preparedPayload.payload,
 	}, true, nil
+}
+
+func (r *GrokTextRuntime) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
+	if account == nil {
+		return nil, newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok accounts")
+	}
+	if r == nil || r.gatewayService == nil {
+		return nil, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Grok gateway service is not configured")
+	}
+
+	hydrated, err := r.gatewayService.hydrateSelectedAccount(ctx, account)
+	if err != nil {
+		return nil, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to hydrate selected Grok account")
+	}
+	if hydrated == nil {
+		return nil, newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok accounts")
+	}
+	return hydrated, nil
 }
 
 func prepareGrokResponsesPayload(body []byte) (*grokSessionTextPreparedPayload, error) {

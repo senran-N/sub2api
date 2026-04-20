@@ -339,6 +339,71 @@ func TestGrokGatewayServiceHandleChatCompletions_UsesSessionAccount(t *testing.T
 	require.Equal(t, "stop", response.Choices[0].FinishReason)
 }
 
+func TestGrokGatewayServiceHandleChatCompletions_HydratesSnapshotSelectedSessionAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-3","messages":[{"role":"user","content":"hello"}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	snapshotAccount := &Account{
+		ID:          303,
+		Name:        "grok-session-snapshot",
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Status:      StatusActive,
+		Schedulable: true,
+	}
+	fullAccount := &Account{
+		ID:          snapshotAccount.ID,
+		Name:        snapshotAccount.Name,
+		Platform:    snapshotAccount.Platform,
+		Type:        snapshotAccount.Type,
+		Status:      snapshotAccount.Status,
+		Schedulable: snapshotAccount.Schedulable,
+		Credentials: map[string]any{
+			"session_token": "session-cookie",
+		},
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		snapshotAccounts: []*Account{snapshotAccount},
+		accountsByID:     map[int64]*Account{fullAccount.ID: fullAccount},
+	}
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"token":"answer","messageTag":"final"}}}`,
+				`{"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{*fullAccount},
+		accountsByID: map[int64]*Account{
+			fullAccount.ID: fullAccount,
+		},
+	}
+	svc := NewGrokGatewayService(&GatewayService{
+		accountRepo:        repo,
+		httpUpstream:       upstream,
+		cfg:                testConfig(),
+		schedulerSnapshot:  &SchedulerSnapshotService{cache: snapshotCache},
+	}, nil)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie"), upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, 0, repo.getByIDCalls)
+
+	var response apicompat.ChatCompletionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Choices, 1)
+}
+
 func TestGrokGatewayServiceHandleMessages_UsesSessionAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
