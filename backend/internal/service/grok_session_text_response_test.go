@@ -254,6 +254,61 @@ func TestRelayGrokSessionChatCompletions_StreamEmitsToolCallChunks(t *testing.T)
 	require.Equal(t, "tool_calls", *chunks[3].Choices[0].FinishReason)
 }
 
+func TestRelayGrokSessionResponses_StreamEmitsAltFunctionCallEvents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	upstream := strings.Join([]string{
+		`data: {"result":{"response":{"token":"<function_call><name>get_weather</name><arguments>{\"city\":\"Shanghai\"}</arguments></function_call>","messageTag":"final"}}}`,
+		`data: {"result":{"response":{"isSoftStop":true,"finalMetadata":{"stop_reason":"tool_calls"}}}}`,
+	}, "\n")
+
+	err := relayGrokSessionResponses(c, strings.NewReader(upstream), "grok-3", true, []string{"get_weather"})
+	require.NoError(t, err)
+
+	events := decodeResponsesSSEEvents(t, rec.Body.String())
+	require.Len(t, events, 6)
+	require.Equal(t, "response.created", events[0].Type)
+	require.Equal(t, "response.output_item.added", events[1].Type)
+	require.NotNil(t, events[1].Item)
+	require.Equal(t, "function_call", events[1].Item.Type)
+	require.Equal(t, "get_weather", events[1].Item.Name)
+	require.Equal(t, "response.function_call_arguments.delta", events[2].Type)
+	require.Equal(t, `{"city":"Shanghai"}`, events[2].Delta)
+	require.Equal(t, "response.function_call_arguments.done", events[3].Type)
+	require.Equal(t, "response.output_item.done", events[4].Type)
+	require.Equal(t, "response.completed", events[5].Type)
+}
+
+func TestRelayGrokSessionChatCompletions_StreamEmitsInvokeToolCallChunks(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	upstream := strings.Join([]string{
+		`data: {"result":{"response":{"token":"<invoke name=\"get_weather\">{\"city\":\"Shanghai\"}</invoke>","messageTag":"final"}}}`,
+		`data: {"result":{"response":{"isSoftStop":true,"finalMetadata":{"stop_reason":"tool_calls"}}}}`,
+	}, "\n")
+
+	err := relayGrokSessionChatCompletions(c, strings.NewReader(upstream), "grok-3", true, false, []string{"get_weather"})
+	require.NoError(t, err)
+
+	chunks := decodeChatCompletionsSSEChunks(t, rec.Body.String())
+	require.Len(t, chunks, 4)
+	require.Equal(t, "assistant", chunks[0].Choices[0].Delta.Role)
+	require.Len(t, chunks[1].Choices[0].Delta.ToolCalls, 1)
+	require.Equal(t, "get_weather", chunks[1].Choices[0].Delta.ToolCalls[0].Function.Name)
+	require.Len(t, chunks[2].Choices[0].Delta.ToolCalls, 1)
+	require.Equal(t, `{"city":"Shanghai"}`, chunks[2].Choices[0].Delta.ToolCalls[0].Function.Arguments)
+	require.NotNil(t, chunks[3].Choices[0].FinishReason)
+	require.Equal(t, "tool_calls", *chunks[3].Choices[0].FinishReason)
+}
+
 func TestRelayGrokSessionAnthropic_StreamEmitsToolUseBlocks(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
