@@ -4851,6 +4851,31 @@ export default {
         grokVideoOutputFormat: "Grok Video Output Format",
         grokVideoOutputFormatHint:
           "Controls how Grok video responses are returned to clients.",
+        grokMediaBehaviorTitle: "Grok Media Fetch and Cache Behavior",
+        grokMediaBehaviorDescription:
+          "These settings determine whether clients receive local proxy URLs, upstream URLs, or inline payloads, and whether the gateway downloads and stores media files locally.",
+        grokMediaImageBehavior: "Current image behavior",
+        grokMediaVideoBehavior: "Current video behavior",
+        grokMediaBehaviorProxyLazy:
+          "Returns a local proxy URL. The gateway downloads and caches the file on first access, then serves the local copy on later requests.",
+        grokMediaBehaviorDirect:
+          "Returns the upstream URL directly. The gateway does not proxy, download, or create new local cache files.",
+        grokMediaBehaviorDirectFallback:
+          "Media proxy is disabled, so local-style formats degrade to upstream URLs. The gateway will not create new local cache files.",
+        grokMediaBehaviorImageMarkdownProxy:
+          "Returns a Markdown-wrapped local proxy URL. The gateway fetches and caches the image when the client opens it.",
+        grokMediaBehaviorImageMarkdownDirect:
+          "Returns a Markdown-wrapped upstream URL. The gateway does not proxy or cache the image file.",
+        grokMediaBehaviorImageBase64:
+          "The gateway immediately downloads the image during response generation and converts it to Base64, consuming server bandwidth and local cache space.",
+        grokMediaBehaviorVideoHTMLProxy:
+          "Returns an HTML video tag whose src points to a local proxy URL. The gateway fetches and caches the video on first playback.",
+        grokMediaBehaviorVideoHTMLDirect:
+          "Returns an HTML video tag whose src points to the upstream URL. The gateway does not proxy or cache the video file.",
+        grokMediaBehaviorRetentionActive:
+          "This configuration creates local media cache entries. Cached files are retained for {hours} hours before background cleanup removes unreferenced files.",
+        grokMediaBehaviorRetentionInactive:
+          "This configuration will not create new local cache files. Retention only affects existing cached assets or future requests after caching is re-enabled.",
         grokMediaCacheRetentionHours: "Grok Media Cache Retention (hours)",
         grokMediaCacheRetentionHoursHint:
           "How long locally cached Grok media assets are retained.",
@@ -4876,7 +4901,7 @@ export default {
           "Upper timeout bound for Grok video create, poll, and content fetch requests.",
         grokMediaProxyEnabled: "Grok Media Proxy",
         grokMediaProxyEnabledHint:
-          "Serve Grok media assets through the local proxy/cache pipeline.",
+          "Serve Grok media assets through the local proxy/cache pipeline. When disabled, local_url, markdown, and html degrade to upstream URLs. Base64 image output still downloads immediately.",
         outputFormat: {
           localUrl: "Local URL",
           upstreamUrl: "Upstream URL",

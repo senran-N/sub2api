@@ -42,7 +42,43 @@
         </div>
       </div>
 
-      <div class="settings-model-routing-card__section grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div class="settings-model-routing-card__section space-y-4">
+        <div class="settings-model-routing-card__behavior-panel">
+          <div>
+            <h3 class="settings-model-routing-card__field-label text-sm font-medium">
+              {{ t('admin.settings.modelRouting.grokMediaBehaviorTitle') }}
+            </h3>
+            <p class="settings-model-routing-card__description mt-1 text-xs">
+              {{ t('admin.settings.modelRouting.grokMediaBehaviorDescription') }}
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            <div class="settings-model-routing-card__behavior-item">
+              <p class="settings-model-routing-card__field-label text-sm font-medium">
+                {{ t('admin.settings.modelRouting.grokMediaImageBehavior') }}
+              </p>
+              <p class="settings-model-routing-card__description mt-1 text-sm">
+                {{ imageDeliveryBehavior }}
+              </p>
+            </div>
+
+            <div class="settings-model-routing-card__behavior-item">
+              <p class="settings-model-routing-card__field-label text-sm font-medium">
+                {{ t('admin.settings.modelRouting.grokMediaVideoBehavior') }}
+              </p>
+              <p class="settings-model-routing-card__description mt-1 text-sm">
+                {{ videoDeliveryBehavior }}
+              </p>
+            </div>
+          </div>
+
+          <p class="settings-model-routing-card__description text-xs">
+            {{ cacheRetentionBehavior }}
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div>
           <label class="settings-model-routing-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.modelRouting.grokOfficialBaseUrl') }}
@@ -223,12 +259,13 @@
           <Toggle v-model="form.grok_media_proxy_enabled" />
         </div>
       </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, toRefs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
@@ -238,9 +275,10 @@ import {
 } from '@/composables/useModelWhitelist'
 import type { SettingsModelRoutingFields } from './settingsForm'
 
-defineProps<{
+const props = defineProps<{
   form: SettingsModelRoutingFields
 }>()
+const { form } = toRefs(props)
 
 const { t } = useI18n()
 
@@ -295,6 +333,64 @@ const videoOutputOptions = computed<SelectOption[]>(() => [
   { value: 'html', label: t('admin.settings.modelRouting.outputFormat.html') }
 ])
 
+const imageDeliveryBehavior = computed(() => {
+  if (form.value.grok_image_output_format === 'base64') {
+    return t('admin.settings.modelRouting.grokMediaBehaviorImageBase64')
+  }
+
+  if (form.value.grok_image_output_format === 'upstream_url') {
+    return t('admin.settings.modelRouting.grokMediaBehaviorDirect')
+  }
+
+  if (!form.value.grok_media_proxy_enabled) {
+    if (form.value.grok_image_output_format === 'markdown') {
+      return t('admin.settings.modelRouting.grokMediaBehaviorImageMarkdownDirect')
+    }
+    return t('admin.settings.modelRouting.grokMediaBehaviorDirectFallback')
+  }
+
+  if (form.value.grok_image_output_format === 'markdown') {
+    return t('admin.settings.modelRouting.grokMediaBehaviorImageMarkdownProxy')
+  }
+
+  return t('admin.settings.modelRouting.grokMediaBehaviorProxyLazy')
+})
+
+const videoDeliveryBehavior = computed(() => {
+  if (form.value.grok_video_output_format === 'upstream_url') {
+    return t('admin.settings.modelRouting.grokMediaBehaviorDirect')
+  }
+
+  if (!form.value.grok_media_proxy_enabled) {
+    if (form.value.grok_video_output_format === 'html') {
+      return t('admin.settings.modelRouting.grokMediaBehaviorVideoHTMLDirect')
+    }
+    return t('admin.settings.modelRouting.grokMediaBehaviorDirectFallback')
+  }
+
+  if (form.value.grok_video_output_format === 'html') {
+    return t('admin.settings.modelRouting.grokMediaBehaviorVideoHTMLProxy')
+  }
+
+  return t('admin.settings.modelRouting.grokMediaBehaviorProxyLazy')
+})
+
+const cacheRetentionBehavior = computed(() => {
+  const imageUsesLocalCache =
+    form.value.grok_image_output_format === 'base64' ||
+    (form.value.grok_media_proxy_enabled && form.value.grok_image_output_format !== 'upstream_url')
+  const videoUsesLocalCache =
+    form.value.grok_media_proxy_enabled && form.value.grok_video_output_format !== 'upstream_url'
+
+  if (imageUsesLocalCache || videoUsesLocalCache) {
+    return t('admin.settings.modelRouting.grokMediaBehaviorRetentionActive', {
+      hours: form.value.grok_media_cache_retention_hours || 72
+    })
+  }
+
+  return t('admin.settings.modelRouting.grokMediaBehaviorRetentionInactive')
+})
+
 onMounted(() => {
   void ensureModelCatalogLoaded('grok')
 })
@@ -319,5 +415,22 @@ onMounted(() => {
 
 .settings-model-routing-card__section {
   padding-top: 0.5rem;
+}
+
+.settings-model-routing-card__behavior-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 9%, var(--theme-surface));
+}
+
+.settings-model-routing-card__behavior-item {
+  padding: 0.875rem 1rem;
+  border-radius: 0.875rem;
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 82%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 84%, transparent);
 }
 </style>

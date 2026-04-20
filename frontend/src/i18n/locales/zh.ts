@@ -4792,6 +4792,31 @@ export default {
         grokImageOutputFormatHint: "控制 Grok 图片响应返回给客户端的格式。",
         grokVideoOutputFormat: "Grok 视频输出格式",
         grokVideoOutputFormatHint: "控制 Grok 视频响应返回给客户端的格式。",
+        grokMediaBehaviorTitle: "Grok 媒体回源与缓存行为",
+        grokMediaBehaviorDescription:
+          "这里决定返回给客户端的是本地代理地址、上游地址还是内联内容，也决定服务器是否会回源下载并落地缓存媒体文件。",
+        grokMediaImageBehavior: "图片当前行为",
+        grokMediaVideoBehavior: "视频当前行为",
+        grokMediaBehaviorProxyLazy:
+          "返回本地代理 URL；客户端首次访问时服务器回源下载并缓存，后续优先命中本地文件。",
+        grokMediaBehaviorDirect:
+          "直接返回上游 URL；服务器不代理、不下载，也不会新增本地缓存文件。",
+        grokMediaBehaviorDirectFallback:
+          "当前关闭了媒体代理，即使选择本地格式也会退化为上游 URL；服务器不会新增本地缓存文件。",
+        grokMediaBehaviorImageMarkdownProxy:
+          "返回 Markdown 包裹的本地代理 URL；客户端首次打开图片时服务器回源下载并缓存。",
+        grokMediaBehaviorImageMarkdownDirect:
+          "返回 Markdown 包裹的上游 URL；服务器不代理，也不会缓存图片文件。",
+        grokMediaBehaviorImageBase64:
+          "在生成响应阶段由服务器立即下载图片并转成 Base64；会消耗服务器带宽并写入本地缓存。",
+        grokMediaBehaviorVideoHTMLProxy:
+          "返回 HTML video 标签，src 指向本地代理 URL；首次播放时服务器回源下载并缓存视频。",
+        grokMediaBehaviorVideoHTMLDirect:
+          "返回 HTML video 标签，src 指向上游 URL；服务器不代理，也不会缓存视频文件。",
+        grokMediaBehaviorRetentionActive:
+          "当前配置会生成本地媒体缓存，缓存保留 {hours} 小时；过期后由后台清理任务删除未被引用的文件。",
+        grokMediaBehaviorRetentionInactive:
+          "当前配置不会新增本地媒体缓存文件；保留时长只会影响已有缓存或你后续重新启用缓存后的资源。",
         grokMediaCacheRetentionHours: "Grok 媒体缓存保留时长（小时）",
         grokMediaCacheRetentionHoursHint: "本地缓存的 Grok 媒体资源保留多久。",
         grokQuotaSyncIntervalSeconds: "Grok 配额同步间隔（秒）",
@@ -4813,7 +4838,8 @@ export default {
         grokVideoTimeoutHint:
           "控制 Grok 视频创建、轮询和内容获取请求的上游超时上限。",
         grokMediaProxyEnabled: "Grok 媒体代理",
-        grokMediaProxyEnabledHint: "通过本地代理与缓存链路提供 Grok 媒体资源。",
+        grokMediaProxyEnabledHint:
+          "开启后通过本地代理与缓存链路提供媒体。关闭后 local_url、markdown、html 会直接退化成上游 URL，只有 base64 仍会立即下载图片。",
         outputFormat: {
           localUrl: "本地 URL",
           upstreamUrl: "上游 URL",
