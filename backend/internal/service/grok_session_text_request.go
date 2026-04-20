@@ -18,10 +18,12 @@ const (
 )
 
 type grokSessionTextRequest struct {
-	ModelID      string
-	ModeID       string
-	SystemPrompt string
-	Message      string
+	ModelID         string
+	ModeID          string
+	SystemPrompt    string
+	Message         string
+	FileAttachments []string
+	ImageInputs     []grokSessionUploadInput
 }
 
 func buildGrokSessionTextPayload(input grokSessionTextRequest) (map[string]any, error) {
@@ -69,6 +71,15 @@ func buildGrokSessionTextPayload(input grokSessionTextRequest) (map[string]any, 
 	if systemPrompt := strings.TrimSpace(input.SystemPrompt); systemPrompt != "" {
 		payload["customPersonality"] = systemPrompt
 	}
+	if len(input.FileAttachments) > 0 {
+		attachments := make([]any, 0, len(input.FileAttachments))
+		for _, attachment := range input.FileAttachments {
+			if trimmed := strings.TrimSpace(attachment); trimmed != "" {
+				attachments = append(attachments, trimmed)
+			}
+		}
+		payload["fileAttachments"] = attachments
+	}
 
 	return payload, nil
 }
@@ -110,7 +121,7 @@ func grokSessionTextRequestFromResponsesRequest(req *apicompat.ResponsesRequest)
 		return grokSessionTextRequest{}, errors.New("responses request is nil")
 	}
 
-	message, systemPrompt, err := extractGrokSessionPromptFromResponsesInput(req.Input)
+	message, systemPrompt, imageInputs, err := extractGrokSessionPromptFromResponsesInput(req.Input)
 	if err != nil {
 		return grokSessionTextRequest{}, err
 	}
@@ -125,34 +136,36 @@ func grokSessionTextRequestFromResponsesRequest(req *apicompat.ResponsesRequest)
 		ModeID:       modeID,
 		SystemPrompt: systemPrompt,
 		Message:      message,
+		ImageInputs:  imageInputs,
 	}, nil
 }
 
-func extractGrokSessionPromptFromResponsesInput(raw json.RawMessage) (message string, systemPrompt string, err error) {
+func extractGrokSessionPromptFromResponsesInput(raw json.RawMessage) (message string, systemPrompt string, imageInputs []grokSessionUploadInput, err error) {
 	raw = json.RawMessage(strings.TrimSpace(string(raw)))
 	if len(raw) == 0 || string(raw) == "null" {
-		return "", "", errors.New("grok session text request is missing input")
+		return "", "", nil, errors.New("grok session text request is missing input")
 	}
 
 	var plain string
 	if err := json.Unmarshal(raw, &plain); err == nil {
 		plain = strings.TrimSpace(plain)
 		if plain == "" {
-			return "", "", errors.New("grok session text request is missing input text")
+			return "", "", nil, errors.New("grok session text request is missing input text")
 		}
-		return plain, "", nil
+		return plain, "", nil, nil
 	}
 
 	var items []apicompat.ResponsesInputItem
 	if err := json.Unmarshal(raw, &items); err != nil {
-		return "", "", fmt.Errorf("parse responses input: %w", err)
+		return "", "", nil, fmt.Errorf("parse responses input: %w", err)
 	}
 	return grokSessionPromptFromResponsesItems(items)
 }
 
-func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (message string, systemPrompt string, err error) {
+func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (message string, systemPrompt string, imageInputs []grokSessionUploadInput, err error) {
 	systemParts := make([]string, 0, 2)
 	historyParts := make([]string, 0, len(items))
+	uploads := make([]grokSessionUploadInput, 0, 2)
 	lastUserOnly := ""
 	lastUserOnlyCount := 0
 
@@ -160,12 +173,13 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 		role := strings.ToLower(strings.TrimSpace(item.Role))
 		switch role {
 		case "system", "developer":
-			text, err := grokSessionTextFromResponsesContent(item.Content)
+			content, err := grokSessionTextContentFromResponsesContent(item.Content)
 			if err != nil {
-				return "", "", err
+				return "", "", nil, err
 			}
-			if text != "" {
-				systemParts = append(systemParts, text)
+			uploads = append(uploads, content.ImageInputs...)
+			if content.Text != "" {
+				systemParts = append(systemParts, content.Text)
 			}
 			continue
 		}
@@ -199,18 +213,19 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 			continue
 		}
 
-		text, err := grokSessionTextFromResponsesContent(item.Content)
+		content, err := grokSessionTextContentFromResponsesContent(item.Content)
 		if err != nil {
-			return "", "", err
+			return "", "", nil, err
 		}
-		if text == "" {
+		uploads = append(uploads, content.ImageInputs...)
+		if content.Text == "" {
 			continue
 		}
 
 		label := grokSessionTranscriptRoleLabel(role)
-		historyParts = append(historyParts, fmt.Sprintf("%s: %s", label, text))
+		historyParts = append(historyParts, fmt.Sprintf("%s: %s", label, content.Text))
 		if role == "user" {
-			lastUserOnly = text
+			lastUserOnly = content.Text
 			lastUserOnlyCount++
 		} else {
 			lastUserOnly = ""
@@ -218,14 +233,14 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 	}
 
 	if len(historyParts) == 0 {
-		return "", "", errors.New("grok session text request does not contain a supported text prompt")
+		return "", "", nil, errors.New("grok session text request does not contain a supported text prompt")
 	}
 
 	systemPrompt = strings.Join(systemParts, "\n\n")
 	if len(historyParts) == 1 && lastUserOnlyCount == 1 && lastUserOnly != "" {
-		return lastUserOnly, systemPrompt, nil
+		return lastUserOnly, systemPrompt, uploads, nil
 	}
-	return strings.Join(historyParts, "\n\n"), systemPrompt, nil
+	return strings.Join(historyParts, "\n\n"), systemPrompt, uploads, nil
 }
 
 func grokSessionTranscriptRoleLabel(role string) string {
@@ -239,23 +254,29 @@ func grokSessionTranscriptRoleLabel(role string) string {
 	}
 }
 
-func grokSessionTextFromResponsesContent(raw json.RawMessage) (string, error) {
+type grokSessionTextContent struct {
+	Text        string
+	ImageInputs []grokSessionUploadInput
+}
+
+func grokSessionTextContentFromResponsesContent(raw json.RawMessage) (grokSessionTextContent, error) {
 	raw = json.RawMessage(strings.TrimSpace(string(raw)))
 	if len(raw) == 0 || string(raw) == "null" {
-		return "", nil
+		return grokSessionTextContent{}, nil
 	}
 
 	var plain string
 	if err := json.Unmarshal(raw, &plain); err == nil {
-		return strings.TrimSpace(plain), nil
+		return grokSessionTextContent{Text: strings.TrimSpace(plain)}, nil
 	}
 
 	var parts []apicompat.ResponsesContentPart
 	if err := json.Unmarshal(raw, &parts); err != nil {
-		return "", fmt.Errorf("parse responses content: %w", err)
+		return grokSessionTextContent{}, fmt.Errorf("parse responses content: %w", err)
 	}
 
 	textParts := make([]string, 0, len(parts))
+	imageInputs := make([]grokSessionUploadInput, 0, len(parts))
 	for _, part := range parts {
 		switch strings.TrimSpace(part.Type) {
 		case "input_text", "output_text", "text":
@@ -263,11 +284,16 @@ func grokSessionTextFromResponsesContent(raw json.RawMessage) (string, error) {
 				textParts = append(textParts, text)
 			}
 		case "input_image":
-			return "", errors.New("grok session text transport does not support image inputs yet")
+			if imageURL := strings.TrimSpace(part.ImageURL); imageURL != "" {
+				imageInputs = append(imageInputs, grokSessionUploadInput{Source: imageURL})
+			}
 		}
 	}
 
-	return strings.Join(textParts, "\n"), nil
+	return grokSessionTextContent{
+		Text:        strings.Join(textParts, "\n"),
+		ImageInputs: imageInputs,
+	}, nil
 }
 
 func resolveGrokSessionModeID(modelID string) (string, error) {

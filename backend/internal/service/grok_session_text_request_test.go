@@ -83,18 +83,29 @@ func TestBuildGrokSessionTextPayloadFromResponsesRequest_FlattensSystemAndHistor
 	require.Contains(t, message, "User: What should I wear?")
 }
 
-func TestBuildGrokSessionTextPayloadFromChatCompletionsRequest_RejectsImageInputs(t *testing.T) {
-	payload, err := buildGrokSessionTextPayloadFromChatCompletionsRequest(&apicompat.ChatCompletionsRequest{
+func TestGrokSessionTextRequestFromResponsesRequest_CollectsImageInputs(t *testing.T) {
+	responsesReq, err := apicompat.ChatCompletionsToResponses(&apicompat.ChatCompletionsRequest{
 		Model: "grok-3-fast",
 		Messages: []apicompat.ChatMessage{
 			{
+				Role:    "system",
+				Content: json.RawMessage(`"Describe the image precisely."`),
+			},
+			{
 				Role:    "user",
-				Content: json.RawMessage(`[{"type":"image_url","image_url":{"url":"https://example.com/cat.png"}}]`),
+				Content: json.RawMessage(`[{"type":"text","text":"What is in this image?"},{"type":"image_url","image_url":{"url":"https://example.com/cat.png"}}]`),
 			},
 		},
 	})
-	require.Nil(t, payload)
-	require.ErrorContains(t, err, "does not support image inputs yet")
+	require.NoError(t, err)
+
+	request, err := grokSessionTextRequestFromResponsesRequest(responsesReq)
+	require.NoError(t, err)
+	require.Equal(t, "fast", request.ModeID)
+	require.Equal(t, "Describe the image precisely.", request.SystemPrompt)
+	require.Equal(t, "What is in this image?", request.Message)
+	require.Len(t, request.ImageInputs, 1)
+	require.Equal(t, "https://example.com/cat.png", request.ImageInputs[0].Source)
 }
 
 func TestBuildGrokSessionTextPayloadFromAnthropicRequest_UsesSystemAsCustomPersonality(t *testing.T) {

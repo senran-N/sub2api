@@ -286,6 +286,63 @@ func TestGrokGatewayServiceHandleResponses_UsesSessionAccount(t *testing.T) {
 	require.Equal(t, "answer", response.Output[0].Content[0].Text)
 }
 
+func TestGrokGatewayServiceHandleResponses_SessionUploadsImageInputs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-3","input":[{"role":"user","content":[{"type":"input_text","text":"Describe this image"},{"type":"input_image","image_url":"data:image/png;base64,QUJD"}]}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/responses", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"fileMetadataId":"file_456","fileUri":"https://assets.grok.com/users/u_1/file_456/content"}`),
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"token":"answer","messageTag":"final"}}}`,
+				`{"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          22,
+				Name:        "grok-session-response-image",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"session_token": "session-cookie",
+				},
+			},
+		},
+	}
+	svc := NewGrokGatewayService(&GatewayService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		cfg:          testConfig(),
+	}, nil)
+
+	handled := svc.HandleResponses(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 2)
+	require.Contains(t, upstream.requests[0].URL.String(), "/rest/app-chat/upload-file")
+	require.Contains(t, upstream.requests[1].URL.String(), "/rest/app-chat/conversations/new")
+
+	var chatPayload map[string]any
+	require.NoError(t, json.NewDecoder(upstream.requests[1].Body).Decode(&chatPayload))
+	require.Equal(t, "Describe this image", chatPayload["message"])
+	require.Equal(t, []any{"file_456"}, chatPayload["fileAttachments"])
+
+	var response apicompat.ResponsesResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Equal(t, "completed", response.Status)
+	require.Len(t, response.Output, 1)
+}
+
 func TestGrokGatewayServiceHandleChatCompletions_UsesSessionAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -339,6 +396,70 @@ func TestGrokGatewayServiceHandleChatCompletions_UsesSessionAccount(t *testing.T
 	require.Equal(t, "stop", response.Choices[0].FinishReason)
 }
 
+func TestGrokGatewayServiceHandleChatCompletions_SessionUploadsImageInputs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-3","messages":[{"role":"user","content":[{"type":"text","text":"Describe this image"},{"type":"image_url","image_url":{"url":"data:image/png;base64,QUJD"}}]}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"fileMetadataId":"file_123","fileUri":"https://assets.grok.com/users/u_1/file_123/content"}`),
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"token":"answer","messageTag":"final"}}}`,
+				`{"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          31,
+				Name:        "grok-session-chat-image",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"session_token": "session-cookie",
+				},
+			},
+		},
+	}
+	svc := NewGrokGatewayService(&GatewayService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		cfg:          testConfig(),
+	}, nil)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 2)
+	require.Contains(t, upstream.requests[0].URL.String(), "/rest/app-chat/upload-file")
+	require.Contains(t, upstream.requests[1].URL.String(), "/rest/app-chat/conversations/new")
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie"), upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie"), upstream.requests[1].Header.Get("Cookie"))
+
+	var uploadPayload map[string]any
+	require.NoError(t, json.NewDecoder(upstream.requests[0].Body).Decode(&uploadPayload))
+	require.Equal(t, "upload.png", uploadPayload["fileName"])
+	require.Equal(t, "image/png", uploadPayload["fileMimeType"])
+	require.Equal(t, "QUJD", uploadPayload["content"])
+
+	var chatPayload map[string]any
+	require.NoError(t, json.NewDecoder(upstream.requests[1].Body).Decode(&chatPayload))
+	require.Equal(t, "Describe this image", chatPayload["message"])
+	require.Equal(t, []any{"file_123"}, chatPayload["fileAttachments"])
+
+	var response apicompat.ChatCompletionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Choices, 1)
+}
+
 func TestGrokGatewayServiceHandleChatCompletions_HydratesSnapshotSelectedSessionAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -386,10 +507,10 @@ func TestGrokGatewayServiceHandleChatCompletions_HydratesSnapshotSelectedSession
 		},
 	}
 	svc := NewGrokGatewayService(&GatewayService{
-		accountRepo:        repo,
-		httpUpstream:       upstream,
-		cfg:                testConfig(),
-		schedulerSnapshot:  &SchedulerSnapshotService{cache: snapshotCache},
+		accountRepo:       repo,
+		httpUpstream:      upstream,
+		cfg:               testConfig(),
+		schedulerSnapshot: &SchedulerSnapshotService{cache: snapshotCache},
 	}, nil)
 
 	handled := svc.HandleChatCompletions(c, nil, body)

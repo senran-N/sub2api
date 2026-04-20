@@ -42,7 +42,9 @@ type grokSessionTextPreparedPayload struct {
 	requestedModel string
 	stream         bool
 	includeUsage   bool
+	payloadMap     map[string]any
 	payload        []byte
+	imageInputs    []grokSessionUploadInput
 }
 
 type grokResponsesHTTPError struct {
@@ -199,6 +201,9 @@ func (r *GrokTextRuntime) prepareTextRequest(
 	if r.gatewayService != nil && r.gatewayService.settingService != nil {
 		runtimeSettings = r.gatewayService.settingService.GetGrokRuntimeSettings(ctx)
 	}
+	if err := r.prepareSessionAttachments(ctx, selected, preparedPayload); err != nil {
+		return nil, true, err
+	}
 	target, err := resolveGrokTransportTargetWithSettings(
 		selected,
 		r.gatewayService.validateUpstreamBaseURL,
@@ -217,6 +222,61 @@ func (r *GrokTextRuntime) prepareTextRequest(
 		target:         target,
 		payload:        preparedPayload.payload,
 	}, true, nil
+}
+
+func (r *GrokTextRuntime) prepareSessionAttachments(
+	ctx context.Context,
+	account *Account,
+	preparedPayload *grokSessionTextPreparedPayload,
+) error {
+	if preparedPayload == nil {
+		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to build Grok session request")
+	}
+	if preparedPayload.payloadMap == nil {
+		preparedPayload.payloadMap = map[string]any{}
+	}
+	if len(preparedPayload.imageInputs) == 0 {
+		if len(preparedPayload.payload) == 0 {
+			payloadBytes, err := json.Marshal(preparedPayload.payloadMap)
+			if err != nil {
+				return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to build Grok session request")
+			}
+			preparedPayload.payload = payloadBytes
+		}
+		return nil
+	}
+	if r == nil || r.gatewayService == nil {
+		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Grok gateway service is not configured")
+	}
+
+	uploader := NewGrokSessionMediaRuntime(r.gatewayService, nil, nil)
+	attachments := make([]any, 0, len(preparedPayload.imageInputs))
+	for _, input := range preparedPayload.imageInputs {
+		uploaded, err := uploader.uploadSessionMediaInput(ctx, account, input)
+		if err != nil {
+			var upstreamErr *grokSessionMediaUpstreamError
+			if errors.As(err, &upstreamErr) {
+				return newGrokResponsesHTTPError(upstreamErr.statusCode, upstreamErr.code, upstreamErr.message)
+			}
+			message := sanitizeUpstreamErrorMessage(strings.TrimSpace(err.Error()))
+			if message == "" {
+				message = "Failed to upload Grok image input"
+			}
+			return newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", message)
+		}
+		if uploaded == nil || strings.TrimSpace(uploaded.FileID) == "" {
+			return newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Grok image upload returned no attachment id")
+		}
+		attachments = append(attachments, strings.TrimSpace(uploaded.FileID))
+	}
+	preparedPayload.payloadMap["fileAttachments"] = attachments
+
+	payloadBytes, err := json.Marshal(preparedPayload.payloadMap)
+	if err != nil {
+		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to build Grok session request")
+	}
+	preparedPayload.payload = payloadBytes
+	return nil
 }
 
 func (r *GrokTextRuntime) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
@@ -248,19 +308,20 @@ func prepareGrokResponsesPayload(body []byte) (*grokSessionTextPreparedPayload, 
 		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", "model is required")
 	}
 
-	payload, err := buildGrokSessionTextPayloadFromResponsesRequest(&req)
+	request, err := grokSessionTextRequestFromResponsesRequest(&req)
 	if err != nil {
 		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
-	payloadBytes, err := json.Marshal(payload)
+	payload, err := buildGrokSessionTextPayload(request)
 	if err != nil {
-		return nil, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to build Grok session request")
+		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
 
 	return &grokSessionTextPreparedPayload{
 		requestedModel: requestedModel,
 		stream:         req.Stream,
-		payload:        payloadBytes,
+		payloadMap:     payload,
+		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
 	}, nil
 }
 
@@ -275,13 +336,17 @@ func prepareGrokChatCompletionsPayload(body []byte) (*grokSessionTextPreparedPay
 		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", "model is required")
 	}
 
-	payload, err := buildGrokSessionTextPayloadFromChatCompletionsRequest(&req)
+	responsesReq, err := apicompat.ChatCompletionsToResponses(&req)
 	if err != nil {
 		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
-	payloadBytes, err := json.Marshal(payload)
+	request, err := grokSessionTextRequestFromResponsesRequest(responsesReq)
 	if err != nil {
-		return nil, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to build Grok session request")
+		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", err.Error())
+	}
+	payload, err := buildGrokSessionTextPayload(request)
+	if err != nil {
+		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
 
 	includeUsage := req.StreamOptions != nil && req.StreamOptions.IncludeUsage
@@ -289,7 +354,8 @@ func prepareGrokChatCompletionsPayload(body []byte) (*grokSessionTextPreparedPay
 		requestedModel: requestedModel,
 		stream:         req.Stream,
 		includeUsage:   includeUsage,
-		payload:        payloadBytes,
+		payloadMap:     payload,
+		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
 	}, nil
 }
 
@@ -304,19 +370,24 @@ func prepareGrokMessagesPayload(body []byte) (*grokSessionTextPreparedPayload, e
 		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", "model is required")
 	}
 
-	payload, err := buildGrokSessionTextPayloadFromAnthropicRequest(&req)
+	responsesReq, err := apicompat.AnthropicToResponses(&req)
 	if err != nil {
 		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
-	payloadBytes, err := json.Marshal(payload)
+	request, err := grokSessionTextRequestFromResponsesRequest(responsesReq)
 	if err != nil {
-		return nil, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to build Grok session request")
+		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", err.Error())
+	}
+	payload, err := buildGrokSessionTextPayload(request)
+	if err != nil {
+		return nil, newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
 
 	return &grokSessionTextPreparedPayload{
 		requestedModel: requestedModel,
 		stream:         req.Stream,
-		payload:        payloadBytes,
+		payloadMap:     payload,
+		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
 	}, nil
 }
 
