@@ -67,6 +67,7 @@ func (s *GrokMediaAssetService) RewriteResponse(
 	account *Account,
 	body []byte,
 	assetType string,
+	requestResponseFormat string,
 	requestedModel string,
 	canonicalModel string,
 	jobID string,
@@ -91,7 +92,10 @@ func (s *GrokMediaAssetService) RewriteResponse(
 		canonicalModel: strings.TrimSpace(canonicalModel),
 		jobID:          strings.TrimSpace(jobID),
 	}
-	rewriter.outputFormat, rewriter.proxyEnabled = s.resolveRewritePolicy(c.Request.Context(), rewriter.assetType)
+	policy := s.resolveRewritePolicy(c.Request.Context(), rewriter.assetType, requestResponseFormat)
+	rewriter.outputFormat = policy.outputFormat
+	rewriter.proxyEnabled = policy.proxyEnabled
+	rewriter.responseField = policy.responseField
 	rewriter.walk(&payload)
 	if !rewriter.changed {
 		return body, "", nil
@@ -240,7 +244,8 @@ func (s *GrokMediaAssetService) RenderExistingAssetValue(c *gin.Context, assetID
 	}
 
 	resolvedAssetType := firstNonEmpty(strings.TrimSpace(assetType), strings.TrimSpace(record.AssetType), "image")
-	outputFormat, proxyEnabled := s.resolveRewritePolicy(ctx, resolvedAssetType)
+	policy := s.resolveRewritePolicy(ctx, resolvedAssetType, "")
+	outputFormat, proxyEnabled := policy.outputFormat, policy.proxyEnabled
 	upstreamURL := strings.TrimSpace(record.UpstreamURL)
 	if upstreamURL == "" {
 		return "", "", errors.New("grok media asset upstream url is empty")
@@ -587,6 +592,7 @@ type grokMediaResponseRewriter struct {
 	jobID          string
 	outputFormat   string
 	proxyEnabled   bool
+	responseField  string
 	primaryAssetID string
 	changed        bool
 }
@@ -626,13 +632,22 @@ func (r *grokMediaResponseRewriter) rewriteMap(node map[string]any) {
 		if renderedValue == rawURL {
 			continue
 		}
+		targetKey := key
 		switch key {
 		case "url":
-			node["upstream_url"] = rawURL
+			targetKey = r.targetImageResponseField()
+			if targetKey == "url" {
+				node["upstream_url"] = rawURL
+			} else {
+				delete(node, "upstream_url")
+			}
 		case "content_url":
 			node["upstream_content_url"] = rawURL
 		}
-		node[key] = renderedValue
+		if targetKey != key {
+			delete(node, key)
+		}
+		node[targetKey] = renderedValue
 		if r.primaryAssetID == "" && assetID != "" {
 			r.primaryAssetID = assetID
 		}
@@ -640,18 +655,49 @@ func (r *grokMediaResponseRewriter) rewriteMap(node map[string]any) {
 	}
 }
 
-func (s *GrokMediaAssetService) resolveRewritePolicy(ctx context.Context, assetType string) (string, bool) {
+type grokMediaRewritePolicy struct {
+	outputFormat  string
+	proxyEnabled  bool
+	responseField string
+}
+
+func (s *GrokMediaAssetService) resolveRewritePolicy(ctx context.Context, assetType string, requestResponseFormat string) grokMediaRewritePolicy {
 	settings := DefaultGrokMediaSettings()
 	if s != nil && s.gatewayService != nil && s.gatewayService.settingService != nil {
 		settings = s.gatewayService.settingService.GetGrokMediaSettings(ctx)
 	}
 
+	policy := grokMediaRewritePolicy{
+		proxyEnabled:  settings.MediaProxyEnabled,
+		responseField: "url",
+	}
 	switch strings.ToLower(strings.TrimSpace(assetType)) {
 	case "video":
-		return settings.VideoOutputFormat, settings.MediaProxyEnabled
+		policy.outputFormat = settings.VideoOutputFormat
+		policy.responseField = "content_url"
+		return policy
 	default:
-		return settings.ImageOutputFormat, settings.MediaProxyEnabled
+		switch normalized, _ := normalizeGrokOpenAIImageResponseFormat(requestResponseFormat); normalized {
+		case grokOpenAIImageResponseFormatURL:
+			policy.outputFormat = GrokMediaOutputFormatLocalURL
+		case grokOpenAIImageResponseFormatB64JSON:
+			policy.outputFormat = GrokMediaOutputFormatBase64
+			policy.responseField = grokOpenAIImageResponseFormatB64JSON
+		default:
+			policy.outputFormat = settings.ImageOutputFormat
+		}
+		return policy
 	}
+}
+
+func (r *grokMediaResponseRewriter) targetImageResponseField() string {
+	if r == nil || strings.ToLower(strings.TrimSpace(r.assetType)) != "image" {
+		return "url"
+	}
+	if strings.TrimSpace(r.responseField) == "" {
+		return "url"
+	}
+	return strings.TrimSpace(r.responseField)
 }
 
 func (r *grokMediaResponseRewriter) renderValue(rawURL string) (string, string, error) {
@@ -665,7 +711,7 @@ func (r *grokMediaResponseRewriter) renderValue(rawURL string) (string, string, 
 		}
 		return fmt.Sprintf("![grok-image](%s)", renderURL), assetID, nil
 	case GrokMediaOutputFormatBase64:
-		return r.renderBase64(rawURL)
+		return r.renderBase64(rawURL, r.targetImageResponseField() == grokOpenAIImageResponseFormatB64JSON)
 	case GrokMediaOutputFormatHTML:
 		renderURL, assetID, err := r.renderURL(rawURL)
 		if err != nil {
@@ -696,7 +742,7 @@ func (r *grokMediaResponseRewriter) renderURL(rawURL string) (string, string, er
 	return r.service.BuildLocalURL(r.requestContext, record.AssetID), record.AssetID, nil
 }
 
-func (r *grokMediaResponseRewriter) renderBase64(rawURL string) (string, string, error) {
+func (r *grokMediaResponseRewriter) renderBase64(rawURL string, rawPayloadOnly bool) (string, string, error) {
 	record, err := r.service.createProxyAssetRecord(
 		r.ctx,
 		r.account,
@@ -717,8 +763,12 @@ func (r *grokMediaResponseRewriter) renderBase64(rawURL string) (string, string,
 	if err != nil {
 		return "", "", err
 	}
+	encoded := base64.StdEncoding.EncodeToString(payload)
+	if rawPayloadOnly {
+		return encoded, record.AssetID, nil
+	}
 	mimeType = firstNonEmpty(strings.TrimSpace(mimeType), http.DetectContentType(payload))
-	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(payload), record.AssetID, nil
+	return "data:" + mimeType + ";base64," + encoded, record.AssetID, nil
 }
 
 func isProxyableMediaURL(raw string) bool {

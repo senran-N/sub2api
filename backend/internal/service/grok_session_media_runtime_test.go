@@ -38,6 +38,39 @@ func TestParseGrokSessionImageEditRequest_JSONCollectsMultipleImageReferences(t 
 	require.Equal(t, "https://media.example/b.png", req.InputImages[1].Source)
 }
 
+func TestParseGrokSessionImageGenerationRequest_NormalizesResponseFormat(t *testing.T) {
+	req, err := parseGrokSessionImageGenerationRequest(
+		[]byte(`{"model":"grok-2-image","prompt":"cat","response_format":"B64_JSON"}`),
+		"grok-2-image",
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, grokOpenAIImageResponseFormatB64JSON, req.ResponseFormat)
+}
+
+func TestParseGrokSessionImageEditRequest_MultipartReadsResponseFormat(t *testing.T) {
+	body := "--boundary\r\n" +
+		"Content-Disposition: form-data; name=\"model\"\r\n\r\n" +
+		"grok-imagine-image-edit\r\n" +
+		"--boundary\r\n" +
+		"Content-Disposition: form-data; name=\"prompt\"\r\n\r\n" +
+		"replace sky\r\n" +
+		"--boundary\r\n" +
+		"Content-Disposition: form-data; name=\"response_format\"\r\n\r\n" +
+		"b64_json\r\n" +
+		"--boundary\r\n" +
+		"Content-Disposition: form-data; name=\"image\"; filename=\"a.png\"\r\n" +
+		"Content-Type: image/png\r\n\r\n" +
+		"PNGDATA\r\n" +
+		"--boundary--\r\n"
+
+	req, err := parseMultipartGrokSessionImageEditRequest([]byte(body), "boundary", "grok-imagine-image-edit")
+
+	require.NoError(t, err)
+	require.Equal(t, grokOpenAIImageResponseFormatB64JSON, req.ResponseFormat)
+	require.Len(t, req.InputImages, 1)
+}
+
 func TestGrokSessionMediaRuntimePersistSessionMediaRuntimeFeedback_RateLimitedVideoSetsCooldown(t *testing.T) {
 	account := &Account{
 		ID:       88,

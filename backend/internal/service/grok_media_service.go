@@ -59,6 +59,11 @@ func (s *GrokMediaService) HandleImages(c *gin.Context, groupID *int64, body []b
 	if c == nil {
 		return false
 	}
+	requestResponseFormat, err := resolveGrokImageResponseFormatRequest(c, body)
+	if err != nil {
+		writeCompatibleGatewayMediaError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return true
+	}
 
 	reqMeta := GetOpenAICompatiblePassthroughRequestMeta(c, body)
 	requestedModel, schedulingModel, restricted := s.resolveMappedModel(c.Request.Context(), groupID, reqMeta.Model)
@@ -88,7 +93,7 @@ func (s *GrokMediaService) HandleImages(c *gin.Context, groupID *int64, body []b
 		return true
 	}
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-		resp.Body, _, _ = s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), "", "image", resp.Body)
+		resp.Body, _, _ = s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), "", "image", requestResponseFormat, resp.Body)
 	}
 	s.writeForwardResponse(c, resp)
 	return true
@@ -138,7 +143,7 @@ func (s *GrokMediaService) handleVideoCreate(c *gin.Context, groupID *int64, bod
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices && s.videoJobs != nil {
 		jobID := extractGrokVideoJobID(resp.Body)
 		if jobID != "" {
-			rewrittenBody, outputAssetID, _ := s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), jobID, "video", resp.Body)
+			rewrittenBody, outputAssetID, _ := s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), jobID, "video", "", resp.Body)
 			resp.Body = rewrittenBody
 			_ = s.videoJobs.Upsert(c.Request.Context(), GrokVideoJobRecord{
 				JobID:                  jobID,
@@ -156,7 +161,7 @@ func (s *GrokMediaService) handleVideoCreate(c *gin.Context, groupID *int64, bod
 			})
 		}
 	} else if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-		resp.Body, _, _ = s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), "", "video", resp.Body)
+		resp.Body, _, _ = s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), "", "video", "", resp.Body)
 	}
 
 	s.writeForwardResponse(c, resp)
@@ -205,7 +210,7 @@ func (s *GrokMediaService) handleVideoFollowup(c *gin.Context, jobID string, con
 	}
 
 	if !contentRequest {
-		rewrittenBody, outputAssetID, _ := s.rewriteMediaResponse(c, account, record.RequestedModel, record.CanonicalModel, record.JobID, "video", resp.Body)
+		rewrittenBody, outputAssetID, _ := s.rewriteMediaResponse(c, account, record.RequestedModel, record.CanonicalModel, record.JobID, "video", "", resp.Body)
 		resp.Body = rewrittenBody
 		_ = s.videoJobs.UpdateStatus(c.Request.Context(), GrokVideoJobStatusPatch{
 			JobID:            record.JobID,
@@ -217,7 +222,7 @@ func (s *GrokMediaService) handleVideoFollowup(c *gin.Context, jobID string, con
 			OutputAssetID:    outputAssetID,
 		})
 	} else {
-		resp.Body, _, _ = s.rewriteMediaResponse(c, account, record.RequestedModel, record.CanonicalModel, record.JobID, "video", resp.Body)
+		resp.Body, _, _ = s.rewriteMediaResponse(c, account, record.RequestedModel, record.CanonicalModel, record.JobID, "video", "", resp.Body)
 	}
 
 	s.writeForwardResponse(c, resp)
@@ -427,12 +432,13 @@ func (s *GrokMediaService) rewriteMediaResponse(
 	canonicalModel string,
 	jobID string,
 	assetType string,
+	requestResponseFormat string,
 	body []byte,
 ) ([]byte, string, error) {
 	if s == nil || s.mediaAssets == nil {
 		return body, "", nil
 	}
-	return s.mediaAssets.RewriteResponse(c, account, body, assetType, requestedModel, canonicalModel, jobID)
+	return s.mediaAssets.RewriteResponse(c, account, body, assetType, requestResponseFormat, requestedModel, canonicalModel, jobID)
 }
 
 func writeCompatibleGatewayMediaError(c *gin.Context, statusCode int, code, message string) {

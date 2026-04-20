@@ -70,18 +70,20 @@ type GrokSessionMediaRuntime struct {
 }
 
 type grokSessionImageGenerationRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	N      int    `json:"n"`
+	Model          string `json:"model"`
+	Prompt         string `json:"prompt"`
+	N              int    `json:"n"`
+	ResponseFormat string `json:"response_format"`
 }
 
 type grokSessionImageEditRequest struct {
-	Model        string
-	Prompt       string
-	N            int
-	InputImages  []grokSessionUploadInput
-	HasMask      bool
-	MaskProvided string
+	Model          string
+	Prompt         string
+	N              int
+	ResponseFormat string
+	InputImages    []grokSessionUploadInput
+	HasMask        bool
+	MaskProvided   string
 }
 
 type grokSessionVideoCreateRequest struct {
@@ -362,7 +364,7 @@ func (r *GrokSessionMediaRuntime) handleImageGeneration(
 		return true
 	}
 	if r.mediaAssets != nil {
-		responseBody, _, _ = r.mediaAssets.RewriteResponse(c, account, responseBody, "image", requestedModel, canonicalModel, "")
+		responseBody, _, _ = r.mediaAssets.RewriteResponse(c, account, responseBody, "image", req.ResponseFormat, requestedModel, canonicalModel, "")
 	}
 	r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, nil)
 	c.Data(http.StatusOK, "application/json", responseBody)
@@ -483,7 +485,7 @@ func (r *GrokSessionMediaRuntime) handleImageEdit(
 		return true
 	}
 	if r.mediaAssets != nil {
-		responseBody, _, _ = r.mediaAssets.RewriteResponse(c, account, responseBody, "image", requestedModel, canonicalModel, "")
+		responseBody, _, _ = r.mediaAssets.RewriteResponse(c, account, responseBody, "image", req.ResponseFormat, requestedModel, canonicalModel, "")
 	}
 	r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, nil)
 	c.Data(http.StatusOK, "application/json", responseBody)
@@ -1295,8 +1297,13 @@ func parseGrokSessionImageGenerationRequest(body []byte, defaultModel string) (g
 	if err := json.Unmarshal(body, &req); err != nil {
 		return req, errors.New("failed to parse image generation request body")
 	}
+	responseFormat, err := normalizeGrokOpenAIImageResponseFormat(req.ResponseFormat)
+	if err != nil {
+		return req, err
+	}
 	req.Model = firstNonEmpty(strings.TrimSpace(req.Model), strings.TrimSpace(defaultModel))
 	req.Prompt = strings.TrimSpace(req.Prompt)
+	req.ResponseFormat = responseFormat
 	if req.Model == "" {
 		return req, errors.New("model is required")
 	}
@@ -1326,6 +1333,11 @@ func parseGrokSessionImageEditRequest(c *gin.Context, body []byte, defaultModel 
 		Prompt: strings.TrimSpace(gjson.GetBytes(body, "prompt").String()),
 		N:      int(gjson.GetBytes(body, "n").Int()),
 	}
+	responseFormat, err := normalizeGrokOpenAIImageResponseFormat(gjson.GetBytes(body, "response_format").String())
+	if err != nil {
+		return req, err
+	}
+	req.ResponseFormat = responseFormat
 	if req.N <= 0 {
 		req.N = grokSessionDefaultImageEditCount
 	}
@@ -1392,6 +1404,11 @@ func parseMultipartGrokSessionImageEditRequest(body []byte, boundary string, def
 					req.N = parsed
 				}
 			}
+		case "response_format":
+			value, readErr := readMultipartTextField(part, 64)
+			if readErr == nil {
+				req.ResponseFormat = strings.TrimSpace(value)
+			}
 		case "mask":
 			value, readErr := readMultipartTextField(part, 128<<10)
 			if readErr == nil && strings.TrimSpace(value) != "" {
@@ -1418,6 +1435,11 @@ func parseMultipartGrokSessionImageEditRequest(body []byte, boundary string, def
 
 	req.Model = firstNonEmpty(strings.TrimSpace(req.Model), strings.TrimSpace(defaultModel))
 	req.Prompt = strings.TrimSpace(req.Prompt)
+	responseFormat, err := normalizeGrokOpenAIImageResponseFormat(req.ResponseFormat)
+	if err != nil {
+		return req, err
+	}
+	req.ResponseFormat = responseFormat
 	if req.N <= 0 {
 		req.N = grokSessionDefaultImageEditCount
 	}

@@ -753,6 +753,154 @@ func TestGrokMediaServiceHandleImages_UsesConfiguredBase64OutputAndRetention(t *
 	require.Equal(t, now.Add(2*time.Hour), mediaAssets.upserts[0].ExpiresAt.UTC())
 }
 
+func TestGrokMediaServiceHandleImages_ResponseFormatOverrideReturnsB64JSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","prompt":"cat","response_format":"b64_json"}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"data":[{"url":"https://media.example/image.png"}]}`),
+			{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"image/png"}},
+				Body:       io.NopCloser(bytes.NewReader([]byte("PNGDATA"))),
+			},
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokMediaAccount(141, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "basic",
+					},
+				},
+			}),
+		},
+	}
+	mediaAssets := &stubGrokMediaAssetRepository{}
+	settingService := NewSettingService(&grokMediaSettingRepoStub{
+		values: map[string]string{
+			SettingKeyGrokImageOutputFormat: GrokMediaOutputFormatUpstreamURL,
+			SettingKeyGrokMediaProxyEnabled: "true",
+		},
+	}, testConfig())
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:    repo,
+		cfg:            testConfig(),
+		httpUpstream:   upstream,
+		settingService: settingService,
+	}, nil, mediaAssets)
+	svc.mediaAssets.cacheRoot = t.TempDir()
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/images/generations", body)
+	handled := svc.HandleImages(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "UE5HREFUQQ==", gjson.Get(rec.Body.String(), "data.0.b64_json").String())
+	require.False(t, gjson.Get(rec.Body.String(), "data.0.url").Exists())
+	require.Len(t, mediaAssets.upserts, 1)
+}
+
+func TestGrokMediaServiceHandleImages_ResponseFormatOverrideReturnsURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","prompt":"cat","response_format":"url"}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"data":[{"url":"https://media.example/image.png"}]}`),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokMediaAccount(142, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "basic",
+					},
+				},
+			}),
+		},
+	}
+	mediaAssets := &stubGrokMediaAssetRepository{}
+	settingService := NewSettingService(&grokMediaSettingRepoStub{
+		values: map[string]string{
+			SettingKeyGrokImageOutputFormat: GrokMediaOutputFormatBase64,
+			SettingKeyGrokMediaProxyEnabled: "true",
+		},
+	}, testConfig())
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:    repo,
+		cfg:            testConfig(),
+		httpUpstream:   upstream,
+		settingService: settingService,
+	}, nil, mediaAssets)
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/images/generations", body)
+	c.Request.Host = "gateway.example"
+	c.Request.Header.Set("X-Forwarded-Proto", "https")
+	handled := svc.HandleImages(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"url":"https://gateway.example/grok/media/assets/`)
+	require.False(t, gjson.Get(rec.Body.String(), "data.0.b64_json").Exists())
+	require.Len(t, mediaAssets.upserts, 1)
+}
+
+func TestGrokMediaServiceHandleImages_SessionResponseFormatOverrideReturnsB64JSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","prompt":"cat","response_format":"b64_json"}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newGrokSessionImageGenerationResponse("https://media.example/image.png"),
+			{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"image/png"}},
+				Body:       io.NopCloser(bytes.NewReader([]byte("PNGDATA"))),
+			},
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokSessionMediaAccount(391, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "basic",
+					},
+				},
+			}),
+		},
+	}
+	mediaAssets := &stubGrokMediaAssetRepository{}
+	settingService := NewSettingService(&grokMediaSettingRepoStub{
+		values: map[string]string{
+			SettingKeyGrokImageOutputFormat: GrokMediaOutputFormatUpstreamURL,
+			SettingKeyGrokMediaProxyEnabled: "true",
+		},
+	}, testConfig())
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:    repo,
+		cfg:            testConfig(),
+		httpUpstream:   upstream,
+		settingService: settingService,
+	}, nil, mediaAssets)
+	svc.mediaAssets.cacheRoot = t.TempDir()
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/images/generations", body)
+	handled := svc.HandleImages(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "UE5HREFUQQ==", gjson.Get(rec.Body.String(), "data.0.b64_json").String())
+	require.False(t, gjson.Get(rec.Body.String(), "data.0.url").Exists())
+	require.Len(t, mediaAssets.upserts, 1)
+	require.Len(t, upstream.requests, 2)
+	require.Equal(t, "https://media.example/image.png", upstream.requests[1].URL.String())
+}
+
 func TestGrokMediaServiceHandleVideos_ContentFollowup_UsesConfiguredHTMLFormat(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
