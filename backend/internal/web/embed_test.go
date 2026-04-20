@@ -433,6 +433,7 @@ func TestFrontendServer_Middleware(t *testing.T) {
 		apiPaths := []string{
 			"/api/v1/users",
 			"/v1/models",
+			"/grok/v1/models",
 			"/v1beta/chat",
 			"/antigravity/test",
 			"/setup/init",
@@ -484,6 +485,32 @@ func TestFrontendServer_Middleware(t *testing.T) {
 		assert.True(t, nextCalled, "next handler should be called for compact API route")
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.JSONEq(t, `{"ok":true}`, w.Body.String())
+	})
+
+	t.Run("skips_grok_post_routes", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"test": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(server.Middleware())
+		nextCalled := false
+		router.POST("/grok/v1/chat/completions", func(c *gin.Context) {
+			nextCalled = true
+			c.String(http.StatusOK, `{"object":"chat.completion"}`)
+		})
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", strings.NewReader(`{"model":"grok-3"}`))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		assert.True(t, nextCalled, "next handler should be called for grok API route")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, `{"object":"chat.completion"}`, w.Body.String())
 	})
 
 	t.Run("serves_index_for_spa_routes", func(t *testing.T) {
@@ -635,6 +662,7 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 		apiPaths := []string{
 			"/api/users",
 			"/v1/models",
+			"/grok/v1/models",
 			"/v1beta/chat",
 			"/antigravity/test",
 			"/setup/init",
