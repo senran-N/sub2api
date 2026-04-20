@@ -241,7 +241,7 @@ func createGrokSessionTestPayload(modelID string, prompt string) (map[string]any
 func (s *AccountTestService) processGrokSessionTestStream(c *gin.Context, body io.Reader, model string) error {
 	sawContent := false
 
-	finalResponse, err := collectGrokSessionResponses(body, model, &grokSessionResponsesCallbacks{
+	finalResponse, err := collectGrokSessionResponses(body, model, nil, &grokSessionResponsesCallbacks{
 		onEvent: func(event apicompat.ResponsesStreamEvent) error {
 			if event.Type == "response.output_text.delta" && event.Delta != "" {
 				sawContent = true

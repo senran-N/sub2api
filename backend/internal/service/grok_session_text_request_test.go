@@ -78,9 +78,38 @@ func TestBuildGrokSessionTextPayloadFromResponsesRequest_FlattensSystemAndHistor
 	require.True(t, ok)
 	require.Contains(t, message, "User: Hello")
 	require.Contains(t, message, "Assistant: Hi.")
-	require.Contains(t, message, `Assistant tool call get_weather: {"city":"Shanghai"}`)
+	require.Contains(t, message, "<tool_calls>")
+	require.Contains(t, message, "<tool_name>get_weather</tool_name>")
+	require.Contains(t, message, `<parameters>{"city":"Shanghai"}</parameters>`)
 	require.Contains(t, message, `Tool result (call_1): {"temp_c":26}`)
 	require.Contains(t, message, "User: What should I wear?")
+}
+
+func TestBuildGrokSessionTextPayloadFromResponsesRequest_InjectsToolPrompt(t *testing.T) {
+	input, err := json.Marshal([]apicompat.ResponsesInputItem{{
+		Role:    "user",
+		Content: json.RawMessage(`"What's the weather?"`),
+	}})
+	require.NoError(t, err)
+
+	payload, err := buildGrokSessionTextPayloadFromResponsesRequest(&apicompat.ResponsesRequest{
+		Model: "grok-3",
+		Input: input,
+		Tools: []apicompat.ResponsesTool{{
+			Type:        "function",
+			Name:        "get_weather",
+			Description: "Look up weather",
+			Parameters:  json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"}}}`),
+		}},
+		ToolChoice: json.RawMessage(`"required"`),
+	})
+	require.NoError(t, err)
+
+	personality, ok := payload["customPersonality"].(string)
+	require.True(t, ok)
+	require.Contains(t, personality, "AVAILABLE TOOLS:")
+	require.Contains(t, personality, "Tool: get_weather")
+	require.Contains(t, personality, "WHEN TO CALL: You MUST output a <tool_calls> XML block.")
 }
 
 func TestGrokSessionTextRequestFromResponsesRequest_CollectsImageInputs(t *testing.T) {

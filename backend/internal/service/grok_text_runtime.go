@@ -31,6 +31,7 @@ type grokTextPreparation struct {
 	requestedModel string
 	stream         bool
 	includeUsage   bool
+	toolNames      []string
 	account        *Account
 	compatibleBody []byte
 	usesCompatible bool
@@ -42,6 +43,7 @@ type grokSessionTextPreparedPayload struct {
 	requestedModel string
 	stream         bool
 	includeUsage   bool
+	toolNames      []string
 	payloadMap     map[string]any
 	payload        []byte
 	imageInputs    []grokSessionUploadInput
@@ -218,6 +220,7 @@ func (r *GrokTextRuntime) prepareTextRequest(
 		requestedModel: requestedModel,
 		stream:         preparedPayload.stream,
 		includeUsage:   preparedPayload.includeUsage,
+		toolNames:      append([]string(nil), preparedPayload.toolNames...),
 		account:        selected,
 		target:         target,
 		payload:        preparedPayload.payload,
@@ -320,6 +323,7 @@ func prepareGrokResponsesPayload(body []byte) (*grokSessionTextPreparedPayload, 
 	return &grokSessionTextPreparedPayload{
 		requestedModel: requestedModel,
 		stream:         req.Stream,
+		toolNames:      append([]string(nil), request.ToolNames...),
 		payloadMap:     payload,
 		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
 	}, nil
@@ -354,6 +358,7 @@ func prepareGrokChatCompletionsPayload(body []byte) (*grokSessionTextPreparedPay
 		requestedModel: requestedModel,
 		stream:         req.Stream,
 		includeUsage:   includeUsage,
+		toolNames:      append([]string(nil), request.ToolNames...),
 		payloadMap:     payload,
 		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
 	}, nil
@@ -386,6 +391,7 @@ func prepareGrokMessagesPayload(body []byte) (*grokSessionTextPreparedPayload, e
 	return &grokSessionTextPreparedPayload{
 		requestedModel: requestedModel,
 		stream:         req.Stream,
+		toolNames:      append([]string(nil), request.ToolNames...),
 		payloadMap:     payload,
 		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
 	}, nil

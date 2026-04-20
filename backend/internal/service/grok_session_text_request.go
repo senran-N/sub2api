@@ -24,6 +24,8 @@ type grokSessionTextRequest struct {
 	Message         string
 	FileAttachments []string
 	ImageInputs     []grokSessionUploadInput
+	ToolNames       []string
+	ToolPrompt      string
 }
 
 func buildGrokSessionTextPayload(input grokSessionTextRequest) (map[string]any, error) {
@@ -68,7 +70,7 @@ func buildGrokSessionTextPayload(input grokSessionTextRequest) (map[string]any, 
 		"temporary":                   true,
 		"toolOverrides":               grokSessionDefaultToolOverrides(),
 	}
-	if systemPrompt := strings.TrimSpace(input.SystemPrompt); systemPrompt != "" {
+	if systemPrompt := strings.TrimSpace(mergeGrokSessionSystemPrompt(input.SystemPrompt, input.ToolPrompt)); systemPrompt != "" {
 		payload["customPersonality"] = systemPrompt
 	}
 	if len(input.FileAttachments) > 0 {
@@ -130,6 +132,7 @@ func grokSessionTextRequestFromResponsesRequest(req *apicompat.ResponsesRequest)
 	if err != nil {
 		return grokSessionTextRequest{}, err
 	}
+	toolPrompt, toolNames := grokSessionToolConfigFromResponsesRequest(req)
 
 	return grokSessionTextRequest{
 		ModelID:      strings.TrimSpace(req.Model),
@@ -137,6 +140,8 @@ func grokSessionTextRequestFromResponsesRequest(req *apicompat.ResponsesRequest)
 		SystemPrompt: systemPrompt,
 		Message:      message,
 		ImageInputs:  imageInputs,
+		ToolNames:    append([]string(nil), toolNames...),
+		ToolPrompt:   toolPrompt,
 	}, nil
 }
 
@@ -188,11 +193,14 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 		case "function_call":
 			name := strings.TrimSpace(item.Name)
 			arguments := strings.TrimSpace(item.Arguments)
-			switch {
-			case name != "" && arguments != "":
-				historyParts = append(historyParts, fmt.Sprintf("Assistant tool call %s: %s", name, arguments))
-			case name != "":
-				historyParts = append(historyParts, fmt.Sprintf("Assistant tool call %s", name))
+			if name != "" {
+				xmlBlock := grokToolCallsToXML([]grokParsedToolCall{{
+					Name:      name,
+					Arguments: arguments,
+				}})
+				if xmlBlock != "" {
+					historyParts = append(historyParts, fmt.Sprintf("Assistant: %s", xmlBlock))
+				}
 			}
 			lastUserOnly = ""
 			continue
@@ -241,6 +249,13 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 		return lastUserOnly, systemPrompt, uploads, nil
 	}
 	return strings.Join(historyParts, "\n\n"), systemPrompt, uploads, nil
+}
+
+func grokSessionToolConfigFromResponsesRequest(req *apicompat.ResponsesRequest) (string, []string) {
+	if req == nil {
+		return "", nil
+	}
+	return grokSessionToolPromptFromResponsesTools(req.Tools, req.ToolChoice)
 }
 
 func grokSessionTranscriptRoleLabel(role string) string {
