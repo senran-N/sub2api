@@ -181,6 +181,40 @@ func TestChatCompletionsToResponses_ImageURL(t *testing.T) {
 	assert.Equal(t, "data:image/png;base64,abc123", parts[1].ImageURL)
 }
 
+func TestChatCompletionsToResponses_InputAudioAndFile(t *testing.T) {
+	content := `[
+		{"type":"text","text":"Transcribe and summarize"},
+		{"type":"input_audio","input_audio":{"data":"data:audio/wav;base64,abc123","filename":"note.wav","mime_type":"audio/wav"}},
+		{"type":"file","file":{"file_data":"data:text/plain;base64,Zm9v","filename":"note.txt","mime_type":"text/plain"}}
+	]`
+	req := &ChatCompletionsRequest{
+		Model: "gpt-4o",
+		Messages: []ChatMessage{
+			{Role: "user", Content: json.RawMessage(content)},
+		},
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Len(t, items, 1)
+
+	var parts []ResponsesContentPart
+	require.NoError(t, json.Unmarshal(items[0].Content, &parts))
+	require.Len(t, parts, 3)
+	assert.Equal(t, "input_text", parts[0].Type)
+	assert.Equal(t, "input_audio", parts[1].Type)
+	require.NotNil(t, parts[1].InputAudio)
+	assert.Equal(t, "data:audio/wav;base64,abc123", parts[1].InputAudio.Data)
+	assert.Equal(t, "note.wav", parts[1].InputAudio.Filename)
+	assert.Equal(t, "file", parts[2].Type)
+	require.NotNil(t, parts[2].File)
+	assert.Equal(t, "data:text/plain;base64,Zm9v", parts[2].File.FileData)
+	assert.Equal(t, "note.txt", parts[2].File.Filename)
+}
+
 func TestChatCompletionsToResponses_SystemArrayContent(t *testing.T) {
 	req := &ChatCompletionsRequest{
 		Model: "gpt-4o",

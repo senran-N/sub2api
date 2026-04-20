@@ -197,11 +197,28 @@ type ResponsesInputItem struct {
 
 // ResponsesContentPart is a typed content part in a Responses message.
 type ResponsesContentPart struct {
-	Type        string                    `json:"type"` // "input_text" | "output_text" | "input_image"
+	Type        string                    `json:"type"` // "input_text" | "output_text" | "input_image" | "input_audio" | "file"
 	Text        string                    `json:"text,omitempty"`
-	ImageURL    string                    `json:"image_url,omitempty"` // data URI or URL for input_image
-	Detail      string                    `json:"detail,omitempty"`    // "auto" | "low" | "high" (image resolution hint)
+	ImageURL    string                    `json:"image_url,omitempty"`   // data URI or URL for input_image
+	Detail      string                    `json:"detail,omitempty"`      // "auto" | "low" | "high" (image resolution hint)
+	InputAudio  *ResponsesInputAudio      `json:"input_audio,omitempty"` // inline input_audio payload
+	File        *ResponsesInputFile       `json:"file,omitempty"`        // inline file payload
 	Annotations []ResponsesTextAnnotation `json:"annotations,omitempty"`
+}
+
+// ResponsesInputAudio contains inline audio content for a Responses content part.
+type ResponsesInputAudio struct {
+	Data     string `json:"data,omitempty"`
+	Format   string `json:"format,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	MIMEType string `json:"mime_type,omitempty"`
+}
+
+// ResponsesInputFile contains inline file content for a Responses content part.
+type ResponsesInputFile struct {
+	FileData string `json:"file_data,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	MIMEType string `json:"mime_type,omitempty"`
 }
 
 // ResponsesTool describes a tool in the Responses API.
@@ -398,15 +415,32 @@ type ChatMessage struct {
 
 // ChatContentPart is a typed content part in a multi-modal message.
 type ChatContentPart struct {
-	Type     string        `json:"type"` // "text" | "image_url"
-	Text     string        `json:"text,omitempty"`
-	ImageURL *ChatImageURL `json:"image_url,omitempty"`
+	Type       string          `json:"type"` // "text" | "image_url" | "input_audio" | "file"
+	Text       string          `json:"text,omitempty"`
+	ImageURL   *ChatImageURL   `json:"image_url,omitempty"`
+	InputAudio *ChatInputAudio `json:"input_audio,omitempty"`
+	File       *ChatInputFile  `json:"file,omitempty"`
 }
 
 // ChatImageURL contains the URL for an image content part.
 type ChatImageURL struct {
 	URL    string `json:"url"`
 	Detail string `json:"detail,omitempty"` // "auto" | "low" | "high"
+}
+
+// ChatInputAudio contains inline audio content for a chat content part.
+type ChatInputAudio struct {
+	Data     string `json:"data,omitempty"`
+	Format   string `json:"format,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	MIMEType string `json:"mime_type,omitempty"`
+}
+
+// ChatInputFile contains inline file content for a chat content part.
+type ChatInputFile struct {
+	FileData string `json:"file_data,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	MIMEType string `json:"mime_type,omitempty"`
 }
 
 // ChatTool describes a tool available to the model.

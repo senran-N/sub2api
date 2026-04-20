@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/senran-N/sub2api/internal/pkg/apicompat"
@@ -18,14 +19,14 @@ const (
 )
 
 type grokSessionTextRequest struct {
-	ModelID         string
-	ModeID          string
-	SystemPrompt    string
-	Message         string
-	FileAttachments []string
-	ImageInputs     []grokSessionUploadInput
-	ToolNames       []string
-	ToolPrompt      string
+	ModelID          string
+	ModeID           string
+	SystemPrompt     string
+	Message          string
+	FileAttachments  []string
+	AttachmentInputs []grokSessionUploadInput
+	ToolNames        []string
+	ToolPrompt       string
 }
 
 func buildGrokSessionTextPayload(input grokSessionTextRequest) (map[string]any, error) {
@@ -123,7 +124,7 @@ func grokSessionTextRequestFromResponsesRequest(req *apicompat.ResponsesRequest)
 		return grokSessionTextRequest{}, errors.New("responses request is nil")
 	}
 
-	message, systemPrompt, imageInputs, err := extractGrokSessionPromptFromResponsesInput(req.Input)
+	message, systemPrompt, attachmentInputs, err := extractGrokSessionPromptFromResponsesInput(req.Input)
 	if err != nil {
 		return grokSessionTextRequest{}, err
 	}
@@ -135,17 +136,17 @@ func grokSessionTextRequestFromResponsesRequest(req *apicompat.ResponsesRequest)
 	toolPrompt, toolNames := grokSessionToolConfigFromResponsesRequest(req)
 
 	return grokSessionTextRequest{
-		ModelID:      strings.TrimSpace(req.Model),
-		ModeID:       modeID,
-		SystemPrompt: systemPrompt,
-		Message:      message,
-		ImageInputs:  imageInputs,
-		ToolNames:    append([]string(nil), toolNames...),
-		ToolPrompt:   toolPrompt,
+		ModelID:          strings.TrimSpace(req.Model),
+		ModeID:           modeID,
+		SystemPrompt:     systemPrompt,
+		Message:          message,
+		AttachmentInputs: append([]grokSessionUploadInput(nil), attachmentInputs...),
+		ToolNames:        append([]string(nil), toolNames...),
+		ToolPrompt:       toolPrompt,
 	}, nil
 }
 
-func extractGrokSessionPromptFromResponsesInput(raw json.RawMessage) (message string, systemPrompt string, imageInputs []grokSessionUploadInput, err error) {
+func extractGrokSessionPromptFromResponsesInput(raw json.RawMessage) (message string, systemPrompt string, attachmentInputs []grokSessionUploadInput, err error) {
 	raw = json.RawMessage(strings.TrimSpace(string(raw)))
 	if len(raw) == 0 || string(raw) == "null" {
 		return "", "", nil, errors.New("grok session text request is missing input")
@@ -167,7 +168,7 @@ func extractGrokSessionPromptFromResponsesInput(raw json.RawMessage) (message st
 	return grokSessionPromptFromResponsesItems(items)
 }
 
-func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (message string, systemPrompt string, imageInputs []grokSessionUploadInput, err error) {
+func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (message string, systemPrompt string, attachmentInputs []grokSessionUploadInput, err error) {
 	systemParts := make([]string, 0, 2)
 	historyParts := make([]string, 0, len(items))
 	uploads := make([]grokSessionUploadInput, 0, 2)
@@ -182,7 +183,7 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 			if err != nil {
 				return "", "", nil, err
 			}
-			uploads = append(uploads, content.ImageInputs...)
+			uploads = append(uploads, content.AttachmentInputs...)
 			if content.Text != "" {
 				systemParts = append(systemParts, content.Text)
 			}
@@ -225,7 +226,7 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 		if err != nil {
 			return "", "", nil, err
 		}
-		uploads = append(uploads, content.ImageInputs...)
+		uploads = append(uploads, content.AttachmentInputs...)
 		if content.Text == "" {
 			continue
 		}
@@ -270,8 +271,8 @@ func grokSessionTranscriptRoleLabel(role string) string {
 }
 
 type grokSessionTextContent struct {
-	Text        string
-	ImageInputs []grokSessionUploadInput
+	Text             string
+	AttachmentInputs []grokSessionUploadInput
 }
 
 func grokSessionTextContentFromResponsesContent(raw json.RawMessage) (grokSessionTextContent, error) {
@@ -291,7 +292,7 @@ func grokSessionTextContentFromResponsesContent(raw json.RawMessage) (grokSessio
 	}
 
 	textParts := make([]string, 0, len(parts))
-	imageInputs := make([]grokSessionUploadInput, 0, len(parts))
+	attachmentInputs := make([]grokSessionUploadInput, 0, len(parts))
 	for _, part := range parts {
 		switch strings.TrimSpace(part.Type) {
 		case "input_text", "output_text", "text":
@@ -300,15 +301,85 @@ func grokSessionTextContentFromResponsesContent(raw json.RawMessage) (grokSessio
 			}
 		case "input_image":
 			if imageURL := strings.TrimSpace(part.ImageURL); imageURL != "" {
-				imageInputs = append(imageInputs, grokSessionUploadInput{Source: imageURL})
+				attachmentInputs = append(attachmentInputs, grokSessionUploadInput{Source: imageURL})
+			}
+		case "input_audio":
+			if part.InputAudio == nil {
+				continue
+			}
+			if attachment, ok := grokSessionUploadInputFromInlineContent(
+				part.InputAudio.Data,
+				part.InputAudio.Filename,
+				firstNonEmpty(strings.TrimSpace(part.InputAudio.MIMEType), grokSessionAudioMimeType(part.InputAudio.Format)),
+			); ok {
+				attachmentInputs = append(attachmentInputs, attachment)
+			}
+		case "file":
+			if part.File == nil {
+				continue
+			}
+			if attachment, ok := grokSessionUploadInputFromInlineContent(
+				part.File.FileData,
+				part.File.Filename,
+				strings.TrimSpace(part.File.MIMEType),
+			); ok {
+				attachmentInputs = append(attachmentInputs, attachment)
 			}
 		}
 	}
 
 	return grokSessionTextContent{
-		Text:        strings.Join(textParts, "\n"),
-		ImageInputs: imageInputs,
+		Text:             strings.Join(textParts, "\n"),
+		AttachmentInputs: attachmentInputs,
 	}, nil
+}
+
+func grokSessionUploadInputFromInlineContent(raw string, fileName string, mimeType string) (grokSessionUploadInput, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return grokSessionUploadInput{}, false
+	}
+
+	input := grokSessionUploadInput{
+		FileName: strings.TrimSpace(fileName),
+		MimeType: strings.TrimSpace(mimeType),
+	}
+	switch {
+	case strings.HasPrefix(raw, "data:"):
+		input.Source = raw
+	case grokSessionLooksLikeAbsoluteURL(raw):
+		input.Source = raw
+	default:
+		input.Base64 = raw
+		if input.FileName == "" && input.MimeType != "" {
+			input.FileName = grokSessionDefaultFileName(input.MimeType)
+		}
+	}
+	return input, true
+}
+
+func grokSessionLooksLikeAbsoluteURL(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil && parsed.Scheme != "" && parsed.Host != ""
+}
+
+func grokSessionAudioMimeType(format string) string {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "flac":
+		return "audio/flac"
+	case "m4a":
+		return "audio/mp4"
+	case "mp3", "mpeg":
+		return "audio/mpeg"
+	case "ogg":
+		return "audio/ogg"
+	case "wav", "wave":
+		return "audio/wav"
+	case "webm":
+		return "audio/webm"
+	default:
+		return ""
+	}
 }
 
 func resolveGrokSessionModeID(modelID string) (string, error) {

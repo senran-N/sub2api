@@ -112,7 +112,7 @@ func TestBuildGrokSessionTextPayloadFromResponsesRequest_InjectsToolPrompt(t *te
 	require.Contains(t, personality, "WHEN TO CALL: You MUST output a <tool_calls> XML block.")
 }
 
-func TestGrokSessionTextRequestFromResponsesRequest_CollectsImageInputs(t *testing.T) {
+func TestGrokSessionTextRequestFromResponsesRequest_CollectsAttachments(t *testing.T) {
 	responsesReq, err := apicompat.ChatCompletionsToResponses(&apicompat.ChatCompletionsRequest{
 		Model: "grok-3-fast",
 		Messages: []apicompat.ChatMessage{
@@ -121,8 +121,13 @@ func TestGrokSessionTextRequestFromResponsesRequest_CollectsImageInputs(t *testi
 				Content: json.RawMessage(`"Describe the image precisely."`),
 			},
 			{
-				Role:    "user",
-				Content: json.RawMessage(`[{"type":"text","text":"What is in this image?"},{"type":"image_url","image_url":{"url":"https://example.com/cat.png"}}]`),
+				Role: "user",
+				Content: json.RawMessage(`[
+					{"type":"text","text":"What is in this image and audio clip?"},
+					{"type":"image_url","image_url":{"url":"https://example.com/cat.png"}},
+					{"type":"input_audio","input_audio":{"data":"data:audio/wav;base64,abc123","filename":"clip.wav","mime_type":"audio/wav"}},
+					{"type":"file","file":{"file_data":"data:text/plain;base64,Zm9v","filename":"notes.txt","mime_type":"text/plain"}}
+				]`),
 			},
 		},
 	})
@@ -132,9 +137,35 @@ func TestGrokSessionTextRequestFromResponsesRequest_CollectsImageInputs(t *testi
 	require.NoError(t, err)
 	require.Equal(t, "fast", request.ModeID)
 	require.Equal(t, "Describe the image precisely.", request.SystemPrompt)
-	require.Equal(t, "What is in this image?", request.Message)
-	require.Len(t, request.ImageInputs, 1)
-	require.Equal(t, "https://example.com/cat.png", request.ImageInputs[0].Source)
+	require.Equal(t, "What is in this image and audio clip?", request.Message)
+	require.Len(t, request.AttachmentInputs, 3)
+	require.Equal(t, "https://example.com/cat.png", request.AttachmentInputs[0].Source)
+	require.Equal(t, "data:audio/wav;base64,abc123", request.AttachmentInputs[1].Source)
+	require.Equal(t, "clip.wav", request.AttachmentInputs[1].FileName)
+	require.Equal(t, "data:text/plain;base64,Zm9v", request.AttachmentInputs[2].Source)
+	require.Equal(t, "notes.txt", request.AttachmentInputs[2].FileName)
+}
+
+func TestGrokSessionTextRequestFromResponsesRequest_CollectsRawBase64Audio(t *testing.T) {
+	input, err := json.Marshal([]apicompat.ResponsesInputItem{{
+		Role: "user",
+		Content: json.RawMessage(`[
+			{"type":"input_text","text":"Listen carefully."},
+			{"type":"input_audio","input_audio":{"data":"UklGRngAAABXQVZF","format":"wav"}}
+		]`),
+	}})
+	require.NoError(t, err)
+
+	request, err := grokSessionTextRequestFromResponsesRequest(&apicompat.ResponsesRequest{
+		Model: "grok-3",
+		Input: input,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Listen carefully.", request.Message)
+	require.Len(t, request.AttachmentInputs, 1)
+	require.Equal(t, "UklGRngAAABXQVZF", request.AttachmentInputs[0].Base64)
+	require.Equal(t, "audio/wav", request.AttachmentInputs[0].MimeType)
+	require.Equal(t, "upload.wav", request.AttachmentInputs[0].FileName)
 }
 
 func TestBuildGrokSessionTextPayloadFromAnthropicRequest_UsesSystemAsCustomPersonality(t *testing.T) {

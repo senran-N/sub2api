@@ -349,6 +349,29 @@ func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesCont
 				}
 				responseParts = append(responseParts, part)
 			}
+		case "input_audio":
+			if p.InputAudio != nil && p.InputAudio.Data != "" {
+				responseParts = append(responseParts, ResponsesContentPart{
+					Type: "input_audio",
+					InputAudio: &ResponsesInputAudio{
+						Data:     p.InputAudio.Data,
+						Format:   p.InputAudio.Format,
+						Filename: p.InputAudio.Filename,
+						MIMEType: p.InputAudio.MIMEType,
+					},
+				})
+			}
+		case "file":
+			if p.File != nil && p.File.FileData != "" {
+				responseParts = append(responseParts, ResponsesContentPart{
+					Type: "file",
+					File: &ResponsesInputFile{
+						FileData: p.File.FileData,
+						Filename: p.File.Filename,
+						MIMEType: p.File.MIMEType,
+					},
+				})
+			}
 		}
 	}
 	return responseParts

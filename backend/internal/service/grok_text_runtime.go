@@ -40,13 +40,13 @@ type grokTextPreparation struct {
 }
 
 type grokSessionTextPreparedPayload struct {
-	requestedModel string
-	stream         bool
-	includeUsage   bool
-	toolNames      []string
-	payloadMap     map[string]any
-	payload        []byte
-	imageInputs    []grokSessionUploadInput
+	requestedModel   string
+	stream           bool
+	includeUsage     bool
+	toolNames        []string
+	payloadMap       map[string]any
+	payload          []byte
+	attachmentInputs []grokSessionUploadInput
 }
 
 type grokResponsesHTTPError struct {
@@ -238,7 +238,7 @@ func (r *GrokTextRuntime) prepareSessionAttachments(
 	if preparedPayload.payloadMap == nil {
 		preparedPayload.payloadMap = map[string]any{}
 	}
-	if len(preparedPayload.imageInputs) == 0 {
+	if len(preparedPayload.attachmentInputs) == 0 {
 		if len(preparedPayload.payload) == 0 {
 			payloadBytes, err := json.Marshal(preparedPayload.payloadMap)
 			if err != nil {
@@ -253,8 +253,8 @@ func (r *GrokTextRuntime) prepareSessionAttachments(
 	}
 
 	uploader := NewGrokSessionMediaRuntime(r.gatewayService, nil, nil)
-	attachments := make([]any, 0, len(preparedPayload.imageInputs))
-	for _, input := range preparedPayload.imageInputs {
+	attachments := make([]any, 0, len(preparedPayload.attachmentInputs))
+	for _, input := range preparedPayload.attachmentInputs {
 		uploaded, err := uploader.uploadSessionMediaInput(ctx, account, input)
 		if err != nil {
 			var upstreamErr *grokSessionMediaUpstreamError
@@ -263,12 +263,12 @@ func (r *GrokTextRuntime) prepareSessionAttachments(
 			}
 			message := sanitizeUpstreamErrorMessage(strings.TrimSpace(err.Error()))
 			if message == "" {
-				message = "Failed to upload Grok image input"
+				message = "Failed to upload Grok attachment input"
 			}
 			return newGrokResponsesHTTPError(http.StatusBadRequest, "invalid_request_error", message)
 		}
 		if uploaded == nil || strings.TrimSpace(uploaded.FileID) == "" {
-			return newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Grok image upload returned no attachment id")
+			return newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Grok attachment upload returned no attachment id")
 		}
 		attachments = append(attachments, strings.TrimSpace(uploaded.FileID))
 	}
@@ -321,11 +321,11 @@ func prepareGrokResponsesPayload(body []byte) (*grokSessionTextPreparedPayload, 
 	}
 
 	return &grokSessionTextPreparedPayload{
-		requestedModel: requestedModel,
-		stream:         req.Stream,
-		toolNames:      append([]string(nil), request.ToolNames...),
-		payloadMap:     payload,
-		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
+		requestedModel:   requestedModel,
+		stream:           req.Stream,
+		toolNames:        append([]string(nil), request.ToolNames...),
+		payloadMap:       payload,
+		attachmentInputs: append([]grokSessionUploadInput(nil), request.AttachmentInputs...),
 	}, nil
 }
 
@@ -355,12 +355,12 @@ func prepareGrokChatCompletionsPayload(body []byte) (*grokSessionTextPreparedPay
 
 	includeUsage := req.StreamOptions != nil && req.StreamOptions.IncludeUsage
 	return &grokSessionTextPreparedPayload{
-		requestedModel: requestedModel,
-		stream:         req.Stream,
-		includeUsage:   includeUsage,
-		toolNames:      append([]string(nil), request.ToolNames...),
-		payloadMap:     payload,
-		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
+		requestedModel:   requestedModel,
+		stream:           req.Stream,
+		includeUsage:     includeUsage,
+		toolNames:        append([]string(nil), request.ToolNames...),
+		payloadMap:       payload,
+		attachmentInputs: append([]grokSessionUploadInput(nil), request.AttachmentInputs...),
 	}, nil
 }
 
@@ -389,11 +389,11 @@ func prepareGrokMessagesPayload(body []byte) (*grokSessionTextPreparedPayload, e
 	}
 
 	return &grokSessionTextPreparedPayload{
-		requestedModel: requestedModel,
-		stream:         req.Stream,
-		toolNames:      append([]string(nil), request.ToolNames...),
-		payloadMap:     payload,
-		imageInputs:    append([]grokSessionUploadInput(nil), request.ImageInputs...),
+		requestedModel:   requestedModel,
+		stream:           req.Stream,
+		toolNames:        append([]string(nil), request.ToolNames...),
+		payloadMap:       payload,
+		attachmentInputs: append([]grokSessionUploadInput(nil), request.AttachmentInputs...),
 	}, nil
 }
 
