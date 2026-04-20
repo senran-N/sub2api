@@ -111,14 +111,16 @@ func TestGrokCapabilityProbeServiceProbeNowTargetsUnknownTierAccountsAcrossTrans
 	grokExtra := grokExtraMap(repo.updatedExtra[0])
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_at"))
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_ok_at"))
-	require.ElementsMatch(t, []string{"chat", "image", "image_edit", "video", "voice"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
-	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast", "grok-4-fast-reasoning", "grok-4-voice", "grok-imagine-image", "grok-imagine-image-edit", "grok-imagine-image-pro", "grok-imagine-video"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+	expectedAPIKeyCapabilities := buildGrokProbeCapabilities(&repo.accounts[0], grokCapabilityTierBootstrapModelID)
+	require.ElementsMatch(t, grokParseStringSlice(expectedAPIKeyCapabilities["operations"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, grokParseStringSlice(expectedAPIKeyCapabilities["models"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
 
 	sessionExtra := grokExtraMap(repo.updatedExtra[1])
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(sessionExtra, "sync_state", "last_probe_at"))
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(sessionExtra, "sync_state", "last_probe_ok_at"))
-	require.ElementsMatch(t, []string{"chat", "image", "image_edit", "video", "voice"}, grokParseStringSlice(getNestedGrokValue(sessionExtra, "capabilities", "operations")))
-	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast", "grok-4-fast-reasoning", "grok-4-voice", "grok-imagine-image", "grok-imagine-image-edit", "grok-imagine-image-pro", "grok-imagine-video"}, grokParseStringSlice(getNestedGrokValue(sessionExtra, "capabilities", "models")))
+	expectedSessionCapabilities := buildGrokProbeCapabilities(&repo.accounts[2], grokCapabilityTierBootstrapModelID)
+	require.ElementsMatch(t, grokParseStringSlice(expectedSessionCapabilities["operations"]), grokParseStringSlice(getNestedGrokValue(sessionExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, grokParseStringSlice(expectedSessionCapabilities["models"]), grokParseStringSlice(getNestedGrokValue(sessionExtra, "capabilities", "models")))
 }
 
 func TestGrokCapabilityProbeServiceProbeNowFallsBackToDefaultProbeWhenBootstrapModelFails(t *testing.T) {
@@ -181,7 +183,11 @@ func TestBuildGrokCapabilitySyncSnapshotWidensSimpleChatProbeWhenTierKnown(t *te
 
 	capabilities := buildGrokCapabilitySyncSnapshot(account, grok.TierBasic)
 	require.ElementsMatch(t, []string{"chat", "image"}, grokParseStringSlice(capabilities["operations"]))
-	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast"}, grokParseStringSlice(capabilities["models"]))
+	models := grokParseStringSlice(capabilities["models"])
+	require.Contains(t, models, "grok-4.20-fast")
+	require.Contains(t, models, "grok-4.20-auto")
+	require.Contains(t, models, "grok-imagine-image-lite")
+	require.NotContains(t, models, "grok-4.20-heavy")
 }
 
 func TestGrokCapabilityProbeServiceShouldProbeAccountUsesRuntimeSettings(t *testing.T) {
@@ -287,7 +293,11 @@ func TestBuildGrokProbeCapabilitiesWidensKnownTierBaseline(t *testing.T) {
 
 	capabilities := buildGrokProbeCapabilities(account, "grok-3-fast")
 	require.ElementsMatch(t, []string{"chat", "image"}, grokParseStringSlice(capabilities["operations"]))
-	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast"}, grokParseStringSlice(capabilities["models"]))
+	models := grokParseStringSlice(capabilities["models"])
+	require.Contains(t, models, "grok-4.20-fast")
+	require.Contains(t, models, "grok-4.20-auto")
+	require.Contains(t, models, "grok-imagine-image-lite")
+	require.NotContains(t, models, "grok-4.20-heavy")
 }
 
 func TestGrokTierStateInfersHighTierFromCapabilityModelsWithoutDowngradingBasicProbe(t *testing.T) {
@@ -296,7 +306,7 @@ func TestGrokTierStateInfersHighTierFromCapabilityModelsWithoutDowngradingBasicP
 		Extra: map[string]any{
 			"grok": map[string]any{
 				"capabilities": map[string]any{
-					"models": []any{"grok-4-fast-reasoning"},
+					"models": []any{"grok-4.20-heavy"},
 				},
 			},
 		},

@@ -160,7 +160,7 @@ func TestBuildGrokRuntimeCapabilityExtraUpdatesPersistsObservedSuccessIntoPatchL
 	grokExtra := grokExtraMap(updates)
 	require.Equal(t, "2026-04-18T00:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_ok_at"))
 	require.Nil(t, getNestedGrokValue(grokExtra, "runtime_state", "last_outcome"))
-	require.ElementsMatch(t, []string{"grok-3-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+	require.ElementsMatch(t, []string{"grok-4.20-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
 	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
 }
 

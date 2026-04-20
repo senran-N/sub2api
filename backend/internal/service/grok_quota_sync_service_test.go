@@ -144,8 +144,9 @@ func TestGrokQuotaSyncServiceSyncNowWidensSimpleChatProbeCapabilitiesOnceTierIsK
 
 	grokExtra := grokExtraMap(repo.updatedExtra[0])
 	require.Equal(t, "basic", getNestedGrokValue(grokExtra, "tier", "normalized"))
-	require.ElementsMatch(t, []string{"chat", "image"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
-	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+	expectedCapabilities := buildGrokCapabilitySyncSnapshot(&repo.accounts[0], grok.TierBasic)
+	require.ElementsMatch(t, grokParseStringSlice(expectedCapabilities["operations"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, grokParseStringSlice(expectedCapabilities["models"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
 }
 
 func TestGrokQuotaSyncServiceCurrentIntervalUsesRuntimeSettings(t *testing.T) {

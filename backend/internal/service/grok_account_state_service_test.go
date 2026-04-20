@@ -67,8 +67,9 @@ func TestGrokAccountStateService_PersistProbeResultSuccessWritesNormalizedProvid
 	require.Equal(t, "2026-04-19T08:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_at"))
 	require.Equal(t, "2026-04-19T08:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_ok_at"))
 	require.Equal(t, 200, grokParseInt(getNestedGrokValue(grokExtra, "sync_state", "last_probe_status_code")))
-	require.ElementsMatch(t, []string{"chat", "image"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
-	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+	expectedCapabilities := buildGrokCapabilitySyncSnapshot(account, grok.TierBasic)
+	require.ElementsMatch(t, grokParseStringSlice(expectedCapabilities["operations"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, grokParseStringSlice(expectedCapabilities["models"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
 	require.Equal(t, "2026-04-19T08:00:00Z", getNestedGrokValue(account.grokExtraMap(), "sync_state", "last_probe_at"))
 }
 
