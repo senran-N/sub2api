@@ -71,6 +71,22 @@ func (h *GrokGatewayHandler) Models(c *gin.Context) {
 	})
 }
 
+func (h *GrokGatewayHandler) GetModel(c *gin.Context) {
+	h.withForcedGrokPlatform(c)
+	groupID, _ := resolveGatewayModelListingContext(c)
+	if writeCompatibleGatewayModelResponse(
+		c,
+		c.Param("model"),
+		groupID,
+		service.PlatformGrok,
+		h.compatibleUpstreamModelsService,
+		h.gatewayService,
+	) {
+		return
+	}
+	writeCompatibleGatewayModelNotFound(c, c.Param("model"))
+}
+
 func (h *GrokGatewayHandler) Messages(c *gin.Context) {
 	h.withForcedGrokTextRuntime(c)
 	if h == nil {

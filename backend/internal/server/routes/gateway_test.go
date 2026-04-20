@@ -76,6 +76,7 @@ func TestGatewayRoutesGrokCompatPathsAreRegistered(t *testing.T) {
 		body   string
 	}{
 		{method: http.MethodGet, path: "/grok/v1/models", body: ``},
+		{method: http.MethodGet, path: "/grok/v1/models/grok-3", body: ``},
 		{method: http.MethodPost, path: "/grok/v1/chat/completions", body: `{"model":"grok-3"}`},
 		{method: http.MethodPost, path: "/grok/v1/responses", body: `{"model":"grok-3"}`},
 		{method: http.MethodPost, path: "/grok/v1/messages", body: `{"model":"grok-3"}`},
@@ -103,6 +104,7 @@ func TestGatewayRoutesOpenAICompatPassthroughPathsAreRegistered(t *testing.T) {
 		path   string
 		body   string
 	}{
+		{method: http.MethodGet, path: "/v1/models/gpt-5", body: ``},
 		{method: http.MethodPost, path: "/v1/images/generations", body: `{"model":"grok-2-image"}`},
 		{method: http.MethodPost, path: "/v1/audio/transcriptions", body: `{"model":"grok-4-voice"}`},
 		{method: http.MethodPost, path: "/v1/tts", body: `{"model":"grok-4-voice"}`},

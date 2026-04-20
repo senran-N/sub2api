@@ -42,6 +42,7 @@ func RegisterGatewayRoutes(
 		gateway.POST("/messages", dispatcher.Messages)
 		gateway.POST("/messages/count_tokens", dispatcher.CountTokens)
 		gateway.GET("/models", dispatcher.Models)
+		gateway.GET("/models/:model", dispatcher.GetModel)
 		gateway.GET("/usage", h.Gateway.Usage)
 		gateway.POST("/responses", dispatcher.Responses)
 		gateway.POST("/responses/*subpath", dispatcher.Responses)
@@ -89,6 +90,7 @@ func RegisterGatewayRoutes(
 	grokV1.Use(requireGroupAnthropic)
 	{
 		grokV1.GET("/models", h.GrokGateway.Models)
+		grokV1.GET("/models/:model", h.GrokGateway.GetModel)
 		grokV1.POST("/chat/completions", h.GrokGateway.ChatCompletions)
 		grokV1.POST("/responses", h.GrokGateway.Responses)
 		grokV1.POST("/responses/*subpath", h.GrokGateway.Responses)

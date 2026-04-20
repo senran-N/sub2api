@@ -47,6 +47,23 @@ func (d gatewayProtocolDispatcher) Models(c *gin.Context) {
 	d.handlers.Gateway.Models(c)
 }
 
+func (d gatewayProtocolDispatcher) GetModel(c *gin.Context) {
+	if platform, ok := d.resolveCompatibleGatewayPlatform(c); ok {
+		if platform == service.PlatformGrok {
+			d.handlers.GrokGateway.GetModel(c)
+			return
+		}
+		d.handlers.CompatibleGateway.GetModel(c)
+		return
+	}
+	c.JSON(http.StatusNotFound, gin.H{
+		"error": gin.H{
+			"type":    "not_found_error",
+			"message": "The requested endpoint is not available for this platform",
+		},
+	})
+}
+
 func (d gatewayProtocolDispatcher) CountTokens(c *gin.Context) {
 	if d.usesCompatibleGatewayProtocol(c) {
 		c.JSON(http.StatusNotFound, gin.H{

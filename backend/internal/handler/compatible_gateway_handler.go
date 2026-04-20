@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/senran-N/sub2api/internal/service"
 
@@ -116,6 +118,22 @@ func (h *CompatibleGatewayHandler) Models(c *gin.Context) {
 	})
 }
 
+func (h *CompatibleGatewayHandler) GetModel(c *gin.Context) {
+	groupID, _ := resolveGatewayModelListingContext(c)
+	platform := h.compatibleGatewayPlatform(c)
+	if writeCompatibleGatewayModelResponse(
+		c,
+		strings.TrimSpace(c.Param("model")),
+		groupID,
+		platform,
+		h.compatibleUpstreamModelsService,
+		h.gatewayService,
+	) {
+		return
+	}
+	writeCompatibleGatewayModelNotFound(c, c.Param("model"))
+}
+
 func (h *CompatibleGatewayHandler) Messages(c *gin.Context) {
 	protocolHandler := h.protocolHandler(c)
 	if protocolHandler == nil {
@@ -159,4 +177,47 @@ func (h *CompatibleGatewayHandler) Passthrough(c *gin.Context) {
 		return
 	}
 	protocolHandler.Passthrough(c)
+}
+
+func writeCompatibleGatewayModelResponse(
+	c *gin.Context,
+	modelID string,
+	groupID *int64,
+	platform string,
+	compatibleUpstreamModelsService *service.CompatibleUpstreamModelsService,
+	gatewayService *service.GatewayService,
+) bool {
+	if compatibleUpstreamModelsService != nil {
+		discoveredModels, err := compatibleUpstreamModelsService.DiscoverGroupModels(c.Request.Context(), groupID, platform)
+		if err == nil {
+			if model, ok := service.LookupCompatibleGatewayDiscoveredModel(discoveredModels, modelID, platform); ok {
+				c.JSON(http.StatusOK, model)
+				return true
+			}
+		}
+	}
+
+	if gatewayService != nil {
+		availableModels := gatewayService.GetAvailableModels(c.Request.Context(), groupID, platform)
+		if model, ok := service.LookupCompatibleGatewayMappedModel(availableModels, modelID, platform); ok {
+			c.JSON(http.StatusOK, model)
+			return true
+		}
+	}
+
+	if model, ok := service.LookupCompatibleGatewayDefaultModel(modelID, platform); ok {
+		c.JSON(http.StatusOK, model)
+		return true
+	}
+
+	return false
+}
+
+func writeCompatibleGatewayModelNotFound(c *gin.Context, modelID string) {
+	c.JSON(http.StatusNotFound, gin.H{
+		"error": gin.H{
+			"message": fmt.Sprintf("Model %q not found", strings.TrimSpace(modelID)),
+			"type":    "invalid_request_error",
+		},
+	})
 }

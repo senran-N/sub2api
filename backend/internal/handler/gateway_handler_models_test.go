@@ -68,6 +68,44 @@ func TestGrokGatewayHandlerModels_ForceBindsPlatform(t *testing.T) {
 	require.Equal(t, "grok-4.20-0309-non-reasoning", response.Data[0].ID)
 }
 
+func TestGrokGatewayHandlerGetModel_ResolvesAliasAndForceBindsPlatform(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	_, r := gin.CreateTestContext(w)
+	r.GET("/grok/v1/models/:model", func(c *gin.Context) {
+		h := NewGrokGatewayHandler(NewCompatibleGatewayRuntimeHandler(&CompatibleGatewayTextHandler{}, &OpenAIGatewayHandler{}), nil, nil, nil)
+		h.GetModel(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/grok/v1/models/grok-3", nil)
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var response grok.Model
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, "grok-4.20-auto", response.ID)
+	require.Equal(t, "xai", response.OwnedBy)
+}
+
+func TestGrokGatewayHandlerGetModel_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	_, r := gin.CreateTestContext(w)
+	r.GET("/grok/v1/models/:model", func(c *gin.Context) {
+		h := NewGrokGatewayHandler(NewCompatibleGatewayRuntimeHandler(&CompatibleGatewayTextHandler{}, &OpenAIGatewayHandler{}), nil, nil, nil)
+		h.GetModel(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/grok/v1/models/not-a-real-model", nil)
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Contains(t, w.Body.String(), "invalid_request_error")
+}
+
 func TestGrokGatewayHandlerMessages_ForceBindsPlatform(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
