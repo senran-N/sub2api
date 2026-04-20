@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/apicompat"
@@ -16,10 +19,11 @@ import (
 )
 
 type grokSessionResponseDelta struct {
-	token      string
-	reasoning  bool
-	completion bool
-	errorText  string
+	token              string
+	reasoning          bool
+	completion         bool
+	errorText          string
+	cardAttachmentJSON string
 }
 
 type grokSessionResponsesState struct {
@@ -33,9 +37,14 @@ type grokSessionResponsesState struct {
 	messageOutputIndex   int
 	messageItemID        string
 	accumulator          *apicompat.BufferedResponseAccumulator
+	cardAttachments      map[string]string
+	citationIndexByURL   map[string]int
+	nextCitationIndex    int
+	lastCitationIndex    int
 }
 
 var errGrokSessionTextStreamHandled = errors.New("grok session text stream already handled")
+var grokSessionRenderRe = regexp.MustCompile(`<grok:render\s+card_id="([^"]+)"\s+card_type="([^"]+)"\s+type="([^"]+)"[^>]*>.*?</grok:render>`)
 
 type grokSessionResponsesCallbacks struct {
 	onEvent         func(apicompat.ResponsesStreamEvent) error
@@ -192,9 +201,12 @@ func collectGrokSessionResponses(
 	}
 
 	state := grokSessionResponsesState{
-		responseID:  newGrokSessionResponseID("resp"),
-		model:       strings.TrimSpace(model),
-		accumulator: apicompat.NewBufferedResponseAccumulator(),
+		responseID:         newGrokSessionResponseID("resp"),
+		model:              strings.TrimSpace(model),
+		accumulator:        apicompat.NewBufferedResponseAccumulator(),
+		cardAttachments:    make(map[string]string),
+		citationIndexByURL: make(map[string]int),
+		lastCitationIndex:  -1,
 	}
 	if state.model == "" {
 		state.model = "grok"
@@ -209,6 +221,7 @@ func collectGrokSessionResponses(
 		sawDelta       bool
 		sawCompletion  bool
 		createdEmitted bool
+		reasoningBuf   strings.Builder
 	)
 
 	emitCreated := func() error {
@@ -223,6 +236,26 @@ func collectGrokSessionResponses(
 			return nil
 		}
 		return callbacks.onEvent(event)
+	}
+	flushReasoning := func() error {
+		if reasoningBuf.Len() == 0 {
+			return nil
+		}
+		if err := emitCreated(); err != nil {
+			return err
+		}
+		if !state.reasoningOpened {
+			if err := emitEvent(state.openReasoningItemEvent()); err != nil {
+				return err
+			}
+		}
+		event := state.nextReasoningDeltaEvent(reasoningBuf.String())
+		state.accumulator.ProcessEvent(&event)
+		if err := emitEvent(event); err != nil {
+			return err
+		}
+		reasoningBuf.Reset()
+		return nil
 	}
 	handleStreamFailure := func(message string) error {
 		if callbacks == nil || callbacks.onStreamFailure == nil || !createdEmitted {
@@ -243,32 +276,35 @@ func collectGrokSessionResponses(
 			continue
 		}
 		if delta.errorText != "" {
+			if err := flushReasoning(); err != nil {
+				return nil, err
+			}
 			return nil, handleStreamFailure(delta.errorText)
 		}
+		applyGrokSessionDeltaMetadata(&state, delta)
 
 		if delta.token != "" {
 			sawDelta = true
-			if err := emitCreated(); err != nil {
-				return nil, err
-			}
 			if delta.reasoning {
-				if !state.reasoningOpened {
-					if err := emitEvent(state.openReasoningItemEvent()); err != nil {
+				_, _ = reasoningBuf.WriteString(delta.token)
+				if shouldFlushGrokSessionReasoning(reasoningBuf.String()) {
+					if err := flushReasoning(); err != nil {
 						return nil, err
 					}
 				}
-				event := state.nextReasoningDeltaEvent(delta.token)
-				state.accumulator.ProcessEvent(&event)
-				if err := emitEvent(event); err != nil {
+			} else {
+				if err := flushReasoning(); err != nil {
 					return nil, err
 				}
-			} else {
+				if err := emitCreated(); err != nil {
+					return nil, err
+				}
 				if !state.messageOpened {
 					if err := emitEvent(state.openMessageItemEvent()); err != nil {
 						return nil, err
 					}
 				}
-				event := state.nextOutputTextDeltaEvent(delta.token)
+				event := state.nextOutputTextDeltaEvent(cleanGrokSessionTextToken(&state, delta.token))
 				state.accumulator.ProcessEvent(&event)
 				if err := emitEvent(event); err != nil {
 					return nil, err
@@ -277,6 +313,9 @@ func collectGrokSessionResponses(
 		}
 
 		if delta.completion {
+			if err := flushReasoning(); err != nil {
+				return nil, err
+			}
 			sawCompletion = true
 		}
 	}
@@ -290,6 +329,9 @@ func collectGrokSessionResponses(
 
 	if !sawDelta && !sawCompletion {
 		return nil, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
+	}
+	if err := flushReasoning(); err != nil {
+		return nil, err
 	}
 
 	finalResponse := state.finalResponse()
@@ -324,14 +366,16 @@ func parseGrokSessionResponseDelta(line string) (grokSessionResponseDelta, bool)
 	completion := responsePath.Get("isSoftStop").Bool() || (finalMetadata.Exists() && finalMetadata.Type != gjson.Null)
 	token := responsePath.Get("token").String()
 	reasoning := responsePath.Get("isThinking").Bool()
-	if token == "" && !completion {
+	cardAttachmentJSON := strings.TrimSpace(responsePath.Get("cardAttachment.jsonData").String())
+	if token == "" && !completion && cardAttachmentJSON == "" {
 		return grokSessionResponseDelta{}, false
 	}
 
 	return grokSessionResponseDelta{
-		token:      token,
-		reasoning:  reasoning,
-		completion: completion,
+		token:              token,
+		reasoning:          reasoning,
+		completion:         completion,
+		cardAttachmentJSON: cardAttachmentJSON,
 	}, true
 }
 
@@ -557,4 +601,109 @@ func (s *grokSessionResponsesState) finalResponse() *apicompat.ResponsesResponse
 
 func newGrokSessionResponseID(prefix string) string {
 	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+}
+
+func applyGrokSessionDeltaMetadata(state *grokSessionResponsesState, delta grokSessionResponseDelta) {
+	if state == nil {
+		return
+	}
+	if cardID := strings.TrimSpace(gjson.Get(delta.cardAttachmentJSON, "id").String()); cardID != "" {
+		state.cardAttachments[cardID] = delta.cardAttachmentJSON
+	}
+}
+
+func cleanGrokSessionTextToken(state *grokSessionResponsesState, token string) string {
+	if state == nil || !strings.Contains(token, "<grok:render") {
+		return token
+	}
+	cleaned := grokSessionRenderRe.ReplaceAllStringFunc(token, func(match string) string {
+		return replaceGrokSessionRender(state, match)
+	})
+	if strings.HasPrefix(cleaned, "\n") && strings.Contains(cleaned, "[[") {
+		cleaned = strings.TrimLeft(cleaned, "\n")
+	}
+	return cleaned
+}
+
+func replaceGrokSessionRender(state *grokSessionResponsesState, match string) string {
+	if state == nil {
+		return ""
+	}
+	parts := grokSessionRenderRe.FindStringSubmatch(match)
+	if len(parts) < 4 {
+		return ""
+	}
+	cardJSON := state.cardAttachments[parts[1]]
+	if cardJSON == "" {
+		return ""
+	}
+
+	card := gjson.Parse(cardJSON)
+	switch parts[3] {
+	case "render_searched_image":
+		title := strings.TrimSpace(card.Get("image.title").String())
+		if title == "" {
+			title = "image"
+		}
+		thumbnail := strings.TrimSpace(card.Get("image.thumbnail").String())
+		if thumbnail == "" {
+			thumbnail = strings.TrimSpace(card.Get("image.original").String())
+		}
+		link := strings.TrimSpace(card.Get("image.link").String())
+		if thumbnail == "" && link == "" {
+			return ""
+		}
+		if thumbnail == "" {
+			return fmt.Sprintf("[%s](%s)", title, link)
+		}
+		if link != "" {
+			return fmt.Sprintf("[![%s](%s)](%s)", title, thumbnail, link)
+		}
+		return fmt.Sprintf("![%s](%s)", title, thumbnail)
+	case "render_generated_image":
+		return ""
+	case "render_inline_citation":
+		url := strings.TrimSpace(card.Get("url").String())
+		if url == "" {
+			return ""
+		}
+		index, ok := state.citationIndexByURL[url]
+		if !ok {
+			state.nextCitationIndex++
+			index = state.nextCitationIndex
+			state.citationIndexByURL[url] = index
+		}
+		if index == state.lastCitationIndex {
+			return ""
+		}
+		state.lastCitationIndex = index
+		return fmt.Sprintf(" [[%d]](%s)", index, url)
+	default:
+		return ""
+	}
+}
+
+func shouldFlushGrokSessionReasoning(buffer string) bool {
+	trimmedRight := strings.TrimRightFunc(buffer, unicode.IsSpace)
+	if trimmedRight == "" {
+		return false
+	}
+	if strings.Contains(buffer, "\n\n") || strings.HasSuffix(buffer, "\n") {
+		return true
+	}
+
+	lastRune, _ := utf8.DecodeLastRuneInString(trimmedRight)
+	switch lastRune {
+	case '.', '!', '?', ';', ':', '。', '！', '？', '；', '：':
+		return true
+	}
+
+	trimmedLen := utf8.RuneCountInString(trimmedRight)
+	if trimmedLen >= 240 {
+		return true
+	}
+	if trimmedLen >= 160 && len(trimmedRight) < len(buffer) {
+		return true
+	}
+	return false
 }
