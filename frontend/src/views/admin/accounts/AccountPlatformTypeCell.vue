@@ -23,6 +23,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import type { Account } from '@/types'
+import { getGrokAccountRuntime } from '@/utils/grokAccountRuntime'
 import {
   getAccountAntigravityTierClass,
   getAccountAntigravityTierLabel
@@ -44,6 +45,34 @@ const privacyMode = computed(() => {
   return typeof value === 'string' ? value : undefined
 })
 
-const tierLabel = computed(() => getAccountAntigravityTierLabel(props.account, t))
-const tierClass = computed(() => getAccountAntigravityTierClass(props.account))
+const grokRuntime = computed(() => getGrokAccountRuntime(props.account))
+
+const tierLabel = computed(() => {
+  if (props.account.platform === 'grok') {
+    const tier = grokRuntime.value?.tier.normalized ?? 'unknown'
+    if (!grokRuntime.value?.hasState && tier === 'unknown') {
+      return null
+    }
+    return t(`admin.accounts.grok.runtime.tiers.${tier}`)
+  }
+
+  return getAccountAntigravityTierLabel(props.account, t)
+})
+
+const tierClass = computed(() => {
+  if (props.account.platform !== 'grok') {
+    return getAccountAntigravityTierClass(props.account)
+  }
+
+  switch (grokRuntime.value?.tier.normalized) {
+    case 'basic':
+      return 'theme-chip--info'
+    case 'heavy':
+      return 'theme-chip--brand-orange'
+    case 'super':
+      return 'theme-chip--brand-purple'
+    default:
+      return 'theme-chip--neutral'
+  }
+})
 </script>

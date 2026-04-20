@@ -58,23 +58,7 @@ func openAIRequestedModelAvailableForPlatformWithContext(
 	requestedModel string,
 	platform string,
 ) bool {
-	model := strings.TrimSpace(requestedModel)
-	if model == "" {
-		return true
-	}
-	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
-		return defaultGrokAccountSelector.RequestedModelAvailableWithContext(ctx, accounts, model)
-	}
-	for i := range accounts {
-		account := &accounts[i]
-		if !isOpenAISelectionPlatformAccount(account, platform) {
-			continue
-		}
-		if isCompatibleGatewayAccountModelEligible(account, model, platform) {
-			return true
-		}
-	}
-	return false
+	return compatibleRequestedModelAvailableForPlatformWithContext(ctx, accounts, requestedModel, platform)
 }
 
 func IsOpenAIRequestedModelUnavailableError(err error) bool {

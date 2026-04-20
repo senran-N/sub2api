@@ -140,6 +140,41 @@ function buildGrokSessionAccount() {
     type: 'session',
     credentials: {
       session_token: 'grok-session-existing'
+    },
+    extra: {
+      grok: {
+        auth_mode: 'session',
+        auth_fingerprint: 'sha256:ab12...cd34',
+        tier: {
+          normalized: 'heavy',
+          source: 'quota_sync',
+          confidence: 0.92
+        },
+        capabilities: {
+          operations: ['chat', 'video'],
+          models: ['grok-4', 'grok-4-video']
+        },
+        quota_windows: {
+          auto: {
+            remaining: 17,
+            total: 150,
+            source: 'sync',
+            reset_at: '2026-04-20T02:00:00Z'
+          }
+        },
+        sync_state: {
+          last_sync_at: '2026-04-20T00:00:00Z',
+          last_probe_at: '2026-04-20T01:00:00Z',
+          last_probe_ok_at: '2026-04-20T00:45:00Z',
+          last_probe_error_at: '2026-04-20T01:00:00Z',
+          last_probe_error: 'API returned 401 Unauthorized',
+          last_probe_status_code: 401
+        },
+        runtime_state: {
+          last_fail_at: '2026-04-20T01:05:00Z',
+          last_fail_reason: 'video tier required'
+        }
+      }
     }
   } as any
 }
@@ -242,6 +277,17 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.session_token).toBe(
       'grok-session-existing'
     )
+  })
+
+  it('shows the Grok runtime summary for session accounts', () => {
+    const wrapper = mountModal(buildGrokSessionAccount())
+
+    expect(wrapper.text()).toContain('admin.accounts.grok.runtime.title')
+    expect(wrapper.text()).toContain('admin.accounts.grok.runtime.tiers.heavy')
+    expect(wrapper.text()).toContain('sha256:ab12...cd34')
+    expect(wrapper.text()).toContain('admin.accounts.grok.runtime.capabilities.video')
+    expect(wrapper.text()).toContain('API returned 401 Unauthorized')
+    expect(wrapper.text()).toContain('video tier required')
   })
 
   it('hydrates Grok upstream settings and keeps the existing API key on save', async () => {

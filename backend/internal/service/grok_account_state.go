@@ -251,8 +251,16 @@ func (a *Account) GrokTierState() GrokTierState {
 	if state.Normalized == grok.TierUnknown {
 		state.Normalized = grokInferTierFromQuotaWindows(extra["quota_windows"])
 	}
+	if state.Normalized == grok.TierUnknown {
+		if inferred := grokInferTierFromCapabilityState(a.grokCapabilities()); inferred != grok.TierUnknown {
+			state.Normalized = inferred
+			state.Source = "capability_models"
+		}
+	}
 	state.Raw = getStringFromMaps(tier, extra, "raw", "raw_tier", "tier_raw")
-	state.Source = getStringFromMaps(tier, extra, "source", "tier_source")
+	if source := getStringFromMaps(tier, extra, "source", "tier_source"); source != "" {
+		state.Source = source
+	}
 	if tier != nil {
 		state.Confidence = grokParseFloat(tier["confidence"])
 	}
@@ -283,15 +291,21 @@ func getStringFromMaps(primary map[string]any, secondary map[string]any, keys ..
 }
 
 func (a *Account) grokCapabilities() grokCapabilityState {
+	extra := a.grokExtraMap()
+	if extra == nil {
+		return grokCapabilityState{
+			operations: make(map[grok.Capability]bool),
+			models:     make(map[string]struct{}),
+		}
+	}
+	return parseGrokCapabilityState(extra["capabilities"])
+}
+
+func parseGrokCapabilityState(rawCaps any) grokCapabilityState {
 	state := grokCapabilityState{
 		operations: make(map[grok.Capability]bool),
 		models:     make(map[string]struct{}),
 	}
-	extra := a.grokExtraMap()
-	if extra == nil {
-		return state
-	}
-	rawCaps := extra["capabilities"]
 	if rawCaps == nil {
 		return state
 	}
@@ -339,6 +353,23 @@ func (a *Account) grokCapabilities() grokCapabilityState {
 	}
 
 	return state
+}
+
+func grokInferTierFromCapabilityState(state grokCapabilityState) grok.Tier {
+	inferred := grok.TierUnknown
+	for modelID := range state.models {
+		spec, ok := grok.LookupModelSpec(modelID)
+		if !ok {
+			continue
+		}
+		if spec.RequiredTier == "" || spec.RequiredTier == grok.TierUnknown || spec.RequiredTier == grok.TierBasic {
+			continue
+		}
+		if grokTierRank(spec.RequiredTier) > grokTierRank(inferred) {
+			inferred = spec.RequiredTier
+		}
+	}
+	return inferred
 }
 
 func (a *Account) GrokCapabilityModelIDs() []string {

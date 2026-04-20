@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	defaultGrokCapabilityProbeInterval = 6 * time.Hour
 	grokCapabilityProbeTimeout         = 20 * time.Second
+	grokCapabilityTierBootstrapModelID = "grok-4-fast-reasoning"
 )
 
 type grokCapabilityProbeAccountRepo interface {
@@ -33,7 +33,7 @@ type GrokCapabilityProbeService struct {
 	httpUpstream        HTTPUpstream
 	cfg                 *config.Config
 	tlsFPProfileService *TLSFingerprintProfileService
-	interval            time.Duration
+	settingSvc          *SettingService
 	now                 func() time.Time
 	stopCh              chan struct{}
 	stopOnce            sync.Once
@@ -46,6 +46,7 @@ func NewGrokCapabilityProbeService(
 	httpUpstream HTTPUpstream,
 	cfg *config.Config,
 	tlsFPProfileService *TLSFingerprintProfileService,
+	settingSvc *SettingService,
 ) *GrokCapabilityProbeService {
 	return &GrokCapabilityProbeService{
 		accountRepo:         accountRepo,
@@ -53,7 +54,7 @@ func NewGrokCapabilityProbeService(
 		httpUpstream:        httpUpstream,
 		cfg:                 cfg,
 		tlsFPProfileService: tlsFPProfileService,
-		interval:            defaultGrokCapabilityProbeInterval,
+		settingSvc:          settingSvc,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -67,9 +68,10 @@ func ProvideGrokCapabilityProbeService(
 	httpUpstream HTTPUpstream,
 	cfg *config.Config,
 	tlsFPProfileService *TLSFingerprintProfileService,
+	settingSvc *SettingService,
 	lifecycle *LifecycleRegistry,
 ) *GrokCapabilityProbeService {
-	svc := NewGrokCapabilityProbeService(accountRepo, stateSvc, httpUpstream, cfg, tlsFPProfileService)
+	svc := NewGrokCapabilityProbeService(accountRepo, stateSvc, httpUpstream, cfg, tlsFPProfileService, settingSvc)
 	if err := svc.ProbeNow(context.Background()); err != nil {
 		logger.LegacyPrintf("service.grok_capability_probe", "Warning: startup probe failed: %v", err)
 	}
@@ -77,19 +79,18 @@ func ProvideGrokCapabilityProbeService(
 }
 
 func (s *GrokCapabilityProbeService) Start() {
-	if s == nil || s.accountRepo == nil || s.stateSvc == nil || s.httpUpstream == nil || s.interval <= 0 {
+	if s == nil || s.accountRepo == nil || s.stateSvc == nil || s.httpUpstream == nil {
 		return
 	}
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		ticker := time.NewTicker(s.interval)
-		defer ticker.Stop()
 
 		for {
+			timer := time.NewTimer(s.currentInterval(context.Background()))
 			select {
-			case <-ticker.C:
+			case <-timer.C:
 				ctx, cancel := context.WithTimeout(context.Background(), grokCapabilityProbeTimeout)
 				err := s.ProbeNow(ctx)
 				cancel()
@@ -97,6 +98,12 @@ func (s *GrokCapabilityProbeService) Start() {
 					logger.LegacyPrintf("service.grok_capability_probe", "Warning: periodic probe failed: %v", err)
 				}
 			case <-s.stopCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return
 			}
 		}
@@ -124,34 +131,39 @@ func (s *GrokCapabilityProbeService) ProbeNow(ctx context.Context) error {
 	}
 
 	now := s.now().UTC()
-	var firstErr error
-	for i := range accounts {
-		account := &accounts[i]
-		if !s.shouldProbeAccount(account, now) {
-			continue
+	runtimeSettings := s.currentRuntimeSettings(ctx)
+	return runGrokParallelAccounts(accounts, runtimeSettings.CapabilityProbeWorkers(), func(account *Account) error {
+		interval := s.currentIntervalForAccount(account, runtimeSettings)
+		if !s.shouldProbeAccount(account, now, interval) {
+			return nil
 		}
 		if err := s.probeAccount(ctx, account); err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
 			logger.LegacyPrintf("service.grok_capability_probe", "Warning: account %d probe failed: %v", account.ID, err)
+			return err
 		}
-	}
-	return firstErr
+		return nil
+	})
 }
 
-func (s *GrokCapabilityProbeService) shouldProbeAccount(account *Account, now time.Time) bool {
+func (s *GrokCapabilityProbeService) shouldProbeAccount(account *Account, now time.Time, interval time.Duration) bool {
 	if account == nil || NormalizeCompatibleGatewayPlatform(account.Platform) != PlatformGrok {
 		return false
 	}
-	if account.Type != AccountTypeAPIKey && account.Type != AccountTypeUpstream {
+	if account.Type != AccountTypeAPIKey && account.Type != AccountTypeUpstream && account.Type != AccountTypeSession {
 		return false
 	}
 	if !account.IsSchedulable() {
 		return false
 	}
-	if account.GrokTierState().Normalized != grok.TierUnknown {
-		return false
+	switch account.Type {
+	case AccountTypeAPIKey, AccountTypeUpstream:
+		if strings.TrimSpace(account.GetOpenAIApiKey()) == "" {
+			return false
+		}
+	case AccountTypeSession:
+		if strings.TrimSpace(account.GetGrokSessionToken()) == "" {
+			return false
+		}
 	}
 
 	capabilityState := account.grokCapabilities()
@@ -162,23 +174,48 @@ func (s *GrokCapabilityProbeService) shouldProbeAccount(account *Account, now ti
 	if syncState.LastProbeAt == nil {
 		return true
 	}
-	return now.Sub(*syncState.LastProbeAt) >= s.interval
+	return now.Sub(*syncState.LastProbeAt) >= interval
+}
+
+func (s *GrokCapabilityProbeService) currentInterval(ctx context.Context) time.Duration {
+	return s.loopInterval(s.currentRuntimeSettings(ctx))
+}
+
+func (s *GrokCapabilityProbeService) currentRuntimeSettings(ctx context.Context) GrokRuntimeSettings {
+	if s == nil || s.settingSvc == nil {
+		return DefaultGrokRuntimeSettings()
+	}
+	return s.settingSvc.GetGrokRuntimeSettings(ctx)
+}
+
+func (s *GrokCapabilityProbeService) currentIntervalForAccount(
+	account *Account,
+	settings GrokRuntimeSettings,
+) time.Duration {
+	if account != nil && account.Type == AccountTypeSession {
+		return settings.SessionValidityCheckInterval()
+	}
+	return settings.CapabilityProbeInterval()
+}
+
+func (s *GrokCapabilityProbeService) loopInterval(settings GrokRuntimeSettings) time.Duration {
+	probeInterval := settings.CapabilityProbeInterval()
+	sessionInterval := settings.SessionValidityCheckInterval()
+	if sessionInterval < probeInterval {
+		return sessionInterval
+	}
+	return probeInterval
 }
 
 func (s *GrokCapabilityProbeService) probeAccount(ctx context.Context, account *Account) error {
-	target, err := resolveGrokTransportTarget(account, s.validateUpstreamBaseURL)
+	target, err := resolveGrokTransportTargetWithSettings(
+		account,
+		s.validateUpstreamBaseURL,
+		s.currentRuntimeSettings(ctx),
+	)
 	if err != nil {
 		s.stateSvc.PersistProbeResult(ctx, account, grok.DefaultTestModel, nil, err)
 		return err
-	}
-	if target.Kind != grokTransportKindCompatible {
-		return nil
-	}
-
-	payload := createCompatibleGatewayTestPayload(grok.DefaultTestModel, false, "")
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal grok capability probe payload: %w", err)
 	}
 
 	reqCtx := ctx
@@ -188,12 +225,44 @@ func (s *GrokCapabilityProbeService) probeAccount(ctx context.Context, account *
 	reqCtx, cancel := context.WithTimeout(reqCtx, grokCapabilityProbeTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, target.URL, bytes.NewReader(payloadBytes))
-	if err != nil {
-		return fmt.Errorf("create grok capability probe request: %w", err)
+	candidates := grokCapabilityProbeModelCandidates(account, "")
+	if len(candidates) == 0 {
+		candidates = []string{grok.DefaultTestModel}
 	}
-	req.Header.Set("Content-Type", "application/json")
-	target.Apply(req)
+
+	var (
+		lastModel string
+		lastResp  *http.Response
+		lastErr   error
+	)
+	for _, modelID := range candidates {
+		lastModel = modelID
+		resp, probeErr := s.executeProbeAttempt(reqCtx, account, target, modelID)
+		if probeErr == nil {
+			s.stateSvc.PersistProbeResult(ctx, account, modelID, resp, nil)
+			return nil
+		}
+		lastResp = resp
+		lastErr = probeErr
+	}
+
+	if lastModel == "" {
+		lastModel = grok.DefaultTestModel
+	}
+	s.stateSvc.PersistProbeResult(ctx, account, lastModel, lastResp, lastErr)
+	return lastErr
+}
+
+func (s *GrokCapabilityProbeService) executeProbeAttempt(
+	ctx context.Context,
+	account *Account,
+	target grokTransportTarget,
+	modelID string,
+) (*http.Response, error) {
+	req, err := s.buildProbeRequest(ctx, account, target, modelID)
+	if err != nil {
+		return nil, fmt.Errorf("create grok capability probe request: %w", err)
+	}
 
 	resp, err := s.httpUpstream.DoWithTLS(
 		req,
@@ -203,21 +272,96 @@ func (s *GrokCapabilityProbeService) probeAccount(ctx context.Context, account *
 		s.tlsProfile(account),
 	)
 	if err != nil {
-		probeErr := fmt.Errorf("request failed: %w", err)
-		s.stateSvc.PersistProbeResult(ctx, account, grok.DefaultTestModel, nil, probeErr)
-		return probeErr
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	summary := &http.Response{
+		StatusCode: resp.StatusCode,
+		Status:     resp.Status,
+		Header:     resp.Header.Clone(),
+	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(resp.Body)
-		probeErr := fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body))
-		s.stateSvc.PersistProbeResult(ctx, account, grok.DefaultTestModel, resp, probeErr)
-		return probeErr
+		return summary, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body))
+	}
+	return summary, nil
+}
+
+func (s *GrokCapabilityProbeService) buildProbeRequest(
+	ctx context.Context,
+	account *Account,
+	target grokTransportTarget,
+	modelID string,
+) (*http.Request, error) {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		modelID = grok.DefaultTestModel
+	}
+	switch target.Kind {
+	case grokTransportKindCompatible:
+		payload := createCompatibleGatewayTestPayload(modelID, false, "")
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal grok capability probe payload: %w", err)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, target.URL, bytes.NewReader(payloadBytes))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		target.Apply(req)
+		return req, nil
+	case grokTransportKindSession:
+		payload, err := createGrokSessionTestPayload(modelID, "")
+		if err != nil {
+			return nil, fmt.Errorf("build grok session capability probe payload: %w", err)
+		}
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal grok session capability probe payload: %w", err)
+		}
+		return newGrokSessionJSONRequest(ctx, http.MethodPost, target, payloadBytes, "application/json, text/plain, */*")
+	default:
+		if account == nil {
+			return nil, fmt.Errorf("unsupported grok transport kind: %s", target.Kind)
+		}
+		return nil, fmt.Errorf("unsupported grok transport kind for account %d: %s", account.ID, target.Kind)
+	}
+}
+
+func grokCapabilityProbeModelCandidates(account *Account, requestedModel string) []string {
+	candidates := make([]string, 0, 2)
+	appendCandidate := func(modelID string) {
+		modelID = strings.TrimSpace(modelID)
+		if modelID == "" {
+			return
+		}
+		if canonical := grok.ResolveCanonicalModelID(modelID); canonical != "" {
+			modelID = canonical
+		}
+		for _, existing := range candidates {
+			if existing == modelID {
+				return
+			}
+		}
+		candidates = append(candidates, modelID)
 	}
 
-	s.stateSvc.PersistProbeResult(ctx, account, grok.DefaultTestModel, resp, nil)
-	return nil
+	if explicit := strings.TrimSpace(requestedModel); explicit != "" {
+		appendCandidate(explicit)
+		return candidates
+	}
+
+	if account != nil {
+		switch account.GrokTierState().Normalized {
+		case grok.TierUnknown, grok.TierSuper, grok.TierHeavy:
+			appendCandidate(grokCapabilityTierBootstrapModelID)
+		}
+	}
+	appendCandidate(grok.DefaultTestModel)
+	return candidates
 }
 
 func (s *GrokCapabilityProbeService) validateUpstreamBaseURL(raw string) (string, error) {
@@ -280,11 +424,14 @@ func shouldSeedGrokTierCapabilities(account *Account, tier grok.Tier) bool {
 }
 
 func buildGrokTierCapabilityBaseline(account *Account, tier grok.Tier) map[string]any {
+	return buildGrokTierCapabilityBaselineFromState(account, account.grokCapabilities(), tier)
+}
+
+func buildGrokTierCapabilityBaselineFromState(account *Account, state grokCapabilityState, tier grok.Tier) map[string]any {
 	if account == nil || tier == grok.TierUnknown {
 		return nil
 	}
 
-	state := account.grokCapabilities()
 	modelIDs := make([]string, 0, len(grok.Specs()))
 	enabledSet := make(map[grok.Capability]struct{})
 	for _, spec := range grok.Specs() {

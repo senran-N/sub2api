@@ -2,6 +2,7 @@ package grok
 
 const (
 	QuotaSourceDefault = "default"
+	QuotaSourceLive    = "live"
 
 	QuotaWindowAuto   = "auto"
 	QuotaWindowFast   = "fast"

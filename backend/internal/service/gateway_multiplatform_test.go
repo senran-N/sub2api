@@ -27,6 +27,8 @@ type mockAccountRepoForPlatform struct {
 	accountsByID     map[int64]*Account
 	listPlatformFunc func(ctx context.Context, platform string) ([]Account, error)
 	getByIDCalls     int
+	extraUpdates     []map[string]any
+	runtimeStates    []map[string]any
 }
 
 func (m *mockAccountRepoForPlatform) GetByID(ctx context.Context, id int64) (*Account, error) {
@@ -183,6 +185,19 @@ func (m *mockAccountRepoForPlatform) UpdateSessionWindow(ctx context.Context, id
 	return nil
 }
 func (m *mockAccountRepoForPlatform) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {
+	cloned := cloneAnyMap(updates)
+	m.extraUpdates = append(m.extraUpdates, cloned)
+	m.applyAccountUpdate(id, func(account *Account) {
+		mergeAccountExtra(account, cloned)
+	})
+	return nil
+}
+func (m *mockAccountRepoForPlatform) UpdateGrokRuntimeState(ctx context.Context, id int64, runtimeState map[string]any) error {
+	cloned := cloneAnyMap(runtimeState)
+	m.runtimeStates = append(m.runtimeStates, cloned)
+	m.applyAccountUpdate(id, func(account *Account) {
+		mergeGrokRuntimeState(account, cloned)
+	})
 	return nil
 }
 func (m *mockAccountRepoForPlatform) BulkUpdate(ctx context.Context, ids []int64, updates AccountBulkUpdate) (int64, error) {
@@ -195,6 +210,22 @@ func (m *mockAccountRepoForPlatform) IncrementQuotaUsed(ctx context.Context, id 
 
 func (m *mockAccountRepoForPlatform) ResetQuotaUsed(ctx context.Context, id int64) error {
 	return nil
+}
+
+func (m *mockAccountRepoForPlatform) applyAccountUpdate(id int64, apply func(*Account)) {
+	if apply == nil {
+		return
+	}
+	for i := range m.accounts {
+		if m.accounts[i].ID == id {
+			apply(&m.accounts[i])
+		}
+	}
+	if m.accountsByID != nil {
+		if account := m.accountsByID[id]; account != nil {
+			apply(account)
+		}
+	}
 }
 
 // Verify interface implementation

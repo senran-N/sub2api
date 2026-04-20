@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/senran-N/sub2api/internal/pkg/grok"
 )
 
 // IsRegistrationEnabled 检查是否开放注册
@@ -245,7 +247,7 @@ func (s *SettingService) GetFallbackModel(ctx context.Context, platform string) 
 		defaultModel = "gpt-4o"
 	case PlatformGrok:
 		key = SettingKeyFallbackModelGrok
-		defaultModel = "grok-3"
+		defaultModel = grok.DefaultFallbackModelID()
 	case PlatformGemini:
 		key = SettingKeyFallbackModelGemini
 		defaultModel = "gemini-2.5-pro"

@@ -143,7 +143,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	antigravityTokenProvider := service.ProvideAntigravityTokenProvider(accountRepository, v9, antigravityOAuthService, oAuthRefreshAPI, v7)
 	v13 := repository.NewInternal500CounterCache(redisClient)
 	antigravityGatewayService := service.NewAntigravityGatewayService(accountRepository, v11, schedulerSnapshotService, antigravityTokenProvider, rateLimitService, httpUpstream, settingService, v13)
-	accountTestService := service.NewAccountTestService(accountRepository, geminiTokenProvider, antigravityGatewayService, httpUpstream, configConfig, tlsFingerprintProfileService)
+	accountTestService := service.NewAccountTestService(accountRepository, geminiTokenProvider, antigravityGatewayService, httpUpstream, configConfig, settingService, tlsFingerprintProfileService)
 	crsSyncService := service.NewCRSSyncService(accountRepository, proxyRepository, oAuthService, openAIOAuthService, geminiOAuthService, configConfig)
 	accountHandler := admin.ProvideAccountHandler(adminService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, compatibleUpstreamModelsService, rateLimitService, accountUsageService, accountTestService, concurrencyService, crsSyncService, v4, rpmCache, compositeTokenCacheInvalidator)
 	adminAnnouncementHandler := admin.NewAnnouncementHandler(announcementService)
@@ -178,6 +178,10 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	gatewayService := service.NewGatewayService(accountRepository, groupRepository, usageLogRepository, usageBillingRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, v11, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, identityService, httpUpstream, deferredService, claudeTokenProvider, v4, rpmCache, digestSessionStore, settingService, tlsFingerprintProfileService, channelService, modelPricingResolver)
 	openAITokenProvider := service.ProvideOpenAITokenProvider(accountRepository, v9, openAIOAuthService, oAuthRefreshAPI)
 	openAIGatewayService := service.NewOpenAIGatewayService(accountRepository, usageLogRepository, usageBillingRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, v11, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider, modelPricingResolver, channelService)
+	grokAccountStateService := service.NewGrokAccountStateService(accountRepository)
+	grokTierService := service.NewGrokTierService()
+	grokQuotaSyncService := service.ProvideGrokQuotaSyncService(accountRepository, grokAccountStateService, grokTierService, settingService, httpUpstream, tlsFingerprintProfileService, lifecycleRegistry)
+	grokCapabilityProbeService := service.ProvideGrokCapabilityProbeService(accountRepository, grokAccountStateService, httpUpstream, configConfig, tlsFingerprintProfileService, settingService, lifecycleRegistry)
 	geminiMessagesCompatService := service.NewGeminiMessagesCompatService(accountRepository, groupRepository, v11, schedulerSnapshotService, geminiTokenProvider, rateLimitService, httpUpstream, antigravityGatewayService, configConfig)
 	opsSystemLogSink := service.ProvideOpsSystemLogSink(opsRepository, configConfig, lifecycleRegistry)
 	opsService := service.NewOpsService(opsRepository, settingRepository, configConfig, accountRepository, userRepository, concurrencyService, gatewayService, openAIGatewayService, geminiMessagesCompatService, antigravityGatewayService, opsSystemLogSink)
@@ -240,7 +244,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	engine := server.ProvideRouter(configConfig, routeDependencies)
 	httpServer := server.ProvideHTTPServer(configConfig, engine)
 	claudeCodeProfileSyncService := service.ProvideClaudeCodeProfileSyncStarter(configConfig)
-	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService)
+	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, grokQuotaSyncService, grokCapabilityProbeService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v20,
@@ -281,6 +285,8 @@ func provideCleanup(
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
+	_ *service.GrokQuotaSyncService,
+	_ *service.GrokCapabilityProbeService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), resolveShutdownTimeout(cfg))

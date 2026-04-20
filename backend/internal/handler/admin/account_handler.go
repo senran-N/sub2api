@@ -113,6 +113,21 @@ type CreateAccountRequest struct {
 	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
+type GrokSessionBatchImportRequest struct {
+	RawInput        string   `json:"raw_input" binding:"required"`
+	NamePrefix      string   `json:"name_prefix"`
+	GroupIDs        []int64  `json:"group_ids"`
+	ProxyID         *int64   `json:"proxy_id"`
+	Priority        int      `json:"priority"`
+	Concurrency     int      `json:"concurrency"`
+	RateMultiplier  *float64 `json:"rate_multiplier"`
+	LoadFactor      *int     `json:"load_factor"`
+	Notes           *string  `json:"notes"`
+	DedupeStrategy  string   `json:"dedupe_strategy"`
+	DryRun          bool     `json:"dry_run"`
+	TestAfterCreate bool     `json:"test_after_create"`
+}
+
 // UpdateAccountRequest represents update account request
 // 使用指针类型来区分"未提供"和"设置为0"
 type UpdateAccountRequest struct {
@@ -436,6 +451,53 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		c.Header("X-Idempotency-Replayed", "true")
 	}
 	response.Success(c, result.Data)
+}
+
+// BatchImportGrokSession handles bulk importing Grok session tokens.
+// POST /api/v1/admin/accounts/grok/session/batch-import
+func (h *AccountHandler) BatchImportGrokSession(c *gin.Context) {
+	var req GrokSessionBatchImportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if req.RateMultiplier != nil && *req.RateMultiplier < 0 {
+		response.BadRequest(c, "rate_multiplier must be >= 0")
+		return
+	}
+
+	executeAdminIdempotentJSON(c, "admin.accounts.grok_session.batch_import", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
+		result, err := h.adminService.BatchImportGrokSessionAccounts(ctx, &service.GrokSessionBatchImportInput{
+			RawInput:        req.RawInput,
+			NamePrefix:      req.NamePrefix,
+			GroupIDs:        req.GroupIDs,
+			ProxyID:         req.ProxyID,
+			Priority:        req.Priority,
+			Concurrency:     req.Concurrency,
+			RateMultiplier:  req.RateMultiplier,
+			LoadFactor:      req.LoadFactor,
+			Notes:           req.Notes,
+			DedupeStrategy:  req.DedupeStrategy,
+			DryRun:          req.DryRun,
+			TestAfterCreate: req.TestAfterCreate,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if !req.DryRun && req.TestAfterCreate && h.accountTestService != nil && len(result.CreatedAccountIDs) > 0 {
+			accountIDs := append([]int64(nil), result.CreatedAccountIDs...)
+			runDetachedAdminTask("grok_session_batch_import_probe", 20*time.Minute, func(bgCtx context.Context) {
+				for _, accountID := range accountIDs {
+					if _, testErr := h.accountTestService.RunTestBackground(bgCtx, accountID, ""); testErr != nil {
+						log.Printf("grok session batch import probe failed: account_id=%d err=%v", accountID, testErr)
+					}
+				}
+			})
+		}
+
+		return result, nil
+	})
 }
 
 // Update handles updating an account

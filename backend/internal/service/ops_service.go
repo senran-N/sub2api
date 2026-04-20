@@ -546,6 +546,10 @@ func isSensitiveKey(key string) bool {
 		"private_key",
 		"jwt",
 		"signature",
+		"cf_clearance",
+		"sso",
+		"sso_rw",
+		"sso-rw",
 		"accesskeyid",
 		"secretaccesskey":
 		return true

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -11,9 +12,8 @@ import (
 )
 
 const (
-	defaultGrokQuotaSyncInterval = 15 * time.Minute
-	grokQuotaSyncTimeout         = 30 * time.Second
-	grokTierSourceQuotaWindows   = "quota_windows"
+	grokQuotaSyncTimeout       = 30 * time.Second
+	grokTierSourceQuotaWindows = "quota_windows"
 )
 
 type grokQuotaSyncAccountRepo interface {
@@ -66,11 +66,13 @@ func inferGrokTierSnapshotSource(account *Account, state GrokTierState) string {
 }
 
 type GrokQuotaSyncService struct {
-	accountRepo grokQuotaSyncAccountRepo
-	stateSvc    *GrokAccountStateService
-	tierSvc     *GrokTierService
-	interval    time.Duration
-	now         func() time.Time
+	accountRepo         grokQuotaSyncAccountRepo
+	stateSvc            *GrokAccountStateService
+	tierSvc             *GrokTierService
+	settingSvc          *SettingService
+	httpUpstream        HTTPUpstream
+	tlsFPProfileService *TLSFingerprintProfileService
+	now                 func() time.Time
 
 	stopCh   chan struct{}
 	stopOnce sync.Once
@@ -81,6 +83,7 @@ func NewGrokQuotaSyncService(
 	accountRepo grokQuotaSyncAccountRepo,
 	stateSvc *GrokAccountStateService,
 	tierSvc *GrokTierService,
+	settingSvc *SettingService,
 ) *GrokQuotaSyncService {
 	if tierSvc == nil {
 		tierSvc = NewGrokTierService()
@@ -89,7 +92,7 @@ func NewGrokQuotaSyncService(
 		accountRepo: accountRepo,
 		stateSvc:    stateSvc,
 		tierSvc:     tierSvc,
-		interval:    defaultGrokQuotaSyncInterval,
+		settingSvc:  settingSvc,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -101,9 +104,14 @@ func ProvideGrokQuotaSyncService(
 	accountRepo AccountRepository,
 	stateSvc *GrokAccountStateService,
 	tierSvc *GrokTierService,
+	settingSvc *SettingService,
+	httpUpstream HTTPUpstream,
+	tlsFPProfileService *TLSFingerprintProfileService,
 	lifecycle *LifecycleRegistry,
 ) *GrokQuotaSyncService {
-	svc := NewGrokQuotaSyncService(accountRepo, stateSvc, tierSvc)
+	svc := NewGrokQuotaSyncService(accountRepo, stateSvc, tierSvc, settingSvc)
+	svc.httpUpstream = httpUpstream
+	svc.tlsFPProfileService = tlsFPProfileService
 	if err := svc.SyncNow(context.Background()); err != nil {
 		logger.LegacyPrintf("service.grok_quota_sync", "Warning: startup sync failed: %v", err)
 	}
@@ -111,19 +119,18 @@ func ProvideGrokQuotaSyncService(
 }
 
 func (s *GrokQuotaSyncService) Start() {
-	if s == nil || s.accountRepo == nil || s.stateSvc == nil || s.interval <= 0 {
+	if s == nil || s.accountRepo == nil || s.stateSvc == nil {
 		return
 	}
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		ticker := time.NewTicker(s.interval)
-		defer ticker.Stop()
 
 		for {
+			timer := time.NewTimer(s.currentInterval(context.Background()))
 			select {
-			case <-ticker.C:
+			case <-timer.C:
 				ctx, cancel := context.WithTimeout(context.Background(), grokQuotaSyncTimeout)
 				err := s.SyncNow(ctx)
 				cancel()
@@ -131,10 +138,23 @@ func (s *GrokQuotaSyncService) Start() {
 					logger.LegacyPrintf("service.grok_quota_sync", "Warning: periodic sync failed: %v", err)
 				}
 			case <-s.stopCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return
 			}
 		}
 	}()
+}
+
+func (s *GrokQuotaSyncService) currentInterval(ctx context.Context) time.Duration {
+	if s == nil || s.settingSvc == nil {
+		return DefaultGrokRuntimeSettings().QuotaSyncInterval()
+	}
+	return s.settingSvc.GetGrokRuntimeSettings(ctx).QuotaSyncInterval()
 }
 
 func (s *GrokQuotaSyncService) Stop() {
@@ -158,31 +178,56 @@ func (s *GrokQuotaSyncService) SyncNow(ctx context.Context) error {
 	}
 
 	now := s.now().UTC()
-	for i := range accounts {
-		account := &accounts[i]
-		snapshot := s.buildSyncSnapshot(account, now)
+	runtimeSettings := DefaultGrokRuntimeSettings()
+	if s.settingSvc != nil {
+		runtimeSettings = s.settingSvc.GetGrokRuntimeSettings(ctx)
+	}
+
+	return runGrokParallelAccounts(accounts, runtimeSettings.UsageSyncWorkers(), func(account *Account) error {
+		snapshot, syncErr := s.buildSyncSnapshot(ctx, account, now)
 		if len(snapshot.Tier) == 0 && len(snapshot.QuotaWindows) == 0 && len(snapshot.SyncState) == 0 {
-			continue
+			return syncErr
 		}
 		s.stateSvc.PersistSyncSnapshot(ctx, account, snapshot)
-	}
-	return nil
+		return syncErr
+	})
 }
 
-func (s *GrokQuotaSyncService) buildSyncSnapshot(account *Account, now time.Time) grokStateSyncSnapshot {
+func (s *GrokQuotaSyncService) buildSyncSnapshot(
+	ctx context.Context,
+	account *Account,
+	now time.Time,
+) (grokStateSyncSnapshot, error) {
 	if account == nil || NormalizeCompatibleGatewayPlatform(account.Platform) != PlatformGrok {
-		return grokStateSyncSnapshot{}
+		return grokStateSyncSnapshot{}, nil
 	}
 
 	tierSnapshot := s.tierSnapshot(account)
 	normalizedTier := grokNormalizeTier(getStringFromMaps(tierSnapshot, nil, "normalized"))
 	quotaWindows := buildGrokSyncedQuotaWindows(account, normalizedTier, now)
-
 	syncState := cloneAnyMap(grokNestedMap(account.grokExtraMap()["sync_state"]))
-	if len(syncState) == 0 {
-		syncState = make(map[string]any, 1)
+
+	liveQuotaAttempted := s.shouldFetchLiveSessionQuota(account)
+	var syncErr error
+	if liveQuotaAttempted {
+		liveResult, err := s.fetchLiveSessionQuota(ctx, account, now)
+		if err != nil {
+			syncErr = err
+		} else if liveResult != nil {
+			if liveResult.Tier != grok.TierUnknown {
+				normalizedTier = liveResult.Tier
+				tierSnapshot = applyLiveGrokTierSnapshot(tierSnapshot, liveResult.Tier)
+			}
+			quotaWindows = buildGrokSyncedQuotaWindowsFromRaw(liveResult.QuotaWindows, normalizedTier, now)
+			syncState = buildGrokQuotaSyncState(syncState, now, true, liveResult.StatusCode, nil)
+		}
+		if syncErr != nil {
+			syncState = buildGrokQuotaSyncState(syncState, now, true, grokSessionRateLimitStatusCode(syncErr), syncErr)
+		}
 	}
-	syncState["last_sync_at"] = now.Format(time.RFC3339)
+	if !liveQuotaAttempted {
+		syncState = buildGrokQuotaSyncState(syncState, now, false, 0, nil)
+	}
 
 	return grokStateSyncSnapshot{
 		AuthMode:     defaultGrokAuthMode(account.Type),
@@ -190,7 +235,7 @@ func (s *GrokQuotaSyncService) buildSyncSnapshot(account *Account, now time.Time
 		QuotaWindows: quotaWindows,
 		Capabilities: buildGrokCapabilitySyncSnapshot(account, normalizedTier),
 		SyncState:    syncState,
-	}
+	}, syncErr
 }
 
 func (s *GrokQuotaSyncService) tierSnapshot(account *Account) map[string]any {
@@ -204,9 +249,11 @@ func buildGrokSyncedQuotaWindows(account *Account, tier grok.Tier, now time.Time
 	if account == nil {
 		return nil
 	}
+	return buildGrokSyncedQuotaWindowsFromRaw(account.grokExtraMap()["quota_windows"], tier, now)
+}
 
-	grokExtra := account.grokExtraMap()
-	windows := normalizeGrokQuotaWindows(grokExtra["quota_windows"], tier)
+func buildGrokSyncedQuotaWindowsFromRaw(raw any, tier grok.Tier, now time.Time) map[string]any {
+	windows := normalizeGrokQuotaWindows(raw, tier)
 	if len(windows) == 0 {
 		return nil
 	}
@@ -235,4 +282,63 @@ func buildGrokSyncedQuotaWindows(account *Account, tier grok.Tier, now time.Time
 	}
 
 	return windows
+}
+
+func buildGrokQuotaSyncState(
+	current map[string]any,
+	now time.Time,
+	attemptedLiveFetch bool,
+	statusCode int,
+	syncErr error,
+) map[string]any {
+	syncState := cloneAnyMap(current)
+	if len(syncState) == 0 {
+		syncState = make(map[string]any, 4)
+	}
+
+	timestamp := now.UTC().Format(time.RFC3339)
+	syncState["last_sync_at"] = timestamp
+	if !attemptedLiveFetch {
+		return syncState
+	}
+
+	if statusCode > 0 {
+		syncState["last_sync_status_code"] = statusCode
+	} else {
+		delete(syncState, "last_sync_status_code")
+	}
+
+	if syncErr == nil {
+		syncState["last_sync_ok_at"] = timestamp
+		delete(syncState, "last_sync_error")
+		delete(syncState, "last_sync_error_at")
+		return syncState
+	}
+
+	syncState["last_sync_error_at"] = timestamp
+	syncState["last_sync_error"] = strings.TrimSpace(syncErr.Error())
+	return syncState
+}
+
+func applyLiveGrokTierSnapshot(snapshot map[string]any, tier grok.Tier) map[string]any {
+	if tier == grok.TierUnknown {
+		return cloneAnyMap(snapshot)
+	}
+
+	merged := cloneAnyMap(snapshot)
+	if len(merged) == 0 {
+		merged = make(map[string]any, 3)
+	}
+	merged["normalized"] = string(tier)
+	merged["source"] = grokTierSourceUsageAPI
+	merged["confidence"] = 1.0
+	return merged
+}
+
+func grokSessionRateLimitStatusCode(err error) int {
+	var rateErr *grokSessionRateLimitsError
+	if errors.As(err, &rateErr) && rateErr != nil {
+		return rateErr.StatusCode
+	}
+	return 0
 }

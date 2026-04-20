@@ -282,6 +282,8 @@ const getPlatformChipClasses = (platform: string) => {
       return 'theme-chip theme-chip--regular theme-chip--brand-orange inline-flex items-center gap-1.5'
     case 'openai':
       return 'theme-chip theme-chip--regular theme-chip--success inline-flex items-center gap-1.5'
+    case 'grok':
+      return 'theme-chip theme-chip--regular theme-chip--brand-rose inline-flex items-center gap-1.5'
     case 'antigravity':
       return 'theme-chip theme-chip--regular theme-chip--brand-purple inline-flex items-center gap-1.5'
     default:

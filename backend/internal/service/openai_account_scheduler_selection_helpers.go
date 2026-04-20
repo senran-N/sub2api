@@ -14,13 +14,7 @@ func isCompatibleGatewayRequestedModelAvailableForScheduling(
 	requestedModel string,
 	platform string,
 ) bool {
-	if requestedModel == "" {
-		return true
-	}
-	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
-		return defaultGrokAccountSelector.IsRuntimeEligibleWithContext(ctx, account, requestedModel)
-	}
-	return isCompatibleGatewayAccountModelEligible(account, requestedModel, platform)
+	return compatibleRequestedModelAvailableForScheduling(ctx, account, requestedModel, platform)
 }
 
 func normalizeOpenAISchedulerTopK(configuredTopK int, candidateCount int) int {

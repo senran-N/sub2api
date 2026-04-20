@@ -42,11 +42,8 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 		writeResponsesError(c, http.StatusInternalServerError, "api_error", "Failed to create Grok upstream request")
 		return
 	}
-	req.Header.Set("Accept", "application/json, text/event-stream, text/plain, */*")
+	applyGrokSessionBrowserHeaders(req.Header, preparation.target, "application/json, text/event-stream, text/plain, */*")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", grokWebBaseURL)
-	req.Header.Set("Referer", grokWebBaseURL+"/")
-	req.Header.Set("User-Agent", grokSessionProbeUserAgent)
 	preparation.target.Apply(req)
 
 	proxyURL := ""

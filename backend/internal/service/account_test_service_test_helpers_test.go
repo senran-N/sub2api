@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/tlsfingerprint"
+	"github.com/stretchr/testify/require"
 )
 
 type queuedHTTPUpstream struct {
@@ -38,6 +40,13 @@ func newJSONResponse(status int, body string) *http.Response {
 		Header:     make(http.Header),
 		Body:       io.NopCloser(strings.NewReader(body)),
 	}
+}
+
+func requireGrokSessionCookieHeader(t *testing.T, rawSessionToken string) string {
+	t.Helper()
+	cookieHeader, err := BuildGrokSessionCookieHeader(rawSessionToken, "", "")
+	require.NoError(t, err)
+	return cookieHeader
 }
 
 func newAccountTestContext() (*gin.Context, *httptest.ResponseRecorder) {

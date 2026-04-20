@@ -79,6 +79,8 @@ func provideCleanup(
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
+	_ *service.GrokQuotaSyncService,
+	_ *service.GrokCapabilityProbeService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), resolveShutdownTimeout(cfg))

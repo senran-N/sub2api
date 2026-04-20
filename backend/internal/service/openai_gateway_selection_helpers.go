@@ -9,18 +9,15 @@ import (
 )
 
 func resolveOpenAISelectionPlatform(ctx context.Context) string {
-	return ResolveCompatibleGatewayPlatform(ctx, PlatformOpenAI)
+	return resolveCompatibleSelectionPlatform(ctx, PlatformOpenAI)
 }
 
 func isOpenAISelectionPlatformAccount(account *Account, platform string) bool {
-	if account == nil {
-		return false
-	}
-	return NormalizeCompatibleGatewayPlatform(account.Platform) == ResolveCompatibleGatewayPlatform(context.TODO(), platform)
+	return isCompatibleSelectionPlatformAccount(account, platform)
 }
 
 func isOpenAIAccountBaseEligibleForPlatform(account *Account, platform string) bool {
-	return isOpenAISelectionPlatformAccount(account, platform) && account.IsSchedulable()
+	return isCompatibleAccountBaseEligibleForPlatform(account, platform)
 }
 
 func isOpenAIAccountRuntimeEligibleForPlatformWithContext(
@@ -29,23 +26,7 @@ func isOpenAIAccountRuntimeEligibleForPlatformWithContext(
 	requestedModel string,
 	platform string,
 ) bool {
-	switch ResolveCompatibleGatewayPlatform(context.TODO(), platform) {
-	case PlatformGrok:
-		return defaultGrokAccountSelector.IsRuntimeEligibleWithContext(ctx, account, requestedModel)
-	}
-	if account == nil || !isOpenAISelectionPlatformAccount(account, platform) {
-		return false
-	}
-	if !account.IsSchedulable() {
-		return false
-	}
-	if oauthSelectionCredentialIssue(account) != "" {
-		return false
-	}
-	if requestedModel != "" && !isCompatibleGatewayAccountModelEligible(account, requestedModel, platform) {
-		return false
-	}
-	return true
+	return isCompatibleAccountRuntimeEligibleForPlatformWithContext(ctx, account, requestedModel, platform)
 }
 
 func isOpenAIAccountModelEligible(account *Account, requestedModel string) bool {
@@ -63,12 +44,7 @@ func isOpenAIAccountModelEligible(account *Account, requestedModel string) bool 
 }
 
 func isCompatibleGatewayAccountModelEligible(account *Account, requestedModel string, platform string) bool {
-	switch ResolveCompatibleGatewayPlatform(context.TODO(), platform) {
-	case PlatformGrok:
-		return defaultGrokAccountSelector.IsModelEligible(account, requestedModel)
-	default:
-		return isOpenAIAccountModelEligible(account, requestedModel)
-	}
+	return isCompatibleAccountModelEligible(account, requestedModel, platform)
 }
 
 // isOpenAIAccountExcluded reports whether the account is in exclusion set.
@@ -105,21 +81,7 @@ func filterSchedulableOpenAICandidatesForPlatformWithContext(
 	excludedIDs map[int64]struct{},
 	platform string,
 ) []*Account {
-	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
-		return defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, excludedIDs)
-	}
-	candidates := make([]*Account, 0, len(accounts))
-	for i := range accounts {
-		account := &accounts[i]
-		if isOpenAIAccountExcluded(excludedIDs, account.ID) {
-			continue
-		}
-		if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, account, requestedModel, platform) {
-			continue
-		}
-		candidates = append(candidates, account)
-	}
-	return candidates
+	return filterSchedulableCompatibleCandidatesForPlatformWithContext(ctx, accounts, requestedModel, excludedIDs, platform)
 }
 
 func filterSchedulableOpenAIAccountPointersForPlatformWithContext(
@@ -129,23 +91,7 @@ func filterSchedulableOpenAIAccountPointersForPlatformWithContext(
 	excludedIDs map[int64]struct{},
 	platform string,
 ) []*Account {
-	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
-		return defaultGrokAccountSelector.FilterSchedulableAccountPointersWithContext(ctx, accounts, requestedModel, excludedIDs)
-	}
-	candidates := make([]*Account, 0, len(accounts))
-	for _, account := range accounts {
-		if account == nil {
-			continue
-		}
-		if isOpenAIAccountExcluded(excludedIDs, account.ID) {
-			continue
-		}
-		if !isOpenAIAccountRuntimeEligibleForPlatformWithContext(ctx, account, requestedModel, platform) {
-			continue
-		}
-		candidates = append(candidates, account)
-	}
-	return candidates
+	return filterSchedulableCompatibleAccountPointersForPlatformWithContext(ctx, accounts, requestedModel, excludedIDs, platform)
 }
 
 // normalizeOpenAIWaitLoadMap converts nil load map to an empty map for wait-plan scoring.

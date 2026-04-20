@@ -109,12 +109,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { allModels, getModelsByPlatform } from '@/composables/useModelWhitelist'
+import {
+  ensureModelCatalogLoaded,
+  getAllModelOptions,
+  getModelsByPlatform
+} from '@/composables/useModelWhitelist'
 
 const { t } = useI18n()
 
@@ -151,9 +155,18 @@ const normalizedPlatforms = computed(() => {
   )
 })
 
+watch(
+  normalizedPlatforms,
+  (platforms) => {
+    const catalogPlatforms = platforms.length > 0 ? platforms : ['grok']
+    void Promise.all(catalogPlatforms.map((platform) => ensureModelCatalogLoaded(platform)))
+  },
+  { immediate: true }
+)
+
 const availableOptions = computed(() => {
   if (normalizedPlatforms.value.length === 0) {
-    return allModels
+    return getAllModelOptions()
   }
 
   const allowedModels = new Set<string>()
@@ -163,7 +176,7 @@ const availableOptions = computed(() => {
     }
   }
 
-  return allModels.filter(model => allowedModels.has(model.value))
+  return getAllModelOptions().filter(model => allowedModels.has(model.value))
 })
 
 const filteredModels = computed(() => {
@@ -214,7 +227,10 @@ const handleEnter = () => {
   if (!isComposing.value) addCustom()
 }
 
-const fillRelated = () => {
+const fillRelated = async () => {
+  await Promise.all(
+    normalizedPlatforms.value.map((platform) => ensureModelCatalogLoaded(platform))
+  )
   const newModels = [...props.modelValue]
   for (const platform of normalizedPlatforms.value) {
     for (const model of getModelsByPlatform(platform)) {

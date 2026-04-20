@@ -1,6 +1,6 @@
 import type { GroupPlatform } from '@/types'
 
-export const platformOrder: GroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity']
+export const platformOrder: GroupPlatform[] = ['anthropic', 'openai', 'gemini', 'grok', 'antigravity']
 
 export function joinClassNames(...classNames: Array<string | false | null | undefined>): string {
   return classNames.filter(Boolean).join(' ')
@@ -11,6 +11,7 @@ export function getPlatformTextClass(platform: GroupPlatform | string): string {
     case 'anthropic': return 'channel-view__tone-text channel-view__tone-text--brand-orange'
     case 'openai': return 'channel-view__tone-text channel-view__tone-text--success'
     case 'gemini': return 'channel-view__tone-text channel-view__tone-text--info'
+    case 'grok': return 'channel-view__tone-text channel-view__tone-text--brand-rose'
     case 'antigravity': return 'channel-view__tone-text channel-view__tone-text--brand-purple'
     default: return 'channel-view__text-muted'
   }
@@ -21,6 +22,7 @@ export function getRateBadgeClass(platform: GroupPlatform | string): string {
     case 'anthropic': return 'theme-chip theme-chip--compact theme-chip--brand-orange'
     case 'openai': return 'theme-chip theme-chip--compact theme-chip--success'
     case 'gemini': return 'theme-chip theme-chip--compact theme-chip--info'
+    case 'grok': return 'theme-chip theme-chip--compact theme-chip--brand-rose'
     case 'antigravity': return 'theme-chip theme-chip--compact theme-chip--brand-purple'
     default: return 'theme-chip theme-chip--compact theme-chip--neutral'
   }

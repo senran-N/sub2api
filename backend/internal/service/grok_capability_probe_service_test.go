@@ -34,7 +34,7 @@ func (r *grokCapabilityProbeRepoStub) UpdateExtra(_ context.Context, id int64, u
 	return nil
 }
 
-func TestGrokCapabilityProbeServiceProbeNowTargetsOnlyUnknownTierCompatibleAccounts(t *testing.T) {
+func TestGrokCapabilityProbeServiceProbeNowTargetsUnknownTierAccountsAcrossTransports(t *testing.T) {
 	repo := &grokCapabilityProbeRepoStub{
 		accounts: []Account{
 			{
@@ -68,11 +68,19 @@ func TestGrokCapabilityProbeServiceProbeNowTargetsOnlyUnknownTierCompatibleAccou
 				Type:        AccountTypeSession,
 				Status:      StatusActive,
 				Schedulable: true,
+				Credentials: map[string]any{
+					"session_token": "session-cookie-303",
+				},
 			},
 		},
 	}
 	stateSvc := NewGrokAccountStateService(repo)
-	upstream := &queuedHTTPUpstream{responses: []*http.Response{newJSONResponse(http.StatusOK, `{"id":"ok"}`)}}
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"id":"ok"}`),
+			newJSONResponse(http.StatusOK, `{"conversationId":"conv_303"}`),
+		},
+	}
 	svc := NewGrokCapabilityProbeService(
 		repo,
 		stateSvc,
@@ -83,6 +91,7 @@ func TestGrokCapabilityProbeServiceProbeNowTargetsOnlyUnknownTierCompatibleAccou
 			},
 		},
 		nil,
+		nil,
 	)
 	probeNow := time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return probeNow }
@@ -90,16 +99,70 @@ func TestGrokCapabilityProbeServiceProbeNowTargetsOnlyUnknownTierCompatibleAccou
 
 	err := svc.ProbeNow(context.Background())
 	require.NoError(t, err)
-	require.Len(t, upstream.requests, 1)
+	require.Len(t, upstream.requests, 2)
 	require.Equal(t, "https://api.x.ai/v1/responses", upstream.requests[0].URL.String())
-	require.Equal(t, []int64{301}, repo.updatedIDs)
-	require.Equal(t, grok.DefaultTestModel, requestBodyModel(t, upstream.requests[0]))
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[1].URL.String())
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie-303"), upstream.requests[1].Header.Get("Cookie"))
+	require.Equal(t, grokSessionProbeUserAgent, upstream.requests[1].Header.Get("User-Agent"))
+	require.Equal(t, []int64{301, 303}, repo.updatedIDs)
+	require.Equal(t, grokCapabilityTierBootstrapModelID, requestBodyModel(t, upstream.requests[0]))
+	require.Equal(t, grokSessionModeExpert, requestBodyModeID(t, upstream.requests[1]))
 
 	grokExtra := grokExtraMap(repo.updatedExtra[0])
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_at"))
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_ok_at"))
-	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
-	require.ElementsMatch(t, []string{grok.DefaultTestModel}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+	require.ElementsMatch(t, []string{"chat", "image", "image_edit", "video", "voice"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast", "grok-4-fast-reasoning", "grok-4-voice", "grok-imagine-image", "grok-imagine-image-edit", "grok-imagine-image-pro", "grok-imagine-video"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+
+	sessionExtra := grokExtraMap(repo.updatedExtra[1])
+	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(sessionExtra, "sync_state", "last_probe_at"))
+	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(sessionExtra, "sync_state", "last_probe_ok_at"))
+	require.ElementsMatch(t, []string{"chat", "image", "image_edit", "video", "voice"}, grokParseStringSlice(getNestedGrokValue(sessionExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast", "grok-4-fast-reasoning", "grok-4-voice", "grok-imagine-image", "grok-imagine-image-edit", "grok-imagine-image-pro", "grok-imagine-video"}, grokParseStringSlice(getNestedGrokValue(sessionExtra, "capabilities", "models")))
+}
+
+func TestGrokCapabilityProbeServiceProbeNowFallsBackToDefaultProbeWhenBootstrapModelFails(t *testing.T) {
+	repo := &grokCapabilityProbeRepoStub{
+		accounts: []Account{
+			{
+				ID:          303,
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"session_token": "session-cookie-303",
+				},
+			},
+		},
+	}
+	stateSvc := NewGrokAccountStateService(repo)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusForbidden, `{"error":"tier required"}`),
+			newJSONResponse(http.StatusOK, `{"conversationId":"conv_303"}`),
+		},
+	}
+	svc := NewGrokCapabilityProbeService(
+		repo,
+		stateSvc,
+		upstream,
+		&config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+		nil,
+		nil,
+	)
+
+	err := svc.ProbeNow(context.Background())
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 2)
+	require.Equal(t, grokSessionModeExpert, requestBodyModeID(t, upstream.requests[0]))
+	require.Equal(t, grokSessionModeAuto, requestBodyModeID(t, upstream.requests[1]))
+	require.Len(t, repo.updatedExtra, 1)
+	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtraMap(repo.updatedExtra[0]), "capabilities", "operations")))
 }
 
 func TestBuildGrokCapabilitySyncSnapshotWidensSimpleChatProbeWhenTierKnown(t *testing.T) {
@@ -119,4 +182,137 @@ func TestBuildGrokCapabilitySyncSnapshotWidensSimpleChatProbeWhenTierKnown(t *te
 	capabilities := buildGrokCapabilitySyncSnapshot(account, grok.TierBasic)
 	require.ElementsMatch(t, []string{"chat", "image"}, grokParseStringSlice(capabilities["operations"]))
 	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast"}, grokParseStringSlice(capabilities["models"]))
+}
+
+func TestGrokCapabilityProbeServiceShouldProbeAccountUsesRuntimeSettings(t *testing.T) {
+	settingSvc := NewSettingService(&grokRuntimeSettingRepoStub{
+		values: map[string]string{
+			SettingKeyGrokCapabilityProbeIntervalSeconds: "60",
+		},
+	}, nil)
+
+	svc := NewGrokCapabilityProbeService(
+		nil,
+		nil,
+		nil,
+		&config.Config{},
+		nil,
+		settingSvc,
+	)
+	now := time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)
+	lastProbeAt := now.Add(-2 * time.Minute)
+	account := &Account{
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"api_key": "xai-test-key",
+		},
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"sync_state": map[string]any{
+					"last_probe_at": lastProbeAt.Format(time.RFC3339),
+				},
+				"capabilities": map[string]any{
+					"models": []any{"grok-3"},
+				},
+			},
+		},
+	}
+
+	require.True(t, svc.shouldProbeAccount(account, now, svc.currentInterval(context.Background())))
+}
+
+func TestGrokCapabilityProbeServiceShouldProbeKnownTierAccountsWhenProbeRefreshIsDue(t *testing.T) {
+	svc := NewGrokCapabilityProbeService(nil, nil, nil, &config.Config{}, nil, nil)
+	now := time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)
+	lastProbeAt := now.Add(-8 * time.Hour)
+	account := &Account{
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"session_token": "grok-session-token",
+		},
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "super",
+				},
+				"sync_state": map[string]any{
+					"last_probe_at": lastProbeAt.Format(time.RFC3339),
+				},
+				"capabilities": map[string]any{
+					"operations": []any{"chat", "image", "video"},
+					"models":     []any{"grok-3", "grok-imagine-video"},
+				},
+			},
+		},
+	}
+
+	require.True(t, svc.shouldProbeAccount(account, now, DefaultGrokRuntimeSettings().CapabilityProbeInterval()))
+	require.Equal(t, []string{grokCapabilityTierBootstrapModelID, grok.DefaultTestModel}, grokCapabilityProbeModelCandidates(account, ""))
+}
+
+func TestGrokCapabilityProbeServiceShouldProbeSessionAccounts(t *testing.T) {
+	svc := NewGrokCapabilityProbeService(nil, nil, nil, &config.Config{}, nil, nil)
+	now := time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)
+	account := &Account{
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"session_token": "grok-session-token",
+		},
+	}
+
+	require.True(t, svc.shouldProbeAccount(account, now, DefaultGrokRuntimeSettings().CapabilityProbeInterval()))
+}
+
+func TestBuildGrokProbeCapabilitiesWidensKnownTierBaseline(t *testing.T) {
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeSession,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "basic",
+				},
+			},
+		},
+	}
+
+	capabilities := buildGrokProbeCapabilities(account, "grok-3-fast")
+	require.ElementsMatch(t, []string{"chat", "image"}, grokParseStringSlice(capabilities["operations"]))
+	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast"}, grokParseStringSlice(capabilities["models"]))
+}
+
+func TestGrokTierStateInfersHighTierFromCapabilityModelsWithoutDowngradingBasicProbe(t *testing.T) {
+	heavyAccount := &Account{
+		Platform: PlatformGrok,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"capabilities": map[string]any{
+					"models": []any{"grok-4-fast-reasoning"},
+				},
+			},
+		},
+	}
+	require.Equal(t, grok.TierHeavy, heavyAccount.GrokTierState().Normalized)
+	require.Equal(t, "capability_models", heavyAccount.GrokTierState().Source)
+
+	basicOnlyAccount := &Account{
+		Platform: PlatformGrok,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"capabilities": map[string]any{
+					"models": []any{"grok-3"},
+				},
+			},
+		},
+	}
+	require.Equal(t, grok.TierUnknown, basicOnlyAccount.GrokTierState().Normalized)
 }

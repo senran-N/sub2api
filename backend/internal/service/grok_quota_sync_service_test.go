@@ -81,7 +81,7 @@ func TestGrokQuotaSyncServiceSyncNowPersistsNormalizedSchedulerState(t *testing.
 		},
 	}
 	stateSvc := NewGrokAccountStateService(repo)
-	quotaSvc := NewGrokQuotaSyncService(repo, stateSvc, NewGrokTierService())
+	quotaSvc := NewGrokQuotaSyncService(repo, stateSvc, NewGrokTierService(), nil)
 	quotaSvc.now = func() time.Time {
 		return time.Date(2026, 4, 19, 8, 0, 0, 0, time.UTC)
 	}
@@ -132,7 +132,7 @@ func TestGrokQuotaSyncServiceSyncNowWidensSimpleChatProbeCapabilitiesOnceTierIsK
 		},
 	}
 	stateSvc := NewGrokAccountStateService(repo)
-	quotaSvc := NewGrokQuotaSyncService(repo, stateSvc, NewGrokTierService())
+	quotaSvc := NewGrokQuotaSyncService(repo, stateSvc, NewGrokTierService(), nil)
 	quotaSvc.now = func() time.Time {
 		return time.Date(2026, 4, 19, 9, 0, 0, 0, time.UTC)
 	}
@@ -146,4 +146,15 @@ func TestGrokQuotaSyncServiceSyncNowWidensSimpleChatProbeCapabilitiesOnceTierIsK
 	require.Equal(t, "basic", getNestedGrokValue(grokExtra, "tier", "normalized"))
 	require.ElementsMatch(t, []string{"chat", "image"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
 	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+}
+
+func TestGrokQuotaSyncServiceCurrentIntervalUsesRuntimeSettings(t *testing.T) {
+	settingSvc := NewSettingService(&grokRuntimeSettingRepoStub{
+		values: map[string]string{
+			SettingKeyGrokQuotaSyncIntervalSeconds: "120",
+		},
+	}, nil)
+
+	svc := NewGrokQuotaSyncService(nil, nil, nil, settingSvc)
+	require.Equal(t, 2*time.Minute, svc.currentInterval(context.Background()))
 }

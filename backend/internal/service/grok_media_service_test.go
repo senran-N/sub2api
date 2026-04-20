@@ -11,12 +11,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 type grokMediaSettingRepoStub struct {
@@ -414,6 +416,144 @@ func TestGrokMediaServiceHandleVideos_ContentFollowupDoesNotRewriteStatus(t *tes
 	require.Equal(t, "/v1/videos/job_123/content", upstream.requests[0].URL.Path)
 }
 
+func TestGrokMediaServiceHandleImages_SessionAccountUsesProviderTransport(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","prompt":"cat"}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newGrokSessionImageGenerationResponse("https://media.example/image.png"),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokSessionMediaAccount(91, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "basic",
+					},
+				},
+			}),
+		},
+	}
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, nil, nil)
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/images/generations", body)
+	handled := svc.HandleImages(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[0].URL.String())
+	require.Equal(t, "sso=session-token-91; sso-rw=session-token-91-rw", upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, grokWebBaseURL, upstream.requests[0].Header.Get("Origin"))
+	require.Equal(t, grokWebBaseURL+"/", upstream.requests[0].Header.Get("Referer"))
+	require.Equal(t, grokSessionProbeUserAgent, upstream.requests[0].Header.Get("User-Agent"))
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(readTestRequestBody(t, upstream.requests[0])), &payload))
+	require.Equal(t, "Drawing: cat", payload["message"])
+	require.Equal(t, true, payload["disableTextFollowUps"])
+	require.Equal(t, true, payload["enableImageGeneration"])
+	require.Equal(t, true, payload["enableImageStreaming"])
+	require.Equal(t, false, payload["returnImageBytes"])
+	require.Equal(t, false, payload["returnRawGrokInXaiRequest"])
+	require.Equal(t, float64(1), payload["imageGenerationCount"])
+	require.Equal(t, grokSessionModeFast, payload["modeId"])
+	require.Equal(t, "https://media.example/image.png", gjson.Get(rec.Body.String(), "data.0.url").String())
+}
+
+func TestGrokMediaServiceHandleImages_SessionAccountUsesConfiguredRuntimeSessionBaseURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","prompt":"cat"}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newGrokSessionImageGenerationResponse("https://media.example/image.png"),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokSessionMediaAccount(191, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "basic",
+					},
+				},
+			}),
+		},
+	}
+	settingService := NewSettingService(&grokMediaSettingRepoStub{
+		values: map[string]string{
+			SettingKeyGrokSessionBaseURL: "https://session.grok.example/root",
+		},
+	}, testConfig())
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:    repo,
+		cfg:            testConfig(),
+		httpUpstream:   upstream,
+		settingService: settingService,
+	}, nil, nil)
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/images/generations", body)
+	handled := svc.HandleImages(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://session.grok.example/root/rest/app-chat/conversations/new", upstream.requests[0].URL.String())
+	require.Equal(t, "https://session.grok.example/root", upstream.requests[0].Header.Get("Origin"))
+	require.Equal(t, "https://session.grok.example/root/", upstream.requests[0].Header.Get("Referer"))
+	require.Equal(t, "https://media.example/image.png", gjson.Get(rec.Body.String(), "data.0.url").String())
+}
+
+func TestGrokMediaServiceHandleVideos_FollowupUsesBoundSessionAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	videoJobs := &stubGrokVideoJobRepository{
+		records: map[string]GrokVideoJobRecord{
+			"job_123": {
+				JobID:            "job_123",
+				AccountID:        177,
+				CanonicalModel:   "grok-imagine-video",
+				NormalizedStatus: "completed",
+				UpstreamStatus:   "completed",
+				CreatedAt:        time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC),
+				UpdatedAt:        time.Date(2026, 4, 20, 12, 6, 0, 0, time.UTC),
+			},
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accountsByID: map[int64]*Account{
+			177: accountPtr(newSchedulableGrokSessionMediaAccount(177, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			})),
+		},
+	}
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: &queuedHTTPUpstream{},
+	}, videoJobs, nil)
+
+	c, rec := newGrokMediaTestContext(http.MethodGet, "/v1/videos/job_123", nil)
+	handled := svc.HandleVideos(c, nil, nil)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, repo.getByIDCalls)
+	require.Empty(t, videoJobs.patches)
+	require.JSONEq(t, `{"id":"job_123","object":"video","created_at":1776686400,"status":"completed","model":"grok-imagine-video","progress":100,"prompt":"","seconds":"6","size":"720x1280","quality":"standard","completed_at":1776686760}`, rec.Body.String())
+}
+
 func TestGrokMediaServiceHandleImages_RewritesToLocalProxyAssetURL(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -771,6 +911,14 @@ func newGrokMediaTestContext(method, path string, body []byte) (*gin.Context, *h
 	return c, rec
 }
 
+func newGrokSessionImageGenerationResponse(url string) *http.Response {
+	payload := strings.Join([]string{
+		`{"result":{"response":{"token":"partial"}}}`,
+		`{"result":{"response":{"modelResponse":{"generatedImageUrls":["` + url + `"]}}}}`,
+	}, "\n")
+	return newJSONResponse(http.StatusOK, payload)
+}
+
 func newSchedulableGrokMediaAccount(id int64, extra map[string]any) Account {
 	return Account{
 		ID:          id,
@@ -782,6 +930,21 @@ func newSchedulableGrokMediaAccount(id int64, extra map[string]any) Account {
 		Credentials: map[string]any{
 			"api_key":  "sk-grok-media",
 			"base_url": "https://grok.example/v1",
+		},
+		Extra: extra,
+	}
+}
+
+func newSchedulableGrokSessionMediaAccount(id int64, extra map[string]any) Account {
+	return Account{
+		ID:          id,
+		Name:        "grok-media-session",
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"session_token": "sso=session-token-" + strconv.FormatInt(id, 10) + "; sso-rw=session-token-" + strconv.FormatInt(id, 10) + "-rw",
 		},
 		Extra: extra,
 	}

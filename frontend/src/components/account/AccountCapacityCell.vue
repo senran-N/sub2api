@@ -1,5 +1,30 @@
 <template>
   <div class="flex flex-col gap-1.5">
+    <div v-if="grokQuotaWindows.length > 0" class="flex flex-wrap gap-1">
+      <span
+        v-for="window in grokQuotaWindows"
+        :key="window.name"
+        :class="grokQuotaWindowClass(window)"
+        :title="grokQuotaWindowTitle(window)"
+      >
+        {{ t(`admin.accounts.grok.runtime.windows.${window.name}`) }}
+        <span class="account-capacity-cell__separator"> </span>
+        <span class="font-mono">{{ window.remaining }}</span>
+        <span class="account-capacity-cell__separator">/</span>
+        <span class="font-mono">{{ window.total }}</span>
+      </span>
+    </div>
+
+    <div v-if="grokCapabilities.length > 0" class="flex flex-wrap gap-1">
+      <span
+        v-for="capability in grokCapabilities"
+        :key="capability"
+        :class="grokCapabilityClass(capability)"
+      >
+        {{ t(`admin.accounts.grok.runtime.capabilities.${capability}`) }}
+      </span>
+    </div>
+
     <div class="flex items-center gap-1.5">
       <span :class="concurrencyClass">
         <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -55,6 +80,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/types'
+import type { GrokRuntimeQuotaWindowInfo } from '@/utils/grokAccountRuntime'
+import { getGrokAccountRuntime } from '@/utils/grokAccountRuntime'
 import QuotaBadge from './QuotaBadge.vue'
 
 type CapacityTone = 'neutral' | 'success' | 'warning' | 'brand' | 'danger'
@@ -64,6 +91,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const grokRuntime = computed(() => getGrokAccountRuntime(props.account))
 
 const buildMetricBadgeClass = (tone: CapacityTone, compact = true) => [
   'theme-chip',
@@ -73,6 +101,16 @@ const buildMetricBadgeClass = (tone: CapacityTone, compact = true) => [
 ]
 
 const currentConcurrency = computed(() => props.account.current_concurrency ?? 0)
+
+const grokQuotaWindows = computed(() => {
+  const windows = grokRuntime.value?.quotaWindows.filter((window) => window.total > 0 || window.hasSignal) ?? []
+  const priority = ['auto', 'heavy', 'fast', 'expert']
+  return windows
+    .sort((left, right) => priority.indexOf(left.name) - priority.indexOf(right.name))
+    .slice(0, 2)
+})
+
+const grokCapabilities = computed(() => grokRuntime.value?.capabilities.operations.slice(0, 4) ?? [])
 
 const isAnthropicOAuthOrSetupToken = computed(() => {
   return (
@@ -115,6 +153,48 @@ const concurrencyClass = computed(() => {
   }
   return buildMetricBadgeClass('neutral', false)
 })
+
+function grokQuotaWindowClass(window: GrokRuntimeQuotaWindowInfo) {
+  if (window.total <= 0) {
+    return buildMetricBadgeClass('neutral')
+  }
+
+  const utilization = window.remaining / window.total
+  if (window.remaining <= 0) {
+    return buildMetricBadgeClass('danger')
+  }
+  if (utilization <= 0.2) {
+    return buildMetricBadgeClass('warning')
+  }
+  return buildMetricBadgeClass('success')
+}
+
+function grokQuotaWindowTitle(window: GrokRuntimeQuotaWindowInfo) {
+  const segments = [`${window.remaining}/${window.total}`]
+  if (window.resetAt) {
+    segments.push(`${t('admin.accounts.grok.runtime.resetAt')}: ${window.resetAt}`)
+  }
+  if (window.source) {
+    segments.push(`${t('admin.accounts.grok.runtime.source')}: ${window.source}`)
+  }
+  return segments.join(' · ')
+}
+
+function grokCapabilityClass(capability: string) {
+  switch (capability) {
+    case 'chat':
+      return buildMetricBadgeClass('neutral')
+    case 'image':
+    case 'image_edit':
+      return buildMetricBadgeClass('brand')
+    case 'video':
+      return buildMetricBadgeClass('warning')
+    case 'voice':
+      return buildMetricBadgeClass('success')
+    default:
+      return buildMetricBadgeClass('neutral')
+  }
+}
 
 const windowCostClass = computed(() => {
   if (!showWindowCost.value) return []

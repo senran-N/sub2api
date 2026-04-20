@@ -94,6 +94,7 @@ describe('groupsTable helpers', () => {
     expect(formatGroupCost(12.345)).toBe('12.35')
     expect(getGroupPlatformBadgeClass('anthropic')).toBe('theme-chip--brand-orange')
     expect(getGroupPlatformBadgeClass('openai')).toBe('theme-chip--success')
+    expect(getGroupPlatformBadgeClass('grok')).toBe('theme-chip--brand-rose')
     expect(getGroupPlatformBadgeClass('antigravity')).toBe('theme-chip--brand-purple')
     expect(getGroupPlatformBadgeClass('gemini')).toBe('theme-chip--info')
 

@@ -89,6 +89,8 @@
         </div>
 
         <div v-if="activeTab === 'gateway'" class="space-y-6">
+          <SettingsModelRoutingCard :form="form" />
+
           <SettingsClaudeCodeCard :form="form" />
 
           <SettingsSchedulingCard :form="form" />
@@ -163,6 +165,7 @@ import SettingsDefaultsCard from './settings/SettingsDefaultsCard.vue'
 import SettingsEmailDisabledCard from './settings/SettingsEmailDisabledCard.vue'
 import SettingsGatewayForwardingCard from './settings/SettingsGatewayForwardingCard.vue'
 import SettingsLinuxdoCard from './settings/SettingsLinuxdoCard.vue'
+import SettingsModelRoutingCard from './settings/SettingsModelRoutingCard.vue'
 import SettingsOverloadCooldownCard from './settings/SettingsOverloadCooldownCard.vue'
 import SettingsPurchaseCard from './settings/SettingsPurchaseCard.vue'
 import SettingsRegistrationCard from './settings/SettingsRegistrationCard.vue'

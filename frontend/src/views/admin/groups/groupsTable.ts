@@ -74,6 +74,9 @@ export function getGroupPlatformBadgeClass(platform: GroupPlatform): string {
   if (platform === 'openai') {
     return 'theme-chip--success'
   }
+  if (platform === 'grok') {
+    return 'theme-chip--brand-rose'
+  }
   if (platform === 'antigravity') {
     return 'theme-chip--brand-purple'
   }

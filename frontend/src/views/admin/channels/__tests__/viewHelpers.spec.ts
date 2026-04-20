@@ -11,16 +11,18 @@ import {
 
 describe('channels view helpers', () => {
   it('defines the supported platform order', () => {
-    expect(platformOrder).toEqual(['anthropic', 'openai', 'gemini', 'antigravity'])
+    expect(platformOrder).toEqual(['anthropic', 'openai', 'gemini', 'grok', 'antigravity'])
   })
 
   it('returns tone and badge classes for supported platforms', () => {
     expect(getPlatformTextClass('openai')).toContain('channel-view__tone-text--success')
     expect(getPlatformTextClass('gemini')).toContain('channel-view__tone-text--info')
+    expect(getPlatformTextClass('grok')).toContain('channel-view__tone-text--brand-rose')
     expect(getPlatformTextClass('unknown')).toBe('channel-view__text-muted')
 
     expect(getRateBadgeClass('anthropic')).toContain('theme-chip--brand-orange')
     expect(getRateBadgeClass('openai')).toContain('theme-chip--success')
+    expect(getRateBadgeClass('grok')).toContain('theme-chip--brand-rose')
     expect(getRateBadgeClass('unknown')).toContain('theme-chip--neutral')
   })
 

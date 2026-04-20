@@ -418,6 +418,7 @@ export function buildUseKeyModalFiles(
   }
 
   const apiBase = ensureV1(baseRoot)
+  const grokBase = ensureV1(`${baseRoot}/grok`)
   const antigravityBase = ensureV1(`${baseRoot}/antigravity`)
   const antigravityGeminiBase = (() => {
     const trimmed = `${baseRoot}/antigravity`.replace(/\/+$/, '')
@@ -434,6 +435,8 @@ export function buildUseKeyModalFiles(
         return [buildOpenCodeConfig('anthropic', apiBase, apiKey, options.t)]
       case 'openai':
         return [buildOpenCodeConfig('openai', apiBase, apiKey, options.t)]
+      case 'grok':
+        return [buildOpenCodeConfig('openai', grokBase, apiKey, options.t)]
       case 'gemini':
         return [buildOpenCodeConfig('gemini', geminiBase, apiKey, options.t)]
       case 'antigravity':
@@ -460,11 +463,21 @@ export function buildUseKeyModalFiles(
 
   switch (options.platform) {
     case 'openai':
+    case 'grok':
       if (options.activeClientTab === 'claude') {
+        if (options.platform === 'grok') {
+          return buildAnthropicFiles(options.activeTab, `${baseUrl}/grok`, apiKey)
+        }
         return buildAnthropicFiles(options.activeTab, baseUrl, apiKey)
       }
       if (options.activeClientTab === 'codex-ws') {
+        if (options.platform === 'grok') {
+          return buildOpenAIFiles(options.activeTab, `${baseUrl}/grok`, apiKey, true)
+        }
         return buildOpenAIFiles(options.activeTab, baseUrl, apiKey, true)
+      }
+      if (options.platform === 'grok') {
+        return buildOpenAIFiles(options.activeTab, `${baseUrl}/grok`, apiKey, false)
       }
       return buildOpenAIFiles(options.activeTab, baseUrl, apiKey, false)
     case 'gemini':

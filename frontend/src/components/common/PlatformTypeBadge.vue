@@ -69,6 +69,7 @@ const props = defineProps<Props>()
 const platformLabel = computed(() => {
   if (props.platform === 'anthropic') return 'Anthropic'
   if (props.platform === 'openai') return 'OpenAI'
+  if (props.platform === 'grok') return 'Grok'
   if (props.platform === 'antigravity') return 'Antigravity'
   return 'Gemini'
 })
@@ -115,6 +116,9 @@ const platformClass = computed(() => {
   if (props.platform === 'openai') {
     return 'theme-chip--success'
   }
+  if (props.platform === 'grok') {
+    return 'theme-chip--brand-rose'
+  }
   if (props.platform === 'antigravity') {
     return 'theme-chip--brand-purple'
   }
@@ -127,6 +131,9 @@ const typeClass = computed(() => {
   }
   if (props.platform === 'openai') {
     return 'theme-chip--accent'
+  }
+  if (props.platform === 'grok') {
+    return 'theme-chip--brand-rose'
   }
   if (props.platform === 'antigravity') {
     return 'theme-chip--brand-purple'

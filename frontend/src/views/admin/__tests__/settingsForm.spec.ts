@@ -8,6 +8,7 @@ import {
   buildSendTestEmailRequest,
   buildSmtpTestConnectionRequest,
   buildSettingsUpdatePayload,
+  createDefaultSettingsForm,
   hydrateSettingsForm,
   moveCustomMenuItem,
   removeCustomEndpoint,
@@ -63,8 +64,17 @@ function createSettingsForm(overrides: Partial<SettingsForm> = {}): SettingsForm
     enable_model_fallback: false,
     fallback_model_anthropic: 'claude-3-5-sonnet-20241022',
     fallback_model_openai: 'gpt-4o',
+    fallback_model_grok: 'grok-3',
     fallback_model_gemini: 'gemini-2.5-pro',
     fallback_model_antigravity: 'gemini-2.5-pro',
+    grok_image_output_format: 'local_url',
+    grok_video_output_format: 'local_url',
+    grok_media_proxy_enabled: true,
+    grok_media_cache_retention_hours: 72,
+    grok_quota_sync_interval_seconds: 900,
+    grok_capability_probe_interval_seconds: 21600,
+    grok_session_validity_check_interval: 1800,
+    grok_video_timeout: 600,
     enable_identity_patch: true,
     identity_patch_prompt: '',
     ops_monitoring_enabled: true,
@@ -165,6 +175,10 @@ describe('default subscription helpers', () => {
 })
 
 describe('hydrateSettingsForm', () => {
+  it('does not hardcode a Grok fallback model before backend settings load', () => {
+    expect(createDefaultSettingsForm().fallback_model_grok).toBe('')
+  })
+
   it('normalizes loaded settings and clears transient secret inputs', () => {
     const form = createSettingsForm({
       smtp_password: 'manual-secret',
@@ -234,6 +248,8 @@ describe('buildSettingsUpdatePayload', () => {
         validity_days: 45
       }
     ])
+    expect(result.payload.grok_session_validity_check_interval).toBe(1800)
+    expect(result.payload.grok_video_timeout).toBe(600)
     expect(result.payload.smtp_password).toBeUndefined()
     expect(result.payload.turnstile_secret_key).toBeUndefined()
     expect(result.payload.linuxdo_connect_client_secret).toBeUndefined()

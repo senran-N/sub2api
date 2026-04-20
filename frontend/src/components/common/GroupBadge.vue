@@ -106,6 +106,9 @@ const labelClass = computed(() => {
   if (props.platform === 'openai') {
     return 'theme-chip--success'
   }
+  if (props.platform === 'grok') {
+    return 'theme-chip--brand-rose'
+  }
   if (props.platform === 'gemini') {
     return 'theme-chip--info'
   }
@@ -121,6 +124,11 @@ const badgeClass = computed(() => {
   } else if (props.platform === 'openai') {
     return isSubscription.value
       ? 'theme-chip--success'
+      : 'theme-chip--accent'
+  }
+  if (props.platform === 'grok') {
+    return isSubscription.value
+      ? 'theme-chip--brand-rose'
       : 'theme-chip--accent'
   }
   if (props.platform === 'gemini') {

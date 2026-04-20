@@ -66,7 +66,7 @@ func (selector GrokAccountSelector) IsBaseEligibleWithContext(ctx context.Contex
 	if account.SupportsCompatibleGatewaySharedRuntime() {
 		return true
 	}
-	return account.Type == AccountTypeSession && AllowsGrokSessionTextRuntime(ctx)
+	return account.Type == AccountTypeSession && AllowsGrokSessionProviderRuntime(ctx)
 }
 
 func (selector GrokAccountSelector) IsModelEligible(account *Account, requestedModel string) bool {

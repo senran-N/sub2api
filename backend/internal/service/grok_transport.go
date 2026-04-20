@@ -21,11 +21,14 @@ const (
 )
 
 type grokTransportTarget struct {
-	Kind         grokTransportKind
-	URL          string
-	AuthToken    string
-	AuthHeader   string
-	CookieHeader string
+	Kind           grokTransportKind
+	URL            string
+	SessionBaseURL string
+	AuthToken      string
+	AuthHeader     string
+	CookieHeader   string
+	UserAgent      string
+	AcceptLang     string
 }
 
 func (t grokTransportTarget) Apply(req *http.Request) {
@@ -40,14 +43,15 @@ func (t grokTransportTarget) Apply(req *http.Request) {
 	}
 }
 
-func (a *Account) GetGrokSessionToken() string {
-	if a == nil || NormalizeCompatibleGatewayPlatform(a.Platform) != PlatformGrok || a.Type != AccountTypeSession {
-		return ""
-	}
-	return strings.TrimSpace(a.GetCredential("session_token"))
+func resolveGrokTransportTarget(account *Account, validateBaseURL func(string) (string, error)) (grokTransportTarget, error) {
+	return resolveGrokTransportTargetWithSettings(account, validateBaseURL, DefaultGrokRuntimeSettings())
 }
 
-func resolveGrokTransportTarget(account *Account, validateBaseURL func(string) (string, error)) (grokTransportTarget, error) {
+func resolveGrokTransportTargetWithSettings(
+	account *Account,
+	validateBaseURL func(string) (string, error),
+	settings GrokRuntimeSettings,
+) (grokTransportTarget, error) {
 	if account == nil {
 		return grokTransportTarget{}, errors.New("account is nil")
 	}
@@ -62,9 +66,9 @@ func resolveGrokTransportTarget(account *Account, validateBaseURL func(string) (
 			return grokTransportTarget{}, errors.New("api_key not found in credentials")
 		}
 
-		baseURL := strings.TrimSpace(account.GetOpenAIBaseURL())
+		baseURL := strings.TrimSpace(account.GetCredential("base_url"))
 		if baseURL == "" {
-			baseURL = CompatibleGatewayDefaultBaseURL(account.Platform)
+			baseURL = normalizeGrokRuntimeBaseURL(settings.OfficialBaseURL, CompatibleGatewayDefaultBaseURL(account.Platform))
 		}
 		if validateBaseURL != nil {
 			normalizedBaseURL, err := validateBaseURL(baseURL)
@@ -86,18 +90,108 @@ func resolveGrokTransportTarget(account *Account, validateBaseURL func(string) (
 			AuthHeader: target.AuthHeader,
 		}, nil
 	case AccountTypeSession:
-		cookieHeader, err := normalizeGrokSessionCookieHeader(account.GetGrokSessionToken())
+		cookieHeader, err := BuildGrokSessionCookieHeader(
+			account.GetGrokSessionToken(),
+			account.GetGrokSessionCFCookies(),
+			account.GetGrokSessionCFClearance(),
+		)
 		if err != nil {
 			return grokTransportTarget{}, err
 		}
-		targetURL, err := buildGrokSessionTransportURL(validateBaseURL)
+		targetURL, sessionBaseURL, err := buildGrokSessionTransportURLWithSettings(validateBaseURL, settings)
 		if err != nil {
 			return grokTransportTarget{}, err
 		}
 		return grokTransportTarget{
-			Kind:         grokTransportKindSession,
-			URL:          targetURL,
-			CookieHeader: cookieHeader,
+			Kind:           grokTransportKindSession,
+			URL:            targetURL,
+			SessionBaseURL: sessionBaseURL,
+			CookieHeader:   cookieHeader,
+			UserAgent:      account.GetGrokSessionUserAgent(),
+			AcceptLang:     account.GetGrokSessionAcceptLanguage(),
+		}, nil
+	default:
+		return grokTransportTarget{}, fmt.Errorf("unsupported account type: %s", account.Type)
+	}
+}
+
+func resolveGrokMediaTransportTarget(
+	account *Account,
+	validateBaseURL func(string) (string, error),
+	requestPath string,
+) (grokTransportTarget, error) {
+	return resolveGrokMediaTransportTargetWithSettings(account, validateBaseURL, DefaultGrokRuntimeSettings(), requestPath)
+}
+
+func resolveGrokMediaTransportTargetWithSettings(
+	account *Account,
+	validateBaseURL func(string) (string, error),
+	settings GrokRuntimeSettings,
+	requestPath string,
+) (grokTransportTarget, error) {
+	if account == nil {
+		return grokTransportTarget{}, errors.New("account is nil")
+	}
+	if NormalizeCompatibleGatewayPlatform(account.Platform) != PlatformGrok {
+		return grokTransportTarget{}, fmt.Errorf("unsupported grok platform: %s", account.Platform)
+	}
+
+	switch account.Type {
+	case AccountTypeAPIKey, AccountTypeUpstream:
+		apiKey := strings.TrimSpace(account.GetOpenAIApiKey())
+		if apiKey == "" {
+			return grokTransportTarget{}, errors.New("api_key not found in credentials")
+		}
+
+		baseURL := strings.TrimSpace(account.GetCredential("base_url"))
+		if baseURL == "" {
+			baseURL = normalizeGrokRuntimeBaseURL(settings.OfficialBaseURL, CompatibleGatewayDefaultBaseURL(account.Platform))
+		}
+		if validateBaseURL != nil {
+			normalizedBaseURL, err := validateBaseURL(baseURL)
+			if err != nil {
+				return grokTransportTarget{}, err
+			}
+			baseURL = normalizedBaseURL
+		}
+
+		target := newCompatiblePassthroughUpstreamTargetWithOptions(
+			baseURL,
+			normalizeGrokMediaUpstreamPath(requestPath),
+			account.GetCompatibleAuthMode(""),
+			account.GetCompatibleEndpointOverride("responses"),
+			account.GetCompatibleEndpointOverride("chat_completions"),
+		)
+		return grokTransportTarget{
+			Kind:       grokTransportKindCompatible,
+			URL:        target.URL,
+			AuthToken:  apiKey,
+			AuthHeader: target.AuthHeader,
+		}, nil
+	case AccountTypeSession:
+		cookieHeader, err := BuildGrokSessionCookieHeader(
+			account.GetGrokSessionToken(),
+			account.GetGrokSessionCFCookies(),
+			account.GetGrokSessionCFClearance(),
+		)
+		if err != nil {
+			return grokTransportTarget{}, err
+		}
+		targetURL, sessionBaseURL, err := buildGrokSessionTransportURLForPathWithSettings(
+			validateBaseURL,
+			settings,
+			normalizeGrokMediaUpstreamPath(requestPath),
+		)
+		if err != nil {
+			return grokTransportTarget{}, err
+		}
+		return grokTransportTarget{
+			Kind:           grokTransportKindSession,
+			URL:            targetURL,
+			SessionBaseURL: sessionBaseURL,
+			CookieHeader:   cookieHeader,
+			UserAgent:      account.GetGrokSessionUserAgent(),
+			AcceptLang:     account.GetGrokSessionAcceptLanguage(),
 		}, nil
 	default:
 		return grokTransportTarget{}, fmt.Errorf("unsupported account type: %s", account.Type)
@@ -105,55 +199,61 @@ func resolveGrokTransportTarget(account *Account, validateBaseURL func(string) (
 }
 
 func buildGrokSessionTransportURL(validateBaseURL func(string) (string, error)) (string, error) {
-	baseURL := grokWebBaseURL
+	targetURL, _, err := buildGrokSessionTransportURLWithSettings(validateBaseURL, DefaultGrokRuntimeSettings())
+	return targetURL, err
+}
+
+func buildGrokSessionTransportURLForPath(validateBaseURL func(string) (string, error), requestPath string) (string, error) {
+	targetURL, _, err := buildGrokSessionTransportURLForPathWithSettings(
+		validateBaseURL,
+		DefaultGrokRuntimeSettings(),
+		requestPath,
+	)
+	return targetURL, err
+}
+
+func buildGrokSessionTransportURLWithSettings(
+	validateBaseURL func(string) (string, error),
+	settings GrokRuntimeSettings,
+) (string, string, error) {
+	return buildGrokSessionTransportURLForPathWithSettings(validateBaseURL, settings, grokSessionConversationEndpoint)
+}
+
+func buildGrokSessionTransportURLForPathWithSettings(
+	validateBaseURL func(string) (string, error),
+	settings GrokRuntimeSettings,
+	requestPath string,
+) (string, string, error) {
+	baseURL := normalizeGrokRuntimeBaseURL(settings.SessionBaseURL, grokWebBaseURL)
 	if validateBaseURL != nil {
 		normalizedBaseURL, err := validateBaseURL(baseURL)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		baseURL = normalizedBaseURL
 	}
-	return appendGrokSessionTransportPath(baseURL), nil
+	return appendGrokSessionTransportPath(baseURL, requestPath), baseURL, nil
 }
 
-func appendGrokSessionTransportPath(baseURL string) string {
+func appendGrokSessionTransportPath(baseURL string, requestPath string) string {
 	trimmedBase := strings.TrimSpace(baseURL)
 	parsed, err := url.Parse(trimmedBase)
 	if err != nil {
-		return strings.TrimRight(trimmedBase, "/") + grokSessionConversationEndpoint
+		return strings.TrimRight(trimmedBase, "/") + normalizeGrokSessionTransportPath(requestPath)
 	}
 
-	parsed.Path = strings.TrimRight(strings.TrimSpace(parsed.Path), "/") + grokSessionConversationEndpoint
+	parsed.Path = strings.TrimRight(strings.TrimSpace(parsed.Path), "/") + normalizeGrokSessionTransportPath(requestPath)
 	parsed.RawPath = ""
 	return parsed.String()
 }
 
-// Grok session accounts may paste either a full browser cookie string or just the
-// bare session value. When only a single token is present, treat it as the `sso`
-// cookie so the provider-owned transport can build a valid Cookie header.
-func normalizeGrokSessionCookieHeader(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	trimmed = strings.TrimPrefix(trimmed, "Cookie:")
-	trimmed = strings.TrimPrefix(trimmed, "cookie:")
-	trimmed = strings.TrimSpace(trimmed)
+func normalizeGrokSessionTransportPath(requestPath string) string {
+	trimmed := strings.TrimSpace(requestPath)
 	if trimmed == "" {
-		return "", errors.New("session_token not found in credentials")
+		return grokSessionConversationEndpoint
 	}
-	if !strings.Contains(trimmed, "=") {
-		return "sso=" + trimmed, nil
+	if !strings.HasPrefix(trimmed, "/") {
+		return "/" + trimmed
 	}
-
-	parts := strings.Split(trimmed, ";")
-	normalizedParts := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" || !strings.Contains(part, "=") {
-			continue
-		}
-		normalizedParts = append(normalizedParts, part)
-	}
-	if len(normalizedParts) == 0 {
-		return "", errors.New("session_token does not contain a valid Grok cookie")
-	}
-	return strings.Join(normalizedParts, "; "), nil
+	return trimmed
 }

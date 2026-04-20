@@ -14,6 +14,7 @@ type accountAdminService interface {
 	GetAccount(ctx context.Context, id int64) (*service.Account, error)
 	GetAccountsByIDs(ctx context.Context, ids []int64) ([]*service.Account, error)
 	CreateAccount(ctx context.Context, input *service.CreateAccountInput) (*service.Account, error)
+	BatchImportGrokSessionAccounts(ctx context.Context, input *service.GrokSessionBatchImportInput) (*service.GrokSessionBatchImportResult, error)
 	UpdateAccount(ctx context.Context, id int64, input *service.UpdateAccountInput) (*service.Account, error)
 	DeleteAccount(ctx context.Context, id int64) error
 	GetProxy(ctx context.Context, id int64) (*service.Proxy, error)

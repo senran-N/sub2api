@@ -1,3 +1,10 @@
+import { ref } from 'vue'
+import { getAntigravityDefaultModelMapping } from '@/api/admin/accounts'
+import {
+  getModelCatalog,
+  type AdminModelCatalogEntry
+} from '@/api/admin/modelCatalog'
+
 // =====================
 // 模型列表（硬编码，与 new-api 一致）
 // =====================
@@ -138,13 +145,156 @@ const metaModels = [
   'codellama-70b-instruct', 'codellama-34b-instruct', 'codellama-13b-instruct'
 ]
 
-// Grok
-const grokModels = [
-  'grok-4', 'grok-4-0709',
-  'grok-3-beta', 'grok-3-mini-beta', 'grok-3-fast-beta',
-  'grok-2', 'grok-2-vision', 'grok-2-image',
-  'grok-beta', 'grok-vision-beta'
-]
+type ModelOption = {
+  value: string
+  label: string
+}
+
+const grokCatalogEntries = ref<AdminModelCatalogEntry[]>([])
+let grokCatalogLoaded = false
+let grokCatalogPromise: Promise<AdminModelCatalogEntry[]> | null = null
+
+function dedupeModelOptions(options: ModelOption[]): ModelOption[] {
+  const seen = new Set<string>()
+  const deduped: ModelOption[] = []
+  for (const option of options) {
+    if (seen.has(option.value)) {
+      continue
+    }
+    seen.add(option.value)
+    deduped.push(option)
+  }
+  return deduped
+}
+
+function buildStaticModelOptions(models: string[]): ModelOption[] {
+  return models.map((model) => ({ value: model, label: model }))
+}
+
+function normalizePlatformKey(platform: string): string {
+  const normalized = platform.trim().toLowerCase()
+  if (normalized === 'xai') {
+    return 'grok'
+  }
+  if (normalized === 'claude') {
+    return 'anthropic'
+  }
+  return normalized
+}
+
+function grokCatalogToOptions(entries: AdminModelCatalogEntry[]): ModelOption[] {
+  return entries.map((entry) => ({
+    value: entry.id,
+    label: entry.display_name ? `${entry.display_name} (${entry.id})` : entry.id
+  }))
+}
+
+function getGrokPresetTone(entry: AdminModelCatalogEntry): PresetMappingTone {
+  switch (entry.capability) {
+    case 'video':
+      return 'brand-rose'
+    case 'image':
+    case 'image_edit':
+      return 'warning'
+    case 'voice':
+      return 'success'
+    default:
+      if (entry.required_tier === 'heavy') {
+        return 'brand-purple'
+      }
+      if (entry.required_tier === 'super') {
+        return 'accent'
+      }
+      return 'info'
+  }
+}
+
+function buildGrokPresetMappings(entries: AdminModelCatalogEntry[]): PresetMapping[] {
+  return entries.map((entry) => ({
+    label: entry.display_name || entry.id,
+    from: entry.id,
+    to: entry.id,
+    tone: getGrokPresetTone(entry)
+  }))
+}
+
+function setGrokCatalogEntries(entries: AdminModelCatalogEntry[]): AdminModelCatalogEntry[] {
+  const seen = new Set<string>()
+  const deduped: AdminModelCatalogEntry[] = []
+  for (const entry of entries) {
+    if (!entry?.id || seen.has(entry.id)) {
+      continue
+    }
+    seen.add(entry.id)
+    deduped.push(entry)
+  }
+  grokCatalogEntries.value = deduped
+  return deduped
+}
+
+export async function ensureModelCatalogLoaded(platform: string): Promise<AdminModelCatalogEntry[]> {
+  if (normalizePlatformKey(platform) !== 'grok') {
+    return []
+  }
+  if (grokCatalogLoaded) {
+    return grokCatalogEntries.value
+  }
+  if (grokCatalogPromise) {
+    return grokCatalogPromise
+  }
+
+  grokCatalogPromise = getModelCatalog('grok')
+    .then((response) => {
+      grokCatalogLoaded = true
+      return setGrokCatalogEntries(response.models)
+    })
+    .catch((error) => {
+      grokCatalogLoaded = false
+      setGrokCatalogEntries([])
+      console.warn('[useModelWhitelist] Failed to load Grok model catalog', error)
+      return []
+    })
+    .finally(() => {
+      grokCatalogPromise = null
+    })
+
+  return grokCatalogPromise
+}
+
+function getGrokCatalogEntries(): AdminModelCatalogEntry[] {
+  return grokCatalogEntries.value
+}
+
+function getStaticModelsByPlatform(platform: string): string[] {
+  switch (normalizePlatformKey(platform)) {
+    case 'openai': return openaiModels
+    case 'anthropic': return claudeModels
+    case 'gemini': return geminiModels
+    case 'antigravity': return antigravityModels
+    case 'zhipu': return zhipuModels
+    case 'qwen': return qwenModels
+    case 'deepseek': return deepseekModels
+    case 'mistral': return mistralModels
+    case 'meta': return metaModels
+    case 'cohere': return cohereModels
+    case 'yi': return yiModels
+    case 'moonshot': return moonshotModels
+    case 'doubao': return doubaoModels
+    case 'minimax': return minimaxModels
+    case 'baidu': return baiduModels
+    case 'spark': return sparkModels
+    case 'hunyuan': return hunyuanModels
+    case 'perplexity': return perplexityModels
+    default: return claudeModels
+  }
+}
+
+export function getModelOptionsByPlatform(platform: string): ModelOption[] {
+  if (normalizePlatformKey(platform) === 'grok') {
+    return grokCatalogToOptions(getGrokCatalogEntries())
+  }
+  return buildStaticModelOptions(getStaticModelsByPlatform(platform))
+}
 
 // Cohere
 const cohereModels = [
@@ -215,30 +365,35 @@ const perplexityModels = [
   'llama-3-sonar-small-32k-chat', 'llama-3-sonar-large-32k-chat'
 ]
 
-// 所有模型（去重）
-const allModelsList: string[] = [
-  ...openaiModels,
-  ...claudeModels,
-  ...geminiModels,
-  ...zhipuModels,
-  ...qwenModels,
-  ...deepseekModels,
-  ...mistralModels,
-  ...metaModels,
-  ...grokModels,
-  ...cohereModels,
-  ...yiModels,
-  ...moonshotModels,
-  ...doubaoModels,
-  ...minimaxModels,
-  ...baiduModels,
-  ...sparkModels,
-  ...hunyuanModels,
-  ...perplexityModels
-]
+function getStaticAllModelOptions(): ModelOption[] {
+  return dedupeModelOptions([
+    ...buildStaticModelOptions(openaiModels),
+    ...buildStaticModelOptions(claudeModels),
+    ...buildStaticModelOptions(geminiModels),
+    ...buildStaticModelOptions(zhipuModels),
+    ...buildStaticModelOptions(qwenModels),
+    ...buildStaticModelOptions(deepseekModels),
+    ...buildStaticModelOptions(mistralModels),
+    ...buildStaticModelOptions(metaModels),
+    ...buildStaticModelOptions(cohereModels),
+    ...buildStaticModelOptions(yiModels),
+    ...buildStaticModelOptions(moonshotModels),
+    ...buildStaticModelOptions(doubaoModels),
+    ...buildStaticModelOptions(minimaxModels),
+    ...buildStaticModelOptions(baiduModels),
+    ...buildStaticModelOptions(sparkModels),
+    ...buildStaticModelOptions(hunyuanModels),
+    ...buildStaticModelOptions(perplexityModels),
+    ...buildStaticModelOptions(antigravityModels)
+  ])
+}
 
-// 转换为下拉选项格式
-export const allModels = allModelsList.map(m => ({ value: m, label: m }))
+export function getAllModelOptions(): ModelOption[] {
+  return dedupeModelOptions([
+    ...getStaticAllModelOptions(),
+    ...getModelOptionsByPlatform('grok')
+  ])
+}
 
 // =====================
 // 预设映射
@@ -297,14 +452,6 @@ const geminiPresetMappings: PresetMapping[] = [
   { label: '3.1 Image', from: 'gemini-3.1-flash-image', to: 'gemini-3.1-flash-image', tone: 'info' }
 ]
 
-const grokPresetMappings: PresetMapping[] = [
-  { label: 'Grok 4', from: 'grok-4', to: 'grok-4', tone: 'accent' },
-  { label: 'Grok 3 Beta', from: 'grok-3-beta', to: 'grok-3-beta', tone: 'info' },
-  { label: 'Grok 3 Mini', from: 'grok-3-mini-beta', to: 'grok-3-mini-beta', tone: 'success' },
-  { label: 'Grok Vision', from: 'grok-2-vision', to: 'grok-2-vision', tone: 'brand-purple' },
-  { label: 'Grok Image', from: 'grok-2-image', to: 'grok-2-image', tone: 'warning' }
-]
-
 // Antigravity 预设映射（支持通配符）
 const antigravityPresetMappings: PresetMapping[] = [
   // Claude 通配符映射
@@ -346,10 +493,6 @@ const bedrockPresetMappings: PresetMapping[] = [
   { label: 'Haiku 4.5', from: 'claude-haiku-4-5', to: 'us.anthropic.claude-haiku-4-5-20251001-v1:0', tone: 'success' },
 ]
 
-// Antigravity 默认映射（从后端 API 获取，与 constants.go 保持一致）
-// 使用 fetchAntigravityDefaultMappings() 异步获取
-import { getAntigravityDefaultModelMapping } from '@/api/admin/accounts'
-
 let _antigravityDefaultMappingsCache: { from: string; to: string }[] | null = null
 
 export async function fetchAntigravityDefaultMappings(): Promise<{ from: string; to: string }[]> {
@@ -386,39 +529,20 @@ export const commonErrorCodes = [
 
 // 按平台获取模型
 export function getModelsByPlatform(platform: string): string[] {
-  switch (platform) {
-    case 'openai': return openaiModels
-    case 'anthropic':
-    case 'claude': return claudeModels
-    case 'gemini': return geminiModels
-    case 'grok': return grokModels
-    case 'antigravity': return antigravityModels
-    case 'zhipu': return zhipuModels
-    case 'qwen': return qwenModels
-    case 'deepseek': return deepseekModels
-    case 'mistral': return mistralModels
-    case 'meta': return metaModels
-    case 'xai': return grokModels
-    case 'cohere': return cohereModels
-    case 'yi': return yiModels
-    case 'moonshot': return moonshotModels
-    case 'doubao': return doubaoModels
-    case 'minimax': return minimaxModels
-    case 'baidu': return baiduModels
-    case 'spark': return sparkModels
-    case 'hunyuan': return hunyuanModels
-    case 'perplexity': return perplexityModels
-    default: return claudeModels
+  if (normalizePlatformKey(platform) === 'grok') {
+    return getGrokCatalogEntries().map((entry) => entry.id)
   }
+  return getStaticModelsByPlatform(platform)
 }
 
 // 按平台获取预设映射
 export function getPresetMappingsByPlatform(platform: string) {
-  if (platform === 'openai') return openaiPresetMappings
-  if (platform === 'gemini') return geminiPresetMappings
-  if (platform === 'grok') return grokPresetMappings
-  if (platform === 'antigravity') return antigravityPresetMappings
-  if (platform === 'bedrock') return bedrockPresetMappings
+  const normalized = normalizePlatformKey(platform)
+  if (normalized === 'openai') return openaiPresetMappings
+  if (normalized === 'gemini') return geminiPresetMappings
+  if (normalized === 'grok') return buildGrokPresetMappings(getGrokCatalogEntries())
+  if (normalized === 'antigravity') return antigravityPresetMappings
+  if (normalized === 'bedrock') return bedrockPresetMappings
   return anthropicPresetMappings
 }
 

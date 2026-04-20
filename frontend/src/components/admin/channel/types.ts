@@ -167,6 +167,7 @@ export function getPlatformTagClass(platform: string): string {
     case 'anthropic': return 'theme-chip theme-chip--compact theme-chip--brand-orange'
     case 'openai': return 'theme-chip theme-chip--compact theme-chip--success'
     case 'gemini': return 'theme-chip theme-chip--compact theme-chip--info'
+    case 'grok': return 'theme-chip theme-chip--compact theme-chip--brand-rose'
     case 'antigravity': return 'theme-chip theme-chip--compact theme-chip--brand-purple'
     default: return 'theme-chip theme-chip--compact theme-chip--neutral'
   }

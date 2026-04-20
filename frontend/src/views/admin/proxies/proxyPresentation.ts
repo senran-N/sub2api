@@ -86,6 +86,8 @@ export function getQualityTargetLabel(target: string, t: Translate) {
       return t('admin.proxies.qualityTargetBase')
     case 'openai':
       return 'OpenAI'
+    case 'grok':
+      return 'Grok'
     case 'anthropic':
       return 'Anthropic'
     case 'gemini':

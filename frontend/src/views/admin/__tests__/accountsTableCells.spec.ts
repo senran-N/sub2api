@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
 import type { Account } from '@/types'
 import AccountActionsCell from '../accounts/AccountActionsCell.vue'
 import AccountExpiresCell from '../accounts/AccountExpiresCell.vue'
@@ -142,6 +143,81 @@ describe('account table cells', () => {
       }
     })
     expect(lastUsedWrapper.text()).toContain('relative:2026-04-04T00:00:00Z')
+  })
+
+  it('renders Grok runtime fingerprint, tier, quota, and capability hints', () => {
+    const account = createAccount({
+      name: 'Grok Session',
+      platform: 'grok',
+      type: 'session',
+      credentials: {
+        session_token: 'secret'
+      },
+      extra: {
+        grok: {
+          auth_mode: 'session',
+          auth_fingerprint: 'sha256:ab12...cd34',
+          tier: {
+            normalized: 'heavy'
+          },
+          sync_state: {
+            last_sync_at: '2026-04-20T00:30:00Z',
+            last_probe_at: '2026-04-20T01:00:00Z',
+            last_probe_error: 'API returned 401 Unauthorized'
+          },
+          capabilities: {
+            operations: ['chat', 'video']
+          },
+          quota_windows: {
+            auto: {
+              remaining: 17,
+              total: 150,
+              source: 'sync'
+            },
+            heavy: {
+              remaining: 3,
+              total: 20,
+              source: 'sync'
+            }
+          }
+        }
+      }
+    })
+
+    const nameWrapper = mount(AccountNameCell, {
+      props: {
+        account
+      }
+    })
+    expect(nameWrapper.text()).toContain('sha256:ab12...cd34')
+    expect(nameWrapper.text()).toContain('admin.accounts.grok.runtime.lastSyncAt')
+    expect(nameWrapper.text()).toContain('relative:2026-04-20T00:30:00Z')
+    expect(nameWrapper.text()).toContain('admin.accounts.grok.runtime.lastProbeError')
+    expect(nameWrapper.text()).toContain('API returned 401 Unauthorized')
+
+    const platformWrapper = mount(AccountPlatformTypeCell, {
+      props: {
+        account
+      },
+      global: {
+        stubs: {
+          PlatformTypeBadge: {
+            template: '<div>badge</div>'
+          }
+        }
+      }
+    })
+    expect(platformWrapper.text()).toContain('admin.accounts.grok.runtime.tiers.heavy')
+
+    const capacityWrapper = mount(AccountCapacityCell, {
+      props: {
+        account
+      }
+    })
+    expect(capacityWrapper.text()).toContain('admin.accounts.grok.runtime.windows.auto')
+    expect(capacityWrapper.text()).toContain('17')
+    expect(capacityWrapper.text()).toContain('150')
+    expect(capacityWrapper.text()).toContain('admin.accounts.grok.runtime.capabilities.video')
   })
 
   it('emits schedulable and action events', async () => {

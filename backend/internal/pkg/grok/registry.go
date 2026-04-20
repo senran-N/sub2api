@@ -245,3 +245,20 @@ func EnabledModelIDs() []string {
 	}
 	return ids
 }
+
+func DefaultFallbackModelID() string {
+	for _, spec := range modelSpecs {
+		if spec.Capability == CapabilityChat && spec.RequiredTier == TierBasic {
+			return spec.ID
+		}
+	}
+	for _, spec := range modelSpecs {
+		if spec.Capability == CapabilityChat {
+			return spec.ID
+		}
+	}
+	if len(modelSpecs) == 0 {
+		return ""
+	}
+	return modelSpecs[0].ID
+}

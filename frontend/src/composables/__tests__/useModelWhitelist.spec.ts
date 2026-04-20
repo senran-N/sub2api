@@ -4,7 +4,18 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn()
 }))
 
-import { buildModelMappingObject, getModelsByPlatform } from '../useModelWhitelist'
+vi.mock('@/api/admin/modelCatalog', () => ({
+  getModelCatalog: vi.fn()
+}))
+
+import { getModelCatalog } from '@/api/admin/modelCatalog'
+import {
+  buildModelMappingObject,
+  ensureModelCatalogLoaded,
+  getModelOptionsByPlatform,
+  getModelsByPlatform,
+  getPresetMappingsByPlatform
+} from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
   it('openai 模型列表包含 GPT-5.4 官方快照', () => {
@@ -62,5 +73,45 @@ describe('useModelWhitelist', () => {
       'gpt-5.4-mini': 'gpt-5.4-mini',
       'gpt-5.4-nano': 'gpt-5.4-nano'
     })
+  })
+
+  it('grok 模型列表和预设映射来自后端 catalog', async () => {
+    vi.mocked(getModelCatalog).mockResolvedValueOnce({
+      platform: 'grok',
+      models: [
+        {
+          id: 'grok-3',
+          display_name: 'Grok 3',
+          capability: 'chat',
+          protocol_family: 'responses',
+          required_tier: 'basic',
+          aliases: ['grok-4.20-auto'],
+          supports_stream: true,
+          supports_tools: true
+        },
+        {
+          id: 'grok-imagine-video',
+          display_name: 'Grok Imagine Video',
+          capability: 'video',
+          protocol_family: 'media_job',
+          required_tier: 'super',
+          aliases: [],
+          supports_stream: false,
+          supports_tools: false
+        }
+      ]
+    })
+
+    await ensureModelCatalogLoaded('grok')
+
+    expect(getModelsByPlatform('grok')).toEqual(['grok-3', 'grok-imagine-video'])
+    expect(getModelOptionsByPlatform('grok')).toEqual([
+      { value: 'grok-3', label: 'Grok 3 (grok-3)' },
+      { value: 'grok-imagine-video', label: 'Grok Imagine Video (grok-imagine-video)' }
+    ])
+    expect(getPresetMappingsByPlatform('grok')).toEqual([
+      { label: 'Grok 3', from: 'grok-3', to: 'grok-3', tone: 'info' },
+      { label: 'Grok Imagine Video', from: 'grok-imagine-video', to: 'grok-imagine-video', tone: 'brand-rose' }
+    ])
   })
 })

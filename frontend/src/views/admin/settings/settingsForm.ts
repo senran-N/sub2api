@@ -77,6 +77,28 @@ export type SettingsClaudeCodeFields = Pick<
   'min_claude_code_version' | 'max_claude_code_version'
 >
 
+export type SettingsModelRoutingFields = Pick<
+  SettingsForm,
+  | 'enable_model_fallback'
+  | 'fallback_model_anthropic'
+  | 'fallback_model_openai'
+  | 'fallback_model_grok'
+  | 'fallback_model_gemini'
+  | 'fallback_model_antigravity'
+  | 'grok_official_base_url'
+  | 'grok_session_base_url'
+  | 'grok_image_output_format'
+  | 'grok_video_output_format'
+  | 'grok_media_proxy_enabled'
+  | 'grok_media_cache_retention_hours'
+  | 'grok_quota_sync_interval_seconds'
+  | 'grok_usage_sync_concurrency'
+  | 'grok_capability_probe_interval_seconds'
+  | 'grok_capability_probe_concurrency'
+  | 'grok_session_validity_check_interval'
+  | 'grok_video_timeout'
+>
+
 export type SettingsSchedulingFields = Pick<
   SettingsForm,
   'allow_ungrouped_key_scheduling'
@@ -185,8 +207,21 @@ export function createDefaultSettingsForm(): SettingsForm {
     enable_model_fallback: false,
     fallback_model_anthropic: 'claude-3-5-sonnet-20241022',
     fallback_model_openai: 'gpt-4o',
+    fallback_model_grok: '',
     fallback_model_gemini: 'gemini-2.5-pro',
     fallback_model_antigravity: 'gemini-2.5-pro',
+    grok_official_base_url: 'https://api.x.ai',
+    grok_session_base_url: 'https://grok.com',
+    grok_image_output_format: 'local_url',
+    grok_video_output_format: 'local_url',
+    grok_media_proxy_enabled: true,
+    grok_media_cache_retention_hours: 72,
+    grok_quota_sync_interval_seconds: 900,
+    grok_usage_sync_concurrency: 50,
+    grok_capability_probe_interval_seconds: 21600,
+    grok_capability_probe_concurrency: 10,
+    grok_session_validity_check_interval: 1800,
+    grok_video_timeout: 600,
     enable_identity_patch: true,
     identity_patch_prompt: '',
     ops_monitoring_enabled: true,
@@ -366,8 +401,21 @@ export function buildSettingsUpdatePayload(
       enable_model_fallback: form.enable_model_fallback,
       fallback_model_anthropic: form.fallback_model_anthropic,
       fallback_model_openai: form.fallback_model_openai,
+      fallback_model_grok: form.fallback_model_grok,
       fallback_model_gemini: form.fallback_model_gemini,
       fallback_model_antigravity: form.fallback_model_antigravity,
+      grok_official_base_url: form.grok_official_base_url,
+      grok_session_base_url: form.grok_session_base_url,
+      grok_image_output_format: form.grok_image_output_format,
+      grok_video_output_format: form.grok_video_output_format,
+      grok_media_proxy_enabled: form.grok_media_proxy_enabled,
+      grok_media_cache_retention_hours: form.grok_media_cache_retention_hours,
+      grok_quota_sync_interval_seconds: form.grok_quota_sync_interval_seconds,
+      grok_usage_sync_concurrency: form.grok_usage_sync_concurrency,
+      grok_capability_probe_interval_seconds: form.grok_capability_probe_interval_seconds,
+      grok_capability_probe_concurrency: form.grok_capability_probe_concurrency,
+      grok_session_validity_check_interval: form.grok_session_validity_check_interval,
+      grok_video_timeout: form.grok_video_timeout,
       enable_identity_patch: form.enable_identity_patch,
       identity_patch_prompt: form.identity_patch_prompt,
       min_claude_code_version: form.min_claude_code_version,

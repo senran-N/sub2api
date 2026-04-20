@@ -191,7 +191,15 @@ func (r *GrokTextRuntime) prepareTextRequest(
 		return nil, true, newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok session accounts")
 	}
 
-	target, err := resolveGrokTransportTarget(selected, r.gatewayService.validateUpstreamBaseURL)
+	runtimeSettings := DefaultGrokRuntimeSettings()
+	if r.gatewayService != nil && r.gatewayService.settingService != nil {
+		runtimeSettings = r.gatewayService.settingService.GetGrokRuntimeSettings(ctx)
+	}
+	target, err := resolveGrokTransportTargetWithSettings(
+		selected,
+		r.gatewayService.validateUpstreamBaseURL,
+		runtimeSettings,
+	)
 	if err != nil {
 		return nil, true, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", err.Error())
 	}

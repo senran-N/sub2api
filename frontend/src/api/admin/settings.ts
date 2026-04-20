@@ -67,8 +67,21 @@ export interface SystemSettings {
   enable_model_fallback: boolean
   fallback_model_anthropic: string
   fallback_model_openai: string
+  fallback_model_grok: string
   fallback_model_gemini: string
   fallback_model_antigravity: string
+  grok_official_base_url: string
+  grok_session_base_url: string
+  grok_image_output_format: string
+  grok_video_output_format: string
+  grok_media_proxy_enabled: boolean
+  grok_media_cache_retention_hours: number
+  grok_quota_sync_interval_seconds: number
+  grok_usage_sync_concurrency: number
+  grok_capability_probe_interval_seconds: number
+  grok_capability_probe_concurrency: number
+  grok_session_validity_check_interval: number
+  grok_video_timeout: number
 
   // Identity patch configuration (Claude -> Gemini)
   enable_identity_patch: boolean
@@ -136,8 +149,21 @@ export interface UpdateSettingsRequest {
   enable_model_fallback?: boolean
   fallback_model_anthropic?: string
   fallback_model_openai?: string
+  fallback_model_grok?: string
   fallback_model_gemini?: string
   fallback_model_antigravity?: string
+  grok_official_base_url?: string
+  grok_session_base_url?: string
+  grok_image_output_format?: string
+  grok_video_output_format?: string
+  grok_media_proxy_enabled?: boolean
+  grok_media_cache_retention_hours?: number
+  grok_quota_sync_interval_seconds?: number
+  grok_usage_sync_concurrency?: number
+  grok_capability_probe_interval_seconds?: number
+  grok_capability_probe_concurrency?: number
+  grok_session_validity_check_interval?: number
+  grok_video_timeout?: number
   enable_identity_patch?: boolean
   identity_patch_prompt?: string
   ops_monitoring_enabled?: boolean

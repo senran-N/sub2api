@@ -209,8 +209,49 @@ func TestAccountTestService_GrokAPIKeyUsesCompatibleProbeDefaults(t *testing.T) 
 
 	capabilities := grokNestedMap(grokExtra["capabilities"])
 	require.Equal(t, false, capabilities["video"])
-	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(capabilities["operations"]))
-	require.ElementsMatch(t, []string{grok.DefaultTestModel}, grokParseStringSlice(capabilities["models"]))
+	require.ElementsMatch(t, []string{"chat", "image"}, grokParseStringSlice(capabilities["operations"]))
+	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast"}, grokParseStringSlice(capabilities["models"]))
+}
+
+func TestAccountTestService_GrokAPIKeyUsesConfiguredRuntimeOfficialBaseURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: [DONE]\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	account := &Account{
+		ID:          860,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "xai-test-key",
+		},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{account.ID: account},
+		},
+	}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		settingService: NewSettingService(&grokRuntimeSettingRepoStub{values: map[string]string{
+			SettingKeyGrokOfficialBaseURL: "https://official.grok.example/api",
+		}}, nil),
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://official.grok.example/api/v1/responses", upstream.requests[0].URL.String())
 }
 
 func TestAccountTestService_GrokSessionProbeUsesProviderOwnedTransport(t *testing.T) {
@@ -243,8 +284,8 @@ func TestAccountTestService_GrokSessionProbeUsesProviderOwnedTransport(t *testin
 	require.NoError(t, err)
 	require.Len(t, upstream.requests, 1)
 	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[0].URL.String())
-	require.Equal(t, "sso=grok-session-token", upstream.requests[0].Header.Get("Cookie"))
-	require.Equal(t, grokSessionModeAuto, requestBodyModeID(t, upstream.requests[0]))
+	require.Equal(t, "sso=grok-session-token; sso-rw=grok-session-token", upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, grokSessionModeExpert, requestBodyModeID(t, upstream.requests[0]))
 	require.Contains(t, recorder.Body.String(), "test_complete")
 	require.NotEmpty(t, repo.updatedExtra)
 
@@ -255,8 +296,118 @@ func TestAccountTestService_GrokSessionProbeUsesProviderOwnedTransport(t *testin
 	require.Equal(t, 200, grokParseInt(getNestedGrokValue(grokExtra, "sync_state", "last_probe_status_code")))
 
 	capabilities := grokNestedMap(grokExtra["capabilities"])
-	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(capabilities["operations"]))
-	require.ElementsMatch(t, []string{grok.DefaultTestModel}, grokParseStringSlice(capabilities["models"]))
+	require.ElementsMatch(t, []string{"chat", "image", "image_edit", "video", "voice"}, grokParseStringSlice(capabilities["operations"]))
+	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast", "grok-4-fast-reasoning", "grok-4-voice", "grok-imagine-image", "grok-imagine-image-edit", "grok-imagine-image-pro", "grok-imagine-video"}, grokParseStringSlice(capabilities["models"]))
+}
+
+func TestAccountTestService_GrokSessionProbeUsesConfiguredRuntimeSessionBaseURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, `{"conversationId":"conv_123"}`)
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	account := &Account{
+		ID:          851,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"session_token": "grok-session-token",
+		},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{account.ID: account},
+		},
+	}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		settingService: NewSettingService(&grokRuntimeSettingRepoStub{values: map[string]string{
+			SettingKeyGrokSessionBaseURL: "https://session.grok.example/root",
+		}}, nil),
+	}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://session.grok.example/root/rest/app-chat/conversations/new", upstream.requests[0].URL.String())
+	require.Equal(t, "https://session.grok.example/root", upstream.requests[0].Header.Get("Origin"))
+	require.Equal(t, "https://session.grok.example/root/", upstream.requests[0].Header.Get("Referer"))
+}
+
+func TestAccountTestService_GrokSessionUnknownTierBootstrapsHighTierProbeBeforeSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, recorder := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, `{"conversationId":"conv_123"}`)
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	account := &Account{
+		ID:          185,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"session_token": "grok-session-token",
+		},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{account.ID: account},
+		},
+	}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+	}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, grokSessionModeExpert, requestBodyModeID(t, upstream.requests[0]))
+	require.Contains(t, recorder.Body.String(), "test_complete")
+
+	grokExtra := grokExtraMap(repo.updatedExtra)
+	require.ElementsMatch(t, []string{"chat", "image", "image_edit", "video", "voice"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, []string{"grok-2-image", "grok-3", "grok-3-fast", "grok-4-fast-reasoning", "grok-4-voice", "grok-imagine-image", "grok-imagine-image-edit", "grok-imagine-image-pro", "grok-imagine-video"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+}
+
+func TestAccountTestService_GrokSessionUnknownTierFallsBackToDefaultProbeModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{
+		newJSONResponse(http.StatusForbidden, `{"error":"tier required"}`),
+		newJSONResponse(http.StatusOK, `{"conversationId":"conv_123"}`),
+	}}
+	account := &Account{
+		ID:          186,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"session_token": "grok-session-token",
+		},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{account.ID: account},
+		},
+	}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+	}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 2)
+	require.Equal(t, grokSessionModeExpert, requestBodyModeID(t, upstream.requests[0]))
+	require.Equal(t, grokSessionModeAuto, requestBodyModeID(t, upstream.requests[1]))
+
+	grokExtra := grokExtraMap(repo.updatedExtra)
+	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, []string{grok.DefaultTestModel}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
 }
 
 func TestAccountTestService_GrokProbeFailurePersistsNormalizedState(t *testing.T) {

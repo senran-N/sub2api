@@ -12,8 +12,6 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/grok"
 )
 
-const grokSessionProbeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-
 func (s *AccountTestService) testGrokAccountConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
 	if account == nil || NormalizeCompatibleGatewayPlatform(account.Platform) != PlatformGrok {
 		platform := ""
@@ -23,19 +21,104 @@ func (s *AccountTestService) testGrokAccountConnection(c *gin.Context, account *
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported compatible platform: %s", platform))
 	}
 
-	target, err := resolveGrokTransportTarget(account, s.accountTestBaseURLValidator())
+	runtimeSettings := s.currentGrokRuntimeSettings(c.Request.Context())
+	target, err := resolveGrokTransportTargetWithSettings(account, s.accountTestBaseURLValidator(), runtimeSettings)
 	if err != nil {
 		return s.sendErrorAndEnd(c, err.Error())
 	}
 
 	switch target.Kind {
 	case grokTransportKindCompatible:
-		return s.testCompatibleGatewayAPIKeyConnection(c, account, modelID, prompt)
+		return s.testGrokCompatibleConnection(c, account, modelID, prompt, target)
 	case grokTransportKindSession:
 		return s.testGrokSessionConnection(c, account, modelID, prompt, target)
 	default:
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported Grok transport kind: %s", target.Kind))
 	}
+}
+
+func (s *AccountTestService) testGrokCompatibleConnection(
+	c *gin.Context,
+	account *Account,
+	modelID string,
+	prompt string,
+	target grokTransportTarget,
+) error {
+	ctx := c.Request.Context()
+	probeModels := grokCapabilityProbeModelCandidates(account, modelID)
+	if len(probeModels) == 0 {
+		probeModels = []string{grok.DefaultTestModel}
+	}
+
+	s.prepareTestStream(c)
+
+	var (
+		lastModel   string
+		lastResp    *http.Response
+		lastErr     error
+		lastErrMsg  string
+		authErrBody string
+	)
+
+	for _, candidateModel := range probeModels {
+		testModelID := candidateModel
+		if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
+			testModelID = resolveOpenAIForwardModel(account, testModelID, "")
+		}
+		lastModel = testModelID
+
+		payload := createCompatibleGatewayTestPayload(testModelID, false, prompt)
+		payloadBytes, _ := json.Marshal(payload)
+		s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, target.URL, bytes.NewReader(payloadBytes))
+		if err != nil {
+			lastResp = nil
+			lastErr = fmt.Errorf("create request: %w", err)
+			lastErrMsg = "Failed to create request"
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		target.Apply(req)
+
+		resp, err := s.httpUpstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
+		if err != nil {
+			lastResp = nil
+			lastErr = fmt.Errorf("request failed: %w", err)
+			lastErrMsg = fmt.Sprintf("Request failed: %s", err.Error())
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			lastResp = resp
+			lastErrMsg = fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
+			lastErr = fmt.Errorf("%s", lastErrMsg)
+			authErrBody = string(body)
+			continue
+		}
+
+		s.persistCompatibleGatewayProbeState(ctx, account, testModelID, resp, nil, false)
+		defer func() { _ = resp.Body.Close() }()
+		return s.processCompatibleResponsesStream(c, resp.Body)
+	}
+
+	if lastModel == "" {
+		lastModel = grok.DefaultTestModel
+	}
+	if lastErrMsg == "" && lastErr != nil {
+		lastErrMsg = lastErr.Error()
+	}
+	if lastErrMsg == "" {
+		lastErrMsg = "Grok probe failed"
+	}
+	s.persistCompatibleGatewayProbeState(ctx, account, lastModel, lastResp, lastErr, false)
+	if s.accountRepo != nil && lastResp != nil && (lastResp.StatusCode == http.StatusUnauthorized || lastResp.StatusCode == http.StatusForbidden) {
+		authErrMsg := fmt.Sprintf("Authentication failed (%d): %s", lastResp.StatusCode, authErrBody)
+		_ = s.accountRepo.SetError(ctx, account.ID, authErrMsg)
+	}
+	return s.sendErrorAndEnd(c, lastErrMsg)
 }
 
 func (s *AccountTestService) accountTestBaseURLValidator() func(string) (string, error) {
@@ -53,52 +136,86 @@ func (s *AccountTestService) testGrokSessionConnection(
 	target grokTransportTarget,
 ) error {
 	ctx := c.Request.Context()
-
-	testModelID := strings.TrimSpace(modelID)
-	if testModelID == "" {
-		testModelID = grok.DefaultTestModel
-	}
-
 	s.prepareTestStream(c)
-	payload, err := createGrokSessionTestPayload(testModelID, prompt)
-	if err != nil {
-		return s.sendErrorAndEnd(c, err.Error())
-	}
-	payloadBytes, _ := json.Marshal(payload)
-	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target.URL, bytes.NewReader(payloadBytes))
-	if err != nil {
-		return s.sendErrorAndEnd(c, "Failed to create request")
+	probeModels := grokCapabilityProbeModelCandidates(account, modelID)
+	if len(probeModels) == 0 {
+		probeModels = []string{grok.DefaultTestModel}
 	}
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", grokWebBaseURL)
-	req.Header.Set("Referer", grokWebBaseURL+"/")
-	req.Header.Set("User-Agent", grokSessionProbeUserAgent)
-	target.Apply(req)
 
-	resp, err := s.httpUpstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
-	if err != nil {
-		s.persistCompatibleGatewayProbeState(ctx, account, testModelID, nil, fmt.Errorf("request failed: %w", err), false)
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
-	}
-	defer func() { _ = resp.Body.Close() }()
+	var (
+		lastModel   string
+		lastResp    *http.Response
+		lastErr     error
+		lastErrMsg  string
+		authErrBody string
+	)
 
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(resp.Body)
-		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
-		s.persistCompatibleGatewayProbeState(ctx, account, testModelID, resp, fmt.Errorf("%s", errMsg), false)
-		if s.accountRepo != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
-			authErrMsg := fmt.Sprintf("Authentication failed (%d): %s", resp.StatusCode, string(body))
-			_ = s.accountRepo.SetError(ctx, account.ID, authErrMsg)
+	for _, testModelID := range probeModels {
+		lastModel = testModelID
+		payload, err := createGrokSessionTestPayload(testModelID, prompt)
+		if err != nil {
+			lastResp = nil
+			lastErr = err
+			lastErrMsg = err.Error()
+			continue
 		}
-		return s.sendErrorAndEnd(c, errMsg)
+		payloadBytes, _ := json.Marshal(payload)
+		s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
+
+		req, err := newGrokSessionJSONRequest(
+			ctx,
+			http.MethodPost,
+			target,
+			payloadBytes,
+			"application/json, text/plain, */*",
+		)
+		if err != nil {
+			lastResp = nil
+			lastErr = fmt.Errorf("create request: %w", err)
+			lastErrMsg = "Failed to create request"
+			continue
+		}
+
+		resp, err := s.httpUpstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
+		if err != nil {
+			lastResp = nil
+			lastErr = fmt.Errorf("request failed: %w", err)
+			lastErrMsg = fmt.Sprintf("Request failed: %s", err.Error())
+			continue
+		}
+
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			lastResp = resp
+			lastErrMsg = fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
+			lastErr = fmt.Errorf("%s", lastErrMsg)
+			authErrBody = string(body)
+			continue
+		}
+
+		_ = resp.Body.Close()
+		s.persistCompatibleGatewayProbeState(ctx, account, testModelID, resp, nil, false)
+		s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+		return nil
 	}
 
-	s.persistCompatibleGatewayProbeState(ctx, account, testModelID, resp, nil, false)
-	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
-	return nil
+	if lastModel == "" {
+		lastModel = grok.DefaultTestModel
+	}
+	if lastErrMsg == "" && lastErr != nil {
+		lastErrMsg = lastErr.Error()
+	}
+	if lastErrMsg == "" {
+		lastErrMsg = "Grok session probe failed"
+	}
+	s.persistCompatibleGatewayProbeState(ctx, account, lastModel, lastResp, lastErr, false)
+	if s.accountRepo != nil && lastResp != nil && (lastResp.StatusCode == http.StatusUnauthorized || lastResp.StatusCode == http.StatusForbidden) {
+		authErrMsg := fmt.Sprintf("Authentication failed (%d): %s", lastResp.StatusCode, authErrBody)
+		_ = s.accountRepo.SetError(ctx, account.ID, authErrMsg)
+	}
+	return s.sendErrorAndEnd(c, lastErrMsg)
 }
 
 func createGrokSessionTestPayload(modelID string, prompt string) (map[string]any, error) {

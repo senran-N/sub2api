@@ -40,7 +40,7 @@ func (r *grokVideoJobRepository) Upsert(ctx context.Context, record service.Grok
 			error_code,
 			error_message
 		)
-		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12)
 		ON CONFLICT (job_id) DO UPDATE SET
 			account_id = EXCLUDED.account_id,
 			group_id = EXCLUDED.group_id,

@@ -897,6 +897,7 @@ import {
 } from '@/components/account/accountModalShared'
 import {
   buildModelMappingObject as buildModelMappingPayload,
+  ensureModelCatalogLoaded,
   getPresetMappingChipClasses,
   getPresetMappingsByPlatform
 } from '@/composables/useModelWhitelist'
@@ -954,6 +955,18 @@ const allAnthropicOAuthOrSetupToken = computed(() => {
     props.selectedTypes.every(t => t === 'oauth' || t === 'setup-token')
   )
 })
+
+watch(
+  () => props.selectedPlatforms,
+  (platforms) => {
+    for (const platform of platforms) {
+      if (platform === 'grok') {
+        void ensureModelCatalogLoaded(platform)
+      }
+    }
+  },
+  { immediate: true }
+)
 
 const filteredPresets = computed(() => {
   if (props.selectedPlatforms.length === 0) return []

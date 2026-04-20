@@ -35,6 +35,7 @@ type AccountTestService struct {
 	grokAccountStateService   *GrokAccountStateService
 	httpUpstream              HTTPUpstream
 	cfg                       *config.Config
+	settingService            *SettingService
 	tlsFPProfileService       *TLSFingerprintProfileService
 }
 
@@ -45,6 +46,7 @@ func NewAccountTestService(
 	antigravityGatewayService *AntigravityGatewayService,
 	httpUpstream HTTPUpstream,
 	cfg *config.Config,
+	settingService *SettingService,
 	tlsFPProfileService *TLSFingerprintProfileService,
 ) *AccountTestService {
 	return &AccountTestService{
@@ -54,6 +56,7 @@ func NewAccountTestService(
 		grokAccountStateService:   NewGrokAccountStateService(accountRepo),
 		httpUpstream:              httpUpstream,
 		cfg:                       cfg,
+		settingService:            settingService,
 		tlsFPProfileService:       tlsFPProfileService,
 	}
 }
@@ -63,6 +66,13 @@ func (s *AccountTestService) validateUpstreamBaseURL(raw string) (string, error)
 		return "", errors.New("config is not available")
 	}
 	return validateCompatibleUpstreamBaseURL(s.cfg, raw)
+}
+
+func (s *AccountTestService) currentGrokRuntimeSettings(ctx context.Context) GrokRuntimeSettings {
+	if s == nil || s.settingService == nil {
+		return DefaultGrokRuntimeSettings()
+	}
+	return s.settingService.GetGrokRuntimeSettings(ctx)
 }
 
 // generateSessionString generates a Claude Code style session string.

@@ -287,6 +287,41 @@ func (a *Account) GetOpenAIBaseURL() string {
 	return CompatibleGatewayDefaultBaseURL(a.Platform)
 }
 
+func (a *Account) GetGrokSessionToken() string {
+	if a == nil || NormalizeCompatibleGatewayPlatform(a.Platform) != PlatformGrok || a.Type != AccountTypeSession {
+		return ""
+	}
+	return strings.TrimSpace(a.GetCredential("session_token"))
+}
+
+func (a *Account) GetGrokSessionCFCookies() string {
+	if a == nil || NormalizeCompatibleGatewayPlatform(a.Platform) != PlatformGrok || a.Type != AccountTypeSession {
+		return ""
+	}
+	return strings.TrimSpace(a.GetCredential("cf_cookies"))
+}
+
+func (a *Account) GetGrokSessionCFClearance() string {
+	if a == nil || NormalizeCompatibleGatewayPlatform(a.Platform) != PlatformGrok || a.Type != AccountTypeSession {
+		return ""
+	}
+	return strings.TrimSpace(a.GetCredential("cf_clearance"))
+}
+
+func (a *Account) GetGrokSessionUserAgent() string {
+	if a == nil || NormalizeCompatibleGatewayPlatform(a.Platform) != PlatformGrok || a.Type != AccountTypeSession {
+		return ""
+	}
+	return strings.TrimSpace(a.GetCredential("user_agent"))
+}
+
+func (a *Account) GetGrokSessionAcceptLanguage() string {
+	if a == nil || NormalizeCompatibleGatewayPlatform(a.Platform) != PlatformGrok || a.Type != AccountTypeSession {
+		return ""
+	}
+	return strings.TrimSpace(a.GetCredential("accept_language"))
+}
+
 func (a *Account) GetOpenAIAccessToken() string {
 	if !a.IsOpenAI() {
 		return ""

@@ -47,6 +47,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		geminiOAuthSvc,
 		antigravityOAuthSvc,
 		nil, // openAIGateway
+		nil, // grokQuotaSync
+		nil, // grokCapabilityProbe
 	)
 
 	require.NotPanics(t, func() {
@@ -68,6 +70,8 @@ func TestProvideCleanup_StopsLifecycleRegistryEntries(t *testing.T) {
 		nil,
 		nil,
 		lifecycleRegistry,
+		nil,
+		nil,
 		nil,
 		nil,
 		nil,

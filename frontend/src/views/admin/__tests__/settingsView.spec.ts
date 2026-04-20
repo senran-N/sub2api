@@ -20,6 +20,10 @@ describe('settings feature helpers', () => {
     expect(form.smtp_port).toBe(587)
     expect(form.enable_fingerprint_unification).toBe(true)
     expect(form.enable_cch_signing).toBe(false)
+    expect(form.grok_quota_sync_interval_seconds).toBe(900)
+    expect(form.grok_capability_probe_interval_seconds).toBe(21600)
+    expect(form.grok_session_validity_check_interval).toBe(1800)
+    expect(form.grok_video_timeout).toBe(600)
 
     expect(createDefaultOverloadCooldownSettings()).toEqual({
       enabled: true,

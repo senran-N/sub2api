@@ -11,6 +11,9 @@ const (
 	// GrokSessionTextRuntimeAllowed 标识当前请求允许 Grok session 账号进入 provider-owned 文本运行时选择。
 	GrokSessionTextRuntimeAllowed Key = "ctx_grok_session_text_runtime_allowed"
 
+	// GrokSessionMediaRuntimeAllowed 标识当前请求允许 Grok session 账号进入 provider-owned 媒体运行时选择。
+	GrokSessionMediaRuntimeAllowed Key = "ctx_grok_session_media_runtime_allowed"
+
 	// RequestID 为服务端生成/透传的请求 ID。
 	RequestID Key = "ctx_request_id"
 

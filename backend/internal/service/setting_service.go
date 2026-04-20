@@ -10,6 +10,7 @@ import (
 
 	"github.com/senran-N/sub2api/internal/config"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
+	"github.com/senran-N/sub2api/internal/pkg/grok"
 )
 
 var (
@@ -171,6 +172,7 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyEnableModelFallback] = strconv.FormatBool(settings.EnableModelFallback)
 	updates[SettingKeyFallbackModelAnthropic] = settings.FallbackModelAnthropic
 	updates[SettingKeyFallbackModelOpenAI] = settings.FallbackModelOpenAI
+	updates[SettingKeyFallbackModelGrok] = settings.FallbackModelGrok
 	updates[SettingKeyFallbackModelGemini] = settings.FallbackModelGemini
 	updates[SettingKeyFallbackModelAntigravity] = settings.FallbackModelAntigravity
 
@@ -178,10 +180,50 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	settings.GrokImageOutputFormat = normalizeGrokImageOutputFormat(settings.GrokImageOutputFormat)
 	settings.GrokVideoOutputFormat = normalizeGrokVideoOutputFormat(settings.GrokVideoOutputFormat)
 	settings.GrokMediaCacheRetentionHours = normalizeGrokMediaCacheRetentionHours(settings.GrokMediaCacheRetentionHours)
+	settings.GrokQuotaSyncIntervalSeconds = normalizeGrokRuntimeIntervalSeconds(
+		settings.GrokQuotaSyncIntervalSeconds,
+		defaultGrokQuotaSyncIntervalSeconds,
+	)
+	settings.GrokUsageSyncConcurrency = normalizeGrokRuntimeConcurrency(
+		settings.GrokUsageSyncConcurrency,
+		defaultGrokUsageSyncConcurrency,
+	)
+	settings.GrokCapabilityProbeIntervalSeconds = normalizeGrokRuntimeIntervalSeconds(
+		settings.GrokCapabilityProbeIntervalSeconds,
+		defaultGrokCapabilityProbeIntervalSeconds,
+	)
+	settings.GrokCapabilityProbeConcurrency = normalizeGrokRuntimeConcurrency(
+		settings.GrokCapabilityProbeConcurrency,
+		defaultGrokCapabilityProbeConcurrency,
+	)
+	settings.GrokSessionValidityCheckIntervalSeconds = normalizeGrokRuntimeIntervalSeconds(
+		settings.GrokSessionValidityCheckIntervalSeconds,
+		defaultGrokSessionValidityCheckSeconds,
+	)
+	settings.GrokVideoTimeoutSeconds = normalizeGrokRuntimeTimeoutSeconds(
+		settings.GrokVideoTimeoutSeconds,
+		defaultGrokVideoTimeoutSeconds,
+	)
+	settings.GrokOfficialBaseURL = normalizeGrokRuntimeBaseURL(
+		settings.GrokOfficialBaseURL,
+		defaultGrokOfficialBaseURL,
+	)
+	settings.GrokSessionBaseURL = normalizeGrokRuntimeBaseURL(
+		settings.GrokSessionBaseURL,
+		defaultGrokSessionBaseURL,
+	)
+	updates[SettingKeyGrokOfficialBaseURL] = settings.GrokOfficialBaseURL
+	updates[SettingKeyGrokSessionBaseURL] = settings.GrokSessionBaseURL
 	updates[SettingKeyGrokImageOutputFormat] = settings.GrokImageOutputFormat
 	updates[SettingKeyGrokVideoOutputFormat] = settings.GrokVideoOutputFormat
 	updates[SettingKeyGrokMediaProxyEnabled] = strconv.FormatBool(settings.GrokMediaProxyEnabled)
 	updates[SettingKeyGrokMediaCacheRetentionHours] = strconv.Itoa(settings.GrokMediaCacheRetentionHours)
+	updates[SettingKeyGrokQuotaSyncIntervalSeconds] = strconv.Itoa(settings.GrokQuotaSyncIntervalSeconds)
+	updates[SettingKeyGrokUsageSyncConcurrency] = strconv.Itoa(settings.GrokUsageSyncConcurrency)
+	updates[SettingKeyGrokCapabilityProbeIntervalSeconds] = strconv.Itoa(settings.GrokCapabilityProbeIntervalSeconds)
+	updates[SettingKeyGrokCapabilityProbeConcurrency] = strconv.Itoa(settings.GrokCapabilityProbeConcurrency)
+	updates[SettingKeyGrokSessionValidityCheckInterval] = strconv.Itoa(settings.GrokSessionValidityCheckIntervalSeconds)
+	updates[SettingKeyGrokVideoTimeout] = strconv.Itoa(settings.GrokVideoTimeoutSeconds)
 
 	// Identity patch configuration (Claude -> Gemini)
 	updates[SettingKeyEnableIdentityPatch] = strconv.FormatBool(settings.EnableIdentityPatch)
@@ -290,15 +332,23 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeySMTPPort:                         "587",
 		SettingKeySMTPUseTLS:                       "false",
 		// Model fallback defaults
-		SettingKeyEnableModelFallback:          "false",
-		SettingKeyFallbackModelAnthropic:       "claude-3-5-sonnet-20241022",
-		SettingKeyFallbackModelOpenAI:          "gpt-4o",
-		SettingKeyFallbackModelGemini:          "gemini-2.5-pro",
-		SettingKeyFallbackModelAntigravity:     "gemini-2.5-pro",
-		SettingKeyGrokImageOutputFormat:        GrokMediaOutputFormatLocalURL,
-		SettingKeyGrokVideoOutputFormat:        GrokMediaOutputFormatLocalURL,
-		SettingKeyGrokMediaProxyEnabled:        "true",
-		SettingKeyGrokMediaCacheRetentionHours: strconv.Itoa(defaultGrokMediaCacheRetentionHours),
+		SettingKeyEnableModelFallback:                "false",
+		SettingKeyFallbackModelAnthropic:             "claude-3-5-sonnet-20241022",
+		SettingKeyFallbackModelOpenAI:                "gpt-4o",
+		SettingKeyFallbackModelGemini:                "gemini-2.5-pro",
+		SettingKeyFallbackModelAntigravity:           "gemini-2.5-pro",
+		SettingKeyGrokOfficialBaseURL:                defaultGrokOfficialBaseURL,
+		SettingKeyGrokSessionBaseURL:                 defaultGrokSessionBaseURL,
+		SettingKeyGrokImageOutputFormat:              GrokMediaOutputFormatLocalURL,
+		SettingKeyGrokVideoOutputFormat:              GrokMediaOutputFormatLocalURL,
+		SettingKeyGrokMediaProxyEnabled:              "true",
+		SettingKeyGrokMediaCacheRetentionHours:       strconv.Itoa(defaultGrokMediaCacheRetentionHours),
+		SettingKeyGrokQuotaSyncIntervalSeconds:       strconv.Itoa(defaultGrokQuotaSyncIntervalSeconds),
+		SettingKeyGrokUsageSyncConcurrency:           strconv.Itoa(defaultGrokUsageSyncConcurrency),
+		SettingKeyGrokCapabilityProbeIntervalSeconds: strconv.Itoa(defaultGrokCapabilityProbeIntervalSeconds),
+		SettingKeyGrokCapabilityProbeConcurrency:     strconv.Itoa(defaultGrokCapabilityProbeConcurrency),
+		SettingKeyGrokSessionValidityCheckInterval:   strconv.Itoa(defaultGrokSessionValidityCheckSeconds),
+		SettingKeyGrokVideoTimeout:                   strconv.Itoa(defaultGrokVideoTimeoutSeconds),
 		// Identity patch defaults
 		SettingKeyEnableIdentityPatch: "true",
 		SettingKeyIdentityPatchPrompt: "",
@@ -419,13 +469,45 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.EnableModelFallback = settings[SettingKeyEnableModelFallback] == "true"
 	result.FallbackModelAnthropic = s.getStringOrDefault(settings, SettingKeyFallbackModelAnthropic, "claude-3-5-sonnet-20241022")
 	result.FallbackModelOpenAI = s.getStringOrDefault(settings, SettingKeyFallbackModelOpenAI, "gpt-4o")
-	result.FallbackModelGrok = s.getStringOrDefault(settings, SettingKeyFallbackModelGrok, "grok-3")
+	result.FallbackModelGrok = s.getStringOrDefault(settings, SettingKeyFallbackModelGrok, grok.DefaultFallbackModelID())
 	result.FallbackModelGemini = s.getStringOrDefault(settings, SettingKeyFallbackModelGemini, "gemini-2.5-pro")
 	result.FallbackModelAntigravity = s.getStringOrDefault(settings, SettingKeyFallbackModelAntigravity, "gemini-2.5-pro")
+	result.GrokOfficialBaseURL = normalizeGrokRuntimeBaseURL(
+		settings[SettingKeyGrokOfficialBaseURL],
+		defaultGrokOfficialBaseURL,
+	)
+	result.GrokSessionBaseURL = normalizeGrokRuntimeBaseURL(
+		settings[SettingKeyGrokSessionBaseURL],
+		defaultGrokSessionBaseURL,
+	)
 	result.GrokImageOutputFormat = normalizeGrokImageOutputFormat(settings[SettingKeyGrokImageOutputFormat])
 	result.GrokVideoOutputFormat = normalizeGrokVideoOutputFormat(settings[SettingKeyGrokVideoOutputFormat])
 	result.GrokMediaProxyEnabled = !isFalseSettingValue(settings[SettingKeyGrokMediaProxyEnabled])
 	result.GrokMediaCacheRetentionHours = parseGrokMediaCacheRetentionHours(settings[SettingKeyGrokMediaCacheRetentionHours])
+	result.GrokQuotaSyncIntervalSeconds = parseGrokRuntimeIntervalSeconds(
+		settings[SettingKeyGrokQuotaSyncIntervalSeconds],
+		defaultGrokQuotaSyncIntervalSeconds,
+	)
+	result.GrokUsageSyncConcurrency = parseGrokRuntimeConcurrency(
+		settings[SettingKeyGrokUsageSyncConcurrency],
+		defaultGrokUsageSyncConcurrency,
+	)
+	result.GrokCapabilityProbeIntervalSeconds = parseGrokRuntimeIntervalSeconds(
+		settings[SettingKeyGrokCapabilityProbeIntervalSeconds],
+		defaultGrokCapabilityProbeIntervalSeconds,
+	)
+	result.GrokCapabilityProbeConcurrency = parseGrokRuntimeConcurrency(
+		settings[SettingKeyGrokCapabilityProbeConcurrency],
+		defaultGrokCapabilityProbeConcurrency,
+	)
+	result.GrokSessionValidityCheckIntervalSeconds = parseGrokRuntimeIntervalSeconds(
+		settings[SettingKeyGrokSessionValidityCheckInterval],
+		defaultGrokSessionValidityCheckSeconds,
+	)
+	result.GrokVideoTimeoutSeconds = parseGrokRuntimeTimeoutSeconds(
+		settings[SettingKeyGrokVideoTimeout],
+		defaultGrokVideoTimeoutSeconds,
+	)
 
 	// Identity patch settings (default: enabled, to preserve existing behavior)
 	if v, ok := settings[SettingKeyEnableIdentityPatch]; ok && v != "" {

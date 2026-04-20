@@ -13,6 +13,7 @@ import (
 
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/handler/dto"
+	"github.com/senran-N/sub2api/internal/pkg/grok"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	"github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
@@ -53,6 +54,52 @@ func NewSettingHandler(settingService *service.SettingService, emailService *ser
 	}
 }
 
+type ModelCatalogEntry struct {
+	ID             string   `json:"id"`
+	DisplayName    string   `json:"display_name"`
+	Capability     string   `json:"capability"`
+	ProtocolFamily string   `json:"protocol_family"`
+	RequiredTier   string   `json:"required_tier"`
+	Aliases        []string `json:"aliases,omitempty"`
+	SupportsStream bool     `json:"supports_stream"`
+	SupportsTools  bool     `json:"supports_tools"`
+}
+
+type ModelCatalogResponse struct {
+	Platform string              `json:"platform"`
+	Models   []ModelCatalogEntry `json:"models"`
+}
+
+// GetModelCatalog returns the backend-owned model catalog for a platform.
+// GET /api/v1/admin/model-catalog?platform=grok
+func (h *SettingHandler) GetModelCatalog(c *gin.Context) {
+	platform := strings.ToLower(strings.TrimSpace(c.Query("platform")))
+	switch platform {
+	case service.PlatformGrok:
+		specs := grok.Specs()
+		models := make([]ModelCatalogEntry, 0, len(specs))
+		for _, spec := range specs {
+			models = append(models, ModelCatalogEntry{
+				ID:             spec.ID,
+				DisplayName:    spec.DisplayName,
+				Capability:     string(spec.Capability),
+				ProtocolFamily: string(spec.ProtocolFamily),
+				RequiredTier:   string(spec.RequiredTier),
+				Aliases:        append([]string(nil), spec.Aliases...),
+				SupportsStream: spec.SupportsStream,
+				SupportsTools:  spec.SupportsTools,
+			})
+		}
+		response.Success(c, ModelCatalogResponse{
+			Platform: platform,
+			Models:   models,
+		})
+		return
+	default:
+		response.BadRequest(c, "unsupported platform")
+	}
+}
+
 // GetSettings 获取所有系统设置
 // GET /api/v1/admin/settings
 func (h *SettingHandler) GetSettings(c *gin.Context) {
@@ -73,67 +120,76 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 	}
 
 	response.Success(c, dto.SystemSettings{
-		RegistrationEnabled:                  settings.RegistrationEnabled,
-		EmailVerifyEnabled:                   settings.EmailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist:     settings.RegistrationEmailSuffixWhitelist,
-		PromoCodeEnabled:                     settings.PromoCodeEnabled,
-		PasswordResetEnabled:                 settings.PasswordResetEnabled,
-		FrontendURL:                          settings.FrontendURL,
-		InvitationCodeEnabled:                settings.InvitationCodeEnabled,
-		TotpEnabled:                          settings.TotpEnabled,
-		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
-		SMTPHost:                             settings.SMTPHost,
-		SMTPPort:                             settings.SMTPPort,
-		SMTPUsername:                         settings.SMTPUsername,
-		SMTPPasswordConfigured:               settings.SMTPPasswordConfigured,
-		SMTPFrom:                             settings.SMTPFrom,
-		SMTPFromName:                         settings.SMTPFromName,
-		SMTPUseTLS:                           settings.SMTPUseTLS,
-		TurnstileEnabled:                     settings.TurnstileEnabled,
-		TurnstileSiteKey:                     settings.TurnstileSiteKey,
-		TurnstileSecretKeyConfigured:         settings.TurnstileSecretKeyConfigured,
-		LinuxDoConnectEnabled:                settings.LinuxDoConnectEnabled,
-		LinuxDoConnectClientID:               settings.LinuxDoConnectClientID,
-		LinuxDoConnectClientSecretConfigured: settings.LinuxDoConnectClientSecretConfigured,
-		LinuxDoConnectRedirectURL:            settings.LinuxDoConnectRedirectURL,
-		SiteName:                             settings.SiteName,
-		SiteLogo:                             settings.SiteLogo,
-		SiteSubtitle:                         settings.SiteSubtitle,
-		FrontendTheme:                        settings.FrontendTheme,
-		APIBaseURL:                           settings.APIBaseURL,
-		ContactInfo:                          settings.ContactInfo,
-		DocURL:                               settings.DocURL,
-		HomeContent:                          settings.HomeContent,
-		HideCcsImportButton:                  settings.HideCcsImportButton,
-		PurchaseSubscriptionEnabled:          settings.PurchaseSubscriptionEnabled,
-		PurchaseSubscriptionURL:              settings.PurchaseSubscriptionURL,
-		CustomMenuItems:                      dto.ParseCustomMenuItems(settings.CustomMenuItems),
-		CustomEndpoints:                      dto.ParseCustomEndpoints(settings.CustomEndpoints),
-		DefaultConcurrency:                   settings.DefaultConcurrency,
-		DefaultBalance:                       settings.DefaultBalance,
-		DefaultSubscriptions:                 defaultSubscriptions,
-		EnableModelFallback:                  settings.EnableModelFallback,
-		FallbackModelAnthropic:               settings.FallbackModelAnthropic,
-		FallbackModelOpenAI:                  settings.FallbackModelOpenAI,
-		FallbackModelGemini:                  settings.FallbackModelGemini,
-		FallbackModelAntigravity:             settings.FallbackModelAntigravity,
-		GrokImageOutputFormat:                settings.GrokImageOutputFormat,
-		GrokVideoOutputFormat:                settings.GrokVideoOutputFormat,
-		GrokMediaProxyEnabled:                settings.GrokMediaProxyEnabled,
-		GrokMediaCacheRetentionHours:         settings.GrokMediaCacheRetentionHours,
-		EnableIdentityPatch:                  settings.EnableIdentityPatch,
-		IdentityPatchPrompt:                  settings.IdentityPatchPrompt,
-		OpsMonitoringEnabled:                 opsEnabled && settings.OpsMonitoringEnabled,
-		OpsRealtimeMonitoringEnabled:         settings.OpsRealtimeMonitoringEnabled,
-		OpsQueryModeDefault:                  settings.OpsQueryModeDefault,
-		OpsMetricsIntervalSeconds:            settings.OpsMetricsIntervalSeconds,
-		MinClaudeCodeVersion:                 settings.MinClaudeCodeVersion,
-		MaxClaudeCodeVersion:                 settings.MaxClaudeCodeVersion,
-		AllowUngroupedKeyScheduling:          settings.AllowUngroupedKeyScheduling,
-		BackendModeEnabled:                   settings.BackendModeEnabled,
-		EnableFingerprintUnification:         settings.EnableFingerprintUnification,
-		EnableMetadataPassthrough:            settings.EnableMetadataPassthrough,
-		EnableCCHSigning:                     settings.EnableCCHSigning,
+		RegistrationEnabled:                     settings.RegistrationEnabled,
+		EmailVerifyEnabled:                      settings.EmailVerifyEnabled,
+		RegistrationEmailSuffixWhitelist:        settings.RegistrationEmailSuffixWhitelist,
+		PromoCodeEnabled:                        settings.PromoCodeEnabled,
+		PasswordResetEnabled:                    settings.PasswordResetEnabled,
+		FrontendURL:                             settings.FrontendURL,
+		InvitationCodeEnabled:                   settings.InvitationCodeEnabled,
+		TotpEnabled:                             settings.TotpEnabled,
+		TotpEncryptionKeyConfigured:             h.settingService.IsTotpEncryptionKeyConfigured(),
+		SMTPHost:                                settings.SMTPHost,
+		SMTPPort:                                settings.SMTPPort,
+		SMTPUsername:                            settings.SMTPUsername,
+		SMTPPasswordConfigured:                  settings.SMTPPasswordConfigured,
+		SMTPFrom:                                settings.SMTPFrom,
+		SMTPFromName:                            settings.SMTPFromName,
+		SMTPUseTLS:                              settings.SMTPUseTLS,
+		TurnstileEnabled:                        settings.TurnstileEnabled,
+		TurnstileSiteKey:                        settings.TurnstileSiteKey,
+		TurnstileSecretKeyConfigured:            settings.TurnstileSecretKeyConfigured,
+		LinuxDoConnectEnabled:                   settings.LinuxDoConnectEnabled,
+		LinuxDoConnectClientID:                  settings.LinuxDoConnectClientID,
+		LinuxDoConnectClientSecretConfigured:    settings.LinuxDoConnectClientSecretConfigured,
+		LinuxDoConnectRedirectURL:               settings.LinuxDoConnectRedirectURL,
+		SiteName:                                settings.SiteName,
+		SiteLogo:                                settings.SiteLogo,
+		SiteSubtitle:                            settings.SiteSubtitle,
+		FrontendTheme:                           settings.FrontendTheme,
+		APIBaseURL:                              settings.APIBaseURL,
+		ContactInfo:                             settings.ContactInfo,
+		DocURL:                                  settings.DocURL,
+		HomeContent:                             settings.HomeContent,
+		HideCcsImportButton:                     settings.HideCcsImportButton,
+		PurchaseSubscriptionEnabled:             settings.PurchaseSubscriptionEnabled,
+		PurchaseSubscriptionURL:                 settings.PurchaseSubscriptionURL,
+		CustomMenuItems:                         dto.ParseCustomMenuItems(settings.CustomMenuItems),
+		CustomEndpoints:                         dto.ParseCustomEndpoints(settings.CustomEndpoints),
+		DefaultConcurrency:                      settings.DefaultConcurrency,
+		DefaultBalance:                          settings.DefaultBalance,
+		DefaultSubscriptions:                    defaultSubscriptions,
+		EnableModelFallback:                     settings.EnableModelFallback,
+		FallbackModelAnthropic:                  settings.FallbackModelAnthropic,
+		FallbackModelOpenAI:                     settings.FallbackModelOpenAI,
+		FallbackModelGrok:                       settings.FallbackModelGrok,
+		FallbackModelGemini:                     settings.FallbackModelGemini,
+		FallbackModelAntigravity:                settings.FallbackModelAntigravity,
+		GrokOfficialBaseURL:                     settings.GrokOfficialBaseURL,
+		GrokSessionBaseURL:                      settings.GrokSessionBaseURL,
+		GrokImageOutputFormat:                   settings.GrokImageOutputFormat,
+		GrokVideoOutputFormat:                   settings.GrokVideoOutputFormat,
+		GrokMediaProxyEnabled:                   settings.GrokMediaProxyEnabled,
+		GrokMediaCacheRetentionHours:            settings.GrokMediaCacheRetentionHours,
+		GrokQuotaSyncIntervalSeconds:            settings.GrokQuotaSyncIntervalSeconds,
+		GrokUsageSyncConcurrency:                settings.GrokUsageSyncConcurrency,
+		GrokCapabilityProbeIntervalSeconds:      settings.GrokCapabilityProbeIntervalSeconds,
+		GrokCapabilityProbeConcurrency:          settings.GrokCapabilityProbeConcurrency,
+		GrokSessionValidityCheckIntervalSeconds: settings.GrokSessionValidityCheckIntervalSeconds,
+		GrokVideoTimeoutSeconds:                 settings.GrokVideoTimeoutSeconds,
+		EnableIdentityPatch:                     settings.EnableIdentityPatch,
+		IdentityPatchPrompt:                     settings.IdentityPatchPrompt,
+		OpsMonitoringEnabled:                    opsEnabled && settings.OpsMonitoringEnabled,
+		OpsRealtimeMonitoringEnabled:            settings.OpsRealtimeMonitoringEnabled,
+		OpsQueryModeDefault:                     settings.OpsQueryModeDefault,
+		OpsMetricsIntervalSeconds:               settings.OpsMetricsIntervalSeconds,
+		MinClaudeCodeVersion:                    settings.MinClaudeCodeVersion,
+		MaxClaudeCodeVersion:                    settings.MaxClaudeCodeVersion,
+		AllowUngroupedKeyScheduling:             settings.AllowUngroupedKeyScheduling,
+		BackendModeEnabled:                      settings.BackendModeEnabled,
+		EnableFingerprintUnification:            settings.EnableFingerprintUnification,
+		EnableMetadataPassthrough:               settings.EnableMetadataPassthrough,
+		EnableCCHSigning:                        settings.EnableCCHSigning,
 	})
 }
 
@@ -190,15 +246,24 @@ type UpdateSettingsRequest struct {
 	DefaultSubscriptions []dto.DefaultSubscriptionSetting `json:"default_subscriptions"`
 
 	// Model fallback configuration
-	EnableModelFallback          bool   `json:"enable_model_fallback"`
-	FallbackModelAnthropic       string `json:"fallback_model_anthropic"`
-	FallbackModelOpenAI          string `json:"fallback_model_openai"`
-	FallbackModelGemini          string `json:"fallback_model_gemini"`
-	FallbackModelAntigravity     string `json:"fallback_model_antigravity"`
-	GrokImageOutputFormat        string `json:"grok_image_output_format"`
-	GrokVideoOutputFormat        string `json:"grok_video_output_format"`
-	GrokMediaProxyEnabled        *bool  `json:"grok_media_proxy_enabled"`
-	GrokMediaCacheRetentionHours *int   `json:"grok_media_cache_retention_hours"`
+	EnableModelFallback                bool   `json:"enable_model_fallback"`
+	FallbackModelAnthropic             string `json:"fallback_model_anthropic"`
+	FallbackModelOpenAI                string `json:"fallback_model_openai"`
+	FallbackModelGrok                  string `json:"fallback_model_grok"`
+	FallbackModelGemini                string `json:"fallback_model_gemini"`
+	FallbackModelAntigravity           string `json:"fallback_model_antigravity"`
+	GrokOfficialBaseURL                string `json:"grok_official_base_url"`
+	GrokSessionBaseURL                 string `json:"grok_session_base_url"`
+	GrokImageOutputFormat              string `json:"grok_image_output_format"`
+	GrokVideoOutputFormat              string `json:"grok_video_output_format"`
+	GrokMediaProxyEnabled              *bool  `json:"grok_media_proxy_enabled"`
+	GrokMediaCacheRetentionHours       *int   `json:"grok_media_cache_retention_hours"`
+	GrokQuotaSyncIntervalSeconds       *int   `json:"grok_quota_sync_interval_seconds"`
+	GrokUsageSyncConcurrency           *int   `json:"grok_usage_sync_concurrency"`
+	GrokCapabilityProbeIntervalSeconds *int   `json:"grok_capability_probe_interval_seconds"`
+	GrokCapabilityProbeConcurrency     *int   `json:"grok_capability_probe_concurrency"`
+	GrokSessionValidityCheckInterval   *int   `json:"grok_session_validity_check_interval"`
+	GrokVideoTimeout                   *int   `json:"grok_video_timeout"`
 
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`
@@ -374,6 +439,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	if req.FrontendURL != "" {
 		if err := config.ValidateAbsoluteHTTPURL(req.FrontendURL); err != nil {
 			response.BadRequest(c, "Frontend URL must be an absolute http(s) URL")
+			return
+		}
+	}
+	if value := strings.TrimSpace(req.GrokOfficialBaseURL); value != "" {
+		if err := config.ValidateAbsoluteHTTPURL(value); err != nil {
+			response.BadRequest(c, "Grok Official Base URL must be an absolute http(s) URL")
+			return
+		}
+	}
+	if value := strings.TrimSpace(req.GrokSessionBaseURL); value != "" {
+		if err := config.ValidateAbsoluteHTTPURL(value); err != nil {
+			response.BadRequest(c, "Grok Session Base URL must be an absolute http(s) URL")
 			return
 		}
 	}
@@ -590,10 +667,23 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		EnableModelFallback:              req.EnableModelFallback,
 		FallbackModelAnthropic:           req.FallbackModelAnthropic,
 		FallbackModelOpenAI:              req.FallbackModelOpenAI,
+		FallbackModelGrok:                req.FallbackModelGrok,
 		FallbackModelGemini:              req.FallbackModelGemini,
 		FallbackModelAntigravity:         req.FallbackModelAntigravity,
-		GrokImageOutputFormat:            req.GrokImageOutputFormat,
-		GrokVideoOutputFormat:            req.GrokVideoOutputFormat,
+		GrokOfficialBaseURL: func() string {
+			if value := strings.TrimSpace(req.GrokOfficialBaseURL); value != "" {
+				return value
+			}
+			return previousSettings.GrokOfficialBaseURL
+		}(),
+		GrokSessionBaseURL: func() string {
+			if value := strings.TrimSpace(req.GrokSessionBaseURL); value != "" {
+				return value
+			}
+			return previousSettings.GrokSessionBaseURL
+		}(),
+		GrokImageOutputFormat: req.GrokImageOutputFormat,
+		GrokVideoOutputFormat: req.GrokVideoOutputFormat,
 		GrokMediaProxyEnabled: func() bool {
 			if req.GrokMediaProxyEnabled != nil {
 				return *req.GrokMediaProxyEnabled
@@ -605,6 +695,42 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				return *req.GrokMediaCacheRetentionHours
 			}
 			return previousSettings.GrokMediaCacheRetentionHours
+		}(),
+		GrokQuotaSyncIntervalSeconds: func() int {
+			if req.GrokQuotaSyncIntervalSeconds != nil {
+				return *req.GrokQuotaSyncIntervalSeconds
+			}
+			return previousSettings.GrokQuotaSyncIntervalSeconds
+		}(),
+		GrokUsageSyncConcurrency: func() int {
+			if req.GrokUsageSyncConcurrency != nil {
+				return *req.GrokUsageSyncConcurrency
+			}
+			return previousSettings.GrokUsageSyncConcurrency
+		}(),
+		GrokCapabilityProbeIntervalSeconds: func() int {
+			if req.GrokCapabilityProbeIntervalSeconds != nil {
+				return *req.GrokCapabilityProbeIntervalSeconds
+			}
+			return previousSettings.GrokCapabilityProbeIntervalSeconds
+		}(),
+		GrokCapabilityProbeConcurrency: func() int {
+			if req.GrokCapabilityProbeConcurrency != nil {
+				return *req.GrokCapabilityProbeConcurrency
+			}
+			return previousSettings.GrokCapabilityProbeConcurrency
+		}(),
+		GrokSessionValidityCheckIntervalSeconds: func() int {
+			if req.GrokSessionValidityCheckInterval != nil {
+				return *req.GrokSessionValidityCheckInterval
+			}
+			return previousSettings.GrokSessionValidityCheckIntervalSeconds
+		}(),
+		GrokVideoTimeoutSeconds: func() int {
+			if req.GrokVideoTimeout != nil {
+				return *req.GrokVideoTimeout
+			}
+			return previousSettings.GrokVideoTimeoutSeconds
 		}(),
 		EnableIdentityPatch:         req.EnableIdentityPatch,
 		IdentityPatchPrompt:         req.IdentityPatchPrompt,
@@ -678,67 +804,76 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	response.Success(c, dto.SystemSettings{
-		RegistrationEnabled:                  updatedSettings.RegistrationEnabled,
-		EmailVerifyEnabled:                   updatedSettings.EmailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist:     updatedSettings.RegistrationEmailSuffixWhitelist,
-		PromoCodeEnabled:                     updatedSettings.PromoCodeEnabled,
-		PasswordResetEnabled:                 updatedSettings.PasswordResetEnabled,
-		FrontendURL:                          updatedSettings.FrontendURL,
-		InvitationCodeEnabled:                updatedSettings.InvitationCodeEnabled,
-		TotpEnabled:                          updatedSettings.TotpEnabled,
-		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
-		SMTPHost:                             updatedSettings.SMTPHost,
-		SMTPPort:                             updatedSettings.SMTPPort,
-		SMTPUsername:                         updatedSettings.SMTPUsername,
-		SMTPPasswordConfigured:               updatedSettings.SMTPPasswordConfigured,
-		SMTPFrom:                             updatedSettings.SMTPFrom,
-		SMTPFromName:                         updatedSettings.SMTPFromName,
-		SMTPUseTLS:                           updatedSettings.SMTPUseTLS,
-		TurnstileEnabled:                     updatedSettings.TurnstileEnabled,
-		TurnstileSiteKey:                     updatedSettings.TurnstileSiteKey,
-		TurnstileSecretKeyConfigured:         updatedSettings.TurnstileSecretKeyConfigured,
-		LinuxDoConnectEnabled:                updatedSettings.LinuxDoConnectEnabled,
-		LinuxDoConnectClientID:               updatedSettings.LinuxDoConnectClientID,
-		LinuxDoConnectClientSecretConfigured: updatedSettings.LinuxDoConnectClientSecretConfigured,
-		LinuxDoConnectRedirectURL:            updatedSettings.LinuxDoConnectRedirectURL,
-		SiteName:                             updatedSettings.SiteName,
-		SiteLogo:                             updatedSettings.SiteLogo,
-		SiteSubtitle:                         updatedSettings.SiteSubtitle,
-		FrontendTheme:                        updatedSettings.FrontendTheme,
-		APIBaseURL:                           updatedSettings.APIBaseURL,
-		ContactInfo:                          updatedSettings.ContactInfo,
-		DocURL:                               updatedSettings.DocURL,
-		HomeContent:                          updatedSettings.HomeContent,
-		HideCcsImportButton:                  updatedSettings.HideCcsImportButton,
-		PurchaseSubscriptionEnabled:          updatedSettings.PurchaseSubscriptionEnabled,
-		PurchaseSubscriptionURL:              updatedSettings.PurchaseSubscriptionURL,
-		CustomMenuItems:                      dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
-		CustomEndpoints:                      dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
-		DefaultConcurrency:                   updatedSettings.DefaultConcurrency,
-		DefaultBalance:                       updatedSettings.DefaultBalance,
-		DefaultSubscriptions:                 updatedDefaultSubscriptions,
-		EnableModelFallback:                  updatedSettings.EnableModelFallback,
-		FallbackModelAnthropic:               updatedSettings.FallbackModelAnthropic,
-		FallbackModelOpenAI:                  updatedSettings.FallbackModelOpenAI,
-		FallbackModelGemini:                  updatedSettings.FallbackModelGemini,
-		FallbackModelAntigravity:             updatedSettings.FallbackModelAntigravity,
-		GrokImageOutputFormat:                updatedSettings.GrokImageOutputFormat,
-		GrokVideoOutputFormat:                updatedSettings.GrokVideoOutputFormat,
-		GrokMediaProxyEnabled:                updatedSettings.GrokMediaProxyEnabled,
-		GrokMediaCacheRetentionHours:         updatedSettings.GrokMediaCacheRetentionHours,
-		EnableIdentityPatch:                  updatedSettings.EnableIdentityPatch,
-		IdentityPatchPrompt:                  updatedSettings.IdentityPatchPrompt,
-		OpsMonitoringEnabled:                 updatedSettings.OpsMonitoringEnabled,
-		OpsRealtimeMonitoringEnabled:         updatedSettings.OpsRealtimeMonitoringEnabled,
-		OpsQueryModeDefault:                  updatedSettings.OpsQueryModeDefault,
-		OpsMetricsIntervalSeconds:            updatedSettings.OpsMetricsIntervalSeconds,
-		MinClaudeCodeVersion:                 updatedSettings.MinClaudeCodeVersion,
-		MaxClaudeCodeVersion:                 updatedSettings.MaxClaudeCodeVersion,
-		AllowUngroupedKeyScheduling:          updatedSettings.AllowUngroupedKeyScheduling,
-		BackendModeEnabled:                   updatedSettings.BackendModeEnabled,
-		EnableFingerprintUnification:         updatedSettings.EnableFingerprintUnification,
-		EnableMetadataPassthrough:            updatedSettings.EnableMetadataPassthrough,
-		EnableCCHSigning:                     updatedSettings.EnableCCHSigning,
+		RegistrationEnabled:                     updatedSettings.RegistrationEnabled,
+		EmailVerifyEnabled:                      updatedSettings.EmailVerifyEnabled,
+		RegistrationEmailSuffixWhitelist:        updatedSettings.RegistrationEmailSuffixWhitelist,
+		PromoCodeEnabled:                        updatedSettings.PromoCodeEnabled,
+		PasswordResetEnabled:                    updatedSettings.PasswordResetEnabled,
+		FrontendURL:                             updatedSettings.FrontendURL,
+		InvitationCodeEnabled:                   updatedSettings.InvitationCodeEnabled,
+		TotpEnabled:                             updatedSettings.TotpEnabled,
+		TotpEncryptionKeyConfigured:             h.settingService.IsTotpEncryptionKeyConfigured(),
+		SMTPHost:                                updatedSettings.SMTPHost,
+		SMTPPort:                                updatedSettings.SMTPPort,
+		SMTPUsername:                            updatedSettings.SMTPUsername,
+		SMTPPasswordConfigured:                  updatedSettings.SMTPPasswordConfigured,
+		SMTPFrom:                                updatedSettings.SMTPFrom,
+		SMTPFromName:                            updatedSettings.SMTPFromName,
+		SMTPUseTLS:                              updatedSettings.SMTPUseTLS,
+		TurnstileEnabled:                        updatedSettings.TurnstileEnabled,
+		TurnstileSiteKey:                        updatedSettings.TurnstileSiteKey,
+		TurnstileSecretKeyConfigured:            updatedSettings.TurnstileSecretKeyConfigured,
+		LinuxDoConnectEnabled:                   updatedSettings.LinuxDoConnectEnabled,
+		LinuxDoConnectClientID:                  updatedSettings.LinuxDoConnectClientID,
+		LinuxDoConnectClientSecretConfigured:    updatedSettings.LinuxDoConnectClientSecretConfigured,
+		LinuxDoConnectRedirectURL:               updatedSettings.LinuxDoConnectRedirectURL,
+		SiteName:                                updatedSettings.SiteName,
+		SiteLogo:                                updatedSettings.SiteLogo,
+		SiteSubtitle:                            updatedSettings.SiteSubtitle,
+		FrontendTheme:                           updatedSettings.FrontendTheme,
+		APIBaseURL:                              updatedSettings.APIBaseURL,
+		ContactInfo:                             updatedSettings.ContactInfo,
+		DocURL:                                  updatedSettings.DocURL,
+		HomeContent:                             updatedSettings.HomeContent,
+		HideCcsImportButton:                     updatedSettings.HideCcsImportButton,
+		PurchaseSubscriptionEnabled:             updatedSettings.PurchaseSubscriptionEnabled,
+		PurchaseSubscriptionURL:                 updatedSettings.PurchaseSubscriptionURL,
+		CustomMenuItems:                         dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
+		CustomEndpoints:                         dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
+		DefaultConcurrency:                      updatedSettings.DefaultConcurrency,
+		DefaultBalance:                          updatedSettings.DefaultBalance,
+		DefaultSubscriptions:                    updatedDefaultSubscriptions,
+		EnableModelFallback:                     updatedSettings.EnableModelFallback,
+		FallbackModelAnthropic:                  updatedSettings.FallbackModelAnthropic,
+		FallbackModelOpenAI:                     updatedSettings.FallbackModelOpenAI,
+		FallbackModelGrok:                       updatedSettings.FallbackModelGrok,
+		FallbackModelGemini:                     updatedSettings.FallbackModelGemini,
+		FallbackModelAntigravity:                updatedSettings.FallbackModelAntigravity,
+		GrokOfficialBaseURL:                     updatedSettings.GrokOfficialBaseURL,
+		GrokSessionBaseURL:                      updatedSettings.GrokSessionBaseURL,
+		GrokImageOutputFormat:                   updatedSettings.GrokImageOutputFormat,
+		GrokVideoOutputFormat:                   updatedSettings.GrokVideoOutputFormat,
+		GrokMediaProxyEnabled:                   updatedSettings.GrokMediaProxyEnabled,
+		GrokMediaCacheRetentionHours:            updatedSettings.GrokMediaCacheRetentionHours,
+		GrokQuotaSyncIntervalSeconds:            updatedSettings.GrokQuotaSyncIntervalSeconds,
+		GrokUsageSyncConcurrency:                updatedSettings.GrokUsageSyncConcurrency,
+		GrokCapabilityProbeIntervalSeconds:      updatedSettings.GrokCapabilityProbeIntervalSeconds,
+		GrokCapabilityProbeConcurrency:          updatedSettings.GrokCapabilityProbeConcurrency,
+		GrokSessionValidityCheckIntervalSeconds: updatedSettings.GrokSessionValidityCheckIntervalSeconds,
+		GrokVideoTimeoutSeconds:                 updatedSettings.GrokVideoTimeoutSeconds,
+		EnableIdentityPatch:                     updatedSettings.EnableIdentityPatch,
+		IdentityPatchPrompt:                     updatedSettings.IdentityPatchPrompt,
+		OpsMonitoringEnabled:                    updatedSettings.OpsMonitoringEnabled,
+		OpsRealtimeMonitoringEnabled:            updatedSettings.OpsRealtimeMonitoringEnabled,
+		OpsQueryModeDefault:                     updatedSettings.OpsQueryModeDefault,
+		OpsMetricsIntervalSeconds:               updatedSettings.OpsMetricsIntervalSeconds,
+		MinClaudeCodeVersion:                    updatedSettings.MinClaudeCodeVersion,
+		MaxClaudeCodeVersion:                    updatedSettings.MaxClaudeCodeVersion,
+		AllowUngroupedKeyScheduling:             updatedSettings.AllowUngroupedKeyScheduling,
+		BackendModeEnabled:                      updatedSettings.BackendModeEnabled,
+		EnableFingerprintUnification:            updatedSettings.EnableFingerprintUnification,
+		EnableMetadataPassthrough:               updatedSettings.EnableMetadataPassthrough,
+		EnableCCHSigning:                        updatedSettings.EnableCCHSigning,
 	})
 }
 
@@ -779,6 +914,15 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.FrontendURL != after.FrontendURL {
 		changed = append(changed, "frontend_url")
 	}
+	if before.FallbackModelGrok != after.FallbackModelGrok {
+		changed = append(changed, "fallback_model_grok")
+	}
+	if before.GrokOfficialBaseURL != after.GrokOfficialBaseURL {
+		changed = append(changed, "grok_official_base_url")
+	}
+	if before.GrokSessionBaseURL != after.GrokSessionBaseURL {
+		changed = append(changed, "grok_session_base_url")
+	}
 	if before.GrokImageOutputFormat != after.GrokImageOutputFormat {
 		changed = append(changed, "grok_image_output_format")
 	}
@@ -790,6 +934,24 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.GrokMediaCacheRetentionHours != after.GrokMediaCacheRetentionHours {
 		changed = append(changed, "grok_media_cache_retention_hours")
+	}
+	if before.GrokQuotaSyncIntervalSeconds != after.GrokQuotaSyncIntervalSeconds {
+		changed = append(changed, "grok_quota_sync_interval_seconds")
+	}
+	if before.GrokUsageSyncConcurrency != after.GrokUsageSyncConcurrency {
+		changed = append(changed, "grok_usage_sync_concurrency")
+	}
+	if before.GrokCapabilityProbeIntervalSeconds != after.GrokCapabilityProbeIntervalSeconds {
+		changed = append(changed, "grok_capability_probe_interval_seconds")
+	}
+	if before.GrokCapabilityProbeConcurrency != after.GrokCapabilityProbeConcurrency {
+		changed = append(changed, "grok_capability_probe_concurrency")
+	}
+	if before.GrokSessionValidityCheckIntervalSeconds != after.GrokSessionValidityCheckIntervalSeconds {
+		changed = append(changed, "grok_session_validity_check_interval")
+	}
+	if before.GrokVideoTimeoutSeconds != after.GrokVideoTimeoutSeconds {
+		changed = append(changed, "grok_video_timeout")
 	}
 	if before.TotpEnabled != after.TotpEnabled {
 		changed = append(changed, "totp_enabled")

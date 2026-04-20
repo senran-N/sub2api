@@ -220,6 +220,34 @@ func TestSettingService_UpdateSettings_NormalizesGrokMediaSettings(t *testing.T)
 	require.Equal(t, "72", repo.updates[SettingKeyGrokMediaCacheRetentionHours])
 }
 
+func TestSettingService_UpdateSettings_NormalizesGrokRuntimeSettings(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		GrokQuotaSyncIntervalSeconds:            30,
+		GrokCapabilityProbeIntervalSeconds:      99999999,
+		GrokSessionValidityCheckIntervalSeconds: 10,
+		GrokVideoTimeoutSeconds:                 99999999,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "60", repo.updates[SettingKeyGrokQuotaSyncIntervalSeconds])
+	require.Equal(t, "604800", repo.updates[SettingKeyGrokCapabilityProbeIntervalSeconds])
+	require.Equal(t, "60", repo.updates[SettingKeyGrokSessionValidityCheckInterval])
+	require.Equal(t, "3600", repo.updates[SettingKeyGrokVideoTimeout])
+}
+
+func TestSettingService_UpdateSettings_PersistsGrokFallbackModel(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		FallbackModelGrok: "grok-2-image",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "grok-2-image", repo.updates[SettingKeyFallbackModelGrok])
+}
+
 func TestParseDefaultSubscriptions_NormalizesValues(t *testing.T) {
 	got := parseDefaultSubscriptions(`[{"group_id":11,"validity_days":30},{"group_id":11,"validity_days":60},{"group_id":0,"validity_days":10},{"group_id":12,"validity_days":99999}]`)
 	require.Equal(t, []DefaultSubscriptionSetting{

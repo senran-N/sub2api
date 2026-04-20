@@ -25,6 +25,9 @@ type stubAdminService struct {
 	testedProxyIDs       []int64
 	updateProxyErr       error
 	createAccountErr     error
+	batchImportResult    *service.GrokSessionBatchImportResult
+	batchImportErr       error
+	lastBatchImportInput *service.GrokSessionBatchImportInput
 	updateAccountErr     error
 	bulkUpdateAccountErr error
 	checkMixedErr        error
@@ -219,6 +222,17 @@ func (s *stubAdminService) CreateAccount(ctx context.Context, input *service.Cre
 	}
 	account := service.Account{ID: 300, Name: input.Name, Status: service.StatusActive}
 	return &account, nil
+}
+
+func (s *stubAdminService) BatchImportGrokSessionAccounts(ctx context.Context, input *service.GrokSessionBatchImportInput) (*service.GrokSessionBatchImportResult, error) {
+	s.lastBatchImportInput = input
+	if s.batchImportErr != nil {
+		return nil, s.batchImportErr
+	}
+	if s.batchImportResult != nil {
+		return s.batchImportResult, nil
+	}
+	return &service.GrokSessionBatchImportResult{}, nil
 }
 
 func (s *stubAdminService) UpdateAccount(ctx context.Context, id int64, input *service.UpdateAccountInput) (*service.Account, error) {

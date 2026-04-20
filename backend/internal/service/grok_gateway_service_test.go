@@ -272,7 +272,7 @@ func TestGrokGatewayServiceHandleResponses_UsesSessionAccount(t *testing.T) {
 	handled := svc.HandleResponses(c, nil, body)
 	require.True(t, handled)
 	require.Len(t, upstream.requests, 1)
-	require.Equal(t, "sso=session-cookie", upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie"), upstream.requests[0].Header.Get("Cookie"))
 	require.Contains(t, upstream.requests[0].URL.String(), "/rest/app-chat/conversations/new")
 
 	var payload map[string]any
@@ -327,7 +327,7 @@ func TestGrokGatewayServiceHandleChatCompletions_UsesSessionAccount(t *testing.T
 	handled := svc.HandleChatCompletions(c, nil, body)
 	require.True(t, handled)
 	require.Len(t, upstream.requests, 1)
-	require.Equal(t, "sso=session-cookie", upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie"), upstream.requests[0].Header.Get("Cookie"))
 
 	var response apicompat.ChatCompletionsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
@@ -380,7 +380,7 @@ func TestGrokGatewayServiceHandleMessages_UsesSessionAccount(t *testing.T) {
 	handled := svc.HandleMessages(c, nil, body)
 	require.True(t, handled)
 	require.Len(t, upstream.requests, 1)
-	require.Equal(t, "sso=session-cookie", upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie"), upstream.requests[0].Header.Get("Cookie"))
 
 	var response apicompat.AnthropicResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))

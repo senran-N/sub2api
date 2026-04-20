@@ -23,6 +23,7 @@ type GrokMediaService struct {
 	gatewayService *GatewayService
 	videoJobs      GrokVideoJobRepository
 	mediaAssets    *GrokMediaAssetService
+	sessionRuntime *GrokSessionMediaRuntime
 }
 
 type grokMediaForwardRequest struct {
@@ -30,6 +31,7 @@ type grokMediaForwardRequest struct {
 	body               []byte
 	requestMeta        openAICompatiblePassthroughRequestMeta
 	defaultMappedModel string
+	applyVideoTimeout  bool
 }
 
 type grokMediaForwardResponse struct {
@@ -44,10 +46,12 @@ func NewGrokMediaService(
 	videoJobs GrokVideoJobRepository,
 	mediaAssets GrokMediaAssetRepository,
 ) *GrokMediaService {
+	assetService := NewGrokMediaAssetService(gatewayService, mediaAssets)
 	return &GrokMediaService{
 		gatewayService: gatewayService,
 		videoJobs:      videoJobs,
-		mediaAssets:    NewGrokMediaAssetService(gatewayService, mediaAssets),
+		mediaAssets:    assetService,
+		sessionRuntime: NewGrokSessionMediaRuntime(gatewayService, videoJobs, assetService),
 	}
 }
 
@@ -68,12 +72,16 @@ func (s *GrokMediaService) HandleImages(c *gin.Context, groupID *int64, body []b
 		s.writeSelectionError(c, requestedModel, schedulingModel, err)
 		return true
 	}
+	if account.Type == AccountTypeSession && s.sessionRuntime != nil {
+		return s.sessionRuntime.HandleImages(c, account, requestedModel, firstNonEmpty(schedulingModel, requestedModel), body)
+	}
 
 	resp, err := s.forwardCompatibleRequest(c, grokMediaForwardRequest{
 		account:            account,
 		body:               body,
 		requestMeta:        reqMeta,
 		defaultMappedModel: schedulingModel,
+		applyVideoTimeout:  false,
 	})
 	if err != nil {
 		writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Grok upstream request failed")
@@ -111,12 +119,16 @@ func (s *GrokMediaService) handleVideoCreate(c *gin.Context, groupID *int64, bod
 		s.writeSelectionError(c, requestedModel, schedulingModel, err)
 		return true
 	}
+	if account.Type == AccountTypeSession && s.sessionRuntime != nil {
+		return s.sessionRuntime.HandleVideoCreate(c, groupID, account, requestedModel, firstNonEmpty(schedulingModel, requestedModel), body)
+	}
 
 	resp, err := s.forwardCompatibleRequest(c, grokMediaForwardRequest{
 		account:            account,
 		body:               body,
 		requestMeta:        reqMeta,
 		defaultMappedModel: schedulingModel,
+		applyVideoTimeout:  true,
 	})
 	if err != nil {
 		writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Grok upstream request failed")
@@ -176,9 +188,8 @@ func (s *GrokMediaService) handleVideoFollowup(c *gin.Context, jobID string, con
 		writeCompatibleGatewayMediaError(c, http.StatusServiceUnavailable, "api_error", "Bound Grok video account is unavailable")
 		return true
 	}
-	if !account.SupportsCompatibleGatewaySharedRuntime() {
-		writeCompatibleGatewayMediaError(c, http.StatusServiceUnavailable, "api_error", "Bound Grok video account does not support provider media replay")
-		return true
+	if account.Type == AccountTypeSession && s.sessionRuntime != nil {
+		return s.sessionRuntime.HandleVideoFollowup(c, account, record, contentRequest)
 	}
 
 	resp, err := s.forwardCompatibleRequest(c, grokMediaForwardRequest{
@@ -186,6 +197,7 @@ func (s *GrokMediaService) handleVideoFollowup(c *gin.Context, jobID string, con
 		body:               body,
 		requestMeta:        GetOpenAICompatiblePassthroughRequestMeta(c, body),
 		defaultMappedModel: record.CanonicalModel,
+		applyVideoTimeout:  true,
 	})
 	if err != nil {
 		writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Grok upstream request failed")
@@ -223,6 +235,7 @@ func (s *GrokMediaService) selectCompatibleAccount(ctx context.Context, groupID 
 	if s == nil || s.gatewayService == nil {
 		return nil, errors.New("grok media service is not configured")
 	}
+	ctx = WithGrokSessionMediaRuntimeAllowed(ctx)
 
 	accounts, _, err := s.gatewayService.listSchedulableAccounts(ctx, groupID, PlatformGrok, true)
 	if err != nil {
@@ -247,9 +260,6 @@ func (s *GrokMediaService) selectCompatibleAccount(ctx context.Context, groupID 
 	selected := defaultGrokAccountSelector.SelectBestCandidateWithContext(ctx, candidates, requestedModel, loadMap)
 	if selected == nil {
 		return nil, errors.New("no compatible grok media accounts")
-	}
-	if !selected.SupportsCompatibleGatewaySharedRuntime() {
-		return nil, errors.New("selected grok account does not support compatible media transport")
 	}
 	return selected, nil
 }
@@ -278,20 +288,6 @@ func (s *GrokMediaService) forwardCompatibleRequest(c *gin.Context, input grokMe
 		return nil, errors.New("invalid grok media forward request")
 	}
 
-	token := strings.TrimSpace(input.account.GetOpenAIApiKey())
-	if token == "" {
-		return nil, errors.New("api_key not found in credentials")
-	}
-
-	baseURL := strings.TrimSpace(input.account.GetOpenAIBaseURL())
-	if baseURL == "" {
-		baseURL = CompatibleGatewayDefaultBaseURL(input.account.Platform)
-	}
-	validatedBaseURL, err := s.gatewayService.validateUpstreamBaseURL(baseURL)
-	if err != nil {
-		return nil, err
-	}
-
 	mappedModel := resolveOpenAIForwardModel(input.account, input.requestMeta.Model, input.defaultMappedModel)
 	mappedModel = normalizeOpenAIModelForUpstream(input.account, mappedModel)
 	forwardBody := input.body
@@ -303,14 +299,20 @@ func (s *GrokMediaService) forwardCompatibleRequest(c *gin.Context, input grokMe
 		forwardBody = patchedBody
 	}
 
-	upstreamTarget := newCompatiblePassthroughUpstreamTargetWithOptions(
-		validatedBaseURL,
-		normalizeGrokMediaUpstreamPath(c.Request.URL.Path),
-		input.account.GetCompatibleAuthMode(""),
-		input.account.GetCompatibleEndpointOverride("responses"),
-		input.account.GetCompatibleEndpointOverride("chat_completions"),
+	runtimeSettings := DefaultGrokRuntimeSettings()
+	if s.gatewayService != nil && s.gatewayService.settingService != nil {
+		runtimeSettings = s.gatewayService.settingService.GetGrokRuntimeSettings(c.Request.Context())
+	}
+	target, err := resolveGrokMediaTransportTargetWithSettings(
+		input.account,
+		s.gatewayService.validateUpstreamBaseURL,
+		runtimeSettings,
+		c.Request.URL.Path,
 	)
-	targetURL := upstreamTarget.URL
+	if err != nil {
+		return nil, err
+	}
+	targetURL := target.URL
 	if rawQuery := strings.TrimSpace(c.Request.URL.RawQuery); rawQuery != "" {
 		parsedTarget, err := url.Parse(targetURL)
 		if err != nil {
@@ -320,7 +322,21 @@ func (s *GrokMediaService) forwardCompatibleRequest(c *gin.Context, input grokMe
 		targetURL = parsedTarget.String()
 	}
 
-	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, targetURL, bytes.NewReader(forwardBody))
+	reqCtx := c.Request.Context()
+	if reqCtx == nil {
+		reqCtx = context.Background()
+	}
+	var cancel context.CancelFunc
+	if input.applyVideoTimeout {
+		videoTimeout := DefaultGrokRuntimeSettings().VideoTimeout()
+		if s.gatewayService != nil && s.gatewayService.settingService != nil {
+			videoTimeout = s.gatewayService.settingService.GetGrokRuntimeSettings(reqCtx).VideoTimeout()
+		}
+		reqCtx, cancel = context.WithTimeout(reqCtx, videoTimeout)
+		defer cancel()
+	}
+
+	req, err := http.NewRequestWithContext(reqCtx, c.Request.Method, targetURL, bytes.NewReader(forwardBody))
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +354,10 @@ func (s *GrokMediaService) forwardCompatibleRequest(c *gin.Context, input grokMe
 	req.Header.Del("authorization")
 	req.Header.Del("api-key")
 	req.Header.Del("x-api-key")
-	upstreamTarget.ApplyAuthHeader(req.Header, token)
+	target.Apply(req)
+	if target.Kind == grokTransportKindSession {
+		applyGrokSessionBrowserHeaders(req.Header, target, "")
+	}
 	if req.Header.Get("content-type") == "" && len(forwardBody) > 0 {
 		req.Header.Set("content-type", "application/json")
 	}

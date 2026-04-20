@@ -169,6 +169,32 @@ func (s *GrokMediaAssetService) createProxyAssetRecord(
 	jobID string,
 	upstreamURL string,
 ) (*GrokMediaAssetRecord, error) {
+	return s.upsertRemoteAssetRecord(ctx, account, assetType, requestedModel, canonicalModel, jobID, "", upstreamURL)
+}
+
+func (s *GrokMediaAssetService) UpsertRemoteAssetRecord(
+	ctx context.Context,
+	account *Account,
+	assetType string,
+	requestedModel string,
+	canonicalModel string,
+	jobID string,
+	assetID string,
+	upstreamURL string,
+) (*GrokMediaAssetRecord, error) {
+	return s.upsertRemoteAssetRecord(ctx, account, assetType, requestedModel, canonicalModel, jobID, assetID, upstreamURL)
+}
+
+func (s *GrokMediaAssetService) upsertRemoteAssetRecord(
+	ctx context.Context,
+	account *Account,
+	assetType string,
+	requestedModel string,
+	canonicalModel string,
+	jobID string,
+	assetID string,
+	upstreamURL string,
+) (*GrokMediaAssetRecord, error) {
 	if s == nil || s.repo == nil || account == nil {
 		return nil, errors.New("grok media asset service is not configured")
 	}
@@ -178,7 +204,7 @@ func (s *GrokMediaAssetService) createProxyAssetRecord(
 		return nil, errors.New("upstream url is empty")
 	}
 
-	assetID := uuid.NewString()
+	assetID = firstNonEmpty(strings.TrimSpace(assetID), uuid.NewString())
 	record := GrokMediaAssetRecord{
 		AssetID:        assetID,
 		AccountID:      account.ID,
@@ -194,6 +220,64 @@ func (s *GrokMediaAssetService) createProxyAssetRecord(
 		return nil, err
 	}
 	return &record, nil
+}
+
+func (s *GrokMediaAssetService) RenderExistingAssetValue(c *gin.Context, assetID string, assetType string) (string, string, error) {
+	if s == nil || s.repo == nil {
+		return "", "", errors.New("grok media asset service is not configured")
+	}
+	ctx := context.Background()
+	if c != nil && c.Request != nil && c.Request.Context() != nil {
+		ctx = c.Request.Context()
+	}
+
+	record, err := s.repo.GetByAssetID(ctx, strings.TrimSpace(assetID))
+	if err != nil {
+		return "", "", err
+	}
+	if record == nil {
+		return "", "", ErrGrokMediaAssetNotFound
+	}
+
+	resolvedAssetType := firstNonEmpty(strings.TrimSpace(assetType), strings.TrimSpace(record.AssetType), "image")
+	outputFormat, proxyEnabled := s.resolveRewritePolicy(ctx, resolvedAssetType)
+	upstreamURL := strings.TrimSpace(record.UpstreamURL)
+	if upstreamURL == "" {
+		return "", "", errors.New("grok media asset upstream url is empty")
+	}
+
+	switch outputFormat {
+	case GrokMediaOutputFormatUpstreamURL:
+		return upstreamURL, upstreamURL, nil
+	case GrokMediaOutputFormatMarkdown:
+		renderURL := upstreamURL
+		if proxyEnabled {
+			renderURL = s.BuildLocalURL(c, record.AssetID)
+		}
+		return fmt.Sprintf("![grok-image](%s)", renderURL), upstreamURL, nil
+	case GrokMediaOutputFormatBase64:
+		localPath, mimeType, err := s.ensureLocalAsset(ctx, record)
+		if err != nil {
+			return "", "", err
+		}
+		payload, err := os.ReadFile(localPath)
+		if err != nil {
+			return "", "", err
+		}
+		mimeType = firstNonEmpty(strings.TrimSpace(mimeType), http.DetectContentType(payload))
+		return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(payload), upstreamURL, nil
+	case GrokMediaOutputFormatHTML:
+		renderURL := upstreamURL
+		if proxyEnabled {
+			renderURL = s.BuildLocalURL(c, record.AssetID)
+		}
+		return fmt.Sprintf(`<video controls src="%s"></video>`, html.EscapeString(renderURL)), upstreamURL, nil
+	default:
+		if !proxyEnabled {
+			return upstreamURL, upstreamURL, nil
+		}
+		return s.BuildLocalURL(c, record.AssetID), upstreamURL, nil
+	}
 }
 
 func (s *GrokMediaAssetService) BuildLocalURL(c *gin.Context, assetID string) string {
@@ -268,12 +352,18 @@ func (s *GrokMediaAssetService) downloadAndCache(ctx context.Context, record *Gr
 
 	account, _ := s.gatewayService.accountRepo.GetByID(ctx, record.AccountID)
 	if account != nil {
-		if target, targetErr := resolveGrokTransportTarget(account, s.gatewayService.validateUpstreamBaseURL); targetErr == nil {
+		runtimeSettings := DefaultGrokRuntimeSettings()
+		if s.gatewayService != nil && s.gatewayService.settingService != nil {
+			runtimeSettings = s.gatewayService.settingService.GetGrokRuntimeSettings(ctx)
+		}
+		if target, targetErr := resolveGrokTransportTargetWithSettings(
+			account,
+			s.gatewayService.validateUpstreamBaseURL,
+			runtimeSettings,
+		); targetErr == nil {
 			target.Apply(req)
 			if target.Kind == grokTransportKindSession {
-				req.Header.Set("Origin", grokWebBaseURL)
-				req.Header.Set("Referer", grokWebBaseURL+"/")
-				req.Header.Set("User-Agent", grokSessionProbeUserAgent)
+				applyGrokSessionBrowserHeaders(req.Header, target, "")
 			}
 		}
 	}

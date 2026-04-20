@@ -128,7 +128,24 @@ func buildGrokProbeStateExtraUpdates(account *Account, modelID string, resp *htt
 }
 
 func buildGrokProbeCapabilities(account *Account, modelID string) map[string]any {
-	return buildGrokKnownCapabilities(account, modelID, "")
+	capabilities := buildGrokKnownCapabilities(account, modelID, "")
+	if account == nil {
+		return capabilities
+	}
+
+	tier := account.GrokTierState().Normalized
+	if tier == grok.TierUnknown {
+		tier = grokInferTierFromCapabilityState(parseGrokCapabilityState(capabilities))
+	}
+	if tier == grok.TierUnknown {
+		return capabilities
+	}
+
+	widened := buildGrokTierCapabilityBaselineFromState(account, parseGrokCapabilityState(capabilities), tier)
+	if len(widened) == 0 {
+		return capabilities
+	}
+	return widened
 }
 
 func buildGrokKnownCapabilities(account *Account, modelID string, capabilityHint grok.Capability) map[string]any {

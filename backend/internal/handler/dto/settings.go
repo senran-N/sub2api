@@ -70,15 +70,24 @@ type SystemSettings struct {
 	DefaultSubscriptions []DefaultSubscriptionSetting `json:"default_subscriptions"`
 
 	// Model fallback configuration
-	EnableModelFallback          bool   `json:"enable_model_fallback"`
-	FallbackModelAnthropic       string `json:"fallback_model_anthropic"`
-	FallbackModelOpenAI          string `json:"fallback_model_openai"`
-	FallbackModelGemini          string `json:"fallback_model_gemini"`
-	FallbackModelAntigravity     string `json:"fallback_model_antigravity"`
-	GrokImageOutputFormat        string `json:"grok_image_output_format"`
-	GrokVideoOutputFormat        string `json:"grok_video_output_format"`
-	GrokMediaProxyEnabled        bool   `json:"grok_media_proxy_enabled"`
-	GrokMediaCacheRetentionHours int    `json:"grok_media_cache_retention_hours"`
+	EnableModelFallback                     bool   `json:"enable_model_fallback"`
+	FallbackModelAnthropic                  string `json:"fallback_model_anthropic"`
+	FallbackModelOpenAI                     string `json:"fallback_model_openai"`
+	FallbackModelGrok                       string `json:"fallback_model_grok"`
+	FallbackModelGemini                     string `json:"fallback_model_gemini"`
+	FallbackModelAntigravity                string `json:"fallback_model_antigravity"`
+	GrokOfficialBaseURL                     string `json:"grok_official_base_url"`
+	GrokSessionBaseURL                      string `json:"grok_session_base_url"`
+	GrokImageOutputFormat                   string `json:"grok_image_output_format"`
+	GrokVideoOutputFormat                   string `json:"grok_video_output_format"`
+	GrokMediaProxyEnabled                   bool   `json:"grok_media_proxy_enabled"`
+	GrokMediaCacheRetentionHours            int    `json:"grok_media_cache_retention_hours"`
+	GrokQuotaSyncIntervalSeconds            int    `json:"grok_quota_sync_interval_seconds"`
+	GrokUsageSyncConcurrency                int    `json:"grok_usage_sync_concurrency"`
+	GrokCapabilityProbeIntervalSeconds      int    `json:"grok_capability_probe_interval_seconds"`
+	GrokCapabilityProbeConcurrency          int    `json:"grok_capability_probe_concurrency"`
+	GrokSessionValidityCheckIntervalSeconds int    `json:"grok_session_validity_check_interval"`
+	GrokVideoTimeoutSeconds                 int    `json:"grok_video_timeout"`
 
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`

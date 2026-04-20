@@ -210,6 +210,10 @@ function resolveCcsImportTarget(
     return { app: 'codex', endpoint: baseUrl }
   }
 
+  if (platform === 'grok') {
+    return { app: 'claude', endpoint: `${baseUrl}/grok` }
+  }
+
   if (platform === 'gemini') {
     return { app: 'gemini', endpoint: baseUrl }
   }
