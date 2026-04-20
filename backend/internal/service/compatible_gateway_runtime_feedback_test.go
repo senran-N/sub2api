@@ -34,7 +34,7 @@ func TestOpenAIGatewayService_PersistCompatibleGatewayRuntimeFeedbackDelegatesTo
 
 	require.Len(t, repo.extraUpdates, 1)
 	require.Len(t, repo.runtimeStates, 1)
-	require.Equal(t, "grok-3-fast", repo.runtimeStates[0]["last_request_upstream_model"])
+	require.Equal(t, "grok-4.20-fast", repo.runtimeStates[0]["last_request_upstream_model"])
 	require.Equal(t, "responses", repo.runtimeStates[0]["last_request_protocol_family"])
 	accountGrok := account.grokExtraMap()
 	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(accountGrok, "capabilities", "operations")))

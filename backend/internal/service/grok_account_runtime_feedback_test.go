@@ -77,13 +77,13 @@ func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackSuccessEnrichesCapabilit
 	require.Equal(t, "2026-04-19T00:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_sync_at"))
 	require.Equal(t, false, grokNestedMap(grokExtra["capabilities"])["video"])
 	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
-	require.ElementsMatch(t, []string{"grok-3-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+	require.ElementsMatch(t, []string{"grok-4.20-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
 
 	runtimeState := repo.runtimeStates[0]
 	require.Equal(t, "success", runtimeState["last_outcome"])
 	require.Equal(t, http.StatusOK, grokParseInt(runtimeState["last_request_status_code"]))
 	require.Equal(t, "grok-4.20-fast", runtimeState["last_request_model"])
-	require.Equal(t, "grok-3-fast", runtimeState["last_request_upstream_model"])
+	require.Equal(t, "grok-4.20-fast", runtimeState["last_request_upstream_model"])
 	require.Equal(t, string(grok.ProtocolFamilyChatCompletions), runtimeState["last_request_protocol_family"])
 	require.Equal(t, string(grok.CapabilityChat), runtimeState["last_request_capability"])
 	require.NotEmpty(t, runtimeState["last_request_at"])
@@ -91,7 +91,7 @@ func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackSuccessEnrichesCapabilit
 
 	accountGrok := account.grokExtraMap()
 	require.Equal(t, "basic", getNestedGrokValue(accountGrok, "tier", "normalized"))
-	require.Equal(t, "grok-3-fast", getNestedGrokValue(accountGrok, "runtime_state", "last_request_upstream_model"))
+	require.Equal(t, "grok-4.20-fast", getNestedGrokValue(accountGrok, "runtime_state", "last_request_upstream_model"))
 }
 
 func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackKnownCapabilitySkipsExtraPatch(t *testing.T) {

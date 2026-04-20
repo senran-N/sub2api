@@ -3,12 +3,14 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/pkg/apicompat"
 	"github.com/senran-N/sub2api/internal/pkg/grok"
 )
 
@@ -195,10 +197,9 @@ func (s *AccountTestService) testGrokSessionConnection(
 			continue
 		}
 
-		_ = resp.Body.Close()
 		s.persistCompatibleGatewayProbeState(ctx, account, testModelID, resp, nil, false)
-		s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
-		return nil
+		defer func() { _ = resp.Body.Close() }()
+		return s.processGrokSessionTestStream(c, resp.Body, testModelID)
 	}
 
 	if lastModel == "" {
@@ -235,4 +236,58 @@ func createGrokSessionTestPayload(modelID string, prompt string) (map[string]any
 	payload["disableSearch"] = true
 	payload["sendFinalMetadata"] = false
 	return payload, nil
+}
+
+func (s *AccountTestService) processGrokSessionTestStream(c *gin.Context, body io.Reader, model string) error {
+	sawContent := false
+
+	finalResponse, err := collectGrokSessionResponses(body, model, &grokSessionResponsesCallbacks{
+		onEvent: func(event apicompat.ResponsesStreamEvent) error {
+			if event.Type == "response.output_text.delta" && event.Delta != "" {
+				sawContent = true
+				s.sendEvent(c, TestEvent{Type: "content", Text: event.Delta})
+			}
+			return nil
+		},
+		onStreamFailure: func(message string, _ apicompat.ResponsesStreamEvent) error {
+			return s.sendErrorAndEnd(c, message)
+		},
+	})
+	if errors.Is(err, errGrokSessionTextStreamHandled) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if !sawContent {
+		text := strings.TrimSpace(extractResponsesOutputText(finalResponse))
+		if text == "" {
+			text = "(empty response)"
+		}
+		s.sendEvent(c, TestEvent{Type: "content", Text: text})
+	}
+
+	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+	return nil
+}
+
+func extractResponsesOutputText(resp *apicompat.ResponsesResponse) string {
+	if resp == nil || len(resp.Output) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, output := range resp.Output {
+		if output.Type != "message" {
+			continue
+		}
+		for _, content := range output.Content {
+			if content.Type != "output_text" {
+				continue
+			}
+			builder.WriteString(content.Text)
+		}
+	}
+	return builder.String()
 }
