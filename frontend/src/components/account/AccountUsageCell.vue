@@ -232,6 +232,75 @@
       <div v-else class="account-usage-cell__empty text-xs">-</div>
     </template>
 
+    <template v-else-if="account.platform === 'grok' && account.type === 'session'">
+      <div v-if="loading" class="space-y-1.5">
+        <div v-for="index in 3" :key="index" class="account-usage-cell__skeleton-row">
+          <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
+          <div class="account-usage-cell__skeleton-bar animate-pulse"></div>
+          <div class="account-usage-cell__skeleton-block account-usage-cell__skeleton-block--label animate-pulse"></div>
+        </div>
+      </div>
+
+      <div v-else-if="grokUsageBars.length > 0 || usageInfo?.error" class="space-y-1">
+        <div
+          v-if="error"
+          class="account-usage-cell__warning account-usage-cell__warning--truncated text-xs"
+          :title="error"
+        >
+          {{ error }}
+        </div>
+
+        <div
+          v-if="usageInfo?.error"
+          class="account-usage-cell__warning account-usage-cell__warning--truncated text-xs"
+          :title="usageInfo.error"
+        >
+          {{ usageInfo.error }}
+        </div>
+
+        <UsageProgressBar
+          v-for="bar in grokUsageBars"
+          :key="bar.key"
+          :label="t(`admin.accounts.grok.runtime.windows.${bar.name}`)"
+          :utilization="bar.utilization"
+          :resets-at="bar.resetsAt"
+          :window-stats="bar.windowStats"
+          :color="bar.color"
+        />
+
+        <div class="account-usage-cell__inline-row account-usage-cell__inline-row--compact">
+          <button
+            type="button"
+            class="account-usage-cell__action account-usage-cell__action--compact"
+            :disabled="activeQueryLoading"
+            @click="loadActiveUsage"
+          >
+            <svg
+              class="h-2.5 w-2.5"
+              :class="{ 'animate-spin': activeQueryLoading }"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {{ t('admin.accounts.usageWindow.activeQuery') }}
+          </button>
+        </div>
+      </div>
+
+      <div v-else-if="error" class="account-usage-cell__error text-xs">
+        {{ error }}
+      </div>
+
+      <div v-else class="account-usage-cell__empty text-xs">-</div>
+    </template>
+
     <template v-else-if="account.platform === 'gemini'">
       <div v-if="geminiAuthTypeLabel" class="account-usage-cell__inline-row account-usage-cell__inline-row--with-margin">
         <span :class="geminiTierClass">
@@ -418,6 +487,7 @@ const {
   geminiTierClass,
   geminiUsageAvailable,
   geminiUsageBars,
+  grokUsageBars,
   hasAntigravityQuotaFromAPI,
   hasApiKeyQuota,
   hasIneligibleTiers,

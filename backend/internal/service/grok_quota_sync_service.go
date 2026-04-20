@@ -193,6 +193,23 @@ func (s *GrokQuotaSyncService) SyncNow(ctx context.Context) error {
 	})
 }
 
+func (s *GrokQuotaSyncService) SyncAccount(ctx context.Context, account *Account) error {
+	if s == nil || s.stateSvc == nil || account == nil {
+		return nil
+	}
+	if NormalizeCompatibleGatewayPlatform(account.Platform) != PlatformGrok {
+		return nil
+	}
+
+	now := s.now().UTC()
+	snapshot, err := s.buildSyncSnapshot(ctx, account, now)
+	if len(snapshot.Tier) == 0 && len(snapshot.QuotaWindows) == 0 && len(snapshot.SyncState) == 0 && len(snapshot.Capabilities) == 0 {
+		return err
+	}
+	s.stateSvc.PersistSyncSnapshot(ctx, account, snapshot)
+	return err
+}
+
 func (s *GrokQuotaSyncService) buildSyncSnapshot(
 	ctx context.Context,
 	account *Account,

@@ -153,6 +153,7 @@ type adminServiceImpl struct {
 	userSubRepo          UserSubscriptionRepository
 	privacyClientFactory PrivacyClientFactory
 	ipRiskService        *IPRiskService
+	grokQuotaSyncer      grokQuotaAccountSyncer
 }
 
 // NewAdminService creates a new AdminService
@@ -174,6 +175,7 @@ func NewAdminService(
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
 	ipRiskService *IPRiskService,
+	grokQuotaSyncer grokQuotaAccountSyncer,
 ) AdminService {
 	return &adminServiceImpl{
 		userRepo:             userRepo,
@@ -193,7 +195,15 @@ func NewAdminService(
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
 		ipRiskService:        ipRiskService,
+		grokQuotaSyncer:      grokQuotaSyncer,
 	}
+}
+
+func (s *adminServiceImpl) SetGrokQuotaSyncer(syncer grokQuotaAccountSyncer) {
+	if s == nil {
+		return
+	}
+	s.grokQuotaSyncer = syncer
 }
 
 // normalizeLimit 将负数转换为 nil（表示无限制），0 保留（表示限额为零）

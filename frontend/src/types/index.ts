@@ -830,6 +830,7 @@ export interface AccountUsageInfo {
   gemini_shared_minute?: UsageProgress | null
   gemini_pro_minute?: UsageProgress | null
   gemini_flash_minute?: UsageProgress | null
+  grok_quota_windows?: Record<string, UsageProgress> | null
   antigravity_quota?: Record<string, AntigravityModelQuota> | null
   ai_credits?: Array<{
     credit_type?: string

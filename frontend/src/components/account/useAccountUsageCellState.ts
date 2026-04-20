@@ -3,6 +3,7 @@ import { adminAPI } from '@/api/admin'
 import type { Account, AccountUsageInfo, GeminiCredentials, WindowStats } from '@/types'
 import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
 import { formatCompactNumber } from '@/utils/format'
+import { getGrokAccountRuntime } from '@/utils/grokAccountRuntime'
 
 export interface AccountUsageCellProps {
   account: Account
@@ -53,6 +54,7 @@ export function useAccountUsageCellState(
 
   const showUsageWindows = computed(() => {
     if (props.account.platform === 'gemini') return true
+    if (props.account.platform === 'grok') return props.account.type === 'session'
     return props.account.type === 'oauth' || props.account.type === 'setup-token'
   })
 
@@ -69,7 +71,79 @@ export function useAccountUsageCellState(
     if (props.account.platform === 'openai') {
       return props.account.type === 'oauth'
     }
+    if (props.account.platform === 'grok') {
+      return props.account.type === 'session'
+    }
     return false
+  })
+
+  const grokUsageBars = computed(() => {
+    if (props.account.platform !== 'grok' || props.account.type !== 'session') return []
+
+    const bars: Array<{
+      key: string
+      name: string
+      utilization: number
+      resetsAt: string | null
+      windowStats?: WindowStats | null
+      color: 'indigo' | 'emerald' | 'purple' | 'amber'
+    }> = []
+
+    const quotaWindows = usageInfo.value?.grok_quota_windows
+    const orderedNames = ['auto', 'fast', 'expert', 'heavy']
+
+    if (quotaWindows && Object.keys(quotaWindows).length > 0) {
+      for (const name of orderedNames) {
+        const window = quotaWindows[name]
+        if (!window) continue
+
+        bars.push({
+          key: name,
+          name,
+          utilization: window.utilization,
+          resetsAt: window.resets_at,
+          windowStats: window.window_stats,
+          color:
+            name === 'auto'
+              ? 'indigo'
+              : name === 'fast'
+                ? 'emerald'
+                : name === 'expert'
+                  ? 'purple'
+                  : 'amber'
+        })
+      }
+      return bars
+    }
+
+    const grokRuntime = getGrokAccountRuntime(props.account)
+    const runtimeWindows = grokRuntime?.quotaWindows ?? []
+    for (const name of orderedNames) {
+      const window = runtimeWindows.find((item) => item.name === name)
+      if (!window || (!window.hasSignal && window.total <= 0)) continue
+
+      const total = window.total > 0 ? window.total : 0
+      const remaining = Math.max(window.remaining, 0)
+      const used = total > remaining ? total - remaining : 0
+      const utilization = total > 0 ? (used / total) * 100 : 0
+
+      bars.push({
+        key: name,
+        name,
+        utilization,
+        resetsAt: window.resetAt,
+        color:
+          name === 'auto'
+            ? 'indigo'
+            : name === 'fast'
+              ? 'emerald'
+              : name === 'expert'
+                ? 'purple'
+                : 'amber'
+      })
+    }
+
+    return bars
   })
 
   const geminiUsageAvailable = computed(() => {
@@ -752,6 +826,7 @@ export function useAccountUsageCellState(
     geminiTierClass,
     geminiUsageAvailable,
     geminiUsageBars,
+    grokUsageBars,
     hasAntigravityQuotaFromAPI,
     hasApiKeyQuota,
     hasIneligibleTiers,

@@ -147,6 +147,97 @@ describe('AccountUsageCell', () => {
     expect(wrapper.text()).toContain('25')
   })
 
+  it('Grok session 会渲染后端返回的 quota windows', async () => {
+    getUsage.mockResolvedValue({
+      grok_quota_windows: {
+        auto: {
+          utilization: 65,
+          resets_at: '2026-03-08T12:00:00Z',
+          remaining_seconds: 3600,
+          window_stats: {
+            requests: 13,
+            tokens: 1300,
+            cost: 0.13,
+            standard_cost: 0.13,
+            user_cost: 0.13
+          }
+        },
+        fast: {
+          utilization: 40,
+          resets_at: '2026-03-08T12:00:00Z',
+          remaining_seconds: 3600
+        }
+      }
+    })
+
+    const wrapper = mount(AccountUsageCell, {
+      props: {
+        account: makeAccount({
+          id: 1101,
+          platform: 'grok',
+          type: 'session',
+          extra: {}
+        })
+      },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'resetsAt', 'windowStats', 'color'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}</div>'
+          },
+          AccountQuotaInfo: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(getUsage).toHaveBeenCalledWith(1101)
+    expect(wrapper.text()).toContain('admin.accounts.grok.runtime.windows.auto|65|1300')
+    expect(wrapper.text()).toContain('admin.accounts.grok.runtime.windows.fast|40|')
+  })
+
+  it('Grok session 在 usage 拉取失败时会回退显示 runtime quota windows', async () => {
+    getUsage.mockRejectedValue(new Error('usage unavailable'))
+
+    const wrapper = mount(AccountUsageCell, {
+      props: {
+        account: makeAccount({
+          id: 1102,
+          platform: 'grok',
+          type: 'session',
+          extra: {
+            grok: {
+              quota_windows: {
+                auto: {
+                  remaining: 7,
+                  total: 20,
+                  reset_at: '2026-03-08T12:00:00Z',
+                  source: 'live'
+                }
+              }
+            }
+          }
+        })
+      },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'resetsAt', 'windowStats', 'color'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}</div>'
+          },
+          AccountQuotaInfo: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(getUsage).toHaveBeenCalledWith(1102)
+    expect(wrapper.text()).toContain('admin.accounts.grok.runtime.windows.auto|65')
+    expect(wrapper.text()).toContain('common.error')
+  })
+
 
   it('OpenAI OAuth 快照已过期时首屏会重新请求 usage', async () => {
     getUsage.mockResolvedValue({

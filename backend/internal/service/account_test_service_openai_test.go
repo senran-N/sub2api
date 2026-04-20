@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/pkg/apicompat"
 	"github.com/senran-N/sub2api/internal/pkg/grok"
 	"github.com/stretchr/testify/require"
 )
@@ -431,6 +432,23 @@ func newGrokSessionTestResponse(text string) *http.Response {
 		`{"result":{"response":{"isSoftStop":true,"finalMetadata":{"stop_reason":"end_turn"}}}}`,
 	}, "\n")))
 	return resp
+}
+
+func TestExtractResponsesOutputText_FallsBackToReasoningSummary(t *testing.T) {
+	t.Parallel()
+
+	text := extractResponsesOutputText(&apicompat.ResponsesResponse{
+		Output: []apicompat.ResponsesOutput{
+			{
+				Type: "reasoning",
+				Summary: []apicompat.ResponsesSummary{
+					{Type: "summary_text", Text: "thinking summary"},
+				},
+			},
+		},
+	})
+
+	require.Equal(t, "thinking summary", text)
 }
 
 func TestAccountTestService_GrokProbeFailurePersistsNormalizedState(t *testing.T) {

@@ -189,6 +189,17 @@ func (s *grokSessionBatchImportAccountRepoStub) ResetQuotaUsed(context.Context, 
 
 type grokSessionBatchImportGroupRepoStub struct{}
 
+type grokSessionBatchImportSyncerStub struct {
+	syncedAccountIDs []int64
+}
+
+func (s *grokSessionBatchImportSyncerStub) SyncAccount(_ context.Context, account *Account) error {
+	if account != nil {
+		s.syncedAccountIDs = append(s.syncedAccountIDs, account.ID)
+	}
+	return nil
+}
+
 func (g grokSessionBatchImportGroupRepoStub) Create(context.Context, *Group) error {
 	panic("unexpected Create call")
 }
@@ -310,4 +321,23 @@ func TestAdminServiceBatchImportGrokSessionAccounts_DedupesExistingAndRejectsMis
 	require.Len(t, accountRepo.createdAccounts, 0)
 	require.Equal(t, "missing sso cookie", result.Results[1].Reason)
 	require.NotContains(t, result.Results[0].Reason, "existing-token")
+}
+
+func TestAdminServiceBatchImportGrokSessionAccounts_SyncsCreatedSessionAccount(t *testing.T) {
+	accountRepo := &grokSessionBatchImportAccountRepoStub{}
+	syncer := &grokSessionBatchImportSyncerStub{}
+	svc := &adminServiceImpl{
+		accountRepo:     accountRepo,
+		groupRepo:       grokSessionBatchImportGroupRepoStub{},
+		grokQuotaSyncer: syncer,
+	}
+
+	result, err := svc.BatchImportGrokSessionAccounts(context.Background(), &GrokSessionBatchImportInput{
+		RawInput:    "token-a\n",
+		Concurrency: 1,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Created)
+	require.Equal(t, []int64{1}, syncer.syncedAccountIDs)
 }

@@ -279,14 +279,21 @@ func extractResponsesOutputText(resp *apicompat.ResponsesResponse) string {
 
 	var builder strings.Builder
 	for _, output := range resp.Output {
-		if output.Type != "message" {
-			continue
-		}
-		for _, content := range output.Content {
-			if content.Type != "output_text" {
-				continue
+		switch output.Type {
+		case "message":
+			for _, content := range output.Content {
+				if content.Type != "output_text" {
+					continue
+				}
+				builder.WriteString(content.Text)
 			}
-			builder.WriteString(content.Text)
+		case "reasoning":
+			for _, summary := range output.Summary {
+				if summary.Type != "summary_text" {
+					continue
+				}
+				builder.WriteString(summary.Text)
+			}
 		}
 	}
 	return builder.String()

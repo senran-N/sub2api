@@ -6,8 +6,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/pkg/grok"
 	"github.com/stretchr/testify/require"
 )
+
+type grokUsageSyncerStub struct {
+	syncFn func(ctx context.Context, account *Account) error
+}
+
+func (s grokUsageSyncerStub) SyncAccount(ctx context.Context, account *Account) error {
+	if s.syncFn == nil {
+		return nil
+	}
+	return s.syncFn(ctx, account)
+}
 
 type accountUsageCodexProbeRepo struct {
 	stubOpenAIAccountRepo
@@ -240,6 +252,72 @@ func TestAccountUsageService_BuildOpenAICodexProbeRequestUsesStablePersona(t *te
 	require.Equal(t, "chatgpt-acc", req.Header.Get("chatgpt-account-id"))
 	require.Empty(t, req.Header.Get("Accept-Language"))
 	require.Empty(t, req.Header.Get("x-codex-beta-features"))
+}
+
+func TestAccountUsageService_GetGrokUsage_UsesSyncedQuotaWindows(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		ID:       501,
+		Platform: PlatformGrok,
+		Type:     AccountTypeSession,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"quota_windows": map[string]any{
+					grok.QuotaWindowAuto: map[string]any{
+						"remaining":      20,
+						"total":          20,
+						"window_seconds": 72000,
+						"source":         "default",
+					},
+				},
+			},
+		},
+	}
+
+	svc := &AccountUsageService{
+		grokQuotaSyncer: grokUsageSyncerStub{
+			syncFn: func(_ context.Context, account *Account) error {
+				account.Extra = map[string]any{
+					"grok": map[string]any{
+						"quota_windows": map[string]any{
+							grok.QuotaWindowAuto: map[string]any{
+								"remaining":      7,
+								"total":          20,
+								"window_seconds": 72000,
+								"source":         "live",
+								"reset_at":       "2099-03-16T14:00:00Z",
+							},
+							grok.QuotaWindowFast: map[string]any{
+								"remaining":      40,
+								"total":          60,
+								"window_seconds": 72000,
+								"source":         "live",
+								"reset_at":       "2099-03-16T14:00:00Z",
+							},
+						},
+						"sync_state": map[string]any{
+							"last_probe_at": "2099-03-16T12:00:00Z",
+						},
+					},
+				}
+				return nil
+			},
+		},
+	}
+
+	usage, err := svc.getGrokUsage(context.Background(), account)
+	require.NoError(t, err)
+	require.NotNil(t, usage)
+	require.NotNil(t, usage.GrokQuotaWindows)
+	require.Len(t, usage.GrokQuotaWindows, 2)
+	require.Equal(t, int64(13), usage.GrokQuotaWindows[grok.QuotaWindowAuto].UsedRequests)
+	require.Equal(t, int64(20), usage.GrokQuotaWindows[grok.QuotaWindowAuto].LimitRequests)
+	require.Equal(t, 65.0, usage.GrokQuotaWindows[grok.QuotaWindowAuto].Utilization)
+	require.Equal(t, int64(20), usage.GrokQuotaWindows[grok.QuotaWindowFast].UsedRequests)
+	require.InDelta(t, 33.33333333333333, usage.GrokQuotaWindows[grok.QuotaWindowFast].Utilization, 1e-9)
+	require.NotNil(t, usage.UpdatedAt)
+	require.Equal(t, "2099-03-16T12:00:00Z", usage.UpdatedAt.UTC().Format(time.RFC3339))
 }
 
 func TestNewOpenAICodexOAuthResponsesRequestHonorsAccountOverrides(t *testing.T) {

@@ -31,6 +31,8 @@ func (s *AccountUsageService) getPlatformUsage(ctx context.Context, account *Acc
 		return s.getOpenAIUsage(ctx, account)
 	case account.Platform == PlatformGemini:
 		return s.getGeminiUsage(ctx, account)
+	case NormalizeCompatibleGatewayPlatform(account.Platform) == PlatformGrok:
+		return s.getGrokUsage(ctx, account)
 	case account.Platform == PlatformAntigravity:
 		return s.getAntigravityUsage(ctx, account)
 	case account.CanGetUsage():

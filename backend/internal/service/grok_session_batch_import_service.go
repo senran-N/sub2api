@@ -163,6 +163,10 @@ func (s *adminServiceImpl) BatchImportGrokSessionAccounts(ctx context.Context, i
 			continue
 		}
 
+		if s.grokQuotaSyncer != nil && account.Type == AccountTypeSession {
+			_ = s.grokQuotaSyncer.SyncAccount(ctx, account)
+		}
+
 		result.Created++
 		result.CreatedAccountIDs = append(result.CreatedAccountIDs, account.ID)
 		result.Results = append(result.Results, GrokSessionBatchImportLineResult{
