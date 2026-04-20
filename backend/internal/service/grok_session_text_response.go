@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -245,7 +244,6 @@ func collectGrokSessionResponses(
 		sawDelta       bool
 		sawCompletion  bool
 		createdEmitted bool
-		reasoningBuf   strings.Builder
 		toolSieve      *grokToolSieve
 		toolCallsSeen  bool
 	)
@@ -298,8 +296,8 @@ func collectGrokSessionResponses(
 		toolCallsSeen = true
 		return nil
 	}
-	flushReasoning := func() error {
-		if reasoningBuf.Len() == 0 {
+	emitReasoning := func(token string) error {
+		if token == "" {
 			return nil
 		}
 		if err := emitCreated(); err != nil {
@@ -310,12 +308,11 @@ func collectGrokSessionResponses(
 				return err
 			}
 		}
-		event := state.nextReasoningDeltaEvent(reasoningBuf.String())
+		event := state.nextReasoningDeltaEvent(token)
 		state.accumulator.ProcessEvent(&event)
 		if err := emitEvent(event); err != nil {
 			return err
 		}
-		reasoningBuf.Reset()
 		return nil
 	}
 	handleStreamFailure := func(message string) error {
@@ -337,9 +334,6 @@ func collectGrokSessionResponses(
 			continue
 		}
 		if delta.errorText != "" {
-			if err := flushReasoning(); err != nil {
-				return nil, err
-			}
 			return nil, handleStreamFailure(delta.errorText)
 		}
 		applyGrokSessionDeltaMetadata(&state, delta)
@@ -347,18 +341,12 @@ func collectGrokSessionResponses(
 		if delta.token != "" {
 			sawDelta = true
 			if delta.reasoning {
-				_, _ = reasoningBuf.WriteString(delta.token)
-				if shouldFlushGrokSessionReasoning(reasoningBuf.String()) {
-					if err := flushReasoning(); err != nil {
-						return nil, err
-					}
+				if err := emitReasoning(delta.token); err != nil {
+					return nil, err
 				}
 			} else {
 				if toolCallsSeen {
 					continue
-				}
-				if err := flushReasoning(); err != nil {
-					return nil, err
 				}
 				textToken := delta.token
 				if toolSieve != nil {
@@ -396,9 +384,6 @@ func collectGrokSessionResponses(
 		}
 
 		if delta.completion {
-			if err := flushReasoning(); err != nil {
-				return nil, err
-			}
 			sawCompletion = true
 		}
 	}
@@ -412,9 +397,6 @@ func collectGrokSessionResponses(
 
 	if !sawDelta && !sawCompletion {
 		return nil, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
-	}
-	if err := flushReasoning(); err != nil {
-		return nil, err
 	}
 	if toolSieve != nil && !toolCallsSeen {
 		if calls, ok := toolSieve.Flush(); ok && len(calls) > 0 {
@@ -1062,29 +1044,4 @@ func truncateGrokSessionSearchText(text string, limit int) string {
 		return text
 	}
 	return string(runes[:limit]) + "..."
-}
-
-func shouldFlushGrokSessionReasoning(buffer string) bool {
-	trimmedRight := strings.TrimRightFunc(buffer, unicode.IsSpace)
-	if trimmedRight == "" {
-		return false
-	}
-	if strings.Contains(buffer, "\n\n") || strings.HasSuffix(buffer, "\n") {
-		return true
-	}
-
-	lastRune, _ := utf8.DecodeLastRuneInString(trimmedRight)
-	switch lastRune {
-	case '.', '!', '?', ';', ':', '。', '！', '？', '；', '：':
-		return true
-	}
-
-	trimmedLen := utf8.RuneCountInString(trimmedRight)
-	if trimmedLen >= 240 {
-		return true
-	}
-	if trimmedLen >= 160 && len(trimmedRight) < len(buffer) {
-		return true
-	}
-	return false
 }

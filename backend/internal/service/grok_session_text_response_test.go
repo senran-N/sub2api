@@ -63,11 +63,15 @@ func TestRelayGrokSessionResponses_StreamAggregatesReasoningTokens(t *testing.T)
 	require.NoError(t, err)
 
 	events := decodeResponsesSSEEvents(t, rec.Body.String())
-	require.Len(t, events, 6)
+	require.Len(t, events, 8)
 	require.Equal(t, "response.reasoning_summary_text.delta", events[2].Type)
-	require.Equal(t, "Analyzing the request.", events[2].Delta)
-	require.Equal(t, "response.output_text.delta", events[4].Type)
-	require.Equal(t, "done", events[4].Delta)
+	require.Equal(t, "Analyzing", events[2].Delta)
+	require.Equal(t, "response.reasoning_summary_text.delta", events[3].Type)
+	require.Equal(t, " the", events[3].Delta)
+	require.Equal(t, "response.reasoning_summary_text.delta", events[4].Type)
+	require.Equal(t, " request.", events[4].Delta)
+	require.Equal(t, "response.output_text.delta", events[6].Type)
+	require.Equal(t, "done", events[6].Delta)
 }
 
 func TestRelayGrokSessionChatCompletions_StreamAggregatesReasoningContent(t *testing.T) {
@@ -90,14 +94,18 @@ func TestRelayGrokSessionChatCompletions_StreamAggregatesReasoningContent(t *tes
 	require.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
 
 	chunks := decodeChatCompletionsSSEChunks(t, rec.Body.String())
-	require.Len(t, chunks, 4)
+	require.Len(t, chunks, 6)
 	require.Equal(t, "assistant", chunks[0].Choices[0].Delta.Role)
 	require.NotNil(t, chunks[1].Choices[0].Delta.ReasoningContent)
-	require.Equal(t, "Analyzing the request.", *chunks[1].Choices[0].Delta.ReasoningContent)
-	require.NotNil(t, chunks[2].Choices[0].Delta.Content)
-	require.Equal(t, "done", *chunks[2].Choices[0].Delta.Content)
-	require.NotNil(t, chunks[3].Choices[0].FinishReason)
-	require.Equal(t, "stop", *chunks[3].Choices[0].FinishReason)
+	require.Equal(t, "Analyzing", *chunks[1].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[2].Choices[0].Delta.ReasoningContent)
+	require.Equal(t, " the", *chunks[2].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[3].Choices[0].Delta.ReasoningContent)
+	require.Equal(t, " request.", *chunks[3].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[4].Choices[0].Delta.Content)
+	require.Equal(t, "done", *chunks[4].Choices[0].Delta.Content)
+	require.NotNil(t, chunks[5].Choices[0].FinishReason)
+	require.Equal(t, "stop", *chunks[5].Choices[0].FinishReason)
 }
 
 func TestRelayGrokSessionResponses_BufferedBuildsResponsesResponse(t *testing.T) {
