@@ -621,8 +621,8 @@ func TestGetAvailableModels_GrokUsesRegistryWhenNoExplicitMapping(t *testing.T) 
 
 	models := svc.GetAvailableModels(context.Background(), &groupID, PlatformGrok)
 	require.NotEmpty(t, models)
-	require.Contains(t, models, "grok-3")
-	require.NotContains(t, models, "grok-4-fast-reasoning")
+	require.Contains(t, models, "grok-4.20-auto")
+	require.Contains(t, models, "grok-4.20-expert")
 	require.NotContains(t, models, "grok-imagine-video")
 }
 

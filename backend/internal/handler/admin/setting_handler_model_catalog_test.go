@@ -43,12 +43,12 @@ func TestSettingHandlerGetModelCatalog_Grok(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Equal(t, "grok", resp.Data.Platform)
 	require.NotEmpty(t, resp.Data.Models)
-	require.Equal(t, "grok-3", resp.Data.Models[0].ID)
-	require.Equal(t, "Grok 3", resp.Data.Models[0].DisplayName)
+	require.Equal(t, "grok-4.20-0309-non-reasoning", resp.Data.Models[0].ID)
+	require.Equal(t, "Grok 4.20 0309 Non-Reasoning", resp.Data.Models[0].DisplayName)
 	require.Equal(t, "chat", resp.Data.Models[0].Capability)
-	require.Equal(t, "responses", resp.Data.Models[0].ProtocolFamily)
+	require.Equal(t, "chat_completions", resp.Data.Models[0].ProtocolFamily)
 	require.Equal(t, "basic", resp.Data.Models[0].RequiredTier)
-	require.Contains(t, resp.Data.Models[0].Aliases, "grok-4.20-auto")
+	require.Empty(t, resp.Data.Models[0].Aliases)
 }
 
 func TestSettingHandlerGetModelCatalog_UnsupportedPlatform(t *testing.T) {

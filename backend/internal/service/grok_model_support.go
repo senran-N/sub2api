@@ -105,6 +105,10 @@ func grokAccountMatchesModelMapping(account *Account, requestedModel string) boo
 }
 
 func grokQuotaWindowForModel(modelID string) string {
+	if spec, ok := grok.LookupModelSpec(modelID); ok && strings.TrimSpace(spec.QuotaWindow) != "" {
+		return spec.QuotaWindow
+	}
+
 	normalized := strings.ToLower(strings.TrimSpace(modelID))
 	switch {
 	case strings.Contains(normalized, "4.20-heavy"), strings.Contains(normalized, "-heavy"):
@@ -115,19 +119,7 @@ func grokQuotaWindowForModel(modelID string) string {
 		return grok.QuotaWindowFast
 	}
 
-	spec, ok := grok.LookupModelSpec(modelID)
-	if !ok {
-		return ""
-	}
-
-	switch spec.ID {
-	case "grok-3-fast":
-		return grok.QuotaWindowFast
-	case "grok-4-fast-reasoning":
-		return grok.QuotaWindowExpert
-	default:
-		return grok.QuotaWindowAuto
-	}
+	return ""
 }
 
 func isGrokAccountModelEligible(account *Account, requestedModel string) bool {
@@ -180,6 +172,5 @@ func GrokAvailableModelIDsForAccount(account *Account) []string {
 			models = append(models, spec.ID)
 		}
 	}
-	sort.Strings(models)
 	return models
 }

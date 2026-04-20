@@ -15,4 +15,4 @@ func DefaultModelIDs() []string {
 	return EnabledModelIDs()
 }
 
-const DefaultTestModel = "grok-3"
+const DefaultTestModel = "grok-4.20-auto"

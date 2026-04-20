@@ -39,7 +39,7 @@ func TestCompatibleGatewayHandlerModels_DefaultsGrokModels(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 	require.Equal(t, "list", response.Object)
 	require.NotEmpty(t, response.Data)
-	require.Equal(t, "grok-3", response.Data[0].ID)
+	require.Equal(t, "grok-4.20-0309-non-reasoning", response.Data[0].ID)
 	require.Equal(t, "xai", response.Data[0].OwnedBy)
 }
 
@@ -65,7 +65,7 @@ func TestGrokGatewayHandlerModels_ForceBindsPlatform(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 	require.Equal(t, "list", response.Object)
 	require.NotEmpty(t, response.Data)
-	require.Equal(t, "grok-3", response.Data[0].ID)
+	require.Equal(t, "grok-4.20-0309-non-reasoning", response.Data[0].ID)
 }
 
 func TestGrokGatewayHandlerMessages_ForceBindsPlatform(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 
 const (
 	grokCapabilityProbeTimeout         = 20 * time.Second
-	grokCapabilityTierBootstrapModelID = "grok-4-fast-reasoning"
+	grokCapabilityTierBootstrapModelID = "grok-4.20-expert"
 )
 
 type grokCapabilityProbeAccountRepo interface {

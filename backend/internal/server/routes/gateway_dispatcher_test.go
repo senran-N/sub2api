@@ -48,7 +48,7 @@ func TestGatewayProtocolDispatcherModels_UsesCompatibleGatewayForGrok(t *testing
 
 	require.Equal(t, http.StatusOK, w.Code)
 	modelIDs := decodeGatewayModelIDs(t, w.Body.Bytes())
-	require.Contains(t, modelIDs, "grok-3")
+	require.Contains(t, modelIDs, "grok-4.20-auto")
 	require.NotContains(t, modelIDs, "claude-opus-4-6")
 }
 

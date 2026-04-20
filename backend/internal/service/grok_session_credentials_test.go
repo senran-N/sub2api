@@ -9,7 +9,7 @@ import (
 func TestNormalizeGrokSessionCookieHeader_BareTokenUsesSSOCookie(t *testing.T) {
 	normalized, err := NormalizeGrokSessionCookieHeader("  raw-session-token  ")
 	require.NoError(t, err)
-	require.Equal(t, "sso=raw-session-token", normalized)
+	require.Equal(t, "sso=raw-session-token; sso-rw=raw-session-token", normalized)
 }
 
 func TestNormalizeGrokSessionCookieHeader_CompactsCookiePairs(t *testing.T) {
@@ -19,8 +19,9 @@ func TestNormalizeGrokSessionCookieHeader_CompactsCookiePairs(t *testing.T) {
 }
 
 func TestValidateGrokSessionImportToken_RequiresSSOCookie(t *testing.T) {
-	_, err := ValidateGrokSessionImportToken("x-anonuserid=anon-only; sso-rw=rw-only")
-	require.EqualError(t, err, "missing sso cookie")
+	normalized, err := ValidateGrokSessionImportToken("x-anonuserid=anon-only; sso-rw=rw-only")
+	require.NoError(t, err)
+	require.Equal(t, "sso=rw-only; sso-rw=rw-only; x-anonuserid=anon-only", normalized)
 }
 
 func TestMaskGrokSessionFingerprint_RedactsFullDigest(t *testing.T) {

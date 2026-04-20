@@ -166,7 +166,7 @@ func TestAccountHandlerGetAvailableModels_GrokWithoutMappingDoesNotLeakOpenAIDef
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.Data)
-	require.Equal(t, "grok-2-image", resp.Data[0].ID)
+	require.Equal(t, "grok-4.20-0309-non-reasoning", resp.Data[0].ID)
 }
 
 func TestAccountHandlerGetAvailableModels_GrokSessionUsesTierState(t *testing.T) {
@@ -203,7 +203,14 @@ func TestAccountHandlerGetAvailableModels_GrokSessionUsesTierState(t *testing.T)
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.Data)
 	for _, model := range resp.Data {
-		require.NotEqual(t, "grok-4-fast-reasoning", model.ID)
+		require.NotEqual(t, "grok-4.20-0309-non-reasoning-super", model.ID)
+		require.NotEqual(t, "grok-4.20-0309-super", model.ID)
+		require.NotEqual(t, "grok-4.20-0309-reasoning-super", model.ID)
+		require.NotEqual(t, "grok-4.20-0309-non-reasoning-heavy", model.ID)
+		require.NotEqual(t, "grok-4.20-0309-heavy", model.ID)
+		require.NotEqual(t, "grok-4.20-0309-reasoning-heavy", model.ID)
+		require.NotEqual(t, "grok-4.20-multi-agent-0309", model.ID)
+		require.NotEqual(t, "grok-4.20-heavy", model.ID)
 		require.NotEqual(t, "grok-imagine-video", model.ID)
 	}
 }

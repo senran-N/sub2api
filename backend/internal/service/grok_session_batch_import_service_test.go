@@ -273,7 +273,7 @@ func TestAdminServiceBatchImportGrokSessionAccounts_CreatesNormalizedAccounts(t 
 	require.Len(t, accountRepo.createdAccounts, 2)
 	require.Equal(t, PlatformGrok, accountRepo.createdAccounts[0].Platform)
 	require.Equal(t, AccountTypeSession, accountRepo.createdAccounts[0].Type)
-	require.Equal(t, "sso=token-a", accountRepo.createdAccounts[0].GetCredential("session_token"))
+	require.Equal(t, "sso=token-a; sso-rw=token-a", accountRepo.createdAccounts[0].GetCredential("session_token"))
 	require.Equal(t, "sso=token-b; sso-rw=rw-b", accountRepo.createdAccounts[1].GetCredential("session_token"))
 	require.NotEmpty(t, getStringFromMaps(accountRepo.createdAccounts[0].grokExtraMap(), nil, "auth_fingerprint"))
 	require.NotContains(t, result.Results[0].Fingerprint, "token-a")
