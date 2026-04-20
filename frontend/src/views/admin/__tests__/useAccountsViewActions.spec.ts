@@ -117,6 +117,7 @@ function createComposable(selectedIds: number[] = [1, 2]) {
   const patchAccountInList = vi.fn()
   const updateSchedulableInList = vi.fn()
   const enterAutoRefreshSilentWindow = vi.fn()
+  const refreshUsageCells = vi.fn()
   const showSuccess = vi.fn()
   const showError = vi.fn()
 
@@ -146,6 +147,7 @@ function createComposable(selectedIds: number[] = [1, 2]) {
     patchAccountInList,
     updateSchedulableInList,
     enterAutoRefreshSilentWindow,
+    refreshUsageCells,
     t: (key: string) => key,
     showSuccess,
     showError
@@ -167,6 +169,7 @@ function createComposable(selectedIds: number[] = [1, 2]) {
     patchAccountInList,
     updateSchedulableInList,
     enterAutoRefreshSilentWindow,
+    refreshUsageCells,
     showSuccess,
     showError
   }
@@ -355,6 +358,7 @@ describe('useAccountsViewActions', () => {
     expect(refreshCredentials).toHaveBeenCalledWith(21)
     expect(setup.patchAccountInList).toHaveBeenCalledWith(updated)
     expect(setup.enterAutoRefreshSilentWindow).toHaveBeenCalledTimes(1)
+    expect(setup.refreshUsageCells).toHaveBeenCalledTimes(1)
     expect(setup.showSuccess).toHaveBeenCalledWith('admin.accounts.tokenRefreshed')
   })
 

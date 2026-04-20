@@ -447,6 +447,11 @@ func (r *accountRepository) Delete(ctx context.Context, id int64) error {
 			return err
 		}
 	}
+	if r.schedulerCache != nil {
+		if err := r.schedulerCache.DeleteAccount(ctx, id); err != nil {
+			logger.LegacyPrintf("repository.account", "[Scheduler] delete account snapshot failed: account=%d err=%v", id, err)
+		}
+	}
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, buildSchedulerGroupPayload(groupIDs)); err != nil {
 		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue account delete failed: account=%d err=%v", id, err)
 	}

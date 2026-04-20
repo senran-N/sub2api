@@ -72,6 +72,10 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
   const usageManualRefreshToken = ref(0)
   const isFirstLoad = ref(true)
 
+  const bumpUsageManualRefreshToken = () => {
+    usageManualRefreshToken.value += 1
+  }
+
   const createListRefreshRequest = () => {
     listRefreshReqSeq.value += 1
     return listRefreshReqSeq.value
@@ -208,6 +212,7 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
     }
 
     await refreshTodayStatsBatch(requestSeq)
+    bumpUsageManualRefreshToken()
   }
 
   const debouncedReload = () => {
@@ -295,13 +300,13 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
 
   const handleManualRefresh = async () => {
     await load()
-    usageManualRefreshToken.value += 1
+    bumpUsageManualRefreshToken()
   }
 
   const syncPendingListChanges = async () => {
     hasPendingListSync.value = false
     await load()
-    usageManualRefreshToken.value += 1
+    bumpUsageManualRefreshToken()
   }
 
   const { pause: pauseAutoRefresh, resume: resumeAutoRefresh } = useIntervalFn(
@@ -383,6 +388,7 @@ export function useAccountsViewRefresh(options: AccountsViewRefreshOptions) {
     todayStatsLoading,
     todayStatsError,
     usageManualRefreshToken,
+    bumpUsageManualRefreshToken,
     refreshTodayStatsBatch,
     load,
     reload,

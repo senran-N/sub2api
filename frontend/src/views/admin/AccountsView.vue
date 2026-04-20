@@ -362,6 +362,7 @@ const {
   todayStatsLoading,
   todayStatsError,
   usageManualRefreshToken,
+  bumpUsageManualRefreshToken,
   refreshTodayStatsBatch,
   load,
   reload,
@@ -444,6 +445,7 @@ const {
   patchAccountInList,
   updateSchedulableInList,
   enterAutoRefreshSilentWindow,
+  refreshUsageCells: bumpUsageManualRefreshToken,
   t,
   showSuccess: appStore.showSuccess,
   showError: appStore.showError

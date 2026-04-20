@@ -30,6 +30,7 @@ interface AccountsViewActionsOptions {
   patchAccountInList: (updatedAccount: Account) => void
   updateSchedulableInList: (accountIds: number[], schedulable: boolean) => void
   enterAutoRefreshSilentWindow: () => void
+  refreshUsageCells: () => void
   t: (key: string, params?: Record<string, unknown>) => string
   showSuccess: (message: string) => void
   showError: (message: string) => void
@@ -182,6 +183,7 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
   const handleAccountUpdated = (updatedAccount: Account) => {
     options.patchAccountInList(updatedAccount)
     options.enterAutoRefreshSilentWindow()
+    options.refreshUsageCells()
   }
 
   const closeTestModal = () => {
@@ -259,6 +261,7 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
       .then((updatedAccount) => {
         options.patchAccountInList(updatedAccount)
         options.enterAutoRefreshSilentWindow()
+        options.refreshUsageCells()
 
         if (optionsForMessage?.successMessage) {
           options.showSuccess(optionsForMessage.successMessage)
@@ -297,6 +300,7 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
       const updated = await adminAPI.accounts.resetAccountQuota(account.id)
       options.patchAccountInList(updated)
       options.enterAutoRefreshSilentWindow()
+      options.refreshUsageCells()
       options.showSuccess(options.t('common.success'))
     } catch (error) {
       console.error('Failed to reset quota:', error)
@@ -357,6 +361,7 @@ export function useAccountsViewActions(options: AccountsViewActionsOptions) {
     options.tempUnschedAcc.value = null
     options.patchAccountInList(updatedAccount)
     options.enterAutoRefreshSilentWindow()
+    options.refreshUsageCells()
   }
 
   return {

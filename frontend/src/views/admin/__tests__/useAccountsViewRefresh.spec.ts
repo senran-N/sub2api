@@ -270,6 +270,15 @@ describe('useAccountsViewRefresh', () => {
     expect(setup.loadBase).toHaveBeenCalledTimes(2)
   })
 
+  it('reload bumps usage refresh token after the list refresh completes', async () => {
+    const setup = createComposable()
+
+    await setup.composable.reload()
+
+    expect(setup.reloadBase).toHaveBeenCalledTimes(1)
+    expect(setup.composable.usageManualRefreshToken.value).toBe(1)
+  })
+
   it('ignores stale base loads once a newer load starts', async () => {
     const firstLoad = createDeferred<void>()
     const secondLoad = createDeferred<void>()
