@@ -112,6 +112,37 @@ func TestBuildGrokSessionTextPayloadFromResponsesRequest_InjectsToolPrompt(t *te
 	require.Contains(t, personality, "WHEN TO CALL: You MUST output a <tool_calls> XML block.")
 }
 
+func TestBuildGrokSessionTextPayloadFromResponsesRequest_DeepsearchPreset(t *testing.T) {
+	input, err := json.Marshal([]apicompat.ResponsesInputItem{{
+		Role:    "user",
+		Content: json.RawMessage(`"Research the latest launch."`),
+	}})
+	require.NoError(t, err)
+
+	payload, err := buildGrokSessionTextPayloadFromResponsesRequest(&apicompat.ResponsesRequest{
+		Model:      "grok-3",
+		Input:      input,
+		Deepsearch: "deeper",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "deeper", payload["deepsearchPreset"])
+}
+
+func TestBuildGrokSessionTextPayloadFromResponsesRequest_InvalidDeepsearchPreset(t *testing.T) {
+	input, err := json.Marshal([]apicompat.ResponsesInputItem{{
+		Role:    "user",
+		Content: json.RawMessage(`"Research the latest launch."`),
+	}})
+	require.NoError(t, err)
+
+	_, err = buildGrokSessionTextPayloadFromResponsesRequest(&apicompat.ResponsesRequest{
+		Model:      "grok-3",
+		Input:      input,
+		Deepsearch: "max",
+	})
+	require.EqualError(t, err, `unsupported deepsearch value "max"`)
+}
+
 func TestGrokSessionTextRequestFromResponsesRequest_CollectsAttachments(t *testing.T) {
 	responsesReq, err := apicompat.ChatCompletionsToResponses(&apicompat.ChatCompletionsRequest{
 		Model: "grok-3-fast",

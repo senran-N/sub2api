@@ -167,6 +167,7 @@ type ResponsesRequest struct {
 	Reasoning       *ResponsesReasoning `json:"reasoning,omitempty"`
 	ToolChoice      json.RawMessage     `json:"tool_choice,omitempty"`
 	ServiceTier     string              `json:"service_tier,omitempty"`
+	Deepsearch      string              `json:"deepsearch,omitempty"` // "default" | "deeper"
 }
 
 // ResponsesReasoning configures reasoning effort in the Responses API.
@@ -387,7 +388,8 @@ type ChatCompletionsRequest struct {
 	ToolChoice          json.RawMessage    `json:"tool_choice,omitempty"`
 	ReasoningEffort     string             `json:"reasoning_effort,omitempty"` // "low" | "medium" | "high"
 	ServiceTier         string             `json:"service_tier,omitempty"`
-	Stop                json.RawMessage    `json:"stop,omitempty"` // string or []string
+	Deepsearch          string             `json:"deepsearch,omitempty"` // "default" | "deeper"
+	Stop                json.RawMessage    `json:"stop,omitempty"`       // string or []string
 
 	// Legacy function calling (deprecated but still supported)
 	Functions    []ChatFunction  `json:"functions,omitempty"`

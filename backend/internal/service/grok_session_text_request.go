@@ -16,11 +16,15 @@ const (
 	grokSessionModeFast   = "fast"
 	grokSessionModeExpert = "expert"
 	grokSessionModeHeavy  = "heavy"
+
+	grokSessionDeepsearchDefault = "default"
+	grokSessionDeepsearchDeeper  = "deeper"
 )
 
 type grokSessionTextRequest struct {
 	ModelID          string
 	ModeID           string
+	DeepsearchPreset string
 	SystemPrompt     string
 	Message          string
 	FileAttachments  []string
@@ -70,6 +74,9 @@ func buildGrokSessionTextPayload(input grokSessionTextRequest) (map[string]any, 
 		"sendFinalMetadata":           true,
 		"temporary":                   true,
 		"toolOverrides":               grokSessionDefaultToolOverrides(),
+	}
+	if input.DeepsearchPreset != "" {
+		payload["deepsearchPreset"] = input.DeepsearchPreset
 	}
 	if systemPrompt := strings.TrimSpace(mergeGrokSessionSystemPrompt(input.SystemPrompt, input.ToolPrompt)); systemPrompt != "" {
 		payload["customPersonality"] = systemPrompt
@@ -134,10 +141,15 @@ func grokSessionTextRequestFromResponsesRequest(req *apicompat.ResponsesRequest)
 		return grokSessionTextRequest{}, err
 	}
 	toolPrompt, toolNames := grokSessionToolConfigFromResponsesRequest(req)
+	deepsearchPreset, err := normalizeGrokSessionDeepsearchPreset(req.Deepsearch)
+	if err != nil {
+		return grokSessionTextRequest{}, err
+	}
 
 	return grokSessionTextRequest{
 		ModelID:          strings.TrimSpace(req.Model),
 		ModeID:           modeID,
+		DeepsearchPreset: deepsearchPreset,
 		SystemPrompt:     systemPrompt,
 		Message:          message,
 		AttachmentInputs: append([]grokSessionUploadInput(nil), attachmentInputs...),
@@ -257,6 +269,19 @@ func grokSessionToolConfigFromResponsesRequest(req *apicompat.ResponsesRequest) 
 		return "", nil
 	}
 	return grokSessionToolPromptFromResponsesTools(req.Tools, req.ToolChoice)
+}
+
+func normalizeGrokSessionDeepsearchPreset(raw string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "":
+		return "", nil
+	case grokSessionDeepsearchDefault:
+		return grokSessionDeepsearchDefault, nil
+	case grokSessionDeepsearchDeeper:
+		return grokSessionDeepsearchDeeper, nil
+	default:
+		return "", fmt.Errorf("unsupported deepsearch value %q", strings.TrimSpace(raw))
+	}
 }
 
 func grokSessionTranscriptRoleLabel(role string) string {

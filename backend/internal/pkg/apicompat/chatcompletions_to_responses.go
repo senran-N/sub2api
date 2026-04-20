@@ -34,6 +34,7 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 		Stream:      true, // upstream always streams
 		Include:     []string{"reasoning.encrypted_content"},
 		ServiceTier: req.ServiceTier,
+		Deepsearch:  req.Deepsearch,
 	}
 
 	storeFalse := false
