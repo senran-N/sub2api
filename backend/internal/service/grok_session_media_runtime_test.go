@@ -27,6 +27,17 @@ func TestExtractGrokSessionImageCardURLs_SkipsModeratedImage(t *testing.T) {
 	require.Empty(t, urls)
 }
 
+func TestParseGrokSessionImageEditRequest_JSONCollectsMultipleImageReferences(t *testing.T) {
+	body := []byte(`{"model":"grok-imagine-image-edit","prompt":"replace background","image":["https://media.example/a.png","https://media.example/b.png"]}`)
+
+	req, err := parseGrokSessionImageEditRequest(nil, body, "grok-imagine-image-edit")
+
+	require.NoError(t, err)
+	require.Len(t, req.InputImages, 2)
+	require.Equal(t, "https://media.example/a.png", req.InputImages[0].Source)
+	require.Equal(t, "https://media.example/b.png", req.InputImages[1].Source)
+}
+
 func TestGrokSessionMediaRuntimePersistSessionMediaRuntimeFeedback_RateLimitedVideoSetsCooldown(t *testing.T) {
 	account := &Account{
 		ID:       88,

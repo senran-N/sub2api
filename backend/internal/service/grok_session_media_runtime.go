@@ -79,7 +79,7 @@ type grokSessionImageEditRequest struct {
 	Model        string
 	Prompt       string
 	N            int
-	InputImage   grokSessionUploadInput
+	InputImages  []grokSessionUploadInput
 	HasMask      bool
 	MaskProvided string
 }
@@ -386,8 +386,15 @@ func (r *GrokSessionMediaRuntime) handleImageEdit(
 		return true
 	}
 
-	uploaded, err := r.uploadSessionMediaInput(c.Request.Context(), account, req.InputImage)
+	uploaded, err := r.uploadSessionMediaInputs(c.Request.Context(), account, req.InputImages)
 	if err != nil {
+		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
+		r.writeMediaRuntimeError(c, err)
+		return true
+	}
+	imageReferences := collectGrokSessionUploadedContentURLs(uploaded)
+	if len(imageReferences) == 0 {
+		err = errors.New("grok session image edit has no uploaded image references")
 		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, c.Request.URL.Path, err)
 		r.writeMediaRuntimeError(c, err)
 		return true
@@ -397,7 +404,7 @@ func (r *GrokSessionMediaRuntime) handleImageEdit(
 		c.Request.Context(),
 		account,
 		grokSessionMediaPostTypeImage,
-		uploaded.ContentURL,
+		imageReferences[0],
 		"",
 	)
 	if err != nil {
@@ -430,7 +437,7 @@ func (r *GrokSessionMediaRuntime) handleImageEdit(
 			"modelMap": map[string]any{
 				"imageEditModel": grokSessionImageEditModelKind,
 				"imageEditModelConfig": map[string]any{
-					"imageReferences": []any{uploaded.ContentURL},
+					"imageReferences": grokSessionStringSliceToAny(imageReferences),
 					"parentPostId":    postID,
 				},
 			},
@@ -935,6 +942,27 @@ func (r *GrokSessionMediaRuntime) uploadSessionMediaInput(
 	}, nil
 }
 
+func (r *GrokSessionMediaRuntime) uploadSessionMediaInputs(
+	ctx context.Context,
+	account *Account,
+	inputs []grokSessionUploadInput,
+) ([]*grokSessionUploadedAsset, error) {
+	uploaded := make([]*grokSessionUploadedAsset, 0, len(inputs))
+	for _, input := range inputs {
+		asset, err := r.uploadSessionMediaInput(ctx, account, input)
+		if err != nil {
+			return nil, err
+		}
+		if asset != nil {
+			uploaded = append(uploaded, asset)
+		}
+	}
+	if len(uploaded) == 0 {
+		return nil, errors.New("image is required")
+	}
+	return uploaded, nil
+}
+
 func (r *GrokSessionMediaRuntime) normalizeSessionUploadInput(
 	ctx context.Context,
 	account *Account,
@@ -1316,23 +1344,12 @@ func parseGrokSessionImageEditRequest(c *gin.Context, body []byte, defaultModel 
 		req.MaskProvided = mask
 	}
 
-	imageValue := firstNonEmpty(
-		strings.TrimSpace(gjson.GetBytes(body, "image").String()),
-		strings.TrimSpace(gjson.GetBytes(body, "image_url").String()),
-		strings.TrimSpace(gjson.GetBytes(body, "input_image").String()),
-	)
-	if imageValue == "" {
-		for _, item := range gjson.GetBytes(body, "image").Array() {
-			if value := strings.TrimSpace(item.String()); value != "" {
-				imageValue = value
-				break
-			}
-		}
-	}
-	if imageValue == "" {
+	req.InputImages = append(req.InputImages, grokSessionImageEditSourcesFromJSON(body, "image")...)
+	req.InputImages = append(req.InputImages, grokSessionImageEditSourcesFromJSON(body, "image_url")...)
+	req.InputImages = append(req.InputImages, grokSessionImageEditSourcesFromJSON(body, "input_image")...)
+	if len(req.InputImages) == 0 {
 		return req, errors.New("image is required")
 	}
-	req.InputImage = grokSessionUploadInput{Source: imageValue}
 	return req, nil
 }
 
@@ -1389,11 +1406,11 @@ func parseMultipartGrokSessionImageEditRequest(body []byte, boundary string, def
 					mimeType = http.DetectContentType(raw)
 				}
 				name := firstNonEmpty(fileName, grokSessionDefaultFileName(mimeType))
-				req.InputImage = grokSessionUploadInput{
+				req.InputImages = append(req.InputImages, grokSessionUploadInput{
 					FileName: name,
 					MimeType: mimeType,
 					Base64:   base64.StdEncoding.EncodeToString(raw),
-				}
+				})
 			}
 		}
 		_ = part.Close()
@@ -1413,10 +1430,37 @@ func parseMultipartGrokSessionImageEditRequest(body []byte, boundary string, def
 	if req.Prompt == "" {
 		return req, errors.New("prompt is required")
 	}
-	if req.InputImage.Base64 == "" && strings.TrimSpace(req.InputImage.Source) == "" {
+	if len(req.InputImages) == 0 {
 		return req, errors.New("image is required")
 	}
 	return req, nil
+}
+
+func grokSessionImageEditSourcesFromJSON(body []byte, field string) []grokSessionUploadInput {
+	field = strings.TrimSpace(field)
+	if field == "" {
+		return nil
+	}
+
+	result := make([]grokSessionUploadInput, 0, 4)
+	appendSource := func(raw string) {
+		if trimmed := strings.TrimSpace(raw); trimmed != "" {
+			result = append(result, grokSessionUploadInput{Source: trimmed})
+		}
+	}
+
+	value := gjson.GetBytes(body, field)
+	if !value.Exists() {
+		return result
+	}
+	if value.IsArray() {
+		for _, item := range value.Array() {
+			appendSource(item.String())
+		}
+		return result
+	}
+	appendSource(value.String())
+	return result
 }
 
 func parseGrokSessionVideoCreateRequest(body []byte, defaultModel string) (grokSessionVideoCreateRequest, error) {
@@ -1726,6 +1770,32 @@ func absolutizeGrokSessionAssetURL(raw string) string {
 		return strings.TrimRight(grokSessionUploadedAssetBaseURL, "/") + trimmed
 	}
 	return strings.TrimRight(grokSessionUploadedAssetBaseURL, "/") + "/" + trimmed
+}
+
+func collectGrokSessionUploadedContentURLs(assets []*grokSessionUploadedAsset) []string {
+	if len(assets) == 0 {
+		return nil
+	}
+	urls := make([]string, 0, len(assets))
+	for _, asset := range assets {
+		if asset == nil {
+			continue
+		}
+		if trimmed := strings.TrimSpace(asset.ContentURL); trimmed != "" {
+			urls = append(urls, trimmed)
+		}
+	}
+	return urls
+}
+
+func grokSessionStringSliceToAny(values []string) []any {
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 func grokSessionUserIDFromTargetAndResponse(target grokTransportTarget, resp *http.Response) string {

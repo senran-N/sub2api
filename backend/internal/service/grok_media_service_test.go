@@ -511,6 +511,68 @@ func TestGrokMediaServiceHandleImages_SessionAccountUsesConfiguredRuntimeSession
 	require.Equal(t, "https://media.example/image.png", gjson.Get(rec.Body.String(), "data.0.url").String())
 }
 
+func TestGrokMediaServiceHandleImages_SessionImageEditForwardsAllImageReferences(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{
+		"model":"grok-imagine-image-edit",
+		"prompt":"replace the sky",
+		"image":[
+			"data:image/png;base64,QUFB",
+			"data:image/png;base64,QkJC"
+		]
+	}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"fileMetadataId":"file_1","fileUri":"https://assets.grok.com/users/u_1/file_1/content"}`),
+			newJSONResponse(http.StatusOK, `{"fileMetadataId":"file_2","fileUri":"https://assets.grok.com/users/u_1/file_2/content"}`),
+			newJSONResponse(http.StatusOK, `{"post":{"id":"post_123"}}`),
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"streamingImageGenerationResponse":{"progress":100,"imageUrl":"https://media.example/edited.png"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokSessionMediaAccount(291, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			}),
+		},
+	}
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, nil, nil)
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/images/edits", body)
+	handled := svc.HandleImages(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 4)
+	require.Equal(t, "https://grok.com/rest/app-chat/upload-file", upstream.requests[0].URL.String())
+	require.Equal(t, "https://grok.com/rest/app-chat/upload-file", upstream.requests[1].URL.String())
+	require.Equal(t, "https://grok.com/rest/media/post/create", upstream.requests[2].URL.String())
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[3].URL.String())
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(readTestRequestBody(t, upstream.requests[3])), &payload))
+	require.Equal(t, "imagine-image-edit", payload["modelName"])
+	require.Equal(t, float64(2), payload["imageGenerationCount"])
+
+	references := gjson.GetBytes([]byte(readTestRequestBody(t, upstream.requests[3])), "responseMetadata.modelConfigOverride.modelMap.imageEditModelConfig.imageReferences").Array()
+	require.Len(t, references, 2)
+	require.Equal(t, "https://assets.grok.com/users/u_1/file_1/content", references[0].String())
+	require.Equal(t, "https://assets.grok.com/users/u_1/file_2/content", references[1].String())
+	require.Equal(t, "post_123", gjson.GetBytes([]byte(readTestRequestBody(t, upstream.requests[3])), "responseMetadata.modelConfigOverride.modelMap.imageEditModelConfig.parentPostId").String())
+	require.Equal(t, "https://media.example/edited.png", gjson.Get(rec.Body.String(), "data.0.url").String())
+}
+
 func TestGrokMediaServiceHandleVideos_FollowupUsesBoundSessionAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
