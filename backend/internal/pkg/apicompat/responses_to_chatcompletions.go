@@ -143,6 +143,7 @@ type ResponsesEventToChatState struct {
 	OutputIndexToToolIndex map[int]int // Responses output_index → Chat tool_calls index
 	IncludeUsage           bool
 	Usage                  *ChatUsage
+	PendingSearchSources   []SearchSource
 }
 
 // NewResponsesEventToChatState returns an initialised stream state.
@@ -193,6 +194,9 @@ func FinalizeResponsesChatStream(state *ResponsesEventToChatState) []ChatComplet
 	}
 
 	chunks := []ChatCompletionsChunk{makeChatFinishChunk(state, finishReason)}
+	if len(state.PendingSearchSources) > 0 {
+		chunks[0].SearchSources = append([]SearchSource(nil), state.PendingSearchSources...)
+	}
 
 	if state.IncludeUsage && state.Usage != nil {
 		chunks = append(chunks, ChatCompletionsChunk{
@@ -336,6 +340,9 @@ func resToChatHandleCompleted(evt *ResponsesStreamEvent, state *ResponsesEventTo
 	if evt.Response != nil {
 		finishChunk.Choices[0].Delta.Annotations = collectChatAnnotationsFromResponse(evt.Response)
 		finishChunk.SearchSources = collectSearchSourcesFromResponse(evt.Response)
+	}
+	if len(finishChunk.SearchSources) == 0 && len(state.PendingSearchSources) > 0 {
+		finishChunk.SearchSources = append([]SearchSource(nil), state.PendingSearchSources...)
 	}
 	chunks = append(chunks, finishChunk)
 

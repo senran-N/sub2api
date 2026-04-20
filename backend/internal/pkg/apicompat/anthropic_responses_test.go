@@ -597,6 +597,34 @@ func TestStreamingCompletedIncludesAnnotationsAndSearchSources(t *testing.T) {
 	assert.Equal(t, "https://example.com/article", events[0].Delta.SearchSources[0].URL)
 }
 
+func TestStreamingCompletedFallsBackToPendingSearchSources(t *testing.T) {
+	state := NewResponsesEventToAnthropicState()
+	state.PendingSearchSources = []SearchSource{{
+		URL:   "https://example.com/article",
+		Title: "Example Article",
+		Type:  "web",
+	}}
+
+	ResponsesEventToAnthropicEvents(&ResponsesStreamEvent{
+		Type:     "response.created",
+		Response: &ResponsesResponse{ID: "resp_tool_stream", Model: "gpt-5.2"},
+	}, state)
+
+	events := ResponsesEventToAnthropicEvents(&ResponsesStreamEvent{
+		Type: "response.completed",
+		Response: &ResponsesResponse{
+			Status: "completed",
+		},
+	}, state)
+
+	require.Len(t, events, 2)
+	require.NotNil(t, events[0].Delta)
+	require.Len(t, events[0].Delta.SearchSources, 1)
+	assert.Equal(t, "https://example.com/article", events[0].Delta.SearchSources[0].URL)
+	assert.Equal(t, "Example Article", events[0].Delta.SearchSources[0].Title)
+	assert.Equal(t, "web", events[0].Delta.SearchSources[0].Type)
+}
+
 func TestResponsesAnthropicEventToSSE(t *testing.T) {
 	evt := AnthropicStreamEvent{
 		Type: "message_start",

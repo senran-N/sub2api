@@ -618,6 +618,7 @@ func writeGrokChatMediaCompletion(c *gin.Context, model string, stream bool, con
 func writeGrokChatMediaStream(c *gin.Context, model string, content string, reasoning string) {
 	responseID := fmt.Sprintf("chatcmpl_%d", time.Now().UTC().UnixNano())
 	createdAt := time.Now().UTC().Unix()
+	flusher, _ := c.Writer.(http.Flusher)
 
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
@@ -629,6 +630,9 @@ func writeGrokChatMediaStream(c *gin.Context, model string, content string, reas
 			return
 		}
 		_, _ = c.Writer.WriteString(frame)
+		if flusher != nil {
+			flusher.Flush()
+		}
 	}
 
 	writeChunk(apicompat.ChatCompletionsChunk{
@@ -688,6 +692,9 @@ func writeGrokChatMediaStream(c *gin.Context, model string, content string, reas
 	})
 
 	_, _ = c.Writer.WriteString("data: [DONE]\n\n")
+	if flusher != nil {
+		flusher.Flush()
+	}
 }
 
 func writeGrokChatMediaError(c *gin.Context, statusCode int, body []byte) {

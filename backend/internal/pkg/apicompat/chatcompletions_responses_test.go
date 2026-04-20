@@ -815,6 +815,30 @@ func TestResponsesEventToChatChunks_CompletedWithToolCalls(t *testing.T) {
 	assert.Equal(t, "tool_calls", *chunks[0].Choices[0].FinishReason)
 }
 
+func TestResponsesEventToChatChunks_CompletedWithPendingSearchSources(t *testing.T) {
+	state := NewResponsesEventToChatState()
+	state.Model = "gpt-4o"
+	state.SawToolCall = true
+	state.PendingSearchSources = []SearchSource{{
+		URL:   "https://example.com/article",
+		Title: "Example Article",
+		Type:  "web",
+	}}
+
+	chunks := ResponsesEventToChatChunks(&ResponsesStreamEvent{
+		Type: "response.completed",
+		Response: &ResponsesResponse{
+			Status: "completed",
+		},
+	}, state)
+
+	require.Len(t, chunks, 1)
+	require.Len(t, chunks[0].SearchSources, 1)
+	assert.Equal(t, "https://example.com/article", chunks[0].SearchSources[0].URL)
+	assert.Equal(t, "Example Article", chunks[0].SearchSources[0].Title)
+	assert.Equal(t, "web", chunks[0].SearchSources[0].Type)
+}
+
 func TestResponsesEventToChatChunks_ReasoningDelta(t *testing.T) {
 	state := NewResponsesEventToChatState()
 	state.Model = "gpt-4o"

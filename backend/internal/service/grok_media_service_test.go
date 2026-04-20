@@ -573,6 +573,67 @@ func TestGrokMediaServiceHandleImages_SessionImageEditForwardsAllImageReferences
 	require.Equal(t, "https://media.example/edited.png", gjson.Get(rec.Body.String(), "data.0.url").String())
 }
 
+func TestGrokMediaServiceHandleImages_SessionImageEditRetriesToFillMissingFinals(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{
+		"model":"grok-imagine-image-edit",
+		"prompt":"replace background",
+		"n":2,
+		"image":[
+			"data:image/png;base64,QUFB",
+			"data:image/png;base64,QkJC"
+		]
+	}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"fileMetadataId":"file_1","fileUri":"https://assets.grok.com/users/u_1/file_1/content"}`),
+			newJSONResponse(http.StatusOK, `{"fileMetadataId":"file_2","fileUri":"https://assets.grok.com/users/u_1/file_2/content"}`),
+			newJSONResponse(http.StatusOK, `{"post":{"id":"post_123"}}`),
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"streamingImageGenerationResponse":{"imageIndex":0,"progress":100,"imageUrl":"https://media.example/edited-a.png"}}}}`,
+			}, "\n")),
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"streamingImageGenerationResponse":{"imageIndex":0,"progress":100,"imageUrl":"https://media.example/edited-a.png"}}}}`,
+				`{"result":{"response":{"streamingImageGenerationResponse":{"imageIndex":1,"progress":100,"imageUrl":"https://media.example/edited-b.png"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokSessionMediaAccount(291, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			}),
+		},
+	}
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, nil, nil)
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/images/edits", body)
+	handled := svc.HandleImages(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 5)
+	require.Equal(t, "https://grok.com/rest/app-chat/upload-file", upstream.requests[0].URL.String())
+	require.Equal(t, "https://grok.com/rest/app-chat/upload-file", upstream.requests[1].URL.String())
+	require.Equal(t, "https://grok.com/rest/media/post/create", upstream.requests[2].URL.String())
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[3].URL.String())
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[4].URL.String())
+
+	require.Equal(t, float64(2), gjson.GetBytes([]byte(readTestRequestBody(t, upstream.requests[3])), "imageGenerationCount").Num)
+	require.Equal(t, float64(2), gjson.GetBytes([]byte(readTestRequestBody(t, upstream.requests[4])), "imageGenerationCount").Num)
+	require.Equal(t, "https://media.example/edited-a.png", gjson.Get(rec.Body.String(), "data.0.url").String())
+	require.Equal(t, "https://media.example/edited-b.png", gjson.Get(rec.Body.String(), "data.1.url").String())
+}
+
 func TestGrokMediaServiceHandleVideos_FollowupUsesBoundSessionAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

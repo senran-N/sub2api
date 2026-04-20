@@ -139,6 +139,8 @@ type ResponsesEventToAnthropicState struct {
 	ResponseID string
 	Model      string
 	Created    int64
+
+	PendingSearchSources []SearchSource
 }
 
 // NewResponsesEventToAnthropicState returns an initialised stream state.
@@ -195,7 +197,8 @@ func FinalizeResponsesAnthropicStream(state *ResponsesEventToAnthropicState) []A
 		AnthropicStreamEvent{
 			Type: "message_delta",
 			Delta: &AnthropicDelta{
-				StopReason: "end_turn",
+				StopReason:    "end_turn",
+				SearchSources: append([]SearchSource(nil), state.PendingSearchSources...),
 			},
 			Usage: &AnthropicUsage{
 				InputTokens:          state.InputTokens,
@@ -486,22 +489,25 @@ func resToAnthHandleCompleted(evt *ResponsesStreamEvent, state *ResponsesEventTo
 		}
 	}
 
-	events = append(events,
-		AnthropicStreamEvent{
-			Type: "message_delta",
-			Delta: &AnthropicDelta{
-				StopReason:    stopReason,
-				SearchSources: collectSearchSourcesFromResponse(evt.Response),
-				Annotations:   collectResponsesAnnotationsFromResponse(evt.Response),
-			},
-			Usage: &AnthropicUsage{
-				InputTokens:          state.InputTokens,
-				OutputTokens:         state.OutputTokens,
-				CacheReadInputTokens: state.CacheReadInputTokens,
-			},
+	messageDelta := AnthropicStreamEvent{
+		Type: "message_delta",
+		Delta: &AnthropicDelta{
+			StopReason:  stopReason,
+			Annotations: collectResponsesAnnotationsFromResponse(evt.Response),
 		},
-		AnthropicStreamEvent{Type: "message_stop"},
-	)
+		Usage: &AnthropicUsage{
+			InputTokens:          state.InputTokens,
+			OutputTokens:         state.OutputTokens,
+			CacheReadInputTokens: state.CacheReadInputTokens,
+		},
+	}
+	if evt.Response != nil {
+		messageDelta.Delta.SearchSources = collectSearchSourcesFromResponse(evt.Response)
+	}
+	if len(messageDelta.Delta.SearchSources) == 0 && len(state.PendingSearchSources) > 0 {
+		messageDelta.Delta.SearchSources = append([]SearchSource(nil), state.PendingSearchSources...)
+	}
+	events = append(events, messageDelta, AnthropicStreamEvent{Type: "message_stop"})
 	state.MessageStopSent = true
 	return events
 }

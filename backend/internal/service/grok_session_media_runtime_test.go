@@ -4,7 +4,9 @@ package service
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/senran-N/sub2api/internal/pkg/grok"
@@ -36,6 +38,7 @@ func TestParseGrokSessionImageEditRequest_JSONCollectsMultipleImageReferences(t 
 	require.Len(t, req.InputImages, 2)
 	require.Equal(t, "https://media.example/a.png", req.InputImages[0].Source)
 	require.Equal(t, "https://media.example/b.png", req.InputImages[1].Source)
+	require.Equal(t, 1, req.N)
 }
 
 func TestParseGrokSessionImageGenerationRequest_NormalizesResponseFormat(t *testing.T) {
@@ -69,6 +72,48 @@ func TestParseGrokSessionImageEditRequest_MultipartReadsResponseFormat(t *testin
 	require.NoError(t, err)
 	require.Equal(t, grokOpenAIImageResponseFormatB64JSON, req.ResponseFormat)
 	require.Len(t, req.InputImages, 1)
+}
+
+func TestCollectGrokSessionImageURLsWithProgress_ImageEditWaitsForFinalIndexedImages(t *testing.T) {
+	resp := &http.Response{
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`{"result":{"response":{"streamingImageGenerationResponse":{"imageIndex":1,"progress":25,"imageUrl":"https://media.example/partial-b.png"}}}}`,
+			`{"result":{"response":{"streamingImageGenerationResponse":{"imageIndex":0,"progress":40,"imageUrl":"https://media.example/partial-a.png"}}}}`,
+			`{"result":{"response":{"streamingImageGenerationResponse":{"imageIndex":1,"progress":100,"imageUrl":"https://media.example/final-b.png"}}}}`,
+			`{"result":{"response":{"streamingImageGenerationResponse":{"imageIndex":0,"progress":100,"imageUrl":"https://media.example/final-a.png"}}}}`,
+		}, "\n"))),
+	}
+
+	urls, err := collectGrokSessionImageURLsWithProgress(
+		resp,
+		grokTransportTarget{},
+		"/v1/images/edits",
+		2,
+		nil,
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"https://media.example/final-a.png",
+		"https://media.example/final-b.png",
+	}, urls)
+}
+
+func TestCollectGrokSessionImageURLsWithProgress_AbsolutizesModelResponseGeneratedURLs(t *testing.T) {
+	resp := &http.Response{
+		Body: io.NopCloser(strings.NewReader(`{"result":{"response":{"modelResponse":{"generatedImageUrls":["users/demo/generated/image.png"]}}}}`)),
+	}
+
+	urls, err := collectGrokSessionImageURLsWithProgress(
+		resp,
+		grokTransportTarget{},
+		"/v1/images/generations",
+		1,
+		nil,
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"https://assets.grok.com/users/demo/generated/image.png"}, urls)
 }
 
 func TestGrokSessionMediaRuntimePersistSessionMediaRuntimeFeedback_RateLimitedVideoSetsCooldown(t *testing.T) {

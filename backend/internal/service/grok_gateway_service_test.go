@@ -406,6 +406,7 @@ func TestGrokGatewayServiceHandleChatCompletions_SessionImageStreamEmitsReasonin
 	require.True(t, handled)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+	require.True(t, rec.Flushed)
 	require.Len(t, upstream.requests, 1)
 	require.Contains(t, upstream.requests[0].URL.String(), "/rest/app-chat/conversations/new")
 
@@ -509,6 +510,7 @@ func TestGrokGatewayServiceHandleChatCompletions_SessionVideoStreamEmitsReasonin
 	require.True(t, handled)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+	require.True(t, rec.Flushed)
 	require.Len(t, upstream.requests, 2)
 	require.Equal(t, "https://grok.com/rest/media/post/create", upstream.requests[0].URL.String())
 	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[1].URL.String())

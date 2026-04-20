@@ -35,7 +35,9 @@ const (
 	grokSessionImageEditModelKind         = "imagine"
 	grokSessionVideoModelName             = "grok-3"
 	grokSessionVideoExtensionRefType      = "ORIGINAL_REF_TYPE_VIDEO_EXTENSION"
-	grokSessionDefaultImageEditCount      = 2
+	grokSessionDefaultImageEditN          = 1
+	grokSessionImageEditGenerationCount   = 2
+	grokSessionImageEditMaxAttempts       = 2
 	grokSessionDefaultVideoSeconds        = 6
 	grokSessionDefaultVideoSize           = "720x1280"
 	grokSessionDefaultVideoQuality        = "standard"
@@ -576,7 +578,7 @@ func (r *GrokSessionMediaRuntime) buildSessionImageEditResponseWithPath(
 	payload["modelName"] = grokSessionImageEditModelName
 	payload["enableImageGeneration"] = true
 	payload["enableImageStreaming"] = true
-	payload["imageGenerationCount"] = req.N
+	payload["imageGenerationCount"] = grokSessionImageEditGenerationCount
 	payload["returnImageBytes"] = false
 	payload["returnRawGrokInXaiRequest"] = false
 	payload["disableTextFollowUps"] = true
@@ -598,21 +600,13 @@ func (r *GrokSessionMediaRuntime) buildSessionImageEditResponseWithPath(
 		return nil, "", errors.New("Failed to build Grok image edit request")
 	}
 
-	resp, target, err := r.doSessionJSONRequest(
+	imageURLs, reasoning, err := r.collectSessionImageEditURLsWithReasoning(
 		c.Request.Context(),
 		account,
-		grokSessionConversationEndpoint,
+		requestPath,
+		req.N,
 		payloadBytes,
-		"application/json, text/event-stream, text/plain, */*",
-		0,
 	)
-	if err != nil {
-		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
-		return nil, "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	imageURLs, reasoning, err := collectGrokSessionImageURLsWithReasoning(resp, target, requestPath, req.N)
 	if err != nil {
 		r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, err)
 		return nil, "", err
@@ -632,6 +626,64 @@ func (r *GrokSessionMediaRuntime) buildSessionImageEditResponseWithPath(
 	}
 	r.persistSessionMediaRuntimeFeedback(c.Request.Context(), account, requestedModel, requestPath, nil)
 	return responseBody, reasoning, nil
+}
+
+func (r *GrokSessionMediaRuntime) collectSessionImageEditURLsWithReasoning(
+	ctx context.Context,
+	account *Account,
+	requestPath string,
+	requestedCount int,
+	payload []byte,
+) ([]string, string, error) {
+	if requestedCount <= 0 {
+		requestedCount = 1
+	}
+
+	imageURLs := make([]string, 0, requestedCount)
+	seen := make(map[string]struct{}, requestedCount)
+	reasoningUpdates := make([]string, 0, 4)
+
+	for attempt := 0; attempt < grokSessionImageEditMaxAttempts && len(imageURLs) < requestedCount; attempt++ {
+		resp, target, err := r.doSessionJSONRequest(
+			ctx,
+			account,
+			grokSessionConversationEndpoint,
+			payload,
+			"application/json, text/event-stream, text/plain, */*",
+			0,
+		)
+		if err != nil {
+			return nil, strings.Join(reasoningUpdates, "\n"), err
+		}
+
+		attemptURLs, attemptReasoning, err := collectGrokSessionImageURLsWithReasoning(resp, target, requestPath, requestedCount)
+		_ = resp.Body.Close()
+		if err != nil {
+			return nil, strings.Join(reasoningUpdates, "\n"), err
+		}
+		if attemptReasoning != "" {
+			for _, line := range strings.Split(attemptReasoning, "\n") {
+				appendGrokSessionReasoningUpdate(&reasoningUpdates, line)
+			}
+		}
+
+		for _, imageURL := range attemptURLs {
+			imageURL = strings.TrimSpace(imageURL)
+			if imageURL == "" {
+				continue
+			}
+			if _, exists := seen[imageURL]; exists {
+				continue
+			}
+			seen[imageURL] = struct{}{}
+			imageURLs = append(imageURLs, imageURL)
+			if len(imageURLs) >= requestedCount {
+				break
+			}
+		}
+	}
+
+	return imageURLs, strings.Join(reasoningUpdates, "\n"), nil
 }
 
 func (r *GrokSessionMediaRuntime) runVideoJob(account *Account, record *GrokVideoJobRecord, req grokSessionVideoCreateRequest) {
@@ -1264,9 +1316,11 @@ func collectGrokSessionImageURLsWithProgress(
 	scanner.Buffer(scanBuf[:0], defaultMaxLineSize)
 	defer putSSEScannerBuf64K(scanBuf)
 
+	isEditRequest := grokSessionImageRouteIsEdit(requestPath)
 	imageURLs := make([]string, 0, 4)
 	seen := make(map[string]struct{})
 	progressMap := make(map[string]int)
+	indexedFinalURLs := make(map[int]string)
 
 	appendURL := func(raw string) {
 		value := strings.TrimSpace(raw)
@@ -1298,6 +1352,20 @@ func collectGrokSessionImageURLsWithProgress(
 			totalImages,
 		)
 	}
+	appendResolvedURL := func(rawURL string) {
+		appendURL(absolutizeGrokSessionAssetURL(rawURL))
+	}
+	appendResolvedFinalURL := func(rawURL string, assetID string, imageIndex gjson.Result) {
+		resolved := resolveGrokSessionImageResultURL(rawURL, assetID, userID)
+		if resolved == "" {
+			return
+		}
+		if index, ok := parseGrokSessionImageIndex(imageIndex); ok {
+			indexedFinalURLs[index] = resolved
+			return
+		}
+		appendURL(resolved)
+	}
 
 	for scanner.Scan() {
 		payload, ok := normalizeGrokSessionResponseLine(scanner.Text())
@@ -1322,11 +1390,19 @@ func collectGrokSessionImageURLsWithProgress(
 				),
 				int(stream.Get("progress").Int()),
 			)
-			appendURL(strings.TrimSpace(stream.Get("imageUrl").String()))
-		}
-
-		if assetID := strings.TrimSpace(stream.Get("assetId").String()); assetID != "" && userID != "" {
-			appendURL(resolveGrokSessionUploadedAssetURL(assetID, "", userID))
+			rawURL := strings.TrimSpace(stream.Get("imageUrl").String())
+			assetID := strings.TrimSpace(stream.Get("assetId").String())
+			progressValue := clampGrokSessionMediaProgress(int(stream.Get("progress").Int()))
+			if isEditRequest {
+				if progressValue >= 100 && !stream.Get("moderated").Bool() {
+					appendResolvedFinalURL(rawURL, assetID, stream.Get("imageIndex"))
+				}
+			} else {
+				appendResolvedURL(rawURL)
+				if assetID != "" && userID != "" {
+					appendURL(resolveGrokSessionUploadedAssetURL(assetID, "", userID))
+				}
+			}
 		}
 		for _, chunk := range extractGrokSessionImageCardChunks(raw) {
 			recordProgress(chunk.Key, chunk.Progress)
@@ -1336,11 +1412,19 @@ func collectGrokSessionImageURLsWithProgress(
 			appendURL(chunk.ImageURL)
 		}
 
-		for _, value := range gjson.GetBytes(raw, "result.response.modelResponse.generatedImageUrls").Array() {
-			appendURL(value.String())
+		for index, value := range gjson.GetBytes(raw, "result.response.modelResponse.generatedImageUrls").Array() {
+			if isEditRequest {
+				appendResolvedFinalURL(value.String(), "", gjson.Parse(strconv.Itoa(index)))
+				continue
+			}
+			appendResolvedURL(value.String())
 		}
-		for _, value := range gjson.GetBytes(raw, "result.response.modelResponse.fileAttachments").Array() {
+		for index, value := range gjson.GetBytes(raw, "result.response.modelResponse.fileAttachments").Array() {
 			assetID := strings.TrimSpace(value.String())
+			if isEditRequest {
+				appendResolvedFinalURL("", assetID, gjson.Parse(strconv.Itoa(index)))
+				continue
+			}
 			if assetID == "" || userID == "" {
 				continue
 			}
@@ -1349,6 +1433,35 @@ func collectGrokSessionImageURLsWithProgress(
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
+	}
+	if len(indexedFinalURLs) > 0 {
+		orderedIndexes := make([]int, 0, len(indexedFinalURLs))
+		for index := range indexedFinalURLs {
+			orderedIndexes = append(orderedIndexes, index)
+		}
+		sort.Ints(orderedIndexes)
+
+		orderedURLs := make([]string, 0, len(indexedFinalURLs)+len(imageURLs))
+		orderedSeen := make(map[string]struct{}, len(indexedFinalURLs)+len(imageURLs))
+		for _, index := range orderedIndexes {
+			url := strings.TrimSpace(indexedFinalURLs[index])
+			if url == "" {
+				continue
+			}
+			if _, exists := orderedSeen[url]; exists {
+				continue
+			}
+			orderedSeen[url] = struct{}{}
+			orderedURLs = append(orderedURLs, url)
+		}
+		for _, url := range imageURLs {
+			if _, exists := orderedSeen[url]; exists {
+				continue
+			}
+			orderedSeen[url] = struct{}{}
+			orderedURLs = append(orderedURLs, url)
+		}
+		imageURLs = orderedURLs
 	}
 	if len(imageURLs) == 0 && strings.Contains(strings.ToLower(strings.TrimSpace(requestPath)), "/images/") {
 		return nil, errors.New("grok session media stream ended without an image result")
@@ -1582,6 +1695,29 @@ func buildGrokSessionVideoProgressReason(progress int) string {
 	return fmt.Sprintf("视频正在生成 %d%%", clampGrokSessionMediaProgress(progress))
 }
 
+func parseGrokSessionImageIndex(value gjson.Result) (int, bool) {
+	raw := strings.TrimSpace(value.String())
+	if raw == "" {
+		return 0, false
+	}
+	index, err := strconv.Atoi(raw)
+	if err != nil || index < 0 {
+		return 0, false
+	}
+	return index, true
+}
+
+func resolveGrokSessionImageResultURL(rawURL string, assetID string, userID string) string {
+	assetID = strings.TrimSpace(assetID)
+	userID = strings.TrimSpace(userID)
+	if assetID != "" && userID != "" {
+		if resolved := resolveGrokSessionUploadedAssetURL(assetID, "", userID); resolved != "" {
+			return resolved
+		}
+	}
+	return absolutizeGrokSessionAssetURL(rawURL)
+}
+
 func scaleGrokSessionSegmentProgress(index int, totalSegments int, progress int) int {
 	if totalSegments <= 0 {
 		return clampGrokSessionMediaProgress(progress)
@@ -1643,7 +1779,7 @@ func parseGrokSessionImageEditRequest(c *gin.Context, body []byte, defaultModel 
 	}
 	req.ResponseFormat = responseFormat
 	if req.N <= 0 {
-		req.N = grokSessionDefaultImageEditCount
+		req.N = grokSessionDefaultImageEditN
 	}
 	if req.N > 2 {
 		req.N = 2
@@ -1672,7 +1808,7 @@ func parseGrokSessionImageEditRequest(c *gin.Context, body []byte, defaultModel 
 func parseMultipartGrokSessionImageEditRequest(body []byte, boundary string, defaultModel string) (grokSessionImageEditRequest, error) {
 	req := grokSessionImageEditRequest{
 		Model: firstNonEmpty(strings.TrimSpace(defaultModel)),
-		N:     grokSessionDefaultImageEditCount,
+		N:     grokSessionDefaultImageEditN,
 	}
 	if strings.TrimSpace(boundary) == "" {
 		return req, errors.New("multipart image edit request boundary is missing")
@@ -1745,7 +1881,7 @@ func parseMultipartGrokSessionImageEditRequest(body []byte, boundary string, def
 	}
 	req.ResponseFormat = responseFormat
 	if req.N <= 0 {
-		req.N = grokSessionDefaultImageEditCount
+		req.N = grokSessionDefaultImageEditN
 	}
 	if req.N > 2 {
 		req.N = 2

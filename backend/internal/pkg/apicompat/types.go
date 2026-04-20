@@ -347,11 +347,14 @@ type ResponsesStreamEvent struct {
 	Item *ResponsesOutput `json:"item,omitempty"`
 
 	// response.output_text.delta / response.output_text.done
-	OutputIndex  int    `json:"output_index,omitempty"`
-	ContentIndex int    `json:"content_index,omitempty"`
-	Delta        string `json:"delta,omitempty"`
-	Text         string `json:"text,omitempty"`
-	ItemID       string `json:"item_id,omitempty"`
+	OutputIndex     int                      `json:"output_index,omitempty"`
+	ContentIndex    int                      `json:"content_index,omitempty"`
+	Delta           string                   `json:"delta,omitempty"`
+	Text            string                   `json:"text,omitempty"`
+	ItemID          string                   `json:"item_id,omitempty"`
+	Part            *ResponsesContentPart    `json:"part,omitempty"`
+	Annotation      *ResponsesTextAnnotation `json:"annotation,omitempty"`
+	AnnotationIndex int                      `json:"annotation_index,omitempty"`
 
 	// response.function_call_arguments.delta / done
 	CallID    string `json:"call_id,omitempty"`

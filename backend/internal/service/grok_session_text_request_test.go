@@ -76,13 +76,57 @@ func TestBuildGrokSessionTextPayloadFromResponsesRequest_FlattensSystemAndHistor
 	require.Equal(t, "Be terse.", payload["customPersonality"])
 	message, ok := payload["message"].(string)
 	require.True(t, ok)
-	require.Contains(t, message, "User: Hello")
-	require.Contains(t, message, "Assistant: Hi.")
-	require.Contains(t, message, "<tool_calls>")
+	require.Contains(t, message, "[user]: Hello")
+	require.Contains(t, message, "[assistant]: Hi.")
+	require.Contains(t, message, "[assistant]:\n<tool_calls>")
 	require.Contains(t, message, "<tool_name>get_weather</tool_name>")
 	require.Contains(t, message, `<parameters>{"city":"Shanghai"}</parameters>`)
-	require.Contains(t, message, `Tool result (call_1): {"temp_c":26}`)
-	require.Contains(t, message, "User: What should I wear?")
+	require.Contains(t, message, "[tool result for call_1]:\n{\"temp_c\":26}")
+	require.Contains(t, message, "[user]: What should I wear?")
+}
+
+func TestBuildGrokSessionTextPayloadFromResponsesRequest_StripsAssistantGeneratedArtifacts(t *testing.T) {
+	input, err := json.Marshal([]apicompat.ResponsesInputItem{
+		{
+			Role:    "user",
+			Content: json.RawMessage(`"Summarize the result."`),
+		},
+		{
+			Role: "assistant",
+			Content: json.RawMessage(`[
+				{"type":"output_text","text":"<thinking>private chain</thinking>\nFinal answer.\n![image](data:image/png;base64,AAAA)"},
+				{"type":"output_text","text":"## Sources\n[grok2api-sources]: #\n- [Doc](https://example.com/doc)"},
+				{"type":"output_text","text":"Second paragraph."}
+			]`),
+		},
+		{
+			Role:    "user",
+			Content: json.RawMessage(`"Continue."`),
+		},
+	})
+	require.NoError(t, err)
+
+	payload, err := buildGrokSessionTextPayloadFromResponsesRequest(&apicompat.ResponsesRequest{
+		Model: "grok-3",
+		Input: input,
+	})
+	require.NoError(t, err)
+
+	message, ok := payload["message"].(string)
+	require.True(t, ok)
+	require.Contains(t, message, "[assistant]:\nFinal answer.\n[图片]\nSecond paragraph.")
+	require.NotContains(t, message, "<thinking>")
+	require.NotContains(t, message, "## Sources")
+	require.NotContains(t, message, "data:image/png;base64")
+}
+
+func TestGrokSessionTextContentFromResponsesContent_PreservesUserSourcesText(t *testing.T) {
+	content, err := grokSessionTextContentFromResponsesContent(
+		json.RawMessage(`"## Sources\n[grok2api-sources]: #\n- [User supplied](https://example.com)"`),
+		"user",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "## Sources\n[grok2api-sources]: #\n- [User supplied](https://example.com)", content.Text)
 }
 
 func TestBuildGrokSessionTextPayloadFromResponsesRequest_InjectsToolPrompt(t *testing.T) {

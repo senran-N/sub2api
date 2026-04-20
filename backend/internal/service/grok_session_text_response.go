@@ -69,6 +69,11 @@ var grokSessionRenderRe = regexp.MustCompile(`<grok:render\s+card_id="([^"]+)"\s
 type grokSessionResponsesCallbacks struct {
 	onEvent         func(apicompat.ResponsesStreamEvent) error
 	onStreamFailure func(string, apicompat.ResponsesStreamEvent) error
+	onSearchSources func([]apicompat.SearchSource)
+}
+
+type grokSessionResponseMetadata struct {
+	SearchSources []apicompat.SearchSource
 }
 
 func relayGrokSessionResponses(c *gin.Context, upstream io.Reader, model string, stream bool, toolNames []string) error {
@@ -76,7 +81,7 @@ func relayGrokSessionResponses(c *gin.Context, upstream io.Reader, model string,
 		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "request context is nil")
 	}
 	if !stream {
-		finalResponse, err := collectGrokSessionResponses(upstream, model, toolNames, nil)
+		finalResponse, _, err := collectGrokSessionResponses(upstream, model, toolNames, nil)
 		if err != nil {
 			return err
 		}
@@ -89,7 +94,7 @@ func relayGrokSessionResponses(c *gin.Context, upstream io.Reader, model string,
 		return err
 	}
 
-	_, err = collectGrokSessionResponses(upstream, model, toolNames, &grokSessionResponsesCallbacks{
+	_, _, err = collectGrokSessionResponses(upstream, model, toolNames, &grokSessionResponsesCallbacks{
 		onEvent: func(event apicompat.ResponsesStreamEvent) error {
 			return writeGrokSessionResponsesEvent(streamWriter, streamFlusher, event)
 		},
@@ -108,11 +113,15 @@ func relayGrokSessionChatCompletions(c *gin.Context, upstream io.Reader, model s
 		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "request context is nil")
 	}
 	if !stream {
-		finalResponse, err := collectGrokSessionResponses(upstream, model, toolNames, nil)
+		finalResponse, metadata, err := collectGrokSessionResponses(upstream, model, toolNames, nil)
 		if err != nil {
 			return err
 		}
-		c.JSON(http.StatusOK, apicompat.ResponsesToChatCompletions(finalResponse, strings.TrimSpace(model)))
+		chatResponse := apicompat.ResponsesToChatCompletions(finalResponse, strings.TrimSpace(model))
+		if len(chatResponse.SearchSources) == 0 && len(metadata.SearchSources) > 0 {
+			chatResponse.SearchSources = append([]apicompat.SearchSource(nil), metadata.SearchSources...)
+		}
+		c.JSON(http.StatusOK, chatResponse)
 		return nil
 	}
 
@@ -125,7 +134,7 @@ func relayGrokSessionChatCompletions(c *gin.Context, upstream io.Reader, model s
 	state.Model = strings.TrimSpace(model)
 	state.IncludeUsage = includeUsage
 
-	_, err = collectGrokSessionResponses(upstream, model, toolNames, &grokSessionResponsesCallbacks{
+	_, _, err = collectGrokSessionResponses(upstream, model, toolNames, &grokSessionResponsesCallbacks{
 		onEvent: func(event apicompat.ResponsesStreamEvent) error {
 			return writeGrokSessionChatChunks(streamWriter, streamFlusher, state, event)
 		},
@@ -142,6 +151,9 @@ func relayGrokSessionChatCompletions(c *gin.Context, upstream io.Reader, model s
 				return err
 			}
 			return writeGrokSessionStreamPayload(streamWriter, streamFlusher, "data: [DONE]\n\n")
+		},
+		onSearchSources: func(searchSources []apicompat.SearchSource) {
+			state.PendingSearchSources = append([]apicompat.SearchSource(nil), searchSources...)
 		},
 	})
 	if errors.Is(err, errGrokSessionTextStreamHandled) {
@@ -164,11 +176,15 @@ func relayGrokSessionAnthropic(c *gin.Context, upstream io.Reader, model string,
 		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "request context is nil")
 	}
 	if !stream {
-		finalResponse, err := collectGrokSessionResponses(upstream, model, toolNames, nil)
+		finalResponse, metadata, err := collectGrokSessionResponses(upstream, model, toolNames, nil)
 		if err != nil {
 			return err
 		}
-		c.JSON(http.StatusOK, apicompat.ResponsesToAnthropic(finalResponse, strings.TrimSpace(model)))
+		anthropicResponse := apicompat.ResponsesToAnthropic(finalResponse, strings.TrimSpace(model))
+		if len(anthropicResponse.SearchSources) == 0 && len(metadata.SearchSources) > 0 {
+			anthropicResponse.SearchSources = append([]apicompat.SearchSource(nil), metadata.SearchSources...)
+		}
+		c.JSON(http.StatusOK, anthropicResponse)
 		return nil
 	}
 
@@ -180,7 +196,7 @@ func relayGrokSessionAnthropic(c *gin.Context, upstream io.Reader, model string,
 	state := apicompat.NewResponsesEventToAnthropicState()
 	state.Model = strings.TrimSpace(model)
 
-	_, err = collectGrokSessionResponses(upstream, model, toolNames, &grokSessionResponsesCallbacks{
+	_, _, err = collectGrokSessionResponses(upstream, model, toolNames, &grokSessionResponsesCallbacks{
 		onEvent: func(event apicompat.ResponsesStreamEvent) error {
 			return writeGrokSessionAnthropicEvents(streamWriter, streamFlusher, state, event)
 		},
@@ -194,6 +210,9 @@ func relayGrokSessionAnthropic(c *gin.Context, upstream io.Reader, model string,
 				return marshalErr
 			}
 			return writeGrokSessionStreamPayload(streamWriter, streamFlusher, "event: error\ndata: "+string(payload)+"\n\n")
+		},
+		onSearchSources: func(searchSources []apicompat.SearchSource) {
+			state.PendingSearchSources = append([]apicompat.SearchSource(nil), searchSources...)
 		},
 	})
 	if errors.Is(err, errGrokSessionTextStreamHandled) {
@@ -216,9 +235,9 @@ func collectGrokSessionResponses(
 	model string,
 	toolNames []string,
 	callbacks *grokSessionResponsesCallbacks,
-) (*apicompat.ResponsesResponse, error) {
+) (*apicompat.ResponsesResponse, grokSessionResponseMetadata, error) {
 	if upstream == nil {
-		return nil, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
+		return nil, grokSessionResponseMetadata{}, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
 	}
 
 	state := grokSessionResponsesState{
@@ -244,6 +263,8 @@ func collectGrokSessionResponses(
 		sawDelta       bool
 		sawCompletion  bool
 		createdEmitted bool
+		reasoningDone  bool
+		messageDone    bool
 		toolSieve      *grokToolSieve
 		toolCallsSeen  bool
 	)
@@ -264,11 +285,55 @@ func collectGrokSessionResponses(
 		}
 		return callbacks.onEvent(event)
 	}
+	emitSearchSources := func() {
+		if callbacks == nil || callbacks.onSearchSources == nil || len(state.searchSources) == 0 {
+			return
+		}
+		callbacks.onSearchSources(append([]apicompat.SearchSource(nil), state.searchSources...))
+	}
+	emitReasoningDone := func() error {
+		if reasoningDone || !state.reasoningOpened {
+			return nil
+		}
+		if err := emitEvent(state.nextReasoningDoneEvent()); err != nil {
+			return err
+		}
+		if err := emitEvent(state.nextReasoningSummaryPartDoneEvent()); err != nil {
+			return err
+		}
+		if err := emitEvent(state.nextReasoningItemDoneEvent()); err != nil {
+			return err
+		}
+		reasoningDone = true
+		return nil
+	}
+	emitMessageDone := func() error {
+		if messageDone || !state.messageOpened {
+			return nil
+		}
+		if err := emitEvent(state.nextOutputTextDoneEvent()); err != nil {
+			return err
+		}
+		if err := emitEvent(state.nextContentPartDoneEvent()); err != nil {
+			return err
+		}
+		if err := emitEvent(state.nextMessageItemDoneEvent()); err != nil {
+			return err
+		}
+		messageDone = true
+		return nil
+	}
 	emitToolCalls := func(calls []grokParsedToolCall) error {
 		if len(calls) == 0 {
 			return nil
 		}
 		if err := emitCreated(); err != nil {
+			return err
+		}
+		if err := emitReasoningDone(); err != nil {
+			return err
+		}
+		if err := emitMessageDone(); err != nil {
 			return err
 		}
 		baseIndex := state.nextFunctionCallOutputIndex()
@@ -307,12 +372,31 @@ func collectGrokSessionResponses(
 			if err := emitEvent(state.openReasoningItemEvent()); err != nil {
 				return err
 			}
+			if err := emitEvent(state.nextReasoningSummaryPartAddedEvent()); err != nil {
+				return err
+			}
 		}
 		event := state.nextReasoningDeltaEvent(token)
 		state.accumulator.ProcessEvent(&event)
 		if err := emitEvent(event); err != nil {
 			return err
 		}
+		return nil
+	}
+	appendReferencesSuffix := func() error {
+		suffix := state.referencesSuffix()
+		if suffix == "" {
+			return nil
+		}
+		if state.messageOpened {
+			event := state.nextOutputTextDeltaEvent(suffix)
+			state.accumulator.ProcessEvent(&event)
+			return emitEvent(event)
+		}
+		state.accumulator.ProcessEvent(&apicompat.ResponsesStreamEvent{
+			Type:  "response.output_text.delta",
+			Delta: suffix,
+		})
 		return nil
 	}
 	handleStreamFailure := func(message string) error {
@@ -334,19 +418,23 @@ func collectGrokSessionResponses(
 			continue
 		}
 		if delta.errorText != "" {
-			return nil, handleStreamFailure(delta.errorText)
+			return nil, grokSessionResponseMetadata{}, handleStreamFailure(delta.errorText)
 		}
 		applyGrokSessionDeltaMetadata(&state, delta)
+		emitSearchSources()
 
 		if delta.token != "" {
 			sawDelta = true
 			if delta.reasoning {
 				if err := emitReasoning(delta.token); err != nil {
-					return nil, err
+					return nil, grokSessionResponseMetadata{}, err
 				}
 			} else {
 				if toolCallsSeen {
 					continue
+				}
+				if err := emitReasoningDone(); err != nil {
+					return nil, grokSessionResponseMetadata{}, err
 				}
 				textToken := delta.token
 				if toolSieve != nil {
@@ -354,7 +442,7 @@ func collectGrokSessionResponses(
 					textToken = safeText
 					if ok {
 						if err := emitToolCalls(calls); err != nil {
-							return nil, err
+							return nil, grokSessionResponseMetadata{}, err
 						}
 						continue
 					}
@@ -363,22 +451,31 @@ func collectGrokSessionResponses(
 					continue
 				}
 				if err := emitCreated(); err != nil {
-					return nil, err
+					return nil, grokSessionResponseMetadata{}, err
 				}
 				if !state.messageOpened {
 					if err := emitEvent(state.openMessageItemEvent()); err != nil {
-						return nil, err
+						return nil, grokSessionResponseMetadata{}, err
+					}
+					if err := emitEvent(state.nextContentPartAddedEvent()); err != nil {
+						return nil, grokSessionResponseMetadata{}, err
 					}
 				}
 				cleanedToken, localAnnotations := cleanGrokSessionTextToken(&state, textToken)
 				if cleanedToken == "" {
 					continue
 				}
+				annotationStart := len(state.messageAnnotations)
 				state.recordMessageText(cleanedToken, localAnnotations)
 				event := state.nextOutputTextDeltaEvent(cleanedToken)
 				state.accumulator.ProcessEvent(&event)
 				if err := emitEvent(event); err != nil {
-					return nil, err
+					return nil, grokSessionResponseMetadata{}, err
+				}
+				for idx := annotationStart; idx < len(state.messageAnnotations); idx++ {
+					if err := emitEvent(state.nextOutputTextAnnotationAddedEvent(idx, state.messageAnnotations[idx])); err != nil {
+						return nil, grokSessionResponseMetadata{}, err
+					}
 				}
 			}
 		}
@@ -390,20 +487,31 @@ func collectGrokSessionResponses(
 
 	if err := scanner.Err(); err != nil {
 		if callbacks != nil && callbacks.onStreamFailure != nil && createdEmitted {
-			return nil, handleStreamFailure("stream read error")
+			return nil, grokSessionResponseMetadata{}, handleStreamFailure("stream read error")
 		}
-		return nil, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "stream read error")
+		return nil, grokSessionResponseMetadata{}, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "stream read error")
 	}
 
 	if !sawDelta && !sawCompletion {
-		return nil, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
+		return nil, grokSessionResponseMetadata{}, newGrokResponsesHTTPError(http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
 	}
 	if toolSieve != nil && !toolCallsSeen {
 		if calls, ok := toolSieve.Flush(); ok && len(calls) > 0 {
 			if err := emitToolCalls(calls); err != nil {
-				return nil, err
+				return nil, grokSessionResponseMetadata{}, err
 			}
 		}
+	}
+	if !toolCallsSeen {
+		if err := appendReferencesSuffix(); err != nil {
+			return nil, grokSessionResponseMetadata{}, err
+		}
+	}
+	if err := emitReasoningDone(); err != nil {
+		return nil, grokSessionResponseMetadata{}, err
+	}
+	if err := emitMessageDone(); err != nil {
+		return nil, grokSessionResponseMetadata{}, err
 	}
 
 	finalResponse := state.finalResponse()
@@ -411,12 +519,12 @@ func collectGrokSessionResponses(
 		finalResponse = rewriteGrokSessionFinalResponseForToolCalls(finalResponse, toolNames)
 	}
 	if err := emitCreated(); err != nil {
-		return nil, err
+		return nil, grokSessionResponseMetadata{}, err
 	}
 	if err := emitEvent(state.nextCompletedEvent(finalResponse)); err != nil {
-		return nil, err
+		return nil, grokSessionResponseMetadata{}, err
 	}
-	return finalResponse, nil
+	return finalResponse, state.metadata(), nil
 }
 
 func parseGrokSessionResponseDelta(line string) (grokSessionResponseDelta, bool) {
@@ -617,6 +725,62 @@ func (s *grokSessionResponsesState) nextReasoningDeltaEvent(token string) apicom
 	})
 }
 
+func (s *grokSessionResponsesState) nextReasoningDoneEvent() apicompat.ResponsesStreamEvent {
+	text := ""
+	if item := s.currentReasoningOutput(); item != nil && len(item.Summary) > 0 {
+		text = item.Summary[0].Text
+	}
+	return s.nextEvent("response.reasoning_summary_text.done", &apicompat.ResponsesStreamEvent{
+		OutputIndex:  s.reasoningOutputIndex,
+		SummaryIndex: 0,
+		Text:         text,
+		ItemID:       s.reasoningItemID,
+	})
+}
+
+func (s *grokSessionResponsesState) nextReasoningSummaryPartAddedEvent() apicompat.ResponsesStreamEvent {
+	return s.nextEvent("response.reasoning_summary_part.added", &apicompat.ResponsesStreamEvent{
+		OutputIndex:  s.reasoningOutputIndex,
+		SummaryIndex: 0,
+		ItemID:       s.reasoningItemID,
+		Part: &apicompat.ResponsesContentPart{
+			Type: "summary_text",
+			Text: "",
+		},
+	})
+}
+
+func (s *grokSessionResponsesState) nextReasoningSummaryPartDoneEvent() apicompat.ResponsesStreamEvent {
+	text := ""
+	if item := s.currentReasoningOutput(); item != nil && len(item.Summary) > 0 {
+		text = item.Summary[0].Text
+	}
+	return s.nextEvent("response.reasoning_summary_part.done", &apicompat.ResponsesStreamEvent{
+		OutputIndex:  s.reasoningOutputIndex,
+		SummaryIndex: 0,
+		ItemID:       s.reasoningItemID,
+		Part: &apicompat.ResponsesContentPart{
+			Type: "summary_text",
+			Text: text,
+		},
+	})
+}
+
+func (s *grokSessionResponsesState) nextReasoningItemDoneEvent() apicompat.ResponsesStreamEvent {
+	item := &apicompat.ResponsesOutput{
+		Type:   "reasoning",
+		ID:     s.reasoningItemID,
+		Status: "completed",
+	}
+	if current := s.currentReasoningOutput(); current != nil && len(current.Summary) > 0 {
+		item.Summary = append([]apicompat.ResponsesSummary(nil), current.Summary...)
+	}
+	return s.nextEvent("response.output_item.done", &apicompat.ResponsesStreamEvent{
+		OutputIndex: s.reasoningOutputIndex,
+		Item:        item,
+	})
+}
+
 func (s *grokSessionResponsesState) nextOutputTextDeltaEvent(token string) apicompat.ResponsesStreamEvent {
 	if !s.messageOpened {
 		s.messageOpened = true
@@ -630,6 +794,89 @@ func (s *grokSessionResponsesState) nextOutputTextDeltaEvent(token string) apico
 		ContentIndex: 0,
 		Delta:        token,
 		ItemID:       s.messageItemID,
+	})
+}
+
+func (s *grokSessionResponsesState) nextContentPartAddedEvent() apicompat.ResponsesStreamEvent {
+	return s.nextEvent("response.content_part.added", &apicompat.ResponsesStreamEvent{
+		OutputIndex:  s.messageOutputIndex,
+		ContentIndex: 0,
+		ItemID:       s.messageItemID,
+		Part: &apicompat.ResponsesContentPart{
+			Type: "output_text",
+			Text: "",
+		},
+	})
+}
+
+func (s *grokSessionResponsesState) nextOutputTextDoneEvent() apicompat.ResponsesStreamEvent {
+	text := ""
+	if item := s.currentMessageOutput(); item != nil {
+		for _, part := range item.Content {
+			if part.Type == "output_text" {
+				text = part.Text
+				break
+			}
+		}
+	}
+	return s.nextEvent("response.output_text.done", &apicompat.ResponsesStreamEvent{
+		OutputIndex:  s.messageOutputIndex,
+		ContentIndex: 0,
+		Text:         text,
+		ItemID:       s.messageItemID,
+	})
+}
+
+func (s *grokSessionResponsesState) nextContentPartDoneEvent() apicompat.ResponsesStreamEvent {
+	part := apicompat.ResponsesContentPart{Type: "output_text"}
+	if item := s.currentMessageOutput(); item != nil {
+		for _, candidate := range item.Content {
+			if candidate.Type != "output_text" {
+				continue
+			}
+			part = candidate
+			break
+		}
+	}
+	return s.nextEvent("response.content_part.done", &apicompat.ResponsesStreamEvent{
+		OutputIndex:  s.messageOutputIndex,
+		ContentIndex: 0,
+		ItemID:       s.messageItemID,
+		Part:         &part,
+	})
+}
+
+func (s *grokSessionResponsesState) nextOutputTextAnnotationAddedEvent(
+	annotationIndex int,
+	annotation apicompat.ResponsesTextAnnotation,
+) apicompat.ResponsesStreamEvent {
+	return s.nextEvent("response.output_text.annotation.added", &apicompat.ResponsesStreamEvent{
+		OutputIndex:     s.messageOutputIndex,
+		ContentIndex:    0,
+		ItemID:          s.messageItemID,
+		AnnotationIndex: annotationIndex,
+		Annotation:      &annotation,
+	})
+}
+
+func (s *grokSessionResponsesState) nextMessageItemDoneEvent() apicompat.ResponsesStreamEvent {
+	item := &apicompat.ResponsesOutput{
+		Type:   "message",
+		ID:     s.messageItemID,
+		Role:   "assistant",
+		Status: "completed",
+	}
+	if current := s.currentMessageOutput(); current != nil {
+		if len(current.Content) > 0 {
+			item.Content = append([]apicompat.ResponsesContentPart(nil), current.Content...)
+		}
+		if len(current.SearchSources) > 0 {
+			item.SearchSources = append([]apicompat.SearchSource(nil), current.SearchSources...)
+		}
+	}
+	return s.nextEvent("response.output_item.done", &apicompat.ResponsesStreamEvent{
+		OutputIndex: s.messageOutputIndex,
+		Item:        item,
 	})
 }
 
@@ -731,6 +978,39 @@ func (s *grokSessionResponsesState) finalResponse() *apicompat.ResponsesResponse
 	s.accumulator.SupplementResponseOutput(response)
 	s.applyMessageMetadata(response)
 	return response
+}
+
+func (s *grokSessionResponsesState) metadata() grokSessionResponseMetadata {
+	if s == nil || len(s.searchSources) == 0 {
+		return grokSessionResponseMetadata{}
+	}
+	return grokSessionResponseMetadata{
+		SearchSources: append([]apicompat.SearchSource(nil), s.searchSources...),
+	}
+}
+
+func (s *grokSessionResponsesState) currentReasoningOutput() *apicompat.ResponsesOutput {
+	return s.currentOutputByType("reasoning")
+}
+
+func (s *grokSessionResponsesState) currentMessageOutput() *apicompat.ResponsesOutput {
+	return s.currentOutputByType("message")
+}
+
+func (s *grokSessionResponsesState) currentOutputByType(outputType string) *apicompat.ResponsesOutput {
+	if s == nil {
+		return nil
+	}
+	response := &apicompat.ResponsesResponse{Output: s.accumulator.BuildOutput()}
+	s.applyMessageMetadata(response)
+	for i := range response.Output {
+		if response.Output[i].Type != outputType {
+			continue
+		}
+		item := response.Output[i]
+		return &item
+	}
+	return nil
 }
 
 func rewriteGrokSessionFinalResponseForToolCalls(
@@ -954,6 +1234,24 @@ func (s *grokSessionResponsesState) applyMessageMetadata(response *apicompat.Res
 	}
 }
 
+func (s *grokSessionResponsesState) referencesSuffix() string {
+	if s == nil || len(s.searchSources) == 0 {
+		return ""
+	}
+	lines := []string{"\n\n## Sources", "[grok2api-sources]: #"}
+	for _, source := range s.searchSources {
+		title := firstNonEmpty(strings.TrimSpace(source.Title), strings.TrimSpace(source.URL))
+		if title == "" || strings.TrimSpace(source.URL) == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- [%s](%s)", escapeGrokSessionMarkdownLinkText(title), source.URL))
+	}
+	if len(lines) == 2 {
+		return ""
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
 func cacheGrokSessionWebSearchResults(state *grokSessionResponsesState, raw string) {
 	if state == nil || raw == "" {
 		return
@@ -1044,4 +1342,13 @@ func truncateGrokSessionSearchText(text string, limit int) string {
 		return text
 	}
 	return string(runes[:limit]) + "..."
+}
+
+func escapeGrokSessionMarkdownLinkText(text string) string {
+	replacer := strings.NewReplacer(
+		`\`, `\\`,
+		`[`, `\[`,
+		`]`, `\]`,
+	)
+	return replacer.Replace(text)
 }

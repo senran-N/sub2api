@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/senran-N/sub2api/internal/pkg/apicompat"
@@ -19,6 +20,12 @@ const (
 
 	grokSessionDeepsearchDefault = "default"
 	grokSessionDeepsearchDeeper  = "deeper"
+)
+
+var (
+	grokSessionThinkTagRe        = regexp.MustCompile(`(?is)<(?:think|thinking)>[\s\S]*?</(?:think|thinking)>`)
+	grokSessionInlineBase64ImgRe = regexp.MustCompile(`!\[image\]\(data:[^)]*?base64,[^)]*?\)`)
+	grokSessionSourcesStripRe    = regexp.MustCompile(`(?:^|\r?\n\r?\n)## Sources\r?\n\[grok2api-sources\]: #\r?\n[\s\S]*$`)
 )
 
 type grokSessionTextRequest struct {
@@ -191,7 +198,7 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 		role := strings.ToLower(strings.TrimSpace(item.Role))
 		switch role {
 		case "system", "developer":
-			content, err := grokSessionTextContentFromResponsesContent(item.Content)
+			content, err := grokSessionTextContentFromResponsesContent(item.Content, role)
 			if err != nil {
 				return "", "", nil, err
 			}
@@ -212,7 +219,7 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 					Arguments: arguments,
 				}})
 				if xmlBlock != "" {
-					historyParts = append(historyParts, fmt.Sprintf("Assistant: %s", xmlBlock))
+					historyParts = append(historyParts, grokSessionFormatTranscriptBlock("assistant", xmlBlock))
 				}
 			}
 			lastUserOnly = ""
@@ -222,9 +229,9 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 			output := strings.TrimSpace(item.Output)
 			switch {
 			case callID != "" && output != "":
-				historyParts = append(historyParts, fmt.Sprintf("Tool result (%s): %s", callID, output))
+				historyParts = append(historyParts, grokSessionFormatToolResultBlock(callID, output))
 			case output != "":
-				historyParts = append(historyParts, fmt.Sprintf("Tool result: %s", output))
+				historyParts = append(historyParts, grokSessionFormatToolResultBlock("", output))
 			}
 			lastUserOnly = ""
 			continue
@@ -234,7 +241,7 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 			continue
 		}
 
-		content, err := grokSessionTextContentFromResponsesContent(item.Content)
+		content, err := grokSessionTextContentFromResponsesContent(item.Content, role)
 		if err != nil {
 			return "", "", nil, err
 		}
@@ -243,8 +250,7 @@ func grokSessionPromptFromResponsesItems(items []apicompat.ResponsesInputItem) (
 			continue
 		}
 
-		label := grokSessionTranscriptRoleLabel(role)
-		historyParts = append(historyParts, fmt.Sprintf("%s: %s", label, content.Text))
+		historyParts = append(historyParts, grokSessionFormatTranscriptBlock(role, content.Text))
 		if role == "user" {
 			lastUserOnly = content.Text
 			lastUserOnlyCount++
@@ -284,15 +290,30 @@ func normalizeGrokSessionDeepsearchPreset(raw string) (string, error) {
 	}
 }
 
-func grokSessionTranscriptRoleLabel(role string) string {
-	switch strings.ToLower(strings.TrimSpace(role)) {
-	case "assistant":
-		return "Assistant"
-	case "system", "developer":
-		return "System"
-	default:
-		return "User"
+func grokSessionFormatTranscriptBlock(role string, text string) string {
+	role = strings.ToLower(strings.TrimSpace(role))
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
 	}
+	switch {
+	case strings.Contains(text, "\n"):
+		return fmt.Sprintf("[%s]:\n%s", firstNonEmpty(role, "user"), text)
+	default:
+		return fmt.Sprintf("[%s]: %s", firstNonEmpty(role, "user"), text)
+	}
+}
+
+func grokSessionFormatToolResultBlock(callID string, output string) string {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return ""
+	}
+	label := "[tool result]"
+	if callID = strings.TrimSpace(callID); callID != "" {
+		label = fmt.Sprintf("[tool result for %s]", callID)
+	}
+	return fmt.Sprintf("%s:\n%s", label, output)
 }
 
 type grokSessionTextContent struct {
@@ -300,7 +321,7 @@ type grokSessionTextContent struct {
 	AttachmentInputs []grokSessionUploadInput
 }
 
-func grokSessionTextContentFromResponsesContent(raw json.RawMessage) (grokSessionTextContent, error) {
+func grokSessionTextContentFromResponsesContent(raw json.RawMessage, role string) (grokSessionTextContent, error) {
 	raw = json.RawMessage(strings.TrimSpace(string(raw)))
 	if len(raw) == 0 || string(raw) == "null" {
 		return grokSessionTextContent{}, nil
@@ -308,7 +329,7 @@ func grokSessionTextContentFromResponsesContent(raw json.RawMessage) (grokSessio
 
 	var plain string
 	if err := json.Unmarshal(raw, &plain); err == nil {
-		return grokSessionTextContent{Text: strings.TrimSpace(plain)}, nil
+		return grokSessionTextContent{Text: grokSessionSanitizeTranscriptText(strings.TrimSpace(plain), role)}, nil
 	}
 
 	var parts []apicompat.ResponsesContentPart
@@ -321,7 +342,7 @@ func grokSessionTextContentFromResponsesContent(raw json.RawMessage) (grokSessio
 	for _, part := range parts {
 		switch strings.TrimSpace(part.Type) {
 		case "input_text", "output_text", "text":
-			if text := strings.TrimSpace(part.Text); text != "" {
+			if text := grokSessionSanitizeTranscriptText(strings.TrimSpace(part.Text), role); text != "" {
 				textParts = append(textParts, text)
 			}
 		case "input_image":
@@ -357,6 +378,21 @@ func grokSessionTextContentFromResponsesContent(raw json.RawMessage) (grokSessio
 		Text:             strings.Join(textParts, "\n"),
 		AttachmentInputs: attachmentInputs,
 	}, nil
+}
+
+func grokSessionSanitizeTranscriptText(text string, role string) string {
+	if text == "" {
+		return ""
+	}
+	if strings.EqualFold(strings.TrimSpace(role), "assistant") {
+		text = grokSessionSourcesStripRe.ReplaceAllString(text, "")
+	}
+	text = grokSessionThinkTagRe.ReplaceAllString(text, "")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	return grokSessionInlineBase64ImgRe.ReplaceAllString(text, "[图片]")
 }
 
 func grokSessionUploadInputFromInlineContent(raw string, fileName string, mimeType string) (grokSessionUploadInput, bool) {
