@@ -384,8 +384,12 @@ type ChatCompletionsRequest struct {
 	TopP                *float64           `json:"top_p,omitempty"`
 	Stream              bool               `json:"stream,omitempty"`
 	StreamOptions       *ChatStreamOptions `json:"stream_options,omitempty"`
+	Thinking            *bool              `json:"thinking,omitempty"`
+	ImageConfig         *ChatImageConfig   `json:"image_config,omitempty"`
+	VideoConfig         *ChatVideoConfig   `json:"video_config,omitempty"`
 	Tools               []ChatTool         `json:"tools,omitempty"`
 	ToolChoice          json.RawMessage    `json:"tool_choice,omitempty"`
+	ParallelToolCalls   *bool              `json:"parallel_tool_calls,omitempty"`
 	ReasoningEffort     string             `json:"reasoning_effort,omitempty"` // "low" | "medium" | "high"
 	ServiceTier         string             `json:"service_tier,omitempty"`
 	Deepsearch          string             `json:"deepsearch,omitempty"` // "default" | "deeper"
@@ -399,6 +403,21 @@ type ChatCompletionsRequest struct {
 // ChatStreamOptions configures streaming behavior.
 type ChatStreamOptions struct {
 	IncludeUsage bool `json:"include_usage,omitempty"`
+}
+
+// ChatImageConfig configures Grok image generation through Chat Completions.
+type ChatImageConfig struct {
+	N              int    `json:"n,omitempty"`
+	Size           string `json:"size,omitempty"`
+	ResponseFormat string `json:"response_format,omitempty"`
+}
+
+// ChatVideoConfig configures Grok video generation through Chat Completions.
+type ChatVideoConfig struct {
+	Seconds        int    `json:"seconds,omitempty"`
+	Size           string `json:"size,omitempty"`
+	ResolutionName string `json:"resolution_name,omitempty"`
+	Preset         string `json:"preset,omitempty"`
 }
 
 // ChatMessage is a single message in the Chat Completions conversation.

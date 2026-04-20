@@ -54,7 +54,13 @@ func (s *GrokGatewayService) HandleResponses(c *gin.Context, groupID *int64, bod
 }
 
 func (s *GrokGatewayService) HandleChatCompletions(c *gin.Context, groupID *int64, body []byte) bool {
-	if s == nil || s.textRuntime == nil {
+	if s == nil {
+		return false
+	}
+	if s.handleChatCompletionsMedia(c, groupID, body) {
+		return true
+	}
+	if s.textRuntime == nil {
 		return false
 	}
 	return s.textRuntime.HandleChatCompletions(c, groupID, body)

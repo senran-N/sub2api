@@ -196,6 +196,178 @@ func TestGrokGatewayServiceHandleChatCompletions_UsesCompatibleAccount(t *testin
 	require.JSONEq(t, string(body), executor.chatCompletionsCalls[0].body)
 }
 
+func TestGrokGatewayServiceHandleChatCompletions_RoutesImageModelsThroughMediaService(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","messages":[{"role":"user","content":"paint a lighthouse"}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"data":[{"url":"https://media.example/image.png"}]}`),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokMediaAccount(41, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			}),
+		},
+	}
+	executor := &stubGrokCompatibleTextExecutor{}
+	svc := NewGrokGatewayServiceWithCompatibleExecutor(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, executor)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Empty(t, executor.chatCompletionsCalls)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "/v1/images/generations", upstream.requests[0].URL.Path)
+
+	var forwarded map[string]any
+	require.NoError(t, json.NewDecoder(upstream.requests[0].Body).Decode(&forwarded))
+	require.Equal(t, "grok-2-image", forwarded["model"])
+	require.Equal(t, "paint a lighthouse", forwarded["prompt"])
+
+	var response apicompat.ChatCompletionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Choices, 1)
+	var content string
+	require.NoError(t, json.Unmarshal(response.Choices[0].Message.Content, &content))
+	require.Equal(t, "![image](https://media.example/image.png)", content)
+	require.Equal(t, "stop", response.Choices[0].FinishReason)
+}
+
+func TestGrokGatewayServiceHandleChatCompletions_RoutesImageEditModelsThroughMediaService(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-imagine-image-edit","messages":[{"role":"user","content":[{"type":"text","text":"replace the sky with sunset"},{"type":"image_url","image_url":{"url":"https://media.example/source.png"}}]}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"data":[{"url":"https://media.example/edited.png"}]}`),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokMediaAccount(42, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			}),
+		},
+	}
+	executor := &stubGrokCompatibleTextExecutor{}
+	svc := NewGrokGatewayServiceWithCompatibleExecutor(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, executor)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Empty(t, executor.chatCompletionsCalls)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "/v1/images/edits", upstream.requests[0].URL.Path)
+
+	var forwarded map[string]any
+	require.NoError(t, json.NewDecoder(upstream.requests[0].Body).Decode(&forwarded))
+	require.Equal(t, "replace the sky with sunset", forwarded["prompt"])
+	require.Equal(t, "https://media.example/source.png", forwarded["image"])
+
+	var response apicompat.ChatCompletionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Choices, 1)
+	var content string
+	require.NoError(t, json.Unmarshal(response.Choices[0].Message.Content, &content))
+	require.Equal(t, "![image](https://media.example/edited.png)", content)
+}
+
+func TestGrokGatewayServiceHandleChatCompletions_RoutesVideoModelsThroughMediaService(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-imagine-video","messages":[{"role":"user","content":"launch sequence"}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"id":"job_123","status":"queued","poll_after":0}`),
+			newJSONResponse(http.StatusOK, `{"id":"job_123","status":"completed"}`),
+			newJSONResponse(http.StatusOK, `{"content_url":"https://media.example/job_123.mp4"}`),
+		},
+	}
+	videoJobs := &stubGrokVideoJobRepository{}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			newSchedulableGrokMediaAccount(43, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			}),
+		},
+		accountsByID: map[int64]*Account{
+			43: accountPtr(newSchedulableGrokMediaAccount(43, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			})),
+		},
+	}
+	executor := &stubGrokCompatibleTextExecutor{}
+	gatewayService := &GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}
+	svc := ProvideGrokGatewayService(
+		NewGrokTextRuntime(gatewayService, NewGrokCompatibleRuntime(executor), NewGrokSessionRuntime(gatewayService)),
+		gatewayService,
+		videoJobs,
+		&stubGrokMediaAssetRepository{},
+	)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Empty(t, executor.chatCompletionsCalls)
+	require.Len(t, upstream.requests, 3)
+	require.Equal(t, "/v1/videos", upstream.requests[0].URL.Path)
+	require.Equal(t, "/v1/videos/job_123", upstream.requests[1].URL.Path)
+	require.Equal(t, "/v1/videos/job_123/content", upstream.requests[2].URL.Path)
+
+	var response apicompat.ChatCompletionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Choices, 1)
+	var content string
+	require.NoError(t, json.Unmarshal(response.Choices[0].Message.Content, &content))
+	require.Contains(t, content, "/grok/media/assets/")
+}
+
 func TestGrokGatewayServiceHandleMessages_UsesCompatibleAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
