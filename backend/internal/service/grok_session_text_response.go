@@ -24,6 +24,21 @@ type grokSessionResponseDelta struct {
 	completion         bool
 	errorText          string
 	cardAttachmentJSON string
+	webSearchResults   string
+	xSearchResults     string
+}
+
+type grokSessionPendingCitation struct {
+	URL    string
+	Title  string
+	Needle string
+}
+
+type grokSessionLocalAnnotation struct {
+	URL        string
+	Title      string
+	StartIndex int
+	EndIndex   int
 }
 
 type grokSessionResponsesState struct {
@@ -41,6 +56,12 @@ type grokSessionResponsesState struct {
 	citationIndexByURL   map[string]int
 	nextCitationIndex    int
 	lastCitationIndex    int
+	pendingCitations     []grokSessionPendingCitation
+	messageTextOffset    int
+	messageAnnotations   []apicompat.ResponsesTextAnnotation
+	searchSources        []apicompat.SearchSource
+	searchSourceSeen     map[string]struct{}
+	searchSourceTitle    map[string]string
 }
 
 var errGrokSessionTextStreamHandled = errors.New("grok session text stream already handled")
@@ -207,6 +228,8 @@ func collectGrokSessionResponses(
 		cardAttachments:    make(map[string]string),
 		citationIndexByURL: make(map[string]int),
 		lastCitationIndex:  -1,
+		searchSourceSeen:   make(map[string]struct{}),
+		searchSourceTitle:  make(map[string]string),
 	}
 	if state.model == "" {
 		state.model = "grok"
@@ -304,7 +327,12 @@ func collectGrokSessionResponses(
 						return nil, err
 					}
 				}
-				event := state.nextOutputTextDeltaEvent(cleanGrokSessionTextToken(&state, delta.token))
+				cleanedToken, localAnnotations := cleanGrokSessionTextToken(&state, delta.token)
+				if cleanedToken == "" {
+					continue
+				}
+				state.recordMessageText(cleanedToken, localAnnotations)
+				event := state.nextOutputTextDeltaEvent(cleanedToken)
 				state.accumulator.ProcessEvent(&event)
 				if err := emitEvent(event); err != nil {
 					return nil, err
@@ -367,7 +395,9 @@ func parseGrokSessionResponseDelta(line string) (grokSessionResponseDelta, bool)
 	token := responsePath.Get("token").String()
 	reasoning := responsePath.Get("isThinking").Bool()
 	cardAttachmentJSON := strings.TrimSpace(responsePath.Get("cardAttachment.jsonData").String())
-	if token == "" && !completion && cardAttachmentJSON == "" {
+	webSearchResults := strings.TrimSpace(responsePath.Get("webSearchResults").Raw)
+	xSearchResults := strings.TrimSpace(responsePath.Get("xSearchResults").Raw)
+	if token == "" && !completion && cardAttachmentJSON == "" && webSearchResults == "" && xSearchResults == "" {
 		return grokSessionResponseDelta{}, false
 	}
 
@@ -376,6 +406,8 @@ func parseGrokSessionResponseDelta(line string) (grokSessionResponseDelta, bool)
 		reasoning:          reasoning,
 		completion:         completion,
 		cardAttachmentJSON: cardAttachmentJSON,
+		webSearchResults:   webSearchResults,
+		xSearchResults:     xSearchResults,
 	}, true
 }
 
@@ -596,6 +628,7 @@ func (s *grokSessionResponsesState) finalResponse() *apicompat.ResponsesResponse
 		Output: s.accumulator.BuildOutput(),
 	}
 	s.accumulator.SupplementResponseOutput(response)
+	s.applyMessageMetadata(response)
 	return response
 }
 
@@ -610,11 +643,13 @@ func applyGrokSessionDeltaMetadata(state *grokSessionResponsesState, delta grokS
 	if cardID := strings.TrimSpace(gjson.Get(delta.cardAttachmentJSON, "id").String()); cardID != "" {
 		state.cardAttachments[cardID] = delta.cardAttachmentJSON
 	}
+	cacheGrokSessionWebSearchResults(state, delta.webSearchResults)
+	cacheGrokSessionXSearchResults(state, delta.xSearchResults)
 }
 
-func cleanGrokSessionTextToken(state *grokSessionResponsesState, token string) string {
+func cleanGrokSessionTextToken(state *grokSessionResponsesState, token string) (string, []grokSessionLocalAnnotation) {
 	if state == nil || !strings.Contains(token, "<grok:render") {
-		return token
+		return token, nil
 	}
 	cleaned := grokSessionRenderRe.ReplaceAllStringFunc(token, func(match string) string {
 		return replaceGrokSessionRender(state, match)
@@ -622,7 +657,29 @@ func cleanGrokSessionTextToken(state *grokSessionResponsesState, token string) s
 	if strings.HasPrefix(cleaned, "\n") && strings.Contains(cleaned, "[[") {
 		cleaned = strings.TrimLeft(cleaned, "\n")
 	}
-	return cleaned
+	if len(state.pendingCitations) == 0 {
+		return cleaned, nil
+	}
+
+	localAnnotations := make([]grokSessionLocalAnnotation, 0, len(state.pendingCitations))
+	searchStart := 0
+	for _, pending := range state.pendingCitations {
+		relative := strings.Index(cleaned[searchStart:], pending.Needle)
+		if relative < 0 {
+			continue
+		}
+		startByte := searchStart + relative
+		startIndex := utf8.RuneCountInString(cleaned[:startByte])
+		localAnnotations = append(localAnnotations, grokSessionLocalAnnotation{
+			URL:        pending.URL,
+			Title:      pending.Title,
+			StartIndex: startIndex,
+			EndIndex:   startIndex + utf8.RuneCountInString(pending.Needle),
+		})
+		searchStart = startByte + len(pending.Needle)
+	}
+	state.pendingCitations = nil
+	return cleaned, localAnnotations
 }
 
 func replaceGrokSessionRender(state *grokSessionResponsesState, match string) string {
@@ -677,10 +734,164 @@ func replaceGrokSessionRender(state *grokSessionResponsesState, match string) st
 			return ""
 		}
 		state.lastCitationIndex = index
-		return fmt.Sprintf(" [[%d]](%s)", index, url)
+		title := state.searchSourceTitle[url]
+		if title == "" {
+			title = strings.TrimSpace(card.Get("title").String())
+		}
+		if title == "" {
+			title = url
+		}
+		citationText := fmt.Sprintf(" [[%d]](%s)", index, url)
+		state.pendingCitations = append(state.pendingCitations, grokSessionPendingCitation{
+			URL:    url,
+			Title:  title,
+			Needle: citationText,
+		})
+		return citationText
 	default:
 		return ""
 	}
+}
+
+func (s *grokSessionResponsesState) recordMessageText(
+	cleaned string,
+	localAnnotations []grokSessionLocalAnnotation,
+) {
+	if s == nil || cleaned == "" {
+		return
+	}
+	for _, ann := range localAnnotations {
+		s.messageAnnotations = append(s.messageAnnotations, apicompat.ResponsesTextAnnotation{
+			Type:       "url_citation",
+			URL:        ann.URL,
+			Title:      ann.Title,
+			StartIndex: s.messageTextOffset + ann.StartIndex,
+			EndIndex:   s.messageTextOffset + ann.EndIndex,
+		})
+	}
+	s.messageTextOffset += utf8.RuneCountInString(cleaned)
+}
+
+func (s *grokSessionResponsesState) applyMessageMetadata(response *apicompat.ResponsesResponse) {
+	if s == nil || response == nil {
+		return
+	}
+	for i := range response.Output {
+		if response.Output[i].Type != "message" {
+			continue
+		}
+		if len(s.searchSources) > 0 && len(response.Output[i].SearchSources) == 0 {
+			response.Output[i].SearchSources = append([]apicompat.SearchSource(nil), s.searchSources...)
+		}
+		if len(s.messageAnnotations) == 0 {
+			return
+		}
+		for j := range response.Output[i].Content {
+			if response.Output[i].Content[j].Type != "output_text" {
+				continue
+			}
+			if len(response.Output[i].Content[j].Annotations) == 0 {
+				response.Output[i].Content[j].Annotations = append(
+					[]apicompat.ResponsesTextAnnotation(nil),
+					s.messageAnnotations...,
+				)
+			}
+			return
+		}
+		return
+	}
+}
+
+func cacheGrokSessionWebSearchResults(state *grokSessionResponsesState, raw string) {
+	if state == nil || raw == "" {
+		return
+	}
+	for _, item := range gjson.Parse(raw).Get("results").Array() {
+		url := strings.TrimSpace(item.Get("url").String())
+		if url == "" {
+			continue
+		}
+		state.addSearchSource(url, strings.TrimSpace(item.Get("title").String()), "web")
+	}
+}
+
+func cacheGrokSessionXSearchResults(state *grokSessionResponsesState, raw string) {
+	if state == nil || raw == "" {
+		return
+	}
+	for _, item := range gjson.Parse(raw).Get("results").Array() {
+		username := strings.TrimSpace(item.Get("username").String())
+		postID := strings.TrimSpace(item.Get("postId").String())
+		if username == "" || postID == "" {
+			continue
+		}
+		url := fmt.Sprintf("https://x.com/%s/status/%s", username, postID)
+		title := fmt.Sprintf("X/@%s", username)
+		if text := truncateGrokSessionSearchText(normalizeGrokSessionSearchText(item.Get("text").String()), 50); text != "" {
+			title = fmt.Sprintf("X/@%s: %s", username, text)
+		}
+		state.addSearchSource(url, title, "x_post")
+	}
+}
+
+func (s *grokSessionResponsesState) addSearchSource(url, title, sourceType string) {
+	if s == nil || url == "" {
+		return
+	}
+	if title == "" {
+		title = url
+	}
+	if current := s.searchSourceTitle[url]; current == "" || current == url {
+		s.searchSourceTitle[url] = title
+	}
+	if _, seen := s.searchSourceSeen[url]; seen {
+		for i := range s.searchSources {
+			if s.searchSources[i].URL != url {
+				continue
+			}
+			if s.searchSources[i].Title == "" || s.searchSources[i].Title == url {
+				s.searchSources[i].Title = title
+			}
+			if s.searchSources[i].Type == "" {
+				s.searchSources[i].Type = sourceType
+			}
+		}
+		for i := range s.messageAnnotations {
+			if s.messageAnnotations[i].URL == url && (s.messageAnnotations[i].Title == "" || s.messageAnnotations[i].Title == url) {
+				s.messageAnnotations[i].Title = title
+			}
+		}
+		for i := range s.pendingCitations {
+			if s.pendingCitations[i].URL == url && (s.pendingCitations[i].Title == "" || s.pendingCitations[i].Title == url) {
+				s.pendingCitations[i].Title = title
+			}
+		}
+		return
+	}
+	s.searchSourceSeen[url] = struct{}{}
+	s.searchSources = append(s.searchSources, apicompat.SearchSource{
+		URL:   url,
+		Title: title,
+		Type:  sourceType,
+	})
+}
+
+func normalizeGrokSessionSearchText(text string) string {
+	if text == "" {
+		return ""
+	}
+	return strings.Join(strings.Fields(text), " ")
+}
+
+func truncateGrokSessionSearchText(text string, limit int) string {
+	if limit <= 0 || text == "" {
+		return text
+	}
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return string(runes[:limit]) + "..."
 }
 
 func shouldFlushGrokSessionReasoning(buffer string) bool {

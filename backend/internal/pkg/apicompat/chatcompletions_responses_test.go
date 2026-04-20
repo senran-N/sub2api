@@ -537,6 +537,45 @@ func TestResponsesToChatCompletions_WebSearch(t *testing.T) {
 	assert.Equal(t, "search results", content)
 }
 
+func TestResponsesToChatCompletions_AnnotationsAndSearchSources(t *testing.T) {
+	resp := &ResponsesResponse{
+		ID:     "resp_ann",
+		Status: "completed",
+		Output: []ResponsesOutput{
+			{
+				Type: "message",
+				Content: []ResponsesContentPart{{
+					Type: "output_text",
+					Text: "Answer [[1]](https://example.com/article)",
+					Annotations: []ResponsesTextAnnotation{{
+						Type:       "url_citation",
+						URL:        "https://example.com/article",
+						Title:      "Example Article",
+						StartIndex: 6,
+						EndIndex:   40,
+					}},
+				}},
+				SearchSources: []SearchSource{{
+					URL:   "https://example.com/article",
+					Title: "Example Article",
+					Type:  "web",
+				}},
+			},
+		},
+	}
+
+	chat := ResponsesToChatCompletions(resp, "gpt-4o")
+	require.Len(t, chat.Choices, 1)
+	require.Len(t, chat.Choices[0].Message.Annotations, 1)
+	assert.Equal(t, "url_citation", chat.Choices[0].Message.Annotations[0].Type)
+	require.NotNil(t, chat.Choices[0].Message.Annotations[0].URLCitation)
+	assert.Equal(t, "https://example.com/article", chat.Choices[0].Message.Annotations[0].URLCitation.URL)
+	assert.Equal(t, "Example Article", chat.Choices[0].Message.Annotations[0].URLCitation.Title)
+	require.Len(t, chat.SearchSources, 1)
+	assert.Equal(t, "https://example.com/article", chat.SearchSources[0].URL)
+	assert.Equal(t, "web", chat.SearchSources[0].Type)
+}
+
 // ---------------------------------------------------------------------------
 // Streaming: ResponsesEventToChatChunks tests
 // ---------------------------------------------------------------------------
@@ -672,6 +711,46 @@ func TestResponsesEventToChatChunks_Completed(t *testing.T) {
 	assert.Equal(t, 70, chunks[1].Usage.TotalTokens)
 	require.NotNil(t, chunks[1].Usage.PromptTokensDetails)
 	assert.Equal(t, 30, chunks[1].Usage.PromptTokensDetails.CachedTokens)
+}
+
+func TestResponsesEventToChatChunks_CompletedWithAnnotationsAndSearchSources(t *testing.T) {
+	state := NewResponsesEventToChatState()
+	state.Model = "gpt-4o"
+
+	chunks := ResponsesEventToChatChunks(&ResponsesStreamEvent{
+		Type: "response.completed",
+		Response: &ResponsesResponse{
+			Status: "completed",
+			Output: []ResponsesOutput{{
+				Type: "message",
+				Content: []ResponsesContentPart{{
+					Type: "output_text",
+					Text: "Answer [[1]](https://example.com/article)",
+					Annotations: []ResponsesTextAnnotation{{
+						Type:       "url_citation",
+						URL:        "https://example.com/article",
+						Title:      "Example Article",
+						StartIndex: 6,
+						EndIndex:   40,
+					}},
+				}},
+				SearchSources: []SearchSource{{
+					URL:   "https://example.com/article",
+					Title: "Example Article",
+					Type:  "web",
+				}},
+			}},
+		},
+	}, state)
+
+	require.Len(t, chunks, 1)
+	require.NotNil(t, chunks[0].Choices[0].FinishReason)
+	assert.Equal(t, "stop", *chunks[0].Choices[0].FinishReason)
+	require.Len(t, chunks[0].Choices[0].Delta.Annotations, 1)
+	require.NotNil(t, chunks[0].Choices[0].Delta.Annotations[0].URLCitation)
+	assert.Equal(t, "https://example.com/article", chunks[0].Choices[0].Delta.Annotations[0].URLCitation.URL)
+	require.Len(t, chunks[0].SearchSources, 1)
+	assert.Equal(t, "https://example.com/article", chunks[0].SearchSources[0].URL)
 }
 
 func TestResponsesEventToChatChunks_CompletedWithToolCalls(t *testing.T) {

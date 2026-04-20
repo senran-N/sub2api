@@ -39,11 +39,13 @@ func ResponsesToAnthropic(resp *ResponsesResponse, model string) *AnthropicRespo
 				})
 			}
 		case "message":
+			out.SearchSources = appendUniqueSearchSources(out.SearchSources, item.SearchSources)
 			for _, part := range item.Content {
 				if part.Type == "output_text" && part.Text != "" {
 					blocks = append(blocks, AnthropicContentBlock{
-						Type: "text",
-						Text: part.Text,
+						Type:        "text",
+						Text:        part.Text,
+						Annotations: part.Annotations,
 					})
 				}
 			}
@@ -488,7 +490,9 @@ func resToAnthHandleCompleted(evt *ResponsesStreamEvent, state *ResponsesEventTo
 		AnthropicStreamEvent{
 			Type: "message_delta",
 			Delta: &AnthropicDelta{
-				StopReason: stopReason,
+				StopReason:    stopReason,
+				SearchSources: collectSearchSourcesFromResponse(evt.Response),
+				Annotations:   collectResponsesAnnotationsFromResponse(evt.Response),
 			},
 			Usage: &AnthropicUsage{
 				InputTokens:          state.InputTokens,
@@ -513,4 +517,20 @@ func closeCurrentBlock(state *ResponsesEventToAnthropicState) []AnthropicStreamE
 		Type:  "content_block_stop",
 		Index: &idx,
 	}}
+}
+
+func collectResponsesAnnotationsFromResponse(resp *ResponsesResponse) []ResponsesTextAnnotation {
+	if resp == nil {
+		return nil
+	}
+	var annotations []ResponsesTextAnnotation
+	for _, item := range resp.Output {
+		if item.Type != "message" {
+			continue
+		}
+		for _, part := range item.Content {
+			annotations = append(annotations, part.Annotations...)
+		}
+	}
+	return annotations
 }

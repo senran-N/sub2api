@@ -407,6 +407,9 @@ func mergeResponsesOutput(base, next apicompat.ResponsesOutput) apicompat.Respon
 	if base.Status == "" {
 		base.Status = next.Status
 	}
+	if len(base.SearchSources) == 0 && len(next.SearchSources) > 0 {
+		base.SearchSources = next.SearchSources
+	}
 	if base.EncryptedContent == "" {
 		base.EncryptedContent = next.EncryptedContent
 	}

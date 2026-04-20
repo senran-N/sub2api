@@ -48,7 +48,8 @@ type AnthropicContentBlock struct {
 	Type string `json:"type"`
 
 	// type=text
-	Text string `json:"text,omitempty"`
+	Text        string                    `json:"text,omitempty"`
+	Annotations []ResponsesTextAnnotation `json:"annotations,omitempty"`
 
 	// type=thinking
 	Thinking string `json:"thinking,omitempty"`
@@ -84,14 +85,15 @@ type AnthropicTool struct {
 
 // AnthropicResponse is the non-streaming response from POST /v1/messages.
 type AnthropicResponse struct {
-	ID           string                  `json:"id"`
-	Type         string                  `json:"type"` // "message"
-	Role         string                  `json:"role"` // "assistant"
-	Content      []AnthropicContentBlock `json:"content"`
-	Model        string                  `json:"model"`
-	StopReason   string                  `json:"stop_reason"`
-	StopSequence *string                 `json:"stop_sequence,omitempty"`
-	Usage        AnthropicUsage          `json:"usage"`
+	ID            string                  `json:"id"`
+	Type          string                  `json:"type"` // "message"
+	Role          string                  `json:"role"` // "assistant"
+	Content       []AnthropicContentBlock `json:"content"`
+	Model         string                  `json:"model"`
+	StopReason    string                  `json:"stop_reason"`
+	StopSequence  *string                 `json:"stop_sequence,omitempty"`
+	Usage         AnthropicUsage          `json:"usage"`
+	SearchSources []SearchSource          `json:"search_sources,omitempty"`
 }
 
 // AnthropicUsage holds token counts in Anthropic format.
@@ -141,8 +143,10 @@ type AnthropicDelta struct {
 	Signature string `json:"signature,omitempty"`
 
 	// message_delta fields
-	StopReason   string  `json:"stop_reason,omitempty"`
-	StopSequence *string `json:"stop_sequence,omitempty"`
+	StopReason    string                    `json:"stop_reason,omitempty"`
+	StopSequence  *string                   `json:"stop_sequence,omitempty"`
+	SearchSources []SearchSource            `json:"search_sources,omitempty"`
+	Annotations   []ResponsesTextAnnotation `json:"annotations,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -193,10 +197,11 @@ type ResponsesInputItem struct {
 
 // ResponsesContentPart is a typed content part in a Responses message.
 type ResponsesContentPart struct {
-	Type     string `json:"type"` // "input_text" | "output_text" | "input_image"
-	Text     string `json:"text,omitempty"`
-	ImageURL string `json:"image_url,omitempty"` // data URI or URL for input_image
-	Detail   string `json:"detail,omitempty"`    // "auto" | "low" | "high" (image resolution hint)
+	Type        string                    `json:"type"` // "input_text" | "output_text" | "input_image"
+	Text        string                    `json:"text,omitempty"`
+	ImageURL    string                    `json:"image_url,omitempty"` // data URI or URL for input_image
+	Detail      string                    `json:"detail,omitempty"`    // "auto" | "low" | "high" (image resolution hint)
+	Annotations []ResponsesTextAnnotation `json:"annotations,omitempty"`
 }
 
 // ResponsesTool describes a tool in the Responses API.
@@ -240,10 +245,11 @@ type ResponsesOutput struct {
 	Type string `json:"type"` // "message" | "reasoning" | "function_call" | "web_search_call"
 
 	// type=message
-	ID      string                 `json:"id,omitempty"`
-	Role    string                 `json:"role,omitempty"`
-	Content []ResponsesContentPart `json:"content,omitempty"`
-	Status  string                 `json:"status,omitempty"`
+	ID            string                 `json:"id,omitempty"`
+	Role          string                 `json:"role,omitempty"`
+	Content       []ResponsesContentPart `json:"content,omitempty"`
+	Status        string                 `json:"status,omitempty"`
+	SearchSources []SearchSource         `json:"search_sources,omitempty"`
 
 	// type=reasoning
 	EncryptedContent string             `json:"encrypted_content,omitempty"`
@@ -268,6 +274,22 @@ type WebSearchAction struct {
 type ResponsesSummary struct {
 	Type string `json:"type"` // "summary_text"
 	Text string `json:"text"`
+}
+
+// ResponsesTextAnnotation marks a structured annotation within output text.
+type ResponsesTextAnnotation struct {
+	Type       string `json:"type"`
+	URL        string `json:"url,omitempty"`
+	Title      string `json:"title,omitempty"`
+	StartIndex int    `json:"start_index,omitempty"`
+	EndIndex   int    `json:"end_index,omitempty"`
+}
+
+// SearchSource describes a structured search source attached to a response.
+type SearchSource struct {
+	URL   string `json:"url"`
+	Title string `json:"title,omitempty"`
+	Type  string `json:"type,omitempty"`
 }
 
 // ResponsesUsage holds token counts in Responses API format.
@@ -362,12 +384,13 @@ type ChatStreamOptions struct {
 
 // ChatMessage is a single message in the Chat Completions conversation.
 type ChatMessage struct {
-	Role             string          `json:"role"` // "system" | "user" | "assistant" | "tool" | "function"
-	Content          json.RawMessage `json:"content,omitempty"`
-	ReasoningContent string          `json:"reasoning_content,omitempty"`
-	Name             string          `json:"name,omitempty"`
-	ToolCalls        []ChatToolCall  `json:"tool_calls,omitempty"`
-	ToolCallID       string          `json:"tool_call_id,omitempty"`
+	Role             string           `json:"role"` // "system" | "user" | "assistant" | "tool" | "function"
+	Content          json.RawMessage  `json:"content,omitempty"`
+	ReasoningContent string           `json:"reasoning_content,omitempty"`
+	Annotations      []ChatAnnotation `json:"annotations,omitempty"`
+	Name             string           `json:"name,omitempty"`
+	ToolCalls        []ChatToolCall   `json:"tool_calls,omitempty"`
+	ToolCallID       string           `json:"tool_call_id,omitempty"`
 
 	// Legacy function calling
 	FunctionCall *ChatFunctionCall `json:"function_call,omitempty"`
@@ -417,14 +440,15 @@ type ChatFunctionCall struct {
 
 // ChatCompletionsResponse is the non-streaming response from POST /v1/chat/completions.
 type ChatCompletionsResponse struct {
-	ID                string       `json:"id"`
-	Object            string       `json:"object"` // "chat.completion"
-	Created           int64        `json:"created"`
-	Model             string       `json:"model"`
-	Choices           []ChatChoice `json:"choices"`
-	Usage             *ChatUsage   `json:"usage,omitempty"`
-	SystemFingerprint string       `json:"system_fingerprint,omitempty"`
-	ServiceTier       string       `json:"service_tier,omitempty"`
+	ID                string         `json:"id"`
+	Object            string         `json:"object"` // "chat.completion"
+	Created           int64          `json:"created"`
+	Model             string         `json:"model"`
+	Choices           []ChatChoice   `json:"choices"`
+	Usage             *ChatUsage     `json:"usage,omitempty"`
+	SystemFingerprint string         `json:"system_fingerprint,omitempty"`
+	ServiceTier       string         `json:"service_tier,omitempty"`
+	SearchSources     []SearchSource `json:"search_sources,omitempty"`
 }
 
 // ChatChoice is a single completion choice.
@@ -457,6 +481,7 @@ type ChatCompletionsChunk struct {
 	Usage             *ChatUsage        `json:"usage,omitempty"`
 	SystemFingerprint string            `json:"system_fingerprint,omitempty"`
 	ServiceTier       string            `json:"service_tier,omitempty"`
+	SearchSources     []SearchSource    `json:"search_sources,omitempty"`
 }
 
 // ChatChunkChoice is a single choice in a streaming chunk.
@@ -468,10 +493,25 @@ type ChatChunkChoice struct {
 
 // ChatDelta carries incremental content in a streaming chunk.
 type ChatDelta struct {
-	Role             string         `json:"role,omitempty"`
-	Content          *string        `json:"content,omitempty"` // pointer: omit when not present, null vs "" matters
-	ReasoningContent *string        `json:"reasoning_content,omitempty"`
-	ToolCalls        []ChatToolCall `json:"tool_calls,omitempty"`
+	Role             string           `json:"role,omitempty"`
+	Content          *string          `json:"content,omitempty"` // pointer: omit when not present, null vs "" matters
+	ReasoningContent *string          `json:"reasoning_content,omitempty"`
+	Annotations      []ChatAnnotation `json:"annotations,omitempty"`
+	ToolCalls        []ChatToolCall   `json:"tool_calls,omitempty"`
+}
+
+// ChatAnnotation describes a structured annotation in chat content.
+type ChatAnnotation struct {
+	Type        string           `json:"type"`
+	URLCitation *ChatURLCitation `json:"url_citation,omitempty"`
+}
+
+// ChatURLCitation contains URL citation metadata in Chat Completions shape.
+type ChatURLCitation struct {
+	URL        string `json:"url"`
+	Title      string `json:"title,omitempty"`
+	StartIndex int    `json:"start_index"`
+	EndIndex   int    `json:"end_index"`
 }
 
 // ---------------------------------------------------------------------------

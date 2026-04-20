@@ -32,14 +32,18 @@ func ResponsesToChatCompletions(resp *ResponsesResponse, model string) *ChatComp
 	var contentText string
 	var reasoningText string
 	var toolCalls []ChatToolCall
+	var annotations []ChatAnnotation
+	var searchSources []SearchSource
 
 	for _, item := range resp.Output {
 		switch item.Type {
 		case "message":
+			searchSources = appendUniqueSearchSources(searchSources, item.SearchSources)
 			for _, part := range item.Content {
 				if part.Type == "output_text" && part.Text != "" {
 					contentText += part.Text
 				}
+				annotations = append(annotations, responsesAnnotationsToChat(part.Annotations)...)
 			}
 		case "function_call":
 			toolCalls = append(toolCalls, ChatToolCall{
@@ -72,6 +76,9 @@ func ResponsesToChatCompletions(resp *ResponsesResponse, model string) *ChatComp
 	if reasoningText != "" {
 		msg.ReasoningContent = reasoningText
 	}
+	if len(annotations) > 0 {
+		msg.Annotations = annotations
+	}
 
 	finishReason := responsesStatusToChatFinishReason(resp.Status, resp.IncompleteDetails, toolCalls)
 
@@ -93,6 +100,9 @@ func ResponsesToChatCompletions(resp *ResponsesResponse, model string) *ChatComp
 			}
 		}
 		out.Usage = usage
+	}
+	if len(searchSources) > 0 {
+		out.SearchSources = searchSources
 	}
 
 	return out
@@ -322,7 +332,12 @@ func resToChatHandleCompleted(evt *ResponsesStreamEvent, state *ResponsesEventTo
 	}
 
 	var chunks []ChatCompletionsChunk
-	chunks = append(chunks, makeChatFinishChunk(state, finishReason))
+	finishChunk := makeChatFinishChunk(state, finishReason)
+	if evt.Response != nil {
+		finishChunk.Choices[0].Delta.Annotations = collectChatAnnotationsFromResponse(evt.Response)
+		finishChunk.SearchSources = collectSearchSourcesFromResponse(evt.Response)
+	}
+	chunks = append(chunks, finishChunk)
 
 	if state.IncludeUsage && state.Usage != nil {
 		chunks = append(chunks, ChatCompletionsChunk{
@@ -365,6 +380,76 @@ func makeChatFinishChunk(state *ResponsesEventToChatState, finishReason string) 
 			FinishReason: &finishReason,
 		}},
 	}
+}
+
+func collectChatAnnotationsFromResponse(resp *ResponsesResponse) []ChatAnnotation {
+	if resp == nil {
+		return nil
+	}
+	var annotations []ChatAnnotation
+	for _, item := range resp.Output {
+		if item.Type != "message" {
+			continue
+		}
+		for _, part := range item.Content {
+			annotations = append(annotations, responsesAnnotationsToChat(part.Annotations)...)
+		}
+	}
+	return annotations
+}
+
+func collectSearchSourcesFromResponse(resp *ResponsesResponse) []SearchSource {
+	if resp == nil {
+		return nil
+	}
+	var sources []SearchSource
+	for _, item := range resp.Output {
+		if item.Type != "message" {
+			continue
+		}
+		sources = appendUniqueSearchSources(sources, item.SearchSources)
+	}
+	return sources
+}
+
+func responsesAnnotationsToChat(annotations []ResponsesTextAnnotation) []ChatAnnotation {
+	if len(annotations) == 0 {
+		return nil
+	}
+	out := make([]ChatAnnotation, 0, len(annotations))
+	for _, ann := range annotations {
+		out = append(out, ChatAnnotation{
+			Type: "url_citation",
+			URLCitation: &ChatURLCitation{
+				URL:        ann.URL,
+				Title:      ann.Title,
+				StartIndex: ann.StartIndex,
+				EndIndex:   ann.EndIndex,
+			},
+		})
+	}
+	return out
+}
+
+func appendUniqueSearchSources(base []SearchSource, extra []SearchSource) []SearchSource {
+	if len(extra) == 0 {
+		return base
+	}
+	seen := make(map[string]struct{}, len(base))
+	for _, item := range base {
+		seen[item.URL] = struct{}{}
+	}
+	for _, item := range extra {
+		if item.URL == "" {
+			continue
+		}
+		if _, ok := seen[item.URL]; ok {
+			continue
+		}
+		seen[item.URL] = struct{}{}
+		base = append(base, item)
+	}
+	return base
 }
 
 // generateChatCmplID returns a "chatcmpl-" prefixed random hex ID.

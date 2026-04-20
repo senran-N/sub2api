@@ -260,6 +260,43 @@ func TestResponsesToAnthropic_Incomplete(t *testing.T) {
 	assert.Equal(t, "max_tokens", anth.StopReason)
 }
 
+func TestResponsesToAnthropic_AnnotationsAndSearchSources(t *testing.T) {
+	resp := &ResponsesResponse{
+		ID:     "resp_ann",
+		Model:  "gpt-5.2",
+		Status: "completed",
+		Output: []ResponsesOutput{
+			{
+				Type: "message",
+				Content: []ResponsesContentPart{{
+					Type: "output_text",
+					Text: "Answer [[1]](https://example.com/article)",
+					Annotations: []ResponsesTextAnnotation{{
+						Type:       "url_citation",
+						URL:        "https://example.com/article",
+						Title:      "Example Article",
+						StartIndex: 6,
+						EndIndex:   40,
+					}},
+				}},
+				SearchSources: []SearchSource{{
+					URL:   "https://example.com/article",
+					Title: "Example Article",
+					Type:  "web",
+				}},
+			},
+		},
+	}
+
+	anth := ResponsesToAnthropic(resp, "claude-opus-4-6")
+	require.Len(t, anth.Content, 1)
+	assert.Equal(t, "text", anth.Content[0].Type)
+	require.Len(t, anth.Content[0].Annotations, 1)
+	assert.Equal(t, "https://example.com/article", anth.Content[0].Annotations[0].URL)
+	require.Len(t, anth.SearchSources, 1)
+	assert.Equal(t, "https://example.com/article", anth.SearchSources[0].URL)
+}
+
 func TestResponsesToAnthropic_EmptyOutput(t *testing.T) {
 	resp := &ResponsesResponse{
 		ID:     "resp_empty",
@@ -516,6 +553,48 @@ func TestStreamingEmptyResponse(t *testing.T) {
 	require.Len(t, events, 2) // message_delta + message_stop
 	assert.Equal(t, "message_delta", events[0].Type)
 	assert.Equal(t, "end_turn", events[0].Delta.StopReason)
+}
+
+func TestStreamingCompletedIncludesAnnotationsAndSearchSources(t *testing.T) {
+	state := NewResponsesEventToAnthropicState()
+
+	ResponsesEventToAnthropicEvents(&ResponsesStreamEvent{
+		Type:     "response.created",
+		Response: &ResponsesResponse{ID: "resp_ann_stream", Model: "gpt-5.2"},
+	}, state)
+
+	events := ResponsesEventToAnthropicEvents(&ResponsesStreamEvent{
+		Type: "response.completed",
+		Response: &ResponsesResponse{
+			Status: "completed",
+			Output: []ResponsesOutput{{
+				Type: "message",
+				Content: []ResponsesContentPart{{
+					Type: "output_text",
+					Text: "Answer [[1]](https://example.com/article)",
+					Annotations: []ResponsesTextAnnotation{{
+						Type:       "url_citation",
+						URL:        "https://example.com/article",
+						Title:      "Example Article",
+						StartIndex: 6,
+						EndIndex:   40,
+					}},
+				}},
+				SearchSources: []SearchSource{{
+					URL:   "https://example.com/article",
+					Title: "Example Article",
+					Type:  "web",
+				}},
+			}},
+		},
+	}, state)
+
+	require.Len(t, events, 2)
+	require.NotNil(t, events[0].Delta)
+	require.Len(t, events[0].Delta.Annotations, 1)
+	assert.Equal(t, "https://example.com/article", events[0].Delta.Annotations[0].URL)
+	require.Len(t, events[0].Delta.SearchSources, 1)
+	assert.Equal(t, "https://example.com/article", events[0].Delta.SearchSources[0].URL)
 }
 
 func TestResponsesAnthropicEventToSSE(t *testing.T) {

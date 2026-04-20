@@ -136,6 +136,7 @@ func TestRelayGrokSessionResponses_BufferedCleansRenderCitationTokens(t *testing
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
 
 	upstream := strings.Join([]string{
+		`data: {"result":{"response":{"webSearchResults":{"results":[{"url":"https://example.com/article","title":"Example Article"}]}}}}`,
 		`data: {"result":{"response":{"cardAttachment":{"jsonData":"{\"id\":\"card_1\",\"url\":\"https://example.com/article\"}"}}}}`,
 		`data: {"result":{"response":{"token":"Answer<grok:render card_id=\"card_1\" card_type=\"citation\" type=\"render_inline_citation\"></grok:render>","messageTag":"final"}}}`,
 		`data: {"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
@@ -150,6 +151,16 @@ func TestRelayGrokSessionResponses_BufferedCleansRenderCitationTokens(t *testing
 	require.Len(t, response.Output, 1)
 	require.Equal(t, "message", response.Output[0].Type)
 	require.Equal(t, "Answer [[1]](https://example.com/article)", response.Output[0].Content[0].Text)
+	require.Len(t, response.Output[0].Content[0].Annotations, 1)
+	require.Equal(t, "url_citation", response.Output[0].Content[0].Annotations[0].Type)
+	require.Equal(t, "https://example.com/article", response.Output[0].Content[0].Annotations[0].URL)
+	require.Equal(t, "Example Article", response.Output[0].Content[0].Annotations[0].Title)
+	require.Equal(t, 6, response.Output[0].Content[0].Annotations[0].StartIndex)
+	require.Equal(t, 41, response.Output[0].Content[0].Annotations[0].EndIndex)
+	require.Len(t, response.Output[0].SearchSources, 1)
+	require.Equal(t, "https://example.com/article", response.Output[0].SearchSources[0].URL)
+	require.Equal(t, "Example Article", response.Output[0].SearchSources[0].Title)
+	require.Equal(t, "web", response.Output[0].SearchSources[0].Type)
 }
 
 func decodeResponsesSSEEvents(t *testing.T, raw string) []apicompat.ResponsesStreamEvent {
