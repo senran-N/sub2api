@@ -42,6 +42,10 @@ type grokRuntimeStateWriter interface {
 	UpdateGrokRuntimeState(ctx context.Context, id int64, runtimeState map[string]any) error
 }
 
+type grokExtraStateWriter interface {
+	UpdateGrokExtra(ctx context.Context, id int64, grokPatch map[string]any) error
+}
+
 func buildGrokSyncStateExtraUpdates(account *Account, snapshot grokStateSyncSnapshot) map[string]any {
 	if account == nil {
 		return nil
@@ -240,9 +244,15 @@ func persistGrokRuntimeFeedbackToRepo(ctx context.Context, repo AccountRepositor
 	updateCtx, cancel := newGrokAccountStateContext(ctx)
 	defer cancel()
 
-	if updates := buildGrokRuntimeCapabilityExtraUpdates(input.Account, input, upstreamModel, capability); len(updates) > 0 {
-		if err := repo.UpdateExtra(updateCtx, input.Account.ID, updates); err == nil {
-			mergeAccountExtra(input.Account, updates)
+	if grokPatch := buildGrokRuntimeCapabilityExtraUpdates(input.Account, input, upstreamModel, capability); len(grokPatch) > 0 {
+		if writer, ok := repo.(grokExtraStateWriter); ok {
+			if err := writer.UpdateGrokExtra(updateCtx, input.Account.ID, grokPatch); err == nil {
+				mergeGrokExtraPatch(input.Account, grokPatch)
+			}
+		} else if updates := buildGrokStateExtraPatch(input.Account, grokPatch); len(updates) > 0 {
+			if err := repo.UpdateExtra(updateCtx, input.Account.ID, updates); err == nil {
+				mergeAccountExtra(input.Account, updates)
+			}
 		}
 	}
 
@@ -270,7 +280,9 @@ func buildGrokRuntimeCapabilityExtraUpdates(account *Account, input GrokRuntimeF
 	if len(capabilities) == 0 {
 		return nil
 	}
-	return buildGrokStateExtraPatch(account, map[string]any{"capabilities": capabilities})
+	return map[string]any{
+		"capabilities": capabilities,
+	}
 }
 
 func mergeGrokRuntimeState(account *Account, runtimeState map[string]any) {
@@ -497,6 +509,19 @@ func buildGrokRuntimeCapabilities(account *Account, input GrokRuntimeFeedbackInp
 	}
 
 	return nextCapabilities
+}
+
+func mergeGrokExtraPatch(account *Account, grokPatch map[string]any) {
+	if account == nil || len(grokPatch) == 0 {
+		return
+	}
+
+	if account.Extra == nil {
+		account.Extra = map[string]any{}
+	}
+
+	current := cloneAnyMap(account.grokExtraMap())
+	account.Extra["grok"] = mergeAnyMaps(current, grokPatch)
 }
 
 func buildGrokPrunedCapabilities(account *Account, modelID string) map[string]any {

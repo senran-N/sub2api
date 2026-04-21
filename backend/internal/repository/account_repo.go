@@ -1259,6 +1259,54 @@ func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates m
 	return nil
 }
 
+func (r *accountRepository) UpdateGrokExtra(ctx context.Context, id int64, grokPatch map[string]any) error {
+	if len(grokPatch) == 0 {
+		return nil
+	}
+
+	payload, err := json.Marshal(grokPatch)
+	if err != nil {
+		return err
+	}
+
+	client := clientFromContext(ctx, r.client)
+	result, err := client.ExecContext(
+		ctx,
+		`UPDATE accounts
+		SET extra = jsonb_set(
+			COALESCE(extra, '{}'::jsonb),
+			'{grok}',
+			COALESCE(
+				CASE
+					WHEN jsonb_typeof(COALESCE(extra, '{}'::jsonb)->'grok') = 'object' THEN COALESCE(extra, '{}'::jsonb)->'grok'
+					ELSE '{}'::jsonb
+				END,
+				'{}'::jsonb
+			) || $1::jsonb,
+			true
+		),
+		updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL`,
+		string(payload), id,
+	)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAccountNotFound
+	}
+
+	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, nil); err != nil {
+		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue grok extra update failed: account=%d err=%v", id, err)
+	}
+	return nil
+}
+
 func (r *accountRepository) UpdateGrokRuntimeState(ctx context.Context, id int64, runtimeState map[string]any) error {
 	if len(runtimeState) == 0 {
 		return nil

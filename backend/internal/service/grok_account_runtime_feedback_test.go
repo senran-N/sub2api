@@ -22,6 +22,11 @@ func (r *grokRuntimeFeedbackRepoStub) UpdateExtra(_ context.Context, _ int64, up
 	return nil
 }
 
+func (r *grokRuntimeFeedbackRepoStub) UpdateGrokExtra(_ context.Context, _ int64, grokPatch map[string]any) error {
+	r.extraUpdates = append(r.extraUpdates, map[string]any{"grok": cloneAnyMap(grokPatch)})
+	return nil
+}
+
 func (r *grokRuntimeFeedbackRepoStub) UpdateGrokRuntimeState(_ context.Context, _ int64, runtimeState map[string]any) error {
 	r.runtimeStates = append(r.runtimeStates, cloneAnyMap(runtimeState))
 	return nil
@@ -72,9 +77,8 @@ func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackSuccessEnrichesCapabilit
 	require.Len(t, repo.runtimeStates, 1)
 
 	grokExtra := grokExtraMap(repo.extraUpdates[0])
-	require.Equal(t, "basic", getNestedGrokValue(grokExtra, "tier", "normalized"))
-	require.Equal(t, "manual", getNestedGrokValue(grokExtra, "tier", "source"))
-	require.Equal(t, "2026-04-19T00:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_sync_at"))
+	require.Nil(t, getNestedGrokValue(grokExtra, "tier", "normalized"))
+	require.Nil(t, getNestedGrokValue(grokExtra, "sync_state", "last_sync_at"))
 	require.Equal(t, false, grokNestedMap(grokExtra["capabilities"])["video"])
 	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
 	require.ElementsMatch(t, []string{"grok-4.20-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
@@ -166,8 +170,13 @@ func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackFailoverOnlyUpdatesRunti
 		},
 	})
 
-	require.Empty(t, repo.extraUpdates)
+	require.Len(t, repo.extraUpdates, 1)
 	require.Len(t, repo.runtimeStates, 1)
+
+	grokExtra := grokExtraMap(repo.extraUpdates[0])
+	require.Equal(t, false, grokNestedMap(grokExtra["capabilities"])["video"])
+	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
+	require.ElementsMatch(t, []string{"grok-4.20-auto"}, grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
 
 	runtimeState := repo.runtimeStates[0]
 	require.Equal(t, "failover", runtimeState["last_outcome"])
@@ -186,7 +195,7 @@ func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackFailoverOnlyUpdatesRunti
 
 	accountGrok := account.grokExtraMap()
 	require.Equal(t, "super", getNestedGrokValue(accountGrok, "tier", "normalized"))
-	require.ElementsMatch(t, []string{"grok-3"}, grokParseStringSlice(getNestedGrokValue(accountGrok, "capabilities", "models")))
+	require.ElementsMatch(t, []string{"grok-4.20-auto"}, grokParseStringSlice(getNestedGrokValue(accountGrok, "capabilities", "models")))
 	require.Equal(t, "video tier required", getNestedGrokValue(accountGrok, "runtime_state", "last_fail_reason"))
 	require.Equal(t, "model_unsupported", getNestedGrokValue(accountGrok, "runtime_state", "last_fail_class"))
 }

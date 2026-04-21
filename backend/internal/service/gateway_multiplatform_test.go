@@ -198,6 +198,14 @@ func (m *mockAccountRepoForPlatform) UpdateExtra(ctx context.Context, id int64, 
 	})
 	return nil
 }
+func (m *mockAccountRepoForPlatform) UpdateGrokExtra(ctx context.Context, id int64, grokPatch map[string]any) error {
+	cloned := cloneAnyMap(grokPatch)
+	m.extraUpdates = append(m.extraUpdates, map[string]any{"grok": cloned})
+	m.applyAccountUpdate(id, func(account *Account) {
+		mergeGrokExtraPatch(account, cloned)
+	})
+	return nil
+}
 func (m *mockAccountRepoForPlatform) UpdateGrokRuntimeState(ctx context.Context, id int64, runtimeState map[string]any) error {
 	cloned := cloneAnyMap(runtimeState)
 	m.runtimeStates = append(m.runtimeStates, cloned)
