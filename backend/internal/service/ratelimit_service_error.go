@@ -66,6 +66,9 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		case strings.Contains(lowerMessage, "organization has been disabled"):
 			s.handleAuthError(ctx, account, "Organization disabled (400): "+upstreamMessage)
 			shouldDisable = true
+		case strings.Contains(lowerMessage, "identity verification is required"):
+			s.handleAuthError(ctx, account, "Identity verification required (400): "+upstreamMessage)
+			shouldDisable = true
 		case account.Platform == PlatformAnthropic && strings.Contains(lowerMessage, "credit balance"):
 			s.handleAuthError(ctx, account, "Credit balance exhausted (400): "+upstreamMessage)
 			shouldDisable = true

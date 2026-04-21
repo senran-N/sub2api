@@ -17,6 +17,11 @@ var (
 
 const outboxEventTimeout = 2 * time.Minute
 
+type batchSeenKey struct {
+	groupID  int64
+	platform string
+}
+
 type SchedulerSnapshotService struct {
 	cache         SchedulerCache
 	outboxRepo    SchedulerOutboxRepository

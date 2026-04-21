@@ -20,12 +20,16 @@ import (
 	"github.com/senran-N/sub2api/ent/errorpassthroughrule"
 	"github.com/senran-N/sub2api/ent/group"
 	"github.com/senran-N/sub2api/ent/idempotencyrecord"
+	"github.com/senran-N/sub2api/ent/paymentauditlog"
+	"github.com/senran-N/sub2api/ent/paymentorder"
+	"github.com/senran-N/sub2api/ent/paymentproviderinstance"
 	"github.com/senran-N/sub2api/ent/promocode"
 	"github.com/senran-N/sub2api/ent/promocodeusage"
 	"github.com/senran-N/sub2api/ent/proxy"
 	"github.com/senran-N/sub2api/ent/redeemcode"
 	"github.com/senran-N/sub2api/ent/securitysecret"
 	"github.com/senran-N/sub2api/ent/setting"
+	"github.com/senran-N/sub2api/ent/subscriptionplan"
 	"github.com/senran-N/sub2api/ent/tlsfingerprintprofile"
 	"github.com/senran-N/sub2api/ent/usagecleanuptask"
 	"github.com/senran-N/sub2api/ent/usagelog"
@@ -102,12 +106,16 @@ func checkColumn(t, c string) error {
 			errorpassthroughrule.Table:    errorpassthroughrule.ValidColumn,
 			group.Table:                   group.ValidColumn,
 			idempotencyrecord.Table:       idempotencyrecord.ValidColumn,
+			paymentauditlog.Table:         paymentauditlog.ValidColumn,
+			paymentorder.Table:            paymentorder.ValidColumn,
+			paymentproviderinstance.Table: paymentproviderinstance.ValidColumn,
 			promocode.Table:               promocode.ValidColumn,
 			promocodeusage.Table:          promocodeusage.ValidColumn,
 			proxy.Table:                   proxy.ValidColumn,
 			redeemcode.Table:              redeemcode.ValidColumn,
 			securitysecret.Table:          securitysecret.ValidColumn,
 			setting.Table:                 setting.ValidColumn,
+			subscriptionplan.Table:        subscriptionplan.ValidColumn,
 			tlsfingerprintprofile.Table:   tlsfingerprintprofile.ValidColumn,
 			usagecleanuptask.Table:        usagecleanuptask.ValidColumn,
 			usagelog.Table:                usagelog.ValidColumn,

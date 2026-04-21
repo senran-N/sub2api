@@ -107,6 +107,7 @@ func TestGetModelPricing_FallbackMatchesByFamily(t *testing.T) {
 		expectedInput float64
 	}{
 		{"claude-opus-4.5-20250101", 5e-6},
+		{"claude-opus-4-7-20260417", 5e-6},
 		{"claude-3-opus-20240229", 15e-6},
 		{"claude-sonnet-4-20250514", 3e-6},
 		{"claude-3-5-sonnet-20241022", 3e-6},
@@ -151,13 +152,13 @@ func TestGetModelPricing_UnknownOpenAIModelReturnsError(t *testing.T) {
 	require.Contains(t, err.Error(), "pricing not found")
 }
 
-func TestGetModelPricing_OpenAIGPT51Fallback(t *testing.T) {
+func TestGetModelPricing_OpenAILegacyGPT5FallbackUsesGPT54Pricing(t *testing.T) {
 	svc := newTestBillingService()
 
 	pricing, err := svc.GetModelPricing("gpt-5.1")
 	require.NoError(t, err)
 	require.NotNil(t, pricing)
-	require.InDelta(t, 1.25e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 2.5e-6, pricing.InputPricePerToken, 1e-12)
 }
 
 func TestGetModelPricing_OpenAIGPT54Fallback(t *testing.T) {
@@ -183,18 +184,6 @@ func TestGetModelPricing_OpenAIGPT54MiniFallback(t *testing.T) {
 	require.InDelta(t, 7.5e-7, pricing.InputPricePerToken, 1e-12)
 	require.InDelta(t, 4.5e-6, pricing.OutputPricePerToken, 1e-12)
 	require.InDelta(t, 7.5e-8, pricing.CacheReadPricePerToken, 1e-12)
-	require.Zero(t, pricing.LongContextInputThreshold)
-}
-
-func TestGetModelPricing_OpenAIGPT54NanoFallback(t *testing.T) {
-	svc := newTestBillingService()
-
-	pricing, err := svc.GetModelPricing("gpt-5.4-nano")
-	require.NoError(t, err)
-	require.NotNil(t, pricing)
-	require.InDelta(t, 2e-7, pricing.InputPricePerToken, 1e-12)
-	require.InDelta(t, 1.25e-6, pricing.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 2e-8, pricing.CacheReadPricePerToken, 1e-12)
 	require.Zero(t, pricing.LongContextInputThreshold)
 }
 
@@ -228,17 +217,17 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 	}{
 		{name: "empty model", model: "   ", expectNilPricing: true},
 		{name: "claude opus 4.6", model: "claude-opus-4.6-20260201", expectedInput: 5e-6},
+		{name: "claude opus 4.7", model: "claude-opus-4.7-20260417", expectedInput: 5e-6},
 		{name: "claude opus 4.5 alt separator", model: "claude-opus-4-5-20260101", expectedInput: 5e-6},
 		{name: "claude generic model fallback sonnet", model: "claude-foo-bar", expectedInput: 3e-6},
 		{name: "gemini explicit fallback", model: "gemini-3-1-pro", expectedInput: 2e-6},
 		{name: "gemini unknown no fallback", model: "gemini-2.0-pro", expectNilPricing: true},
-		{name: "openai gpt5.1", model: "gpt-5.1", expectedInput: 1.25e-6},
+		{name: "openai legacy gpt5.1 falls back to gpt5.4", model: "gpt-5.1", expectedInput: 2.5e-6},
 		{name: "openai gpt5.4", model: "gpt-5.4", expectedInput: 2.5e-6},
 		{name: "openai gpt5.4 mini", model: "gpt-5.4-mini", expectedInput: 7.5e-7},
-		{name: "openai gpt5.4 nano", model: "gpt-5.4-nano", expectedInput: 2e-7},
 		{name: "openai gpt5.3 codex", model: "gpt-5.3-codex", expectedInput: 1.5e-6},
-		{name: "openai gpt5.1 codex max alias", model: "gpt-5.1-codex-max", expectedInput: 1.5e-6},
-		{name: "openai codex mini latest alias", model: "codex-mini-latest", expectedInput: 1.5e-6},
+		{name: "openai gpt5.3 codex spark", model: "gpt-5.3-codex-spark", expectedInput: 1.5e-6},
+		{name: "openai legacy codex alias", model: "gpt-5.1-codex-max", expectedInput: 1.5e-6},
 		{name: "openai unknown no fallback", model: "gpt-unknown-model", expectNilPricing: true},
 		{name: "non supported family", model: "qwen-max", expectNilPricing: true},
 	}
@@ -511,10 +500,10 @@ func TestCalculateCostWithServiceTier_OpenAIPriorityUsesPriorityPricing(t *testi
 	svc := newTestBillingService()
 	tokens := UsageTokens{InputTokens: 100, OutputTokens: 50, CacheReadTokens: 20}
 
-	baseCost, err := svc.CalculateCost("gpt-5.1-codex", tokens, 1.0)
+	baseCost, err := svc.CalculateCost("gpt-5.3-codex", tokens, 1.0)
 	require.NoError(t, err)
 
-	priorityCost, err := svc.CalculateCostWithServiceTier("gpt-5.1-codex", tokens, 1.0, "priority")
+	priorityCost, err := svc.CalculateCostWithServiceTier("gpt-5.3-codex", tokens, 1.0, "priority")
 	require.NoError(t, err)
 
 	require.InDelta(t, baseCost.InputCost*2, priorityCost.InputCost, 1e-10)
@@ -557,14 +546,14 @@ func TestCalculateCostWithServiceTier_Gpt54MiniPriorityFallsBackToTierMultiplier
 	require.InDelta(t, baseCost.TotalCost*2, priorityCost.TotalCost, 1e-10)
 }
 
-func TestCalculateCostWithServiceTier_Gpt54NanoFlexAppliesHalfMultiplier(t *testing.T) {
+func TestCalculateCostWithServiceTier_Gpt53CodexSparkFlexAppliesHalfMultiplier(t *testing.T) {
 	svc := newTestBillingService()
 	tokens := UsageTokens{InputTokens: 100, OutputTokens: 50, CacheCreationTokens: 40, CacheReadTokens: 20}
 
-	baseCost, err := svc.CalculateCost("gpt-5.4-nano", tokens, 1.0)
+	baseCost, err := svc.CalculateCost("gpt-5.3-codex-spark", tokens, 1.0)
 	require.NoError(t, err)
 
-	flexCost, err := svc.CalculateCostWithServiceTier("gpt-5.4-nano", tokens, 1.0, "flex")
+	flexCost, err := svc.CalculateCostWithServiceTier("gpt-5.3-codex-spark", tokens, 1.0, "flex")
 	require.NoError(t, err)
 
 	require.InDelta(t, baseCost.InputCost*0.5, flexCost.InputCost, 1e-10)
@@ -632,12 +621,12 @@ func TestBillingServiceGetModelPricing_OpenAIFallbackGpt52Variants(t *testing.T)
 	require.InDelta(t, 1.75e-6, gpt52.InputPricePerToken, 1e-12)
 	require.InDelta(t, 3.5e-6, gpt52.InputPricePerTokenPriority, 1e-12)
 
-	gpt52Codex, err := svc.GetModelPricing("gpt-5.2-codex")
+	gpt53Codex, err := svc.GetModelPricing("gpt-5.3-codex")
 	require.NoError(t, err)
-	require.NotNil(t, gpt52Codex)
-	require.InDelta(t, 1.75e-6, gpt52Codex.InputPricePerToken, 1e-12)
-	require.InDelta(t, 3.5e-6, gpt52Codex.InputPricePerTokenPriority, 1e-12)
-	require.InDelta(t, 28e-6, gpt52Codex.OutputPricePerTokenPriority, 1e-12)
+	require.NotNil(t, gpt53Codex)
+	require.InDelta(t, 1.5e-6, gpt53Codex.InputPricePerToken, 1e-12)
+	require.InDelta(t, 3e-6, gpt53Codex.InputPricePerTokenPriority, 1e-12)
+	require.InDelta(t, 24e-6, gpt53Codex.OutputPricePerTokenPriority, 1e-12)
 }
 
 func TestCalculateCostWithServiceTier_PriorityFallsBackToTierMultiplierWhenExplicitPriceMissing(t *testing.T) {
@@ -676,12 +665,20 @@ func TestGetModelPricing_OpenAIGpt52FallbacksExposePriorityPrices(t *testing.T) 
 	require.InDelta(t, 14e-6, gpt52.OutputPricePerToken, 1e-12)
 	require.InDelta(t, 28e-6, gpt52.OutputPricePerTokenPriority, 1e-12)
 
-	gpt52Codex, err := svc.GetModelPricing("gpt-5.2-codex")
+	gpt53Codex, err := svc.GetModelPricing("gpt-5.3-codex-spark")
 	require.NoError(t, err)
-	require.InDelta(t, 1.75e-6, gpt52Codex.InputPricePerToken, 1e-12)
-	require.InDelta(t, 3.5e-6, gpt52Codex.InputPricePerTokenPriority, 1e-12)
-	require.InDelta(t, 14e-6, gpt52Codex.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 28e-6, gpt52Codex.OutputPricePerTokenPriority, 1e-12)
+	require.InDelta(t, 1.5e-6, gpt53Codex.InputPricePerToken, 1e-12)
+	require.InDelta(t, 3e-6, gpt53Codex.InputPricePerTokenPriority, 1e-12)
+	require.InDelta(t, 12e-6, gpt53Codex.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 24e-6, gpt53Codex.OutputPricePerTokenPriority, 1e-12)
+}
+
+func TestIsOpenAIGPT54Model_GuardsNonGPTFamilies(t *testing.T) {
+	require.True(t, isOpenAIGPT54Model("gpt-5.4"))
+	require.True(t, isOpenAIGPT54Model("gpt-5.1"))
+	require.False(t, isOpenAIGPT54Model("gpt-4o"))
+	require.False(t, isOpenAIGPT54Model("claude-sonnet-4-6"))
+	require.False(t, isOpenAIGPT54Model("gemini-3.1-pro"))
 }
 
 func TestGetModelPricing_MapsDynamicPriorityFieldsIntoBillingPricing(t *testing.T) {

@@ -20,19 +20,11 @@ const openaiModels = [
   'o1', 'o1-preview', 'o1-mini', 'o1-pro',
   'o3', 'o3-mini', 'o3-pro',
   'o4-mini',
-  // GPT-5 系列（同步后端定价文件）
-  'gpt-5', 'gpt-5-2025-08-07', 'gpt-5-chat', 'gpt-5-chat-latest',
-  'gpt-5-codex', 'gpt-5.3-codex-spark', 'gpt-5-pro', 'gpt-5-pro-2025-10-06',
-  'gpt-5-mini', 'gpt-5-mini-2025-08-07',
-  'gpt-5-nano', 'gpt-5-nano-2025-08-07',
-  // GPT-5.1 系列
-  'gpt-5.1', 'gpt-5.1-2025-11-13', 'gpt-5.1-chat-latest',
-  'gpt-5.1-codex', 'gpt-5.1-codex-max', 'gpt-5.1-codex-mini',
   // GPT-5.2 系列
   'gpt-5.2', 'gpt-5.2-2025-12-11', 'gpt-5.2-chat-latest',
-  'gpt-5.2-codex', 'gpt-5.2-pro', 'gpt-5.2-pro-2025-12-11',
+  'gpt-5.2-pro', 'gpt-5.2-pro-2025-12-11',
   // GPT-5.4 系列
-  'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.4-2026-03-05',
+  'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-2026-03-05',
   // GPT-5.3 系列
   'gpt-5.3-codex', 'gpt-5.3-codex-spark',
   'chatgpt-4o-latest',
@@ -50,6 +42,7 @@ export const claudeModels = [
   'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001',
   'claude-opus-4-5-20251101',
   'claude-opus-4-6',
+  'claude-opus-4-7',
   'claude-sonnet-4-6',
   'claude-2.1', 'claude-2.0', 'claude-instant-1.2'
 ]
@@ -73,6 +66,7 @@ const antigravityModels = [
   // Claude 4.5+ 系列
   'claude-opus-4-6',
   'claude-opus-4-6-thinking',
+  'claude-opus-4-7',
   'claude-opus-4-5-thinking',
   'claude-sonnet-4-6',
   'claude-sonnet-4-5',
@@ -422,6 +416,7 @@ const anthropicPresetMappings: PresetMapping[] = [
   { label: 'Sonnet 4.6', from: 'claude-sonnet-4-6', to: 'claude-sonnet-4-6', tone: 'accent' },
   { label: 'Opus 4.5', from: 'claude-opus-4-5-20251101', to: 'claude-opus-4-5-20251101', tone: 'brand-purple' },
   { label: 'Opus 4.6', from: 'claude-opus-4-6', to: 'claude-opus-4-6', tone: 'brand-purple' },
+  { label: 'Opus 4.7', from: 'claude-opus-4-7', to: 'claude-opus-4-7', tone: 'brand-purple' },
   { label: 'Haiku 3.5', from: 'claude-3-5-haiku-20241022', to: 'claude-3-5-haiku-20241022', tone: 'success' },
   { label: 'Haiku 4.5', from: 'claude-haiku-4-5-20251001', to: 'claude-haiku-4-5-20251001', tone: 'success' },
   { label: 'Opus->Sonnet', from: 'claude-opus-4-6', to: 'claude-sonnet-4-5-20250929', tone: 'warning' }
@@ -433,12 +428,9 @@ const openaiPresetMappings: PresetMapping[] = [
   { label: 'GPT-4.1', from: 'gpt-4.1', to: 'gpt-4.1', tone: 'accent' },
   { label: 'o1', from: 'o1', to: 'o1', tone: 'brand-purple' },
   { label: 'o3', from: 'o3', to: 'o3', tone: 'success' },
-  { label: 'GPT-5', from: 'gpt-5', to: 'gpt-5', tone: 'warning' },
   { label: 'GPT-5.3 Codex Spark', from: 'gpt-5.3-codex-spark', to: 'gpt-5.3-codex-spark', tone: 'success' },
-  { label: 'GPT-5.1', from: 'gpt-5.1', to: 'gpt-5.1', tone: 'brand-orange' },
   { label: 'GPT-5.2', from: 'gpt-5.2', to: 'gpt-5.2', tone: 'danger' },
   { label: 'GPT-5.4', from: 'gpt-5.4', to: 'gpt-5.4', tone: 'brand-rose' },
-  { label: 'GPT-5.1 Codex', from: 'gpt-5.1-codex', to: 'gpt-5.1-codex', tone: 'accent' },
   { label: 'Haiku→5.4', from: 'claude-haiku-4-5-20251001', to: 'gpt-5.4', tone: 'success' },
   { label: 'Opus→5.4', from: 'claude-opus-4-6', to: 'gpt-5.4', tone: 'brand-purple' },
   { label: 'Sonnet→5.4', from: 'claude-sonnet-4-6', to: 'gpt-5.4', tone: 'info' }
@@ -481,11 +473,13 @@ const antigravityPresetMappings: PresetMapping[] = [
   { label: 'Sonnet 4.6', from: 'claude-sonnet-4-6', to: 'claude-sonnet-4-6', tone: 'accent' },
   { label: 'Sonnet 4.5', from: 'claude-sonnet-4-5', to: 'claude-sonnet-4-5', tone: 'accent' },
   { label: 'Opus 4.6', from: 'claude-opus-4-6', to: 'claude-opus-4-6-thinking', tone: 'brand-rose' },
-  { label: 'Opus 4.6-thinking', from: 'claude-opus-4-6-thinking', to: 'claude-opus-4-6-thinking', tone: 'brand-rose' }
+  { label: 'Opus 4.6-thinking', from: 'claude-opus-4-6-thinking', to: 'claude-opus-4-6-thinking', tone: 'brand-rose' },
+  { label: 'Opus 4.7', from: 'claude-opus-4-7', to: 'claude-opus-4-7', tone: 'brand-rose' }
 ]
 
 // Bedrock 预设映射（与后端 DefaultBedrockModelMapping 保持一致）
 const bedrockPresetMappings: PresetMapping[] = [
+  { label: 'Opus 4.7', from: 'claude-opus-4-7', to: 'us.anthropic.claude-opus-4-7-v1', tone: 'brand-rose' },
   { label: 'Opus 4.6', from: 'claude-opus-4-6', to: 'us.anthropic.claude-opus-4-6-v1', tone: 'brand-rose' },
   { label: 'Sonnet 4.6', from: 'claude-sonnet-4-6', to: 'us.anthropic.claude-sonnet-4-6', tone: 'accent' },
   { label: 'Opus 4.5', from: 'claude-opus-4-5-thinking', to: 'us.anthropic.claude-opus-4-5-20251101-v1:0', tone: 'brand-rose' },

@@ -77,6 +77,12 @@ func TestAntigravityGatewayService_GetMappedModel(t *testing.T) {
 
 		// 3. 默认映射中的透传（映射到自己）
 		{
+			name:           "默认映射透传 - claude-opus-4-7",
+			requestedModel: "claude-opus-4-7",
+			accountMapping: nil,
+			expected:       "claude-opus-4-7",
+		},
+		{
 			name:           "默认映射透传 - claude-sonnet-4-6",
 			requestedModel: "claude-sonnet-4-6",
 			accountMapping: nil,
@@ -211,6 +217,7 @@ func TestAntigravityGatewayService_IsModelSupported(t *testing.T) {
 
 		// 可映射（有明确前缀映射）
 		{"可映射 - claude-opus-4-6", "claude-opus-4-6", true},
+		{"可映射 - claude-opus-4-7", "claude-opus-4-7", true},
 
 		// 前缀透传（claude 和 gemini 前缀）
 		{"Gemini前缀", "gemini-unknown", true},

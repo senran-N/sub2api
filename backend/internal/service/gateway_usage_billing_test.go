@@ -171,6 +171,65 @@ func TestBuildUsageBillingCommand_PopulatesCostsAndMetadata(t *testing.T) {
 	require.Equal(t, &subscriptionID, cmd.SubscriptionID)
 }
 
+func TestBuildUsageBillingCommand_SubscriptionUsesActualCost(t *testing.T) {
+	groupID := int64(7)
+	subscriptionID := int64(42)
+
+	tests := []struct {
+		name               string
+		totalCost          float64
+		actualCost         float64
+		isSubscriptionBill bool
+		wantSubscription   float64
+		wantBalance        float64
+	}{
+		{
+			name:               "subscription honours 2x multiplier",
+			totalCost:          1.0,
+			actualCost:         2.0,
+			isSubscriptionBill: true,
+			wantSubscription:   2.0,
+		},
+		{
+			name:               "subscription honours 0.5x multiplier",
+			totalCost:          1.0,
+			actualCost:         0.5,
+			isSubscriptionBill: true,
+			wantSubscription:   0.5,
+		},
+		{
+			name:               "free subscription consumes no quota",
+			totalCost:          1.0,
+			actualCost:         0.0,
+			isSubscriptionBill: true,
+		},
+		{
+			name:               "balance billing still uses actual cost",
+			totalCost:          1.0,
+			actualCost:         2.0,
+			isSubscriptionBill: false,
+			wantBalance:        2.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := buildUsageBillingCommand("req-1", nil, &postUsageBillingParams{
+				Cost:               &CostBreakdown{TotalCost: tt.totalCost, ActualCost: tt.actualCost},
+				User:               &User{ID: 1},
+				APIKey:             &APIKey{ID: 2, GroupID: &groupID},
+				Account:            &Account{ID: 3},
+				Subscription:       &UserSubscription{ID: subscriptionID},
+				IsSubscriptionBill: tt.isSubscriptionBill,
+			})
+
+			require.NotNil(t, cmd)
+			require.InDelta(t, tt.wantSubscription, cmd.SubscriptionCost, 1e-12)
+			require.InDelta(t, tt.wantBalance, cmd.BalanceCost, 1e-12)
+		})
+	}
+}
+
 type testAPIKeyQuotaUpdater struct{}
 
 func (u *testAPIKeyQuotaUpdater) UpdateQuotaUsed(context.Context, int64, float64) error {
@@ -277,7 +336,8 @@ func TestPostUsageBilling_QueuesSubscriptionCacheExactlyOnce(t *testing.T) {
 
 	postUsageBilling(context.Background(), &postUsageBillingParams{
 		Cost: &CostBreakdown{
-			TotalCost: 6.25,
+			TotalCost:  6.25,
+			ActualCost: 3.125,
 		},
 		IsSubscriptionBill: true,
 		Subscription:       &UserSubscription{ID: 808},
@@ -300,7 +360,7 @@ func TestPostUsageBilling_QueuesSubscriptionCacheExactlyOnce(t *testing.T) {
 	cache.mu.Lock()
 	require.Equal(t, int64(202), cache.lastSubscriptionID.userID)
 	require.Equal(t, int64(7), cache.lastSubscriptionID.groupID)
-	require.Equal(t, 6.25, cache.lastSubscriptionID.costUSD)
+	require.Equal(t, 3.125, cache.lastSubscriptionID.costUSD)
 	cache.mu.Unlock()
 
 	_, ok := deferred.lastUsedUpdates.Load(int64(303))

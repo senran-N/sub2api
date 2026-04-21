@@ -286,17 +286,17 @@ func (s *GatewayService) diagnoseSelectionFailure(
 			Detail:   "channel_restricted",
 		}
 	}
+	if !s.isAccountSchedulableForQuota(acc) {
+		return selectionFailureDiagnosis{
+			Category: "quota_limited",
+			Detail:   "quota_exceeded",
+		}
+	}
 	if !s.isAccountSchedulableForModelSelection(ctx, acc, requestedModel) {
 		remaining := acc.GetRateLimitRemainingTimeWithContext(ctx, requestedModel).Truncate(time.Second)
 		return selectionFailureDiagnosis{
 			Category: "model_rate_limited",
 			Detail:   fmt.Sprintf("remaining=%s", remaining),
-		}
-	}
-	if !s.isAccountSchedulableForQuota(acc) {
-		return selectionFailureDiagnosis{
-			Category: "quota_limited",
-			Detail:   "quota_exceeded",
 		}
 	}
 	if !s.isAccountSchedulableForWindowCost(ctx, acc, false) {

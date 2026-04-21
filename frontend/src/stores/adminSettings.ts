@@ -3,8 +3,10 @@ import { ref } from 'vue'
 import type { CustomMenuItem } from '@/types'
 
 type AdminSettingsApiModule = typeof import('@/api/admin/settings')
+type AdminPaymentApiModule = typeof import('@/api/admin/payment')
 
 let adminSettingsApiModulePromise: Promise<AdminSettingsApiModule> | null = null
+let adminPaymentApiModulePromise: Promise<AdminPaymentApiModule> | null = null
 
 function loadAdminSettingsApiModule(): Promise<AdminSettingsApiModule> {
   if (!adminSettingsApiModulePromise) {
@@ -12,6 +14,14 @@ function loadAdminSettingsApiModule(): Promise<AdminSettingsApiModule> {
   }
 
   return adminSettingsApiModulePromise
+}
+
+function loadAdminPaymentApiModule(): Promise<AdminPaymentApiModule> {
+  if (!adminPaymentApiModulePromise) {
+    adminPaymentApiModulePromise = import('@/api/admin/payment')
+  }
+
+  return adminPaymentApiModulePromise
 }
 
 export const useAdminSettingsStore = defineStore('adminSettings', () => {
@@ -59,6 +69,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
   const opsMonitoringEnabled = ref(readCachedBool('ops_monitoring_enabled_cached', true))
   const opsRealtimeMonitoringEnabled = ref(readCachedBool('ops_realtime_monitoring_enabled_cached', true))
   const opsQueryModeDefault = ref(readCachedString('ops_query_mode_default_cached', 'auto'))
+  const paymentEnabled = ref(readCachedBool('payment_enabled_cached', false))
   const customMenuItems = ref<CustomMenuItem[]>([])
 
   async function fetch(force = false): Promise<void> {
@@ -67,8 +78,14 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
 
     loading.value = true
     try {
-      const { getSettings } = await loadAdminSettingsApiModule()
-      const settings = await getSettings()
+      const [{ getSettings }, { adminPaymentAPI }] = await Promise.all([
+        loadAdminSettingsApiModule(),
+        loadAdminPaymentApiModule()
+      ])
+      const [settings, paymentConfigResponse] = await Promise.all([
+        getSettings(),
+        adminPaymentAPI.getConfig()
+      ])
       opsMonitoringEnabled.value = settings.ops_monitoring_enabled ?? true
       writeCachedBool('ops_monitoring_enabled_cached', opsMonitoringEnabled.value)
 
@@ -79,6 +96,8 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
       writeCachedString('ops_query_mode_default_cached', opsQueryModeDefault.value)
 
       customMenuItems.value = Array.isArray(settings.custom_menu_items) ? settings.custom_menu_items : []
+      paymentEnabled.value = paymentConfigResponse.data?.enabled ?? false
+      writeCachedBool('payment_enabled_cached', paymentEnabled.value)
 
       loaded.value = true
     } catch (err) {
@@ -105,6 +124,12 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
   function setOpsQueryModeDefaultLocal(value: string) {
     opsQueryModeDefault.value = value || 'auto'
     writeCachedString('ops_query_mode_default_cached', opsQueryModeDefault.value)
+    loaded.value = true
+  }
+
+  function setPaymentEnabledLocal(value: boolean) {
+    paymentEnabled.value = value
+    writeCachedBool('payment_enabled_cached', value)
     loaded.value = true
   }
 
@@ -138,10 +163,12 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
     opsMonitoringEnabled,
     opsRealtimeMonitoringEnabled,
     opsQueryModeDefault,
+    paymentEnabled,
     customMenuItems,
     fetch,
     setOpsMonitoringEnabledLocal,
     setOpsRealtimeMonitoringEnabledLocal,
-    setOpsQueryModeDefaultLocal
+    setOpsQueryModeDefaultLocal,
+    setPaymentEnabledLocal
   }
 })

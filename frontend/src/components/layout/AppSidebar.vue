@@ -511,6 +511,46 @@ const SunIcon = {
     )
 }
 
+const OrderIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M3.75 3h16.5M4.5 6.75h15A1.5 1.5 0 0121 8.25v10.5A1.5 1.5 0 0119.5 20.25h-15A1.5 1.5 0 013 18.75V8.25a1.5 1.5 0 011.5-1.5z'
+        }),
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M7.5 10.5h9m-9 3h9m-9 3h5.25'
+        })
+      ]
+    )
+}
+
+const OrderListIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M8.25 6.75h12m-12 5.25h12m-12 5.25h12'
+        }),
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M3.75 6.75h.008v.008H3.75V6.75zm0 5.25h.008v.008H3.75V12zm0 5.25h.008v.008H3.75v-.008z'
+        })
+      ]
+    )
+}
+
 const MoonIcon = {
   render: () =>
     h(
@@ -563,12 +603,22 @@ const userNavItems = computed((): NavItem[] => {
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
-    ...(appStore.cachedPublicSettings?.purchase_subscription_enabled
+    ...(appStore.cachedPublicSettings?.payment_enabled
       ? [
           {
             path: '/purchase',
             label: t('nav.buySubscription'),
             icon: RechargeSubscriptionIcon,
+            hideInSimpleMode: true
+          }
+        ]
+      : []),
+    ...(appStore.cachedPublicSettings?.payment_enabled
+      ? [
+          {
+            path: '/orders',
+            label: t('nav.myOrders'),
+            icon: OrderListIcon,
             hideInSimpleMode: true
           }
         ]
@@ -591,12 +641,22 @@ const personalNavItems = computed((): NavItem[] => {
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
-    ...(appStore.cachedPublicSettings?.purchase_subscription_enabled
+    ...(appStore.cachedPublicSettings?.payment_enabled
       ? [
           {
             path: '/purchase',
             label: t('nav.buySubscription'),
             icon: RechargeSubscriptionIcon,
+            hideInSimpleMode: true
+          }
+        ]
+      : []),
+    ...(appStore.cachedPublicSettings?.payment_enabled
+      ? [
+          {
+            path: '/orders',
+            label: t('nav.myOrders'),
+            icon: OrderListIcon,
             hideInSimpleMode: true
           }
         ]
@@ -643,6 +703,13 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
+    ...(adminSettingsStore.paymentEnabled
+      ? [
+          { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon, hideInSimpleMode: true },
+          { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderIcon, hideInSimpleMode: true },
+          { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon, hideInSimpleMode: true }
+        ]
+      : []),
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon }
   ]
 

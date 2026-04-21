@@ -365,6 +365,10 @@ export default {
     github: "GitHub",
     mySubscriptions: "我的订阅",
     buySubscription: "充值/订阅",
+    myOrders: "我的订单",
+    orderManagement: "订单管理",
+    paymentDashboard: "支付看板",
+    paymentPlans: "订阅套餐",
     docs: "文档",
   },
 
@@ -2292,6 +2296,7 @@ export default {
         rateLimited: "限流中",
         overloaded: "过载中",
         tempUnschedulable: "临时不可调度",
+        quotaExceeded: "配额已耗尽",
         rateLimitedUntil: "限流中，当前不参与调度，预计 {time} 自动恢复",
         rateLimitedAutoResume: "{time} 自动恢复",
         modelRateLimitedUntil: "{model} 限流至 {time}",

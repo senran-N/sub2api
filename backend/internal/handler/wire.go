@@ -34,6 +34,7 @@ func ProvideAdminHandlers(
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
 	channelHandler *admin.ChannelHandler,
+	paymentHandler *admin.PaymentHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:             dashboardHandler,
@@ -61,6 +62,7 @@ func ProvideAdminHandlers(
 		APIKey:                apiKeyHandler,
 		ScheduledTest:         scheduledTestHandler,
 		Channel:               channelHandler,
+		Payment:               paymentHandler,
 	}
 }
 
@@ -93,6 +95,8 @@ func ProvideHandlers(
 	grokGatewayHandler *GrokGatewayHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
+	paymentHandler *PaymentHandler,
+	paymentWebhookHandler *PaymentWebhookHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -110,6 +114,8 @@ func ProvideHandlers(
 		GrokGateway:       grokGatewayHandler,
 		Setting:           settingHandler,
 		Totp:              totpHandler,
+		Payment:           paymentHandler,
+		PaymentWebhook:    paymentWebhookHandler,
 	}
 }
 
@@ -131,6 +137,8 @@ var ProviderSet = wire.NewSet(
 	NewGrokGatewayHandler,
 	NewTotpHandler,
 	ProvideSettingHandler,
+	NewPaymentHandler,
+	NewPaymentWebhookHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
@@ -158,6 +166,7 @@ var ProviderSet = wire.NewSet(
 	admin.ProvideAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
 	admin.NewChannelHandler,
+	admin.NewPaymentHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideCompatibleGatewayPassthroughRuntime,

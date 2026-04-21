@@ -368,6 +368,10 @@ export default {
     github: "GitHub",
     mySubscriptions: "My Subscriptions",
     buySubscription: "Recharge / Subscription",
+    myOrders: "My Orders",
+    orderManagement: "Order Management",
+    paymentDashboard: "Payment Dashboard",
+    paymentPlans: "Subscription Plans",
     docs: "Docs",
   },
 
@@ -2195,6 +2199,7 @@ export default {
         rateLimited: "Rate Limited",
         overloaded: "Overloaded",
         tempUnschedulable: "Temp Unschedulable",
+        quotaExceeded: "Quota Exceeded",
         rateLimitedUntil:
           "Rate limited and removed from scheduling. Auto resumes at {time}",
         rateLimitedAutoResume: "Auto resumes in {time}",

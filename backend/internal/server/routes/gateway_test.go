@@ -104,7 +104,7 @@ func TestGatewayRoutesOpenAICompatPassthroughPathsAreRegistered(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{method: http.MethodGet, path: "/v1/models/gpt-5", body: ``},
+		{method: http.MethodGet, path: "/v1/models/gpt-5.4", body: ``},
 		{method: http.MethodPost, path: "/v1/images/generations", body: `{"model":"grok-2-image"}`},
 		{method: http.MethodPost, path: "/v1/audio/transcriptions", body: `{"model":"grok-4-voice"}`},
 		{method: http.MethodPost, path: "/v1/tts", body: `{"model":"grok-4-voice"}`},

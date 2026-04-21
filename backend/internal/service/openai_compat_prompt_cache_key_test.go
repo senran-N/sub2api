@@ -17,7 +17,9 @@ func TestShouldAutoInjectPromptCacheKeyForCompat(t *testing.T) {
 	require.True(t, shouldAutoInjectPromptCacheKeyForCompat("gpt-5.4"))
 	require.True(t, shouldAutoInjectPromptCacheKeyForCompat("gpt-5.3"))
 	require.True(t, shouldAutoInjectPromptCacheKeyForCompat("gpt-5.3-codex"))
+	require.True(t, shouldAutoInjectPromptCacheKeyForCompat("gpt-5.3-codex-spark"))
 	require.False(t, shouldAutoInjectPromptCacheKeyForCompat("gpt-4o"))
+	require.False(t, shouldAutoInjectPromptCacheKeyForCompat("claude-sonnet-4-6"))
 }
 
 func TestDeriveCompatPromptCacheKey_StableAcrossLaterTurns(t *testing.T) {
@@ -63,7 +65,7 @@ func TestDeriveCompatPromptCacheKey_DiffersAcrossSessions(t *testing.T) {
 	require.NotEqual(t, k1, k2, "different first user messages should yield different keys")
 }
 
-func TestDeriveCompatPromptCacheKey_CollapsesCodexSparkToCodexFamily(t *testing.T) {
+func TestDeriveCompatPromptCacheKey_PreservesCodexSparkDistinction(t *testing.T) {
 	req := &apicompat.ChatCompletionsRequest{
 		Model: "gpt-5.3-codex-spark",
 		Messages: []apicompat.ChatMessage{
@@ -75,5 +77,5 @@ func TestDeriveCompatPromptCacheKey_CollapsesCodexSparkToCodexFamily(t *testing.
 	codexKey := deriveCompatPromptCacheKey(req, "gpt-5.3-codex")
 
 	require.NotEmpty(t, sparkKey)
-	require.Equal(t, codexKey, sparkKey, "spark aliases should collapse to the canonical codex cache key")
+	require.NotEqual(t, codexKey, sparkKey, "spark should keep its own prompt cache namespace")
 }

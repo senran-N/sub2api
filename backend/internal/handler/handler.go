@@ -31,6 +31,7 @@ type AdminHandlers struct {
 	APIKey                *admin.AdminAPIKeyHandler
 	ScheduledTest         *admin.ScheduledTestHandler
 	Channel               *admin.ChannelHandler
+	Payment               *admin.PaymentHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -48,6 +49,8 @@ type Handlers struct {
 	GrokGateway       *GrokGatewayHandler
 	Setting           *SettingHandler
 	Totp              *TotpHandler
+	Payment           *PaymentHandler
+	PaymentWebhook    *PaymentWebhookHandler
 }
 
 // BuildInfo contains build-time information

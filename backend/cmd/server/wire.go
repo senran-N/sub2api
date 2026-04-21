@@ -10,6 +10,7 @@ import (
 	"github.com/senran-N/sub2api/ent"
 	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/handler"
+	"github.com/senran-N/sub2api/internal/payment"
 	"github.com/senran-N/sub2api/internal/repository"
 	"github.com/senran-N/sub2api/internal/server"
 	"github.com/senran-N/sub2api/internal/server/middleware"
@@ -31,6 +32,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 
 		// Business layer ProviderSets
 		repository.ProviderSet,
+		payment.ProviderSet,
 		service.ProviderSet,
 		middleware.ProviderSet,
 		handler.ProviderSet,

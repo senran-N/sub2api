@@ -90,6 +90,9 @@ func (a *Account) IsSchedulable() bool {
 	if !a.IsActive() {
 		return false
 	}
+	if a.IsAPIKeyOrBedrock() && a.IsQuotaExceeded() {
+		return false
+	}
 	return a.isSchedulableAt(time.Now())
 }
 

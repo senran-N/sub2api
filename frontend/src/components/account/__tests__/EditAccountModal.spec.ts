@@ -314,4 +314,13 @@ describe('EditAccountModal', () => {
     })
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.quota_limit).toBe(42)
   })
+
+  it('marks the compatible API key field to ignore password manager autofill', () => {
+    const wrapper = mountModal()
+    const input = wrapper.get('input[autocomplete="new-password"]')
+
+    expect(input.attributes('data-1p-ignore')).toBe('')
+    expect(input.attributes('data-lpignore')).toBe('true')
+    expect(input.attributes('data-bwignore')).toBe('true')
+  })
 })

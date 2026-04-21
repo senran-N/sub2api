@@ -159,4 +159,42 @@ describe('AccountStatusIndicator', () => {
     // AICredits 积分耗尽状态应显示
     expect(wrapper.text()).toContain('admin.accounts.status.creditsExhausted')
   })
+
+  it('quota exceeded 时显示 quotaExceeded 状态文案', () => {
+    const wrapper = mount(AccountStatusIndicator, {
+      props: {
+        account: makeAccount({
+          quota_limit: 10,
+          quota_used: 10
+        })
+      },
+      global: {
+        stubs: {
+          Icon: true
+        }
+      }
+    })
+
+    expect(wrapper.text()).toContain('admin.accounts.status.quotaExceeded')
+  })
+
+  it('inactive 状态优先于 quota exceeded', () => {
+    const wrapper = mount(AccountStatusIndicator, {
+      props: {
+        account: makeAccount({
+          status: 'inactive',
+          quota_limit: 10,
+          quota_used: 10
+        })
+      },
+      global: {
+        stubs: {
+          Icon: true
+        }
+      }
+    })
+
+    expect(wrapper.text()).toContain('admin.accounts.status.inactive')
+    expect(wrapper.text()).not.toContain('admin.accounts.status.quotaExceeded')
+  })
 })

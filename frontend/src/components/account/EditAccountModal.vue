@@ -194,6 +194,10 @@
             v-model="editApiKey"
             type="password"
             class="input font-mono"
+            autocomplete="new-password"
+            data-1p-ignore
+            data-lpignore="true"
+            data-bwignore="true"
             :placeholder="apiKeyPlaceholder"
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>

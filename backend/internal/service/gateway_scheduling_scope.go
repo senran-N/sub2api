@@ -229,7 +229,10 @@ func (s *GatewayService) isAccountSchedulableForSelection(account *Account) bool
 	if account == nil {
 		return false
 	}
-	if !account.IsSchedulable() {
+	// Keep base schedulability focused on account/runtime state only.
+	// Quota/window/rpm limits are classified separately later so diagnostics
+	// can report the precise blocking reason instead of generic unschedulable.
+	if !account.IsActive() || !account.isSchedulableAt(time.Now()) {
 		return false
 	}
 	return oauthSelectionCredentialIssue(account) == ""

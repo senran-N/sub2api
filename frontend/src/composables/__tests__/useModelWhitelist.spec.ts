@@ -23,16 +23,34 @@ describe('useModelWhitelist', () => {
 
     expect(models).toContain('gpt-5.4')
     expect(models).toContain('gpt-5.4-mini')
-    expect(models).toContain('gpt-5.4-nano')
     expect(models).toContain('gpt-5.4-2026-03-05')
   })
 
   it('antigravity 模型列表包含图片模型兼容项', () => {
     const models = getModelsByPlatform('antigravity')
 
+    expect(models).toContain('claude-opus-4-7')
     expect(models).toContain('gemini-2.5-flash-image')
     expect(models).toContain('gemini-3.1-flash-image')
     expect(models).toContain('gemini-3-pro-image')
+  })
+
+  it('Claude 与 Bedrock 预设包含 Opus 4.7', () => {
+    expect(getPresetMappingsByPlatform('anthropic')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'claude-opus-4-7', to: 'claude-opus-4-7' })
+      ])
+    )
+    expect(getPresetMappingsByPlatform('antigravity')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'claude-opus-4-7', to: 'claude-opus-4-7' })
+      ])
+    )
+    expect(getPresetMappingsByPlatform('bedrock')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'claude-opus-4-7', to: 'us.anthropic.claude-opus-4-7-v1' })
+      ])
+    )
   })
 
   it('gemini 模型列表包含原生生图模型', () => {
@@ -66,12 +84,11 @@ describe('useModelWhitelist', () => {
     })
   })
 
-  it('whitelist keeps GPT-5.4 mini and nano exact mappings', () => {
-    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-mini', 'gpt-5.4-nano'], [])
+  it('whitelist keeps GPT-5.4 mini exact mapping', () => {
+    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-mini'], [])
 
     expect(mapping).toEqual({
-      'gpt-5.4-mini': 'gpt-5.4-mini',
-      'gpt-5.4-nano': 'gpt-5.4-nano'
+      'gpt-5.4-mini': 'gpt-5.4-mini'
     })
   })
 

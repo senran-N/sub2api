@@ -7,7 +7,9 @@ import (
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
+	dbent "github.com/senran-N/sub2api/ent"
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/payment"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 )
 
@@ -412,6 +414,26 @@ func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupReposit
 	return svc
 }
 
+func ProvideGrokAccountStateExtraWriter(accountRepo AccountRepository) grokAccountStateExtraWriter {
+	return accountRepo
+}
+
+func ProvideGrokQuotaAccountSyncer(syncer *GrokQuotaSyncService) grokQuotaAccountSyncer {
+	return syncer
+}
+
+// ProvidePaymentConfigService wraps NewPaymentConfigService to accept the named
+// payment.EncryptionKey type instead of raw []byte, avoiding Wire ambiguity.
+func ProvidePaymentConfigService(entClient *dbent.Client, settingRepo SettingRepository, key payment.EncryptionKey) *PaymentConfigService {
+	return NewPaymentConfigService(entClient, settingRepo, []byte(key))
+}
+
+// ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
+func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lifecycle *LifecycleRegistry) *PaymentOrderExpiryService {
+	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
+	return manageStartStopLifecycle(lifecycle, "PaymentOrderExpiryService", svc)
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -432,6 +454,7 @@ var ProviderSet = wire.NewSet(
 	NewBillingCacheService,
 	NewAnnouncementService,
 	NewAdminService,
+	ProvideGrokAccountStateExtraWriter,
 	NewIPRiskService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
@@ -440,6 +463,7 @@ var ProviderSet = wire.NewSet(
 	ProvideGrokCompatibleRuntime,
 	NewGrokTierService,
 	ProvideGrokQuotaSyncService,
+	ProvideGrokQuotaAccountSyncer,
 	ProvideGrokCapabilityProbeService,
 	NewGrokSessionRuntime,
 	NewGrokTextRuntime,
@@ -507,4 +531,7 @@ var ProviderSet = wire.NewSet(
 	NewGroupCapacityService,
 	NewChannelService,
 	NewModelPricingResolver,
+	ProvidePaymentConfigService,
+	NewPaymentService,
+	ProvidePaymentOrderExpiryService,
 )

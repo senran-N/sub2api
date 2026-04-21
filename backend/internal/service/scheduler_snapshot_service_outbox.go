@@ -11,6 +11,7 @@ import (
 )
 
 const schedulerSnapshotOutboxPollTimeout = 10 * time.Second
+const schedulerSnapshotOutboxWatermarkTimeout = 5 * time.Second
 
 func (s *SchedulerSnapshotService) pollOutbox() {
 	if s.outboxRepo == nil || s.cache == nil {
@@ -35,9 +36,10 @@ func (s *SchedulerSnapshotService) pollOutbox() {
 	}
 
 	watermarkForCheck := watermark
+	seen := make(map[batchSeenKey]struct{})
 	for _, event := range events {
 		eventCtx, cancel := context.WithTimeout(context.Background(), outboxEventTimeout)
-		err := s.handleOutboxEvent(eventCtx, event)
+		err := s.handleOutboxEvent(eventCtx, event, seen)
 		cancel()
 		if err != nil {
 			logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox handle failed: id=%d type=%s err=%v", event.ID, event.EventType, err)
@@ -46,26 +48,38 @@ func (s *SchedulerSnapshotService) pollOutbox() {
 	}
 
 	lastID := events[len(events)-1].ID
-	if err := s.cache.SetOutboxWatermark(ctx, lastID); err != nil {
-		logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox watermark write failed: %v", err)
+	var wmErr error
+	for i := 0; i < 3; i++ {
+		wmCtx, wmCancel := context.WithTimeout(context.Background(), schedulerSnapshotOutboxWatermarkTimeout)
+		wmErr = s.cache.SetOutboxWatermark(wmCtx, lastID)
+		wmCancel()
+		if wmErr == nil {
+			break
+		}
+		if i < 2 {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	if wmErr != nil {
+		logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox watermark write failed: %v", wmErr)
 	} else {
 		watermarkForCheck = lastID
 	}
 	s.checkOutboxLag(ctx, events[0], watermarkForCheck)
 }
 
-func (s *SchedulerSnapshotService) handleOutboxEvent(ctx context.Context, event SchedulerOutboxEvent) error {
+func (s *SchedulerSnapshotService) handleOutboxEvent(ctx context.Context, event SchedulerOutboxEvent, seen map[batchSeenKey]struct{}) error {
 	switch event.EventType {
 	case SchedulerOutboxEventAccountLastUsed:
 		return s.handleLastUsedEvent(ctx, event.Payload)
 	case SchedulerOutboxEventAccountBulkChanged:
-		return s.handleBulkAccountEvent(ctx, event.Payload)
+		return s.handleBulkAccountEvent(ctx, event.Payload, seen)
 	case SchedulerOutboxEventAccountGroupsChanged:
-		return s.handleAccountEvent(ctx, event.AccountID, event.Payload)
+		return s.handleAccountEvent(ctx, event.AccountID, event.Payload, seen)
 	case SchedulerOutboxEventAccountChanged:
-		return s.handleAccountEvent(ctx, event.AccountID, event.Payload)
+		return s.handleAccountEvent(ctx, event.AccountID, event.Payload, seen)
 	case SchedulerOutboxEventGroupChanged:
-		return s.handleGroupEvent(ctx, event.GroupID)
+		return s.handleGroupEvent(ctx, event.GroupID, seen)
 	case SchedulerOutboxEventFullRebuild:
 		return s.triggerFullRebuild("outbox")
 	default:
@@ -99,7 +113,7 @@ func (s *SchedulerSnapshotService) handleLastUsedEvent(ctx context.Context, payl
 	return s.cache.UpdateLastUsed(ctx, updates)
 }
 
-func (s *SchedulerSnapshotService) handleBulkAccountEvent(ctx context.Context, payload map[string]any) error {
+func (s *SchedulerSnapshotService) handleBulkAccountEvent(ctx context.Context, payload map[string]any, seen map[batchSeenKey]struct{}) error {
 	if payload == nil || s.accountRepo == nil {
 		return nil
 	}
@@ -110,15 +124,15 @@ func (s *SchedulerSnapshotService) handleBulkAccountEvent(ctx context.Context, p
 	}
 
 	ids := make([]int64, 0, len(rawIDs))
-	seen := make(map[int64]struct{}, len(rawIDs))
+	seenIDs := make(map[int64]struct{}, len(rawIDs))
 	for _, id := range rawIDs {
 		if id <= 0 {
 			continue
 		}
-		if _, exists := seen[id]; exists {
+		if _, exists := seenIDs[id]; exists {
 			continue
 		}
-		seen[id] = struct{}{}
+		seenIDs[id] = struct{}{}
 		ids = append(ids, id)
 	}
 	if len(ids) == 0 {
@@ -171,10 +185,10 @@ func (s *SchedulerSnapshotService) handleBulkAccountEvent(ctx context.Context, p
 	for gid := range rebuildGroupSet {
 		rebuildGroupIDs = append(rebuildGroupIDs, gid)
 	}
-	return s.rebuildByGroupIDs(ctx, rebuildGroupIDs, "account_bulk_change")
+	return s.rebuildByGroupIDs(ctx, rebuildGroupIDs, "account_bulk_change", seen)
 }
 
-func (s *SchedulerSnapshotService) handleAccountEvent(ctx context.Context, accountID *int64, payload map[string]any) error {
+func (s *SchedulerSnapshotService) handleAccountEvent(ctx context.Context, accountID *int64, payload map[string]any, seen map[batchSeenKey]struct{}) error {
 	if accountID == nil || *accountID <= 0 || s.accountRepo == nil {
 		return nil
 	}
@@ -192,7 +206,7 @@ func (s *SchedulerSnapshotService) handleAccountEvent(ctx context.Context, accou
 					return err
 				}
 			}
-			return s.rebuildByGroupIDs(ctx, groupIDs, "account_miss")
+			return s.rebuildByGroupIDs(ctx, groupIDs, "account_miss", seen)
 		}
 		return err
 	}
@@ -204,14 +218,14 @@ func (s *SchedulerSnapshotService) handleAccountEvent(ctx context.Context, accou
 	if len(groupIDs) == 0 {
 		groupIDs = account.GroupIDs
 	}
-	return s.rebuildByAccount(ctx, account, groupIDs, "account_change")
+	return s.rebuildByAccount(ctx, account, groupIDs, "account_change", seen)
 }
 
-func (s *SchedulerSnapshotService) handleGroupEvent(ctx context.Context, groupID *int64) error {
+func (s *SchedulerSnapshotService) handleGroupEvent(ctx context.Context, groupID *int64, seen map[batchSeenKey]struct{}) error {
 	if groupID == nil || *groupID <= 0 {
 		return nil
 	}
-	return s.rebuildByGroupIDs(ctx, []int64{*groupID}, "group_change")
+	return s.rebuildByGroupIDs(ctx, []int64{*groupID}, "group_change", seen)
 }
 
 func (s *SchedulerSnapshotService) checkOutboxLag(ctx context.Context, oldest SchedulerOutboxEvent, watermark int64) {

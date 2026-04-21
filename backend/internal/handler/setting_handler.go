@@ -56,6 +56,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		CustomEndpoints:                  dto.ParseCustomEndpoints(settings.CustomEndpoints),
 		LinuxDoOAuthEnabled:              settings.LinuxDoOAuthEnabled,
 		BackendModeEnabled:               settings.BackendModeEnabled,
+		PaymentEnabled:                   settings.PaymentEnabled,
 		Version:                          h.version,
 	})
 }

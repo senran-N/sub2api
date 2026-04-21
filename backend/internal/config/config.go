@@ -53,6 +53,9 @@ const (
 	ConnectionPoolIsolationAccountProxy = "account_proxy"
 )
 
+// DefaultUpstreamResponseReadMaxBytes 上游非流式响应体的默认读取上限。
+const DefaultUpstreamResponseReadMaxBytes int64 = 128 * 1024 * 1024
+
 type Config struct {
 	Server                  ServerConfig                  `mapstructure:"server"`
 	Log                     LogConfig                     `mapstructure:"log"`
