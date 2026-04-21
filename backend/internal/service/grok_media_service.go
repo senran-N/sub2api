@@ -72,30 +72,44 @@ func (s *GrokMediaService) HandleImages(c *gin.Context, groupID *int64, body []b
 		return true
 	}
 
-	account, err := s.selectCompatibleAccount(c.Request.Context(), groupID, schedulingModel)
-	if err != nil {
-		s.writeSelectionError(c, requestedModel, schedulingModel, err)
-		return true
-	}
-	if account.Type == AccountTypeSession && s.sessionRuntime != nil {
-		return s.sessionRuntime.HandleImages(c, account, requestedModel, firstNonEmpty(schedulingModel, requestedModel), body)
-	}
+	err = s.executeWithFailover(c.Request.Context(), groupID, schedulingModel, func(account *Account) error {
+		if account != nil && account.Type == AccountTypeSession && s.sessionRuntime != nil {
+			responseBody, _, err := s.runSessionImageRequest(c, account, requestedModel, firstNonEmpty(schedulingModel, requestedModel), body)
+			if err != nil {
+				return err
+			}
+			c.Data(http.StatusOK, "application/json", responseBody)
+			return nil
+		}
 
-	resp, err := s.forwardCompatibleRequest(c, grokMediaForwardRequest{
-		account:            account,
-		body:               body,
-		requestMeta:        reqMeta,
-		defaultMappedModel: schedulingModel,
-		applyVideoTimeout:  false,
+		resp, err := s.forwardCompatibleRequest(c, grokMediaForwardRequest{
+			account:            account,
+			body:               body,
+			requestMeta:        reqMeta,
+			defaultMappedModel: schedulingModel,
+			applyVideoTimeout:  false,
+		})
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+			resp.Body, _, _ = s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), "", "image", requestResponseFormat, resp.Body)
+		}
+		s.writeForwardResponse(c, resp)
+		return nil
 	})
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Grok upstream request failed")
+		var failoverErr *UpstreamFailoverError
+		switch {
+		case errors.As(err, &failoverErr):
+			writeGrokCompatibleMediaFailoverError(c, failoverErr)
+		case s.isSelectionError(err):
+			s.writeSelectionError(c, requestedModel, schedulingModel, err)
+		default:
+			s.writeExecutionError(c, err)
+		}
 		return true
 	}
-	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-		resp.Body, _, _ = s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), "", "image", requestResponseFormat, resp.Body)
-	}
-	s.writeForwardResponse(c, resp)
 	return true
 }
 
@@ -119,52 +133,62 @@ func (s *GrokMediaService) handleVideoCreate(c *gin.Context, groupID *int64, bod
 		return true
 	}
 
-	account, err := s.selectCompatibleAccount(c.Request.Context(), groupID, schedulingModel)
-	if err != nil {
-		s.writeSelectionError(c, requestedModel, schedulingModel, err)
-		return true
-	}
-	if account.Type == AccountTypeSession && s.sessionRuntime != nil {
-		return s.sessionRuntime.HandleVideoCreate(c, groupID, account, requestedModel, firstNonEmpty(schedulingModel, requestedModel), body)
-	}
+	err := s.executeWithFailover(c.Request.Context(), groupID, schedulingModel, func(account *Account) error {
+		if account != nil && account.Type == AccountTypeSession && s.sessionRuntime != nil {
+			s.sessionRuntime.HandleVideoCreate(c, groupID, account, requestedModel, firstNonEmpty(schedulingModel, requestedModel), body)
+			return nil
+		}
 
-	resp, err := s.forwardCompatibleRequest(c, grokMediaForwardRequest{
-		account:            account,
-		body:               body,
-		requestMeta:        reqMeta,
-		defaultMappedModel: schedulingModel,
-		applyVideoTimeout:  true,
+		resp, err := s.forwardCompatibleRequest(c, grokMediaForwardRequest{
+			account:            account,
+			body:               body,
+			requestMeta:        reqMeta,
+			defaultMappedModel: schedulingModel,
+			applyVideoTimeout:  true,
+		})
+		if err != nil {
+			return err
+		}
+
+		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices && s.videoJobs != nil {
+			jobID := extractGrokVideoJobID(resp.Body)
+			if jobID != "" {
+				rewrittenBody, outputAssetID, _ := s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), jobID, "video", "", resp.Body)
+				resp.Body = rewrittenBody
+				_ = s.videoJobs.Upsert(c.Request.Context(), GrokVideoJobRecord{
+					JobID:                  jobID,
+					AccountID:              account.ID,
+					GroupID:                groupID,
+					RequestedModel:         requestedModel,
+					CanonicalModel:         firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel),
+					OutputAssetID:          outputAssetID,
+					RequestPayloadSnapshot: cloneJSONBody(body),
+					UpstreamStatus:         extractGrokVideoStatus(resp.Body),
+					NormalizedStatus:       normalizeGrokVideoStatus(extractGrokVideoStatus(resp.Body)),
+					PollAfter:              extractGrokVideoPollAfter(resp.Body),
+					ErrorCode:              extractUpstreamErrorCode(resp.Body),
+					ErrorMessage:           ExtractUpstreamErrorMessage(resp.Body),
+				})
+			}
+		} else if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+			resp.Body, _, _ = s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), "", "video", "", resp.Body)
+		}
+
+		s.writeForwardResponse(c, resp)
+		return nil
 	})
 	if err != nil {
-		writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Grok upstream request failed")
+		var failoverErr *UpstreamFailoverError
+		switch {
+		case errors.As(err, &failoverErr):
+			writeGrokCompatibleMediaFailoverError(c, failoverErr)
+		case s.isSelectionError(err):
+			s.writeSelectionError(c, requestedModel, schedulingModel, err)
+		default:
+			s.writeExecutionError(c, err)
+		}
 		return true
 	}
-
-	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices && s.videoJobs != nil {
-		jobID := extractGrokVideoJobID(resp.Body)
-		if jobID != "" {
-			rewrittenBody, outputAssetID, _ := s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), jobID, "video", "", resp.Body)
-			resp.Body = rewrittenBody
-			_ = s.videoJobs.Upsert(c.Request.Context(), GrokVideoJobRecord{
-				JobID:                  jobID,
-				AccountID:              account.ID,
-				GroupID:                groupID,
-				RequestedModel:         requestedModel,
-				CanonicalModel:         firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel),
-				OutputAssetID:          outputAssetID,
-				RequestPayloadSnapshot: cloneJSONBody(body),
-				UpstreamStatus:         extractGrokVideoStatus(resp.Body),
-				NormalizedStatus:       normalizeGrokVideoStatus(extractGrokVideoStatus(resp.Body)),
-				PollAfter:              extractGrokVideoPollAfter(resp.Body),
-				ErrorCode:              extractUpstreamErrorCode(resp.Body),
-				ErrorMessage:           ExtractUpstreamErrorMessage(resp.Body),
-			})
-		}
-	} else if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-		resp.Body, _, _ = s.rewriteMediaResponse(c, account, requestedModel, firstNonEmpty(resp.UpstreamModel, schedulingModel, requestedModel), "", "video", "", resp.Body)
-	}
-
-	s.writeForwardResponse(c, resp)
 	return true
 }
 
@@ -205,6 +229,11 @@ func (s *GrokMediaService) handleVideoFollowup(c *gin.Context, jobID string, con
 		applyVideoTimeout:  true,
 	})
 	if err != nil {
+		var failoverErr *UpstreamFailoverError
+		if errors.As(err, &failoverErr) {
+			writeGrokCompatibleMediaFailoverError(c, failoverErr)
+			return true
+		}
 		writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Grok upstream request failed")
 		return true
 	}
@@ -236,7 +265,7 @@ func (s *GrokMediaService) HandleAssetContent(c *gin.Context, assetID string) bo
 	return s.mediaAssets.Serve(c, assetID)
 }
 
-func (s *GrokMediaService) selectCompatibleAccount(ctx context.Context, groupID *int64, requestedModel string) (*Account, error) {
+func (s *GrokMediaService) selectCompatibleAccount(ctx context.Context, groupID *int64, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
 	if s == nil || s.gatewayService == nil {
 		return nil, errors.New("grok media service is not configured")
 	}
@@ -247,7 +276,7 @@ func (s *GrokMediaService) selectCompatibleAccount(ctx context.Context, groupID 
 		return nil, err
 	}
 
-	candidates := defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, nil)
+	candidates := defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, excludedIDs)
 	if len(candidates) == 0 {
 		if !defaultGrokAccountSelector.RequestedModelAvailableWithContext(ctx, accounts, requestedModel) {
 			return nil, fmt.Errorf("requested model unavailable:%s", requestedModel)
@@ -304,6 +333,11 @@ func (s *GrokMediaService) forwardCompatibleRequest(c *gin.Context, input grokMe
 
 	mappedModel := resolveOpenAIForwardModel(input.account, input.requestMeta.Model, input.defaultMappedModel)
 	mappedModel = normalizeOpenAIModelForUpstream(input.account, mappedModel)
+	requestedModel := strings.TrimSpace(firstNonEmpty(input.requestMeta.Model, input.defaultMappedModel))
+	endpoint := ""
+	if c.Request.URL != nil {
+		endpoint = c.Request.URL.Path
+	}
 	forwardBody := input.body
 	if input.requestMeta.JSONBody && input.requestMeta.Model != "" && mappedModel != "" && mappedModel != input.requestMeta.Model {
 		patchedBody, err := sjson.SetBytes(input.body, "model", mappedModel)
@@ -388,6 +422,18 @@ func (s *GrokMediaService) forwardCompatibleRequest(c *gin.Context, input grokMe
 		resolveGrokGatewayTLSProfile(s.gatewayService, input.account),
 	)
 	if err != nil {
+		failoverErr := newGrokMediaFailoverError(0, nil, err)
+		persistGrokRuntimeFeedbackToRepo(reqCtx, s.gatewayService.accountRepo, GrokRuntimeFeedbackInput{
+			Account:        input.account,
+			RequestedModel: requestedModel,
+			UpstreamModel:  firstNonEmpty(mappedModel, input.defaultMappedModel, input.requestMeta.Model),
+			StatusCode:     0,
+			Endpoint:       endpoint,
+			Err:            firstNonNilError(failoverErr, err),
+		})
+		if failoverErr != nil {
+			return nil, failoverErr
+		}
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -397,12 +443,209 @@ func (s *GrokMediaService) forwardCompatibleRequest(c *gin.Context, input grokMe
 		return nil, err
 	}
 
-	return &grokMediaForwardResponse{
+	forwardResp := &grokMediaForwardResponse{
 		StatusCode:    resp.StatusCode,
 		Header:        resp.Header.Clone(),
 		Body:          respBody,
 		UpstreamModel: firstNonEmpty(mappedModel, input.defaultMappedModel, input.requestMeta.Model),
-	}, nil
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		failoverErr := newGrokMediaFailoverError(resp.StatusCode, respBody, nil)
+		persistGrokRuntimeFeedbackToRepo(reqCtx, s.gatewayService.accountRepo, GrokRuntimeFeedbackInput{
+			Account:        input.account,
+			RequestedModel: requestedModel,
+			UpstreamModel:  forwardResp.UpstreamModel,
+			StatusCode:     resp.StatusCode,
+			Endpoint:       endpoint,
+			Err:            firstNonNilError(failoverErr, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: append([]byte(nil), respBody...)}),
+		})
+		if failoverErr != nil {
+			return nil, failoverErr
+		}
+		return forwardResp, nil
+	}
+
+	persistGrokRuntimeFeedbackToRepo(reqCtx, s.gatewayService.accountRepo, GrokRuntimeFeedbackInput{
+		Account:        input.account,
+		RequestedModel: requestedModel,
+		UpstreamModel:  forwardResp.UpstreamModel,
+		StatusCode:     resp.StatusCode,
+		Endpoint:       endpoint,
+	})
+	return forwardResp, nil
+}
+
+func (s *GrokMediaService) executeWithFailover(
+	ctx context.Context,
+	groupID *int64,
+	schedulingModel string,
+	execute func(account *Account) error,
+) error {
+	if execute == nil {
+		return nil
+	}
+
+	excludedIDs := make(map[int64]struct{})
+	var lastFailoverErr *UpstreamFailoverError
+
+	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+		account, err := s.selectCompatibleAccount(ctx, groupID, schedulingModel, excludedIDs)
+		if err != nil {
+			if lastFailoverErr != nil {
+				return lastFailoverErr
+			}
+			return err
+		}
+
+		if err := execute(account); err != nil {
+			failoverErr := grokMediaFailoverError(err)
+			if failoverErr == nil || account == nil {
+				return err
+			}
+
+			lastFailoverErr = failoverErr
+			excludedIDs[account.ID] = struct{}{}
+			if len(excludedIDs) >= maxRetryAttempts {
+				break
+			}
+			continue
+		}
+		return nil
+	}
+
+	if lastFailoverErr != nil {
+		return lastFailoverErr
+	}
+	return errors.New("no compatible grok media accounts")
+}
+
+func (s *GrokMediaService) runSessionImageRequest(
+	c *gin.Context,
+	account *Account,
+	requestedModel string,
+	canonicalModel string,
+	body []byte,
+) ([]byte, string, error) {
+	if s == nil || s.sessionRuntime == nil {
+		return nil, "", errors.New("grok session media runtime is not configured")
+	}
+	if grokSessionImageRouteIsEdit(c.Request.URL.Path) {
+		return s.sessionRuntime.buildSessionImageEditResponse(c, account, requestedModel, canonicalModel, body)
+	}
+	return s.sessionRuntime.buildSessionImageGenerationResponse(c, account, requestedModel, canonicalModel, body)
+}
+
+func (s *GrokMediaService) isSelectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.HasPrefix(err.Error(), "requested model unavailable:") || strings.Contains(err.Error(), "no compatible grok media accounts")
+}
+
+func (s *GrokMediaService) writeExecutionError(c *gin.Context, err error) {
+	if s != nil && s.sessionRuntime != nil {
+		s.sessionRuntime.writeMediaRuntimeError(c, err)
+		return
+	}
+	writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", firstNonEmpty(strings.TrimSpace(err.Error()), "Grok upstream request failed"))
+}
+
+func grokMediaFailoverError(err error) *UpstreamFailoverError {
+	if err == nil {
+		return nil
+	}
+	var failoverErr *UpstreamFailoverError
+	if errors.As(err, &failoverErr) {
+		return failoverErr
+	}
+
+	var upstreamErr *grokSessionMediaUpstreamError
+	if errors.As(err, &upstreamErr) && upstreamErr != nil {
+		return newGrokMediaFailoverError(upstreamErr.statusCode, marshalGrokMediaErrorBody(upstreamErr.code, upstreamErr.message), err)
+	}
+
+	return newGrokMediaFailoverError(grokSessionMediaFeedbackStatusCode(err), nil, err)
+}
+
+func newGrokMediaFailoverError(statusCode int, responseBody []byte, runtimeErr error) *UpstreamFailoverError {
+	input := GrokRuntimeFeedbackInput{
+		StatusCode: statusCode,
+		Err:        runtimeErr,
+	}
+	if len(responseBody) > 0 {
+		input.Err = &UpstreamFailoverError{
+			StatusCode:   statusCode,
+			ResponseBody: append([]byte(nil), responseBody...),
+		}
+	}
+
+	classification := classifyGrokRuntimeError(input)
+	if classification.Scope == grokRuntimePenaltyScopeNone {
+		return nil
+	}
+
+	bodyCopy := append([]byte(nil), responseBody...)
+	if len(bodyCopy) == 0 {
+		runtimeMessage := ""
+		if runtimeErr != nil {
+			runtimeMessage = strings.TrimSpace(runtimeErr.Error())
+		}
+		bodyCopy = marshalGrokMediaErrorBody("", firstNonEmpty(
+			strings.TrimSpace(classification.Reason),
+			strings.TrimSpace(extractUpstreamErrorMessage(responseBody)),
+			runtimeMessage,
+		))
+	}
+
+	return &UpstreamFailoverError{
+		StatusCode:   statusCode,
+		ResponseBody: bodyCopy,
+		FailureReason: firstNonEmpty(
+			strings.TrimSpace(classification.Reason),
+			strings.TrimSpace(extractUpstreamErrorMessage(bodyCopy)),
+			strings.TrimSpace(string(classification.Class)),
+		),
+	}
+}
+
+func marshalGrokMediaErrorBody(code string, message string) []byte {
+	trimmedMessage := strings.TrimSpace(message)
+	if trimmedMessage == "" {
+		trimmedMessage = "Grok upstream request failed"
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"error": map[string]any{
+			"code":    firstNonEmpty(strings.TrimSpace(code), "api_error"),
+			"message": trimmedMessage,
+		},
+	})
+	return payload
+}
+
+func writeGrokCompatibleMediaFailoverError(c *gin.Context, failoverErr *UpstreamFailoverError) {
+	statusCode, code, message := grokMediaErrorDetails(failoverErr)
+	writeCompatibleGatewayMediaError(c, statusCode, code, message)
+}
+
+func grokMediaErrorDetails(failoverErr *UpstreamFailoverError) (int, string, string) {
+	statusCode := http.StatusBadGateway
+	code := "api_error"
+	message := "Grok upstream request failed"
+	if failoverErr == nil {
+		return statusCode, code, message
+	}
+
+	if failoverErr.StatusCode > 0 {
+		statusCode = firstNonZero(mapUpstreamStatusCode(failoverErr.StatusCode), http.StatusBadGateway)
+		code = firstNonEmpty(strings.TrimSpace(extractUpstreamErrorCode(failoverErr.ResponseBody)), grokResponsesErrorCodeForStatus(failoverErr.StatusCode))
+	}
+	if extracted := sanitizeUpstreamErrorMessage(strings.TrimSpace(ExtractUpstreamErrorMessage(failoverErr.ResponseBody))); extracted != "" {
+		message = extracted
+	} else if reason := sanitizeUpstreamErrorMessage(strings.TrimSpace(failoverErr.FailureReason)); reason != "" {
+		message = reason
+	}
+	return statusCode, code, message
 }
 
 func (s *GrokMediaService) writeSelectionError(c *gin.Context, requestedModel, schedulingModel string, err error) {

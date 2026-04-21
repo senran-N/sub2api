@@ -427,6 +427,89 @@ func TestGrokGatewayServiceHandleChatCompletions_RoutesImageModelsThroughMediaSe
 	require.Equal(t, "stop", response.Choices[0].FinishReason)
 }
 
+func TestGrokGatewayServiceHandleChatCompletions_RoutesImageModelsThroughMediaServiceFailoverSwitchesAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","messages":[{"role":"user","content":"paint a lighthouse"}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/grok/v1/chat/completions", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusTooManyRequests, `{"error":{"message":"rate limit reached"}}`),
+			newJSONResponse(http.StatusOK, `{"data":[{"url":"https://media.example/image.png"}]}`),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          47,
+				Name:        "grok-media-first",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key":  "sk-chat-media-first",
+					"base_url": "https://grok.example/v1",
+				},
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"tier": map[string]any{
+							"normalized": "basic",
+						},
+					},
+				},
+			},
+			{
+				ID:          48,
+				Name:        "grok-media-second",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key":  "sk-chat-media-second",
+					"base_url": "https://grok.example/v1",
+				},
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"tier": map[string]any{
+							"normalized": "basic",
+						},
+					},
+				},
+			},
+		},
+	}
+	executor := &stubGrokCompatibleTextExecutor{}
+	svc := NewGrokGatewayServiceWithCompatibleExecutor(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, executor)
+
+	handled := svc.HandleChatCompletions(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Empty(t, executor.chatCompletionsCalls)
+	require.Len(t, upstream.requests, 2)
+	require.Equal(t, "Bearer sk-chat-media-first", upstream.requests[0].Header.Get("Authorization"))
+	require.Equal(t, "Bearer sk-chat-media-second", upstream.requests[1].Header.Get("Authorization"))
+	require.Len(t, repo.runtimeStates, 2)
+	require.Equal(t, "failover", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "success", repo.runtimeStates[1]["last_outcome"])
+
+	var response apicompat.ChatCompletionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Choices, 1)
+	var content string
+	require.NoError(t, json.Unmarshal(response.Choices[0].Message.Content, &content))
+	require.Equal(t, "![image](https://media.example/image.png)", content)
+}
+
 func TestGrokGatewayServiceHandleChatCompletions_RoutesImageEditModelsThroughMediaService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

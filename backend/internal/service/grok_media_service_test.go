@@ -247,6 +247,79 @@ func TestGrokMediaServiceHandleImages_ForwardsThroughGrokRuntime(t *testing.T) {
 	require.JSONEq(t, string(body), readTestRequestBody(t, upstream.requests[0]))
 }
 
+func TestGrokMediaServiceHandleImages_FailoverSwitchesAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-2-image","prompt":"cat"}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusTooManyRequests, `{"error":{"message":"rate limit reached"}}`),
+			newJSONResponse(http.StatusOK, `{"data":[{"url":"https://media.example/image.png"}]}`),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          141,
+				Name:        "grok-media-first",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key":  "sk-grok-first",
+					"base_url": "https://grok.example/v1",
+				},
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"tier": map[string]any{
+							"normalized": "basic",
+						},
+					},
+				},
+			},
+			{
+				ID:          142,
+				Name:        "grok-media-second",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key":  "sk-grok-second",
+					"base_url": "https://grok.example/v1",
+				},
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"tier": map[string]any{
+							"normalized": "basic",
+						},
+					},
+				},
+			},
+		},
+	}
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, nil, nil)
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/images/generations", body)
+	handled := svc.HandleImages(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 2)
+	require.Equal(t, "Bearer sk-grok-first", upstream.requests[0].Header.Get("Authorization"))
+	require.Equal(t, "Bearer sk-grok-second", upstream.requests[1].Header.Get("Authorization"))
+	require.Len(t, repo.runtimeStates, 2)
+	require.Equal(t, "failover", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "success", repo.runtimeStates[1]["last_outcome"])
+	require.Equal(t, "image", repo.runtimeStates[0]["last_request_capability"])
+	require.Equal(t, "image", repo.runtimeStates[1]["last_request_capability"])
+}
+
 func TestGrokMediaServiceHandleVideos_CreateBindsJobToSelectedAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -289,6 +362,84 @@ func TestGrokMediaServiceHandleVideos_CreateBindsJobToSelectedAccount(t *testing
 	require.Equal(t, "queued", videoJobs.upserts[0].NormalizedStatus)
 	require.JSONEq(t, string(body), string(videoJobs.upserts[0].RequestPayloadSnapshot))
 	require.Len(t, mediaAssets.upserts, 0)
+}
+
+func TestGrokMediaServiceHandleVideos_CreateFailoverSwitchesAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-imagine-video","prompt":"launch sequence"}`)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusTooManyRequests, `{"error":{"message":"rate limit reached"}}`),
+			newJSONResponse(http.StatusOK, `{"id":"job_456","status":"queued"}`),
+		},
+	}
+	videoJobs := &stubGrokVideoJobRepository{}
+	mediaAssets := &stubGrokMediaAssetRepository{}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          242,
+				Name:        "grok-video-first",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key":  "sk-video-first",
+					"base_url": "https://grok.example/v1",
+				},
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"tier": map[string]any{
+							"normalized": "super",
+						},
+					},
+				},
+			},
+			{
+				ID:          243,
+				Name:        "grok-video-second",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key":  "sk-video-second",
+					"base_url": "https://grok.example/v1",
+				},
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"tier": map[string]any{
+							"normalized": "super",
+						},
+					},
+				},
+			},
+		},
+	}
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, videoJobs, mediaAssets)
+
+	c, rec := newGrokMediaTestContext(http.MethodPost, "/v1/videos", body)
+	handled := svc.HandleVideos(c, nil, body)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 2)
+	require.Equal(t, "Bearer sk-video-first", upstream.requests[0].Header.Get("Authorization"))
+	require.Equal(t, "Bearer sk-video-second", upstream.requests[1].Header.Get("Authorization"))
+	require.Len(t, videoJobs.upserts, 1)
+	require.Equal(t, int64(243), videoJobs.upserts[0].AccountID)
+	require.Equal(t, "job_456", videoJobs.upserts[0].JobID)
+	require.Len(t, repo.runtimeStates, 2)
+	require.Equal(t, "failover", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "success", repo.runtimeStates[1]["last_outcome"])
+	require.Equal(t, "video", repo.runtimeStates[0]["last_request_capability"])
+	require.Equal(t, "video", repo.runtimeStates[1]["last_request_capability"])
 }
 
 func TestGrokMediaServiceHandleVideos_FollowupUsesBoundAccountAndUpdatesStatus(t *testing.T) {

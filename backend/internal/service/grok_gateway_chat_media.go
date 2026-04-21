@@ -49,12 +49,6 @@ func (s *GrokGatewayService) handleChatCompletionsMedia(c *gin.Context, groupID 
 		return true
 	}
 
-	account, err := s.mediaService.selectCompatibleAccount(c.Request.Context(), groupID, mappedModel)
-	if err != nil {
-		s.mediaService.writeSelectionError(c, requestedModel, mappedModel, err)
-		return true
-	}
-
 	switch spec.Capability {
 	case grok.CapabilityImage, grok.CapabilityImageEdit:
 		requestBody, routePath, err := buildGrokChatImageRequest(&req, spec.Capability)
@@ -63,30 +57,47 @@ func (s *GrokGatewayService) handleChatCompletionsMedia(c *gin.Context, groupID 
 			return true
 		}
 
-		if account != nil && account.Type == AccountTypeSession && s.mediaService.sessionRuntime != nil {
-			content, reasoning, err := s.mediaService.sessionRuntime.buildChatImageCompletion(c, account, requestedModel, firstNonEmpty(mappedModel, requestedModel), routePath, requestBody)
-			if err != nil {
-				writeGatewayCCError(c, firstNonZero(grokSessionMediaFeedbackStatusCode(err), http.StatusBadGateway), "api_error", sanitizeUpstreamErrorMessage(firstNonEmpty(strings.TrimSpace(err.Error()), "Grok image request failed")))
-				return true
+		var (
+			content   string
+			reasoning string
+			finalResp *grokMediaForwardResponse
+		)
+		err = s.mediaService.executeWithFailover(c.Request.Context(), groupID, mappedModel, func(account *Account) error {
+			if account != nil && account.Type == AccountTypeSession && s.mediaService.sessionRuntime != nil {
+				var err error
+				content, reasoning, err = s.mediaService.sessionRuntime.buildChatImageCompletion(c, account, requestedModel, firstNonEmpty(mappedModel, requestedModel), routePath, requestBody)
+				return err
 			}
-			writeGrokChatMediaCompletion(c, requestedModel, req.Stream, content, reasoning)
-			return true
-		}
-		resp, err := s.runChatMediaRequestWithAccount(c, account, firstNonEmpty(mappedModel, requestedModel), http.MethodPost, routePath, requestBody, "image")
+
+			resp, err := s.runChatMediaRequestWithAccount(c, account, firstNonEmpty(mappedModel, requestedModel), http.MethodPost, routePath, requestBody, "image")
+			if err != nil {
+				return err
+			}
+			finalResp = resp
+			if !grokChatMediaSuccessStatus(resp.StatusCode) {
+				return nil
+			}
+
+			content, err = grokChatImageContentFromResponse(resp.Body)
+			return err
+		})
 		if err != nil {
-			writeGatewayCCError(c, http.StatusBadGateway, "api_error", "Grok image request failed")
+			var failoverErr *UpstreamFailoverError
+			switch {
+			case errors.As(err, &failoverErr):
+				writeGrokChatMediaFailoverError(c, failoverErr)
+			case s.mediaService.isSelectionError(err):
+				s.mediaService.writeSelectionError(c, requestedModel, mappedModel, err)
+			default:
+				writeGatewayCCError(c, firstNonZero(grokSessionMediaFeedbackStatusCode(err), http.StatusBadGateway), "api_error", sanitizeUpstreamErrorMessage(firstNonEmpty(strings.TrimSpace(err.Error()), "Grok image request failed")))
+			}
 			return true
 		}
-		if !grokChatMediaSuccessStatus(resp.StatusCode) {
-			writeGrokChatMediaError(c, resp.StatusCode, resp.Body)
+		if finalResp != nil && !grokChatMediaSuccessStatus(finalResp.StatusCode) {
+			writeGrokChatMediaError(c, finalResp.StatusCode, finalResp.Body)
 			return true
 		}
-		content, err := grokChatImageContentFromResponse(resp.Body)
-		if err != nil {
-			writeGatewayCCError(c, http.StatusBadGateway, "api_error", err.Error())
-			return true
-		}
-		writeGrokChatMediaCompletion(c, requestedModel, req.Stream, content, "")
+		writeGrokChatMediaCompletion(c, requestedModel, req.Stream, content, reasoning)
 		return true
 	case grok.CapabilityVideo:
 		requestBody, err := buildGrokChatVideoRequest(&req)
@@ -95,30 +106,47 @@ func (s *GrokGatewayService) handleChatCompletionsMedia(c *gin.Context, groupID 
 			return true
 		}
 
-		if account != nil && account.Type == AccountTypeSession && s.mediaService.sessionRuntime != nil {
-			content, reasoning, err := s.mediaService.sessionRuntime.buildChatVideoCompletion(c, account, requestedModel, firstNonEmpty(mappedModel, requestedModel), requestBody)
-			if err != nil {
-				writeGatewayCCError(c, firstNonZero(grokSessionMediaFeedbackStatusCode(err), http.StatusBadGateway), "api_error", sanitizeUpstreamErrorMessage(firstNonEmpty(strings.TrimSpace(err.Error()), "Grok video request failed")))
-				return true
+		var (
+			content   string
+			reasoning string
+			finalResp *grokMediaForwardResponse
+		)
+		err = s.mediaService.executeWithFailover(c.Request.Context(), groupID, mappedModel, func(account *Account) error {
+			if account != nil && account.Type == AccountTypeSession && s.mediaService.sessionRuntime != nil {
+				var err error
+				content, reasoning, err = s.mediaService.sessionRuntime.buildChatVideoCompletion(c, account, requestedModel, firstNonEmpty(mappedModel, requestedModel), requestBody)
+				return err
 			}
-			writeGrokChatMediaCompletion(c, requestedModel, req.Stream, content, reasoning)
-			return true
-		}
-		resp, err := s.runChatVideoCompletion(c, account, firstNonEmpty(mappedModel, requestedModel), requestBody)
+
+			resp, err := s.runChatVideoCompletion(c, account, firstNonEmpty(mappedModel, requestedModel), requestBody)
+			if err != nil {
+				return err
+			}
+			finalResp = resp
+			if !grokChatMediaSuccessStatus(resp.StatusCode) {
+				return nil
+			}
+
+			content, err = grokChatVideoContentFromResponse(resp.Body)
+			return err
+		})
 		if err != nil {
-			writeGatewayCCError(c, http.StatusBadGateway, "api_error", "Grok video request failed")
+			var failoverErr *UpstreamFailoverError
+			switch {
+			case errors.As(err, &failoverErr):
+				writeGrokChatMediaFailoverError(c, failoverErr)
+			case s.mediaService.isSelectionError(err):
+				s.mediaService.writeSelectionError(c, requestedModel, mappedModel, err)
+			default:
+				writeGatewayCCError(c, firstNonZero(grokSessionMediaFeedbackStatusCode(err), http.StatusBadGateway), "api_error", sanitizeUpstreamErrorMessage(firstNonEmpty(strings.TrimSpace(err.Error()), "Grok video request failed")))
+			}
 			return true
 		}
-		if !grokChatMediaSuccessStatus(resp.StatusCode) {
-			writeGrokChatMediaError(c, resp.StatusCode, resp.Body)
+		if finalResp != nil && !grokChatMediaSuccessStatus(finalResp.StatusCode) {
+			writeGrokChatMediaError(c, finalResp.StatusCode, finalResp.Body)
 			return true
 		}
-		content, err := grokChatVideoContentFromResponse(resp.Body)
-		if err != nil {
-			writeGatewayCCError(c, http.StatusBadGateway, "api_error", err.Error())
-			return true
-		}
-		writeGrokChatMediaCompletion(c, requestedModel, req.Stream, content, "")
+		writeGrokChatMediaCompletion(c, requestedModel, req.Stream, content, reasoning)
 		return true
 	default:
 		return false
@@ -302,6 +330,11 @@ func buildChatMediaErrorResponse(statusCode int, code string, message string) *g
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       body,
 	}
+}
+
+func writeGrokChatMediaFailoverError(c *gin.Context, failoverErr *UpstreamFailoverError) {
+	statusCode, code, message := grokMediaErrorDetails(failoverErr)
+	writeGatewayCCError(c, statusCode, code, message)
 }
 
 func buildGrokChatImageRequest(req *apicompat.ChatCompletionsRequest, capability grok.Capability) ([]byte, string, error) {
