@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -289,8 +288,9 @@ func (s *GrokCapabilityProbeService) executeProbeAttempt(
 		Header:     resp.Header.Clone(),
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(resp.Body)
-		return summary, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body))
+		body := grokReadProbeErrorBody(resp)
+		errSummary := grokSummarizeProbeHTTPError(resp, body)
+		return summary, fmt.Errorf("%s", errSummary.Message)
 	}
 	return summary, nil
 }
@@ -329,7 +329,7 @@ func (s *GrokCapabilityProbeService) buildProbeRequest(
 		if err != nil {
 			return nil, fmt.Errorf("marshal grok session capability probe payload: %w", err)
 		}
-		return newGrokSessionJSONRequest(ctx, http.MethodPost, target, payloadBytes, "application/json, text/plain, */*")
+		return newGrokSessionJSONRequest(ctx, http.MethodPost, target, payloadBytes, grokSessionProbeAcceptHeader)
 	default:
 		if account == nil {
 			return nil, fmt.Errorf("unsupported grok transport kind: %s", target.Kind)

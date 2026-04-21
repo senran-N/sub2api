@@ -241,6 +241,53 @@ func TestGrokCapabilityProbeServiceProbeNowIncludesRecoverableErrorAccounts(t *t
 	require.Equal(t, int64(304), repo.clearErrorID)
 }
 
+func TestGrokCapabilityProbeServiceProbeNowSanitizesCloudflareChallenge(t *testing.T) {
+	repo := &grokCapabilityProbeRepoStub{
+		accounts: []Account{
+			{
+				ID:          305,
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Credentials: map[string]any{
+					"session_token": "session-cookie-305",
+				},
+			},
+		},
+	}
+	stateSvc := NewGrokAccountStateService(repo)
+	resp := newJSONResponse(http.StatusForbidden, `<!DOCTYPE html><html><head><title>Just a moment...</title></head><body>Enable JavaScript and cookies to continue<script>window._cf_chl_opt={};</script></body></html>`)
+	resp.Header.Set("content-type", "text/html; charset=UTF-8")
+	resp.Header.Set("cf-ray", "probe-ray-305")
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{resp},
+	}
+	svc := NewGrokCapabilityProbeService(
+		repo,
+		stateSvc,
+		upstream,
+		&config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+		nil,
+		nil,
+	)
+
+	err := svc.ProbeNow(context.Background())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cloudflare challenge encountered")
+	require.NotContains(t, err.Error(), "<!DOCTYPE html>")
+	require.Len(t, repo.updatedExtra, 1)
+
+	syncState := grokNestedMap(grokExtraMap(repo.updatedExtra[0])["sync_state"])
+	require.Contains(t, getStringFromMaps(syncState, nil, "last_probe_error"), "Cloudflare challenge encountered")
+	require.NotContains(t, getStringFromMaps(syncState, nil, "last_probe_error"), "<!DOCTYPE html>")
+}
+
 func TestBuildGrokCapabilitySyncSnapshotWidensSimpleChatProbeWhenTierKnown(t *testing.T) {
 	account := &Account{
 		Platform: PlatformGrok,

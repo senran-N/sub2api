@@ -91,7 +91,7 @@ func ProbeGrokSessionConnectionWithSettings(
 		http.MethodPost,
 		target,
 		payloadBytes,
-		"application/json, text/plain, */*",
+		grokSessionProbeAcceptHeader,
 	)
 	if err != nil {
 		return nil, err
@@ -108,10 +108,15 @@ func ProbeGrokSessionConnectionWithSettings(
 		return nil, err
 	}
 
+	bodyText := strings.TrimSpace(string(body))
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		bodyText = grokSummarizeProbeHTTPError(resp, body).Message
+	}
+
 	return &GrokSessionProbeResult{
 		ModelID:            testModelID,
 		StatusCode:         resp.StatusCode,
-		Body:               strings.TrimSpace(string(body)),
+		Body:               bodyText,
 		TargetURL:          target.URL,
 		HasSSO:             strings.Contains(target.CookieHeader, "sso="),
 		HasSSORW:           strings.Contains(target.CookieHeader, "sso-rw="),

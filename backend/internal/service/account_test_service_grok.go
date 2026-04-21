@@ -92,12 +92,13 @@ func (s *AccountTestService) testGrokCompatibleConnection(
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
+			body := grokReadProbeErrorBody(resp)
 			_ = resp.Body.Close()
 			lastResp = resp
-			lastErrMsg = fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
+			errSummary := grokSummarizeProbeHTTPError(resp, body)
+			lastErrMsg = errSummary.Message
 			lastErr = fmt.Errorf("%s", lastErrMsg)
-			authErrBody = string(body)
+			authErrBody = errSummary.AuthenticationMessage
 			continue
 		}
 
@@ -116,9 +117,8 @@ func (s *AccountTestService) testGrokCompatibleConnection(
 		lastErrMsg = "Grok probe failed"
 	}
 	s.persistCompatibleGatewayProbeState(ctx, account, lastModel, lastResp, lastErr, false)
-	if s.accountRepo != nil && lastResp != nil && (lastResp.StatusCode == http.StatusUnauthorized || lastResp.StatusCode == http.StatusForbidden) {
-		authErrMsg := fmt.Sprintf("Authentication failed (%d): %s", lastResp.StatusCode, authErrBody)
-		_ = s.accountRepo.SetError(ctx, account.ID, authErrMsg)
+	if s.accountRepo != nil && strings.TrimSpace(authErrBody) != "" {
+		_ = s.accountRepo.SetError(ctx, account.ID, authErrBody)
 	}
 	return s.sendErrorAndEnd(c, lastErrMsg)
 }
@@ -170,7 +170,7 @@ func (s *AccountTestService) testGrokSessionConnection(
 			http.MethodPost,
 			target,
 			payloadBytes,
-			"application/json, text/plain, */*",
+			grokSessionProbeAcceptHeader,
 		)
 		if err != nil {
 			lastResp = nil
@@ -188,12 +188,13 @@ func (s *AccountTestService) testGrokSessionConnection(
 		}
 
 		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-			body, _ := io.ReadAll(resp.Body)
+			body := grokReadProbeErrorBody(resp)
 			_ = resp.Body.Close()
 			lastResp = resp
-			lastErrMsg = fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
+			errSummary := grokSummarizeProbeHTTPError(resp, body)
+			lastErrMsg = errSummary.Message
 			lastErr = fmt.Errorf("%s", lastErrMsg)
-			authErrBody = string(body)
+			authErrBody = errSummary.AuthenticationMessage
 			continue
 		}
 
@@ -212,9 +213,8 @@ func (s *AccountTestService) testGrokSessionConnection(
 		lastErrMsg = "Grok session probe failed"
 	}
 	s.persistCompatibleGatewayProbeState(ctx, account, lastModel, lastResp, lastErr, false)
-	if s.accountRepo != nil && lastResp != nil && (lastResp.StatusCode == http.StatusUnauthorized || lastResp.StatusCode == http.StatusForbidden) {
-		authErrMsg := fmt.Sprintf("Authentication failed (%d): %s", lastResp.StatusCode, authErrBody)
-		_ = s.accountRepo.SetError(ctx, account.ID, authErrMsg)
+	if s.accountRepo != nil && strings.TrimSpace(authErrBody) != "" {
+		_ = s.accountRepo.SetError(ctx, account.ID, authErrBody)
 	}
 	return s.sendErrorAndEnd(c, lastErrMsg)
 }
@@ -232,9 +232,6 @@ func createGrokSessionTestPayload(modelID string, prompt string) (map[string]any
 	if err != nil {
 		return nil, err
 	}
-
-	payload["disableSearch"] = true
-	payload["sendFinalMetadata"] = false
 	return payload, nil
 }
 

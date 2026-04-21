@@ -59,6 +59,14 @@ var grokInvalidCredentialMarkers = []string{
 	"invalid credentials",
 }
 
+var grokCloudflareChallengeMarkers = []string{
+	"cloudflare challenge",
+	"browser verification",
+	"cf-ray:",
+	"just a moment",
+	"enable javascript and cookies to continue",
+}
+
 func classifyGrokRuntimeError(input GrokRuntimeFeedbackInput) grokRuntimeErrorClassification {
 	signal := extractGrokRuntimeErrorSignal(input)
 	if signal.statusCode == 0 && signal.message == "" {
@@ -77,6 +85,14 @@ func classifyGrokRuntimeError(input GrokRuntimeFeedbackInput) grokRuntimeErrorCl
 		classification.Class = grokRuntimeErrorClassAuth
 		classification.Scope = grokRuntimePenaltyScopeAccount
 		classification.Cooldown = 30 * time.Minute
+		return classification
+	}
+
+	if grokSignalLooksLikeCloudflareChallenge(signal) {
+		classification.Class = grokRuntimeErrorClassUpstream
+		classification.Scope = grokRuntimePenaltyScopeAccount
+		classification.Retryable = true
+		classification.Cooldown = 5 * time.Minute
 		return classification
 	}
 
@@ -188,6 +204,18 @@ func grokSignalLooksLikeInvalidCredentials(signal grokRuntimeErrorSignal) bool {
 		return true
 	}
 	return grokInvalidCredentialsBody(signal.message)
+}
+
+func grokSignalLooksLikeCloudflareChallenge(signal grokRuntimeErrorSignal) bool {
+	if signal.message == "" {
+		return false
+	}
+	for _, marker := range grokCloudflareChallengeMarkers {
+		if strings.Contains(signal.message, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func grokInvalidCredentialsCode(code string) bool {
