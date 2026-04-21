@@ -33,6 +33,8 @@ const (
 	defaultGrokMediaAssetGCBatch    = 128
 )
 
+var errGrokMediaAssetBoundAccountUnavailable = errors.New("bound grok media asset account is unavailable")
+
 type GrokMediaAssetService struct {
 	gatewayService *GatewayService
 	repo           GrokMediaAssetRepository
@@ -145,12 +147,24 @@ func (s *GrokMediaAssetService) Serve(c *gin.Context, assetID string) bool {
 
 	localPath, mimeType, err := s.ensureLocalAsset(c.Request.Context(), record)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error": gin.H{
-				"code":    "api_error",
-				"message": "Failed to load Grok media asset content",
-			},
-		})
+		failoverErr := grokMediaFailoverError(err)
+		var upstreamErr *grokSessionMediaUpstreamError
+		switch {
+		case errors.Is(err, errGrokMediaAssetBoundAccountUnavailable):
+			writeCompatibleGatewayMediaError(c, http.StatusServiceUnavailable, "api_error", "Bound Grok media asset account is unavailable")
+		case failoverErr != nil:
+			statusCode, code, message := grokMediaErrorDetails(failoverErr)
+			writeCompatibleGatewayMediaError(c, statusCode, code, message)
+		case errors.As(err, &upstreamErr):
+			writeCompatibleGatewayMediaError(
+				c,
+				firstNonZero(mapUpstreamStatusCode(upstreamErr.statusCode), http.StatusBadGateway),
+				firstNonEmpty(strings.TrimSpace(upstreamErr.code), "api_error"),
+				firstNonEmpty(strings.TrimSpace(upstreamErr.message), "Failed to load Grok media asset content"),
+			)
+		default:
+			writeCompatibleGatewayMediaError(c, http.StatusBadGateway, "api_error", "Failed to load Grok media asset content")
+		}
 		return true
 	}
 
@@ -355,21 +369,23 @@ func (s *GrokMediaAssetService) downloadAndCache(ctx context.Context, record *Gr
 		return nil, err
 	}
 
-	account, _ := s.gatewayService.accountRepo.GetByID(ctx, record.AccountID)
-	if account != nil {
-		runtimeSettings := DefaultGrokRuntimeSettings()
-		if s.gatewayService != nil && s.gatewayService.settingService != nil {
-			runtimeSettings = s.gatewayService.settingService.GetGrokRuntimeSettings(ctx)
-		}
-		if target, targetErr := resolveGrokTransportTargetWithSettings(
-			account,
-			s.gatewayService.validateUpstreamBaseURL,
-			runtimeSettings,
-		); targetErr == nil {
-			target.Apply(req)
-			if target.Kind == grokTransportKindSession {
-				applyGrokSessionBrowserHeaders(req.Header, target, "")
-			}
+	account, err := s.loadBoundAssetAccount(ctx, record)
+	if err != nil {
+		return nil, err
+	}
+
+	runtimeSettings := DefaultGrokRuntimeSettings()
+	if s.gatewayService != nil && s.gatewayService.settingService != nil {
+		runtimeSettings = s.gatewayService.settingService.GetGrokRuntimeSettings(ctx)
+	}
+	if target, targetErr := resolveGrokTransportTargetWithSettings(
+		account,
+		s.gatewayService.validateUpstreamBaseURL,
+		runtimeSettings,
+	); targetErr == nil {
+		target.Apply(req)
+		if target.Kind == grokTransportKindSession {
+			applyGrokSessionBrowserHeaders(req.Header, target, "")
 		}
 	}
 
@@ -381,16 +397,32 @@ func (s *GrokMediaAssetService) downloadAndCache(ctx context.Context, record *Gr
 		resolveGrokGatewayTLSProfile(s.gatewayService, account),
 	)
 	if err != nil {
+		s.persistAssetFailureFeedback(ctx, account, record, 0, err)
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("unexpected grok media asset status: %d", resp.StatusCode)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		upstreamMessage := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
+		if upstreamMessage == "" {
+			upstreamMessage = strings.TrimSpace(string(respBody))
+		}
+		if upstreamMessage == "" {
+			upstreamMessage = http.StatusText(resp.StatusCode)
+		}
+		upstreamErr := &grokSessionMediaUpstreamError{
+			statusCode: mapUpstreamStatusCode(resp.StatusCode),
+			code:       grokResponsesErrorCodeForStatus(resp.StatusCode),
+			message:    upstreamMessage,
+		}
+		s.persistAssetFailureFeedback(ctx, account, record, resp.StatusCode, upstreamErr)
+		return nil, upstreamErr
 	}
 
 	payload, err := io.ReadAll(resp.Body)
 	if err != nil {
+		s.persistAssetFailureFeedback(ctx, account, record, 0, err)
 		return nil, err
 	}
 
@@ -414,6 +446,69 @@ func (s *GrokMediaAssetService) downloadAndCache(ctx context.Context, record *Gr
 	}
 
 	return []string{cachePath, mimeType}, nil
+}
+
+func (s *GrokMediaAssetService) loadBoundAssetAccount(ctx context.Context, record *GrokMediaAssetRecord) (*Account, error) {
+	if s == nil || s.gatewayService == nil || s.gatewayService.accountRepo == nil || record == nil {
+		return nil, errGrokMediaAssetBoundAccountUnavailable
+	}
+	if record.AccountID <= 0 {
+		return nil, errGrokMediaAssetBoundAccountUnavailable
+	}
+
+	account, err := s.gatewayService.accountRepo.GetByID(ctx, record.AccountID)
+	if err != nil || account == nil {
+		return nil, errGrokMediaAssetBoundAccountUnavailable
+	}
+	return account, nil
+}
+
+func (s *GrokMediaAssetService) persistAssetFailureFeedback(
+	ctx context.Context,
+	account *Account,
+	record *GrokMediaAssetRecord,
+	statusCode int,
+	err error,
+) {
+	if s == nil || s.gatewayService == nil || s.gatewayService.accountRepo == nil || account == nil || record == nil || err == nil {
+		return
+	}
+
+	effectiveStatus := statusCode
+	if upstreamErr := new(grokSessionMediaUpstreamError); errors.As(err, &upstreamErr) && upstreamErr != nil && upstreamErr.statusCode > 0 {
+		effectiveStatus = upstreamErr.statusCode
+	}
+	if !shouldPersistGrokBoundAssetFailure(effectiveStatus) {
+		return
+	}
+	feedbackErr := err
+	if failoverErr := grokMediaFailoverError(err); failoverErr != nil {
+		feedbackErr = failoverErr
+	}
+
+	persistGrokRuntimeFeedbackToRepo(ctx, s.gatewayService.accountRepo, GrokRuntimeFeedbackInput{
+		Account:        account,
+		RequestedModel: strings.TrimSpace(record.RequestedModel),
+		UpstreamModel:  strings.TrimSpace(record.CanonicalModel),
+		StatusCode:     effectiveStatus,
+		Endpoint:       grokMediaAssetRoutePrefix,
+		Err:            feedbackErr,
+	})
+}
+
+func shouldPersistGrokBoundAssetFailure(statusCode int) bool {
+	switch {
+	case statusCode == 0:
+		return true
+	case statusCode == http.StatusUnauthorized,
+		statusCode == http.StatusForbidden,
+		statusCode == http.StatusTooManyRequests:
+		return true
+	case statusCode >= http.StatusInternalServerError:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *GrokMediaAssetService) writeCachedFile(

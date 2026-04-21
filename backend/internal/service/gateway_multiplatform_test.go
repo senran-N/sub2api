@@ -36,6 +36,12 @@ func (m *mockAccountRepoForPlatform) GetByID(ctx context.Context, id int64) (*Ac
 	if acc, ok := m.accountsByID[id]; ok {
 		return acc, nil
 	}
+	for i := range m.accounts {
+		if m.accounts[i].ID == id {
+			accountCopy := m.accounts[i]
+			return &accountCopy, nil
+		}
+	}
 	return nil, errors.New("account not found")
 }
 

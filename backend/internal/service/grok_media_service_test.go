@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/senran-N/sub2api/internal/pkg/grok"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -1207,6 +1208,89 @@ func TestGrokMediaServiceHandleMediaAssetContent_DownloadsAndCachesProxyAsset(t 
 	require.NotEmpty(t, mediaAssets.records["asset_123"].LocalPath)
 	require.FileExists(t, mediaAssets.records["asset_123"].LocalPath)
 	require.Len(t, mediaAssets.accesses, 1)
+}
+
+func TestGrokMediaServiceHandleMediaAssetContent_MissingBoundAccountReturnsUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mediaAssets := &stubGrokMediaAssetRepository{
+		records: map[string]GrokMediaAssetRecord{
+			"asset_123": {
+				AssetID:        "asset_123",
+				AccountID:      88,
+				AssetType:      "video",
+				RequestedModel: "grok-imagine-video",
+				CanonicalModel: "grok-imagine-video",
+				UpstreamURL:    "https://media.example/job_123.mp4",
+			},
+		},
+	}
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:  &mockAccountRepoForPlatform{},
+		cfg:          testConfig(),
+		httpUpstream: &queuedHTTPUpstream{},
+	}, nil, mediaAssets)
+	svc.mediaAssets.cacheRoot = t.TempDir()
+
+	c, rec := newGrokMediaTestContext(http.MethodGet, "/grok/media/assets/asset_123", nil)
+	handled := svc.HandleAssetContent(c, "asset_123")
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	require.JSONEq(t, `{"error":{"code":"api_error","message":"Bound Grok media asset account is unavailable"}}`, rec.Body.String())
+	require.Empty(t, mediaAssets.patches)
+}
+
+func TestGrokMediaServiceHandleMediaAssetContent_RetryableDownloadPersistsRuntimeFeedback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusTooManyRequests, `{"error":{"message":"rate limited"}}`),
+		},
+	}
+	mediaAssets := &stubGrokMediaAssetRepository{
+		records: map[string]GrokMediaAssetRecord{
+			"asset_123": {
+				AssetID:        "asset_123",
+				AccountID:      88,
+				AssetType:      "video",
+				RequestedModel: "grok-imagine-video",
+				CanonicalModel: "grok-imagine-video",
+				UpstreamURL:    "https://media.example/job_123.mp4",
+			},
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accountsByID: map[int64]*Account{
+			88: accountPtr(newSchedulableGrokMediaAccount(88, map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "super",
+					},
+				},
+			})),
+		},
+	}
+	svc := NewGrokMediaService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, nil, mediaAssets)
+	svc.mediaAssets.cacheRoot = t.TempDir()
+
+	c, rec := newGrokMediaTestContext(http.MethodGet, "/grok/media/assets/asset_123", nil)
+	handled := svc.HandleAssetContent(c, "asset_123")
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+	require.JSONEq(t, `{"error":{"code":"rate_limit_error","message":"rate limited"}}`, rec.Body.String())
+	require.Len(t, repo.runtimeStates, 1)
+	require.Equal(t, "failover", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, http.StatusTooManyRequests, grokParseInt(repo.runtimeStates[0]["last_fail_status_code"]))
+	require.Equal(t, string(grok.CapabilityVideo), repo.runtimeStates[0]["last_request_capability"])
+	require.NotEmpty(t, repo.runtimeStates[0]["selection_cooldown_until"])
+	require.Len(t, upstream.requests, 1)
 }
 
 func TestGrokMediaServiceHandleMediaAssetContent_ReusesCachedFileForDuplicateContent(t *testing.T) {
