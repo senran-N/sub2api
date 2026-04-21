@@ -277,7 +277,12 @@ func mergeGrokRuntimeState(account *Account, runtimeState map[string]any) {
 	if account == nil || len(runtimeState) == 0 {
 		return
 	}
-	mergeAccountExtra(account, buildGrokStateExtraPatch(account, map[string]any{"runtime_state": runtimeState}))
+	grokExtra := cloneAnyMap(account.grokExtraMap())
+	grokExtra["runtime_state"] = cloneAnyMap(runtimeState)
+	if account.Extra == nil {
+		account.Extra = map[string]any{}
+	}
+	account.Extra["grok"] = grokExtra
 }
 
 func resolveGrokRuntimeUpstreamModel(input GrokRuntimeFeedbackInput) string {

@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -12,9 +13,10 @@ import (
 )
 
 type grokQuotaSyncRepoStub struct {
-	accounts     []Account
-	updatedIDs   []int64
-	updatedExtra []map[string]any
+	accounts      []Account
+	updatedIDs    []int64
+	updatedExtra  []map[string]any
+	runtimeStates []map[string]any
 }
 
 func (r *grokQuotaSyncRepoStub) ListByPlatform(_ context.Context, platform string) ([]Account, error) {
@@ -29,6 +31,11 @@ func (r *grokQuotaSyncRepoStub) ListByPlatform(_ context.Context, platform strin
 func (r *grokQuotaSyncRepoStub) UpdateExtra(_ context.Context, id int64, updates map[string]any) error {
 	r.updatedIDs = append(r.updatedIDs, id)
 	r.updatedExtra = append(r.updatedExtra, cloneAnyMap(updates))
+	return nil
+}
+
+func (r *grokQuotaSyncRepoStub) UpdateGrokRuntimeState(_ context.Context, _ int64, runtimeState map[string]any) error {
+	r.runtimeStates = append(r.runtimeStates, cloneAnyMap(runtimeState))
 	return nil
 }
 
@@ -158,4 +165,39 @@ func TestGrokQuotaSyncServiceCurrentIntervalUsesRuntimeSettings(t *testing.T) {
 
 	svc := NewGrokQuotaSyncService(nil, nil, nil, settingSvc)
 	require.Equal(t, 2*time.Minute, svc.currentInterval(context.Background()))
+}
+
+func TestGrokQuotaSyncServiceSyncAccountInvalidCredentialsPersistsAuthCooldown(t *testing.T) {
+	repo := &grokQuotaSyncRepoStub{}
+	stateSvc := NewGrokAccountStateService(repo)
+	quotaSvc := NewGrokQuotaSyncService(repo, stateSvc, NewGrokTierService(), nil)
+	quotaSvc.httpUpstream = &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusBadRequest, `{"error":"invalid-credentials"}`),
+		},
+	}
+	now := time.Date(2026, 4, 19, 12, 0, 0, 0, time.UTC)
+	quotaSvc.now = func() time.Time { return now }
+	stateSvc.now = quotaSvc.now
+
+	account := &Account{
+		ID:          93,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"session_token": "session-cookie-93",
+		},
+	}
+
+	err := quotaSvc.SyncAccount(context.Background(), account)
+	require.Error(t, err)
+	require.Len(t, repo.updatedExtra, 1)
+	require.Len(t, repo.runtimeStates, 1)
+	require.Equal(t, "error", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "auth", repo.runtimeStates[0]["last_fail_class"])
+	require.Equal(t, http.StatusBadRequest, grokParseInt(repo.runtimeStates[0]["last_fail_status_code"]))
+	require.NotEmpty(t, repo.runtimeStates[0]["selection_cooldown_until"])
+	require.Contains(t, getStringFromMaps(grokNestedMap(grokExtraMap(repo.updatedExtra[0])["sync_state"]), nil, "last_sync_error"), "invalid-credentials")
 }

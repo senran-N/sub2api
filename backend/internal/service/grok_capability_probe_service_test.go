@@ -100,22 +100,43 @@ func TestGrokCapabilityProbeServiceProbeNowTargetsUnknownTierAccountsAcrossTrans
 	err := svc.ProbeNow(context.Background())
 	require.NoError(t, err)
 	require.Len(t, upstream.requests, 2)
-	require.Equal(t, "https://api.x.ai/v1/responses", upstream.requests[0].URL.String())
-	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[1].URL.String())
-	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie-303"), upstream.requests[1].Header.Get("Cookie"))
-	require.Equal(t, grokSessionProbeUserAgent, upstream.requests[1].Header.Get("User-Agent"))
-	require.Equal(t, []int64{301, 303}, repo.updatedIDs)
-	require.Equal(t, grokCapabilityTierBootstrapModelID, requestBodyModel(t, upstream.requests[0]))
-	require.Equal(t, grokSessionModeExpert, requestBodyModeID(t, upstream.requests[1]))
+	urls := []string{upstream.requests[0].URL.String(), upstream.requests[1].URL.String()}
+	require.ElementsMatch(t, []string{
+		"https://api.x.ai/v1/responses",
+		"https://grok.com/rest/app-chat/conversations/new",
+	}, urls)
+	require.ElementsMatch(t, []int64{301, 303}, repo.updatedIDs)
 
-	grokExtra := grokExtraMap(repo.updatedExtra[0])
+	var apiRequest *http.Request
+	var sessionRequest *http.Request
+	for _, req := range upstream.requests {
+		switch req.URL.String() {
+		case "https://api.x.ai/v1/responses":
+			apiRequest = req
+		case "https://grok.com/rest/app-chat/conversations/new":
+			sessionRequest = req
+		}
+	}
+	require.NotNil(t, apiRequest)
+	require.NotNil(t, sessionRequest)
+	require.Equal(t, grokCapabilityTierBootstrapModelID, requestBodyModel(t, apiRequest))
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie-303"), sessionRequest.Header.Get("Cookie"))
+	require.Equal(t, grokSessionProbeUserAgent, sessionRequest.Header.Get("User-Agent"))
+	require.Equal(t, grokSessionModeExpert, requestBodyModeID(t, sessionRequest))
+
+	extraByID := map[int64]map[string]any{}
+	for i, id := range repo.updatedIDs {
+		extraByID[id] = grokExtraMap(repo.updatedExtra[i])
+	}
+
+	grokExtra := extraByID[301]
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_at"))
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_probe_ok_at"))
 	expectedAPIKeyCapabilities := buildGrokProbeCapabilities(&repo.accounts[0], grokCapabilityTierBootstrapModelID)
 	require.ElementsMatch(t, grokParseStringSlice(expectedAPIKeyCapabilities["operations"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
 	require.ElementsMatch(t, grokParseStringSlice(expectedAPIKeyCapabilities["models"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
 
-	sessionExtra := grokExtraMap(repo.updatedExtra[1])
+	sessionExtra := extraByID[303]
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(sessionExtra, "sync_state", "last_probe_at"))
 	require.Equal(t, "2026-04-19T10:00:00Z", getNestedGrokValue(sessionExtra, "sync_state", "last_probe_ok_at"))
 	expectedSessionCapabilities := buildGrokProbeCapabilities(&repo.accounts[2], grokCapabilityTierBootstrapModelID)

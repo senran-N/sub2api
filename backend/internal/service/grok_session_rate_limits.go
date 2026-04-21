@@ -68,19 +68,7 @@ func (e *grokSessionRateLimitsError) InvalidCredentials() bool {
 }
 
 func grokSessionRateLimitsInvalidCredentialsBody(body string) bool {
-	text := strings.ToLower(strings.TrimSpace(body))
-	if text == "" {
-		return false
-	}
-	return strings.Contains(text, "invalid-credentials") ||
-		strings.Contains(text, "bad-credentials") ||
-		strings.Contains(text, "failed to look up session id") ||
-		strings.Contains(text, "blocked-user") ||
-		strings.Contains(text, "email-domain-rejected") ||
-		strings.Contains(text, "session not found") ||
-		strings.Contains(text, "account suspended") ||
-		strings.Contains(text, "token revoked") ||
-		strings.Contains(text, "token expired")
+	return grokInvalidCredentialsBody(body)
 }
 
 func grokRateLimitWindowNames() []string {

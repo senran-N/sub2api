@@ -50,3 +50,16 @@ func TestClassifyGrokRuntimeError_TransportFailureDoesNotPretendToBeAuth(t *test
 	require.True(t, classification.Retryable)
 	require.Equal(t, 2*time.Minute, classification.Cooldown)
 }
+
+func TestClassifyGrokRuntimeError_InvalidCredentialsBodyUsesAccountAuthCooldown(t *testing.T) {
+	classification := classifyGrokRuntimeError(GrokRuntimeFeedbackInput{
+		StatusCode: http.StatusBadRequest,
+		Err:        errors.New(`API returned 400: {"error":"invalid-credentials"}`),
+	})
+
+	require.Equal(t, http.StatusBadRequest, classification.StatusCode)
+	require.Equal(t, grokRuntimeErrorClassAuth, classification.Class)
+	require.Equal(t, grokRuntimePenaltyScopeAccount, classification.Scope)
+	require.False(t, classification.Retryable)
+	require.Equal(t, 30*time.Minute, classification.Cooldown)
+}

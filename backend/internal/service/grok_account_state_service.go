@@ -42,9 +42,21 @@ func (s *GrokAccountStateService) PersistProbeResult(
 
 	updates := buildGrokProbeStateExtraUpdates(account, modelID, resp, probeErr, s.now())
 	s.persistExtraUpdates(ctx, account, updates)
+	s.persistBackgroundRuntimeState(ctx, GrokRuntimeFeedbackInput{
+		Account:        account,
+		RequestedModel: modelID,
+		StatusCode:     grokProbeStatusCode(resp),
+		Err:            probeErr,
+	})
 }
 
-func (s *GrokAccountStateService) PersistSyncSnapshot(ctx context.Context, account *Account, snapshot grokStateSyncSnapshot) {
+func (s *GrokAccountStateService) PersistSyncSnapshot(
+	ctx context.Context,
+	account *Account,
+	snapshot grokStateSyncSnapshot,
+	statusCode int,
+	syncErr error,
+) {
 	if s == nil || s.accountRepo == nil || account == nil {
 		return
 	}
@@ -54,6 +66,12 @@ func (s *GrokAccountStateService) PersistSyncSnapshot(ctx context.Context, accou
 
 	updates := buildGrokSyncStateExtraUpdates(account, snapshot)
 	s.persistExtraUpdates(ctx, account, updates)
+	s.persistBackgroundRuntimeState(ctx, GrokRuntimeFeedbackInput{
+		Account:    account,
+		StatusCode: statusCode,
+		Err:        syncErr,
+		Endpoint:   grokSessionRateLimitsEndpoint,
+	})
 }
 
 func (s *GrokAccountStateService) persistExtraUpdates(ctx context.Context, account *Account, updates map[string]any) {
@@ -68,6 +86,71 @@ func (s *GrokAccountStateService) persistExtraUpdates(ctx context.Context, accou
 		return
 	}
 	mergeAccountExtra(account, updates)
+}
+
+func (s *GrokAccountStateService) persistBackgroundRuntimeState(ctx context.Context, input GrokRuntimeFeedbackInput) {
+	if s == nil || s.accountRepo == nil || input.Account == nil {
+		return
+	}
+	if !shouldPersistGrokBackgroundRuntimeState(input) {
+		return
+	}
+
+	writer, ok := s.accountRepo.(grokRuntimeStateWriter)
+	if !ok {
+		return
+	}
+
+	now := s.now().UTC()
+	upstreamModel := resolveGrokRuntimeUpstreamModel(input)
+	protocolFamily, capability := resolveGrokRuntimeProtocolAndCapability(
+		input.RequestedModel,
+		upstreamModel,
+		input.ProtocolFamily,
+		input.Endpoint,
+	)
+	runtimeState := buildGrokRuntimeState(input, upstreamModel, protocolFamily, capability, now)
+	if len(runtimeState) == 0 {
+		return
+	}
+
+	updateCtx, cancel := newGrokAccountStateContext(ctx)
+	defer cancel()
+
+	if err := writer.UpdateGrokRuntimeState(updateCtx, input.Account.ID, runtimeState); err != nil {
+		return
+	}
+	mergeGrokRuntimeState(input.Account, runtimeState)
+}
+
+func shouldPersistGrokBackgroundRuntimeState(input GrokRuntimeFeedbackInput) bool {
+	account := input.Account
+	if account == nil {
+		return false
+	}
+
+	if input.Err != nil {
+		return classifyGrokRuntimeError(input).Class == grokRuntimeErrorClassAuth
+	}
+	if input.StatusCode <= 0 {
+		return false
+	}
+
+	runtimeState := account.grokRuntimeSelectionState()
+	if runtimeState.LastFailClass != grokRuntimeErrorClassAuth {
+		return false
+	}
+	if runtimeState.LastFailAt == nil {
+		return runtimeState.CooldownUntil != nil
+	}
+	return runtimeState.LastUseAt == nil || runtimeState.LastUseAt.Before(*runtimeState.LastFailAt)
+}
+
+func grokProbeStatusCode(resp *http.Response) int {
+	if resp == nil {
+		return 0
+	}
+	return resp.StatusCode
 }
 
 func newGrokAccountStateContext(ctx context.Context) (context.Context, context.CancelFunc) {

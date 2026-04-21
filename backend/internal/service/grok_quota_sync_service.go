@@ -188,7 +188,7 @@ func (s *GrokQuotaSyncService) SyncNow(ctx context.Context) error {
 		if len(snapshot.Tier) == 0 && len(snapshot.QuotaWindows) == 0 && len(snapshot.SyncState) == 0 {
 			return syncErr
 		}
-		s.stateSvc.PersistSyncSnapshot(ctx, account, snapshot)
+		s.stateSvc.PersistSyncSnapshot(ctx, account, snapshot, grokSyncSnapshotStatusCode(snapshot), syncErr)
 		return syncErr
 	})
 }
@@ -206,7 +206,7 @@ func (s *GrokQuotaSyncService) SyncAccount(ctx context.Context, account *Account
 	if len(snapshot.Tier) == 0 && len(snapshot.QuotaWindows) == 0 && len(snapshot.SyncState) == 0 && len(snapshot.Capabilities) == 0 {
 		return err
 	}
-	s.stateSvc.PersistSyncSnapshot(ctx, account, snapshot)
+	s.stateSvc.PersistSyncSnapshot(ctx, account, snapshot, grokSyncSnapshotStatusCode(snapshot), err)
 	return err
 }
 
@@ -358,4 +358,8 @@ func grokSessionRateLimitStatusCode(err error) int {
 		return rateErr.StatusCode
 	}
 	return 0
+}
+
+func grokSyncSnapshotStatusCode(snapshot grokStateSyncSnapshot) int {
+	return grokParseInt(grokNestedMap(snapshot.SyncState)["last_sync_status_code"])
 }

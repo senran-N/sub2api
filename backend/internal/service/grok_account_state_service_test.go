@@ -16,11 +16,17 @@ import (
 type grokAccountStateServiceRepoStub struct {
 	updatedID    int64
 	updatedExtra map[string]any
+	runtimeState map[string]any
 }
 
 func (r *grokAccountStateServiceRepoStub) UpdateExtra(_ context.Context, id int64, updates map[string]any) error {
 	r.updatedID = id
 	r.updatedExtra = cloneAnyMap(updates)
+	return nil
+}
+
+func (r *grokAccountStateServiceRepoStub) UpdateGrokRuntimeState(_ context.Context, _ int64, runtimeState map[string]any) error {
+	r.runtimeState = cloneAnyMap(runtimeState)
 	return nil
 }
 
@@ -119,4 +125,73 @@ func TestGrokAccountStateService_PersistProbeResultFailurePreservesTierAndQuotaS
 	require.Equal(t, 401, grokParseInt(getNestedGrokValue(grokExtra, "sync_state", "last_probe_status_code")))
 	require.Contains(t, getStringFromMaps(grokNestedMap(grokExtra["sync_state"]), nil, "last_probe_error"), "API returned 401")
 	require.Equal(t, 7, grokParseInt(getNestedGrokValue(grokQuotaWindowsMap(grokExtra["quota_windows"]), grok.QuotaWindowAuto, "remaining")))
+	require.Equal(t, "error", repo.runtimeState["last_outcome"])
+	require.Equal(t, "auth", repo.runtimeState["last_fail_class"])
+	require.NotEmpty(t, repo.runtimeState["selection_cooldown_until"])
+}
+
+func TestGrokAccountStateService_PersistProbeResultInvalidCredentials400TriggersAuthCooldown(t *testing.T) {
+	repo := &grokAccountStateServiceRepoStub{}
+	svc := NewGrokAccountStateService(repo)
+	svc.now = func() time.Time {
+		return time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)
+	}
+
+	account := &Account{
+		ID:       86,
+		Platform: PlatformGrok,
+		Type:     AccountTypeSession,
+	}
+
+	svc.PersistProbeResult(
+		context.Background(),
+		account,
+		"grok-3",
+		&http.Response{StatusCode: http.StatusBadRequest, Status: "400 Bad Request"},
+		errors.New(`API returned 400: {"error":"invalid-credentials"}`),
+	)
+
+	require.Equal(t, "error", repo.runtimeState["last_outcome"])
+	require.Equal(t, "auth", repo.runtimeState["last_fail_class"])
+	require.Equal(t, http.StatusBadRequest, grokParseInt(repo.runtimeState["last_fail_status_code"]))
+	require.NotEmpty(t, repo.runtimeState["selection_cooldown_until"])
+	require.Equal(t, "auth", getNestedGrokValue(account.grokExtraMap(), "runtime_state", "last_fail_class"))
+}
+
+func TestGrokAccountStateService_PersistProbeResultSuccessClearsPreviousAuthCooldown(t *testing.T) {
+	repo := &grokAccountStateServiceRepoStub{}
+	svc := NewGrokAccountStateService(repo)
+	svc.now = func() time.Time {
+		return time.Date(2026, 4, 19, 11, 0, 0, 0, time.UTC)
+	}
+
+	account := &Account{
+		ID:       87,
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"runtime_state": map[string]any{
+					"last_fail_at":             "2026-04-19T10:00:00Z",
+					"last_fail_class":          "auth",
+					"selection_cooldown_until": "2026-04-19T10:30:00Z",
+					"selection_cooldown_scope": "account",
+				},
+			},
+		},
+	}
+
+	svc.PersistProbeResult(
+		context.Background(),
+		account,
+		"grok-3-fast",
+		&http.Response{StatusCode: http.StatusOK, Status: "200 OK"},
+		nil,
+	)
+
+	require.Equal(t, "success", repo.runtimeState["last_outcome"])
+	require.Equal(t, http.StatusOK, grokParseInt(repo.runtimeState["last_request_status_code"]))
+	require.Nil(t, repo.runtimeState["selection_cooldown_until"])
+	require.NotEmpty(t, repo.runtimeState["last_use_at"])
+	require.Nil(t, getNestedGrokValue(account.grokExtraMap(), "runtime_state", "selection_cooldown_until"))
 }

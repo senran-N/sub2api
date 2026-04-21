@@ -42,6 +42,23 @@ type grokRuntimeErrorSignal struct {
 	message    string
 }
 
+var grokInvalidCredentialMarkers = []string{
+	"invalid-credentials",
+	"invalid_credentials",
+	"bad-credentials",
+	"bad_credentials",
+	"failed to look up session id",
+	"blocked-user",
+	"blocked_user",
+	"email-domain-rejected",
+	"email_domain_rejected",
+	"session not found",
+	"account suspended",
+	"token revoked",
+	"token expired",
+	"invalid credentials",
+}
+
 func classifyGrokRuntimeError(input GrokRuntimeFeedbackInput) grokRuntimeErrorClassification {
 	signal := extractGrokRuntimeErrorSignal(input)
 	if signal.statusCode == 0 && signal.message == "" {
@@ -54,6 +71,13 @@ func classifyGrokRuntimeError(input GrokRuntimeFeedbackInput) grokRuntimeErrorCl
 		Class:      grokRuntimeErrorClassUnknown,
 		Scope:      grokRuntimePenaltyScopeAccount,
 		Cooldown:   3 * time.Minute,
+	}
+
+	if grokSignalLooksLikeInvalidCredentials(signal) {
+		classification.Class = grokRuntimeErrorClassAuth
+		classification.Scope = grokRuntimePenaltyScopeAccount
+		classification.Cooldown = 30 * time.Minute
+		return classification
 	}
 
 	if isGrokRuntimeModelUnsupportedSignal(signal) {
@@ -157,4 +181,53 @@ func isGrokRuntimeModelUnsupportedSignal(signal grokRuntimeErrorSignal) bool {
 	}
 
 	return signal.statusCode == http.StatusNotFound && strings.Contains(signal.message, "model")
+}
+
+func grokSignalLooksLikeInvalidCredentials(signal grokRuntimeErrorSignal) bool {
+	if grokInvalidCredentialsCode(signal.code) {
+		return true
+	}
+	return grokInvalidCredentialsBody(signal.message)
+}
+
+func grokInvalidCredentialsCode(code string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(code))
+	if normalized == "" {
+		return false
+	}
+
+	switch normalized {
+	case "invalid-credentials",
+		"invalid_credentials",
+		"bad-credentials",
+		"bad_credentials",
+		"blocked-user",
+		"blocked_user",
+		"email-domain-rejected",
+		"email_domain_rejected",
+		"session_not_found",
+		"session-not-found",
+		"account_suspended",
+		"account-suspended",
+		"token_revoked",
+		"token-revoked",
+		"token_expired",
+		"token-expired":
+		return true
+	default:
+		return false
+	}
+}
+
+func grokInvalidCredentialsBody(body string) bool {
+	text := strings.ToLower(strings.TrimSpace(body))
+	if text == "" {
+		return false
+	}
+	for _, marker := range grokInvalidCredentialMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
