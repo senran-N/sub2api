@@ -468,3 +468,131 @@ func TestGrokAccountSelectorSelectBestCandidate_DoesNotPenalizeScopeNoneFailures
 	require.NotNil(t, selected)
 	require.Equal(t, int64(61), selected.ID)
 }
+
+func TestGrokAccountSelectorSelectBestCandidate_PenalizesRecentlyUsedNearTie(t *testing.T) {
+	selector := GrokAccountSelector{}
+	now := time.Now().UTC()
+	accounts := []*Account{
+		{
+			ID:          71,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Priority:    1,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+					"sync_state": map[string]any{
+						"last_sync_at": now.Add(-10 * time.Minute).Format(time.RFC3339),
+					},
+					"quota_windows": map[string]any{
+						"expert": map[string]any{
+							"remaining": 120,
+							"total":     150,
+						},
+					},
+					"runtime_state": map[string]any{
+						"last_use_at": now.Add(-2 * time.Second).Format(time.RFC3339),
+					},
+				},
+			},
+		},
+		{
+			ID:          72,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Priority:    1,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+					"sync_state": map[string]any{
+						"last_sync_at": now.Add(-10 * time.Minute).Format(time.RFC3339),
+					},
+					"quota_windows": map[string]any{
+						"expert": map[string]any{
+							"remaining": 110,
+							"total":     150,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	selected := selector.SelectBestCandidateWithContext(context.Background(), accounts, "grok-4-fast-reasoning", nil)
+	require.NotNil(t, selected)
+	require.Equal(t, int64(72), selected.ID)
+}
+
+func TestGrokAccountSelectorSelectBestCandidate_RuntimeLastUseOverridesStaleAccountTimestamp(t *testing.T) {
+	selector := GrokAccountSelector{}
+	now := time.Now().UTC()
+	staleAccountLastUsed := now.Add(-2 * time.Hour)
+	olderPeerLastUsed := now.Add(-5 * time.Minute)
+	accounts := []*Account{
+		{
+			ID:          81,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Priority:    1,
+			LastUsedAt:  &staleAccountLastUsed,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+					"sync_state": map[string]any{
+						"last_sync_at": now.Add(-10 * time.Minute).Format(time.RFC3339),
+					},
+					"quota_windows": map[string]any{
+						"expert": map[string]any{
+							"remaining": 120,
+							"total":     150,
+						},
+					},
+					"runtime_state": map[string]any{
+						"last_use_at": now.Add(-1 * time.Second).Format(time.RFC3339),
+					},
+				},
+			},
+		},
+		{
+			ID:          82,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Priority:    1,
+			LastUsedAt:  &olderPeerLastUsed,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+					"sync_state": map[string]any{
+						"last_sync_at": now.Add(-10 * time.Minute).Format(time.RFC3339),
+					},
+					"quota_windows": map[string]any{
+						"expert": map[string]any{
+							"remaining": 115,
+							"total":     150,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	selected := selector.SelectBestCandidateWithContext(context.Background(), accounts, "grok-4-fast-reasoning", nil)
+	require.NotNil(t, selected)
+	require.Equal(t, int64(82), selected.ID)
+}

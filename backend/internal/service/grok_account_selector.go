@@ -25,6 +25,11 @@ type grokAccountCandidateScore struct {
 	score    float64
 }
 
+const (
+	grokRecentUsePenaltyWindow = 15 * time.Second
+	grokRecentUsePenaltyMax    = 0.7
+)
+
 func newGrokAccountScoreContext(firstPriority int) grokAccountScoreContext {
 	return grokAccountScoreContext{
 		minPriority: firstPriority,
@@ -266,6 +271,7 @@ func (selector GrokAccountSelector) scoreCandidates(
 		quotaFactor := grokQuotaHeadroomFactor(quotaState)
 		freshnessFactor := grokQuotaFreshnessFactor(syncState, now)
 		failureFactor := grokRecentFailureFactor(runtimeState, requestedModel, now)
+		recentUsePenalty := grokRecentUsePenalty(account, runtimeState, now)
 
 		baseScore := 2.4*priorityFactor +
 			1.1*loadFactor +
@@ -274,7 +280,7 @@ func (selector GrokAccountSelector) scoreCandidates(
 			1.0*capabilityFactor +
 			1.0*quotaFactor +
 			0.6*freshnessFactor
-		item.score = baseScore * failureFactor
+		item.score = (baseScore * failureFactor) - recentUsePenalty
 	}
 }
 
@@ -514,6 +520,38 @@ func grokRuntimePenaltyAppliesToModel(cooldownModel string, requestedModel strin
 	return grok.ResolveCanonicalModelID(cooldownModel) == grok.ResolveCanonicalModelID(requestedModel)
 }
 
+func grokRecentUsePenalty(account *Account, runtimeState grokRuntimeSelectionState, now time.Time) float64 {
+	lastUsedAt := grokMostRecentAccountUseAt(account, runtimeState)
+	if lastUsedAt == nil {
+		return 0
+	}
+
+	age := now.Sub(*lastUsedAt)
+	switch {
+	case age >= grokRecentUsePenaltyWindow:
+		return 0
+	case age <= 0:
+		return grokRecentUsePenaltyMax
+	default:
+		return grokRecentUsePenaltyMax * (1 - (float64(age) / float64(grokRecentUsePenaltyWindow)))
+	}
+}
+
+func grokMostRecentAccountUseAt(account *Account, runtimeState grokRuntimeSelectionState) *time.Time {
+	switch {
+	case account == nil:
+		return runtimeState.LastUseAt
+	case account.LastUsedAt == nil:
+		return runtimeState.LastUseAt
+	case runtimeState.LastUseAt == nil:
+		return account.LastUsedAt
+	case runtimeState.LastUseAt.After(*account.LastUsedAt):
+		return runtimeState.LastUseAt
+	default:
+		return account.LastUsedAt
+	}
+}
+
 func grokCandidateBetter(left grokAccountCandidateScore, right grokAccountCandidateScore) bool {
 	if diff := left.score - right.score; math.Abs(diff) > 1e-9 {
 		return diff > 0
@@ -527,14 +565,16 @@ func grokCandidateBetter(left grokAccountCandidateScore, right grokAccountCandid
 	if left.loadInfo.WaitingCount != right.loadInfo.WaitingCount {
 		return left.loadInfo.WaitingCount < right.loadInfo.WaitingCount
 	}
+	leftLastUsedAt := grokMostRecentAccountUseAt(left.account, left.account.grokRuntimeSelectionState())
+	rightLastUsedAt := grokMostRecentAccountUseAt(right.account, right.account.grokRuntimeSelectionState())
 	switch {
-	case left.account.LastUsedAt == nil && right.account.LastUsedAt != nil:
+	case leftLastUsedAt == nil && rightLastUsedAt != nil:
 		return true
-	case left.account.LastUsedAt != nil && right.account.LastUsedAt == nil:
+	case leftLastUsedAt != nil && rightLastUsedAt == nil:
 		return false
-	case left.account.LastUsedAt != nil && right.account.LastUsedAt != nil:
-		if !left.account.LastUsedAt.Equal(*right.account.LastUsedAt) {
-			return left.account.LastUsedAt.Before(*right.account.LastUsedAt)
+	case leftLastUsedAt != nil && rightLastUsedAt != nil:
+		if !leftLastUsedAt.Equal(*rightLastUsedAt) {
+			return leftLastUsedAt.Before(*rightLastUsedAt)
 		}
 	}
 	return left.account.ID < right.account.ID
