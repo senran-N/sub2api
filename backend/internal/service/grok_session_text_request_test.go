@@ -275,10 +275,10 @@ func TestCreateGrokSessionTestPayload_UsesSharedTextBuilder(t *testing.T) {
 	require.Equal(t, "auto", payload["modeId"])
 	disableSearch, ok := payload["disableSearch"].(bool)
 	require.True(t, ok)
-	require.True(t, disableSearch)
+	require.False(t, disableSearch)
 	sendFinalMetadata, ok := payload["sendFinalMetadata"].(bool)
 	require.True(t, ok)
-	require.False(t, sendFinalMetadata)
+	require.True(t, sendFinalMetadata)
 	_, hasModelName := payload["modelName"]
 	require.False(t, hasModelName)
 }
