@@ -26,6 +26,7 @@ type openAIAccountTestRepo struct {
 	rateLimitedAt *time.Time
 	setErrorID    int64
 	setErrorMsg   string
+	clearErrorID  int64
 }
 
 func (r *openAIAccountTestRepo) UpdateExtra(_ context.Context, _ int64, updates map[string]any) error {
@@ -42,6 +43,11 @@ func (r *openAIAccountTestRepo) SetRateLimited(_ context.Context, id int64, rese
 func (r *openAIAccountTestRepo) SetError(_ context.Context, id int64, errorMsg string) error {
 	r.setErrorID = id
 	r.setErrorMsg = errorMsg
+	return nil
+}
+
+func (r *openAIAccountTestRepo) ClearError(_ context.Context, id int64) error {
+	r.clearErrorID = id
 	return nil
 }
 
@@ -214,6 +220,47 @@ func TestAccountTestService_GrokAPIKeyUsesCompatibleProbeDefaults(t *testing.T) 
 	expectedCapabilities := buildGrokCapabilitySyncSnapshot(account, grok.TierBasic)
 	require.ElementsMatch(t, grokParseStringSlice(expectedCapabilities["operations"]), grokParseStringSlice(capabilities["operations"]))
 	require.ElementsMatch(t, grokParseStringSlice(expectedCapabilities["models"]), grokParseStringSlice(capabilities["models"]))
+}
+
+func TestAccountTestService_GrokSuccessClearsRecoverableErrorStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: [DONE]\n\n"))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	account := &Account{
+		ID:           861,
+		Platform:     PlatformGrok,
+		Type:         AccountTypeAPIKey,
+		Status:       StatusError,
+		ErrorMessage: "grok invalid credentials: invalid-credentials",
+		Concurrency:  1,
+		Credentials: map[string]any{
+			"api_key": "xai-test-key",
+		},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{account.ID: account},
+		},
+	}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "", "")
+	require.NoError(t, err)
+	require.Equal(t, int64(861), repo.clearErrorID)
+	require.Equal(t, StatusActive, account.Status)
+	require.Empty(t, account.ErrorMessage)
 }
 
 func TestAccountTestService_GrokAPIKeyUsesConfiguredRuntimeOfficialBaseURL(t *testing.T) {

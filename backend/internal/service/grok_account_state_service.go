@@ -16,6 +16,10 @@ type grokAccountStateErrorWriter interface {
 	SetError(ctx context.Context, id int64, errorMsg string) error
 }
 
+type grokAccountStateRecoveryWriter interface {
+	ClearError(ctx context.Context, id int64) error
+}
+
 type GrokAccountStateService struct {
 	accountRepo grokAccountStateExtraWriter
 	now         func() time.Time
@@ -58,6 +62,7 @@ func (s *GrokAccountStateService) PersistProbeResult(
 		StatusCode:     grokProbeStatusCode(resp),
 		Err:            probeErr,
 	})
+	s.clearRecoveredAccountError(ctx, account, grokProbeStatusCode(resp), probeErr)
 }
 
 func (s *GrokAccountStateService) PersistSyncSnapshot(
@@ -88,6 +93,7 @@ func (s *GrokAccountStateService) PersistSyncSnapshot(
 		Err:        syncErr,
 		Endpoint:   grokSessionRateLimitsEndpoint,
 	})
+	s.clearRecoveredAccountError(ctx, account, statusCode, syncErr)
 }
 
 func (s *GrokAccountStateService) persistExtraUpdates(ctx context.Context, account *Account, updates map[string]any) {
@@ -148,6 +154,34 @@ func (s *GrokAccountStateService) persistInvalidCredentialAccountError(ctx conte
 		return
 	}
 	persistGrokInvalidCredentialAccountError(ctx, writer, input)
+}
+
+func (s *GrokAccountStateService) clearRecoveredAccountError(
+	ctx context.Context,
+	account *Account,
+	statusCode int,
+	resultErr error,
+) {
+	if s == nil || account == nil || account.Status != StatusError {
+		return
+	}
+	if resultErr != nil || statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		return
+	}
+
+	writer, ok := s.accountRepo.(grokAccountStateRecoveryWriter)
+	if !ok {
+		return
+	}
+
+	updateCtx, cancel := newGrokAccountStateContext(ctx)
+	defer cancel()
+
+	if err := writer.ClearError(updateCtx, account.ID); err != nil {
+		return
+	}
+	account.Status = StatusActive
+	account.ErrorMessage = ""
 }
 
 func shouldPersistGrokBackgroundRuntimeState(input GrokRuntimeFeedbackInput) bool {

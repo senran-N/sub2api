@@ -19,6 +19,7 @@ type grokAccountStateServiceRepoStub struct {
 	runtimeState map[string]any
 	setErrorID   int64
 	setErrorMsg  string
+	clearErrorID int64
 }
 
 func (r *grokAccountStateServiceRepoStub) UpdateExtra(_ context.Context, id int64, updates map[string]any) error {
@@ -35,6 +36,11 @@ func (r *grokAccountStateServiceRepoStub) UpdateGrokRuntimeState(_ context.Conte
 func (r *grokAccountStateServiceRepoStub) SetError(_ context.Context, id int64, errorMsg string) error {
 	r.setErrorID = id
 	r.setErrorMsg = errorMsg
+	return nil
+}
+
+func (r *grokAccountStateServiceRepoStub) ClearError(_ context.Context, id int64) error {
+	r.clearErrorID = id
 	return nil
 }
 
@@ -209,6 +215,44 @@ func TestGrokAccountStateService_PersistProbeResultSuccessClearsPreviousAuthCool
 	require.Nil(t, getNestedGrokValue(account.grokExtraMap(), "runtime_state", "selection_cooldown_until"))
 }
 
+func TestGrokAccountStateService_PersistProbeResultSuccessClearsRecoverableAccountError(t *testing.T) {
+	repo := &grokAccountStateServiceRepoStub{}
+	svc := NewGrokAccountStateService(repo)
+	svc.now = func() time.Time {
+		return time.Date(2026, 4, 19, 11, 15, 0, 0, time.UTC)
+	}
+
+	account := &Account{
+		ID:           871,
+		Platform:     PlatformGrok,
+		Type:         AccountTypeAPIKey,
+		Status:       StatusError,
+		ErrorMessage: "grok invalid credentials: invalid-credentials",
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"runtime_state": map[string]any{
+					"last_fail_at":             "2026-04-19T10:00:00Z",
+					"last_fail_class":          "auth",
+					"selection_cooldown_until": "2026-04-19T10:30:00Z",
+					"selection_cooldown_scope": "account",
+				},
+			},
+		},
+	}
+
+	svc.PersistProbeResult(
+		context.Background(),
+		account,
+		"grok-3-fast",
+		&http.Response{StatusCode: http.StatusOK, Status: "200 OK"},
+		nil,
+	)
+
+	require.Equal(t, int64(871), repo.clearErrorID)
+	require.Equal(t, StatusActive, account.Status)
+	require.Empty(t, account.ErrorMessage)
+}
+
 func TestGrokAccountStateService_PersistProbeResultSuccessClearsPreviousRateLimitCooldown(t *testing.T) {
 	repo := &grokAccountStateServiceRepoStub{}
 	svc := NewGrokAccountStateService(repo)
@@ -284,6 +328,45 @@ func TestGrokAccountStateService_PersistSyncSnapshotSuccessClearsPreviousRateLim
 	require.Nil(t, repo.runtimeState["selection_cooldown_until"])
 	require.NotEmpty(t, repo.runtimeState["last_use_at"])
 	require.Nil(t, getNestedGrokValue(account.grokExtraMap(), "runtime_state", "selection_cooldown_until"))
+}
+
+func TestGrokAccountStateService_PersistSyncSnapshotSuccessClearsRecoverableAccountError(t *testing.T) {
+	repo := &grokAccountStateServiceRepoStub{}
+	svc := NewGrokAccountStateService(repo)
+	svc.now = func() time.Time {
+		return time.Date(2026, 4, 19, 12, 5, 0, 0, time.UTC)
+	}
+
+	account := &Account{
+		ID:           891,
+		Platform:     PlatformGrok,
+		Type:         AccountTypeSession,
+		Status:       StatusError,
+		ErrorMessage: "grok invalid credentials: invalid-credentials",
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"runtime_state": map[string]any{
+					"last_fail_at":             "2026-04-19T11:00:00Z",
+					"last_fail_class":          "auth",
+					"selection_cooldown_until": "2026-04-19T12:10:00Z",
+					"selection_cooldown_scope": "account",
+				},
+			},
+		},
+	}
+
+	svc.PersistSyncSnapshot(context.Background(), account, grokStateSyncSnapshot{
+		AuthMode: AccountTypeSession,
+		SyncState: map[string]any{
+			"last_sync_at":          "2026-04-19T12:05:00Z",
+			"last_sync_ok_at":       "2026-04-19T12:05:00Z",
+			"last_sync_status_code": http.StatusOK,
+		},
+	}, http.StatusOK, nil)
+
+	require.Equal(t, int64(891), repo.clearErrorID)
+	require.Equal(t, StatusActive, account.Status)
+	require.Empty(t, account.ErrorMessage)
 }
 
 func TestGrokAccountStateService_PersistProbeResultSuccessKeepsModelUnsupportedCooldown(t *testing.T) {
