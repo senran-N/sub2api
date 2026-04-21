@@ -125,7 +125,7 @@ func (s *GrokCapabilityProbeService) ProbeNow(ctx context.Context) error {
 		return nil
 	}
 
-	accounts, err := s.accountRepo.ListByPlatform(ctx, PlatformGrok)
+	accounts, err := listGrokBackgroundAccounts(ctx, s.accountRepo)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (s *GrokCapabilityProbeService) shouldProbeAccount(account *Account, now ti
 	if account.Type != AccountTypeAPIKey && account.Type != AccountTypeUpstream && account.Type != AccountTypeSession {
 		return false
 	}
-	if !account.IsSchedulable() {
+	if !account.IsMaintenanceSchedulable() {
 		return false
 	}
 	switch account.Type {

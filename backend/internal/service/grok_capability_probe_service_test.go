@@ -17,6 +17,8 @@ type grokCapabilityProbeRepoStub struct {
 	accounts     []Account
 	updatedIDs   []int64
 	updatedExtra []map[string]any
+	listedStatus [][]string
+	clearErrorID int64
 }
 
 func (r *grokCapabilityProbeRepoStub) ListByPlatform(_ context.Context, platform string) ([]Account, error) {
@@ -28,9 +30,19 @@ func (r *grokCapabilityProbeRepoStub) ListByPlatform(_ context.Context, platform
 	return result, nil
 }
 
+func (r *grokCapabilityProbeRepoStub) ListByPlatformStatuses(_ context.Context, platform string, statuses []string) ([]Account, error) {
+	r.listedStatus = append(r.listedStatus, append([]string(nil), statuses...))
+	return r.ListByPlatform(context.Background(), platform)
+}
+
 func (r *grokCapabilityProbeRepoStub) UpdateExtra(_ context.Context, id int64, updates map[string]any) error {
 	r.updatedIDs = append(r.updatedIDs, id)
 	r.updatedExtra = append(r.updatedExtra, cloneAnyMap(updates))
+	return nil
+}
+
+func (r *grokCapabilityProbeRepoStub) ClearError(_ context.Context, id int64) error {
+	r.clearErrorID = id
 	return nil
 }
 
@@ -188,6 +200,47 @@ func TestGrokCapabilityProbeServiceProbeNowFallsBackToDefaultProbeWhenBootstrapM
 	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtraMap(repo.updatedExtra[0]), "capabilities", "operations")))
 }
 
+func TestGrokCapabilityProbeServiceProbeNowIncludesRecoverableErrorAccounts(t *testing.T) {
+	repo := &grokCapabilityProbeRepoStub{
+		accounts: []Account{
+			{
+				ID:          304,
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusError,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"api_key": "xai-test-key",
+				},
+			},
+		},
+	}
+	stateSvc := NewGrokAccountStateService(repo)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"id":"ok"}`),
+		},
+	}
+	svc := NewGrokCapabilityProbeService(
+		repo,
+		stateSvc,
+		upstream,
+		&config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+		nil,
+		nil,
+	)
+
+	err := svc.ProbeNow(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, [][]string{{StatusActive, StatusError}}, repo.listedStatus)
+	require.Equal(t, []int64{304}, repo.updatedIDs)
+	require.Equal(t, int64(304), repo.clearErrorID)
+}
+
 func TestBuildGrokCapabilitySyncSnapshotWidensSimpleChatProbeWhenTierKnown(t *testing.T) {
 	account := &Account{
 		Platform: PlatformGrok,
@@ -281,6 +334,22 @@ func TestGrokCapabilityProbeServiceShouldProbeKnownTierAccountsWhenProbeRefreshI
 
 	require.True(t, svc.shouldProbeAccount(account, now, DefaultGrokRuntimeSettings().CapabilityProbeInterval()))
 	require.Equal(t, []string{grokCapabilityTierBootstrapModelID, grok.DefaultTestModel}, grokCapabilityProbeModelCandidates(account, ""))
+}
+
+func TestGrokCapabilityProbeServiceShouldProbeRecoverableErrorAccount(t *testing.T) {
+	svc := NewGrokCapabilityProbeService(nil, nil, nil, &config.Config{}, nil, nil)
+	now := time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)
+	account := &Account{
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusError,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"api_key": "xai-test-key",
+		},
+	}
+
+	require.True(t, svc.shouldProbeAccount(account, now, time.Hour))
 }
 
 func TestGrokCapabilityProbeServiceShouldProbeSessionAccounts(t *testing.T) {

@@ -87,10 +87,28 @@ func (a *Account) EffectiveLoadFactor() int {
 }
 
 func (a *Account) IsSchedulable() bool {
-	if !a.IsActive() || !a.Schedulable {
+	if !a.IsActive() {
 		return false
 	}
-	now := time.Now()
+	return a.isSchedulableAt(time.Now())
+}
+
+func (a *Account) IsMaintenanceSchedulable() bool {
+	if a == nil {
+		return false
+	}
+	switch a.Status {
+	case StatusActive, StatusError:
+	default:
+		return false
+	}
+	return a.isSchedulableAt(time.Now())
+}
+
+func (a *Account) isSchedulableAt(now time.Time) bool {
+	if !a.Schedulable {
+		return false
+	}
 	if a.AutoPauseOnExpired && a.ExpiresAt != nil && !now.Before(*a.ExpiresAt) {
 		return false
 	}

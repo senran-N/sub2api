@@ -19,6 +19,8 @@ type grokQuotaSyncRepoStub struct {
 	runtimeStates []map[string]any
 	setErrorIDs   []int64
 	setErrorMsgs  []string
+	listedStatus  [][]string
+	clearErrorIDs []int64
 }
 
 func (r *grokQuotaSyncRepoStub) ListByPlatform(_ context.Context, platform string) ([]Account, error) {
@@ -28,6 +30,11 @@ func (r *grokQuotaSyncRepoStub) ListByPlatform(_ context.Context, platform strin
 	result := make([]Account, len(r.accounts))
 	copy(result, r.accounts)
 	return result, nil
+}
+
+func (r *grokQuotaSyncRepoStub) ListByPlatformStatuses(_ context.Context, platform string, statuses []string) ([]Account, error) {
+	r.listedStatus = append(r.listedStatus, append([]string(nil), statuses...))
+	return r.ListByPlatform(context.Background(), platform)
 }
 
 func (r *grokQuotaSyncRepoStub) UpdateExtra(_ context.Context, id int64, updates map[string]any) error {
@@ -44,6 +51,11 @@ func (r *grokQuotaSyncRepoStub) UpdateGrokRuntimeState(_ context.Context, _ int6
 func (r *grokQuotaSyncRepoStub) SetError(_ context.Context, id int64, errorMsg string) error {
 	r.setErrorIDs = append(r.setErrorIDs, id)
 	r.setErrorMsgs = append(r.setErrorMsgs, errorMsg)
+	return nil
+}
+
+func (r *grokQuotaSyncRepoStub) ClearError(_ context.Context, id int64) error {
+	r.clearErrorIDs = append(r.clearErrorIDs, id)
 	return nil
 }
 
@@ -162,6 +174,39 @@ func TestGrokQuotaSyncServiceSyncNowWidensSimpleChatProbeCapabilitiesOnceTierIsK
 	expectedCapabilities := buildGrokCapabilitySyncSnapshot(&repo.accounts[0], grok.TierBasic)
 	require.ElementsMatch(t, grokParseStringSlice(expectedCapabilities["operations"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "operations")))
 	require.ElementsMatch(t, grokParseStringSlice(expectedCapabilities["models"]), grokParseStringSlice(getNestedGrokValue(grokExtra, "capabilities", "models")))
+}
+
+func TestGrokQuotaSyncServiceSyncNowIncludesRecoverableErrorAccounts(t *testing.T) {
+	repo := &grokQuotaSyncRepoStub{
+		accounts: []Account{
+			{
+				ID:          921,
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusError,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"session_token": "session-cookie-921",
+				},
+			},
+		},
+	}
+	stateSvc := NewGrokAccountStateService(repo)
+	quotaSvc := NewGrokQuotaSyncService(repo, stateSvc, NewGrokTierService(), nil)
+	quotaSvc.httpUpstream = &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"windowSizeSeconds":3600,"remainingQueries":12,"totalQueries":20}`),
+			newJSONResponse(http.StatusOK, `{"windowSizeSeconds":3600,"remainingQueries":12,"totalQueries":20}`),
+			newJSONResponse(http.StatusOK, `{"windowSizeSeconds":3600,"remainingQueries":12,"totalQueries":20}`),
+			newJSONResponse(http.StatusOK, `{"windowSizeSeconds":3600,"remainingQueries":12,"totalQueries":20}`),
+		},
+	}
+
+	err := quotaSvc.SyncNow(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, [][]string{{StatusActive, StatusError}}, repo.listedStatus)
+	require.Equal(t, []int64{921}, repo.updatedIDs)
+	require.Equal(t, []int64{921}, repo.clearErrorIDs)
 }
 
 func TestGrokQuotaSyncServiceCurrentIntervalUsesRuntimeSettings(t *testing.T) {

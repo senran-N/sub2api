@@ -172,7 +172,7 @@ func (s *GrokQuotaSyncService) SyncNow(ctx context.Context) error {
 		return nil
 	}
 
-	accounts, err := s.accountRepo.ListByPlatform(ctx, PlatformGrok)
+	accounts, err := listGrokBackgroundAccounts(ctx, s.accountRepo)
 	if err != nil {
 		return err
 	}
