@@ -411,16 +411,14 @@ func TestGrokGatewayServiceHandleChatCompletions_SessionImageStreamEmitsReasonin
 	require.Contains(t, upstream.requests[0].URL.String(), "/rest/app-chat/conversations/new")
 
 	chunks := decodeChatCompletionsSSEChunks(t, rec.Body.String())
-	require.Len(t, chunks, 5)
+	require.Len(t, chunks, 4)
 	require.Equal(t, "assistant", chunks[0].Choices[0].Delta.Role)
 	require.NotNil(t, chunks[1].Choices[0].Delta.ReasoningContent)
-	require.Equal(t, "图片正在生成 25% (0/1)", *chunks[1].Choices[0].Delta.ReasoningContent)
-	require.NotNil(t, chunks[2].Choices[0].Delta.ReasoningContent)
-	require.Equal(t, "图片正在生成 100% (1/1)", *chunks[2].Choices[0].Delta.ReasoningContent)
-	require.NotNil(t, chunks[3].Choices[0].Delta.Content)
-	require.Equal(t, "![image](https://media.example/image.png)", *chunks[3].Choices[0].Delta.Content)
-	require.NotNil(t, chunks[4].Choices[0].FinishReason)
-	require.Equal(t, "stop", *chunks[4].Choices[0].FinishReason)
+	require.Equal(t, "图片正在生成 25% (0/1)\n图片正在生成 100% (1/1)", *chunks[1].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[2].Choices[0].Delta.Content)
+	require.Equal(t, "![image](https://media.example/image.png)", *chunks[2].Choices[0].Delta.Content)
+	require.NotNil(t, chunks[3].Choices[0].FinishReason)
+	require.Equal(t, "stop", *chunks[3].Choices[0].FinishReason)
 }
 
 func TestGrokGatewayServiceHandleChatCompletions_SessionImageIncludesReasoningContent(t *testing.T) {
@@ -516,16 +514,14 @@ func TestGrokGatewayServiceHandleChatCompletions_SessionVideoStreamEmitsReasonin
 	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[1].URL.String())
 
 	chunks := decodeChatCompletionsSSEChunks(t, rec.Body.String())
-	require.Len(t, chunks, 5)
+	require.Len(t, chunks, 4)
 	require.Equal(t, "assistant", chunks[0].Choices[0].Delta.Role)
 	require.NotNil(t, chunks[1].Choices[0].Delta.ReasoningContent)
-	require.Equal(t, "视频正在生成 20%", *chunks[1].Choices[0].Delta.ReasoningContent)
-	require.NotNil(t, chunks[2].Choices[0].Delta.ReasoningContent)
-	require.Equal(t, "视频正在生成 100%", *chunks[2].Choices[0].Delta.ReasoningContent)
-	require.NotNil(t, chunks[3].Choices[0].Delta.Content)
-	require.Equal(t, "https://media.example/video.mp4", *chunks[3].Choices[0].Delta.Content)
-	require.NotNil(t, chunks[4].Choices[0].FinishReason)
-	require.Equal(t, "stop", *chunks[4].Choices[0].FinishReason)
+	require.Equal(t, "视频正在生成 20%\n视频正在生成 100%", *chunks[1].Choices[0].Delta.ReasoningContent)
+	require.NotNil(t, chunks[2].Choices[0].Delta.Content)
+	require.Equal(t, "https://media.example/video.mp4", *chunks[2].Choices[0].Delta.Content)
+	require.NotNil(t, chunks[3].Choices[0].FinishReason)
+	require.Equal(t, "stop", *chunks[3].Choices[0].FinishReason)
 }
 
 func TestGrokGatewayServiceHandleMessages_UsesCompatibleAccount(t *testing.T) {

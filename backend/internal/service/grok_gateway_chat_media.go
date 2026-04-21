@@ -647,23 +647,17 @@ func writeGrokChatMediaStream(c *gin.Context, model string, content string, reas
 	})
 
 	if trimmed := strings.TrimSpace(reasoning); trimmed != "" {
-		for _, part := range strings.Split(trimmed, "\n") {
-			reasoningPart := strings.TrimSpace(part)
-			if reasoningPart == "" {
-				continue
-			}
-			reasoningCopy := reasoningPart
-			writeChunk(apicompat.ChatCompletionsChunk{
-				ID:      responseID,
-				Object:  "chat.completion.chunk",
-				Created: createdAt,
-				Model:   strings.TrimSpace(model),
-				Choices: []apicompat.ChatChunkChoice{{
-					Index: 0,
-					Delta: apicompat.ChatDelta{ReasoningContent: &reasoningCopy},
-				}},
-			})
-		}
+		reasoningCopy := trimmed
+		writeChunk(apicompat.ChatCompletionsChunk{
+			ID:      responseID,
+			Object:  "chat.completion.chunk",
+			Created: createdAt,
+			Model:   strings.TrimSpace(model),
+			Choices: []apicompat.ChatChunkChoice{{
+				Index: 0,
+				Delta: apicompat.ChatDelta{ReasoningContent: &reasoningCopy},
+			}},
+		})
 	}
 
 	contentCopy := content
