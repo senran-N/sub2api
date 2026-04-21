@@ -19,11 +19,11 @@ type GrokTextRuntime struct {
 }
 
 type grokTextCompatibleRuntime interface {
-	Execute(*gin.Context, *grokTextPreparation)
+	Execute(*gin.Context, *grokTextPreparation) error
 }
 
 type grokTextSessionRuntime interface {
-	Execute(*gin.Context, *grokTextPreparation)
+	Execute(*gin.Context, *grokTextPreparation) error
 }
 
 type grokTextPreparation struct {
@@ -105,29 +105,49 @@ func (r *GrokTextRuntime) handleTextRequest(
 		return false
 	}
 
-	preparation, handled, err := r.prepareTextRequest(c.Request.Context(), groupID, body, protocolFamily, buildPreparedPayload)
-	if err != nil {
-		writeGrokTextPreparationError(c, protocolFamily, err)
-		return true
-	}
-	if !handled {
-		return false
-	}
+	excludedIDs := make(map[int64]struct{})
+	var lastFailoverErr *UpstreamFailoverError
 
-	if preparation.usesCompatible {
-		if r.compatibleRuntime == nil {
-			writeGrokTextError(c, protocolFamily, http.StatusInternalServerError, "api_error", "Grok compatible runtime is not configured")
+	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+		preparation, handled, err := r.prepareTextRequest(
+			c.Request.Context(),
+			groupID,
+			body,
+			protocolFamily,
+			buildPreparedPayload,
+			excludedIDs,
+		)
+		if err != nil {
+			if lastFailoverErr != nil && grokShouldReturnFailoverError(err) {
+				writeGrokTextFailoverError(c, protocolFamily, lastFailoverErr)
+				return true
+			}
+			writeGrokTextPreparationError(c, protocolFamily, err)
 			return true
 		}
-		r.compatibleRuntime.Execute(c, preparation)
-		return true
+		if !handled {
+			return false
+		}
+
+		err = r.executePreparedText(c, preparation)
+		if err == nil || c.Writer.Written() {
+			return true
+		}
+
+		failoverErr := grokTextFailoverError(err)
+		if failoverErr == nil || preparation.account == nil {
+			writeGrokTextRuntimeError(c, protocolFamily, err)
+			return true
+		}
+
+		lastFailoverErr = failoverErr
+		excludedIDs[preparation.account.ID] = struct{}{}
+		if len(excludedIDs) >= maxRetryAttempts {
+			break
+		}
 	}
 
-	if r.sessionRuntime == nil {
-		writeGrokTextError(c, protocolFamily, http.StatusInternalServerError, "api_error", "Grok session runtime is not configured")
-		return true
-	}
-	r.sessionRuntime.Execute(c, preparation)
+	writeGrokTextFailoverError(c, protocolFamily, lastFailoverErr)
 	return true
 }
 
@@ -137,6 +157,7 @@ func (r *GrokTextRuntime) prepareTextRequest(
 	body []byte,
 	protocolFamily CompatibleGatewayProtocolFamily,
 	buildPreparedPayload func([]byte) (*grokSessionTextPreparedPayload, error),
+	excludedIDs map[int64]struct{},
 ) (*grokTextPreparation, bool, error) {
 	if r == nil || r.gatewayService == nil {
 		return nil, true, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Grok gateway service is not configured")
@@ -159,7 +180,7 @@ func (r *GrokTextRuntime) prepareTextRequest(
 		return nil, true, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to query Grok accounts")
 	}
 
-	candidates := defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, nil)
+	candidates := defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, excludedIDs)
 	if len(candidates) == 0 {
 		if !defaultGrokAccountSelector.RequestedModelAvailableWithContext(ctx, accounts, requestedModel) {
 			return nil, true, newGrokResponsesHTTPError(
@@ -420,6 +441,84 @@ func writeGrokTextPreparationError(c *gin.Context, protocolFamily CompatibleGate
 		return
 	}
 	writeGrokTextError(c, protocolFamily, http.StatusInternalServerError, "api_error", "Grok runtime request failed")
+}
+
+func (r *GrokTextRuntime) executePreparedText(c *gin.Context, preparation *grokTextPreparation) error {
+	if preparation == nil {
+		return newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok accounts")
+	}
+	if preparation.usesCompatible {
+		if r.compatibleRuntime == nil {
+			return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Grok compatible runtime is not configured")
+		}
+		return r.compatibleRuntime.Execute(c, preparation)
+	}
+	if r.sessionRuntime == nil {
+		return newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Grok session runtime is not configured")
+	}
+	return r.sessionRuntime.Execute(c, preparation)
+}
+
+func grokTextFailoverError(err error) *UpstreamFailoverError {
+	var failoverErr *UpstreamFailoverError
+	if errors.As(err, &failoverErr) {
+		return failoverErr
+	}
+	return nil
+}
+
+func grokShouldReturnFailoverError(err error) bool {
+	var httpErr *grokResponsesHTTPError
+	if !errors.As(err, &httpErr) || httpErr == nil {
+		return false
+	}
+	if httpErr.statusCode == http.StatusServiceUnavailable {
+		return true
+	}
+	if httpErr.statusCode != http.StatusBadRequest {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(httpErr.message))
+	return strings.Contains(message, "requested model is not configured for any available grok account") ||
+		strings.Contains(message, "no available grok accounts")
+}
+
+func writeGrokTextRuntimeError(c *gin.Context, protocolFamily CompatibleGatewayProtocolFamily, err error) {
+	if c == nil || c.Writer.Written() {
+		return
+	}
+	var httpErr *grokResponsesHTTPError
+	if errors.As(err, &httpErr) && httpErr != nil {
+		writeGrokTextError(c, protocolFamily, httpErr.statusCode, httpErr.code, httpErr.message)
+		return
+	}
+	message := sanitizeUpstreamErrorMessage(strings.TrimSpace(err.Error()))
+	if message == "" {
+		message = "Grok runtime request failed"
+	}
+	writeGrokTextError(c, protocolFamily, http.StatusBadGateway, "api_error", message)
+}
+
+func writeGrokTextFailoverError(c *gin.Context, protocolFamily CompatibleGatewayProtocolFamily, failoverErr *UpstreamFailoverError) {
+	if c == nil || c.Writer.Written() {
+		return
+	}
+	statusCode := http.StatusBadGateway
+	code := "api_error"
+	message := "Grok upstream request failed"
+	if failoverErr != nil {
+		if failoverErr.StatusCode > 0 {
+			statusCode = firstNonZero(mapUpstreamStatusCode(failoverErr.StatusCode), http.StatusBadGateway)
+			code = grokResponsesErrorCodeForStatus(failoverErr.StatusCode)
+		}
+		if extracted := sanitizeUpstreamErrorMessage(strings.TrimSpace(ExtractUpstreamErrorMessage(failoverErr.ResponseBody))); extracted != "" {
+			message = extracted
+		} else if reason := sanitizeUpstreamErrorMessage(strings.TrimSpace(failoverErr.FailureReason)); reason != "" {
+			message = reason
+		}
+	}
+	writeGrokTextError(c, protocolFamily, statusCode, code, message)
 }
 
 func writeGrokTextError(c *gin.Context, protocolFamily CompatibleGatewayProtocolFamily, statusCode int, code, message string) {

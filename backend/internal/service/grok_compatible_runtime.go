@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -30,17 +31,17 @@ func ProvideGrokCompatibleRuntime(compatibleTextRuntime *CompatibleGatewayTextRu
 	return NewGrokCompatibleRuntime(compatibleTextRuntime, feedbackRepo)
 }
 
-func (r *GrokCompatibleRuntime) Execute(c *gin.Context, preparation *grokTextPreparation) {
+func (r *GrokCompatibleRuntime) Execute(c *gin.Context, preparation *grokTextPreparation) error {
 	if c == nil {
-		return
+		return nil
 	}
 	if preparation == nil || preparation.account == nil {
 		writeResponsesError(c, http.StatusServiceUnavailable, "api_error", "No available Grok compatible accounts")
-		return
+		return nil
 	}
 	if r == nil || r.textExecutor == nil {
 		writeGrokTextError(c, preparation.protocolFamily, http.StatusInternalServerError, "api_error", "Grok compatible text executor is not configured")
-		return
+		return nil
 	}
 
 	var (
@@ -65,6 +66,11 @@ func (r *GrokCompatibleRuntime) Execute(c *gin.Context, preparation *grokTextPre
 		})
 	}
 	if err != nil && !c.Writer.Written() {
+		var failoverErr *UpstreamFailoverError
+		if errors.As(err, &failoverErr) {
+			return err
+		}
 		writeGrokTextError(c, preparation.protocolFamily, http.StatusBadGateway, "api_error", "Grok upstream request failed")
 	}
+	return err
 }

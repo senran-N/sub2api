@@ -19,17 +19,17 @@ func NewGrokSessionRuntime(gatewayService *GatewayService) *GrokSessionRuntime {
 	return &GrokSessionRuntime{gatewayService: gatewayService}
 }
 
-func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPreparation) {
+func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPreparation) error {
 	if c == nil {
-		return
+		return nil
 	}
 	if r == nil || r.gatewayService == nil || r.gatewayService.httpUpstream == nil {
 		writeResponsesError(c, http.StatusInternalServerError, "api_error", "Grok gateway service is not configured")
-		return
+		return nil
 	}
 	if preparation == nil || preparation.account == nil {
 		writeResponsesError(c, http.StatusServiceUnavailable, "api_error", "No available Grok session accounts")
-		return
+		return nil
 	}
 
 	persistFeedback := func(statusCode int, runtimeErr error) {
@@ -53,7 +53,7 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 	)
 	if err != nil {
 		writeResponsesError(c, http.StatusInternalServerError, "api_error", "Failed to create Grok upstream request")
-		return
+		return err
 	}
 	applyGrokSessionBrowserHeaders(req.Header, preparation.target, "application/json, text/event-stream, text/plain, */*")
 	req.Header.Set("Content-Type", "application/json")
@@ -72,13 +72,17 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 		resolveGrokGatewayTLSProfile(r.gatewayService, preparation.account),
 	)
 	if err != nil {
-		persistFeedback(0, err)
+		failoverErr := newGrokSessionFailoverError(0, nil, err)
+		persistFeedback(0, firstNonNilError(failoverErr, err))
+		if failoverErr != nil {
+			return failoverErr
+		}
 		upstreamMsg := sanitizeUpstreamErrorMessage(err.Error())
 		if upstreamMsg == "" {
 			upstreamMsg = "Upstream request failed"
 		}
 		writeGrokTextError(c, preparation.protocolFamily, http.StatusBadGateway, "api_error", upstreamMsg)
-		return
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -93,9 +97,14 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 		if upstreamMsg == "" {
 			upstreamMsg = http.StatusText(resp.StatusCode)
 		}
-		persistFeedback(resp.StatusCode, errors.New(upstreamMsg))
+		runtimeErr := errors.New(upstreamMsg)
+		failoverErr := newGrokSessionFailoverError(resp.StatusCode, respBody, runtimeErr)
+		persistFeedback(resp.StatusCode, firstNonNilError(failoverErr, runtimeErr))
+		if failoverErr != nil {
+			return failoverErr
+		}
 		writeGrokTextError(c, preparation.protocolFamily, mapUpstreamStatusCode(resp.StatusCode), grokResponsesErrorCodeForStatus(resp.StatusCode), upstreamMsg)
-		return
+		return runtimeErr
 	}
 
 	var relayErr error
@@ -114,18 +123,27 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 			statusCode = httpErr.statusCode
 		}
 	}
-	persistFeedback(statusCode, relayErr)
+	if relayErr == nil {
+		persistFeedback(statusCode, nil)
+	}
 	if relayErr != nil {
 		if c.Writer.Written() {
-			return
+			persistFeedback(statusCode, relayErr)
+			return relayErr
+		}
+		failoverErr := newGrokSessionFailoverError(statusCode, nil, relayErr)
+		persistFeedback(statusCode, firstNonNilError(failoverErr, relayErr))
+		if failoverErr != nil {
+			return failoverErr
 		}
 		var httpErr *grokResponsesHTTPError
 		if errors.As(relayErr, &httpErr) {
 			writeGrokTextError(c, preparation.protocolFamily, httpErr.statusCode, httpErr.code, httpErr.message)
-			return
+			return relayErr
 		}
 		writeGrokTextError(c, preparation.protocolFamily, http.StatusBadGateway, "api_error", "Upstream stream ended without a response")
 	}
+	return relayErr
 }
 
 func resolveGrokGatewayTLSProfile(gatewayService *GatewayService, account *Account) *tlsfingerprint.Profile {
@@ -133,4 +151,39 @@ func resolveGrokGatewayTLSProfile(gatewayService *GatewayService, account *Accou
 		return nil
 	}
 	return gatewayService.tlsFPProfileService.ResolveTLSProfile(account)
+}
+
+func newGrokSessionFailoverError(statusCode int, responseBody []byte, runtimeErr error) *UpstreamFailoverError {
+	input := GrokRuntimeFeedbackInput{
+		StatusCode: statusCode,
+		Err:        runtimeErr,
+	}
+	if len(responseBody) > 0 {
+		input.Err = &UpstreamFailoverError{
+			StatusCode:   statusCode,
+			ResponseBody: append([]byte(nil), responseBody...),
+		}
+	}
+
+	classification := classifyGrokRuntimeError(input)
+	if classification.Scope == grokRuntimePenaltyScopeNone {
+		return nil
+	}
+
+	return &UpstreamFailoverError{
+		StatusCode:   statusCode,
+		ResponseBody: append([]byte(nil), responseBody...),
+		FailureReason: firstNonEmpty(
+			strings.TrimSpace(classification.Reason),
+			strings.TrimSpace(extractUpstreamErrorMessage(responseBody)),
+			strings.TrimSpace(string(classification.Class)),
+		),
+	}
+}
+
+func firstNonNilError(preferred error, fallback error) error {
+	if preferred != nil {
+		return preferred
+	}
+	return fallback
 }
