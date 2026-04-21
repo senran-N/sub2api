@@ -455,42 +455,22 @@ func (s *GrokMediaService) executeWithFailover(
 	schedulingModel string,
 	execute func(account *Account) error,
 ) error {
-	if execute == nil {
-		return nil
-	}
-
-	excludedIDs := make(map[int64]struct{})
-	var lastFailoverErr *UpstreamFailoverError
-
-	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
-		account, err := s.selectCompatibleAccount(ctx, groupID, schedulingModel, excludedIDs)
-		if err != nil {
-			if lastFailoverErr != nil {
-				return lastFailoverErr
+	return executeGrokRequestScopedFailover(
+		func(excludedIDs map[int64]struct{}) (*grokRequestScopedAttempt[struct{}], error) {
+			account, err := s.selectCompatibleAccount(ctx, groupID, schedulingModel, excludedIDs)
+			if err != nil {
+				return nil, err
 			}
-			return err
-		}
-
-		if err := execute(account); err != nil {
-			failoverErr := grokMediaFailoverError(err)
-			if failoverErr == nil || account == nil {
-				return err
-			}
-
-			lastFailoverErr = failoverErr
-			excludedIDs[account.ID] = struct{}{}
-			if len(excludedIDs) >= maxRetryAttempts {
-				break
-			}
-			continue
-		}
-		return nil
-	}
-
-	if lastFailoverErr != nil {
-		return lastFailoverErr
-	}
-	return errors.New("no compatible grok media accounts")
+			return &grokRequestScopedAttempt[struct{}]{
+				account: account,
+			}, nil
+		},
+		func(attempt *grokRequestScopedAttempt[struct{}]) error {
+			return execute(attempt.account)
+		},
+		grokMediaFailoverError,
+		func(error) bool { return true },
+	)
 }
 
 func (s *GrokMediaService) runSessionImageRequest(

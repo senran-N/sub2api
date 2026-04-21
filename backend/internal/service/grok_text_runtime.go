@@ -105,49 +105,56 @@ func (r *GrokTextRuntime) handleTextRequest(
 		return false
 	}
 
-	excludedIDs := make(map[int64]struct{})
-	var lastFailoverErr *UpstreamFailoverError
-
-	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
-		preparation, handled, err := r.prepareTextRequest(
-			c.Request.Context(),
-			groupID,
-			body,
-			protocolFamily,
-			buildPreparedPayload,
-			excludedIDs,
-		)
-		if err != nil {
-			if lastFailoverErr != nil && grokShouldReturnFailoverError(err) {
-				writeGrokTextFailoverError(c, protocolFamily, lastFailoverErr)
-				return true
+	err := executeGrokRequestScopedFailover(
+		func(excludedIDs map[int64]struct{}) (*grokRequestScopedAttempt[*grokTextPreparation], error) {
+			preparation, _, err := r.prepareTextRequest(
+				c.Request.Context(),
+				groupID,
+				body,
+				protocolFamily,
+				buildPreparedPayload,
+				excludedIDs,
+			)
+			if err != nil {
+				return nil, err
 			}
-			writeGrokTextPreparationError(c, protocolFamily, err)
-			return true
-		}
-		if !handled {
-			return false
-		}
-
-		err = r.executePreparedText(c, preparation)
-		if err == nil || c.Writer.Written() {
-			return true
-		}
-
-		failoverErr := grokTextFailoverError(err)
-		if failoverErr == nil || preparation.account == nil {
-			writeGrokTextRuntimeError(c, protocolFamily, err)
-			return true
-		}
-
-		lastFailoverErr = failoverErr
-		excludedIDs[preparation.account.ID] = struct{}{}
-		if len(excludedIDs) >= maxRetryAttempts {
-			break
-		}
+			return &grokRequestScopedAttempt[*grokTextPreparation]{
+				account: preparation.account,
+				value:   preparation,
+			}, nil
+		},
+		func(attempt *grokRequestScopedAttempt[*grokTextPreparation]) error {
+			err := r.executePreparedText(c, attempt.value)
+			if err == nil || c.Writer.Written() {
+				return nil
+			}
+			return err
+		},
+		grokTextFailoverError,
+		grokShouldReturnFailoverError,
+	)
+	if err == nil {
+		return true
 	}
 
-	writeGrokTextFailoverError(c, protocolFamily, lastFailoverErr)
+	var scopedErr *grokRequestScopedExecutionError
+	if errors.As(err, &scopedErr) && scopedErr != nil {
+		switch scopedErr.phase {
+		case grokRequestScopedErrorPhasePrepare:
+			writeGrokTextPreparationError(c, protocolFamily, scopedErr.err)
+		default:
+			writeGrokTextRuntimeError(c, protocolFamily, scopedErr.err)
+		}
+		return true
+	}
+
+	var failoverErr *UpstreamFailoverError
+	if errors.As(err, &failoverErr) {
+		writeGrokTextFailoverError(c, protocolFamily, failoverErr)
+		return true
+	}
+
+	writeGrokTextRuntimeError(c, protocolFamily, err)
 	return true
 }
 
