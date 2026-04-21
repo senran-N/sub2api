@@ -111,11 +111,33 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 	var relayErr error
 	switch preparation.protocolFamily {
 	case CompatibleGatewayProtocolFamilyChatCompletions:
-		relayErr = relayGrokSessionChatCompletions(c, resp.Body, preparation.requestedModel, preparation.stream, preparation.includeUsage, preparation.toolNames)
+		relayErr = relayGrokSessionChatCompletionsWithSettings(
+			c,
+			resp.Body,
+			preparation.requestedModel,
+			preparation.stream,
+			preparation.includeUsage,
+			preparation.toolNames,
+			preparation.textSettings,
+		)
 	case CompatibleGatewayProtocolFamilyMessages:
-		relayErr = relayGrokSessionAnthropic(c, resp.Body, preparation.requestedModel, preparation.stream, preparation.toolNames)
+		relayErr = relayGrokSessionAnthropicWithSettings(
+			c,
+			resp.Body,
+			preparation.requestedModel,
+			preparation.stream,
+			preparation.toolNames,
+			preparation.textSettings,
+		)
 	default:
-		relayErr = relayGrokSessionResponses(c, resp.Body, preparation.requestedModel, preparation.stream, preparation.toolNames)
+		relayErr = relayGrokSessionResponsesWithSettings(
+			c,
+			resp.Body,
+			preparation.requestedModel,
+			preparation.stream,
+			preparation.toolNames,
+			preparation.textSettings,
+		)
 	}
 	statusCode := resp.StatusCode
 	if relayErr != nil {

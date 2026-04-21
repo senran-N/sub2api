@@ -191,7 +191,7 @@ func TestRelayGrokSessionResponses_BufferedCleansRenderCitationTokens(t *testing
 	require.Equal(t, "message", response.Output[0].Type)
 	require.Equal(
 		t,
-		"Answer [[1]](https://example.com/article)\n\n## Sources\n[grok2api-sources]: #\n- [Example Article](https://example.com/article)\n",
+		"Answer [[1]](https://example.com/article)",
 		response.Output[0].Content[0].Text,
 	)
 	require.Len(t, response.Output[0].Content[0].Annotations, 1)
@@ -219,7 +219,14 @@ func TestRelayGrokSessionResponses_BufferedAppendsSourcesSuffix(t *testing.T) {
 		`data: {"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
 	}, "\n")
 
-	err := relayGrokSessionResponses(c, strings.NewReader(upstream), "grok-3", false, nil)
+	err := relayGrokSessionResponsesWithSettings(
+		c,
+		strings.NewReader(upstream),
+		"grok-3",
+		false,
+		nil,
+		GrokTextSettings{ShowSearchSources: true},
+	)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, rec.Code)
 
@@ -250,7 +257,14 @@ func TestRelayGrokSessionResponses_StreamEmitsContentPartAndAnnotationEvents(t *
 		`data: {"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
 	}, "\n")
 
-	err := relayGrokSessionResponses(c, strings.NewReader(upstream), "grok-3", true, nil)
+	err := relayGrokSessionResponsesWithSettings(
+		c,
+		strings.NewReader(upstream),
+		"grok-3",
+		true,
+		nil,
+		GrokTextSettings{ShowSearchSources: true},
+	)
 	require.NoError(t, err)
 
 	events := decodeResponsesSSEEvents(t, rec.Body.String())
@@ -305,7 +319,14 @@ func TestRelayGrokSessionResponses_StreamEmitsSourcesSuffixBeforeDone(t *testing
 		`data: {"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
 	}, "\n")
 
-	err := relayGrokSessionResponses(c, strings.NewReader(upstream), "grok-3", true, nil)
+	err := relayGrokSessionResponsesWithSettings(
+		c,
+		strings.NewReader(upstream),
+		"grok-3",
+		true,
+		nil,
+		GrokTextSettings{ShowSearchSources: true},
+	)
 	require.NoError(t, err)
 
 	events := decodeResponsesSSEEvents(t, rec.Body.String())
@@ -340,6 +361,64 @@ func TestRelayGrokSessionResponses_StreamEmitsSourcesSuffixBeforeDone(t *testing
 		"Answer\n\n## Sources\n[grok2api-sources]: #\n- [Example \\[Doc\\]](https://example.com/article)\n",
 		events[8].Response.Output[0].Content[0].Text,
 	)
+}
+
+func TestRelayGrokSessionResponses_BufferedSummarizesToolUsageCardsWhenEnabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	upstream := strings.Join([]string{
+		`data: {"result":{"response":{"messageTag":"tool_usage_card","toolUsageCard":{"webSearch":{"args":{"query":"latest grok release"}}},"rolloutId":"Agent 1","messageStepId":2}}}`,
+		`data: {"result":{"response":{"token":"done","messageTag":"final"}}}`,
+		`data: {"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
+	}, "\n")
+
+	err := relayGrokSessionResponsesWithSettings(
+		c,
+		strings.NewReader(upstream),
+		"grok-3",
+		false,
+		nil,
+		GrokTextSettings{ThinkingSummary: true},
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response apicompat.ResponsesResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Len(t, response.Output, 2)
+	require.Equal(t, "reasoning", response.Output[0].Type)
+	require.Equal(t, "Research Scope\n- Parallel research: latest grok release.\n", response.Output[0].Summary[0].Text)
+	require.Equal(t, "message", response.Output[1].Type)
+	require.Equal(t, "done", response.Output[1].Content[0].Text)
+}
+
+func TestRelayGrokSessionResponses_StreamIgnoresLateThinkingAfterContent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	upstream := strings.Join([]string{
+		`data: {"result":{"response":{"token":"Answer","messageTag":"final"}}}`,
+		`data: {"result":{"response":{"token":"hidden","isThinking":true,"messageTag":"summary"}}}`,
+		`data: {"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
+	}, "\n")
+
+	err := relayGrokSessionResponses(c, strings.NewReader(upstream), "grok-3", true, nil)
+	require.NoError(t, err)
+
+	events := decodeResponsesSSEEvents(t, rec.Body.String())
+	require.Len(t, events, 8)
+	for _, event := range events {
+		require.NotEqual(t, "response.reasoning_summary_text.delta", event.Type)
+	}
+	require.Equal(t, "Answer", events[3].Delta)
+	require.Equal(t, "Answer", events[4].Text)
 }
 
 func TestRelayGrokSessionResponses_BufferedParsesToolCalls(t *testing.T) {

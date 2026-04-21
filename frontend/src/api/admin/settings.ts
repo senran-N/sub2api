@@ -72,6 +72,8 @@ export interface SystemSettings {
   fallback_model_antigravity: string
   grok_official_base_url: string
   grok_session_base_url: string
+  grok_thinking_summary: boolean
+  grok_show_search_sources: boolean
   grok_image_output_format: string
   grok_video_output_format: string
   grok_media_proxy_enabled: boolean
@@ -154,6 +156,8 @@ export interface UpdateSettingsRequest {
   fallback_model_antigravity?: string
   grok_official_base_url?: string
   grok_session_base_url?: string
+  grok_thinking_summary?: boolean
+  grok_show_search_sources?: boolean
   grok_image_output_format?: string
   grok_video_output_format?: string
   grok_media_proxy_enabled?: boolean

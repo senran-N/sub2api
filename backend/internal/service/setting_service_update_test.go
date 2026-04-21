@@ -215,9 +215,22 @@ func TestSettingService_UpdateSettings_NormalizesGrokMediaSettings(t *testing.T)
 	})
 	require.NoError(t, err)
 	require.Equal(t, GrokMediaOutputFormatBase64, repo.updates[SettingKeyGrokImageOutputFormat])
-	require.Equal(t, GrokMediaOutputFormatLocalURL, repo.updates[SettingKeyGrokVideoOutputFormat])
+	require.Equal(t, GrokMediaOutputFormatUpstreamURL, repo.updates[SettingKeyGrokVideoOutputFormat])
 	require.Equal(t, "false", repo.updates[SettingKeyGrokMediaProxyEnabled])
 	require.Equal(t, "72", repo.updates[SettingKeyGrokMediaCacheRetentionHours])
+}
+
+func TestSettingService_UpdateSettings_PersistsGrokTextSettings(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		GrokThinkingSummary:   true,
+		GrokShowSearchSources: true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "true", repo.updates[SettingKeyGrokThinkingSummary])
+	require.Equal(t, "true", repo.updates[SettingKeyGrokShowSearchSources])
 }
 
 func TestSettingService_UpdateSettings_NormalizesGrokRuntimeSettings(t *testing.T) {

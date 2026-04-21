@@ -4851,6 +4851,12 @@ export default {
         grokSessionBaseUrl: "Grok Session Base URL",
         grokSessionBaseUrlHint:
           "Default browser origin and upstream base URL for Grok Web session requests.",
+        grokThinkingSummary: "Grok Thinking Summary",
+        grokThinkingSummaryHint:
+          "Condense Grok session reasoning into structured summary sections. Disable this to preserve the raw reasoning stream.",
+        grokShowSearchSources: "Append Grok Sources Footer",
+        grokShowSearchSourcesHint:
+          "Structured search_sources are always returned. Enable this only if assistant text should also append a ## Sources footer.",
         grokImageOutputFormat: "Grok Image Output Format",
         grokImageOutputFormatHint:
           "Controls how Grok image responses are returned to clients.",

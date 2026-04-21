@@ -167,6 +167,8 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		FallbackModelAntigravity:                settings.FallbackModelAntigravity,
 		GrokOfficialBaseURL:                     settings.GrokOfficialBaseURL,
 		GrokSessionBaseURL:                      settings.GrokSessionBaseURL,
+		GrokThinkingSummary:                     settings.GrokThinkingSummary,
+		GrokShowSearchSources:                   settings.GrokShowSearchSources,
 		GrokImageOutputFormat:                   settings.GrokImageOutputFormat,
 		GrokVideoOutputFormat:                   settings.GrokVideoOutputFormat,
 		GrokMediaProxyEnabled:                   settings.GrokMediaProxyEnabled,
@@ -254,6 +256,8 @@ type UpdateSettingsRequest struct {
 	FallbackModelAntigravity           string `json:"fallback_model_antigravity"`
 	GrokOfficialBaseURL                string `json:"grok_official_base_url"`
 	GrokSessionBaseURL                 string `json:"grok_session_base_url"`
+	GrokThinkingSummary                *bool  `json:"grok_thinking_summary"`
+	GrokShowSearchSources              *bool  `json:"grok_show_search_sources"`
 	GrokImageOutputFormat              string `json:"grok_image_output_format"`
 	GrokVideoOutputFormat              string `json:"grok_video_output_format"`
 	GrokMediaProxyEnabled              *bool  `json:"grok_media_proxy_enabled"`
@@ -682,6 +686,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.GrokSessionBaseURL
 		}(),
+		GrokThinkingSummary: func() bool {
+			if req.GrokThinkingSummary != nil {
+				return *req.GrokThinkingSummary
+			}
+			return previousSettings.GrokThinkingSummary
+		}(),
+		GrokShowSearchSources: func() bool {
+			if req.GrokShowSearchSources != nil {
+				return *req.GrokShowSearchSources
+			}
+			return previousSettings.GrokShowSearchSources
+		}(),
 		GrokImageOutputFormat: req.GrokImageOutputFormat,
 		GrokVideoOutputFormat: req.GrokVideoOutputFormat,
 		GrokMediaProxyEnabled: func() bool {
@@ -851,6 +867,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelAntigravity:                updatedSettings.FallbackModelAntigravity,
 		GrokOfficialBaseURL:                     updatedSettings.GrokOfficialBaseURL,
 		GrokSessionBaseURL:                      updatedSettings.GrokSessionBaseURL,
+		GrokThinkingSummary:                     updatedSettings.GrokThinkingSummary,
+		GrokShowSearchSources:                   updatedSettings.GrokShowSearchSources,
 		GrokImageOutputFormat:                   updatedSettings.GrokImageOutputFormat,
 		GrokVideoOutputFormat:                   updatedSettings.GrokVideoOutputFormat,
 		GrokMediaProxyEnabled:                   updatedSettings.GrokMediaProxyEnabled,
@@ -922,6 +940,12 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.GrokSessionBaseURL != after.GrokSessionBaseURL {
 		changed = append(changed, "grok_session_base_url")
+	}
+	if before.GrokThinkingSummary != after.GrokThinkingSummary {
+		changed = append(changed, "grok_thinking_summary")
+	}
+	if before.GrokShowSearchSources != after.GrokShowSearchSources {
+		changed = append(changed, "grok_show_search_sources")
 	}
 	if before.GrokImageOutputFormat != after.GrokImageOutputFormat {
 		changed = append(changed, "grok_image_output_format")

@@ -26,6 +26,9 @@ var (
 	grokSessionThinkTagRe        = regexp.MustCompile(`(?is)<(?:think|thinking)>[\s\S]*?</(?:think|thinking)>`)
 	grokSessionInlineBase64ImgRe = regexp.MustCompile(`!\[image\]\(data:[^)]*?base64,[^)]*?\)`)
 	grokSessionSourcesStripRe    = regexp.MustCompile(`(?:^|\r?\n\r?\n)## Sources\r?\n\[grok2api-sources\]: #\r?\n[\s\S]*$`)
+	grokSessionToolCallsStripRe  = regexp.MustCompile(`(?is)<tool_calls\s*>[\s\S]*?</tool_calls\s*>`)
+	grokSessionFunctionStripRe   = regexp.MustCompile(`(?is)<function_call\s*>[\s\S]*?</function_call\s*>`)
+	grokSessionInvokeStripRe     = regexp.MustCompile(`(?is)<invoke\b[\s\S]*?</invoke\s*>`)
 )
 
 type grokSessionTextRequest struct {
@@ -386,6 +389,9 @@ func grokSessionSanitizeTranscriptText(text string, role string) string {
 	}
 	if strings.EqualFold(strings.TrimSpace(role), "assistant") {
 		text = grokSessionSourcesStripRe.ReplaceAllString(text, "")
+		text = grokSessionToolCallsStripRe.ReplaceAllString(text, "")
+		text = grokSessionFunctionStripRe.ReplaceAllString(text, "")
+		text = grokSessionInvokeStripRe.ReplaceAllString(text, "")
 	}
 	text = grokSessionThinkTagRe.ReplaceAllString(text, "")
 	text = strings.TrimSpace(text)

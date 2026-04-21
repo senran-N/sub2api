@@ -23,8 +23,8 @@ func TestSettingServiceGetGrokMediaSettings_UsesDefaultsForInvalidValues(t *test
 
 	settings := svc.GetGrokMediaSettings(context.Background())
 
-	require.Equal(t, GrokMediaOutputFormatLocalURL, settings.ImageOutputFormat)
-	require.Equal(t, GrokMediaOutputFormatLocalURL, settings.VideoOutputFormat)
+	require.Equal(t, GrokMediaOutputFormatUpstreamURL, settings.ImageOutputFormat)
+	require.Equal(t, GrokMediaOutputFormatUpstreamURL, settings.VideoOutputFormat)
 	require.False(t, settings.MediaProxyEnabled)
 	require.Equal(t, defaultGrokMediaCacheRetentionHours, settings.MediaCacheRetentionHours)
 	require.Equal(t, time.Duration(defaultGrokMediaCacheRetentionHours)*time.Hour, svc.GetGrokMediaCacheRetention(context.Background()))

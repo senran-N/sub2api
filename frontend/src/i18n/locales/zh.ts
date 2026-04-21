@@ -4794,6 +4794,12 @@ export default {
         grokSessionBaseUrl: "Grok Session Base URL",
         grokSessionBaseUrlHint:
           "用于 Grok Web session 请求的浏览器 origin 与默认上游地址。",
+        grokThinkingSummary: "Grok 思维链精简输出",
+        grokThinkingSummaryHint:
+          "开启后将 Grok session reasoning 压缩为结构化摘要分段；关闭后尽量保留原始思维流。",
+        grokShowSearchSources: "Grok 正文追加 Sources",
+        grokShowSearchSourcesHint:
+          "结构化 search_sources 字段始终返回。开启后，助手正文末尾还会额外追加 ## Sources 段落。",
         grokImageOutputFormat: "Grok 图片输出格式",
         grokImageOutputFormatHint: "控制 Grok 图片响应返回给客户端的格式。",
         grokVideoOutputFormat: "Grok 视频输出格式",

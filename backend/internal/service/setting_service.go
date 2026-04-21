@@ -214,6 +214,8 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	)
 	updates[SettingKeyGrokOfficialBaseURL] = settings.GrokOfficialBaseURL
 	updates[SettingKeyGrokSessionBaseURL] = settings.GrokSessionBaseURL
+	updates[SettingKeyGrokThinkingSummary] = strconv.FormatBool(settings.GrokThinkingSummary)
+	updates[SettingKeyGrokShowSearchSources] = strconv.FormatBool(settings.GrokShowSearchSources)
 	updates[SettingKeyGrokImageOutputFormat] = settings.GrokImageOutputFormat
 	updates[SettingKeyGrokVideoOutputFormat] = settings.GrokVideoOutputFormat
 	updates[SettingKeyGrokMediaProxyEnabled] = strconv.FormatBool(settings.GrokMediaProxyEnabled)
@@ -339,8 +341,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyFallbackModelAntigravity:           "gemini-2.5-pro",
 		SettingKeyGrokOfficialBaseURL:                defaultGrokOfficialBaseURL,
 		SettingKeyGrokSessionBaseURL:                 defaultGrokSessionBaseURL,
-		SettingKeyGrokImageOutputFormat:              GrokMediaOutputFormatLocalURL,
-		SettingKeyGrokVideoOutputFormat:              GrokMediaOutputFormatLocalURL,
+		SettingKeyGrokThinkingSummary:                "false",
+		SettingKeyGrokShowSearchSources:              "false",
+		SettingKeyGrokImageOutputFormat:              GrokMediaOutputFormatUpstreamURL,
+		SettingKeyGrokVideoOutputFormat:              GrokMediaOutputFormatUpstreamURL,
 		SettingKeyGrokMediaProxyEnabled:              "true",
 		SettingKeyGrokMediaCacheRetentionHours:       strconv.Itoa(defaultGrokMediaCacheRetentionHours),
 		SettingKeyGrokQuotaSyncIntervalSeconds:       strconv.Itoa(defaultGrokQuotaSyncIntervalSeconds),
@@ -480,6 +484,8 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		settings[SettingKeyGrokSessionBaseURL],
 		defaultGrokSessionBaseURL,
 	)
+	result.GrokThinkingSummary = settings[SettingKeyGrokThinkingSummary] == "true"
+	result.GrokShowSearchSources = settings[SettingKeyGrokShowSearchSources] == "true"
 	result.GrokImageOutputFormat = normalizeGrokImageOutputFormat(settings[SettingKeyGrokImageOutputFormat])
 	result.GrokVideoOutputFormat = normalizeGrokVideoOutputFormat(settings[SettingKeyGrokVideoOutputFormat])
 	result.GrokMediaProxyEnabled = !isFalseSettingValue(settings[SettingKeyGrokMediaProxyEnabled])

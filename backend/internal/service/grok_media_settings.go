@@ -26,8 +26,8 @@ type GrokMediaSettings struct {
 
 func DefaultGrokMediaSettings() GrokMediaSettings {
 	return GrokMediaSettings{
-		ImageOutputFormat:        GrokMediaOutputFormatLocalURL,
-		VideoOutputFormat:        GrokMediaOutputFormatLocalURL,
+		ImageOutputFormat:        GrokMediaOutputFormatUpstreamURL,
+		VideoOutputFormat:        GrokMediaOutputFormatUpstreamURL,
 		MediaProxyEnabled:        true,
 		MediaCacheRetentionHours: defaultGrokMediaCacheRetentionHours,
 	}
@@ -42,7 +42,7 @@ func normalizeGrokImageOutputFormat(raw string) string {
 	case GrokMediaOutputFormatBase64:
 		return GrokMediaOutputFormatBase64
 	default:
-		return GrokMediaOutputFormatLocalURL
+		return DefaultGrokMediaSettings().ImageOutputFormat
 	}
 }
 
@@ -53,7 +53,7 @@ func normalizeGrokVideoOutputFormat(raw string) string {
 	case GrokMediaOutputFormatHTML:
 		return GrokMediaOutputFormatHTML
 	default:
-		return GrokMediaOutputFormatLocalURL
+		return DefaultGrokMediaSettings().VideoOutputFormat
 	}
 }
 

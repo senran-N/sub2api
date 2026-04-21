@@ -33,6 +33,7 @@ type grokTextPreparation struct {
 	stream         bool
 	includeUsage   bool
 	toolNames      []string
+	textSettings   GrokTextSettings
 	account        *Account
 	quotaWindow    string
 	compatibleBody []byte
@@ -233,8 +234,10 @@ func (r *GrokTextRuntime) prepareTextRequest(
 	}
 
 	runtimeSettings := DefaultGrokRuntimeSettings()
+	textSettings := DefaultGrokTextSettings()
 	if r.gatewayService != nil && r.gatewayService.settingService != nil {
 		runtimeSettings = r.gatewayService.settingService.GetGrokRuntimeSettings(ctx)
+		textSettings = r.gatewayService.settingService.GetGrokTextSettings(ctx)
 	}
 	if err := r.prepareSessionAttachments(ctx, selected, preparedPayload); err != nil {
 		return nil, true, err
@@ -254,6 +257,7 @@ func (r *GrokTextRuntime) prepareTextRequest(
 		stream:         preparedPayload.stream,
 		includeUsage:   preparedPayload.includeUsage,
 		toolNames:      append([]string(nil), preparedPayload.toolNames...),
+		textSettings:   textSettings,
 		account:        selected,
 		quotaWindow:    selectedQuotaWindow,
 		target:         target,

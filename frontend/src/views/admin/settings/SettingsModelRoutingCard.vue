@@ -109,6 +109,30 @@
           </p>
         </div>
 
+        <div class="flex items-center justify-between gap-4 rounded-lg border border-[color:var(--theme-card-border)] p-4">
+          <div>
+            <label class="settings-model-routing-card__field-label text-sm font-medium">
+              {{ t('admin.settings.modelRouting.grokThinkingSummary') }}
+            </label>
+            <p class="settings-model-routing-card__description mt-0.5 text-xs">
+              {{ t('admin.settings.modelRouting.grokThinkingSummaryHint') }}
+            </p>
+          </div>
+          <Toggle v-model="form.grok_thinking_summary" />
+        </div>
+
+        <div class="flex items-center justify-between gap-4 rounded-lg border border-[color:var(--theme-card-border)] p-4">
+          <div>
+            <label class="settings-model-routing-card__field-label text-sm font-medium">
+              {{ t('admin.settings.modelRouting.grokShowSearchSources') }}
+            </label>
+            <p class="settings-model-routing-card__description mt-0.5 text-xs">
+              {{ t('admin.settings.modelRouting.grokShowSearchSourcesHint') }}
+            </p>
+          </div>
+          <Toggle v-model="form.grok_show_search_sources" />
+        </div>
+
         <div>
           <label class="settings-model-routing-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.modelRouting.grokImageOutputFormat') }}

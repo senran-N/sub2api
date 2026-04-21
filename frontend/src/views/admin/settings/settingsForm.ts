@@ -87,6 +87,8 @@ export type SettingsModelRoutingFields = Pick<
   | 'fallback_model_antigravity'
   | 'grok_official_base_url'
   | 'grok_session_base_url'
+  | 'grok_thinking_summary'
+  | 'grok_show_search_sources'
   | 'grok_image_output_format'
   | 'grok_video_output_format'
   | 'grok_media_proxy_enabled'
@@ -212,8 +214,10 @@ export function createDefaultSettingsForm(): SettingsForm {
     fallback_model_antigravity: 'gemini-2.5-pro',
     grok_official_base_url: 'https://api.x.ai',
     grok_session_base_url: 'https://grok.com',
-    grok_image_output_format: 'local_url',
-    grok_video_output_format: 'local_url',
+    grok_thinking_summary: false,
+    grok_show_search_sources: false,
+    grok_image_output_format: 'upstream_url',
+    grok_video_output_format: 'upstream_url',
     grok_media_proxy_enabled: true,
     grok_media_cache_retention_hours: 72,
     grok_quota_sync_interval_seconds: 900,
@@ -406,6 +410,8 @@ export function buildSettingsUpdatePayload(
       fallback_model_antigravity: form.fallback_model_antigravity,
       grok_official_base_url: form.grok_official_base_url,
       grok_session_base_url: form.grok_session_base_url,
+      grok_thinking_summary: form.grok_thinking_summary,
+      grok_show_search_sources: form.grok_show_search_sources,
       grok_image_output_format: form.grok_image_output_format,
       grok_video_output_format: form.grok_video_output_format,
       grok_media_proxy_enabled: form.grok_media_proxy_enabled,

@@ -95,6 +95,9 @@ func TestBuildGrokSessionTextPayloadFromResponsesRequest_StripsAssistantGenerate
 			Role: "assistant",
 			Content: json.RawMessage(`[
 				{"type":"output_text","text":"<thinking>private chain</thinking>\nFinal answer.\n![image](data:image/png;base64,AAAA)"},
+				{"type":"output_text","text":"<tool_calls><tool_call><tool_name>search</tool_name><parameters>{\"q\":\"demo\"}</parameters></tool_call></tool_calls>"},
+				{"type":"output_text","text":"<function_call><name>search</name><arguments>{\"q\":\"demo\"}</arguments></function_call>"},
+				{"type":"output_text","text":"<invoke name=\"search\">{\"q\":\"demo\"}</invoke>"},
 				{"type":"output_text","text":"## Sources\n[grok2api-sources]: #\n- [Doc](https://example.com/doc)"},
 				{"type":"output_text","text":"Second paragraph."}
 			]`),
@@ -116,6 +119,9 @@ func TestBuildGrokSessionTextPayloadFromResponsesRequest_StripsAssistantGenerate
 	require.True(t, ok)
 	require.Contains(t, message, "[assistant]:\nFinal answer.\n[图片]\nSecond paragraph.")
 	require.NotContains(t, message, "<thinking>")
+	require.NotContains(t, message, "<tool_calls>")
+	require.NotContains(t, message, "<function_call>")
+	require.NotContains(t, message, "<invoke ")
 	require.NotContains(t, message, "## Sources")
 	require.NotContains(t, message, "data:image/png;base64")
 }

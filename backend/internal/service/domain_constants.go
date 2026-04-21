@@ -142,6 +142,8 @@ const (
 	SettingKeyFallbackModelAntigravity           = "fallback_model_antigravity"
 	SettingKeyGrokOfficialBaseURL                = "grok_official_base_url"
 	SettingKeyGrokSessionBaseURL                 = "grok_session_base_url"
+	SettingKeyGrokThinkingSummary                = "grok_thinking_summary"
+	SettingKeyGrokShowSearchSources              = "grok_show_search_sources"
 	SettingKeyGrokImageOutputFormat              = "grok_image_output_format"
 	SettingKeyGrokVideoOutputFormat              = "grok_video_output_format"
 	SettingKeyGrokMediaProxyEnabled              = "grok_media_proxy_enabled"

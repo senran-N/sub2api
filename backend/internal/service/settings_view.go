@@ -58,6 +58,8 @@ type SystemSettings struct {
 	FallbackModelAntigravity                string `json:"fallback_model_antigravity"`
 	GrokOfficialBaseURL                     string `json:"grok_official_base_url"`
 	GrokSessionBaseURL                      string `json:"grok_session_base_url"`
+	GrokThinkingSummary                     bool   `json:"grok_thinking_summary"`
+	GrokShowSearchSources                   bool   `json:"grok_show_search_sources"`
 	GrokImageOutputFormat                   string `json:"grok_image_output_format"`
 	GrokVideoOutputFormat                   string `json:"grok_video_output_format"`
 	GrokMediaProxyEnabled                   bool   `json:"grok_media_proxy_enabled"`
