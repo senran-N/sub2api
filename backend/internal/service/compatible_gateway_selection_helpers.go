@@ -116,7 +116,7 @@ func compatibleRequestedModelAvailableForScheduling(
 		return true
 	}
 	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
-		return defaultGrokAccountSelector.IsRuntimeEligibleWithContext(ctx, account, requestedModel)
+		return defaultGrokAccountSelector.IsModelAvailableWithContext(ctx, account, requestedModel)
 	}
 	return isCompatibleAccountModelEligible(account, requestedModel, platform)
 }

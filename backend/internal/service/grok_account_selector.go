@@ -73,18 +73,31 @@ func (selector GrokAccountSelector) IsModelEligible(account *Account, requestedM
 	return isGrokAccountModelEligible(account, requestedModel)
 }
 
+func (selector GrokAccountSelector) IsModelAvailableWithContext(
+	ctx context.Context,
+	account *Account,
+	requestedModel string,
+) bool {
+	if !selector.IsBaseEligibleWithContext(ctx, account) {
+		return false
+	}
+	if requestedModel != "" && !selector.IsModelEligible(account, requestedModel) {
+		return false
+	}
+
+	runtimeState := account.grokRuntimeSelectionState()
+	return !grokRuntimeModelSelectionBlocked(runtimeState, requestedModel, time.Now().UTC())
+}
+
 func (selector GrokAccountSelector) IsRuntimeEligible(account *Account, requestedModel string) bool {
 	return selector.IsRuntimeEligibleWithContext(context.TODO(), account, requestedModel)
 }
 
 func (selector GrokAccountSelector) IsRuntimeEligibleWithContext(ctx context.Context, account *Account, requestedModel string) bool {
-	if !selector.IsBaseEligibleWithContext(ctx, account) {
+	if !selector.IsModelAvailableWithContext(ctx, account, requestedModel) {
 		return false
 	}
 	if oauthSelectionCredentialIssue(account) != "" {
-		return false
-	}
-	if requestedModel != "" && !selector.IsModelEligible(account, requestedModel) {
 		return false
 	}
 	if grokRuntimeSelectionBlocked(account.grokRuntimeSelectionState(), requestedModel, time.Now().UTC()) {
@@ -106,7 +119,7 @@ func (selector GrokAccountSelector) RequestedModelAvailableWithContext(
 		return true
 	}
 	for i := range accounts {
-		if selector.IsRuntimeEligibleWithContext(ctx, &accounts[i], requestedModel) {
+		if selector.IsModelAvailableWithContext(ctx, &accounts[i], requestedModel) {
 			return true
 		}
 	}
@@ -454,6 +467,14 @@ func grokRuntimeSelectionBlocked(runtimeState grokRuntimeSelectionState, request
 	default:
 		return false
 	}
+}
+
+func grokRuntimeModelSelectionBlocked(runtimeState grokRuntimeSelectionState, requestedModel string, now time.Time) bool {
+	if runtimeState.CooldownUntil == nil || !now.Before(*runtimeState.CooldownUntil) {
+		return false
+	}
+	return runtimeState.CooldownScope == grokRuntimePenaltyScopeModel &&
+		grokRuntimePenaltyAppliesToModel(runtimeState.CooldownModel, requestedModel)
 }
 
 func grokRuntimePenaltyAppliesToModel(cooldownModel string, requestedModel string) bool {

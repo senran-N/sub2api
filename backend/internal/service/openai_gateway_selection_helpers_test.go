@@ -324,6 +324,44 @@ func TestOpenAIRequestedModelAvailableForPlatform_GrokSessionOnlyIsAvailableForT
 	}
 }
 
+func TestOpenAIRequestedModelAvailableForPlatform_GrokAccountCooldownStillCountsAsConfigured(t *testing.T) {
+	now := time.Now().UTC()
+	accounts := []Account{
+		{
+			ID:          2,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+					"runtime_state": map[string]any{
+						"selection_cooldown_until": now.Add(10 * time.Minute).Format(time.RFC3339),
+						"selection_cooldown_scope": "account",
+					},
+				},
+			},
+		},
+	}
+
+	if !openAIRequestedModelAvailableForPlatform(accounts, "grok-4-fast-reasoning", PlatformGrok) {
+		t.Fatal("expected account-scoped grok cooldown to remain model-configured for scheduler errors")
+	}
+
+	accounts[0].Extra["grok"].(map[string]any)["runtime_state"] = map[string]any{
+		"selection_cooldown_until": now.Add(10 * time.Minute).Format(time.RFC3339),
+		"selection_cooldown_scope": "model",
+		"selection_cooldown_model": "grok-4-fast-reasoning",
+	}
+
+	if openAIRequestedModelAvailableForPlatform(accounts, "grok-4-fast-reasoning", PlatformGrok) {
+		t.Fatal("expected model-scoped grok cooldown to keep model unavailable")
+	}
+}
+
 func TestSelectBestOpenAIWaitCandidate(t *testing.T) {
 	now := time.Now()
 	earlier := now.Add(-1 * time.Hour)

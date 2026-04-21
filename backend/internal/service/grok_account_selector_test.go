@@ -35,6 +35,42 @@ func TestGrokAccountSelectorRequestedModelAvailable(t *testing.T) {
 	require.False(t, selector.RequestedModelAvailable(accounts, "grok-imagine-image"))
 }
 
+func TestGrokAccountSelectorRequestedModelAvailable_IgnoresAccountCooldownButHonorsModelCooldown(t *testing.T) {
+	selector := GrokAccountSelector{}
+	now := time.Now().UTC()
+	accounts := []Account{
+		{
+			ID:          3,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+					"runtime_state": map[string]any{
+						"selection_cooldown_until": now.Add(10 * time.Minute).Format(time.RFC3339),
+						"selection_cooldown_scope": "account",
+					},
+				},
+			},
+		},
+	}
+
+	require.True(t, selector.RequestedModelAvailable(accounts, "grok-4-fast-reasoning"))
+	require.Empty(t, selector.FilterSchedulableCandidates(accounts, "grok-4-fast-reasoning", nil))
+
+	accounts[0].Extra["grok"].(map[string]any)["runtime_state"] = map[string]any{
+		"selection_cooldown_until": now.Add(10 * time.Minute).Format(time.RFC3339),
+		"selection_cooldown_scope": "model",
+		"selection_cooldown_model": "grok-4-fast-reasoning",
+	}
+
+	require.False(t, selector.RequestedModelAvailable(accounts, "grok-4-fast-reasoning"))
+}
+
 func TestGrokAccountSelectorIsRuntimeEligible_ExcludesSessionFromSharedRuntime(t *testing.T) {
 	selector := GrokAccountSelector{}
 	account := &Account{
