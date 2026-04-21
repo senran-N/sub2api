@@ -262,7 +262,7 @@ func debugGrokSessionImageStream(t *testing.T, account Account, requestBody []by
 		http.MethodPost,
 		target,
 		payloadBytes,
-		"application/json, text/event-stream, text/plain, */*",
+		grokSessionTextAcceptHeader,
 	)
 	require.NoError(t, err)
 

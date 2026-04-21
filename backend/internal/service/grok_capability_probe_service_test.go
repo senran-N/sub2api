@@ -134,6 +134,8 @@ func TestGrokCapabilityProbeServiceProbeNowTargetsUnknownTierAccountsAcrossTrans
 	require.Equal(t, grokCapabilityTierBootstrapModelID, requestBodyModel(t, apiRequest))
 	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie-303"), sessionRequest.Header.Get("Cookie"))
 	require.Equal(t, grokSessionProbeUserAgent, sessionRequest.Header.Get("User-Agent"))
+	require.Equal(t, grokSessionProbeAcceptHeader, sessionRequest.Header.Get("Accept"))
+	require.Equal(t, "gzip, deflate, br, zstd", sessionRequest.Header.Get("Accept-Encoding"))
 	require.Equal(t, grokSessionModeExpert, requestBodyModeID(t, sessionRequest))
 
 	extraByID := map[int64]map[string]any{}

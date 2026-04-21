@@ -67,7 +67,7 @@ func TestClassifyGrokRuntimeError_InvalidCredentialsBodyUsesAccountAuthCooldown(
 func TestClassifyGrokRuntimeError_CloudflareChallengeDoesNotPretendToBeAuth(t *testing.T) {
 	classification := classifyGrokRuntimeError(GrokRuntimeFeedbackInput{
 		StatusCode: http.StatusForbidden,
-		Err:        errors.New("Cloudflare challenge encountered (HTTP 403); upstream requires browser verification. Refresh Grok cookies if applicable and retry with a browser-matched TLS fingerprint (cf-ray: test-ray-1)"),
+		Err:        errors.New("Cloudflare challenge encountered (HTTP 403)"),
 	})
 
 	require.Equal(t, http.StatusForbidden, classification.StatusCode)

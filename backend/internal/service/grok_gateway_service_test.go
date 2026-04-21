@@ -1357,6 +1357,9 @@ func TestGrokGatewayServiceHandleMessages_UsesSessionAccount(t *testing.T) {
 	require.True(t, handled)
 	require.Len(t, upstream.requests, 1)
 	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie"), upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, grokSessionTextAcceptHeader, upstream.requests[0].Header.Get("Accept"))
+	require.Equal(t, "gzip, deflate, br, zstd", upstream.requests[0].Header.Get("Accept-Encoding"))
+	require.Equal(t, grokSessionProbeUserAgent, upstream.requests[0].Header.Get("User-Agent"))
 
 	var response apicompat.AnthropicResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))

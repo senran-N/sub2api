@@ -11,9 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
-const grokSessionProbeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+const grokSessionProbeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 const grokSessionDefaultAcceptLanguage = "zh-CN,zh;q=0.9,en;q=0.8"
 const grokSessionDefaultStatsigID = "ZTpUeXBlRXJyb3I6IENhbm5vdCByZWFkIHByb3BlcnRpZXMgb2YgdW5kZWZpbmVkIChyZWFkaW5nICdjaGlsZE5vZGVzJyk="
+const grokSessionDefaultBaggage = "sentry-environment=production,sentry-release=d6add6fb0460641fd482d767a335ef72b9b6abb8,sentry-public_key=b311e0f2690c81f25e2c4cf6d4f7ce1c"
+const grokSessionTextAcceptHeader = "*/*"
 
 var grokSessionBrowserVersionPattern = regexp.MustCompile(`(?:chrome|chromium|crios|edg|brave)/(\d{2,3})`)
 
@@ -30,6 +32,8 @@ func applyGrokSessionBrowserHeaders(header http.Header, target grokTransportTarg
 	sessionBaseURL := firstNonEmptyGrokSessionHeaderValue(target.SessionBaseURL, grokWebBaseURL)
 
 	header.Set("Accept-Language", acceptLanguage)
+	header.Set("Accept-Encoding", "gzip, deflate, br, zstd")
+	header.Set("Baggage", grokSessionDefaultBaggage)
 	header.Set("Origin", sessionBaseURL)
 	header.Set("Referer", strings.TrimRight(sessionBaseURL, "/")+"/")
 	header.Set("Priority", "u=1, i")

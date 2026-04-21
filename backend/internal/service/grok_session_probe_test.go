@@ -42,6 +42,8 @@ func TestProbeGrokSessionConnectionWithSettings_UsesConfiguredSessionBaseURL(t *
 	require.Equal(t, "https://session.grok.example/root", upstream.requests[0].Header.Get("Origin"))
 	require.Equal(t, "https://session.grok.example/root/", upstream.requests[0].Header.Get("Referer"))
 	require.Equal(t, grokSessionProbeAcceptHeader, upstream.requests[0].Header.Get("Accept"))
+	require.Equal(t, "gzip, deflate, br, zstd", upstream.requests[0].Header.Get("Accept-Encoding"))
+	require.Equal(t, grokSessionDefaultBaggage, upstream.requests[0].Header.Get("Baggage"))
 	require.Equal(t, "https://session.grok.example/root/rest/app-chat/conversations/new", result.TargetURL)
 	require.True(t, result.HasSSO)
 	require.True(t, result.HasSSORW)

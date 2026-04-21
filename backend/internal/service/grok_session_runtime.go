@@ -56,7 +56,7 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 		writeResponsesError(c, http.StatusInternalServerError, "api_error", "Failed to create Grok upstream request")
 		return err
 	}
-	applyGrokSessionBrowserHeaders(req.Header, preparation.target, "application/json, text/event-stream, text/plain, */*")
+	applyGrokSessionBrowserHeaders(req.Header, preparation.target, grokSessionTextAcceptHeader)
 	req.Header.Set("Content-Type", "application/json")
 	preparation.target.Apply(req)
 

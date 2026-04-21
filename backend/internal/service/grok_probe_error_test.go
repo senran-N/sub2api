@@ -17,8 +17,7 @@ func TestGrokSummarizeProbeHTTPError_CloudflareChallengeSanitized(t *testing.T) 
 	summary := grokSummarizeProbeHTTPError(resp, grokReadProbeErrorBody(resp))
 
 	require.True(t, summary.IsCloudflareChallenge)
-	require.Contains(t, summary.Message, "Cloudflare challenge encountered")
-	require.Contains(t, summary.Message, "cf-ray: test-ray-123")
+	require.Equal(t, "Cloudflare challenge encountered (HTTP 403)", summary.Message)
 	require.NotContains(t, summary.Message, "<!DOCTYPE html>")
 	require.Empty(t, summary.AuthenticationMessage)
 }

@@ -12,7 +12,7 @@ import (
 const (
 	grokProbeErrorBodyLimit      = 16 << 10
 	grokProbeErrorPreviewLimit   = 512
-	grokSessionProbeAcceptHeader = "application/json, text/event-stream, text/plain, */*"
+	grokSessionProbeAcceptHeader = grokSessionTextAcceptHeader
 )
 
 type grokProbeHTTPErrorSummary struct {
@@ -39,17 +39,9 @@ func grokSummarizeProbeHTTPError(resp *http.Response, body []byte) grokProbeHTTP
 	}
 
 	if cloudflareutil.IsCloudflareChallengeResponse(statusCode, headers, body) {
-		message := cloudflareutil.FormatCloudflareChallengeMessage(
-			fmt.Sprintf(
-				"Cloudflare challenge encountered (HTTP %d); upstream requires browser verification. Refresh Grok cookies if applicable and retry with a browser-matched TLS fingerprint",
-				statusCode,
-			),
-			headers,
-			body,
-		)
 		return grokProbeHTTPErrorSummary{
 			StatusCode:            statusCode,
-			Message:               normalizeGrokProbeErrorText(message),
+			Message:               normalizeGrokProbeErrorText(fmt.Sprintf("Cloudflare challenge encountered (HTTP %d)", statusCode)),
 			IsCloudflareChallenge: true,
 		}
 	}
