@@ -32,6 +32,19 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 		return
 	}
 
+	persistFeedback := func(statusCode int, runtimeErr error) {
+		if r == nil || r.gatewayService == nil {
+			return
+		}
+		persistGrokRuntimeFeedbackToRepo(c.Request.Context(), r.gatewayService.accountRepo, GrokRuntimeFeedbackInput{
+			Account:        preparation.account,
+			RequestedModel: preparation.requestedModel,
+			StatusCode:     statusCode,
+			ProtocolFamily: preparation.protocolFamily,
+			Err:            runtimeErr,
+		})
+	}
+
 	req, err := http.NewRequestWithContext(
 		c.Request.Context(),
 		http.MethodPost,
@@ -59,6 +72,7 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 		resolveGrokGatewayTLSProfile(r.gatewayService, preparation.account),
 	)
 	if err != nil {
+		persistFeedback(0, err)
 		upstreamMsg := sanitizeUpstreamErrorMessage(err.Error())
 		if upstreamMsg == "" {
 			upstreamMsg = "Upstream request failed"
@@ -79,6 +93,7 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 		if upstreamMsg == "" {
 			upstreamMsg = http.StatusText(resp.StatusCode)
 		}
+		persistFeedback(resp.StatusCode, errors.New(upstreamMsg))
 		writeGrokTextError(c, preparation.protocolFamily, mapUpstreamStatusCode(resp.StatusCode), grokResponsesErrorCodeForStatus(resp.StatusCode), upstreamMsg)
 		return
 	}
@@ -92,6 +107,14 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 	default:
 		relayErr = relayGrokSessionResponses(c, resp.Body, preparation.requestedModel, preparation.stream, preparation.toolNames)
 	}
+	statusCode := resp.StatusCode
+	if relayErr != nil {
+		var httpErr *grokResponsesHTTPError
+		if errors.As(relayErr, &httpErr) && httpErr != nil && httpErr.statusCode > 0 {
+			statusCode = httpErr.statusCode
+		}
+	}
+	persistFeedback(statusCode, relayErr)
 	if relayErr != nil {
 		if c.Writer.Written() {
 			return

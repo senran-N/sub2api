@@ -39,7 +39,7 @@ func NewGrokGatewayServiceWithCompatibleExecutor(
 	return &GrokGatewayService{
 		textRuntime: NewGrokTextRuntime(
 			gatewayService,
-			NewGrokCompatibleRuntime(compatibleTextExecutor),
+			NewGrokCompatibleRuntime(compatibleTextExecutor, gatewayService.accountRepo),
 			NewGrokSessionRuntime(gatewayService),
 		),
 		mediaService: NewGrokMediaService(gatewayService, nil, nil),

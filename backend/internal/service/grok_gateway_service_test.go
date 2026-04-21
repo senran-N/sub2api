@@ -26,24 +26,36 @@ type stubGrokCompatibleTextExecutor struct {
 	responsesCalls       []grokCompatibleExecutorCall
 	chatCompletionsCalls []grokCompatibleExecutorCall
 	messagesCalls        []grokCompatibleExecutorCall
+	responsesResult      *OpenAIForwardResult
+	chatResult           *OpenAIForwardResult
+	messagesResult       *OpenAIForwardResult
+	responsesErr         error
+	chatErr              error
+	messagesErr          error
 }
 
 func (s *stubGrokCompatibleTextExecutor) ForwardResponses(_ context.Context, c *gin.Context, account *Account, body []byte, _ string) (*OpenAIForwardResult, error) {
 	s.responsesCalls = append(s.responsesCalls, grokCompatibleExecutorCall{accountID: account.ID, body: string(body)})
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-	return nil, nil
+	if s.responsesErr == nil {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	}
+	return s.responsesResult, s.responsesErr
 }
 
 func (s *stubGrokCompatibleTextExecutor) ForwardChatCompletions(_ context.Context, c *gin.Context, account *Account, body []byte, _ string, _ string) (*OpenAIForwardResult, error) {
 	s.chatCompletionsCalls = append(s.chatCompletionsCalls, grokCompatibleExecutorCall{accountID: account.ID, body: string(body)})
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-	return nil, nil
+	if s.chatErr == nil {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	}
+	return s.chatResult, s.chatErr
 }
 
 func (s *stubGrokCompatibleTextExecutor) ForwardMessages(_ context.Context, c *gin.Context, account *Account, body []byte, _ string, _ string) (*OpenAIForwardResult, error) {
 	s.messagesCalls = append(s.messagesCalls, grokCompatibleExecutorCall{accountID: account.ID, body: string(body)})
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-	return nil, nil
+	if s.messagesErr == nil {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	}
+	return s.messagesResult, s.messagesErr
 }
 
 func TestGrokGatewayServiceHandleResponses_UsesCompatibleAccount(t *testing.T) {
@@ -79,6 +91,102 @@ func TestGrokGatewayServiceHandleResponses_UsesCompatibleAccount(t *testing.T) {
 	require.Len(t, executor.responsesCalls, 1)
 	require.Equal(t, int64(1), executor.responsesCalls[0].accountID)
 	require.JSONEq(t, string(body), executor.responsesCalls[0].body)
+}
+
+func TestGrokGatewayServiceHandleResponses_CompatibleRuntimePersistsGrokFeedback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-3","input":"hello"}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          9,
+				Name:        "grok-compatible-feedback",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+			},
+		},
+	}
+	executor := &stubGrokCompatibleTextExecutor{
+		responsesResult: &OpenAIForwardResult{
+			Model:         "grok-3",
+			UpstreamModel: "grok-4.20-fast",
+		},
+	}
+	svc := NewGrokGatewayServiceWithCompatibleExecutor(&GatewayService{
+		accountRepo: repo,
+		cfg:         testConfig(),
+	}, executor)
+
+	handled := svc.HandleResponses(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, repo.extraUpdates, 1)
+	require.Len(t, repo.runtimeStates, 1)
+	require.Equal(t, "success", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "grok-3", repo.runtimeStates[0]["last_request_model"])
+	require.Equal(t, "grok-4.20-fast", repo.runtimeStates[0]["last_request_upstream_model"])
+	require.Equal(t, string(CompatibleGatewayProtocolFamilyResponses), repo.runtimeStates[0]["last_request_protocol_family"])
+	require.ElementsMatch(t, []string{"grok-4.20-fast"}, grokParseStringSlice(getNestedGrokValue(grokExtraMap(repo.extraUpdates[0]), "capabilities", "models")))
+}
+
+func TestGrokGatewayServiceHandleResponses_CompatibleRuntimePersistsFailoverFeedback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-3","input":"hello"}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          10,
+				Name:        "grok-compatible-failover",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"capabilities": map[string]any{
+							"models":     []any{"grok-3"},
+							"operations": []any{"chat"},
+						},
+					},
+				},
+			},
+		},
+	}
+	executor := &stubGrokCompatibleTextExecutor{
+		responsesErr: &UpstreamFailoverError{
+			StatusCode:   http.StatusNotFound,
+			ResponseBody: []byte(`{"error":{"code":"model_not_found","message":"model not found: grok-3"}}`),
+		},
+	}
+	svc := NewGrokGatewayServiceWithCompatibleExecutor(&GatewayService{
+		accountRepo: repo,
+		cfg:         testConfig(),
+	}, executor)
+
+	handled := svc.HandleResponses(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusBadGateway, rec.Code)
+	require.Len(t, repo.extraUpdates, 1)
+	require.Len(t, repo.runtimeStates, 1)
+	require.Equal(t, "failover", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "model_unsupported", repo.runtimeStates[0]["last_fail_class"])
+	require.Equal(t, "model", repo.runtimeStates[0]["selection_cooldown_scope"])
+	require.Equal(t, "grok-4.20-auto", repo.runtimeStates[0]["selection_cooldown_model"])
+	require.Empty(t, grokParseStringSlice(getNestedGrokValue(grokExtraMap(repo.extraUpdates[0]), "capabilities", "models")))
 }
 
 func TestGrokGatewayServiceHandleResponses_UsesScoredGrokSelector(t *testing.T) {
@@ -345,7 +453,7 @@ func TestGrokGatewayServiceHandleChatCompletions_RoutesVideoModelsThroughMediaSe
 		httpUpstream: upstream,
 	}
 	svc := ProvideGrokGatewayService(
-		NewGrokTextRuntime(gatewayService, NewGrokCompatibleRuntime(executor), NewGrokSessionRuntime(gatewayService)),
+		NewGrokTextRuntime(gatewayService, NewGrokCompatibleRuntime(executor, gatewayService.accountRepo), NewGrokSessionRuntime(gatewayService)),
 		gatewayService,
 		videoJobs,
 		&stubGrokMediaAssetRepository{},
@@ -612,6 +720,59 @@ func TestGrokGatewayServiceHandleResponses_UsesSessionAccount(t *testing.T) {
 	require.Equal(t, "completed", response.Status)
 	require.Len(t, response.Output, 1)
 	require.Equal(t, "answer", response.Output[0].Content[0].Text)
+	require.Len(t, repo.extraUpdates, 1)
+	require.Len(t, repo.runtimeStates, 1)
+	require.Equal(t, "success", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "grok-3", repo.runtimeStates[0]["last_request_model"])
+	require.Equal(t, "grok-4.20-auto", repo.runtimeStates[0]["last_request_upstream_model"])
+	require.Equal(t, string(CompatibleGatewayProtocolFamilyResponses), repo.runtimeStates[0]["last_request_protocol_family"])
+	require.ElementsMatch(t, []string{"grok-4.20-auto"}, grokParseStringSlice(getNestedGrokValue(grokExtraMap(repo.extraUpdates[0]), "capabilities", "models")))
+}
+
+func TestGrokGatewayServiceHandleResponses_SessionFailurePersistsGrokFeedback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-3","input":"hello"}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusTooManyRequests, `{"error":{"message":"rate limit reached"}}`),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          23,
+				Name:        "grok-session-rate-limited",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"session_token": "session-cookie",
+				},
+			},
+		},
+	}
+	svc := NewGrokGatewayService(&GatewayService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		cfg:          testConfig(),
+	}, nil)
+
+	handled := svc.HandleResponses(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+	require.Empty(t, repo.extraUpdates)
+	require.Len(t, repo.runtimeStates, 1)
+	require.Equal(t, "error", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "rate_limited", repo.runtimeStates[0]["last_fail_class"])
+	require.Equal(t, "account", repo.runtimeStates[0]["selection_cooldown_scope"])
+	require.Equal(t, "grok-4.20-auto", repo.runtimeStates[0]["last_request_upstream_model"])
 }
 
 func TestGrokGatewayServiceHandleResponses_SessionUploadsImageInputs(t *testing.T) {

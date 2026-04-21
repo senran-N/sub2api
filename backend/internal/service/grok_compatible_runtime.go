@@ -15,14 +15,19 @@ type grokCompatibleTextExecutor interface {
 
 type GrokCompatibleRuntime struct {
 	textExecutor grokCompatibleTextExecutor
+	feedbackRepo AccountRepository
 }
 
-func NewGrokCompatibleRuntime(textExecutor grokCompatibleTextExecutor) *GrokCompatibleRuntime {
-	return &GrokCompatibleRuntime{textExecutor: textExecutor}
+func NewGrokCompatibleRuntime(textExecutor grokCompatibleTextExecutor, feedbackRepo AccountRepository) *GrokCompatibleRuntime {
+	return &GrokCompatibleRuntime{textExecutor: textExecutor, feedbackRepo: feedbackRepo}
 }
 
 func ProvideGrokCompatibleRuntime(compatibleTextRuntime *CompatibleGatewayTextRuntime) *GrokCompatibleRuntime {
-	return NewGrokCompatibleRuntime(compatibleTextRuntime)
+	var feedbackRepo AccountRepository
+	if compatibleTextRuntime != nil && compatibleTextRuntime.openaiGatewayService != nil {
+		feedbackRepo = compatibleTextRuntime.openaiGatewayService.accountRepo
+	}
+	return NewGrokCompatibleRuntime(compatibleTextRuntime, feedbackRepo)
 }
 
 func (r *GrokCompatibleRuntime) Execute(c *gin.Context, preparation *grokTextPreparation) {
@@ -38,14 +43,26 @@ func (r *GrokCompatibleRuntime) Execute(c *gin.Context, preparation *grokTextPre
 		return
 	}
 
-	var err error
+	var (
+		result *OpenAIForwardResult
+		err    error
+	)
 	switch preparation.protocolFamily {
 	case CompatibleGatewayProtocolFamilyChatCompletions:
-		_, err = r.textExecutor.ForwardChatCompletions(c.Request.Context(), c, preparation.account, preparation.compatibleBody, "", "")
+		result, err = r.textExecutor.ForwardChatCompletions(c.Request.Context(), c, preparation.account, preparation.compatibleBody, "", "")
 	case CompatibleGatewayProtocolFamilyMessages:
-		_, err = r.textExecutor.ForwardMessages(c.Request.Context(), c, preparation.account, preparation.compatibleBody, "", "")
+		result, err = r.textExecutor.ForwardMessages(c.Request.Context(), c, preparation.account, preparation.compatibleBody, "", "")
 	default:
-		_, err = r.textExecutor.ForwardResponses(c.Request.Context(), c, preparation.account, preparation.compatibleBody, "")
+		result, err = r.textExecutor.ForwardResponses(c.Request.Context(), c, preparation.account, preparation.compatibleBody, "")
+	}
+	if _, delegated := r.textExecutor.(*CompatibleGatewayTextRuntime); !delegated {
+		persistGrokRuntimeFeedbackToRepo(c.Request.Context(), r.feedbackRepo, GrokRuntimeFeedbackInput{
+			Account:        preparation.account,
+			RequestedModel: preparation.requestedModel,
+			Result:         result,
+			ProtocolFamily: preparation.protocolFamily,
+			Err:            err,
+		})
 	}
 	if err != nil && !c.Writer.Written() {
 		writeGrokTextError(c, preparation.protocolFamily, http.StatusBadGateway, "api_error", "Grok upstream request failed")

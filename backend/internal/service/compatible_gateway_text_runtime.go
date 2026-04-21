@@ -43,12 +43,27 @@ func (r *CompatibleGatewayTextRuntime) ForwardResponses(
 	account *Account,
 	body []byte,
 	defaultMappedModel string,
-) (*OpenAIForwardResult, error) {
+) (result *OpenAIForwardResult, err error) {
 	if r == nil || r.openaiGatewayService == nil {
 		return nil, errors.New("compatible gateway text runtime is not configured")
 	}
 	s := r.openaiGatewayService
 	startTime := time.Now()
+	requestedModel := strings.TrimSpace(getOpenAIRequestMeta(c, body).Model)
+	upstreamModelForFeedback := requestedModel
+	statusCode := 0
+	defer func() {
+		r.persistRuntimeFeedback(
+			ctx,
+			account,
+			requestedModel,
+			upstreamModelForFeedback,
+			CompatibleGatewayProtocolFamilyResponses,
+			statusCode,
+			result,
+			err,
+		)
+	}()
 
 	restrictionResult := s.detectCodexClientRestriction(c, account)
 	apiKeyID := getAPIKeyIDFromContext(c)
@@ -104,6 +119,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardResponses(
 		forwardBody := originalBody
 		mappedModel := resolveOpenAIForwardModel(account, reqModel, defaultMappedModel)
 		mappedModel = normalizeOpenAIModelForUpstream(account, mappedModel)
+		upstreamModelForFeedback = strings.TrimSpace(mappedModel)
 		if mappedModel != "" && mappedModel != reqModel {
 			var patchErr error
 			forwardBody, patchErr = sjson.SetBytes(originalBody, "model", mappedModel)
@@ -125,7 +141,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardResponses(
 		} else {
 			reasoningEffort = extractOpenAIReasoningEffortFromBody(body, reqModel)
 		}
-		result, err := s.forwardOpenAIPassthrough(ctx, c, account, forwardBody, reqModel, reasoningEffort, reqStream, startTime)
+		result, err = s.forwardOpenAIPassthrough(ctx, c, account, forwardBody, reqModel, reasoningEffort, reqStream, startTime)
 		if err != nil {
 			return nil, err
 		}
@@ -139,6 +155,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardResponses(
 	if err != nil {
 		return nil, err
 	}
+	upstreamModelForFeedback = strings.TrimSpace(prepared.mappedModel)
 
 	token, _, err := s.GetAccessToken(ctx, account)
 	if err != nil {
@@ -161,23 +178,41 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 	body []byte,
 	promptCacheKey string,
 	defaultMappedModel string,
-) (*OpenAIForwardResult, error) {
+) (result *OpenAIForwardResult, err error) {
 	if r == nil || r.openaiGatewayService == nil {
 		return nil, errors.New("compatible gateway text runtime is not configured")
 	}
 	s := r.openaiGatewayService
 	startTime := time.Now()
+	var (
+		originalModel            string
+		upstreamModelForFeedback string
+		statusCode               int
+	)
+	defer func() {
+		r.persistRuntimeFeedback(
+			ctx,
+			account,
+			originalModel,
+			upstreamModelForFeedback,
+			CompatibleGatewayProtocolFamilyChatCompletions,
+			statusCode,
+			result,
+			err,
+		)
+	}()
 
 	var chatReq apicompat.ChatCompletionsRequest
 	if err := json.Unmarshal(body, &chatReq); err != nil {
 		return nil, fmt.Errorf("parse chat completions request: %w", err)
 	}
-	originalModel := chatReq.Model
+	originalModel = strings.TrimSpace(chatReq.Model)
 	clientStream := chatReq.Stream
 	includeUsage := chatReq.StreamOptions != nil && chatReq.StreamOptions.IncludeUsage
 
 	mappedModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	mappedModel = normalizeOpenAIModelForUpstream(account, mappedModel)
+	upstreamModelForFeedback = strings.TrimSpace(mappedModel)
 
 	if account != nil && account.SupportsOpenAIPassthroughHTTP() {
 		forwardBody := body
@@ -192,7 +227,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 		if value := normalizeOpenAIReasoningEffort(chatReq.ReasoningEffort); value != "" {
 			reasoningEffort = &value
 		}
-		result, err := s.forwardOpenAIPassthrough(ctx, c, account, forwardBody, originalModel, reasoningEffort, clientStream, startTime)
+		result, err = s.forwardOpenAIPassthrough(ctx, c, account, forwardBody, originalModel, reasoningEffort, clientStream, startTime)
 		if err != nil {
 			return nil, err
 		}
@@ -214,7 +249,6 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 	var (
 		responsesReq  *apicompat.ResponsesRequest
 		responsesBody []byte
-		err           error
 	)
 	if isResponsesShape {
 		responsesBody, err = sjson.SetBytes(body, "model", mappedModel)
@@ -320,6 +354,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
+		statusCode = resp.StatusCode
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 		_ = resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
@@ -358,7 +393,6 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 		return s.handleChatCompletionsErrorResponse(resp, c, account)
 	}
 
-	var result *OpenAIForwardResult
 	var handleErr error
 	if clientStream {
 		result, handleErr = s.handleChatStreamingResponse(resp, c, originalModel, mappedModel, includeUsage, startTime)
@@ -393,18 +427,35 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 	body []byte,
 	promptCacheKey string,
 	defaultMappedModel string,
-) (*OpenAIForwardResult, error) {
+) (result *OpenAIForwardResult, err error) {
 	if r == nil || r.openaiGatewayService == nil {
 		return nil, errors.New("compatible gateway text runtime is not configured")
 	}
 	s := r.openaiGatewayService
 	startTime := time.Now()
+	var (
+		originalModel            string
+		upstreamModelForFeedback string
+		statusCode               int
+	)
+	defer func() {
+		r.persistRuntimeFeedback(
+			ctx,
+			account,
+			originalModel,
+			upstreamModelForFeedback,
+			CompatibleGatewayProtocolFamilyMessages,
+			statusCode,
+			result,
+			err,
+		)
+	}()
 
 	var anthropicReq apicompat.AnthropicRequest
 	if err := json.Unmarshal(body, &anthropicReq); err != nil {
 		return nil, fmt.Errorf("parse anthropic request: %w", err)
 	}
-	originalModel := anthropicReq.Model
+	originalModel = strings.TrimSpace(anthropicReq.Model)
 	applyOpenAICompatModelNormalization(&anthropicReq)
 	normalizedModel := anthropicReq.Model
 	clientStream := anthropicReq.Stream
@@ -423,6 +474,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 
 	billingModel := resolveOpenAIForwardModel(account, normalizedModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
+	upstreamModelForFeedback = strings.TrimSpace(upstreamModel)
 	responsesReq.Model = upstreamModel
 
 	logger.L().Debug("openai messages: model mapping applied",
@@ -519,6 +571,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
+		statusCode = resp.StatusCode
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 		_ = resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
@@ -557,7 +610,6 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 		return s.handleAnthropicErrorResponse(resp, c, account)
 	}
 
-	var result *OpenAIForwardResult
 	var handleErr error
 	if clientStream {
 		result, handleErr = s.handleAnthropicStreamingResponse(resp, c, originalModel, billingModel, upstreamModel, startTime)
@@ -583,4 +635,28 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 	}
 
 	return result, handleErr
+}
+
+func (r *CompatibleGatewayTextRuntime) persistRuntimeFeedback(
+	ctx context.Context,
+	account *Account,
+	requestedModel string,
+	upstreamModel string,
+	protocolFamily CompatibleGatewayProtocolFamily,
+	statusCode int,
+	result *OpenAIForwardResult,
+	runtimeErr error,
+) {
+	if r == nil || r.openaiGatewayService == nil || account == nil {
+		return
+	}
+	r.openaiGatewayService.PersistCompatibleGatewayRuntimeFeedback(ctx, CompatibleGatewayRuntimeFeedbackInput{
+		Account:        account,
+		RequestedModel: strings.TrimSpace(requestedModel),
+		UpstreamModel:  strings.TrimSpace(upstreamModel),
+		Result:         result,
+		StatusCode:     statusCode,
+		ProtocolFamily: protocolFamily,
+		Err:            runtimeErr,
+	})
 }

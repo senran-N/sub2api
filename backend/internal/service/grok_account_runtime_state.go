@@ -214,7 +214,14 @@ func buildGrokKnownCapabilities(account *Account, modelID string, capabilityHint
 }
 
 func (s *OpenAIGatewayService) PersistGrokRuntimeFeedback(ctx context.Context, input GrokRuntimeFeedbackInput) {
-	if s == nil || s.accountRepo == nil || input.Account == nil {
+	if s == nil {
+		return
+	}
+	persistGrokRuntimeFeedbackToRepo(ctx, s.accountRepo, input)
+}
+
+func persistGrokRuntimeFeedbackToRepo(ctx context.Context, repo AccountRepository, input GrokRuntimeFeedbackInput) {
+	if repo == nil || input.Account == nil {
 		return
 	}
 	if NormalizeCompatibleGatewayPlatform(input.Account.Platform) != PlatformGrok {
@@ -234,7 +241,7 @@ func (s *OpenAIGatewayService) PersistGrokRuntimeFeedback(ctx context.Context, i
 	defer cancel()
 
 	if updates := buildGrokRuntimeCapabilityExtraUpdates(input.Account, input, upstreamModel, capability); len(updates) > 0 {
-		if err := s.accountRepo.UpdateExtra(updateCtx, input.Account.ID, updates); err == nil {
+		if err := repo.UpdateExtra(updateCtx, input.Account.ID, updates); err == nil {
 			mergeAccountExtra(input.Account, updates)
 		}
 	}
@@ -244,7 +251,7 @@ func (s *OpenAIGatewayService) PersistGrokRuntimeFeedback(ctx context.Context, i
 		return
 	}
 
-	writer, ok := s.accountRepo.(grokRuntimeStateWriter)
+	writer, ok := repo.(grokRuntimeStateWriter)
 	if !ok {
 		return
 	}
