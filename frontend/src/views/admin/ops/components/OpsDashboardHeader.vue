@@ -981,8 +981,12 @@ function handleToolbarRefresh() {
         </div>
       </div>
 
-      <!-- Right: 6 cards (3 cols x 2 rows) -->
-      <div class="grid h-full grid-cols-1 content-center gap-4 sm:grid-cols-2 lg:col-span-7 lg:grid-cols-3">
+      <!-- Right: 6 cards (3 cols x 2 rows).
+           Use an explicit `lg:grid-rows-2` (= `grid-template-rows: repeat(2, minmax(0, 1fr))`)
+           instead of `auto-rows-fr`. The latter falls back to `auto` when the
+           container's height comes from an intrinsically-sized outer row
+           (chicken-and-egg), which left blank space above/below the cards. -->
+      <div class="ops-dashboard-header__metrics grid h-full grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-7 lg:grid-cols-3 lg:grid-rows-2">
         <!-- Card 1: Requests -->
         <div class="ops-dashboard-header__metric-card" style="order: 1;">
           <div class="flex items-center justify-between">
@@ -1550,10 +1554,12 @@ function handleToolbarRefresh() {
 
 .ops-dashboard-header__metric-card {
   padding: var(--theme-ops-panel-padding);
-}
-
-.ops-dashboard-header__metric-card {
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--theme-surface-contrast) 32%, transparent);
+  /* Stretch to fill the row track so both metric rows visually align with the
+     taller realtime panel on the left. `min-height: 0` lets flex/grid shrink
+     the card in constrained rows without overflowing. */
+  height: 100%;
+  min-height: 0;
 }
 
 .ops-dashboard-header__system-card {

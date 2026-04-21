@@ -879,7 +879,10 @@
   --theme-surface-soft: #f7f4ec;
   --theme-card-border: #E2DFD8;
   --theme-card-border-width: 1px;
-  --theme-card-divider-width: 2px;
+  /* Match card-border-width: a 2px divider is inconsistent with a 1px outer
+     border and reads as a heavy black bar on the editorial warm surface
+     (visible across cards, modal headers, dialog headers, etc.). */
+  --theme-card-divider-width: 1px;
   --theme-card-shadow: 0 8px 30px rgba(45, 43, 41, 0.04);
   --theme-card-shadow-hover: 0 16px 40px rgba(45, 43, 41, 0.08);
 

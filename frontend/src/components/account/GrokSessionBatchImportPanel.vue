@@ -160,35 +160,42 @@
         data-testid="grok-session-batch-result"
       >
         <div class="flex flex-wrap items-center gap-2">
-          <span class="grok-session-panel__summary-chip">
+          <!-- Semantic tones: total is neutral, created/skipped/invalid map to
+               success/warning/danger, and the dry-run flag stays info-blue so
+               the palette reflects each metric's meaning instead of a single
+               uniform blue that clashes with the warm surface. -->
+          <span class="theme-chip theme-chip--regular theme-chip--neutral">
             {{
               t("admin.accounts.grok.batchImportSummaryTotal", {
                 count: result.total,
               })
             }}
           </span>
-          <span class="grok-session-panel__summary-chip">
+          <span class="theme-chip theme-chip--regular theme-chip--success">
             {{
               t("admin.accounts.grok.batchImportSummaryCreated", {
                 count: result.created,
               })
             }}
           </span>
-          <span class="grok-session-panel__summary-chip">
+          <span class="theme-chip theme-chip--regular theme-chip--warning">
             {{
               t("admin.accounts.grok.batchImportSummarySkipped", {
                 count: result.skipped,
               })
             }}
           </span>
-          <span class="grok-session-panel__summary-chip">
+          <span class="theme-chip theme-chip--regular theme-chip--danger">
             {{
               t("admin.accounts.grok.batchImportSummaryInvalid", {
                 count: result.invalid,
               })
             }}
           </span>
-          <span v-if="result.dry_run" class="grok-session-panel__summary-chip">
+          <span
+            v-if="result.dry_run"
+            class="theme-chip theme-chip--regular theme-chip--info"
+          >
             {{ t("admin.accounts.grok.batchImportDryRunBadge") }}
           </span>
         </div>
@@ -323,8 +330,7 @@ const parsedLineCount = computed(() => countMultilineEntries(props.batchInput));
   color: var(--theme-page-muted);
 }
 
-.grok-session-panel__count,
-.grok-session-panel__summary-chip {
+.grok-session-panel__count {
   background: color-mix(
     in srgb,
     rgb(var(--theme-info-rgb)) 12%,
@@ -431,10 +437,9 @@ const parsedLineCount = computed(() => countMultilineEntries(props.batchInput));
 
 .grok-session-panel__fingerprint {
   word-break: break-all;
-  color: color-mix(
-    in srgb,
-    rgb(var(--theme-info-rgb)) 86%,
-    var(--theme-page-text)
-  );
+  /* Fingerprints are technical identifiers — render them in a muted monospace
+     tone so they don't compete with semantic status chips and primary text. */
+  font-family: var(--theme-font-mono);
+  color: var(--theme-page-muted);
 }
 </style>

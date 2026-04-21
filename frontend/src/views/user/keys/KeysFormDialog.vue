@@ -443,14 +443,17 @@ function getUsageWidth(usage: number, limit: number): string {
 }
 
 .keys-form-dialog__toggle {
+  /* Track: 36x20, positions the absolute-positioned thumb inside.
+     Avoid `border: 2px solid transparent` tricks — use explicit thumb
+     offsets instead so the thumb stays 2px away from all edges and the
+     translate math ([0 .. (36-2-16-2)] = 0..16px) matches `translate-x-4`. */
   position: relative;
-  display: inline-flex;
+  display: inline-block;
   height: 1.25rem;
   width: 2.25rem;
   flex-shrink: 0;
   cursor: pointer;
   border-radius: 9999px;
-  border: 2px solid transparent;
   transition: background-color 0.2s ease;
 }
 
@@ -464,13 +467,18 @@ function getUsageWidth(usage: number, limit: number): string {
 
 .keys-form-dialog__toggle-thumb {
   pointer-events: none;
-  display: inline-block;
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
   height: 1rem;
   width: 1rem;
-  transform: translateX(0);
   border-radius: 9999px;
-  background: var(--theme-surface-contrast-text);
-  box-shadow: var(--theme-card-shadow);
+  /* Use surface (white in light themes) to keep the thumb crisp against
+     the orange accent — `surface-contrast-text` is cream on Claude light
+     (#F0EDE6) and looked muddy on the orange pill. Small drop shadow for
+     lift instead of the page-level `--theme-card-shadow`. */
+  background: var(--theme-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
   transition: transform 0.2s ease;
 }
 

@@ -1,5 +1,5 @@
 <template>
-  <component :is="isFullscreen ? 'div' : AppLayout" :class="isFullscreen ? 'ops-dashboard__fullscreen flex min-h-screen flex-col justify-center' : ''">
+  <component :is="isFullscreen ? 'div' : AppLayout" :class="isFullscreen ? 'ops-dashboard__fullscreen flex min-h-screen flex-col' : ''">
     <div
       :class="[
         'ops-dashboard__content space-y-6',
@@ -927,8 +927,12 @@ watch(showAlertRulesCard, async (show) => {
 </script>
 
 <style scoped>
+/* Inherit the body background so the fullscreen shell continues the page
+   seamlessly — overriding it with a slightly different tint used to paint
+   a visible "frame" around the inner white surface (see issue: top dark
+   strip above the content). */
 .ops-dashboard__fullscreen {
-  background: color-mix(in srgb, var(--theme-page-bg) 92%, var(--theme-surface-soft));
+  background: var(--theme-page-bg);
 }
 
 .ops-dashboard__content {
