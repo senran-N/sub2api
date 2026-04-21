@@ -137,13 +137,28 @@ func shouldPersistGrokBackgroundRuntimeState(input GrokRuntimeFeedbackInput) boo
 	}
 
 	runtimeState := account.grokRuntimeSelectionState()
-	if runtimeState.LastFailClass != grokRuntimeErrorClassAuth {
+	if !grokBackgroundSuccessShouldClearCooldown(runtimeState) {
 		return false
 	}
 	if runtimeState.LastFailAt == nil {
 		return runtimeState.CooldownUntil != nil
 	}
 	return runtimeState.LastUseAt == nil || runtimeState.LastUseAt.Before(*runtimeState.LastFailAt)
+}
+
+func grokBackgroundSuccessShouldClearCooldown(runtimeState grokRuntimeSelectionState) bool {
+	switch runtimeState.LastFailClass {
+	case grokRuntimeErrorClassAuth, grokRuntimeErrorClassRateLimited:
+	default:
+		return false
+	}
+
+	switch runtimeState.CooldownScope {
+	case grokRuntimePenaltyScopeNone, grokRuntimePenaltyScopeAccount:
+		return true
+	default:
+		return false
+	}
 }
 
 func grokProbeStatusCode(resp *http.Response) int {
