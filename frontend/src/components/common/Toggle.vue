@@ -2,10 +2,15 @@
   <button
     type="button"
     @click="toggle"
-    class="toggle-switch relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+    class="toggle-switch relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
     :class="[modelValue ? 'toggle-switch--active' : 'toggle-switch--inactive']"
+    :id="id"
+    :name="name"
     role="switch"
+    :disabled="disabled"
     :aria-checked="modelValue"
+    :aria-label="ariaLabel"
+    :aria-labelledby="ariaLabelledby"
   >
     <span
       class="toggle-switch__thumb pointer-events-none inline-block h-5 w-5 transform rounded-full ring-0 transition duration-200 ease-in-out"
@@ -17,6 +22,11 @@
 <script setup lang="ts">
 const props = defineProps<{
   modelValue: boolean
+  id?: string
+  name?: string
+  disabled?: boolean
+  ariaLabel?: string
+  ariaLabelledby?: string
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +34,10 @@ const emit = defineEmits<{
 }>()
 
 function toggle() {
+  if (props.disabled) {
+    return
+  }
+
   emit('update:modelValue', !props.modelValue)
 }
 </script>

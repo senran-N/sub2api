@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Account, ClaudeModel } from '@/types'
 import { AUTH_TOKEN_KEY } from '@/utils/authStorage'
+import { getAccountTypeLabel } from './accountDisplayLabels'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
@@ -333,7 +334,7 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
     )
     addLine(
       options.t('admin.accounts.testAccountTypeLabel', {
-        type: options.account.value.type
+        type: getAccountTypeLabel(options.account.value.type, options.t)
       }),
       'muted'
     )

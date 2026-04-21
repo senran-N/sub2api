@@ -1960,6 +1960,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--theme-page-muted);
     transition:
       opacity 0.16s ease,
       transform 0.16s ease;

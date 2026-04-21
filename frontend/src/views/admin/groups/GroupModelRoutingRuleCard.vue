@@ -3,16 +3,23 @@
     <div class="flex items-start gap-3">
       <div class="flex-1 space-y-2">
         <div>
-          <label class="input-label text-xs">{{ t('admin.groups.modelRouting.modelPattern') }}</label>
+          <label :id="patternLabelId" :for="patternInputId" class="input-label text-xs">
+            {{ t('admin.groups.modelRouting.modelPattern') }}
+          </label>
           <input
+            :id="patternInputId"
+            :name="patternInputName"
             v-model="rule.pattern"
             type="text"
+            autocomplete="off"
             class="input text-sm"
             :placeholder="t('admin.groups.modelRouting.modelPatternPlaceholder')"
           />
         </div>
         <div>
-          <label class="input-label text-xs">{{ t('admin.groups.modelRouting.accounts') }}</label>
+          <label :id="accountsLabelId" :for="accountsInputId" class="input-label text-xs">
+            {{ t('admin.groups.modelRouting.accounts') }}
+          </label>
           <div v-if="rule.accounts.length > 0" class="mb-2 flex flex-wrap gap-1.5">
             <span
               v-for="account in rule.accounts"
@@ -31,8 +38,11 @@
           </div>
           <div class="relative account-search-container">
             <input
+              :id="accountsInputId"
+              :name="accountsInputName"
               v-model="accountSearchKeyword[searchKey]"
               type="text"
+              autocomplete="off"
               class="input text-sm"
               :placeholder="t('admin.groups.modelRouting.searchAccountPlaceholder')"
               @input="searchAccountsByRule(rule)"
@@ -93,6 +103,15 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const searchKey = computed(() => props.getRuleSearchKey(props.rule))
+const fieldIdPrefix = computed(() =>
+  `group-model-routing-rule-${searchKey.value.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+)
+const patternInputId = computed(() => `${fieldIdPrefix.value}-pattern`)
+const patternLabelId = computed(() => `${fieldIdPrefix.value}-pattern-label`)
+const patternInputName = computed(() => `${fieldIdPrefix.value}-pattern`)
+const accountsInputId = computed(() => `${fieldIdPrefix.value}-accounts-search`)
+const accountsLabelId = computed(() => `${fieldIdPrefix.value}-accounts-label`)
+const accountsInputName = computed(() => `${fieldIdPrefix.value}-accounts-search`)
 
 const isSelected = (accountId: number) => {
   return props.rule.accounts.some((account) => account.id === accountId)

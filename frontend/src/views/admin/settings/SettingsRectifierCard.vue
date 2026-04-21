@@ -24,7 +24,10 @@
               {{ t('admin.settings.rectifier.enabledHint') }}
             </p>
           </div>
-          <Toggle v-model="form.enabled" />
+          <Toggle
+            v-model="form.enabled"
+            :aria-label="t('admin.settings.rectifier.enabled')"
+          />
         </div>
 
         <div
@@ -40,7 +43,10 @@
                 {{ t('admin.settings.rectifier.thinkingSignatureHint') }}
               </p>
             </div>
-            <Toggle v-model="form.thinking_signature_enabled" />
+            <Toggle
+              v-model="form.thinking_signature_enabled"
+              :aria-label="t('admin.settings.rectifier.thinkingSignature')"
+            />
           </div>
 
           <div class="flex items-center justify-between">
@@ -52,7 +58,10 @@
                 {{ t('admin.settings.rectifier.thinkingBudgetHint') }}
               </p>
             </div>
-            <Toggle v-model="form.thinking_budget_enabled" />
+            <Toggle
+              v-model="form.thinking_budget_enabled"
+              :aria-label="t('admin.settings.rectifier.thinkingBudget')"
+            />
           </div>
 
           <div class="flex items-center justify-between">
@@ -64,7 +73,10 @@
                 {{ t('admin.settings.rectifier.apikeySignatureHint') }}
               </p>
             </div>
-            <Toggle v-model="form.apikey_signature_enabled" />
+            <Toggle
+              v-model="form.apikey_signature_enabled"
+              :aria-label="t('admin.settings.rectifier.apikeySignature')"
+            />
           </div>
 
           <div

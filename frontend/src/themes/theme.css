@@ -25,14 +25,14 @@
   --theme-card-shadow: 3px 3px 0px #111827;
   --theme-card-shadow-hover: 5px 5px 0px #111827;
 
-  --theme-accent: #FF4D00;
-  --theme-accent-rgb: 217 83 30;
-  --theme-accent-strong: #E64500;
-  --theme-accent-soft: rgba(255, 77, 0, 0.1);
+  --theme-accent: #C43C00;
+  --theme-accent-rgb: 196 60 0;
+  --theme-accent-strong: #9E3000;
+  --theme-accent-soft: rgba(196, 60, 0, 0.12);
   --theme-accent-text: #ffffff;
   --theme-filled-text: #ffffff;
   --theme-success-rgb: 58 115 82;
-  --theme-warning-rgb: 204 122 0;
+  --theme-warning-rgb: 138 82 0;
   --theme-danger-rgb: 178 59 59;
   --theme-info-rgb: 37 99 235;
   --theme-brand-orange-rgb: 217 83 30;
@@ -120,7 +120,7 @@
   --theme-nav-item-text: #5C5C5C;
   --theme-nav-item-hover-bg: #F0EEE6;
   --theme-nav-item-hover-text: #1A1A1A;
-  --theme-nav-item-active-bg: #D9531E;
+  --theme-nav-item-active-bg: #9E3000;
   --theme-nav-item-active-text: #fff;
   --theme-nav-item-hover-border: 1px solid #1A1A1A;
   --theme-nav-item-hover-shadow: 2px 2px 0px #1A1A1A;
@@ -144,8 +144,8 @@
   --theme-brand-logo-border: none;
   --theme-brand-logo-shadow: none;
   --theme-brand-logo-padding: 0;
-  --theme-brand-badge-bg: rgba(255, 90, 31, 0.1);
-  --theme-brand-badge-text: #ff5a1f;
+  --theme-brand-badge-bg: #FCE4D8;
+  --theme-brand-badge-text: #8A2E08;
   --theme-brand-badge-radius: 4px;
   --theme-brand-badge-padding: 2px 6px;
   --theme-brand-badge-border: none;
@@ -162,7 +162,7 @@
   --theme-header-title-weight: 650;
   --theme-header-title-size: 1.125rem;
   --theme-header-title-letter-spacing: -0.03em;
-  --theme-header-meta-color: #7a7a74;
+  --theme-header-meta-color: #666660;
   --theme-header-mobile-title-size: 0.95rem;
   --theme-header-doc-link-padding: 0.55rem 0.8rem;
   --theme-header-profile-padding: 0.35rem 0.45rem;
@@ -173,7 +173,7 @@
   --theme-header-dropdown-section-padding-y-sm: 0.5rem;
   --theme-header-dropdown-section-padding-y-md: 0.75rem;
   --theme-header-dropdown-section-padding-y-lg: 0.625rem;
-  --theme-header-balance-bg: rgb(var(--theme-warning-rgb));
+  --theme-header-balance-bg: #8A5200;
   --theme-header-balance-text: #FFFFFF;
   --theme-header-balance-border: 1px solid #1A1A1A;
   --theme-header-balance-shadow: 2px 2px 0px #1A1A1A;

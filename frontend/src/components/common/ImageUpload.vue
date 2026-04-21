@@ -44,8 +44,11 @@
       <div class="flex items-center gap-2">
         <label class="btn btn-secondary btn-sm cursor-pointer">
           <input
+            :id="resolvedInputId"
+            :name="resolvedInputName"
             type="file"
             :accept="acceptTypes"
+            :aria-label="uploadLabel"
             class="hidden"
             @change="handleUpload"
           />
@@ -73,6 +76,8 @@ import { ref, computed } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 
+let imageUploadInputIdCounter = 0
+
 const props = withDefaults(defineProps<{
   modelValue: string
   mode?: 'image' | 'svg'
@@ -80,6 +85,8 @@ const props = withDefaults(defineProps<{
   uploadLabel?: string
   removeLabel?: string
   hint?: string
+  inputId?: string
+  inputName?: string
   maxSize?: number // bytes
 }>(), {
   mode: 'image',
@@ -87,6 +94,8 @@ const props = withDefaults(defineProps<{
   uploadLabel: 'Upload',
   removeLabel: 'Remove',
   hint: '',
+  inputId: undefined,
+  inputName: undefined,
   maxSize: 300 * 1024,
 })
 
@@ -97,6 +106,9 @@ const emit = defineEmits<{
 const error = ref('')
 
 const acceptTypes = computed(() => props.mode === 'svg' ? '.svg' : 'image/*')
+const generatedInputId = `image-upload-input-${++imageUploadInputIdCounter}`
+const resolvedInputId = computed(() => props.inputId ?? generatedInputId)
+const resolvedInputName = computed(() => props.inputName ?? `${resolvedInputId.value}-file`)
 
 const sanitizedValue = computed(() =>
   props.mode === 'svg' ? sanitizeSvg(props.modelValue ?? '') : ''

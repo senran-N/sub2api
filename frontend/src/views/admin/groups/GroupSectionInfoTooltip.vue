@@ -6,7 +6,7 @@
       :stroke-width="2"
       class="group-section-info-tooltip__icon cursor-help transition-colors"
     />
-    <div class="pointer-events-none absolute bottom-full left-0 z-50 mb-2 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:opacity-100">
+    <div class="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden group-hover:block group-hover:pointer-events-auto">
       <div :class="['group-section-info-tooltip__panel', widthClass]">
         <p class="group-section-info-tooltip__text text-xs leading-relaxed">
           {{ text }}

@@ -56,6 +56,18 @@ export function useOnboardingTour(options: OnboardingOptions) {
     AUTO_START_DELAY_MS: 1000        // Delay before auto-starting tour
   } as const
 
+  const sanitizeDriverAccessibilityArtifacts = () => {
+    const dummyElement = document.getElementById('driver-dummy-element')
+    if (!dummyElement) return
+
+    if (
+      dummyElement.getAttribute('aria-haspopup') === 'dialog' &&
+      dummyElement.hasAttribute('aria-expanded')
+    ) {
+      dummyElement.removeAttribute('aria-expanded')
+    }
+  }
+
   // Helper: Check if a step is interactive (only close button shown)
   const isInteractiveStep = (step: DriveStep): boolean => {
     return step.popover?.showButtons?.length === 1 &&
@@ -209,6 +221,8 @@ export function useOnboardingTour(options: OnboardingOptions) {
         const CLASS_PREV_BTN = 'driver-popover-prev-btn'
 
         try {
+          sanitizeDriverAccessibilityArtifacts()
+
           const { title: titleEl, footer: footerEl, nextButton, previousButton } = popover
 
           // Defensive check: ensure popover elements exist

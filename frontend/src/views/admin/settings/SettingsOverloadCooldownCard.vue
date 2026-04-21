@@ -24,7 +24,10 @@
               {{ t('admin.settings.overloadCooldown.enabledHint') }}
             </p>
           </div>
-          <Toggle v-model="form.enabled" />
+          <Toggle
+            v-model="form.enabled"
+            :aria-label="t('admin.settings.overloadCooldown.enabled')"
+          />
         </div>
 
         <div

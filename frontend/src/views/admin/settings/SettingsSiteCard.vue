@@ -13,23 +13,33 @@
         class="settings-site-card__mode-banner settings-site-card__panel flex items-center justify-between"
       >
         <div>
-          <h3 class="settings-site-card__title text-sm font-medium">
+          <h3 id="settings-site-backend-mode-label" class="settings-site-card__title text-sm font-medium">
             {{ t('admin.settings.site.backendMode') }}
           </h3>
           <p class="settings-site-card__description mt-1 text-xs">
             {{ t('admin.settings.site.backendModeDescription') }}
           </p>
         </div>
-        <Toggle v-model="form.backend_mode_enabled" />
+        <Toggle
+          id="settings-site-backend-mode"
+          v-model="form.backend_mode_enabled"
+          name="backend_mode_enabled"
+          aria-labelledby="settings-site-backend-mode-label"
+        />
       </div>
 
       <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
-          <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
+          <label
+            for="settings-site-name"
+            class="settings-site-card__field-label mb-2 block text-sm font-medium"
+          >
             {{ t('admin.settings.site.siteName') }}
           </label>
           <input
+            id="settings-site-name"
             v-model="form.site_name"
+            name="site_name"
             type="text"
             class="input"
             :placeholder="t('admin.settings.site.siteNamePlaceholder')"
@@ -39,11 +49,16 @@
           </p>
         </div>
         <div>
-          <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
+          <label
+            for="settings-site-subtitle"
+            class="settings-site-card__field-label mb-2 block text-sm font-medium"
+          >
             {{ t('admin.settings.site.siteSubtitle') }}
           </label>
           <input
+            id="settings-site-subtitle"
             v-model="form.site_subtitle"
+            name="site_subtitle"
             type="text"
             class="input"
             :placeholder="t('admin.settings.site.siteSubtitlePlaceholder')"
@@ -55,25 +70,36 @@
       </div>
 
       <div>
-        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
-          Frontend Theme
+        <label
+          for="settings-site-frontend-theme"
+          class="settings-site-card__field-label mb-2 block text-sm font-medium"
+        >
+          {{ t('admin.settings.site.frontendTheme') }}
         </label>
         <Select
+          id="settings-site-frontend-theme"
           v-model="form.frontend_theme"
+          name="frontend_theme"
           :options="themeOptions"
-          placeholder="Select a frontend theme"
+          :aria-label="t('admin.settings.site.frontendTheme')"
+          :placeholder="t('admin.settings.site.frontendThemePlaceholder')"
         />
         <p class="settings-site-card__description mt-1.5 text-xs">
-          Applied globally after save. New themes can be added through the theme registry without rewriting business pages.
+          {{ t('admin.settings.site.frontendThemeHint') }}
         </p>
       </div>
 
       <div>
-        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
+        <label
+          for="settings-api-base-url"
+          class="settings-site-card__field-label mb-2 block text-sm font-medium"
+        >
           {{ t('admin.settings.site.apiBaseUrl') }}
         </label>
         <input
+          id="settings-api-base-url"
           v-model="form.api_base_url"
+          name="api_base_url"
           type="text"
           class="input font-mono text-sm"
           :placeholder="t('admin.settings.site.apiBaseUrlPlaceholder')"
@@ -113,33 +139,48 @@
             </div>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label class="settings-site-card__mini-label mb-1 block text-xs font-medium">
+                <label
+                  :for="`settings-site-endpoint-name-${index}`"
+                  class="settings-site-card__mini-label mb-1 block text-xs font-medium"
+                >
                   {{ t('admin.settings.site.customEndpoints.name') }}
                 </label>
                 <input
+                  :id="`settings-site-endpoint-name-${index}`"
                   v-model="endpoint.name"
+                  :name="`custom_endpoints.${index}.name`"
                   type="text"
                   class="input text-sm"
                   :placeholder="t('admin.settings.site.customEndpoints.namePlaceholder')"
                 />
               </div>
               <div>
-                <label class="settings-site-card__mini-label mb-1 block text-xs font-medium">
+                <label
+                  :for="`settings-site-endpoint-url-${index}`"
+                  class="settings-site-card__mini-label mb-1 block text-xs font-medium"
+                >
                   {{ t('admin.settings.site.customEndpoints.endpointUrl') }}
                 </label>
                 <input
+                  :id="`settings-site-endpoint-url-${index}`"
                   v-model="endpoint.endpoint"
+                  :name="`custom_endpoints.${index}.endpoint`"
                   type="url"
                   class="input font-mono text-sm"
                   :placeholder="t('admin.settings.site.customEndpoints.endpointUrlPlaceholder')"
                 />
               </div>
               <div class="sm:col-span-2">
-                <label class="settings-site-card__mini-label mb-1 block text-xs font-medium">
+                <label
+                  :for="`settings-site-endpoint-description-${index}`"
+                  class="settings-site-card__mini-label mb-1 block text-xs font-medium"
+                >
                   {{ t('admin.settings.site.customEndpoints.descriptionLabel') }}
                 </label>
                 <input
+                  :id="`settings-site-endpoint-description-${index}`"
                   v-model="endpoint.description"
+                  :name="`custom_endpoints.${index}.description`"
                   type="text"
                   class="input text-sm"
                   :placeholder="t('admin.settings.site.customEndpoints.descriptionPlaceholder')"
@@ -162,11 +203,16 @@
       </div>
 
       <div>
-        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
+        <label
+          for="settings-site-contact-info"
+          class="settings-site-card__field-label mb-2 block text-sm font-medium"
+        >
           {{ t('admin.settings.site.contactInfo') }}
         </label>
         <input
+          id="settings-site-contact-info"
           v-model="form.contact_info"
+          name="contact_info"
           type="text"
           class="input"
           :placeholder="t('admin.settings.site.contactInfoPlaceholder')"
@@ -177,11 +223,16 @@
       </div>
 
       <div>
-        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
+        <label
+          for="settings-site-doc-url"
+          class="settings-site-card__field-label mb-2 block text-sm font-medium"
+        >
           {{ t('admin.settings.site.docUrl') }}
         </label>
         <input
+          id="settings-site-doc-url"
           v-model="form.doc_url"
+          name="doc_url"
           type="url"
           class="input font-mono text-sm"
           :placeholder="t('admin.settings.site.docUrlPlaceholder')"
@@ -198,6 +249,8 @@
         <ImageUpload
           v-model="form.site_logo"
           mode="image"
+          input-id="settings-site-logo-upload"
+          input-name="site_logo_file"
           :upload-label="t('admin.settings.site.uploadImage')"
           :remove-label="t('admin.settings.site.remove')"
           :hint="t('admin.settings.site.logoHint')"
@@ -206,11 +259,16 @@
       </div>
 
       <div>
-        <label class="settings-site-card__field-label mb-2 block text-sm font-medium">
+        <label
+          for="settings-site-home-content"
+          class="settings-site-card__field-label mb-2 block text-sm font-medium"
+        >
           {{ t('admin.settings.site.homeContent') }}
         </label>
         <textarea
+          id="settings-site-home-content"
           v-model="form.home_content"
+          name="home_content"
           rows="6"
           class="input font-mono text-sm"
           :placeholder="t('admin.settings.site.homeContentPlaceholder')"
@@ -227,14 +285,19 @@
         class="settings-site-card__section flex items-center justify-between pt-4"
       >
         <div>
-          <label class="settings-site-card__label font-medium">
+          <label id="settings-site-hide-ccs-label" class="settings-site-card__label font-medium">
             {{ t('admin.settings.site.hideCcsImportButton') }}
           </label>
           <p class="settings-site-card__description text-sm">
             {{ t('admin.settings.site.hideCcsImportButtonHint') }}
           </p>
         </div>
-        <Toggle v-model="form.hide_ccs_import_button" />
+        <Toggle
+          id="settings-site-hide-ccs-toggle"
+          v-model="form.hide_ccs_import_button"
+          name="hide_ccs_import_button"
+          aria-labelledby="settings-site-hide-ccs-label"
+        />
       </div>
     </div>
   </div>

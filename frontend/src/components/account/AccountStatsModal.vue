@@ -19,7 +19,7 @@
           </div>
         </div>
         <span :class="getAccountStatusClasses(account.status)">
-          {{ account.status }}
+          {{ accountStatusLabel }}
         </span>
       </div>
 
@@ -455,6 +455,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
 import { useDocumentThemeVersion } from '@/composables/useDocumentThemeVersion'
 import type { Account, AccountUsageStatsResponse } from '@/types'
+import { getAccountStatusLabel } from './accountDisplayLabels'
 import {
   getThemeChartTooltipColors,
   getThemeLineChartConfig,
@@ -534,6 +535,8 @@ const getAccountStatusClasses = (status: string) => [
     ? 'account-stats-modal__status--active'
     : 'account-stats-modal__status--inactive'
 ]
+
+const accountStatusLabel = computed(() => getAccountStatusLabel(props.account?.status, t))
 
 const trendChartData = computed<ChartData<'line'> | null>(() => {
   if (!stats.value?.history?.length) {

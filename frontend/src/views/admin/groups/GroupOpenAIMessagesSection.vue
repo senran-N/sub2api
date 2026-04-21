@@ -3,15 +3,18 @@
     v-if="form.platform === 'openai'"
     class="group-openai-messages-section mt-4 border-t pt-4"
   >
-    <h4 class="group-openai-messages-section__title mb-3 text-sm font-medium">
+    <h3 class="group-openai-messages-section__title mb-3 text-sm font-medium">
       {{ t('admin.groups.openaiMessages.title') }}
-    </h4>
+    </h3>
 
     <div class="flex items-center justify-between">
       <label class="group-openai-messages-section__label text-sm">
         {{ t('admin.groups.openaiMessages.allowDispatch') }}
       </label>
-      <Toggle v-model="form.allow_messages_dispatch" />
+      <Toggle
+        v-model="form.allow_messages_dispatch"
+        :aria-label="t('admin.groups.openaiMessages.allowDispatch')"
+      />
     </div>
     <p class="group-openai-messages-section__hint mt-1 text-xs">
       {{ t('admin.groups.openaiMessages.allowDispatchHint') }}

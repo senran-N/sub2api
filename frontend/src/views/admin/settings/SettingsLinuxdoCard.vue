@@ -18,7 +18,10 @@
             {{ t('admin.settings.linuxdo.enableHint') }}
           </p>
         </div>
-        <Toggle v-model="form.linuxdo_connect_enabled" />
+        <Toggle
+          v-model="form.linuxdo_connect_enabled"
+          :aria-label="t('admin.settings.linuxdo.enable')"
+        />
       </div>
 
       <div

@@ -1,10 +1,15 @@
 <template>
   <div class="space-y-5">
     <div>
-      <label class="input-label">{{ t('admin.groups.form.name') }}</label>
+      <label :id="nameLabelId" :for="nameInputId" class="input-label">
+        {{ t('admin.groups.form.name') }}
+      </label>
       <input
+        :id="nameInputId"
+        name="name"
         v-model="form.name"
         type="text"
+        autocomplete="off"
         required
         class="input"
         :placeholder="namePlaceholder"
@@ -12,20 +17,28 @@
       />
     </div>
     <div>
-      <label class="input-label">{{ t('admin.groups.form.description') }}</label>
+      <label :id="descriptionLabelId" :for="descriptionInputId" class="input-label">
+        {{ t('admin.groups.form.description') }}
+      </label>
       <textarea
+        :id="descriptionInputId"
+        name="description"
         v-model="form.description"
         rows="3"
+        autocomplete="off"
         class="input"
         :placeholder="descriptionPlaceholder"
       ></textarea>
     </div>
     <div>
-      <label class="input-label">{{ t('admin.groups.form.platform') }}</label>
+      <label :id="platformLabelId" class="input-label">{{ t('admin.groups.form.platform') }}</label>
       <Select
+        :id="platformInputId"
+        name="platform"
         v-model="form.platform"
         :options="platformOptions"
         :disabled="platformDisabled"
+        :aria-labelledby="platformLabelId"
         :data-tour="platformTourTarget"
         @change="handlePlatformChange"
       />
@@ -40,10 +53,15 @@
       @remove-group="$emit('remove-group', $event)"
     />
     <div>
-      <label class="input-label">{{ t('admin.groups.form.rateMultiplier') }}</label>
+      <label :id="rateMultiplierLabelId" :for="rateMultiplierInputId" class="input-label">
+        {{ t('admin.groups.form.rateMultiplier') }}
+      </label>
       <input
+        :id="rateMultiplierInputId"
+        name="rate_multiplier"
         v-model.number="form.rate_multiplier"
         type="number"
+        autocomplete="off"
         step="0.001"
         min="0.001"
         required
@@ -56,11 +74,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import type { CreateGroupForm, EditGroupForm, NumberSelectOption } from './groupsForm'
 import GroupCopyAccountsField from './GroupCopyAccountsField.vue'
+
+let groupBaseFieldsIdCounter = 0
 
 const props = withDefaults(
   defineProps<{
@@ -97,6 +118,15 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
+const fieldIdPrefix = `group-base-fields-${++groupBaseFieldsIdCounter}`
+const nameInputId = computed(() => `${fieldIdPrefix}-name`)
+const nameLabelId = computed(() => `${fieldIdPrefix}-name-label`)
+const descriptionInputId = computed(() => `${fieldIdPrefix}-description`)
+const descriptionLabelId = computed(() => `${fieldIdPrefix}-description-label`)
+const platformInputId = computed(() => `${fieldIdPrefix}-platform`)
+const platformLabelId = computed(() => `${fieldIdPrefix}-platform-label`)
+const rateMultiplierInputId = computed(() => `${fieldIdPrefix}-rate-multiplier`)
+const rateMultiplierLabelId = computed(() => `${fieldIdPrefix}-rate-multiplier-label`)
 
 function handlePlatformChange(): void {
   if (!props.resetCopyAccountsOnPlatformChange) {

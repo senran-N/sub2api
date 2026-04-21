@@ -67,7 +67,6 @@
           <button
             @click="toggleDropdown"
             class="app-header__profile-button"
-            aria-label="User Menu"
           >
             <div class="app-header__avatar">
               {{ userInitials }}

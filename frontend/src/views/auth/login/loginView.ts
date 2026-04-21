@@ -150,8 +150,15 @@ export function resetTotpLoginState(state: LoginTotpState): void {
   state.userEmailMasked = ''
 }
 
-export function resolveLoginRedirectTarget(redirect: unknown): string {
-  return typeof redirect === 'string' && redirect ? redirect : '/dashboard'
+export function resolveLoginRedirectTarget(
+  redirect: unknown,
+  isAdmin = false
+): string {
+  if (typeof redirect === 'string' && redirect) {
+    return redirect
+  }
+
+  return isAdmin ? '/admin/dashboard' : '/dashboard'
 }
 
 export function resolveLoginErrorMessage(

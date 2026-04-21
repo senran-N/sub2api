@@ -18,7 +18,10 @@
             {{ t('admin.settings.registration.enableRegistrationHint') }}
           </p>
         </div>
-        <Toggle v-model="form.registration_enabled" />
+        <Toggle
+          v-model="form.registration_enabled"
+          :aria-label="t('admin.settings.registration.enableRegistration')"
+        />
       </div>
 
       <div
@@ -32,7 +35,10 @@
             {{ t('admin.settings.registration.emailVerificationHint') }}
           </p>
         </div>
-        <Toggle v-model="form.email_verify_enabled" />
+        <Toggle
+          v-model="form.email_verify_enabled"
+          :aria-label="t('admin.settings.registration.emailVerification')"
+        />
       </div>
 
       <div class="settings-registration-card__section pt-4">
@@ -95,7 +101,10 @@
             {{ t('admin.settings.registration.promoCodeHint') }}
           </p>
         </div>
-        <Toggle v-model="form.promo_code_enabled" />
+        <Toggle
+          v-model="form.promo_code_enabled"
+          :aria-label="t('admin.settings.registration.promoCode')"
+        />
       </div>
 
       <div
@@ -109,7 +118,10 @@
             {{ t('admin.settings.registration.invitationCodeHint') }}
           </p>
         </div>
-        <Toggle v-model="form.invitation_code_enabled" />
+        <Toggle
+          v-model="form.invitation_code_enabled"
+          :aria-label="t('admin.settings.registration.invitationCode')"
+        />
       </div>
 
       <div
@@ -124,7 +136,10 @@
             {{ t('admin.settings.registration.passwordResetHint') }}
           </p>
         </div>
-        <Toggle v-model="form.password_reset_enabled" />
+        <Toggle
+          v-model="form.password_reset_enabled"
+          :aria-label="t('admin.settings.registration.passwordReset')"
+        />
       </div>
 
       <div
@@ -165,6 +180,7 @@
         <Toggle
           v-model="form.totp_enabled"
           :disabled="!form.totp_encryption_key_configured"
+          :aria-label="t('admin.settings.registration.totp')"
         />
       </div>
     </div>

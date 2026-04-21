@@ -7,7 +7,10 @@
       <GroupSectionInfoTooltip :text="t('admin.groups.claudeCode.tooltip')" />
     </div>
     <div class="flex items-center gap-3">
-      <Toggle v-model="form.claude_code_only" />
+      <Toggle
+        v-model="form.claude_code_only"
+        :aria-label="t('admin.groups.claudeCode.title')"
+      />
       <span class="theme-text-muted text-sm">
         {{ form.claude_code_only ? t('admin.groups.claudeCode.enabled') : t('admin.groups.claudeCode.disabled') }}
       </span>

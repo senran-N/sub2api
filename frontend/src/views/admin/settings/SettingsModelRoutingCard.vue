@@ -19,7 +19,10 @@
             {{ t('admin.settings.modelRouting.enableFallbackHint') }}
           </p>
         </div>
-        <Toggle v-model="form.enable_model_fallback" />
+        <Toggle
+          v-model="form.enable_model_fallback"
+          :aria-label="t('admin.settings.modelRouting.enableFallback')"
+        />
       </div>
 
       <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -118,7 +121,10 @@
               {{ t('admin.settings.modelRouting.grokThinkingSummaryHint') }}
             </p>
           </div>
-          <Toggle v-model="form.grok_thinking_summary" />
+          <Toggle
+            v-model="form.grok_thinking_summary"
+            :aria-label="t('admin.settings.modelRouting.grokThinkingSummary')"
+          />
         </div>
 
         <div class="flex items-center justify-between gap-4 rounded-lg border border-[color:var(--theme-card-border)] p-4">
@@ -130,7 +136,10 @@
               {{ t('admin.settings.modelRouting.grokShowSearchSourcesHint') }}
             </p>
           </div>
-          <Toggle v-model="form.grok_show_search_sources" />
+          <Toggle
+            v-model="form.grok_show_search_sources"
+            :aria-label="t('admin.settings.modelRouting.grokShowSearchSources')"
+          />
         </div>
 
         <div>
@@ -280,7 +289,10 @@
               {{ t('admin.settings.modelRouting.grokMediaProxyEnabledHint') }}
             </p>
           </div>
-          <Toggle v-model="form.grok_media_proxy_enabled" />
+          <Toggle
+            v-model="form.grok_media_proxy_enabled"
+            :aria-label="t('admin.settings.modelRouting.grokMediaProxyEnabled')"
+          />
         </div>
       </div>
       </div>

@@ -132,7 +132,10 @@
             {{ t('admin.settings.smtp.useTlsHint') }}
           </p>
         </div>
-        <Toggle v-model="form.smtp_use_tls" />
+        <Toggle
+          v-model="form.smtp_use_tls"
+          :aria-label="t('admin.settings.smtp.useTls')"
+        />
       </div>
     </div>
   </div>

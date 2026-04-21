@@ -19,9 +19,9 @@
           </div>
           <!-- Header -->
           <div class="modal-header">
-            <h3 :id="dialogId" class="modal-title">
+            <h2 :id="dialogId" class="modal-title">
               {{ title }}
-            </h3>
+            </h2>
             <button
               @click="emit('close')"
               class="modal-close-button transition-colors"

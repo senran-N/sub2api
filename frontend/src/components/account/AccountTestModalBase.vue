@@ -18,14 +18,14 @@
             <div class="account-test-modal__account-name">{{ account.name }}</div>
             <div class="account-test-modal__account-meta">
               <span class="theme-chip theme-chip--compact theme-chip--neutral uppercase">
-                {{ account.type }}
+                {{ accountTypeLabel }}
               </span>
               <span>{{ t('admin.accounts.account') }}</span>
             </div>
           </div>
         </div>
         <span :class="getAccountStatusClasses(account.status)">
-          {{ account.status }}
+          {{ accountStatusLabel }}
         </span>
       </div>
 
@@ -177,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, toRef } from 'vue'
+import { computed, nextTick, ref, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
@@ -185,6 +185,7 @@ import TextArea from '@/components/common/TextArea.vue'
 import { Icon } from '@/components/icons'
 import { useClipboard } from '@/composables/useClipboard'
 import type { Account } from '@/types'
+import { getAccountStatusLabel, getAccountTypeLabel } from './accountDisplayLabels'
 import {
   useAccountTestSession,
   type LogTone
@@ -247,6 +248,9 @@ const getPrimaryActionClasses = () => {
         : 'btn-primary'
   )
 }
+
+const accountTypeLabel = computed(() => getAccountTypeLabel(props.account?.type, t))
+const accountStatusLabel = computed(() => getAccountStatusLabel(props.account?.status, t))
 
 const handleClose = () => {
   cancelActiveRequest()

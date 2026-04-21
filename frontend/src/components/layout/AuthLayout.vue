@@ -58,7 +58,7 @@
 
       <!-- Copyright -->
       <div class="auth-layout__copyright mt-8 text-center text-xs">
-        &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
+        &copy; {{ currentYear }} {{ siteName }}. {{ t('home.footer.allRightsReserved') }}
       </div>
     </div>
   </div>
@@ -66,8 +66,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
+
+const { t } = useI18n()
 
 const appStore = useAppStore()
 

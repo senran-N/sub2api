@@ -444,33 +444,77 @@ onBeforeUnmount(() => {
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
         <label class="ops-system-log-table__field text-xs">
           级别
-          <Select v-model="runtimeConfig.level" class="mt-1" :options="runtimeLevelOptions" />
+          <Select
+            id="ops-log-runtime-level"
+            v-model="runtimeConfig.level"
+            name="runtime_log_level"
+            class="mt-1"
+            :options="runtimeLevelOptions"
+            aria-label="级别"
+          />
         </label>
         <label class="ops-system-log-table__field text-xs">
           堆栈阈值
-          <Select v-model="runtimeConfig.stacktrace_level" class="mt-1" :options="stacktraceLevelOptions" />
+          <Select
+            id="ops-log-stacktrace-level"
+            v-model="runtimeConfig.stacktrace_level"
+            name="runtime_stacktrace_level"
+            class="mt-1"
+            :options="stacktraceLevelOptions"
+            aria-label="堆栈阈值"
+          />
         </label>
         <label class="ops-system-log-table__field text-xs">
           采样初始
-          <input v-model.number="runtimeConfig.sampling_initial" type="number" min="1" class="input mt-1" />
+          <input
+            id="ops-log-sampling-initial"
+            v-model.number="runtimeConfig.sampling_initial"
+            name="runtime_sampling_initial"
+            type="number"
+            min="1"
+            autocomplete="off"
+            class="input mt-1"
+          />
         </label>
         <label class="ops-system-log-table__field text-xs">
           采样后续
-          <input v-model.number="runtimeConfig.sampling_thereafter" type="number" min="1" class="input mt-1" />
+          <input
+            id="ops-log-sampling-thereafter"
+            v-model.number="runtimeConfig.sampling_thereafter"
+            name="runtime_sampling_thereafter"
+            type="number"
+            min="1"
+            autocomplete="off"
+            class="input mt-1"
+          />
         </label>
         <label class="ops-system-log-table__field text-xs">
           保留天数
-          <input v-model.number="runtimeConfig.retention_days" type="number" min="1" max="3650" class="input mt-1" />
+          <input
+            id="ops-log-retention-days"
+            v-model.number="runtimeConfig.retention_days"
+            name="runtime_retention_days"
+            type="number"
+            min="1"
+            max="3650"
+            autocomplete="off"
+            class="input mt-1"
+          />
         </label>
         <div class="md:col-span-2 xl:col-span-6">
           <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
               <label class="ops-system-log-table__checkbox-row inline-flex items-center gap-2 text-xs">
-                <input v-model="runtimeConfig.caller" type="checkbox" />
+                <input id="ops-log-runtime-caller" v-model="runtimeConfig.caller" name="runtime_caller" type="checkbox" />
                 caller
               </label>
               <label class="ops-system-log-table__checkbox-row inline-flex items-center gap-2 text-xs">
-                <input v-model="runtimeConfig.enable_sampling" type="checkbox" />
+                <input
+                  id="ops-log-enable-sampling"
+                  v-model="runtimeConfig.enable_sampling"
+                  name="runtime_enable_sampling"
+                  type="checkbox"
+                />
                 sampling
               </label>
             </div>
@@ -491,51 +535,137 @@ onBeforeUnmount(() => {
     <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-5">
       <label class="ops-system-log-table__field text-xs">
         时间范围
-        <Select v-model="filters.time_range" class="mt-1" :options="timeRangeOptions" />
+        <Select
+          id="ops-log-filter-time-range"
+          v-model="filters.time_range"
+          name="log_time_range"
+          class="mt-1"
+          :options="timeRangeOptions"
+          aria-label="时间范围"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         开始时间（可选）
-        <input v-model="filters.start_time" type="datetime-local" class="input mt-1" />
+        <input
+          id="ops-log-filter-start-time"
+          v-model="filters.start_time"
+          name="log_start_time"
+          type="datetime-local"
+          autocomplete="off"
+          class="input mt-1"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         结束时间（可选）
-        <input v-model="filters.end_time" type="datetime-local" class="input mt-1" />
+        <input
+          id="ops-log-filter-end-time"
+          v-model="filters.end_time"
+          name="log_end_time"
+          type="datetime-local"
+          autocomplete="off"
+          class="input mt-1"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         级别
-        <Select v-model="filters.level" class="mt-1" :options="filterLevelOptions" />
+        <Select
+          id="ops-log-filter-level"
+          v-model="filters.level"
+          name="log_level"
+          class="mt-1"
+          :options="filterLevelOptions"
+          aria-label="级别"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         组件
-        <input v-model="filters.component" type="text" class="input mt-1" placeholder="如 http.access" />
+        <input
+          id="ops-log-filter-component"
+          v-model="filters.component"
+          name="log_component"
+          type="text"
+          autocomplete="off"
+          class="input mt-1"
+          placeholder="如 http.access"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         request_id
-        <input v-model="filters.request_id" type="text" class="input mt-1" />
+        <input
+          id="ops-log-filter-request-id"
+          v-model="filters.request_id"
+          name="log_request_id"
+          type="text"
+          autocomplete="off"
+          class="input mt-1"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         client_request_id
-        <input v-model="filters.client_request_id" type="text" class="input mt-1" />
+        <input
+          id="ops-log-filter-client-request-id"
+          v-model="filters.client_request_id"
+          name="log_client_request_id"
+          type="text"
+          autocomplete="off"
+          class="input mt-1"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         user_id
-        <input v-model="filters.user_id" type="text" class="input mt-1" />
+        <input
+          id="ops-log-filter-user-id"
+          v-model="filters.user_id"
+          name="log_user_id"
+          type="text"
+          autocomplete="off"
+          class="input mt-1"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         account_id
-        <input v-model="filters.account_id" type="text" class="input mt-1" />
+        <input
+          id="ops-log-filter-account-id"
+          v-model="filters.account_id"
+          name="log_account_id"
+          type="text"
+          autocomplete="off"
+          class="input mt-1"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         平台
-        <input v-model="filters.platform" type="text" class="input mt-1" />
+        <input
+          id="ops-log-filter-platform"
+          v-model="filters.platform"
+          name="log_platform"
+          type="text"
+          autocomplete="off"
+          class="input mt-1"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         模型
-        <input v-model="filters.model" type="text" class="input mt-1" />
+        <input
+          id="ops-log-filter-model"
+          v-model="filters.model"
+          name="log_model"
+          type="text"
+          autocomplete="off"
+          class="input mt-1"
+        />
       </label>
       <label class="ops-system-log-table__field text-xs">
         关键词
-        <input v-model="filters.q" type="text" class="input mt-1" placeholder="消息/request_id" />
+        <input
+          id="ops-log-filter-keyword"
+          v-model="filters.q"
+          name="log_keyword"
+          type="text"
+          autocomplete="off"
+          class="input mt-1"
+          placeholder="消息/request_id"
+        />
       </label>
     </div>
 

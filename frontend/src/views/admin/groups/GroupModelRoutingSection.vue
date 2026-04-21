@@ -11,7 +11,10 @@
     </div>
 
     <div class="mb-3 flex items-center gap-3">
-      <Toggle v-model="form.model_routing_enabled" />
+      <Toggle
+        v-model="form.model_routing_enabled"
+        :aria-label="t('admin.groups.modelRouting.title')"
+      />
       <span class="group-model-routing-section__status text-sm">
         {{
           form.model_routing_enabled

@@ -61,13 +61,19 @@
           >
             <template #header-select>
               <AccountSelectionCheckbox
+                id="accounts-select-all-visible"
                 :checked="allVisibleSelected"
+                name="select_all_visible_accounts"
+                :aria-label="t('admin.accounts.bulkActions.selectPage')"
                 @change="toggleSelectAllVisible"
               />
             </template>
             <template #cell-select="{ row }">
               <AccountSelectionCheckbox
+                :id="`account-select-${row.id}`"
                 :checked="selIds.includes(row.id)"
+                :name="`account_select_${row.id}`"
+                :aria-label="t('admin.accounts.selectAccount', { name: row.name || `#${row.id}` })"
                 @change="toggleSel(row.id)"
               />
             </template>

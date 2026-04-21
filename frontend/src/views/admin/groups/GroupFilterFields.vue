@@ -7,32 +7,45 @@
         class="theme-text-subtle absolute left-3 top-1/2 -translate-y-1/2"
       />
       <input
+        id="group-filter-search"
         :value="searchQuery"
+        name="search_groups"
         type="text"
+        autocomplete="off"
+        :aria-label="t('admin.groups.searchGroups')"
         :placeholder="t('admin.groups.searchGroups')"
         class="input pl-10"
         @input="handleSearchInput"
       />
     </div>
     <Select
+      id="group-filter-platform"
       :model-value="platform"
+      name="platform"
       :options="platformOptions"
+      :aria-label="t('admin.groups.allPlatforms')"
       :placeholder="t('admin.groups.allPlatforms')"
       class="w-44"
       @update:modelValue="handlePlatformUpdate"
       @change="emit('platform-change')"
     />
     <Select
+      id="group-filter-status"
       :model-value="status"
+      name="status"
       :options="statusOptions"
+      :aria-label="t('admin.groups.allStatus')"
       :placeholder="t('admin.groups.allStatus')"
       class="w-40"
       @update:modelValue="handleStatusUpdate"
       @change="emit('status-change')"
     />
     <Select
+      id="group-filter-exclusive"
       :model-value="isExclusive"
+      name="is_exclusive"
       :options="exclusiveOptions"
+      :aria-label="t('admin.groups.allGroups')"
       :placeholder="t('admin.groups.allGroups')"
       class="w-44"
       @update:modelValue="handleExclusiveUpdate"

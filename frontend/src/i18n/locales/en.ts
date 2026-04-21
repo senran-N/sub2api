@@ -2074,6 +2074,7 @@ export default {
       listPendingSyncHint:
         "List changes are pending sync. Click sync to load latest rows.",
       listPendingSyncAction: "Sync now",
+      selectAccount: "Select account {name}",
       syncFromCrs: "Sync from CRS",
       dataExport: "Export",
       dataExportSelected: "Export Selected",
@@ -4955,6 +4956,10 @@ export default {
         siteSubtitle: "Site Subtitle",
         siteSubtitlePlaceholder: "Subscription to API Conversion Platform",
         siteSubtitleHint: "Displayed on login and register pages",
+        frontendTheme: "Frontend Theme",
+        frontendThemePlaceholder: "Select a frontend theme",
+        frontendThemeHint:
+          "Applied globally after save. New themes can be added through the theme registry without rewriting business pages.",
         apiBaseUrl: "API Base URL",
         apiBaseUrlPlaceholder: "https://api.example.com",
         apiBaseUrlHint:

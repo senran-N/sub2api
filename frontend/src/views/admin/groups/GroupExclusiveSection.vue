@@ -14,7 +14,7 @@
           :stroke-width="2"
           class="group-exclusive-section__help-icon cursor-help transition-colors"
         />
-        <div class="pointer-events-none absolute bottom-full left-0 z-50 mb-2 w-72 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:opacity-100">
+        <div class="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden w-72 group-hover:block group-hover:pointer-events-auto">
           <div class="group-exclusive-section__tooltip shadow-lg">
             <p class="mb-2 text-xs font-medium">{{ t('admin.groups.exclusiveTooltip.title') }}</p>
             <p class="group-exclusive-section__tooltip-muted mb-2 text-xs leading-relaxed">
@@ -36,7 +36,10 @@
     </div>
 
     <div class="flex items-center gap-3">
-      <Toggle v-model="form.is_exclusive" />
+      <Toggle
+        v-model="form.is_exclusive"
+        :aria-label="t('admin.groups.form.exclusive')"
+      />
       <span class="group-exclusive-section__state text-sm">
         {{ form.is_exclusive ? t('admin.groups.exclusive') : t('admin.groups.public') }}
       </span>

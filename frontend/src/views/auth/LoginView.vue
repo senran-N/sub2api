@@ -240,7 +240,12 @@ async function handleLogin(): Promise<void> {
     }
 
     appStore.showSuccess(t('auth.loginSuccess'))
-    await router.push(resolveLoginRedirectTarget(router.currentRoute.value.query.redirect))
+    await router.push(
+      resolveLoginRedirectTarget(
+        router.currentRoute.value.query.redirect,
+        authStore.isAdmin
+      )
+    )
   } catch (error: unknown) {
     if (turnstileRef.value) {
       turnstileRef.value.reset()
@@ -263,7 +268,12 @@ async function handle2FAVerify(code: string): Promise<void> {
     await authStore.login2FA(totpState.tempToken, code)
     resetTotpLoginState(totpState)
     appStore.showSuccess(t('auth.loginSuccess'))
-    await router.push(resolveLoginRedirectTarget(router.currentRoute.value.query.redirect))
+    await router.push(
+      resolveLoginRedirectTarget(
+        router.currentRoute.value.query.redirect,
+        authStore.isAdmin
+      )
+    )
   } catch (error: unknown) {
     if (totpModalRef.value) {
       totpModalRef.value.setError(resolveTotpLoginErrorMessage(error, t))

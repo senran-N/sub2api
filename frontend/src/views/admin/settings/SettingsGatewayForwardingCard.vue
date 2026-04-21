@@ -18,7 +18,10 @@
             {{ t('admin.settings.gatewayForwarding.fingerprintUnificationHint') }}
           </p>
         </div>
-        <Toggle v-model="form.enable_fingerprint_unification" />
+        <Toggle
+          v-model="form.enable_fingerprint_unification"
+          :aria-label="t('admin.settings.gatewayForwarding.fingerprintUnification')"
+        />
       </div>
 
       <div class="flex items-center justify-between">
@@ -30,7 +33,10 @@
             {{ t('admin.settings.gatewayForwarding.metadataPassthroughHint') }}
           </p>
         </div>
-        <Toggle v-model="form.enable_metadata_passthrough" />
+        <Toggle
+          v-model="form.enable_metadata_passthrough"
+          :aria-label="t('admin.settings.gatewayForwarding.metadataPassthrough')"
+        />
       </div>
 
       <div class="flex items-center justify-between">
@@ -42,7 +48,10 @@
             {{ t('admin.settings.gatewayForwarding.cchSigningHint') }}
           </p>
         </div>
-        <Toggle v-model="form.enable_cch_signing" />
+        <Toggle
+          v-model="form.enable_cch_signing"
+          :aria-label="t('admin.settings.gatewayForwarding.cchSigning')"
+        />
       </div>
     </div>
   </div>

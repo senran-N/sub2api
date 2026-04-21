@@ -110,8 +110,9 @@ describe('loginView', () => {
   })
 
   it('resolves redirect targets and error messages predictably', () => {
-    expect(resolveLoginRedirectTarget('/admin')).toBe('/admin')
-    expect(resolveLoginRedirectTarget(undefined)).toBe('/dashboard')
+    expect(resolveLoginRedirectTarget('/admin', false)).toBe('/admin')
+    expect(resolveLoginRedirectTarget(undefined, false)).toBe('/dashboard')
+    expect(resolveLoginRedirectTarget(undefined, true)).toBe('/admin/dashboard')
 
     expect(
       resolveLoginErrorMessage({ response: { data: { detail: 'detail' } } }, t)

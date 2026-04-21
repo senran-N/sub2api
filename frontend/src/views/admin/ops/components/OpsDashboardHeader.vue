@@ -610,7 +610,7 @@ function handleToolbarRefresh() {
     <!-- Top Toolbar -->
     <div class="ops-dashboard-header__divider flex flex-wrap items-center justify-between gap-4 pb-4">
       <div>
-        <h1 class="ops-dashboard-header__title flex items-center gap-2 text-xl font-black">
+        <h2 class="ops-dashboard-header__title flex items-center gap-2 text-xl font-black">
           <svg class="ops-dashboard-header__title-icon h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
@@ -620,7 +620,7 @@ function handleToolbarRefresh() {
             />
           </svg>
           {{ t('admin.ops.title') }}
-        </h1>
+        </h2>
 
         <div v-if="!props.fullscreen" class="ops-dashboard-header__meta mt-1 flex items-center gap-3 text-xs">
           <span class="flex items-center gap-1.5" :title="props.loading ? t('admin.ops.loadingText') : t('admin.ops.ready')">
@@ -751,13 +751,13 @@ function handleToolbarRefresh() {
           >
             <!-- Diagnosis Popover (hover) -->
             <div
-              class="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-72 -translate-x-1/2 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 md:left-full md:top-0 md:ml-2 md:mt-0 md:translate-x-0"
+              class="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-72 -translate-x-1/2 group-hover:block group-hover:pointer-events-auto md:left-full md:top-0 md:ml-2 md:mt-0 md:translate-x-0"
             >
               <div class="ops-dashboard-header__popover">
-                <h4 class="ops-dashboard-header__popover-title mb-3 flex items-center gap-2 pb-2 text-sm font-bold">
+                <div class="ops-dashboard-header__popover-title mb-3 flex items-center gap-2 pb-2 text-sm font-bold">
                   <Icon name="brain" size="sm" class="ops-dashboard-header__title-icon" />
                   {{ t('admin.ops.diagnosis.title') }}
-                </h4>
+                </div>
 
                 <div class="space-y-3">
                   <div v-for="(item, idx) in diagnosisReport" :key="idx" class="flex gap-3">
@@ -1450,12 +1450,12 @@ function handleToolbarRefresh() {
 }
 
 .ops-dashboard-header__eyebrow {
-  color: color-mix(in srgb, var(--theme-page-muted) 78%, transparent);
+  color: color-mix(in srgb, var(--theme-page-text) 18%, var(--theme-page-muted));
 }
 
 .ops-dashboard-header__label {
-  color: color-mix(in srgb, var(--theme-page-muted) 64%, transparent);
-  font-weight: 500;
+  color: color-mix(in srgb, var(--theme-page-text) 12%, var(--theme-page-muted));
+  font-weight: 600;
 }
 
 .ops-dashboard-header__value {
@@ -1740,6 +1740,6 @@ function handleToolbarRefresh() {
 }
 
 .ops-dashboard-header__tone--muted {
-  color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+  color: color-mix(in srgb, var(--theme-page-text) 18%, var(--theme-page-muted));
 }
 </style>

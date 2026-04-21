@@ -48,4 +48,10 @@ describe('router admin channel route meta', () => {
     expect(route.meta.titleKey).toBe('admin.channels.title')
     expect(route.meta.descriptionKey).toBe('admin.channels.description')
   })
+
+  it('为登录页配置存在的 i18n 标题键', () => {
+    const route = router.resolve('/login')
+
+    expect(route.meta.titleKey).toBe('auth.signIn')
+  })
 })

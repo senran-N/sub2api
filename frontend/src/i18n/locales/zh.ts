@@ -2068,6 +2068,7 @@ export default {
       autoRefreshCountdown: "自动刷新：{seconds}s",
       listPendingSyncHint: "列表存在待同步变更，点击同步可补齐最新数据。",
       listPendingSyncAction: "立即同步",
+      selectAccount: "选择账号 {name}",
       syncFromCrs: "从 CRS 同步",
       dataExport: "导出",
       dataExportSelected: "导出选中",
@@ -4892,6 +4893,10 @@ export default {
         siteSubtitle: "站点副标题",
         siteSubtitleHint: "显示在登录和注册页面",
         siteSubtitlePlaceholder: "订阅转 API 转换平台",
+        frontendTheme: "前端主题",
+        frontendThemePlaceholder: "选择一个前端主题",
+        frontendThemeHint:
+          "保存后会全局生效。新增主题只需扩展主题注册表，无需重写业务页面。",
         apiBaseUrl: "API 端点地址",
         apiBaseUrlHint:
           '用于"使用密钥"和"导入到 CC Switch"功能，留空则使用当前站点地址',

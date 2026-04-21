@@ -18,7 +18,10 @@
             {{ t('admin.settings.turnstile.enableTurnstileHint') }}
           </p>
         </div>
-        <Toggle v-model="form.turnstile_enabled" />
+        <Toggle
+          v-model="form.turnstile_enabled"
+          :aria-label="t('admin.settings.turnstile.enableTurnstile')"
+        />
       </div>
 
       <div

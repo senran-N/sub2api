@@ -7,7 +7,10 @@
       <GroupSectionInfoTooltip :text="t('admin.groups.mcpXml.tooltip')" />
     </div>
     <div class="flex items-center gap-3">
-      <Toggle v-model="form.mcp_xml_inject" />
+      <Toggle
+        v-model="form.mcp_xml_inject"
+        :aria-label="t('admin.groups.mcpXml.title')"
+      />
       <span class="theme-text-muted text-sm">
         {{ form.mcp_xml_inject ? t('admin.groups.mcpXml.enabled') : t('admin.groups.mcpXml.disabled') }}
       </span>

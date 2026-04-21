@@ -18,7 +18,10 @@
             {{ t('admin.settings.scheduling.allowUngroupedKeyHint') }}
           </p>
         </div>
-        <Toggle v-model="form.allow_ungrouped_key_scheduling" />
+        <Toggle
+          v-model="form.allow_ungrouped_key_scheduling"
+          :aria-label="t('admin.settings.scheduling.allowUngroupedKey')"
+        />
       </div>
     </div>
   </div>

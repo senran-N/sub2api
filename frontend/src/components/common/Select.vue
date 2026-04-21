@@ -5,9 +5,12 @@
       type="button"
       @click="toggle"
       :disabled="disabled"
+      :id="id"
+      :name="name"
       :aria-expanded="isOpen"
       :aria-haspopup="true"
-      aria-label="Select option"
+      :aria-label="resolvedAriaLabel"
+      :aria-labelledby="resolvedAriaLabelledby"
       :class="[
         'select-trigger',
         isOpen && 'select-trigger-open',
@@ -17,7 +20,7 @@
       @keydown.down.prevent="onTriggerKeyDown"
       @keydown.up.prevent="onTriggerKeyDown"
     >
-      <span class="select-value">
+      <span :id="selectedValueId" class="select-value">
         <slot name="selected" :option="selectedOption">
           {{ selectedLabel }}
         </slot>
@@ -119,6 +122,7 @@ const { t } = useI18n()
 
 // Instance ID for unique click-outside detection
 const instanceId = `select-${Math.random().toString(36).substring(2, 9)}`
+const selectedValueId = `${instanceId}-value`
 
 export interface SelectOption {
   value: string | number | boolean | null
@@ -128,11 +132,15 @@ export interface SelectOption {
 }
 
 interface Props {
+  id?: string
+  name?: string
   modelValue: string | number | boolean | null | undefined
   options: SelectOption[] | Array<Record<string, unknown>>
   placeholder?: string
   disabled?: boolean
   error?: boolean
+  ariaLabel?: string
+  ariaLabelledby?: string
   searchable?: boolean
   searchPlaceholder?: string
   emptyText?: string
@@ -174,6 +182,32 @@ const triggerRect = ref<DOMRect | null>(null)
 const placeholderText = computed(() => props.placeholder ?? t('common.selectOption'))
 const searchPlaceholderText = computed(() => props.searchPlaceholder ?? t('common.searchPlaceholder'))
 const emptyTextDisplay = computed(() => props.emptyText ?? t('common.noOptionsFound'))
+const selectedLabel = computed(() => {
+  if (selectedOption.value) {
+    return getOptionLabel(selectedOption.value)
+  }
+  // In creatable mode, show the raw value if no matching option
+  if (props.creatable && props.modelValue) {
+    return String(props.modelValue)
+  }
+  return placeholderText.value
+})
+const resolvedAriaLabel = computed(() =>
+  props.ariaLabelledby
+    ? undefined
+    : props.ariaLabel
+      ? [props.ariaLabel, selectedLabel.value]
+          .filter((part, index, parts) => part && parts.indexOf(part) === index)
+          .join(' ')
+      : undefined
+)
+const resolvedAriaLabelledby = computed(() =>
+  props.ariaLabelledby
+    ? [props.ariaLabelledby, selectedValueId]
+        .filter((part, index, parts) => part && parts.indexOf(part) === index)
+        .join(' ')
+    : undefined
+)
 
 // Computed style for teleported dropdown
 const dropdownStyle = computed(() => {
@@ -226,17 +260,6 @@ const isGroupHeaderOption = (option: any): boolean => {
 
 const selectedOption = computed(() => {
   return props.options.find((opt) => getOptionValue(opt) === props.modelValue) || null
-})
-
-const selectedLabel = computed(() => {
-  if (selectedOption.value) {
-    return getOptionLabel(selectedOption.value)
-  }
-  // In creatable mode, show the raw value if no matching option
-  if (props.creatable && props.modelValue) {
-    return String(props.modelValue)
-  }
-  return placeholderText.value
 })
 
 const filteredOptions = computed(() => {

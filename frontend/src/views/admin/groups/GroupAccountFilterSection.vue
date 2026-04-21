@@ -3,9 +3,9 @@
     v-if="ACCOUNT_FILTER_PLATFORMS.includes(form.platform)"
     class="group-account-filter-section mt-4 space-y-4 pt-4"
   >
-    <h4 class="group-account-filter-section__title mb-3 text-sm font-medium">
+    <h3 class="group-account-filter-section__title mb-3 text-sm font-medium">
       {{ t('admin.groups.accountFilter.title') }}
-    </h4>
+    </h3>
 
     <div class="flex items-center justify-between">
       <div>
@@ -20,7 +20,10 @@
           }}
         </p>
       </div>
-      <Toggle v-model="form.require_oauth_only" />
+      <Toggle
+        v-model="form.require_oauth_only"
+        :aria-label="t('admin.groups.accountFilter.oauthOnly')"
+      />
     </div>
 
     <div class="flex items-center justify-between">
@@ -36,7 +39,10 @@
           }}
         </p>
       </div>
-      <Toggle v-model="form.require_privacy_set" />
+      <Toggle
+        v-model="form.require_privacy_set"
+        :aria-label="t('admin.groups.accountFilter.privacySetOnly')"
+      />
     </div>
   </div>
 </template>

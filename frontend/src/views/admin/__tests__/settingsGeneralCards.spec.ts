@@ -12,14 +12,14 @@ vi.mock('vue-i18n', () => ({
 }))
 
 const SelectStub = {
-  props: ['modelValue', 'options'],
+  props: ['id', 'name', 'modelValue', 'options', 'placeholder', 'ariaLabel', 'ariaLabelledby'],
   emits: ['update:modelValue'],
   template:
-    '<select class="select" :value="modelValue" @change="$emit(\'update:modelValue\', Number($event.target.value))"><option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option></select>'
+    '<select class="select" :id="id" :name="name" :aria-label="ariaLabel" :aria-labelledby="ariaLabelledby" :value="modelValue" @change="$emit(\'update:modelValue\', Number($event.target.value))"><option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option></select>'
 }
 
 const ToggleStub = {
-  props: ['modelValue'],
+  props: ['modelValue', 'disabled'],
   emits: ['update:modelValue'],
   template:
     '<input class="toggle" type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" />'
@@ -40,6 +40,7 @@ function createForm(overrides: Record<string, unknown> = {}) {
     backend_mode_enabled: false,
     site_name: 'Sub2API',
     site_subtitle: 'Subtitle',
+    frontend_theme: 'factory',
     api_base_url: '',
     custom_endpoints: [],
     contact_info: '',
@@ -114,6 +115,13 @@ describe('settings general cards', () => {
     })
 
     expect(wrapper.text()).toContain('admin.settings.site.backendMode')
+    expect(wrapper.text()).toContain('admin.settings.site.frontendTheme')
+    expect(wrapper.text()).toContain('admin.settings.site.frontendThemeHint')
+    expect(wrapper.text()).not.toContain('Frontend Theme')
+    expect(wrapper.findAll('.toggle').map((node) => node.attributes('aria-label'))).toEqual([
+      'admin.settings.site.backendMode',
+      'admin.settings.site.hideCcsImportButton'
+    ])
 
     await wrapper.find('.toggle').setValue(true)
     await wrapper.get('.settings-site-card__remove-button').trigger('click')
@@ -139,6 +147,10 @@ describe('settings general cards', () => {
         }
       }
     })
+
+    expect(wrapper.get('.toggle').attributes('aria-label')).toBe(
+      'admin.settings.purchase.enabled'
+    )
 
     await wrapper.find('.toggle').setValue(true)
     await wrapper.find('input[type="url"]').setValue('https://billing.example.com')

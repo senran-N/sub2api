@@ -24,7 +24,10 @@
               {{ t('admin.settings.streamTimeout.enabledHint') }}
             </p>
           </div>
-          <Toggle v-model="form.enabled" />
+          <Toggle
+            v-model="form.enabled"
+            :aria-label="t('admin.settings.streamTimeout.enabled')"
+          />
         </div>
 
         <div

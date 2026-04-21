@@ -11,22 +11,32 @@
     <div class="settings-purchase-card__body">
       <div class="flex items-center justify-between">
         <div>
-          <label class="settings-purchase-card__title font-medium">
+          <label id="settings-purchase-enabled-label" class="settings-purchase-card__title font-medium">
             {{ t('admin.settings.purchase.enabled') }}
           </label>
           <p class="settings-purchase-card__description text-sm">
             {{ t('admin.settings.purchase.enabledHint') }}
           </p>
         </div>
-        <Toggle v-model="form.purchase_subscription_enabled" />
+        <Toggle
+          id="settings-purchase-enabled-toggle"
+          v-model="form.purchase_subscription_enabled"
+          name="purchase_subscription_enabled"
+          aria-labelledby="settings-purchase-enabled-label"
+        />
       </div>
 
       <div>
-        <label class="settings-purchase-card__field-label mb-2 block text-sm font-medium">
+        <label
+          for="settings-purchase-url"
+          class="settings-purchase-card__field-label mb-2 block text-sm font-medium"
+        >
           {{ t('admin.settings.purchase.url') }}
         </label>
         <input
+          id="settings-purchase-url"
           v-model="form.purchase_subscription_url"
+          name="purchase_subscription_url"
           type="url"
           class="input font-mono text-sm"
           :placeholder="t('admin.settings.purchase.urlPlaceholder')"

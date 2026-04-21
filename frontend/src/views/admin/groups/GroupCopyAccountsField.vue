@@ -1,7 +1,11 @@
 <template>
   <div v-if="options.length > 0">
     <div class="mb-1.5 flex items-center gap-1">
-      <label class="group-copy-accounts-field__label text-sm font-medium">
+      <label
+        :id="selectLabelId"
+        :for="selectId"
+        class="group-copy-accounts-field__label text-sm font-medium"
+      >
         {{ t('admin.groups.copyAccounts.title') }}
       </label>
       <div class="group relative inline-flex">
@@ -11,7 +15,7 @@
           :stroke-width="2"
           class="group-copy-accounts-field__hint-icon cursor-help transition-colors"
         />
-        <div class="pointer-events-none absolute bottom-full left-0 z-50 mb-2 w-72 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:opacity-100">
+        <div class="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden w-72 group-hover:block group-hover:pointer-events-auto">
           <div class="group-copy-accounts-field__tooltip">
             <p class="group-copy-accounts-field__tooltip-text text-xs leading-relaxed">
               {{ tooltipText }}
@@ -39,7 +43,7 @@
       </span>
     </div>
 
-    <select class="input" @change="handleSelectChange">
+    <select :id="selectId" name="copy_accounts_from_group_ids" class="input" @change="handleSelectChange">
       <option value="">{{ t('admin.groups.copyAccounts.selectPlaceholder') }}</option>
       <option
         v-for="option in options"
@@ -55,9 +59,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import type { NumberSelectOption } from './groupsForm'
+
+let copyAccountsFieldIdCounter = 0
 
 const props = defineProps<{
   options: NumberSelectOption[]
@@ -72,6 +79,9 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const fieldIdPrefix = `group-copy-accounts-field-${++copyAccountsFieldIdCounter}`
+const selectId = computed(() => `${fieldIdPrefix}-select`)
+const selectLabelId = computed(() => `${fieldIdPrefix}-label`)
 
 function getOptionLabel(groupId: number): string {
   return props.options.find((option) => option.value === groupId)?.label || `#${groupId}`
