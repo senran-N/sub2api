@@ -415,6 +415,9 @@ func grokRecentFailureFactor(runtimeState grokRuntimeSelectionState, requestedMo
 	if runtimeState.LastUseAt != nil && !runtimeState.LastUseAt.Before(*latestFailure) {
 		return 1.0
 	}
+	if !grokRuntimeFailurePenaltyActive(runtimeState, requestedModel, now) {
+		return 1.0
+	}
 
 	age := now.Sub(*latestFailure)
 	factor := 0.95
@@ -452,6 +455,30 @@ func grokRecentFailureFactor(runtimeState grokRuntimeSelectionState, requestedMo
 		}
 	}
 	return clamp01(factor)
+}
+
+func grokRuntimeFailurePenaltyActive(
+	runtimeState grokRuntimeSelectionState,
+	requestedModel string,
+	now time.Time,
+) bool {
+	if runtimeState.LastFailScope == grokRuntimePenaltyScopeNone {
+		return false
+	}
+	if runtimeState.CooldownUntil == nil {
+		return runtimeState.LastFailScope != grokRuntimePenaltyScopeNone
+	}
+	if !now.Before(*runtimeState.CooldownUntil) {
+		return false
+	}
+	switch runtimeState.CooldownScope {
+	case grokRuntimePenaltyScopeAccount:
+		return true
+	case grokRuntimePenaltyScopeModel:
+		return grokRuntimePenaltyAppliesToModel(runtimeState.CooldownModel, requestedModel)
+	default:
+		return runtimeState.LastFailScope != grokRuntimePenaltyScopeNone
+	}
 }
 
 func grokRuntimeSelectionBlocked(runtimeState grokRuntimeSelectionState, requestedModel string, now time.Time) bool {

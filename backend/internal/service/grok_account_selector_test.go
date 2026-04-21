@@ -203,7 +203,7 @@ func TestGrokAccountSelectorSelectBestCandidate_PrefersExactTierAndFreshQuota(t 
 	require.Equal(t, int64(22), selected.ID)
 }
 
-func TestGrokAccountSelectorSelectBestCandidate_PenalizesRecentFailures(t *testing.T) {
+func TestGrokAccountSelectorSelectBestCandidate_ExpiredCooldownDoesNotDelayRecovery(t *testing.T) {
 	selector := GrokAccountSelector{}
 	now := time.Now().UTC()
 	accounts := []*Account{
@@ -232,6 +232,7 @@ func TestGrokAccountSelectorSelectBestCandidate_PenalizesRecentFailures(t *testi
 						"last_fail_at":             now.Add(-3 * time.Minute).Format(time.RFC3339),
 						"last_fail_status_code":    403,
 						"last_fail_class":          "auth",
+						"last_fail_scope":          "account",
 						"selection_cooldown_until": now.Add(-2 * time.Minute).Format(time.RFC3339),
 						"selection_cooldown_scope": "account",
 					},
@@ -266,7 +267,7 @@ func TestGrokAccountSelectorSelectBestCandidate_PenalizesRecentFailures(t *testi
 
 	selected := selector.SelectBestCandidateWithContext(context.Background(), accounts, "grok-4-fast-reasoning", nil)
 	require.NotNil(t, selected)
-	require.Equal(t, int64(32), selected.ID)
+	require.Equal(t, int64(31), selected.ID)
 }
 
 func TestGrokAccountSelectorIsRuntimeEligible_RespectsProviderCooldownScope(t *testing.T) {
@@ -401,4 +402,69 @@ func TestGrokAccountSelectorSelectBestCandidate_UsesLoadSignals(t *testing.T) {
 	})
 	require.NotNil(t, selected)
 	require.Equal(t, int64(42), selected.ID)
+}
+
+func TestGrokAccountSelectorSelectBestCandidate_DoesNotPenalizeScopeNoneFailures(t *testing.T) {
+	selector := GrokAccountSelector{}
+	now := time.Now().UTC()
+	accounts := []*Account{
+		{
+			ID:          61,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Priority:    1,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+					"sync_state": map[string]any{
+						"last_sync_at": now.Add(-10 * time.Minute).Format(time.RFC3339),
+					},
+					"quota_windows": map[string]any{
+						"expert": map[string]any{
+							"remaining": 120,
+							"total":     150,
+						},
+					},
+					"runtime_state": map[string]any{
+						"last_fail_at":          now.Add(-2 * time.Minute).Format(time.RFC3339),
+						"last_fail_status_code": 400,
+						"last_fail_class":       "invalid_request",
+						"last_fail_scope":       "",
+					},
+				},
+			},
+		},
+		{
+			ID:          62,
+			Platform:    PlatformGrok,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Priority:    1,
+			Extra: map[string]any{
+				"grok": map[string]any{
+					"tier": map[string]any{
+						"normalized": "heavy",
+					},
+					"sync_state": map[string]any{
+						"last_sync_at": now.Add(-10 * time.Minute).Format(time.RFC3339),
+					},
+					"quota_windows": map[string]any{
+						"expert": map[string]any{
+							"remaining": 60,
+							"total":     150,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	selected := selector.SelectBestCandidateWithContext(context.Background(), accounts, "grok-4-fast-reasoning", nil)
+	require.NotNil(t, selected)
+	require.Equal(t, int64(61), selected.ID)
 }
