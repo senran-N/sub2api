@@ -209,6 +209,144 @@ func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackFailoverOnlyUpdatesRunti
 	require.Equal(t, "model_unsupported", getNestedGrokValue(accountGrok, "runtime_state", "last_fail_class"))
 }
 
+func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackSuccessDecrementsQuotaEstimate(t *testing.T) {
+	account := &Account{
+		ID:       75,
+		Platform: PlatformGrok,
+		Type:     AccountTypeSession,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "basic",
+					"source":     "sync",
+				},
+				"quota_windows": map[string]any{
+					grok.QuotaWindowFast: map[string]any{
+						"remaining":      7,
+						"total":          60,
+						"window_seconds": 72000,
+						"source":         grok.QuotaSourceLive,
+					},
+				},
+				"capabilities": map[string]any{
+					"models":     []any{"grok-4.20-fast"},
+					"operations": []any{"chat"},
+				},
+			},
+		},
+	}
+	repo := &grokRuntimeFeedbackRepoStub{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+
+	svc.PersistGrokRuntimeFeedback(context.Background(), GrokRuntimeFeedbackInput{
+		Account:        account,
+		RequestedModel: "grok-4.20-fast",
+		UpstreamModel:  "grok-4.20-fast",
+		StatusCode:     http.StatusOK,
+		ProtocolFamily: grok.ProtocolFamilyChatCompletions,
+	})
+
+	require.Len(t, repo.extraUpdates, 1)
+	quotaWindows := grokQuotaWindowsMap(grokExtraMap(repo.extraUpdates[0])["quota_windows"])
+	fastWindow := grokNestedMap(quotaWindows[grok.QuotaWindowFast])
+	require.Equal(t, 6, grokParseInt(fastWindow["remaining"]))
+	require.Equal(t, grok.QuotaSourceEstimated, getStringFromMaps(fastWindow, nil, "source"))
+
+	accountWindow := account.grokQuotaWindow(grok.QuotaWindowFast)
+	require.Equal(t, 6, accountWindow.Remaining)
+	require.Equal(t, grok.QuotaSourceEstimated, accountWindow.Source)
+}
+
+func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackRateLimitedZeroesQuotaEstimate(t *testing.T) {
+	account := &Account{
+		ID:       76,
+		Platform: PlatformGrok,
+		Type:     AccountTypeSession,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "super",
+					"source":     "sync",
+				},
+				"quota_windows": map[string]any{
+					grok.QuotaWindowAuto: map[string]any{
+						"remaining":      12,
+						"total":          50,
+						"window_seconds": 7200,
+						"source":         grok.QuotaSourceLive,
+					},
+				},
+			},
+		},
+	}
+	repo := &grokRuntimeFeedbackRepoStub{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+
+	svc.PersistGrokRuntimeFeedback(context.Background(), GrokRuntimeFeedbackInput{
+		Account:        account,
+		RequestedModel: "grok-4.20-auto",
+		UpstreamModel:  "grok-4.20-auto",
+		StatusCode:     http.StatusTooManyRequests,
+		ProtocolFamily: grok.ProtocolFamilyResponses,
+		Err: &UpstreamFailoverError{
+			StatusCode:   http.StatusTooManyRequests,
+			ResponseBody: []byte(`{"error":{"message":"rate limited"}}`),
+		},
+	})
+
+	require.Len(t, repo.extraUpdates, 1)
+	autoWindow := grokNestedMap(grokQuotaWindowsMap(grokExtraMap(repo.extraUpdates[0])["quota_windows"])[grok.QuotaWindowAuto])
+	require.Equal(t, 0, grokParseInt(autoWindow["remaining"]))
+	require.Equal(t, grok.QuotaSourceEstimated, getStringFromMaps(autoWindow, nil, "source"))
+	require.NotEmpty(t, getStringFromMaps(autoWindow, nil, "reset_at"))
+
+	accountWindow := account.grokQuotaWindow(grok.QuotaWindowAuto)
+	require.Equal(t, 0, accountWindow.Remaining)
+	require.Equal(t, grok.QuotaSourceEstimated, accountWindow.Source)
+	require.NotNil(t, accountWindow.ResetAt)
+}
+
+func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackSuccessRestoresExpiredQuotaWindow(t *testing.T) {
+	expiredResetAt := "2026-04-20T00:00:00Z"
+	account := &Account{
+		ID:       77,
+		Platform: PlatformGrok,
+		Type:     AccountTypeSession,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "basic",
+					"source":     "sync",
+				},
+				"quota_windows": map[string]any{
+					grok.QuotaWindowAuto: map[string]any{
+						"remaining":      0,
+						"total":          20,
+						"window_seconds": 72000,
+						"reset_at":       expiredResetAt,
+						"source":         grok.QuotaSourceLive,
+					},
+				},
+			},
+		},
+	}
+	repo := &grokRuntimeFeedbackRepoStub{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+
+	svc.PersistGrokRuntimeFeedback(context.Background(), GrokRuntimeFeedbackInput{
+		Account:        account,
+		RequestedModel: "grok-4.20-auto",
+		UpstreamModel:  "grok-4.20-auto",
+		StatusCode:     http.StatusOK,
+		ProtocolFamily: grok.ProtocolFamilyResponses,
+	})
+
+	autoWindow := grokNestedMap(grokQuotaWindowsMap(grokExtraMap(repo.extraUpdates[0])["quota_windows"])[grok.QuotaWindowAuto])
+	require.Equal(t, 19, grokParseInt(autoWindow["remaining"]))
+	require.NotEqual(t, expiredResetAt, getStringFromMaps(autoWindow, nil, "reset_at"))
+	require.Equal(t, grok.QuotaSourceEstimated, getStringFromMaps(autoWindow, nil, "source"))
+}
+
 func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackOpenAINoop(t *testing.T) {
 	account := &Account{
 		ID:       74,

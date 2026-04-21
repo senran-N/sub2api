@@ -145,7 +145,11 @@ func TestGrokSessionMediaRuntimePersistSessionMediaRuntimeFeedback_RateLimitedVi
 		},
 	)
 
-	require.Empty(t, repo.extraUpdates)
+	require.Len(t, repo.extraUpdates, 1)
+	autoWindow := grokNestedMap(grokQuotaWindowsMap(grokExtraMap(repo.extraUpdates[0])["quota_windows"])[grok.QuotaWindowAuto])
+	require.Equal(t, 0, grokParseInt(autoWindow["remaining"]))
+	require.Equal(t, grok.QuotaSourceEstimated, getStringFromMaps(autoWindow, nil, "source"))
+	require.NotEmpty(t, getStringFromMaps(autoWindow, nil, "reset_at"))
 	require.Len(t, repo.runtimeStates, 1)
 	runtimeState := repo.runtimeStates[0]
 	require.Equal(t, "error", runtimeState["last_outcome"])

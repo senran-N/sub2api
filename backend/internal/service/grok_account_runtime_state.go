@@ -248,7 +248,7 @@ func persistGrokRuntimeFeedbackToRepo(ctx context.Context, repo AccountRepositor
 	updateCtx, cancel := newGrokAccountStateContext(ctx)
 	defer cancel()
 
-	if grokPatch := buildGrokRuntimeCapabilityExtraUpdates(input.Account, input, upstreamModel, capability); len(grokPatch) > 0 {
+	if grokPatch := buildGrokRuntimeExtraUpdates(input.Account, input, upstreamModel, capability, now); len(grokPatch) > 0 {
 		if writer, ok := repo.(grokExtraStateWriter); ok {
 			if err := writer.UpdateGrokExtra(updateCtx, input.Account.ID, grokPatch); err == nil {
 				mergeGrokExtraPatch(input.Account, grokPatch)
@@ -330,6 +330,168 @@ func buildGrokRuntimeCapabilityExtraUpdates(account *Account, input GrokRuntimeF
 	return map[string]any{
 		"capabilities": capabilities,
 	}
+}
+
+func buildGrokRuntimeExtraUpdates(
+	account *Account,
+	input GrokRuntimeFeedbackInput,
+	upstreamModel string,
+	capability grok.Capability,
+	now time.Time,
+) map[string]any {
+	updates := buildGrokRuntimeCapabilityExtraUpdates(account, input, upstreamModel, capability)
+	quotaUpdates := buildGrokRuntimeQuotaExtraUpdates(account, input, upstreamModel, now)
+	if len(quotaUpdates) == 0 {
+		return updates
+	}
+	if len(updates) == 0 {
+		return quotaUpdates
+	}
+	return mergeAnyMaps(updates, quotaUpdates)
+}
+
+func buildGrokRuntimeQuotaExtraUpdates(
+	account *Account,
+	input GrokRuntimeFeedbackInput,
+	upstreamModel string,
+	now time.Time,
+) map[string]any {
+	if account == nil {
+		return nil
+	}
+
+	quotaWindowName := grokRuntimeQuotaWindowName(input, upstreamModel)
+	if quotaWindowName == "" {
+		return nil
+	}
+
+	quotaWindows := normalizeGrokQuotaWindows(account.grokExtraMap()["quota_windows"], account.GrokTierState().Normalized)
+	if len(quotaWindows) == 0 {
+		return nil
+	}
+
+	window := cloneAnyMap(grokNestedMap(quotaWindows[quotaWindowName]))
+	if len(window) == 0 {
+		return nil
+	}
+
+	outcome, statusCode, _ := classifyGrokRuntimeOutcome(input)
+	classification := grokRuntimeErrorClassification{}
+	if outcome != grokRuntimeOutcomeSuccess {
+		classification = classifyGrokRuntimeError(input)
+		if classification.StatusCode > 0 {
+			statusCode = classification.StatusCode
+		}
+	}
+
+	updatedWindow, changed := grokApplyRuntimeQuotaEstimate(window, outcome, statusCode, classification, now)
+	if !changed {
+		return nil
+	}
+
+	quotaWindows[quotaWindowName] = updatedWindow
+	return map[string]any{
+		"quota_windows": quotaWindows,
+	}
+}
+
+func grokRuntimeQuotaWindowName(input GrokRuntimeFeedbackInput, upstreamModel string) string {
+	for _, candidate := range []string{
+		strings.TrimSpace(upstreamModel),
+		strings.TrimSpace(input.UpstreamModel),
+		strings.TrimSpace(input.RequestedModel),
+	} {
+		if quotaWindow := strings.TrimSpace(grokQuotaWindowForModel(candidate)); quotaWindow != "" {
+			return quotaWindow
+		}
+	}
+	return ""
+}
+
+func grokApplyRuntimeQuotaEstimate(
+	window map[string]any,
+	outcome grokRuntimeOutcome,
+	statusCode int,
+	classification grokRuntimeErrorClassification,
+	now time.Time,
+) (map[string]any, bool) {
+	if len(window) == 0 {
+		return nil, false
+	}
+
+	updated := cloneAnyMap(window)
+	changed := grokRestoreRuntimeQuotaWindowIfExpired(updated, now)
+
+	switch {
+	case outcome == grokRuntimeOutcomeSuccess:
+		remaining := grokParseInt(updated["remaining"])
+		if remaining > 0 {
+			updated["remaining"] = remaining - 1
+			changed = true
+		}
+		if changed {
+			updated["source"] = grok.QuotaSourceEstimated
+		}
+	case classification.Class == grokRuntimeErrorClassRateLimited || statusCode == http.StatusTooManyRequests:
+		if grokParseInt(updated["remaining"]) != 0 {
+			updated["remaining"] = 0
+			changed = true
+		}
+		if resetAt, ok := grokRuntimeQuotaEstimateResetAt(updated, classification, now); ok {
+			currentResetAt := grokParseTime(updated["reset_at"])
+			if currentResetAt == nil || resetAt.After(*currentResetAt) {
+				updated["reset_at"] = resetAt.Format(time.RFC3339)
+				changed = true
+			}
+		}
+		if changed {
+			updated["source"] = grok.QuotaSourceEstimated
+		}
+	}
+
+	return updated, changed
+}
+
+func grokRestoreRuntimeQuotaWindowIfExpired(window map[string]any, now time.Time) bool {
+	resetAt := grokParseTime(window["reset_at"])
+	if resetAt == nil || resetAt.After(now) {
+		return false
+	}
+
+	total := grokParseInt(window["total"])
+	windowSeconds := grokParseInt(window["window_seconds"])
+	changed := false
+	if total > 0 && grokParseInt(window["remaining"]) != total {
+		window["remaining"] = total
+		changed = true
+	}
+	if windowSeconds > 0 {
+		nextResetAt := now.UTC().Add(time.Duration(windowSeconds) * time.Second).Format(time.RFC3339)
+		if strings.TrimSpace(getStringFromMaps(window, nil, "reset_at")) != nextResetAt {
+			window["reset_at"] = nextResetAt
+			changed = true
+		}
+	} else if _, ok := window["reset_at"]; ok {
+		delete(window, "reset_at")
+		changed = true
+	}
+	return changed
+}
+
+func grokRuntimeQuotaEstimateResetAt(
+	window map[string]any,
+	classification grokRuntimeErrorClassification,
+	now time.Time,
+) (time.Time, bool) {
+	if classification.Cooldown > 0 {
+		return now.UTC().Add(classification.Cooldown), true
+	}
+
+	windowSeconds := grokParseInt(window["window_seconds"])
+	if windowSeconds <= 0 {
+		return time.Time{}, false
+	}
+	return now.UTC().Add(time.Duration(windowSeconds) * time.Second), true
 }
 
 func mergeGrokRuntimeState(account *Account, runtimeState map[string]any) {

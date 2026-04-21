@@ -1,8 +1,9 @@
 package grok
 
 const (
-	QuotaSourceDefault = "default"
-	QuotaSourceLive    = "live"
+	QuotaSourceDefault   = "default"
+	QuotaSourceLive      = "live"
+	QuotaSourceEstimated = "estimated"
 
 	QuotaWindowAuto   = "auto"
 	QuotaWindowFast   = "fast"
