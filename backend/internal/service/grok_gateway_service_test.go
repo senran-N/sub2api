@@ -610,6 +610,8 @@ func TestGrokGatewayServiceHandleChatCompletions_RoutesVideoModelsThroughMediaSe
 		gatewayService,
 		videoJobs,
 		&stubGrokMediaAssetRepository{},
+		nil,
+		nil,
 	)
 
 	handled := svc.HandleChatCompletions(c, nil, body)

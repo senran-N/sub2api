@@ -145,6 +145,13 @@ func (s *GrokCapabilityProbeService) ProbeNow(ctx context.Context) error {
 	})
 }
 
+func (s *GrokCapabilityProbeService) ProbeAccount(ctx context.Context, account *Account) error {
+	if s == nil || account == nil {
+		return nil
+	}
+	return s.probeAccount(ctx, account)
+}
+
 func (s *GrokCapabilityProbeService) shouldProbeAccount(account *Account, now time.Time, interval time.Duration) bool {
 	if account == nil || NormalizeCompatibleGatewayPlatform(account.Platform) != PlatformGrok {
 		return false

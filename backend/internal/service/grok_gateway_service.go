@@ -25,7 +25,14 @@ func ProvideGrokGatewayService(
 	gatewayService *GatewayService,
 	videoJobs GrokVideoJobRepository,
 	mediaAssets GrokMediaAssetRepository,
+	grokQuotaSync *GrokQuotaSyncService,
+	grokCapabilityProbe *GrokCapabilityProbeService,
 ) *GrokGatewayService {
+	if gatewayService != nil {
+		gatewayService.SetGrokSelectionRecovery(
+			NewGrokOnDemandRecoveryService(grokQuotaSync, grokCapabilityProbe, gatewayService.settingService),
+		)
+	}
 	return &GrokGatewayService{
 		textRuntime:  textRuntime,
 		mediaService: NewGrokMediaService(gatewayService, videoJobs, mediaAssets),

@@ -7,6 +7,22 @@ func runGrokParallelAccounts(
 	workerCount int,
 	fn func(*Account) error,
 ) error {
+	if len(accounts) == 0 {
+		return nil
+	}
+
+	accountPtrs := make([]*Account, 0, len(accounts))
+	for i := range accounts {
+		accountPtrs = append(accountPtrs, &accounts[i])
+	}
+	return runGrokParallelAccountPointers(accountPtrs, workerCount, fn)
+}
+
+func runGrokParallelAccountPointers(
+	accounts []*Account,
+	workerCount int,
+	fn func(*Account) error,
+) error {
 	if len(accounts) == 0 || fn == nil {
 		return nil
 	}
@@ -48,8 +64,8 @@ func runGrokParallelAccounts(
 		}()
 	}
 
-	for i := range accounts {
-		jobs <- &accounts[i]
+	for _, account := range accounts {
+		jobs <- account
 	}
 	close(jobs)
 	wg.Wait()

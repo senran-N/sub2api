@@ -191,6 +191,7 @@ type GatewayService struct {
 	resolver              *ModelPricingResolver
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
+	grokSelectionRecovery grokOnDemandSelectionRecovery
 }
 
 // NewGatewayService creates a new GatewayService

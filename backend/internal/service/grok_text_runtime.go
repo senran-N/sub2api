@@ -182,37 +182,31 @@ func (r *GrokTextRuntime) prepareTextRequest(
 	}
 	requestedModel := preparedPayload.requestedModel
 
-	accounts, _, err := r.gatewayService.listSchedulableAccounts(ctx, groupID, PlatformGrok, true)
+	selected, err := selectSchedulableGrokAccount(
+		ctx,
+		r.gatewayService,
+		groupID,
+		requestedModel,
+		excludedIDs,
+		nil,
+		"No available Grok accounts",
+	)
 	if err != nil {
-		return nil, true, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to query Grok accounts")
-	}
-
-	candidates := defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, excludedIDs)
-	if len(candidates) == 0 {
-		if !defaultGrokAccountSelector.RequestedModelAvailableWithContext(ctx, accounts, requestedModel) {
+		if strings.HasPrefix(err.Error(), "requested model unavailable:") {
+			model := strings.TrimSpace(strings.TrimPrefix(err.Error(), "requested model unavailable:"))
 			return nil, true, newGrokResponsesHTTPError(
 				http.StatusBadRequest,
 				"invalid_request_error",
-				"Requested model is not configured for any available Grok account: "+requestedModel,
+				"Requested model is not configured for any available Grok account: "+firstNonEmpty(model, requestedModel),
 			)
 		}
-		return nil, true, newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok accounts")
-	}
-
-	var loadMap map[int64]*AccountLoadInfo
-	if r.gatewayService.concurrencyService != nil {
-		if snapshot, err := r.gatewayService.concurrencyService.GetAccountsLoadBatch(ctx, buildAccountLoadRequests(candidates)); err == nil {
-			loadMap = snapshot
+		if err.Error() == "No available Grok accounts" {
+			return nil, true, newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok accounts")
 		}
-	}
-
-	selected := defaultGrokAccountSelector.SelectBestCandidateWithContext(ctx, candidates, requestedModel, loadMap)
-	if selected == nil {
-		return nil, true, newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok accounts")
-	}
-	selected, err = r.hydrateSelectedAccount(ctx, selected)
-	if err != nil {
-		return nil, true, err
+		if err.Error() == "grok gateway service is not configured" {
+			return nil, true, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Grok gateway service is not configured")
+		}
+		return nil, true, newGrokResponsesHTTPError(http.StatusInternalServerError, "api_error", "Failed to query Grok accounts")
 	}
 	if selected.SupportsCompatibleGatewaySharedRuntime() {
 		return &grokTextPreparation{

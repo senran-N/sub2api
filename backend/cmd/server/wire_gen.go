@@ -230,7 +230,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	grokTextRuntime := service.NewGrokTextRuntime(gatewayService, grokCompatibleRuntime, grokSessionRuntime)
 	grokVideoJobRepository := repository.NewGrokVideoJobRepository(db)
 	grokMediaAssetRepository := repository.NewGrokMediaAssetRepository(db)
-	grokGatewayService := service.ProvideGrokGatewayService(grokTextRuntime, gatewayService, grokVideoJobRepository, grokMediaAssetRepository)
+	grokGatewayService := service.ProvideGrokGatewayService(grokTextRuntime, gatewayService, grokVideoJobRepository, grokMediaAssetRepository, grokQuotaSyncService, grokCapabilityProbeService)
 	grokGatewayHandler := handler.NewGrokGatewayHandler(compatibleGatewayRuntimeHandler, gatewayService, grokGatewayService, compatibleUpstreamModelsService)
 	compatibleGatewayHandler := handler.NewCompatibleGatewayHandler(compatibleGatewayRuntimeHandler, grokGatewayHandler, gatewayService, compatibleUpstreamModelsService)
 	handlerSettingHandler := handler.ProvideSettingHandler(settingService, buildInfo)
