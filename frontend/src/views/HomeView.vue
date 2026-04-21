@@ -74,7 +74,21 @@
         />
 
         <HomeFeatureTags :tags="featureTags" />
+
+        <div class="home-view__divider" aria-hidden="true">
+          <span class="home-view__divider-rule"></span>
+          <span class="home-view__divider-label" data-factory="//// FEATURES ////" data-claude="◆ · ◆"></span>
+          <span class="home-view__divider-rule"></span>
+        </div>
+
         <HomeFeaturesGrid :features="features" />
+
+        <div class="home-view__divider" aria-hidden="true">
+          <span class="home-view__divider-rule"></span>
+          <span class="home-view__divider-label" data-factory="//// PROVIDERS ////" data-claude="❦"></span>
+          <span class="home-view__divider-rule"></span>
+        </div>
+
         <HomeProvidersSection
           :description="t('home.providers.description')"
           :providers="providers"
@@ -151,6 +165,97 @@ onMounted(() => {
 .home-view {
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--theme-page-bg) 88%, var(--theme-accent-soft)) 0%, color-mix(in srgb, var(--theme-page-bg) 94%, var(--theme-surface-soft)) 45%, var(--theme-page-bg) 100%);
+}
+
+/* Factory: stronger blueprint-style backdrop. */
+:root[data-brand-theme='factory'] .home-view {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--theme-page-bg) 96%, var(--theme-accent-soft) 4%) 0%,
+      var(--theme-page-bg) 60%,
+      color-mix(in srgb, var(--theme-page-bg) 96%, var(--theme-accent-soft) 4%) 100%
+    );
+}
+
+/* Claude: warm paper-like backdrop. */
+:root[data-brand-theme='claude'] .home-view {
+  background:
+    radial-gradient(
+      ellipse at top,
+      color-mix(in srgb, var(--theme-accent-soft) 82%, transparent),
+      transparent 50%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--theme-page-bg) 90%, var(--theme-accent-soft) 10%) 0%,
+      var(--theme-page-bg) 60%
+    );
+}
+
+/* ==============
+   Section dividers: shared layout, theme-distinct dress.
+   - Factory: dashed rule + monospace label in SCREAMING_SNAKE.
+   - Claude: soft gradient rule + ornament glyph.
+   Labels come from per-theme `data-*` attributes so the same DOM works.
+   ============== */
+.home-view__divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1rem 0 2.25rem;
+}
+
+.home-view__divider-rule {
+  flex: 1;
+  max-width: 180px;
+  height: 1px;
+  background: transparent;
+}
+
+.home-view__divider-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Factory: dashed rule + monospace label via data-factory. */
+:root[data-brand-theme='factory'] .home-view__divider-rule {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--theme-page-text) 0 6px,
+    transparent 6px 10px
+  );
+  opacity: 0.42;
+}
+
+:root[data-brand-theme='factory'] .home-view__divider-label::before {
+  content: attr(data-factory);
+  font-family: var(--theme-font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--theme-page-muted) 78%, var(--theme-page-text));
+}
+
+/* Claude: warm gradient rule + ornament glyph via data-claude. */
+:root[data-brand-theme='claude'] .home-view__divider-rule {
+  max-width: 140px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--theme-accent) 40%, var(--theme-page-border)) 50%,
+    transparent
+  );
+}
+
+:root[data-brand-theme='claude'] .home-view__divider-label::before {
+  content: attr(data-claude);
+  font-family: var(--theme-font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.4em;
+  color: color-mix(in srgb, var(--theme-accent) 74%, var(--theme-page-muted));
 }
 
 .home-view__header {

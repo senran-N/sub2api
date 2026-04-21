@@ -10,6 +10,10 @@ export default {
     login: "登录",
     getStarted: "立即开始",
     goToDashboard: "进入控制台",
+    status: {
+      online: "系统在线",
+      edition: "2026 年刊",
+    },
     // 新增：面向用户的价值主张
     heroSubtitle: "一个密钥，畅用多个 AI 模型",
     heroDescription:

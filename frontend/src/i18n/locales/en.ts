@@ -10,6 +10,10 @@ export default {
     login: "Login",
     getStarted: "Get Started",
     goToDashboard: "Go to Dashboard",
+    status: {
+      online: "System Online",
+      edition: "Edition 2026",
+    },
     // User-focused value proposition
     heroSubtitle: "One Key, All AI Models",
     heroDescription:

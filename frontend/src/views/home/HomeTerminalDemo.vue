@@ -54,11 +54,48 @@
     inset 0 1px 0 color-mix(in srgb, var(--theme-filled-text) 10%, transparent);
   overflow: hidden;
   transform: perspective(1000px) rotateX(2deg) rotateY(-2deg);
-  transition: transform 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .terminal-window:hover {
   transform: perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(-4px);
+}
+
+/* Factory: flatten the perspective and use a hard offset shadow instead of a soft drop. */
+:root[data-brand-theme='factory'] .terminal-window {
+  border-radius: 0;
+  border: 2px solid var(--theme-page-text);
+  box-shadow: 8px 8px 0 var(--theme-page-text);
+  transform: none;
+}
+
+:root[data-brand-theme='factory'] .terminal-window:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 10px 10px 0 var(--theme-page-text);
+}
+
+.dark[data-brand-theme='factory'] .terminal-window {
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 8px 8px 0 rgba(255, 255, 255, 0.2);
+}
+
+.dark[data-brand-theme='factory'] .terminal-window:hover {
+  box-shadow: 10px 10px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Claude: softer perspective + warm glow ring. */
+:root[data-brand-theme='claude'] .terminal-window {
+  transform: perspective(1000px) rotateX(1deg) rotateY(-1deg);
+  box-shadow:
+    0 30px 60px -20px color-mix(in srgb, var(--theme-accent) 28%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--theme-accent) 24%, transparent);
+}
+
+:root[data-brand-theme='claude'] .terminal-window:hover {
+  transform: perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(-6px);
+  box-shadow:
+    0 40px 80px -24px color-mix(in srgb, var(--theme-accent) 38%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--theme-accent) 34%, transparent);
 }
 
 .terminal-header {
