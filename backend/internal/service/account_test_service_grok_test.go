@@ -63,7 +63,10 @@ func TestAccountTestService_GrokSessionUsesTLSFingerprintWhenEnabled(t *testing.
 	ctx, _ := newAccountTestContext()
 
 	resp := newJSONResponse(http.StatusOK, "")
-	resp.Body = io.NopCloser(strings.NewReader("data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\ndata: [DONE]\n\n"))
+	resp.Body = io.NopCloser(strings.NewReader(
+		"data: {\"result\":{\"response\":{\"token\":\"ok\",\"messageTag\":\"final\"}}}\n" +
+			"data: {\"result\":{\"response\":{\"isSoftStop\":true,\"finalMetadata\":{\"stop_reason\":\"end_turn\"}}}}\n",
+	))
 
 	repo := &openAIAccountTestRepo{}
 	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
@@ -100,6 +103,52 @@ func TestAccountTestService_GrokSessionUsesTLSFingerprintWhenEnabled(t *testing.
 	err := svc.testGrokSessionConnection(ctx, account, "grok-3-fast", "", mustResolveGrokSessionTarget(t, account))
 	require.NoError(t, err)
 	require.Equal(t, []bool{true}, upstream.tlsFlags)
+}
+
+func TestAccountTestService_GrokSessionSkipsCompatibleAllowlistValidation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newAccountTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader(
+		"data: {\"result\":{\"response\":{\"token\":\"ok\",\"messageTag\":\"final\"}}}\n" +
+			"data: {\"result\":{\"response\":{\"isSoftStop\":true,\"finalMetadata\":{\"stop_reason\":\"end_turn\"}}}}\n",
+	))
+
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{},
+		},
+	}
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{
+					Enabled:       true,
+					UpstreamHosts: []string{"api.x.ai"},
+				},
+			},
+		},
+	}
+	account := &Account{
+		ID:          903,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"session_token": "test-session-token",
+		},
+	}
+	repo.accountsByID[account.ID] = account
+
+	err := svc.TestAccountConnection(ctx, account.ID, "grok-3-fast", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[0].URL.String())
+	require.Equal(t, requireGrokSessionCookieHeader(t, "test-session-token"), upstream.requests[0].Header.Get("Cookie"))
 }
 
 func mustResolveGrokSessionTarget(t *testing.T, account *Account) grokTransportTarget {

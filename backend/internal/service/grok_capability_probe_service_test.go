@@ -202,6 +202,50 @@ func TestGrokCapabilityProbeServiceProbeNowFallsBackToDefaultProbeWhenBootstrapM
 	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(getNestedGrokValue(grokExtraMap(repo.updatedExtra[0]), "capabilities", "operations")))
 }
 
+func TestGrokCapabilityProbeServiceProbeNowSessionSkipsCompatibleAllowlistValidation(t *testing.T) {
+	repo := &grokCapabilityProbeRepoStub{
+		accounts: []Account{
+			{
+				ID:          305,
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"session_token": "session-cookie-305",
+				},
+			},
+		},
+	}
+	stateSvc := NewGrokAccountStateService(repo)
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"conversationId":"conv_305"}`),
+		},
+	}
+	svc := NewGrokCapabilityProbeService(
+		repo,
+		stateSvc,
+		upstream,
+		&config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{
+					Enabled:       true,
+					UpstreamHosts: []string{"api.x.ai"},
+				},
+			},
+		},
+		nil,
+		nil,
+	)
+
+	err := svc.ProbeNow(context.Background())
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://grok.com/rest/app-chat/conversations/new", upstream.requests[0].URL.String())
+	require.Equal(t, requireGrokSessionCookieHeader(t, "session-cookie-305"), upstream.requests[0].Header.Get("Cookie"))
+}
+
 func TestGrokCapabilityProbeServiceProbeNowIncludesRecoverableErrorAccounts(t *testing.T) {
 	repo := &grokCapabilityProbeRepoStub{
 		accounts: []Account{

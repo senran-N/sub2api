@@ -3,11 +3,30 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+type accountProxyValidationProxyRepoStub struct {
+	proxyRepoStub
+	proxies      map[int64]*Proxy
+	getByIDCalls []int64
+	getByIDErr   error
+}
+
+func (s *accountProxyValidationProxyRepoStub) GetByID(_ context.Context, id int64) (*Proxy, error) {
+	s.getByIDCalls = append(s.getByIDCalls, id)
+	if s.getByIDErr != nil {
+		return nil, s.getByIDErr
+	}
+	if proxy, ok := s.proxies[id]; ok {
+		return proxy, nil
+	}
+	return nil, ErrProxyNotFound
+}
 
 func TestNormalizeAccountLoadFactor(t *testing.T) {
 	t.Run("nil and non-positive values clear load factor", func(t *testing.T) {
@@ -77,4 +96,49 @@ func TestApplyAccountProxyID(t *testing.T) {
 	applyAccountProxyID(account, &newProxyID)
 	require.Equal(t, &newProxyID, account.ProxyID)
 	require.Nil(t, account.Proxy)
+}
+
+func TestAdminServiceCreateAccountRejectsMissingProxyBeforeCreate(t *testing.T) {
+	accountRepo := &groupBindingRuleAccountRepoStub{}
+	svc := &adminServiceImpl{
+		accountRepo: accountRepo,
+		proxyRepo:   &accountProxyValidationProxyRepoStub{},
+	}
+	missingProxyID := int64(999)
+
+	account, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:                 "missing-proxy",
+		Platform:             PlatformAnthropic,
+		Type:                 AccountTypeOAuth,
+		Credentials:          map[string]any{},
+		ProxyID:              &missingProxyID,
+		SkipDefaultGroupBind: true,
+	})
+
+	require.Nil(t, account)
+	require.ErrorIs(t, err, ErrProxyNotFound)
+	require.Zero(t, accountRepo.createCalls)
+}
+
+func TestAdminServiceUpdateAccountRejectsMissingProxyBeforeUpdate(t *testing.T) {
+	accountRepo := &groupBindingRuleAccountRepoStub{
+		getByIDAccount: &Account{
+			ID:       7,
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeOAuth,
+		},
+	}
+	svc := &adminServiceImpl{
+		accountRepo: accountRepo,
+		proxyRepo:   &accountProxyValidationProxyRepoStub{},
+	}
+	missingProxyID := int64(999)
+
+	account, err := svc.UpdateAccount(context.Background(), 7, &UpdateAccountInput{
+		ProxyID: &missingProxyID,
+	})
+
+	require.Nil(t, account)
+	require.ErrorIs(t, err, ErrProxyNotFound)
+	require.Zero(t, accountRepo.updateCalls)
 }

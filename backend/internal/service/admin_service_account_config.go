@@ -40,6 +40,19 @@ func normalizeCreateAccountAutoPauseOnExpired(value *bool) bool {
 	return *value
 }
 
+func validateAccountProxyID(ctx context.Context, proxyRepo ProxyRepository, proxyID *int64) (*int64, error) {
+	if proxyID == nil || *proxyID == 0 {
+		return nil, nil
+	}
+	if proxyRepo == nil {
+		return nil, errors.New("proxy repository not configured")
+	}
+	if _, err := proxyRepo.GetByID(ctx, *proxyID); err != nil {
+		return nil, err
+	}
+	return proxyID, nil
+}
+
 func normalizeAccountLoadFactor(value *int) (*int, error) {
 	if value == nil || *value <= 0 {
 		return nil, nil
@@ -164,7 +177,18 @@ func (s *adminServiceImpl) applyAccountUpdateInput(ctx context.Context, account 
 	if err := applyMutableAccountExtra(account, input.Extra, wasOveragesEnabled); err != nil {
 		return err
 	}
-	applyAccountProxyID(account, input.ProxyID)
+	if input.ProxyID != nil {
+		proxyID, err := validateAccountProxyID(ctx, s.proxyRepo, input.ProxyID)
+		if err != nil {
+			return err
+		}
+		if proxyID == nil {
+			clearProxyID := int64(0)
+			applyAccountProxyID(account, &clearProxyID)
+		} else {
+			applyAccountProxyID(account, proxyID)
+		}
+	}
 	if input.Concurrency != nil {
 		account.Concurrency = *input.Concurrency
 	}

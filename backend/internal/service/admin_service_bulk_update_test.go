@@ -170,3 +170,21 @@ func TestAdminService_BulkUpdateAccounts_MixedChannelPreCheckBlocksOnExistingCon
 	// No BindGroups should have been called since the check runs before any write.
 	require.Empty(t, repo.bindGroupsCalls)
 }
+
+func TestAdminService_BulkUpdateAccounts_RejectsMissingProxyBeforeBulkUpdate(t *testing.T) {
+	repo := &accountRepoStubForBulkUpdate{}
+	svc := &adminServiceImpl{
+		accountRepo: repo,
+		proxyRepo:   &accountProxyValidationProxyRepoStub{},
+	}
+	missingProxyID := int64(999)
+
+	result, err := svc.BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs: []int64{1, 2},
+		ProxyID:    &missingProxyID,
+	})
+
+	require.Nil(t, result)
+	require.ErrorIs(t, err, ErrProxyNotFound)
+	require.Empty(t, repo.bulkUpdateIDs)
+}

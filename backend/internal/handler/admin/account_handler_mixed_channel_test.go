@@ -196,3 +196,28 @@ func TestAccountHandlerBulkUpdateMixedChannelConfirmSkips(t *testing.T) {
 	require.Equal(t, float64(2), data["success"])
 	require.Equal(t, float64(0), data["failed"])
 }
+
+func TestAccountHandlerCreateRejectsMissingProxy(t *testing.T) {
+	adminSvc := newStubAdminService()
+	adminSvc.createAccountErr = service.ErrProxyNotFound
+	router := setupAccountMixedChannelRouter(adminSvc)
+
+	body, _ := json.Marshal(map[string]any{
+		"name":        "oauth-with-missing-proxy",
+		"platform":    "anthropic",
+		"type":        "oauth",
+		"credentials": map[string]any{},
+		"proxy_id":    999999,
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, float64(404), resp["code"])
+	require.Equal(t, "proxy not found", resp["message"])
+	require.Equal(t, "PROXY_NOT_FOUND", resp["reason"])
+}

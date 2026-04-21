@@ -412,6 +412,24 @@ func TestChannelServiceCreateDefaultsBillingModelSourceAndInvalidatesCache(t *te
 	require.Equal(t, 2, loadCount)
 }
 
+func TestChannelServiceCreateRejectsMissingGroups(t *testing.T) {
+	svc := newTestChannelService(&channelServiceRepoStub{
+		existsByNameFn: func(context.Context, string) (bool, error) {
+			return false, nil
+		},
+		getGroupPlatformsFn: func(context.Context, []int64) (map[int64]string, error) {
+			return map[int64]string{}, nil
+		},
+	})
+
+	_, err := svc.Create(context.Background(), &CreateChannelInput{
+		Name:     "missing-group-channel",
+		GroupIDs: []int64{999999},
+	})
+
+	require.ErrorIs(t, err, ErrGroupNotFound)
+}
+
 func TestChannelServiceUpdateInvalidatesOldAndNewGroupAuthCache(t *testing.T) {
 	auth := &channelAuthCacheInvalidatorStub{}
 	getByIDCalls := 0
@@ -436,6 +454,12 @@ func TestChannelServiceUpdateInvalidatesOldAndNewGroupAuthCache(t *testing.T) {
 		getGroupsInOtherChannelsFn: func(context.Context, int64, []int64) ([]int64, error) {
 			return nil, nil
 		},
+		getGroupPlatformsFn: func(context.Context, []int64) (map[int64]string, error) {
+			return map[int64]string{
+				20: PlatformAnthropic,
+				30: PlatformAnthropic,
+			}, nil
+		},
 		getGroupIDsFn: func(context.Context, int64) ([]int64, error) {
 			return []int64{10, 20}, nil
 		},
@@ -458,6 +482,29 @@ func TestChannelServiceUpdateInvalidatesOldAndNewGroupAuthCache(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, updated)
 	require.Equal(t, []int64{10, 20, 30}, auth.groupIDs)
+}
+
+func TestChannelServiceUpdateRejectsMissingGroups(t *testing.T) {
+	svc := newTestChannelService(&channelServiceRepoStub{
+		getByIDFn: func(context.Context, int64) (*Channel, error) {
+			return &Channel{
+				ID:       1,
+				Name:     "primary",
+				Status:   StatusActive,
+				GroupIDs: []int64{10},
+			}, nil
+		},
+		getGroupPlatformsFn: func(context.Context, []int64) (map[int64]string, error) {
+			return map[int64]string{}, nil
+		},
+	})
+
+	groupIDs := []int64{999999}
+	_, err := svc.Update(context.Background(), 1, &UpdateChannelInput{
+		GroupIDs: &groupIDs,
+	})
+
+	require.ErrorIs(t, err, ErrGroupNotFound)
 }
 
 func TestChannelServiceDeleteInvalidatesGroupAuthCache(t *testing.T) {

@@ -32,6 +32,7 @@ type channelHandlerRepoStub struct {
 	getByIDFn               func(ctx context.Context, id int64) (*service.Channel, error)
 	existsByNameFn          func(ctx context.Context, name string) (bool, error)
 	existsByNameExcludingFn func(ctx context.Context, name string, excludeID int64) (bool, error)
+	getGroupPlatformsFn     func(ctx context.Context, groupIDs []int64) (map[int64]string, error)
 }
 
 func newChannelHandlerRepoStub(channels ...service.Channel) *channelHandlerRepoStub {
@@ -151,8 +152,15 @@ func (*channelHandlerRepoStub) GetGroupsInOtherChannels(context.Context, int64, 
 	return nil, nil
 }
 
-func (*channelHandlerRepoStub) GetGroupPlatforms(context.Context, []int64) (map[int64]string, error) {
-	return map[int64]string{}, nil
+func (s *channelHandlerRepoStub) GetGroupPlatforms(ctx context.Context, groupIDs []int64) (map[int64]string, error) {
+	if s.getGroupPlatformsFn != nil {
+		return s.getGroupPlatformsFn(ctx, groupIDs)
+	}
+	result := make(map[int64]string, len(groupIDs))
+	for _, groupID := range groupIDs {
+		result[groupID] = service.PlatformAnthropic
+	}
+	return result, nil
 }
 
 func (*channelHandlerRepoStub) ListModelPricing(context.Context, int64) ([]service.ChannelModelPricing, error) {
@@ -475,6 +483,29 @@ func TestChannelHandlerCreateSuccessAppliesServiceDefaults(t *testing.T) {
 	require.Equal(t, service.PlatformAnthropic, resp.Data.ModelPricing[0].Platform)
 	require.Equal(t, string(service.BillingModeToken), resp.Data.ModelPricing[0].BillingMode)
 	require.Equal(t, "claude-4-upstream", resp.Data.ModelMapping[service.PlatformAnthropic]["claude-sonnet-4"])
+}
+
+func TestChannelHandlerCreateRejectsMissingGroups(t *testing.T) {
+	repo := newChannelHandlerRepoStub()
+	repo.getGroupPlatformsFn = func(context.Context, []int64) (map[int64]string, error) {
+		return map[int64]string{}, nil
+	}
+	router := newChannelHandlerTestRouter(repo)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/channels", bytes.NewBufferString(`{
+		"name":"primary",
+		"group_ids":[999999]
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	var resp struct {
+		Reason string `json:"reason"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, "GROUP_NOT_FOUND", resp.Reason)
 }
 
 func TestChannelHandlerUpdateInvalidID(t *testing.T) {

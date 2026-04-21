@@ -24,7 +24,13 @@ func (s *AccountTestService) testGrokAccountConnection(c *gin.Context, account *
 	}
 
 	runtimeSettings := s.currentGrokRuntimeSettings(c.Request.Context())
-	target, err := resolveGrokTransportTargetWithSettings(account, s.accountTestBaseURLValidator(), runtimeSettings)
+	baseURLValidator := s.accountTestBaseURLValidator()
+	if account.Type == AccountTypeSession {
+		// Session transport uses the provider-owned Grok web origin, so the test path
+		// should mirror the runtime path instead of applying compatible-upstream allowlists.
+		baseURLValidator = nil
+	}
+	target, err := resolveGrokTransportTargetWithSettings(account, baseURLValidator, runtimeSettings)
 	if err != nil {
 		return s.sendErrorAndEnd(c, err.Error())
 	}

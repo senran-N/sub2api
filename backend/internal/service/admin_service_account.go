@@ -41,8 +41,15 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err := validateAccountGroupBindings(ctx, s.groupRepo, input.Type, groupIDs); err != nil {
 		return nil, err
 	}
+	proxyID, err := validateAccountProxyID(ctx, s.proxyRepo, input.ProxyID)
+	if err != nil {
+		return nil, err
+	}
 
-	account, err := s.buildAccountForCreate(input)
+	normalizedInput := *input
+	normalizedInput.ProxyID = proxyID
+
+	account, err := s.buildAccountForCreate(&normalizedInput)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +120,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		return result, nil
 	}
 	if err := validateAccountIDList(input.AccountIDs); err != nil {
+		return nil, err
+	}
+	if _, err := validateAccountProxyID(ctx, s.proxyRepo, input.ProxyID); err != nil {
 		return nil, err
 	}
 	if err := s.validateBulkAccountGroupChange(ctx, input); err != nil {

@@ -577,6 +577,10 @@ func (s *ChannelService) Create(ctx context.Context, input *CreateChannelInput) 
 		return nil, ErrChannelExists
 	}
 
+	if err := s.validateGroupIDsExist(ctx, input.GroupIDs); err != nil {
+		return nil, err
+	}
+
 	// 检查分组冲突
 	if len(input.GroupIDs) > 0 {
 		conflicting, err := s.repo.GetGroupsInOtherChannels(ctx, 0, input.GroupIDs)
@@ -657,6 +661,9 @@ func (s *ChannelService) Update(ctx context.Context, id int64, input *UpdateChan
 
 	// 检查分组冲突
 	if input.GroupIDs != nil {
+		if err := s.validateGroupIDsExist(ctx, *input.GroupIDs); err != nil {
+			return nil, err
+		}
 		conflicting, err := s.repo.GetGroupsInOtherChannels(ctx, id, *input.GroupIDs)
 		if err != nil {
 			return nil, fmt.Errorf("check group conflicts: %w", err)
@@ -742,6 +749,33 @@ func (s *ChannelService) Delete(ctx context.Context, id int64) error {
 	if s.authCacheInvalidator != nil {
 		for _, gid := range groupIDs {
 			s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, gid)
+		}
+	}
+
+	return nil
+}
+
+func (s *ChannelService) validateGroupIDsExist(ctx context.Context, groupIDs []int64) error {
+	if len(groupIDs) == 0 {
+		return nil
+	}
+
+	groupPlatforms, err := s.repo.GetGroupPlatforms(ctx, groupIDs)
+	if err != nil {
+		return fmt.Errorf("get group platforms: %w", err)
+	}
+
+	seen := make(map[int64]struct{}, len(groupIDs))
+	for _, groupID := range groupIDs {
+		if groupID <= 0 {
+			return fmt.Errorf("get group: %w", ErrGroupNotFound)
+		}
+		if _, ok := seen[groupID]; ok {
+			continue
+		}
+		seen[groupID] = struct{}{}
+		if _, ok := groupPlatforms[groupID]; !ok {
+			return fmt.Errorf("get group: %w", ErrGroupNotFound)
 		}
 	}
 

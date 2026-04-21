@@ -214,9 +214,15 @@ func (s *GrokCapabilityProbeService) loopInterval(settings GrokRuntimeSettings) 
 }
 
 func (s *GrokCapabilityProbeService) probeAccount(ctx context.Context, account *Account) error {
+	baseURLValidator := s.validateUpstreamBaseURL
+	if account != nil && account.Type == AccountTypeSession {
+		// Session transport uses the provider-owned Grok web origin, so probe behavior
+		// should match runtime selection instead of compatible-upstream allowlists.
+		baseURLValidator = nil
+	}
 	target, err := resolveGrokTransportTargetWithSettings(
 		account,
-		s.validateUpstreamBaseURL,
+		baseURLValidator,
 		s.currentRuntimeSettings(ctx),
 	)
 	if err != nil {
