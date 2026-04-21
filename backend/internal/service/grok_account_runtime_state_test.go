@@ -204,6 +204,81 @@ func TestBuildGrokRuntimeCapabilityExtraUpdatesPrunesUnsupportedModelsWithoutDro
 	require.Nil(t, getNestedGrokValue(grokExtra, "sync_state", "last_runtime_error_at"))
 }
 
+func TestBuildGrokRuntimeCapabilityExtraUpdatesPrunesUnsupportedCapabilityFamily(t *testing.T) {
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"capabilities": map[string]any{
+					"models":     []any{"grok-3", "grok-imagine-image", "grok-imagine-image-pro"},
+					"operations": []any{"chat", "image"},
+				},
+			},
+		},
+	}
+
+	updates := buildGrokRuntimeCapabilityExtraUpdates(
+		account,
+		GrokRuntimeFeedbackInput{
+			Account:        account,
+			RequestedModel: "grok-imagine-image",
+			StatusCode:     http.StatusForbidden,
+			ProtocolFamily: grok.ProtocolFamilyResponses,
+			Err: &UpstreamFailoverError{
+				StatusCode:   http.StatusForbidden,
+				ResponseBody: []byte(`{"error":{"code":"tier_required","message":"image tier required"}}`),
+			},
+		},
+		"grok-imagine-image",
+		grok.CapabilityImage,
+	)
+
+	grokExtra := grokExtraMap(updates)
+	capabilities := grokNestedMap(grokExtra["capabilities"])
+	require.ElementsMatch(t, []string{"grok-4.20-auto"}, grokParseStringSlice(capabilities["models"]))
+	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(capabilities["operations"]))
+	require.Equal(t, false, capabilities["image"])
+}
+
+func TestBuildGrokRuntimeCapabilityExtraUpdatesPrunesHigherTierChatVariantsOnly(t *testing.T) {
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"capabilities": map[string]any{
+					"models":     []any{"grok-3", "grok-4.20-0309-super", "grok-4.20-heavy"},
+					"operations": []any{"chat"},
+				},
+			},
+		},
+	}
+
+	updates := buildGrokRuntimeCapabilityExtraUpdates(
+		account,
+		GrokRuntimeFeedbackInput{
+			Account:        account,
+			RequestedModel: "grok-4.20-0309-super",
+			StatusCode:     http.StatusForbidden,
+			ProtocolFamily: grok.ProtocolFamilyResponses,
+			Err: &UpstreamFailoverError{
+				StatusCode:   http.StatusForbidden,
+				ResponseBody: []byte(`{"error":{"code":"tier_required","message":"requires super"}}`),
+			},
+		},
+		"grok-4.20-0309-super",
+		grok.CapabilityChat,
+	)
+
+	grokExtra := grokExtraMap(updates)
+	capabilities := grokNestedMap(grokExtra["capabilities"])
+	require.ElementsMatch(t, []string{"grok-4.20-auto"}, grokParseStringSlice(capabilities["models"]))
+	require.ElementsMatch(t, []string{"chat"}, grokParseStringSlice(capabilities["operations"]))
+	_, hasChatNegative := capabilities["chat"]
+	require.False(t, hasChatNegative)
+}
+
 func TestGrokCapabilitiesTreatsEmptyModelsAsExactSignal(t *testing.T) {
 	account := &Account{
 		Platform: PlatformGrok,

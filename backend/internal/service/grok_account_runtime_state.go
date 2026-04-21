@@ -516,18 +516,88 @@ func buildGrokPrunedCapabilities(account *Account, modelID string) map[string]an
 	}
 
 	state := account.grokCapabilities()
-	if !state.hasModelSignal {
-		return nil
+	if state.hasModelSignal {
+		for existingModel := range state.models {
+			if grokShouldPruneUnsupportedModelSignal(existingModel, canonicalModel) {
+				delete(state.models, existingModel)
+			}
+		}
+		modelIDs := make([]string, 0, len(state.models))
+		for model := range state.models {
+			modelIDs = append(modelIDs, model)
+		}
+		sort.Strings(modelIDs)
+		capabilities["models"] = modelIDs
 	}
 
-	delete(state.models, canonicalModel)
-	modelIDs := make([]string, 0, len(state.models))
-	for model := range state.models {
-		modelIDs = append(modelIDs, model)
-	}
-	sort.Strings(modelIDs)
-	capabilities["models"] = modelIDs
+	grokApplyUnsupportedCapabilityPenalty(capabilities, &state, canonicalModel)
 	return capabilities
+}
+
+func grokShouldPruneUnsupportedModelSignal(existingModel string, failedModel string) bool {
+	existingModel = grok.ResolveCanonicalModelID(existingModel)
+	failedModel = grok.ResolveCanonicalModelID(failedModel)
+	if existingModel == "" || failedModel == "" {
+		return false
+	}
+	if existingModel == failedModel {
+		return true
+	}
+
+	failedSpec, hasFailedSpec := grok.LookupModelSpec(failedModel)
+	if !hasFailedSpec {
+		return false
+	}
+
+	existingSpec, hasExistingSpec := grok.LookupModelSpec(existingModel)
+	if !hasExistingSpec || existingSpec.Capability != failedSpec.Capability {
+		return false
+	}
+
+	if failedSpec.Capability != grok.CapabilityChat {
+		return true
+	}
+	if failedSpec.RequiredTier == "" || failedSpec.RequiredTier == grok.TierUnknown || failedSpec.RequiredTier == grok.TierBasic {
+		return false
+	}
+	return grokTierRank(existingSpec.RequiredTier) >= grokTierRank(failedSpec.RequiredTier)
+}
+
+func grokApplyUnsupportedCapabilityPenalty(capabilities map[string]any, state *grokCapabilityState, failedModel string) {
+	if state == nil {
+		return
+	}
+
+	failedSpec, ok := grok.LookupModelSpec(failedModel)
+	if !ok || failedSpec.Capability == "" || failedSpec.Capability == grok.CapabilityChat {
+		return
+	}
+
+	state.operations[failedSpec.Capability] = false
+	state.hasOperationSignal = true
+	grokWriteCapabilityOperations(capabilities, *state)
+}
+
+func grokWriteCapabilityOperations(capabilities map[string]any, state grokCapabilityState) {
+	if capabilities == nil {
+		return
+	}
+
+	enabled := make([]string, 0, len(state.operations))
+	for capability, allowed := range state.operations {
+		if allowed {
+			enabled = append(enabled, string(capability))
+			delete(capabilities, string(capability))
+			continue
+		}
+		capabilities[string(capability)] = false
+	}
+	if len(enabled) > 0 {
+		sort.Strings(enabled)
+		capabilities["operations"] = enabled
+		return
+	}
+	delete(capabilities, "operations")
 }
 
 func classifyGrokRuntimeOutcome(input GrokRuntimeFeedbackInput) (grokRuntimeOutcome, int, string) {

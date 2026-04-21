@@ -280,6 +280,31 @@ func TestGrokAccountSelectorIsRuntimeEligible_RespectsProviderCooldownScope(t *t
 	require.False(t, selector.IsRuntimeEligible(accountBlocked, "grok-3-fast"))
 }
 
+func TestGrokAccountSelectorIsRuntimeEligible_RespectsExplicitCapabilityDowngrade(t *testing.T) {
+	selector := GrokAccountSelector{}
+	account := &Account{
+		ID:          53,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "super",
+				},
+				"capabilities": map[string]any{
+					"operations": []any{"chat"},
+					"video":      false,
+				},
+			},
+		},
+	}
+
+	require.True(t, selector.IsRuntimeEligible(account, "grok-3-fast"))
+	require.False(t, selector.IsRuntimeEligible(account, "grok-imagine-video"))
+}
+
 func TestGrokAccountSelectorSelectBestCandidate_UsesLoadSignals(t *testing.T) {
 	selector := GrokAccountSelector{}
 	now := time.Now().UTC()
