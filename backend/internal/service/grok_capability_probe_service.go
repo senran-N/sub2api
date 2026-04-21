@@ -376,10 +376,10 @@ func (s *GrokCapabilityProbeService) validateUpstreamBaseURL(raw string) (string
 }
 
 func (s *GrokCapabilityProbeService) tlsProfile(account *Account) *tlsfingerprint.Profile {
-	if s == nil || s.tlsFPProfileService == nil {
+	if s == nil {
 		return nil
 	}
-	return s.tlsFPProfileService.ResolveTLSProfile(account)
+	return resolveGrokTLSProfile(account, s.tlsFPProfileService)
 }
 
 func buildGrokCapabilitySyncSnapshot(account *Account, tier grok.Tier) map[string]any {

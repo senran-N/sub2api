@@ -97,7 +97,13 @@ func ProbeGrokSessionConnectionWithSettings(
 		return nil, err
 	}
 
-	resp, err := upstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, nil)
+	resp, err := upstream.DoWithTLS(
+		req,
+		accountTestProxyURL(account),
+		account.ID,
+		account.Concurrency,
+		resolveGrokTLSProfile(account, nil),
+	)
 	if err != nil {
 		return nil, err
 	}

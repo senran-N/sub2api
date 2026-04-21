@@ -270,8 +270,8 @@ func (s *GrokQuotaSyncService) fetchLiveSessionQuotaWindow(
 }
 
 func (s *GrokQuotaSyncService) tlsProfile(account *Account) *tlsfingerprint.Profile {
-	if s == nil || s.tlsFPProfileService == nil {
+	if s == nil {
 		return nil
 	}
-	return s.tlsFPProfileService.ResolveTLSProfile(account)
+	return resolveGrokTLSProfile(account, s.tlsFPProfileService)
 }

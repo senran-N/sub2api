@@ -83,7 +83,7 @@ func (s *AccountTestService) testGrokCompatibleConnection(
 		req.Header.Set("Content-Type", "application/json")
 		target.Apply(req)
 
-		resp, err := s.httpUpstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
+		resp, err := s.httpUpstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, resolveGrokTLSProfile(account, s.tlsFPProfileService))
 		if err != nil {
 			lastResp = nil
 			lastErr = fmt.Errorf("request failed: %w", err)
@@ -179,7 +179,7 @@ func (s *AccountTestService) testGrokSessionConnection(
 			continue
 		}
 
-		resp, err := s.httpUpstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
+		resp, err := s.httpUpstream.DoWithTLS(req, accountTestProxyURL(account), account.ID, account.Concurrency, resolveGrokTLSProfile(account, s.tlsFPProfileService))
 		if err != nil {
 			lastResp = nil
 			lastErr = fmt.Errorf("request failed: %w", err)

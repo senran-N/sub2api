@@ -170,10 +170,10 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 }
 
 func resolveGrokGatewayTLSProfile(gatewayService *GatewayService, account *Account) *tlsfingerprint.Profile {
-	if gatewayService == nil || gatewayService.tlsFPProfileService == nil {
+	if gatewayService == nil {
 		return nil
 	}
-	return gatewayService.tlsFPProfileService.ResolveTLSProfile(account)
+	return resolveGrokTLSProfile(account, gatewayService.tlsFPProfileService)
 }
 
 func newGrokSessionFailoverError(statusCode int, responseBody []byte, runtimeErr error) *UpstreamFailoverError {

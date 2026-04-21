@@ -633,8 +633,18 @@ func (a *Account) IsAnthropicOAuthOrSetupToken() bool {
 	return a.Platform == PlatformAnthropic && (a.Type == AccountTypeOAuth || a.Type == AccountTypeSetupToken)
 }
 
+func (a *Account) SupportsTLSFingerprint() bool {
+	if a == nil {
+		return false
+	}
+	if a.IsAnthropicOAuthOrSetupToken() {
+		return true
+	}
+	return NormalizeCompatibleGatewayPlatform(a.Platform) == PlatformGrok && a.Type == AccountTypeSession
+}
+
 func (a *Account) IsTLSFingerprintEnabled() bool {
-	if !a.IsAnthropicOAuthOrSetupToken() || a.Extra == nil {
+	if !a.SupportsTLSFingerprint() || a.Extra == nil {
 		return false
 	}
 	if value, ok := a.Extra["enable_tls_fingerprint"]; ok {
