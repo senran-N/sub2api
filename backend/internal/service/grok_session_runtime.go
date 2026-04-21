@@ -39,6 +39,7 @@ func (r *GrokSessionRuntime) Execute(c *gin.Context, preparation *grokTextPrepar
 		persistGrokRuntimeFeedbackToRepo(c.Request.Context(), r.gatewayService.accountRepo, GrokRuntimeFeedbackInput{
 			Account:        preparation.account,
 			RequestedModel: preparation.requestedModel,
+			QuotaWindow:    preparation.quotaWindow,
 			StatusCode:     statusCode,
 			ProtocolFamily: preparation.protocolFamily,
 			Err:            runtimeErr,

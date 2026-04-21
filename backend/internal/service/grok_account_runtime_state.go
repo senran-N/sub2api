@@ -23,6 +23,7 @@ type GrokRuntimeFeedbackInput struct {
 	Account        *Account
 	RequestedModel string
 	UpstreamModel  string
+	QuotaWindow    string
 	Result         *OpenAIForwardResult
 	StatusCode     int
 	ProtocolFamily grok.ProtocolFamily
@@ -396,16 +397,34 @@ func buildGrokRuntimeQuotaExtraUpdates(
 }
 
 func grokRuntimeQuotaWindowName(input GrokRuntimeFeedbackInput, upstreamModel string) string {
+	if quotaWindow := normalizeGrokQuotaWindowName(strings.TrimSpace(input.QuotaWindow)); quotaWindow != "" {
+		return quotaWindow
+	}
 	for _, candidate := range []string{
 		strings.TrimSpace(upstreamModel),
 		strings.TrimSpace(input.UpstreamModel),
 		strings.TrimSpace(input.RequestedModel),
 	} {
-		if quotaWindow := strings.TrimSpace(grokQuotaWindowForModel(candidate)); quotaWindow != "" {
+		if quotaWindow := normalizeGrokQuotaWindowName(strings.TrimSpace(grokQuotaWindowForModel(candidate))); quotaWindow != "" {
 			return quotaWindow
 		}
 	}
 	return ""
+}
+
+func normalizeGrokQuotaWindowName(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case grok.QuotaWindowAuto:
+		return grok.QuotaWindowAuto
+	case grok.QuotaWindowFast:
+		return grok.QuotaWindowFast
+	case grok.QuotaWindowExpert:
+		return grok.QuotaWindowExpert
+	case grok.QuotaWindowHeavy:
+		return grok.QuotaWindowHeavy
+	default:
+		return ""
+	}
 }
 
 func grokApplyRuntimeQuotaEstimate(

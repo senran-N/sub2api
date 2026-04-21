@@ -35,6 +35,15 @@ func (s *OpenAIGatewayService) PersistCompatibleGatewayRuntimeFeedback(ctx conte
 
 	switch NormalizeCompatibleGatewayPlatform(input.Account.Platform) {
 	case PlatformGrok:
-		s.PersistGrokRuntimeFeedback(ctx, GrokRuntimeFeedbackInput(input))
+		s.PersistGrokRuntimeFeedback(ctx, GrokRuntimeFeedbackInput{
+			Account:        input.Account,
+			RequestedModel: input.RequestedModel,
+			UpstreamModel:  input.UpstreamModel,
+			Result:         input.Result,
+			StatusCode:     input.StatusCode,
+			ProtocolFamily: input.ProtocolFamily,
+			Endpoint:       input.Endpoint,
+			Err:            input.Err,
+		})
 	}
 }

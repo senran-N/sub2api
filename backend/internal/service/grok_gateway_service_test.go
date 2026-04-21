@@ -884,6 +884,91 @@ func TestGrokGatewayServiceHandleResponses_UsesSessionAccount(t *testing.T) {
 	require.ElementsMatch(t, []string{"grok-4.20-auto"}, grokParseStringSlice(getNestedGrokValue(grokExtraMap(repo.extraUpdates[0]), "capabilities", "models")))
 }
 
+func TestGrokGatewayServiceHandleResponses_SessionAutoFallbackUsesFastQuotaWindow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	now := time.Now().UTC()
+	body := []byte(`{"model":"grok-3","input":"hello"}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+	c.Request = c.Request.WithContext(WithGrokSessionTextRuntimeAllowed(context.Background()))
+
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"token":"answer","messageTag":"final"}}}`,
+				`{"result":{"response":{"finalMetadata":{"stop_reason":"end_turn"}}}}`,
+			}, "\n")),
+		},
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          24,
+				Name:        "grok-session-auto-fallback",
+				Platform:    PlatformGrok,
+				Type:        AccountTypeSession,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"session_token": "session-cookie",
+				},
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"tier": map[string]any{
+							"normalized": "basic",
+						},
+						"capabilities": map[string]any{
+							"models":     []any{"grok-3"},
+							"operations": []any{"chat"},
+						},
+						"quota_windows": map[string]any{
+							"auto": map[string]any{
+								"remaining":      0,
+								"total":          20,
+								"window_seconds": 72000,
+								"reset_at":       now.Add(20 * time.Minute).Format(time.RFC3339),
+								"source":         "live",
+							},
+							"fast": map[string]any{
+								"remaining":      7,
+								"total":          60,
+								"window_seconds": 72000,
+								"reset_at":       now.Add(20 * time.Minute).Format(time.RFC3339),
+								"source":         "live",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	svc := NewGrokGatewayService(&GatewayService{
+		accountRepo:  repo,
+		httpUpstream: upstream,
+		cfg:          testConfig(),
+	}, nil)
+
+	handled := svc.HandleResponses(c, nil, body)
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, upstream.requests, 1)
+
+	var payload map[string]any
+	require.NoError(t, json.NewDecoder(upstream.requests[0].Body).Decode(&payload))
+	require.Equal(t, grokSessionModeFast, payload["modeId"])
+
+	require.Len(t, repo.extraUpdates, 1)
+	quotaWindows := grokQuotaWindowsMap(grokExtraMap(repo.extraUpdates[0])["quota_windows"])
+	require.Equal(t, 0, grokParseInt(grokNestedMap(quotaWindows["auto"])["remaining"]))
+	require.Equal(t, 6, grokParseInt(grokNestedMap(quotaWindows["fast"])["remaining"]))
+
+	require.Len(t, repo.runtimeStates, 1)
+	require.Equal(t, "success", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "grok-4.20-auto", repo.runtimeStates[0]["last_request_upstream_model"])
+}
+
 func TestGrokGatewayServiceHandleResponses_SessionFailurePersistsGrokFeedback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/senran-N/sub2api/internal/pkg/grok"
 	"github.com/stretchr/testify/require"
 )
 
@@ -340,6 +341,79 @@ func TestGrokAccountSelectorIsRuntimeEligible_RespectsExplicitCapabilityDowngrad
 
 	require.True(t, selector.IsRuntimeEligible(account, "grok-3-fast"))
 	require.False(t, selector.IsRuntimeEligible(account, "grok-imagine-video"))
+}
+
+func TestGrokAccountSelectorIsRuntimeEligible_ExcludesExplicitlyDepletedQuota(t *testing.T) {
+	selector := GrokAccountSelector{}
+	now := time.Now().UTC()
+	account := &Account{
+		ID:          54,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Status:      StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "basic",
+				},
+				"capabilities": map[string]any{
+					"models":     []any{"grok-3"},
+					"operations": []any{"chat"},
+				},
+				"quota_windows": map[string]any{
+					"auto": map[string]any{
+						"remaining":      0,
+						"total":          20,
+						"window_seconds": 72000,
+						"reset_at":       now.Add(20 * time.Minute).Format(time.RFC3339),
+					},
+				},
+			},
+		},
+	}
+
+	require.False(t, selector.IsRuntimeEligibleWithContext(WithGrokSessionTextRuntimeAllowed(context.Background()), account, "grok-3"))
+}
+
+func TestGrokAccountSelectorIsRuntimeEligible_UsesSessionAutoQuotaFallback(t *testing.T) {
+	selector := GrokAccountSelector{}
+	now := time.Now().UTC()
+	account := &Account{
+		ID:          55,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeSession,
+		Status:      StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "basic",
+				},
+				"capabilities": map[string]any{
+					"models":     []any{"grok-3"},
+					"operations": []any{"chat"},
+				},
+				"quota_windows": map[string]any{
+					"auto": map[string]any{
+						"remaining":      0,
+						"total":          20,
+						"window_seconds": 72000,
+						"reset_at":       now.Add(20 * time.Minute).Format(time.RFC3339),
+					},
+					"fast": map[string]any{
+						"remaining":      5,
+						"total":          60,
+						"window_seconds": 72000,
+						"reset_at":       now.Add(20 * time.Minute).Format(time.RFC3339),
+					},
+				},
+			},
+		},
+	}
+
+	require.Equal(t, grok.QuotaWindowFast, grokSelectionQuotaWindow(account, "grok-3", now))
+	require.True(t, selector.IsRuntimeEligibleWithContext(WithGrokSessionTextRuntimeAllowed(context.Background()), account, "grok-3"))
 }
 
 func TestGrokAccountSelectorSelectBestCandidate_UsesLoadSignals(t *testing.T) {

@@ -105,7 +105,11 @@ func (selector GrokAccountSelector) IsRuntimeEligibleWithContext(ctx context.Con
 	if oauthSelectionCredentialIssue(account) != "" {
 		return false
 	}
-	if grokRuntimeSelectionBlocked(account.grokRuntimeSelectionState(), requestedModel, time.Now().UTC()) {
+	now := time.Now().UTC()
+	if grokRuntimeSelectionBlocked(account.grokRuntimeSelectionState(), requestedModel, now) {
+		return false
+	}
+	if !grokQuotaEligibleForSelection(account, requestedModel, now) {
 		return false
 	}
 	return true
@@ -236,7 +240,6 @@ func (selector GrokAccountSelector) scoreCandidates(
 	requestedModel string,
 ) {
 	spec, hasSpec := grok.LookupModelSpec(requestedModel)
-	quotaWindowName := grokQuotaWindowForModel(requestedModel)
 	now := time.Now().UTC()
 
 	for i := range candidates {
@@ -262,7 +265,7 @@ func (selector GrokAccountSelector) scoreCandidates(
 
 		tierState := account.GrokTierState()
 		capabilityState := account.grokCapabilities()
-		quotaState := account.grokQuotaWindow(quotaWindowName)
+		quotaState := grokSelectionQuotaState(account, requestedModel, now)
 		syncState := account.grokSyncState()
 		runtimeState := account.grokRuntimeSelectionState()
 
@@ -518,6 +521,65 @@ func grokRuntimePenaltyAppliesToModel(cooldownModel string, requestedModel strin
 		return true
 	}
 	return grok.ResolveCanonicalModelID(cooldownModel) == grok.ResolveCanonicalModelID(requestedModel)
+}
+
+func grokSelectionQuotaState(account *Account, requestedModel string, now time.Time) grokQuotaWindowState {
+	state := account.grokQuotaWindow(grokSelectionQuotaWindow(account, requestedModel, now))
+	return grokAdjustedSelectionQuotaState(state, now)
+}
+
+func grokSelectionQuotaWindow(account *Account, requestedModel string, now time.Time) string {
+	primary := grokQuotaWindowForModel(requestedModel)
+	if !grokSessionAutoChatQuotaFallbackAllowed(account, requestedModel, primary) {
+		return primary
+	}
+
+	primaryState := grokAdjustedSelectionQuotaState(account.grokQuotaWindow(primary), now)
+	if !primaryState.HasSignal || grokQuotaWindowHasSelectionCapacity(primaryState) {
+		return primary
+	}
+
+	for _, candidate := range []string{grok.QuotaWindowFast, grok.QuotaWindowExpert} {
+		state := grokAdjustedSelectionQuotaState(account.grokQuotaWindow(candidate), now)
+		if grokQuotaWindowHasSelectionCapacity(state) {
+			return candidate
+		}
+	}
+
+	return primary
+}
+
+func grokSessionAutoChatQuotaFallbackAllowed(account *Account, requestedModel string, primary string) bool {
+	if account == nil || account.Type != AccountTypeSession || primary != grok.QuotaWindowAuto {
+		return false
+	}
+
+	spec, ok := grok.LookupModelSpec(requestedModel)
+	if !ok {
+		return false
+	}
+
+	return spec.Capability == grok.CapabilityChat
+}
+
+func grokAdjustedSelectionQuotaState(state grokQuotaWindowState, now time.Time) grokQuotaWindowState {
+	if !state.HasSignal || state.ResetAt == nil || state.ResetAt.After(now) || state.Total <= 0 {
+		return state
+	}
+	state.Remaining = state.Total
+	return state
+}
+
+func grokQuotaWindowHasSelectionCapacity(state grokQuotaWindowState) bool {
+	return state.HasSignal && state.Total > 0 && state.Remaining > 0
+}
+
+func grokQuotaEligibleForSelection(account *Account, requestedModel string, now time.Time) bool {
+	state := grokSelectionQuotaState(account, requestedModel, now)
+	if !state.HasSignal {
+		return true
+	}
+	return grokQuotaWindowHasSelectionCapacity(state)
 }
 
 func grokRecentUsePenalty(account *Account, runtimeState grokRuntimeSelectionState, now time.Time) float64 {

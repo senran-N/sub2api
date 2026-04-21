@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/apicompat"
@@ -33,6 +34,7 @@ type grokTextPreparation struct {
 	includeUsage   bool
 	toolNames      []string
 	account        *Account
+	quotaWindow    string
 	compatibleBody []byte
 	usesCompatible bool
 	target         grokTransportTarget
@@ -221,6 +223,15 @@ func (r *GrokTextRuntime) prepareTextRequest(
 		return nil, true, newGrokResponsesHTTPError(http.StatusServiceUnavailable, "api_error", "No available Grok session accounts")
 	}
 
+	selectedQuotaWindow := grokSelectionQuotaWindow(selected, requestedModel, time.Now().UTC())
+	if modeID := grokSessionModeIDForQuotaWindow(selectedQuotaWindow); modeID != "" {
+		if preparedPayload.payloadMap == nil {
+			preparedPayload.payloadMap = map[string]any{}
+		}
+		preparedPayload.payloadMap["modeId"] = modeID
+		preparedPayload.payload = nil
+	}
+
 	runtimeSettings := DefaultGrokRuntimeSettings()
 	if r.gatewayService != nil && r.gatewayService.settingService != nil {
 		runtimeSettings = r.gatewayService.settingService.GetGrokRuntimeSettings(ctx)
@@ -244,6 +255,7 @@ func (r *GrokTextRuntime) prepareTextRequest(
 		includeUsage:   preparedPayload.includeUsage,
 		toolNames:      append([]string(nil), preparedPayload.toolNames...),
 		account:        selected,
+		quotaWindow:    selectedQuotaWindow,
 		target:         target,
 		payload:        preparedPayload.payload,
 	}, true, nil

@@ -459,15 +459,30 @@ func resolveGrokSessionModeID(modelID string) (string, error) {
 
 	switch grokQuotaWindowForModel(modelID) {
 	case grok.QuotaWindowHeavy:
-		return grokSessionModeHeavy, nil
+		return grokSessionModeIDForQuotaWindow(grok.QuotaWindowHeavy), nil
 	case grok.QuotaWindowExpert:
-		return grokSessionModeExpert, nil
+		return grokSessionModeIDForQuotaWindow(grok.QuotaWindowExpert), nil
 	case grok.QuotaWindowFast:
-		return grokSessionModeFast, nil
+		return grokSessionModeIDForQuotaWindow(grok.QuotaWindowFast), nil
 	case grok.QuotaWindowAuto, "":
-		return grokSessionModeAuto, nil
+		return grokSessionModeIDForQuotaWindow(grok.QuotaWindowAuto), nil
 	default:
-		return grokSessionModeAuto, nil
+		return grokSessionModeIDForQuotaWindow(grok.QuotaWindowAuto), nil
+	}
+}
+
+func grokSessionModeIDForQuotaWindow(quotaWindow string) string {
+	switch strings.TrimSpace(quotaWindow) {
+	case grok.QuotaWindowHeavy:
+		return grokSessionModeHeavy
+	case grok.QuotaWindowExpert:
+		return grokSessionModeExpert
+	case grok.QuotaWindowFast:
+		return grokSessionModeFast
+	case grok.QuotaWindowAuto, "":
+		return grokSessionModeAuto
+	default:
+		return grokSessionModeAuto
 	}
 }
 
