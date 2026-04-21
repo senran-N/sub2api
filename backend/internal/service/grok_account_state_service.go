@@ -12,6 +12,10 @@ type grokAccountStateExtraWriter interface {
 	UpdateExtra(ctx context.Context, id int64, updates map[string]any) error
 }
 
+type grokAccountStateErrorWriter interface {
+	SetError(ctx context.Context, id int64, errorMsg string) error
+}
+
 type GrokAccountStateService struct {
 	accountRepo grokAccountStateExtraWriter
 	now         func() time.Time
@@ -48,6 +52,12 @@ func (s *GrokAccountStateService) PersistProbeResult(
 		StatusCode:     grokProbeStatusCode(resp),
 		Err:            probeErr,
 	})
+	s.persistInvalidCredentialAccountError(ctx, GrokRuntimeFeedbackInput{
+		Account:        account,
+		RequestedModel: modelID,
+		StatusCode:     grokProbeStatusCode(resp),
+		Err:            probeErr,
+	})
 }
 
 func (s *GrokAccountStateService) PersistSyncSnapshot(
@@ -67,6 +77,12 @@ func (s *GrokAccountStateService) PersistSyncSnapshot(
 	updates := buildGrokSyncStateExtraUpdates(account, snapshot)
 	s.persistExtraUpdates(ctx, account, updates)
 	s.persistBackgroundRuntimeState(ctx, GrokRuntimeFeedbackInput{
+		Account:    account,
+		StatusCode: statusCode,
+		Err:        syncErr,
+		Endpoint:   grokSessionRateLimitsEndpoint,
+	})
+	s.persistInvalidCredentialAccountError(ctx, GrokRuntimeFeedbackInput{
 		Account:    account,
 		StatusCode: statusCode,
 		Err:        syncErr,
@@ -121,6 +137,17 @@ func (s *GrokAccountStateService) persistBackgroundRuntimeState(ctx context.Cont
 		return
 	}
 	mergeGrokRuntimeState(input.Account, runtimeState)
+}
+
+func (s *GrokAccountStateService) persistInvalidCredentialAccountError(ctx context.Context, input GrokRuntimeFeedbackInput) {
+	if s == nil || input.Account == nil {
+		return
+	}
+	writer, ok := s.accountRepo.(grokAccountStateErrorWriter)
+	if !ok {
+		return
+	}
+	persistGrokInvalidCredentialAccountError(ctx, writer, input)
 }
 
 func shouldPersistGrokBackgroundRuntimeState(input GrokRuntimeFeedbackInput) bool {

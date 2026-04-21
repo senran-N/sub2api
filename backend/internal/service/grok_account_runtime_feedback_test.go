@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -15,6 +16,8 @@ type grokRuntimeFeedbackRepoStub struct {
 	mockAccountRepoForGemini
 	extraUpdates  []map[string]any
 	runtimeStates []map[string]any
+	setErrorID    int64
+	setErrorMsg   string
 }
 
 func (r *grokRuntimeFeedbackRepoStub) UpdateExtra(_ context.Context, _ int64, updates map[string]any) error {
@@ -29,6 +32,12 @@ func (r *grokRuntimeFeedbackRepoStub) UpdateGrokExtra(_ context.Context, _ int64
 
 func (r *grokRuntimeFeedbackRepoStub) UpdateGrokRuntimeState(_ context.Context, _ int64, runtimeState map[string]any) error {
 	r.runtimeStates = append(r.runtimeStates, cloneAnyMap(runtimeState))
+	return nil
+}
+
+func (r *grokRuntimeFeedbackRepoStub) SetError(_ context.Context, id int64, errorMsg string) error {
+	r.setErrorID = id
+	r.setErrorMsg = errorMsg
 	return nil
 }
 
@@ -218,4 +227,28 @@ func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackOpenAINoop(t *testing.T)
 
 	require.Empty(t, repo.extraUpdates)
 	require.Empty(t, repo.runtimeStates)
+}
+
+func TestOpenAIGatewayService_PersistGrokRuntimeFeedbackInvalidCredentialsMarksAccountError(t *testing.T) {
+	account := &Account{
+		ID:       75,
+		Platform: PlatformGrok,
+		Type:     AccountTypeSession,
+		Status:   StatusActive,
+	}
+	repo := &grokRuntimeFeedbackRepoStub{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+
+	svc.PersistGrokRuntimeFeedback(context.Background(), GrokRuntimeFeedbackInput{
+		Account:        account,
+		RequestedModel: "grok-3",
+		StatusCode:     http.StatusBadRequest,
+		Err:            errors.New(`API returned 400: {"error":"invalid-credentials"}`),
+	})
+
+	require.Len(t, repo.runtimeStates, 1)
+	require.Equal(t, int64(75), repo.setErrorID)
+	require.Contains(t, repo.setErrorMsg, "grok invalid credentials")
+	require.Contains(t, repo.setErrorMsg, "invalid-credentials")
+	require.Equal(t, StatusError, account.Status)
 }

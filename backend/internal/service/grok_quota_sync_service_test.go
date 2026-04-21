@@ -17,6 +17,8 @@ type grokQuotaSyncRepoStub struct {
 	updatedIDs    []int64
 	updatedExtra  []map[string]any
 	runtimeStates []map[string]any
+	setErrorIDs   []int64
+	setErrorMsgs  []string
 }
 
 func (r *grokQuotaSyncRepoStub) ListByPlatform(_ context.Context, platform string) ([]Account, error) {
@@ -36,6 +38,12 @@ func (r *grokQuotaSyncRepoStub) UpdateExtra(_ context.Context, id int64, updates
 
 func (r *grokQuotaSyncRepoStub) UpdateGrokRuntimeState(_ context.Context, _ int64, runtimeState map[string]any) error {
 	r.runtimeStates = append(r.runtimeStates, cloneAnyMap(runtimeState))
+	return nil
+}
+
+func (r *grokQuotaSyncRepoStub) SetError(_ context.Context, id int64, errorMsg string) error {
+	r.setErrorIDs = append(r.setErrorIDs, id)
+	r.setErrorMsgs = append(r.setErrorMsgs, errorMsg)
 	return nil
 }
 
@@ -200,4 +208,8 @@ func TestGrokQuotaSyncServiceSyncAccountInvalidCredentialsPersistsAuthCooldown(t
 	require.Equal(t, http.StatusBadRequest, grokParseInt(repo.runtimeStates[0]["last_fail_status_code"]))
 	require.NotEmpty(t, repo.runtimeStates[0]["selection_cooldown_until"])
 	require.Contains(t, getStringFromMaps(grokNestedMap(grokExtraMap(repo.updatedExtra[0])["sync_state"]), nil, "last_sync_error"), "invalid-credentials")
+	require.Equal(t, []int64{93}, repo.setErrorIDs)
+	require.Len(t, repo.setErrorMsgs, 1)
+	require.Contains(t, repo.setErrorMsgs[0], "grok invalid credentials")
+	require.Equal(t, StatusError, account.Status)
 }

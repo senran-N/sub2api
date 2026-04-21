@@ -17,6 +17,8 @@ type grokAccountStateServiceRepoStub struct {
 	updatedID    int64
 	updatedExtra map[string]any
 	runtimeState map[string]any
+	setErrorID   int64
+	setErrorMsg  string
 }
 
 func (r *grokAccountStateServiceRepoStub) UpdateExtra(_ context.Context, id int64, updates map[string]any) error {
@@ -27,6 +29,12 @@ func (r *grokAccountStateServiceRepoStub) UpdateExtra(_ context.Context, id int6
 
 func (r *grokAccountStateServiceRepoStub) UpdateGrokRuntimeState(_ context.Context, _ int64, runtimeState map[string]any) error {
 	r.runtimeState = cloneAnyMap(runtimeState)
+	return nil
+}
+
+func (r *grokAccountStateServiceRepoStub) SetError(_ context.Context, id int64, errorMsg string) error {
+	r.setErrorID = id
+	r.setErrorMsg = errorMsg
 	return nil
 }
 
@@ -128,6 +136,7 @@ func TestGrokAccountStateService_PersistProbeResultFailurePreservesTierAndQuotaS
 	require.Equal(t, "error", repo.runtimeState["last_outcome"])
 	require.Equal(t, "auth", repo.runtimeState["last_fail_class"])
 	require.NotEmpty(t, repo.runtimeState["selection_cooldown_until"])
+	require.Zero(t, repo.setErrorID)
 }
 
 func TestGrokAccountStateService_PersistProbeResultInvalidCredentials400TriggersAuthCooldown(t *testing.T) {
@@ -155,6 +164,10 @@ func TestGrokAccountStateService_PersistProbeResultInvalidCredentials400Triggers
 	require.Equal(t, "auth", repo.runtimeState["last_fail_class"])
 	require.Equal(t, http.StatusBadRequest, grokParseInt(repo.runtimeState["last_fail_status_code"]))
 	require.NotEmpty(t, repo.runtimeState["selection_cooldown_until"])
+	require.Equal(t, int64(86), repo.setErrorID)
+	require.Contains(t, repo.setErrorMsg, "grok invalid credentials")
+	require.Contains(t, repo.setErrorMsg, "invalid-credentials")
+	require.Equal(t, StatusError, account.Status)
 	require.Equal(t, "auth", getNestedGrokValue(account.grokExtraMap(), "runtime_state", "last_fail_class"))
 }
 

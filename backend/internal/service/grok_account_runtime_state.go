@@ -42,6 +42,10 @@ type grokRuntimeStateWriter interface {
 	UpdateGrokRuntimeState(ctx context.Context, id int64, runtimeState map[string]any) error
 }
 
+type grokInvalidCredentialAccountErrorWriter interface {
+	SetError(ctx context.Context, id int64, errorMsg string) error
+}
+
 type grokExtraStateWriter interface {
 	UpdateGrokExtra(ctx context.Context, id int64, grokPatch map[string]any) error
 }
@@ -269,6 +273,49 @@ func persistGrokRuntimeFeedbackToRepo(ctx context.Context, repo AccountRepositor
 		return
 	}
 	mergeGrokRuntimeState(input.Account, runtimeState)
+	persistGrokInvalidCredentialAccountError(ctx, repo, input)
+}
+
+func persistGrokInvalidCredentialAccountError(
+	ctx context.Context,
+	writer grokInvalidCredentialAccountErrorWriter,
+	input GrokRuntimeFeedbackInput,
+) {
+	if writer == nil || input.Account == nil {
+		return
+	}
+
+	errorMessage, ok := grokInvalidCredentialAccountErrorMessage(input)
+	if !ok {
+		return
+	}
+
+	updateCtx, cancel := newGrokAccountStateContext(ctx)
+	defer cancel()
+
+	if err := writer.SetError(updateCtx, input.Account.ID, errorMessage); err != nil {
+		return
+	}
+	input.Account.Status = StatusError
+	input.Account.ErrorMessage = errorMessage
+}
+
+func grokInvalidCredentialAccountErrorMessage(input GrokRuntimeFeedbackInput) (string, bool) {
+	account := input.Account
+	if account == nil || NormalizeCompatibleGatewayPlatform(account.Platform) != PlatformGrok {
+		return "", false
+	}
+
+	signal := extractGrokRuntimeErrorSignal(input)
+	if !grokSignalLooksLikeInvalidCredentials(signal) {
+		return "", false
+	}
+
+	reason := strings.TrimSpace(signal.message)
+	if reason == "" {
+		reason = "invalid credentials"
+	}
+	return "grok invalid credentials: " + reason, true
 }
 
 func buildGrokRuntimeCapabilityExtraUpdates(account *Account, input GrokRuntimeFeedbackInput, upstreamModel string, capability grok.Capability) map[string]any {
