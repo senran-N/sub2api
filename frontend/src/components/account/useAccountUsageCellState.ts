@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Account, AccountUsageInfo, GeminiCredentials, WindowStats } from '@/types'
-import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
+import { buildAccountUsageRefreshKey } from '@/utils/accountUsageRefresh'
 import { formatCompactNumber } from '@/utils/format'
 import { getGrokAccountRuntime } from '@/utils/grokAccountRuntime'
 
@@ -51,6 +51,7 @@ export function useAccountUsageCellState(
   let desktopViewportMediaQuery: MediaQueryList | null = null
   let desktopViewportListener: ((event: MediaQueryListEvent) => void) | null = null
   let visibilityObserver: IntersectionObserver | null = null
+  let latestUsageWriteSeq = 0
 
   const showUsageWindows = computed(() => {
     if (props.account.platform === 'gemini') return true
@@ -162,7 +163,7 @@ export function useAccountUsageCellState(
     return !!usageInfo.value?.five_hour || !!usageInfo.value?.seven_day
   })
 
-  const openAIUsageRefreshKey = computed(() => buildOpenAIUsageRefreshKey(props.account))
+  const accountUsageRefreshKey = computed(() => buildAccountUsageRefreshKey(props.account))
 
   const shouldAutoLoadUsageOnMount = computed(() => shouldFetchUsage.value)
   const shouldLazyLoadOnMobile = computed(() => shouldFetchUsage.value && !isDesktopViewport.value)
@@ -570,33 +571,64 @@ export function useAccountUsageCellState(
     )
   })
 
+  const beginUsageWrite = () => {
+    latestUsageWriteSeq += 1
+    return latestUsageWriteSeq
+  }
+
+  const isLatestUsageWrite = (writeSeq: number, accountId: Account['id']) => {
+    return writeSeq === latestUsageWriteSeq && props.account.id === accountId
+  }
+
   const loadUsage = async (source?: 'passive' | 'active') => {
     if (!shouldFetchUsage.value) return
 
+    const writeSeq = beginUsageWrite()
+    const accountId = props.account.id
     loading.value = true
     error.value = null
 
     try {
-      usageInfo.value = source
+      const nextUsageInfo = source
         ? await adminAPI.accounts.getUsage(props.account.id, source)
         : await adminAPI.accounts.getUsage(props.account.id)
+      if (!isLatestUsageWrite(writeSeq, accountId)) {
+        return
+      }
+      usageInfo.value = nextUsageInfo
     } catch (caughtError) {
+      if (!isLatestUsageWrite(writeSeq, accountId)) {
+        return
+      }
       error.value = t('common.error')
       console.error('Failed to load usage:', caughtError)
     } finally {
-      loading.value = false
+      if (props.account.id === accountId) {
+        loading.value = false
+      }
     }
   }
 
   const loadActiveUsage = async () => {
+    const writeSeq = beginUsageWrite()
+    const accountId = props.account.id
     activeQueryLoading.value = true
 
     try {
-      usageInfo.value = await adminAPI.accounts.getUsage(props.account.id, 'active')
+      const nextUsageInfo = await adminAPI.accounts.getUsage(props.account.id, 'active')
+      if (!isLatestUsageWrite(writeSeq, accountId)) {
+        return
+      }
+      usageInfo.value = nextUsageInfo
     } catch (error) {
+      if (!isLatestUsageWrite(writeSeq, accountId)) {
+        return
+      }
       console.error('Failed to load active usage:', error)
     } finally {
-      activeQueryLoading.value = false
+      if (props.account.id === accountId) {
+        activeQueryLoading.value = false
+      }
     }
   }
 
@@ -748,11 +780,12 @@ export function useAccountUsageCellState(
     requestAutoLoad(source)
   })
 
-  watch(openAIUsageRefreshKey, (nextKey, prevKey) => {
+  watch(accountUsageRefreshKey, (nextKey, prevKey) => {
     if (!prevKey || nextKey === prevKey) return
-    if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return
+    if (!shouldFetchUsage.value) return
 
-    requestAutoLoad()
+    const source = isAnthropicOAuthOrSetupToken.value ? 'passive' : undefined
+    requestAutoLoad(source)
   })
 
   watch(

@@ -54,6 +54,21 @@ function makeAccount(overrides: Partial<Account>): Account {
   }
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject
+  }
+}
+
 describe('AccountUsageCell', () => {
   beforeEach(() => {
     getUsage.mockReset()
@@ -484,7 +499,79 @@ describe('AccountUsageCell', () => {
 
 	expect(getUsage).toHaveBeenCalledWith(2002)
 	expect(wrapper.text()).toContain('5h|0|27700')
-	expect(wrapper.text()).toContain('7d|0|27700')
+		expect(wrapper.text()).toContain('7d|0|27700')
+  })
+
+  it('手动刷新时会忽略较早返回的旧用量响应', async () => {
+    const firstRequest = createDeferred<any>()
+    const secondRequest = createDeferred<any>()
+
+    getUsage
+      .mockImplementationOnce(() => firstRequest.promise)
+      .mockImplementationOnce(() => secondRequest.promise)
+
+    const wrapper = mount(AccountUsageCell, {
+      props: {
+        account: makeAccount({
+          id: 3001,
+          platform: 'openai',
+          type: 'oauth',
+          extra: {
+            codex_usage_updated_at: '2099-03-07T10:00:00Z',
+            codex_5h_used_percent: 12,
+            codex_7d_used_percent: 34
+          }
+        }),
+        manualRefreshToken: 0
+      },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'resetsAt', 'windowStats', 'color'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}</div>'
+          },
+          AccountQuotaInfo: true
+        }
+      }
+    })
+
+    await flushPromises()
+    await wrapper.setProps({ manualRefreshToken: 1 })
+
+    secondRequest.resolve({
+      five_hour: {
+        utilization: 44,
+        resets_at: '2099-03-07T12:00:00Z',
+        remaining_seconds: 3600,
+        window_stats: {
+          requests: 4,
+          tokens: 444,
+          cost: 0.04,
+          standard_cost: 0.04,
+          user_cost: 0.04
+        }
+      }
+    })
+    await flushPromises()
+
+    firstRequest.resolve({
+      five_hour: {
+        utilization: 11,
+        resets_at: '2099-03-07T11:00:00Z',
+        remaining_seconds: 3600,
+        window_stats: {
+          requests: 1,
+          tokens: 111,
+          cost: 0.01,
+          standard_cost: 0.01,
+          user_cost: 0.01
+        }
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('5h|44|444')
+    expect(wrapper.text()).not.toContain('5h|11|111')
   })
 
   it('OpenAI OAuth 在行数据刷新但仍无 codex 快照时会重新拉取 usage', async () => {

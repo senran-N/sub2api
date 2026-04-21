@@ -77,6 +77,16 @@ describe('accountsList helpers', () => {
         codex_usage_updated_at: '2026-01-02T00:00:00Z'
       }
     })
+    const changedStatus = createAccount({
+      extra: {
+        model_rate_limits: {
+          'gpt-5': {
+            rate_limited_at: '2026-01-01T00:00:00Z',
+            rate_limit_reset_at: '2026-01-01T01:00:00Z'
+          }
+        }
+      }
+    })
 
     expect(shouldReplaceAutoRefreshAccountRow(current, same)).toBe(false)
     expect(
@@ -86,6 +96,7 @@ describe('accountsList helpers', () => {
       )
     ).toBe(true)
     expect(shouldReplaceAutoRefreshAccountRow(current, changedUsage)).toBe(true)
+    expect(shouldReplaceAutoRefreshAccountRow(current, changedStatus)).toBe(true)
   })
 
   it('merges incremental account rows and preserves unchanged row references', () => {

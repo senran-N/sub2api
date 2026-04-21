@@ -97,6 +97,8 @@ export function useAccountsViewState(options: AccountsViewStateOptions) {
     if (reAuthAcc.value?.id === nextAccount.id) reAuthAcc.value = nextAccount
     if (tempUnschedAcc.value?.id === nextAccount.id) tempUnschedAcc.value = nextAccount
     if (deletingAcc.value?.id === nextAccount.id) deletingAcc.value = nextAccount
+    if (testingAcc.value?.id === nextAccount.id) testingAcc.value = nextAccount
+    if (statsAcc.value?.id === nextAccount.id) statsAcc.value = nextAccount
     options.syncMenuAccount(nextAccount)
   }
 

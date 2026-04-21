@@ -172,10 +172,14 @@ describe('useAccountsViewState', () => {
 
     setup.params.search = ''
     setup.state.edAcc.value = first
+    setup.state.testingAcc.value = first
+    setup.state.statsAcc.value = first
     setup.state.patchAccountInList(createAccount({ id: 1, name: 'Alpha Prime' }))
 
     expect(setup.accounts.value[0].name).toBe('Alpha Prime')
     expect(setup.state.edAcc.value?.name).toBe('Alpha Prime')
+    expect(setup.state.testingAcc.value?.name).toBe('Alpha Prime')
+    expect(setup.state.statsAcc.value?.name).toBe('Alpha Prime')
     expect(setup.syncMenuAccount).toHaveBeenCalledWith(
       expect.objectContaining({ id: 1, name: 'Alpha Prime' })
     )
