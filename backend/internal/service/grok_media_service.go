@@ -266,45 +266,18 @@ func (s *GrokMediaService) HandleAssetContent(c *gin.Context, assetID string) bo
 }
 
 func (s *GrokMediaService) selectCompatibleAccount(ctx context.Context, groupID *int64, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
-	if s == nil || s.gatewayService == nil {
+	if s == nil {
 		return nil, errors.New("grok media service is not configured")
 	}
-	ctx = WithGrokSessionMediaRuntimeAllowed(ctx)
-
-	accounts, _, err := s.gatewayService.listSchedulableAccounts(ctx, groupID, PlatformGrok, true)
-	if err != nil {
-		return nil, err
-	}
-
-	candidates := defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, excludedIDs)
-	if len(candidates) == 0 {
-		if !defaultGrokAccountSelector.RequestedModelAvailableWithContext(ctx, accounts, requestedModel) {
-			return nil, fmt.Errorf("requested model unavailable:%s", requestedModel)
-		}
-		return nil, errors.New("no compatible grok media accounts")
-	}
-
-	var loadMap map[int64]*AccountLoadInfo
-	if s.gatewayService.concurrencyService != nil {
-		if snapshot, loadErr := s.gatewayService.concurrencyService.GetAccountsLoadBatch(ctx, buildAccountLoadRequests(candidates)); loadErr == nil {
-			loadMap = snapshot
-		}
-	}
-
-	selected := defaultGrokAccountSelector.SelectBestCandidateWithContext(ctx, candidates, requestedModel, loadMap)
-	if selected == nil {
-		return nil, errors.New("no compatible grok media accounts")
-	}
-	if s.gatewayService != nil {
-		hydrated, err := s.gatewayService.hydrateSelectedAccount(ctx, selected)
-		if err != nil {
-			return nil, err
-		}
-		if hydrated != nil {
-			selected = hydrated
-		}
-	}
-	return selected, nil
+	return selectSchedulableGrokMediaAccount(
+		ctx,
+		s.gatewayService,
+		groupID,
+		requestedModel,
+		excludedIDs,
+		nil,
+		"no compatible grok media accounts",
+	)
 }
 
 func (s *GrokMediaService) resolveMappedModel(ctx context.Context, groupID *int64, requestedModel string) (string, string, bool) {

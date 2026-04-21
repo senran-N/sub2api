@@ -698,15 +698,6 @@ func (r *GrokSessionMediaRuntime) runVideoJob(account *Account, record *GrokVide
 	}()
 
 	ctx := context.Background()
-	timeout := DefaultGrokRuntimeSettings().VideoTimeout()
-	if r.gatewayService != nil && r.gatewayService.settingService != nil {
-		timeout = r.gatewayService.settingService.GetGrokRuntimeSettings(ctx).VideoTimeout()
-	}
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
 
 	pollAfter := r.now().Add(grokSessionVideoPollInterval)
 	_ = r.videoJobs.UpdateStatus(ctx, GrokVideoJobStatusPatch{
@@ -716,44 +707,139 @@ func (r *GrokSessionMediaRuntime) runVideoJob(account *Account, record *GrokVide
 		PollAfter:        &pollAfter,
 	})
 
-	artifact, err := r.generateSessionVideo(ctx, account, req, nil)
-	if err != nil {
-		r.persistSessionMediaRuntimeFeedback(ctx, account, firstNonEmpty(record.CanonicalModel, record.RequestedModel, req.Model), "/v1/videos", err)
-		r.failVideoJob(ctx, record.JobID, grokSessionMediaFeedbackCode(err), sanitizeUpstreamErrorMessage(err.Error()))
-		return
-	}
+	requestedModel := firstNonEmpty(record.CanonicalModel, record.RequestedModel, req.Model)
+	excludedIDs := make(map[int64]struct{})
+	currentAccount := account
+	var lastFailoverErr *UpstreamFailoverError
 
-	outputAssetID := strings.TrimSpace(artifact.AssetID)
-	if r.mediaAssets != nil {
-		assetRecord, assetErr := r.mediaAssets.UpsertRemoteAssetRecord(
-			ctx,
-			account,
-			"video",
-			record.RequestedModel,
-			record.CanonicalModel,
-			record.JobID,
-			artifact.AssetID,
-			artifact.VideoURL,
-		)
-		if assetErr != nil {
-			r.failVideoJob(ctx, record.JobID, "api_error", "Failed to persist Grok video asset")
+	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+		if currentAccount == nil {
+			selected, err := r.selectCompatibleVideoAccount(ctx, record, requestedModel, excludedIDs)
+			if err != nil {
+				if lastFailoverErr != nil {
+					break
+				}
+				r.failVideoJob(ctx, record.JobID, "api_error", sanitizeUpstreamErrorMessage(err.Error()))
+				return
+			}
+			currentAccount = selected
+		}
+		if currentAccount == nil {
+			r.failVideoJob(ctx, record.JobID, "api_error", "No available Grok session video account")
 			return
 		}
-		if assetRecord != nil {
-			outputAssetID = strings.TrimSpace(assetRecord.AssetID)
+		if currentAccount.ID != record.AccountID {
+			record.AccountID = currentAccount.ID
+			record.UpstreamStatus = "running"
+			record.NormalizedStatus = "in_progress"
+			record.PollAfter = &pollAfter
+			record.ErrorCode = ""
+			record.ErrorMessage = ""
+			if err := r.videoJobs.Upsert(ctx, *record); err != nil {
+				r.failVideoJob(ctx, record.JobID, "api_error", "Failed to rebind Grok video job account")
+				return
+			}
+		}
+
+		attemptCtx, cancel := r.newVideoJobAttemptContext(ctx)
+		artifact, err := r.generateSessionVideo(attemptCtx, currentAccount, req, nil)
+		cancel()
+		if err == nil {
+			outputAssetID := strings.TrimSpace(artifact.AssetID)
+			if r.mediaAssets != nil {
+				assetRecord, assetErr := r.mediaAssets.UpsertRemoteAssetRecord(
+					ctx,
+					currentAccount,
+					"video",
+					record.RequestedModel,
+					record.CanonicalModel,
+					record.JobID,
+					artifact.AssetID,
+					artifact.VideoURL,
+				)
+				if assetErr != nil {
+					r.failVideoJob(ctx, record.JobID, "api_error", "Failed to persist Grok video asset")
+					return
+				}
+				if assetRecord != nil {
+					outputAssetID = strings.TrimSpace(assetRecord.AssetID)
+				}
+			}
+
+			_ = r.videoJobs.UpdateStatus(ctx, GrokVideoJobStatusPatch{
+				JobID:            record.JobID,
+				UpstreamStatus:   "completed",
+				NormalizedStatus: "completed",
+				PollAfter:        nil,
+				ErrorCode:        "",
+				ErrorMessage:     "",
+				OutputAssetID:    outputAssetID,
+			})
+			r.persistSessionMediaRuntimeFeedback(ctx, currentAccount, requestedModel, "/v1/videos", nil)
+			return
+		}
+
+		failoverErr := grokMediaFailoverError(err)
+		feedbackErr := err
+		if failoverErr != nil {
+			feedbackErr = failoverErr
+		}
+		r.persistSessionMediaRuntimeFeedback(ctx, currentAccount, requestedModel, "/v1/videos", feedbackErr)
+		if failoverErr == nil {
+			r.failVideoJob(ctx, record.JobID, grokSessionMediaFeedbackCode(err), sanitizeUpstreamErrorMessage(err.Error()))
+			return
+		}
+
+		lastFailoverErr = failoverErr
+		excludedIDs[currentAccount.ID] = struct{}{}
+		currentAccount = nil
+		if len(excludedIDs) >= maxRetryAttempts {
+			break
 		}
 	}
 
-	_ = r.videoJobs.UpdateStatus(ctx, GrokVideoJobStatusPatch{
-		JobID:            record.JobID,
-		UpstreamStatus:   "completed",
-		NormalizedStatus: "completed",
-		PollAfter:        nil,
-		ErrorCode:        "",
-		ErrorMessage:     "",
-		OutputAssetID:    outputAssetID,
-	})
-	r.persistSessionMediaRuntimeFeedback(ctx, account, firstNonEmpty(record.CanonicalModel, record.RequestedModel, req.Model), "/v1/videos", nil)
+	if lastFailoverErr != nil {
+		_, code, message := grokMediaErrorDetails(lastFailoverErr)
+		r.failVideoJob(ctx, record.JobID, code, message)
+		return
+	}
+	r.failVideoJob(ctx, record.JobID, "api_error", "Grok session video generation failed")
+}
+
+func (r *GrokSessionMediaRuntime) selectCompatibleVideoAccount(
+	ctx context.Context,
+	record *GrokVideoJobRecord,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+) (*Account, error) {
+	if r == nil {
+		return nil, errors.New("grok session media runtime is not configured")
+	}
+	return selectSchedulableGrokMediaAccount(
+		ctx,
+		r.gatewayService,
+		record.GroupID,
+		requestedModel,
+		excludedIDs,
+		func(account *Account) bool {
+			return account != nil && account.Type == AccountTypeSession
+		},
+		"no compatible grok session video accounts",
+	)
+}
+
+func (r *GrokSessionMediaRuntime) newVideoJobAttemptContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timeout := DefaultGrokRuntimeSettings().VideoTimeout()
+	if r != nil && r.gatewayService != nil && r.gatewayService.settingService != nil {
+		timeout = r.gatewayService.settingService.GetGrokRuntimeSettings(ctx).VideoTimeout()
+	}
+	if timeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
 }
 
 func (r *GrokSessionMediaRuntime) generateSessionVideo(

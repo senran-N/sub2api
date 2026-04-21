@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/senran-N/sub2api/internal/pkg/grok"
 	"github.com/stretchr/testify/require"
@@ -156,4 +157,100 @@ func TestGrokSessionMediaRuntimePersistSessionMediaRuntimeFeedback_RateLimitedVi
 	require.Equal(t, string(grok.ProtocolFamilyMediaJob), runtimeState["last_request_protocol_family"])
 	require.Equal(t, string(grok.CapabilityVideo), runtimeState["last_request_capability"])
 	require.NotEmpty(t, runtimeState["selection_cooldown_until"])
+}
+
+func TestGrokSessionMediaRuntimeRunVideoJob_FailoverRebindsAccountAndCompletes(t *testing.T) {
+	first := newSchedulableGrokSessionMediaAccount(601, map[string]any{
+		"grok": map[string]any{
+			"tier": map[string]any{
+				"normalized": "super",
+			},
+		},
+	})
+	second := newSchedulableGrokSessionMediaAccount(602, map[string]any{
+		"grok": map[string]any{
+			"tier": map[string]any{
+				"normalized": "super",
+			},
+		},
+	})
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{first, second},
+		accountsByID: map[int64]*Account{
+			first.ID:  accountPtr(first),
+			second.ID: accountPtr(second),
+		},
+	}
+	videoJobs := &stubGrokVideoJobRepository{
+		records: map[string]GrokVideoJobRecord{
+			"job_123": {
+				JobID:            "job_123",
+				AccountID:        first.ID,
+				GroupID:          nil,
+				RequestedModel:   "grok-imagine-video",
+				CanonicalModel:   "grok-imagine-video",
+				UpstreamStatus:   "running",
+				NormalizedStatus: "in_progress",
+				CreatedAt:        time.Date(2026, 4, 21, 8, 0, 0, 0, time.UTC),
+				UpdatedAt:        time.Date(2026, 4, 21, 8, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	mediaAssets := &stubGrokMediaAssetRepository{}
+	upstream := &queuedHTTPUpstream{
+		responses: []*http.Response{
+			newJSONResponse(http.StatusOK, `{"post":{"id":"post_first"}}`),
+			newJSONResponse(http.StatusTooManyRequests, `{"error":{"message":"rate limit reached"}}`),
+			newJSONResponse(http.StatusOK, `{"post":{"id":"post_second"}}`),
+			newJSONResponse(http.StatusOK, strings.Join([]string{
+				`{"result":{"response":{"streamingVideoGenerationResponse":{"progress":100,"videoPostId":"video_post_2","videoUrl":"https://media.example/final.mp4","assetId":"asset_video_2"}}}}`,
+			}, "\n")),
+		},
+	}
+
+	runtime := NewGrokSessionMediaRuntime(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, videoJobs, NewGrokMediaAssetService(&GatewayService{
+		accountRepo:  repo,
+		cfg:          testConfig(),
+		httpUpstream: upstream,
+	}, mediaAssets))
+
+	record := videoJobs.records["job_123"]
+	req := grokSessionVideoCreateRequest{
+		Model:          "grok-imagine-video",
+		Prompt:         "launch sequence",
+		Seconds:        6,
+		Size:           "720x1280",
+		Quality:        "standard",
+		Preset:         "custom",
+		ResolutionName: "720p",
+	}
+
+	runtime.runVideoJob(accountPtr(first), &record, req)
+
+	require.Len(t, upstream.requests, 4)
+	require.Equal(t, "sso=session-token-601; sso-rw=session-token-601-rw", upstream.requests[0].Header.Get("Cookie"))
+	require.Equal(t, "sso=session-token-602; sso-rw=session-token-602-rw", upstream.requests[2].Header.Get("Cookie"))
+
+	stored := videoJobs.records["job_123"]
+	require.Equal(t, second.ID, stored.AccountID)
+	require.Equal(t, "completed", stored.UpstreamStatus)
+	require.Equal(t, "completed", stored.NormalizedStatus)
+	require.Equal(t, "asset_video_2", stored.OutputAssetID)
+	require.Len(t, videoJobs.upserts, 1)
+	require.Equal(t, second.ID, videoJobs.upserts[0].AccountID)
+
+	require.Len(t, mediaAssets.upserts, 1)
+	require.Equal(t, second.ID, mediaAssets.upserts[0].AccountID)
+	require.Equal(t, "asset_video_2", mediaAssets.upserts[0].AssetID)
+	require.Equal(t, "https://media.example/final.mp4", mediaAssets.upserts[0].UpstreamURL)
+
+	require.Len(t, repo.runtimeStates, 2)
+	require.Equal(t, "failover", repo.runtimeStates[0]["last_outcome"])
+	require.Equal(t, "success", repo.runtimeStates[1]["last_outcome"])
+	require.Equal(t, string(grok.CapabilityVideo), repo.runtimeStates[0]["last_request_capability"])
+	require.Equal(t, string(grok.CapabilityVideo), repo.runtimeStates[1]["last_request_capability"])
 }
