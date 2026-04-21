@@ -2549,6 +2549,8 @@ export default {
           lastProbeOkAt: "Last Probe OK",
           lastProbeErrorAt: "Last Probe Error",
           probeStatus: "Probe Status",
+          probeHealthy: "Last Probe Succeeded",
+          probeFailed: "Last Probe Failed",
           lastProbeError: "Last Probe Error",
           lastRuntimeError: "Recent Runtime Error",
           lastFailAt: "Last Fail At",

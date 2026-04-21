@@ -1970,11 +1970,61 @@ const grokTierConfidenceDisplay = computed(() => {
 const grokCapabilities = computed(() => grokRuntimeState.value?.capabilities.operations ?? [])
 const grokModels = computed(() => grokRuntimeState.value?.capabilities.models ?? [])
 const grokQuotaWindows = computed(() => grokRuntimeState.value?.quotaWindows.filter((window) => window.hasSignal) ?? [])
+const parseRuntimeTimestamp = (value: string | null | undefined): number | null => {
+  if (!value) {
+    return null
+  }
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
 const grokProbeStatusDisplay = computed(() => {
-  const code = grokRuntimeState.value?.sync.lastProbeStatusCode
-  return code ? t('admin.accounts.grok.runtime.httpStatus', { code }) : emptyRuntimeValue
+  const sync = grokRuntimeState.value?.sync
+  if (!sync?.lastProbeAt) {
+    return emptyRuntimeValue
+  }
+
+  const lastProbeOKAt = parseRuntimeTimestamp(sync.lastProbeOkAt)
+  const lastProbeErrorAt = parseRuntimeTimestamp(sync.lastProbeErrorAt)
+
+  if (lastProbeOKAt !== null && (lastProbeErrorAt === null || lastProbeOKAt >= lastProbeErrorAt)) {
+    return t('admin.accounts.grok.runtime.probeHealthy')
+  }
+  if (lastProbeErrorAt !== null) {
+    return t('admin.accounts.grok.runtime.probeFailed')
+  }
+
+  const code = sync.lastProbeStatusCode
+  if (code !== null && code >= 200 && code < 300) {
+    return t('admin.accounts.grok.runtime.probeHealthy')
+  }
+  if (code !== null) {
+    return t('admin.accounts.grok.runtime.probeFailed')
+  }
+  return emptyRuntimeValue
 })
-const grokProbeErrorDisplay = computed(() => grokRuntimeState.value?.sync.lastProbeError ?? emptyRuntimeValue)
+const grokProbeErrorDisplay = computed(() => {
+  const sync = grokRuntimeState.value?.sync
+  if (!sync) {
+    return emptyRuntimeValue
+  }
+
+  const httpStatusLabel = sync.lastProbeStatusCode
+    ? t('admin.accounts.grok.runtime.httpStatus', { code: sync.lastProbeStatusCode })
+    : null
+  const probeError = sync.lastProbeError
+
+  if (probeError && httpStatusLabel) {
+    return `${httpStatusLabel} · ${probeError}`
+  }
+  if (probeError) {
+    return probeError
+  }
+  if (httpStatusLabel && grokProbeStatusDisplay.value === t('admin.accounts.grok.runtime.probeFailed')) {
+    return httpStatusLabel
+  }
+  return emptyRuntimeValue
+})
 const grokRuntimeErrorDisplay = computed(() => grokRuntimeState.value?.runtime.lastFailReason ?? emptyRuntimeValue)
 
 const showQuotaLimitSection = computed(() => {
