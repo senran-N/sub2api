@@ -236,14 +236,14 @@ watch(
 
 <template>
   <BaseDialog :show="show" :title="modalTitle" width="full" @close="close">
-    <div class="flex h-full min-h-0 flex-col">
+    <div class="ops-error-details-modal">
       <div class="ops-error-details-modal__filters">
         <div class="ops-error-details-modal__filter-grid">
           <div class="ops-error-details-modal__filter-col ops-error-details-modal__filter-col--search compact-select">
-            <div class="relative group">
-              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <div class="ops-error-details-modal__search-shell">
+              <div class="ops-error-details-modal__search-icon-shell">
                 <svg
-                  class="ops-error-details-modal__search-icon h-3.5 w-3.5 transition-colors"
+                  class="ops-error-details-modal__search-icon"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -286,13 +286,13 @@ watch(
         </div>
       </div>
 
-      <div class="flex min-h-0 flex-1 flex-col">
-        <div class="ops-error-details-modal__meta mb-2 flex-shrink-0 text-xs">
+      <div class="ops-error-details-modal__content">
+        <div class="ops-error-details-modal__meta">
           {{ t('admin.ops.errorDetails.total') }} {{ total }}
         </div>
 
           <OpsErrorLogTable
-            class="min-h-0 flex-1"
+            class="ops-error-details-modal__table"
             :rows="rows"
             :total="total"
             :loading="loading"
@@ -310,6 +310,14 @@ watch(
 </template>
 
 <style scoped>
+.ops-error-details-modal,
+.ops-error-details-modal__content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
 .ops-error-details-modal__filters {
   border-bottom: 1px solid var(--theme-page-border);
   padding: calc(var(--theme-ops-panel-padding) * 0.75) calc(var(--theme-ops-panel-padding) * 0.5);
@@ -330,6 +338,20 @@ watch(
   grid-column: span 2;
 }
 
+.ops-error-details-modal__search-shell {
+  position: relative;
+}
+
+.ops-error-details-modal__search-icon-shell {
+  pointer-events: none;
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 0.75rem;
+}
+
 .ops-error-details-modal__filter-col--action {
   display: flex;
   align-items: flex-end;
@@ -337,10 +359,13 @@ watch(
 }
 
 .ops-error-details-modal__search-icon {
+  width: 0.875rem;
+  height: 0.875rem;
   color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+  transition: color 0.2s ease;
 }
 
-.group:focus-within .ops-error-details-modal__search-icon {
+.ops-error-details-modal__search-shell:focus-within .ops-error-details-modal__search-icon {
   color: var(--theme-accent);
 }
 
@@ -386,7 +411,15 @@ watch(
 }
 
 .ops-error-details-modal__meta {
+  margin-bottom: 0.5rem;
+  flex-shrink: 0;
   color: var(--theme-page-muted);
+  font-size: 0.75rem;
+}
+
+.ops-error-details-modal__table {
+  min-height: 0;
+  flex: 1;
 }
 
 .compact-select :deep(.select-trigger) {

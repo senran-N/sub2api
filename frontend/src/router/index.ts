@@ -9,6 +9,7 @@ import { useAppStore } from '@/stores/app'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
+import { sanitizeRedirectPath } from '@/utils/url'
 import { resolveRouteDocumentTitle } from './title'
 
 /**
@@ -545,7 +546,12 @@ router.beforeEach((to, _from, next) => {
         return
       }
       // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(
+        sanitizeRedirectPath(
+          typeof to.query.redirect === 'string' ? to.query.redirect : undefined,
+          authStore.isAdmin ? '/admin/dashboard' : '/dashboard'
+        )
+      )
       return
     }
     // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)

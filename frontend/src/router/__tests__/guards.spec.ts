@@ -60,7 +60,8 @@ interface MockAuthState {
 function simulateGuard(
   toPath: string,
   toMeta: Record<string, any>,
-  authState: MockAuthState
+  authState: MockAuthState,
+  toQuery: Record<string, unknown> = {}
 ): string | null {
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
@@ -73,6 +74,16 @@ function simulateGuard(
     ) {
       if (authState.backendModeEnabled && !authState.isAdmin) {
         return null
+      }
+      const redirect = typeof toQuery.redirect === 'string' ? toQuery.redirect.trim() : ''
+      if (
+        redirect.startsWith('/') &&
+        !redirect.startsWith('//') &&
+        !redirect.includes('://') &&
+        !redirect.includes('\n') &&
+        !redirect.includes('\r')
+      ) {
+        return redirect
       }
       return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
     }
@@ -208,6 +219,16 @@ describe('路由守卫逻辑', () => {
     it('访问 /login 重定向到 /admin/dashboard', () => {
       const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
       expect(redirect).toBe('/admin/dashboard')
+    })
+
+    it('访问 /login 时保留安全的 redirect 参数', () => {
+      const redirect = simulateGuard(
+        '/login',
+        { requiresAuth: false },
+        authState,
+        { redirect: '/admin/ops' }
+      )
+      expect(redirect).toBe('/admin/ops')
     })
 
     it('访问管理页面允许通过', () => {

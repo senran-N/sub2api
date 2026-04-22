@@ -73,6 +73,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { completeLinuxDoOAuthRegistration } from '@/api/auth'
 import { resolveErrorMessage } from '@/utils/errorMessage'
+import { sanitizeRedirectPath } from '@/utils/url'
 
 const route = useRoute()
 const router = useRouter()
@@ -96,15 +97,6 @@ function parseFragmentParams(): URLSearchParams {
   const raw = typeof window !== 'undefined' ? window.location.hash : ''
   const hash = raw.startsWith('#') ? raw.slice(1) : raw
   return new URLSearchParams(hash)
-}
-
-function sanitizeRedirectPath(path: string | null | undefined): string {
-  if (!path) return '/dashboard'
-  if (!path.startsWith('/')) return '/dashboard'
-  if (path.startsWith('//')) return '/dashboard'
-  if (path.includes('://')) return '/dashboard'
-  if (path.includes('\n') || path.includes('\r')) return '/dashboard'
-  return path
 }
 
 async function handleSubmitInvitation() {

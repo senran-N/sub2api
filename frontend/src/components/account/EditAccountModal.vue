@@ -2013,20 +2013,18 @@ const grokProbeErrorDisplay = computed(() => {
     return emptyRuntimeValue
   }
 
-  const httpStatusLabel = sync.lastProbeStatusCode
-    ? t('admin.accounts.grok.runtime.httpStatus', { code: sync.lastProbeStatusCode })
-    : null
-  const probeError = sync.lastProbeError
+  const code = sync.lastProbeStatusCode
+  if (code !== null && code >= 200 && code < 300) {
+    return t('common.success')
+  }
 
-  if (probeError && httpStatusLabel) {
-    return `${httpStatusLabel} · ${probeError}`
+  const hasFailedProbe = Boolean(sync.lastProbeError) || grokProbeStatusDisplay.value === t('admin.accounts.grok.runtime.probeFailed')
+  if (hasFailedProbe) {
+    return code !== null
+      ? t('admin.accounts.grok.runtime.probeFailedWithCode', { code })
+      : t('admin.accounts.grok.runtime.probeFailedShort')
   }
-  if (probeError) {
-    return probeError
-  }
-  if (httpStatusLabel && grokProbeStatusDisplay.value === t('admin.accounts.grok.runtime.probeFailed')) {
-    return httpStatusLabel
-  }
+
   return emptyRuntimeValue
 })
 const grokRuntimeErrorDisplay = computed(() => grokRuntimeState.value?.runtime.lastFailReason ?? emptyRuntimeValue)

@@ -184,19 +184,20 @@ function downloadChart() {
   <div class="ops-chart-card">
     <div class="ops-chart-card__header">
       <h3 class="ops-chart-card__title">
-        <svg class="ops-chart-card__icon--info h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="ops-chart-card__icon ops-chart-card__icon--info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
         </svg>
         {{ t('admin.ops.throughputTrend') }}
         <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.throughputTrend')" />
       </h3>
       <div class="ops-chart-card__legend">
-        <span class="flex items-center gap-1"><span class="ops-chart-card__metric-dot ops-chart-card__metric-dot--info"></span>QPS</span>
-        <span class="flex items-center gap-1"><span class="ops-chart-card__metric-dot ops-chart-card__metric-dot--success"></span>{{ t('admin.ops.tpsK') }}</span>
+        <span class="ops-chart-card__legend-item"><span class="ops-chart-card__metric-dot ops-chart-card__metric-dot--info"></span>QPS</span>
+        <span class="ops-chart-card__legend-item"><span class="ops-chart-card__metric-dot ops-chart-card__metric-dot--success"></span>{{ t('admin.ops.tpsK') }}</span>
         <template v-if="!props.fullscreen">
+          <div class="ops-chart-card__action-group">
           <button
             type="button"
-            class="ops-chart-card__action ml-2"
+            class="ops-chart-card__action"
             :disabled="state !== 'ready'"
             :title="t('admin.ops.requestDetails.title')"
             @click="emit('openDetails')"
@@ -205,7 +206,7 @@ function downloadChart() {
           </button>
           <button
             type="button"
-            class="ops-chart-card__action ml-2"
+            class="ops-chart-card__action"
             :disabled="state !== 'ready'"
             :title="t('admin.ops.charts.resetZoomHint')"
             @click="resetZoom"
@@ -221,68 +222,44 @@ function downloadChart() {
           >
             {{ t('admin.ops.charts.downloadChart') }}
           </button>
+          </div>
         </template>
       </div>
     </div>
 
     <!-- Drilldown chips (baseline interaction: click to set global filter) -->
-    <div v-if="(props.topGroups?.length ?? 0) > 0" class="mb-3 flex flex-wrap gap-2">
+    <div v-if="(props.topGroups?.length ?? 0) > 0" class="ops-chart-card__filters">
       <button
         v-for="g in props.topGroups"
         :key="g.group_id"
         type="button"
-        class="ops-chart-card__filter-chip inline-flex items-center gap-2 text-[11px] font-semibold"
+        class="ops-chart-card__filter-chip"
         @click="emit('selectGroup', g.group_id)"
       >
-        <span class="ops-chart-card__filter-chip-label truncate">{{ g.group_name || `#${g.group_id}` }}</span>
+        <span class="ops-chart-card__filter-chip-label">{{ g.group_name || `#${g.group_id}` }}</span>
         <span class="ops-chart-card__filter-count">{{ formatNumber(g.request_count) }}</span>
       </button>
     </div>
 
-    <div v-else-if="(props.byPlatform?.length ?? 0) > 0" class="mb-3 flex flex-wrap gap-2">
+    <div v-else-if="(props.byPlatform?.length ?? 0) > 0" class="ops-chart-card__filters">
       <button
         v-for="p in props.byPlatform"
         :key="p.platform"
         type="button"
-        class="ops-chart-card__filter-chip inline-flex items-center gap-2 text-[11px] font-semibold"
+        class="ops-chart-card__filter-chip"
         @click="emit('selectPlatform', p.platform)"
       >
-        <span class="uppercase">{{ p.platform }}</span>
+        <span class="ops-chart-card__filter-chip-platform">{{ p.platform }}</span>
         <span class="ops-chart-card__filter-count">{{ formatNumber(p.request_count) }}</span>
       </button>
     </div>
 
-    <div class="min-h-0 flex-1">
+    <div class="ops-chart-card__content">
       <Line v-if="state === 'ready' && chartData" ref="throughputChartRef" :data="chartData" :options="options" />
-      <div v-else class="flex h-full items-center justify-center">
-        <div v-if="state === 'loading'" class="ops-chart-card__placeholder animate-pulse text-sm">{{ t('common.loading') }}</div>
+      <div v-else class="ops-chart-card__state">
+        <div v-if="state === 'loading'" class="ops-chart-card__placeholder ops-chart-card__placeholder--loading">{{ t('common.loading') }}</div>
         <EmptyState v-else :title="t('common.noData')" :description="t('admin.ops.charts.emptyRequest')" />
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.ops-chart-card__filter-chip {
-  padding: calc(var(--theme-button-padding-y) * 0.45) calc(var(--theme-button-padding-x) * 0.75);
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--theme-card-border) 86%, transparent);
-  background: color-mix(in srgb, var(--theme-surface) 92%, var(--theme-surface-soft));
-  color: var(--theme-page-text);
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.ops-chart-card__filter-chip:hover {
-  border-color: color-mix(in srgb, var(--theme-accent) 20%, var(--theme-card-border));
-  background: color-mix(in srgb, var(--theme-accent-soft) 72%, var(--theme-surface));
-  color: var(--theme-accent);
-}
-
-.ops-chart-card__filter-count {
-  color: color-mix(in srgb, var(--theme-page-muted) 78%, transparent);
-}
-
-.ops-chart-card__filter-chip-label {
-  max-width: calc(var(--theme-ops-table-min-width) * 0.225);
-}
-</style>

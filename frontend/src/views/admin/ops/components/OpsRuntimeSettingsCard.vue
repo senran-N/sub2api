@@ -262,63 +262,71 @@ onMounted(() => {
 
 <template>
   <div class="ops-runtime-settings-card">
-    <div class="mb-4 flex items-start justify-between gap-4">
-      <div>
-        <h3 class="ops-runtime-settings-card__title text-sm font-bold">{{ t('admin.ops.runtime.title') }}</h3>
-        <p class="ops-runtime-settings-card__subtitle mt-1 text-xs">{{ t('admin.ops.runtime.description') }}</p>
+    <div class="ops-runtime-settings-card__header">
+      <div class="ops-runtime-settings-card__header-copy">
+        <h3 class="ops-runtime-settings-card__title ops-runtime-settings-card__title--section">{{ t('admin.ops.runtime.title') }}</h3>
+        <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--hint">{{ t('admin.ops.runtime.description') }}</p>
       </div>
       <button
-        class="ops-runtime-settings-card__refresh flex items-center gap-1.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        class="ops-runtime-settings-card__refresh"
         :disabled="loading || saving"
         @click="loadSettings"
       >
-        <svg class="h-3.5 w-3.5" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="ops-runtime-settings-card__refresh-icon" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
         {{ t('common.refresh') }}
       </button>
     </div>
 
-    <div v-if="!alertSettings" class="ops-runtime-settings-card__subtitle text-sm">
+    <div v-if="!alertSettings" class="ops-runtime-settings-card__state">
       <span v-if="loading">{{ t('admin.ops.runtime.loading') }}</span>
       <span v-else>{{ t('admin.ops.runtime.noData') }}</span>
     </div>
 
-    <div v-else class="space-y-6">
+    <div v-else class="ops-runtime-settings-card__content">
       <div class="ops-runtime-settings-card__panel">
-        <div class="mb-3 flex items-center justify-between">
-          <h4 class="ops-runtime-settings-card__title text-sm font-semibold">{{ t('admin.ops.runtime.alertTitle') }}</h4>
+        <div class="ops-runtime-settings-card__panel-header">
+          <h4 class="ops-runtime-settings-card__title ops-runtime-settings-card__title--section">{{ t('admin.ops.runtime.alertTitle') }}</h4>
           <button class="btn btn-sm btn-secondary" @click="openAlertEditor">{{ t('common.edit') }}</button>
         </div>
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div class="ops-runtime-settings-card__meta text-xs">
+        <div class="ops-runtime-settings-card__meta-grid">
+          <div class="ops-runtime-settings-card__meta">
             {{ t('admin.ops.runtime.evalIntervalSeconds') }}:
-            <span class="ops-runtime-settings-card__meta-value ml-1 font-medium">{{ alertSettings.evaluation_interval_seconds }}s</span>
+            <span class="ops-runtime-settings-card__meta-value ops-runtime-settings-card__meta-value--inline">{{ alertSettings.evaluation_interval_seconds }}s</span>
           </div>
           <div
             v-if="alertSettings.silencing?.enabled && alertSettings.silencing.global_until_rfc3339"
-            class="ops-runtime-settings-card__meta text-xs md:col-span-2"
+            class="ops-runtime-settings-card__meta ops-runtime-settings-card__meta--wide"
           >
             {{ t('admin.ops.runtime.silencing.globalUntil') }}:
-            <span class="ops-runtime-settings-card__meta-value ml-1 font-mono">{{ alertSettings.silencing.global_until_rfc3339 }}</span>
+            <span class="ops-runtime-settings-card__meta-value ops-runtime-settings-card__meta-value--inline ops-runtime-settings-card__meta-value--mono">
+              {{ alertSettings.silencing.global_until_rfc3339 }}
+            </span>
           </div>
 
-          <details class="col-span-1 md:col-span-2">
-            <summary class="ops-runtime-settings-card__summary cursor-pointer text-xs font-medium">
+          <details class="ops-runtime-settings-card__details ops-runtime-settings-card__details--wide">
+            <summary class="ops-runtime-settings-card__summary">
               {{ t('admin.ops.runtime.showAdvancedDeveloperSettings') }}
             </summary>
-            <div class="ops-runtime-settings-card__advanced-grid mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div class="ops-runtime-settings-card__subtitle text-xs">
+            <div class="ops-runtime-settings-card__advanced-grid">
+              <div class="ops-runtime-settings-card__subtitle">
                 {{ t('admin.ops.runtime.lockEnabled') }}:
-                <span class="ops-runtime-settings-card__advanced-value ml-1 font-mono">{{ alertSettings.distributed_lock.enabled }}</span>
+                <span class="ops-runtime-settings-card__advanced-value ops-runtime-settings-card__advanced-value--inline ops-runtime-settings-card__advanced-value--mono">
+                  {{ alertSettings.distributed_lock.enabled }}
+                </span>
               </div>
-              <div class="ops-runtime-settings-card__subtitle text-xs">
+              <div class="ops-runtime-settings-card__subtitle">
                 {{ t('admin.ops.runtime.lockKey') }}:
-                <span class="ops-runtime-settings-card__advanced-value ml-1 font-mono">{{ alertSettings.distributed_lock.key }}</span>
+                <span class="ops-runtime-settings-card__advanced-value ops-runtime-settings-card__advanced-value--inline ops-runtime-settings-card__advanced-value--mono">
+                  {{ alertSettings.distributed_lock.key }}
+                </span>
               </div>
-              <div class="ops-runtime-settings-card__subtitle text-xs">
+              <div class="ops-runtime-settings-card__subtitle">
                 {{ t('admin.ops.runtime.lockTTLSeconds') }}:
-                <span class="ops-runtime-settings-card__advanced-value ml-1 font-mono">{{ alertSettings.distributed_lock.ttl_seconds }}s</span>
+                <span class="ops-runtime-settings-card__advanced-value ops-runtime-settings-card__advanced-value--inline ops-runtime-settings-card__advanced-value--mono">
+                  {{ alertSettings.distributed_lock.ttl_seconds }}s
+                </span>
               </div>
             </div>
           </details>
@@ -328,19 +336,19 @@ onMounted(() => {
   </div>
 
   <BaseDialog :show="showAlertEditor" :title="t('admin.ops.runtime.alertTitle')" width="extra-wide" @close="showAlertEditor = false">
-    <div v-if="draftAlert" class="space-y-4">
+    <div v-if="draftAlert" class="ops-runtime-settings-card__dialog-body">
       <div
         v-if="!alertValidation.valid"
-        class="ops-runtime-settings-card__notice ops-runtime-settings-card__notice--warning border text-xs"
+        class="ops-runtime-settings-card__notice ops-runtime-settings-card__notice--warning"
       >
-        <div class="font-bold">{{ t('admin.ops.runtime.validation.title') }}</div>
-        <ul class="mt-1 list-disc space-y-1 pl-4">
+        <div class="ops-runtime-settings-card__title ops-runtime-settings-card__title--compact">{{ t('admin.ops.runtime.validation.title') }}</div>
+        <ul class="ops-runtime-settings-card__validation-list">
           <li v-for="msg in alertValidation.errors" :key="msg">{{ msg }}</li>
         </ul>
       </div>
 
-      <div>
-        <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.evalIntervalSeconds') }}</div>
+      <div class="ops-runtime-settings-card__field">
+        <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.evalIntervalSeconds') }}</div>
         <input
           v-model.number="draftAlert.evaluation_interval_seconds"
           type="number"
@@ -349,16 +357,16 @@ onMounted(() => {
           class="input"
           :aria-invalid="!alertValidation.valid"
         />
-        <p class="ops-runtime-settings-card__subtitle mt-1 text-xs">{{ t('admin.ops.runtime.evalIntervalHint') }}</p>
+        <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--hint">{{ t('admin.ops.runtime.evalIntervalHint') }}</p>
       </div>
 
       <div class="ops-runtime-settings-card__panel">
-        <div class="ops-runtime-settings-card__title mb-2 text-sm font-semibold">{{ t('admin.ops.runtime.metricThresholds') }}</div>
-        <p class="ops-runtime-settings-card__subtitle mb-4 text-xs">{{ t('admin.ops.runtime.metricThresholdsHint') }}</p>
+        <div class="ops-runtime-settings-card__title ops-runtime-settings-card__title--section">{{ t('admin.ops.runtime.metricThresholds') }}</div>
+        <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--section">{{ t('admin.ops.runtime.metricThresholdsHint') }}</p>
 
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.slaMinPercent') }}</div>
+        <div class="ops-runtime-settings-card__fields-grid">
+          <div class="ops-runtime-settings-card__field">
+            <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.slaMinPercent') }}</div>
             <input
               v-model.number="draftAlert.thresholds.sla_percent_min"
               type="number"
@@ -368,13 +376,11 @@ onMounted(() => {
               class="input"
               placeholder="99.5"
             />
-            <p class="ops-runtime-settings-card__subtitle mt-1 text-xs">{{ t('admin.ops.runtime.slaMinPercentHint') }}</p>
+            <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--hint">{{ t('admin.ops.runtime.slaMinPercentHint') }}</p>
           </div>
 
-
-
-          <div>
-            <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.ttftP99MaxMs') }}</div>
+          <div class="ops-runtime-settings-card__field">
+            <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.ttftP99MaxMs') }}</div>
             <input
               v-model.number="draftAlert.thresholds.ttft_p99_ms_max"
               type="number"
@@ -383,11 +389,11 @@ onMounted(() => {
               class="input"
               placeholder="500"
             />
-            <p class="ops-runtime-settings-card__subtitle mt-1 text-xs">{{ t('admin.ops.runtime.ttftP99MaxMsHint') }}</p>
+            <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--hint">{{ t('admin.ops.runtime.ttftP99MaxMsHint') }}</p>
           </div>
 
-          <div>
-            <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.requestErrorRateMaxPercent') }}</div>
+          <div class="ops-runtime-settings-card__field">
+            <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.requestErrorRateMaxPercent') }}</div>
             <input
               v-model.number="draftAlert.thresholds.request_error_rate_percent_max"
               type="number"
@@ -397,11 +403,13 @@ onMounted(() => {
               class="input"
               placeholder="5"
             />
-            <p class="ops-runtime-settings-card__subtitle mt-1 text-xs">{{ t('admin.ops.runtime.requestErrorRateMaxPercentHint') }}</p>
+            <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--hint">
+              {{ t('admin.ops.runtime.requestErrorRateMaxPercentHint') }}
+            </p>
           </div>
 
-          <div>
-            <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.upstreamErrorRateMaxPercent') }}</div>
+          <div class="ops-runtime-settings-card__field">
+            <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.upstreamErrorRateMaxPercent') }}</div>
             <input
               v-model.number="draftAlert.thresholds.upstream_error_rate_percent_max"
               type="number"
@@ -411,33 +419,35 @@ onMounted(() => {
               class="input"
               placeholder="5"
             />
-            <p class="ops-runtime-settings-card__subtitle mt-1 text-xs">{{ t('admin.ops.runtime.upstreamErrorRateMaxPercentHint') }}</p>
+            <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--hint">
+              {{ t('admin.ops.runtime.upstreamErrorRateMaxPercentHint') }}
+            </p>
           </div>
         </div>
       </div>
 
       <div class="ops-runtime-settings-card__panel">
-        <div class="ops-runtime-settings-card__title mb-2 text-sm font-semibold">{{ t('admin.ops.runtime.silencing.title') }}</div>
+        <div class="ops-runtime-settings-card__title ops-runtime-settings-card__title--section">{{ t('admin.ops.runtime.silencing.title') }}</div>
 
-        <label class="ops-runtime-settings-card__toggle-label inline-flex items-center gap-2 text-sm">
-          <input v-model="draftAlert.silencing.enabled" type="checkbox" class="ops-runtime-settings-card__checkbox h-4 w-4 rounded" />
+        <label class="ops-runtime-settings-card__toggle">
+          <input v-model="draftAlert.silencing.enabled" type="checkbox" class="ops-runtime-settings-card__checkbox" />
           <span>{{ t('admin.ops.runtime.silencing.enabled') }}</span>
         </label>
 
-        <div v-if="draftAlert.silencing.enabled" class="mt-4 space-y-4">
-          <div>
-            <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.globalUntil') }}</div>
+        <div v-if="draftAlert.silencing.enabled" class="ops-runtime-settings-card__silencing-body">
+          <div class="ops-runtime-settings-card__field">
+            <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.silencing.globalUntil') }}</div>
             <input
               v-model="draftAlert.silencing.global_until_rfc3339"
               type="text"
-              class="input font-mono text-sm"
-                      placeholder="2026-01-05T00:00:00Z"
+              class="input ops-runtime-settings-card__input--mono"
+              placeholder="2026-01-05T00:00:00Z"
             />
-            <p class="ops-runtime-settings-card__subtitle mt-1 text-xs">{{ t('admin.ops.runtime.silencing.untilHint') }}</p>
+            <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--hint">{{ t('admin.ops.runtime.silencing.untilHint') }}</p>
           </div>
 
-          <div>
-            <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.reason') }}</div>
+          <div class="ops-runtime-settings-card__field">
+            <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.silencing.reason') }}</div>
             <input
               v-model="draftAlert.silencing.global_reason"
               type="text"
@@ -446,69 +456,73 @@ onMounted(() => {
             />
           </div>
 
-          <div class="ops-runtime-settings-card__subpanel border">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <div class="ops-runtime-settings-card__title text-xs font-bold">{{ t('admin.ops.runtime.silencing.entries.title') }}</div>
-                <p class="ops-runtime-settings-card__subtitle text-[11px]">{{ t('admin.ops.runtime.silencing.entries.hint') }}</p>
+          <div class="ops-runtime-settings-card__subpanel">
+            <div class="ops-runtime-settings-card__subpanel-header">
+              <div class="ops-runtime-settings-card__header-copy">
+                <div class="ops-runtime-settings-card__title ops-runtime-settings-card__title--compact">
+                  {{ t('admin.ops.runtime.silencing.entries.title') }}
+                </div>
+                <p class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--micro">
+                  {{ t('admin.ops.runtime.silencing.entries.hint') }}
+                </p>
               </div>
               <button class="btn btn-sm btn-secondary" type="button" @click="addSilenceEntry">
                 {{ t('admin.ops.runtime.silencing.entries.add') }}
               </button>
             </div>
 
-            <div v-if="!draftAlert.silencing.entries?.length" class="ops-runtime-settings-card__empty mt-3 text-xs">
+            <div v-if="!draftAlert.silencing.entries?.length" class="ops-runtime-settings-card__empty">
               {{ t('admin.ops.runtime.silencing.entries.empty') }}
             </div>
 
-            <div v-else class="mt-4 space-y-4">
+            <div v-else class="ops-runtime-settings-card__entries">
               <div
                 v-for="(entry, idx) in draftAlert.silencing.entries"
                 :key="idx"
-                class="ops-runtime-settings-card__entry border"
+                class="ops-runtime-settings-card__entry"
               >
-                <div class="mb-3 flex items-center justify-between">
-                  <div class="ops-runtime-settings-card__title text-xs font-bold">
+                <div class="ops-runtime-settings-card__entry-header">
+                  <div class="ops-runtime-settings-card__title ops-runtime-settings-card__title--compact">
                     {{ t('admin.ops.runtime.silencing.entries.entryTitle', { n: idx + 1 }) }}
                   </div>
                   <button class="btn btn-sm btn-danger" type="button" @click="removeSilenceEntry(idx)">{{ t('common.delete') }}</button>
                 </div>
 
-                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div>
-                    <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.entries.ruleId') }}</div>
+                <div class="ops-runtime-settings-card__fields-grid">
+                  <div class="ops-runtime-settings-card__field">
+                    <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.silencing.entries.ruleId') }}</div>
                     <input
                       :value="typeof getSilenceEntryRuleId(entry) === 'number' ? String(getSilenceEntryRuleId(entry)) : ''"
                       type="text"
-                      class="input font-mono text-sm"
+                      class="input ops-runtime-settings-card__input--mono"
                       :placeholder="t('admin.ops.runtime.silencing.entries.ruleIdPlaceholder')"
                       @input="updateSilenceEntryRuleId(idx, ($event.target as HTMLInputElement).value)"
                     />
                   </div>
 
-                  <div>
-                    <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.entries.severities') }}</div>
+                  <div class="ops-runtime-settings-card__field">
+                    <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.silencing.entries.severities') }}</div>
                     <input
                       :value="getSilenceEntrySeverities(entry).join(', ')"
                       type="text"
-                      class="input font-mono text-sm"
+                      class="input ops-runtime-settings-card__input--mono"
                       :placeholder="t('admin.ops.runtime.silencing.entries.severitiesPlaceholder')"
                       @input="updateSilenceEntrySeverities(idx, ($event.target as HTMLInputElement).value)"
                     />
                   </div>
 
-                  <div>
-                    <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.entries.until') }}</div>
+                  <div class="ops-runtime-settings-card__field">
+                    <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.silencing.entries.until') }}</div>
                     <input
                       v-model="entry.until_rfc3339"
                       type="text"
-                      class="input font-mono text-sm"
-              placeholder="2026-01-05T00:00:00Z"
+                      class="input ops-runtime-settings-card__input--mono"
+                      placeholder="2026-01-05T00:00:00Z"
                     />
                   </div>
 
-                  <div>
-                    <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.silencing.entries.reason') }}</div>
+                  <div class="ops-runtime-settings-card__field">
+                    <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.silencing.entries.reason') }}</div>
                     <input
                       v-model="entry.reason"
                       type="text"
@@ -523,32 +537,38 @@ onMounted(() => {
         </div>
       </div>
 
-      <details class="ops-runtime-settings-card__advanced border">
-        <summary class="ops-runtime-settings-card__subtitle cursor-pointer text-xs font-medium">{{ t('admin.ops.runtime.advancedSettingsSummary') }}</summary>
-        <div class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label class="ops-runtime-settings-card__toggle-label inline-flex items-center gap-2 text-xs">
-              <input v-model="draftAlert.distributed_lock.enabled" type="checkbox" class="ops-runtime-settings-card__checkbox h-4 w-4 rounded" />
+      <details class="ops-runtime-settings-card__advanced">
+        <summary class="ops-runtime-settings-card__summary">{{ t('admin.ops.runtime.advancedSettingsSummary') }}</summary>
+        <div class="ops-runtime-settings-card__fields-grid ops-runtime-settings-card__fields-grid--advanced">
+          <div class="ops-runtime-settings-card__field">
+            <label class="ops-runtime-settings-card__toggle">
+              <input v-model="draftAlert.distributed_lock.enabled" type="checkbox" class="ops-runtime-settings-card__checkbox" />
               <span>{{ t('admin.ops.runtime.lockEnabled') }}</span>
             </label>
           </div>
-          <div class="md:col-span-2">
-            <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.lockKey') }}</div>
-            <input v-model="draftAlert.distributed_lock.key" type="text" class="input text-xs font-mono" />
-            <p v-if="draftAlert.distributed_lock.enabled" class="ops-runtime-settings-card__subtitle mt-1 text-[11px]">
+          <div class="ops-runtime-settings-card__field ops-runtime-settings-card__field--wide">
+            <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.lockKey') }}</div>
+            <input v-model="draftAlert.distributed_lock.key" type="text" class="input ops-runtime-settings-card__input--mono ops-runtime-settings-card__input--compact" />
+            <p v-if="draftAlert.distributed_lock.enabled" class="ops-runtime-settings-card__subtitle ops-runtime-settings-card__subtitle--micro">
               {{ t('admin.ops.runtime.validation.lockKeyHint', { prefix: 'ops:' }) }}
             </p>
           </div>
-          <div>
-            <div class="ops-runtime-settings-card__field-label mb-1 text-xs font-medium">{{ t('admin.ops.runtime.lockTTLSeconds') }}</div>
-            <input v-model.number="draftAlert.distributed_lock.ttl_seconds" type="number" min="1" max="86400" class="input text-xs font-mono" />
+          <div class="ops-runtime-settings-card__field">
+            <div class="ops-runtime-settings-card__field-label">{{ t('admin.ops.runtime.lockTTLSeconds') }}</div>
+            <input
+              v-model.number="draftAlert.distributed_lock.ttl_seconds"
+              type="number"
+              min="1"
+              max="86400"
+              class="input ops-runtime-settings-card__input--mono ops-runtime-settings-card__input--compact"
+            />
           </div>
         </div>
       </details>
     </div>
 
     <template #footer>
-      <div class="flex justify-end gap-2">
+      <div class="ops-runtime-settings-card__footer">
         <button class="btn btn-secondary" @click="showAlertEditor = false">{{ t('common.cancel') }}</button>
         <button class="btn btn-primary" :disabled="saving || !alertValidation.valid" @click="saveAlertSettings">
           {{ saving ? t('common.saving') : t('common.save') }}
@@ -576,15 +596,112 @@ onMounted(() => {
 .ops-runtime-settings-card__subtitle,
 .ops-runtime-settings-card__meta,
 .ops-runtime-settings-card__field-label,
-.ops-runtime-settings-card__toggle-label {
+.ops-runtime-settings-card__toggle,
+.ops-runtime-settings-card__state {
   color: var(--theme-page-muted);
 }
 
+.ops-runtime-settings-card__header,
+.ops-runtime-settings-card__panel-header,
+.ops-runtime-settings-card__subpanel-header,
+.ops-runtime-settings-card__entry-header,
+.ops-runtime-settings-card__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--theme-ops-runtime-header-gap);
+}
+
+.ops-runtime-settings-card__header-copy,
+.ops-runtime-settings-card__field,
+.ops-runtime-settings-card__dialog-body,
+.ops-runtime-settings-card__content,
+.ops-runtime-settings-card__silencing-body,
+.ops-runtime-settings-card__entries {
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-runtime-settings-card__header-copy,
+.ops-runtime-settings-card__field {
+  gap: var(--theme-ops-runtime-field-gap);
+}
+
+.ops-runtime-settings-card__dialog-body,
+.ops-runtime-settings-card__silencing-body {
+  gap: var(--theme-ops-runtime-panel-gap);
+}
+
+.ops-runtime-settings-card__content {
+  gap: var(--theme-ops-runtime-section-gap);
+}
+
+.ops-runtime-settings-card__entries {
+  margin-top: var(--theme-ops-runtime-panel-gap);
+  gap: var(--theme-ops-runtime-entry-gap);
+}
+
+.ops-runtime-settings-card__header {
+  margin-bottom: var(--theme-ops-runtime-panel-gap);
+}
+
+.ops-runtime-settings-card__panel-header,
+.ops-runtime-settings-card__subpanel-header,
+.ops-runtime-settings-card__entry-header {
+  margin-bottom: var(--theme-ops-runtime-panel-gap);
+}
+
+.ops-runtime-settings-card__title--section {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.ops-runtime-settings-card__title--compact {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ops-runtime-settings-card__subtitle {
+  font-size: 0.75rem;
+}
+
+.ops-runtime-settings-card__subtitle--hint {
+  margin-top: var(--theme-ops-runtime-field-gap);
+}
+
+.ops-runtime-settings-card__subtitle--section {
+  margin-top: calc(var(--theme-ops-runtime-field-gap) * 2);
+  margin-bottom: var(--theme-ops-runtime-panel-gap);
+}
+
+.ops-runtime-settings-card__subtitle--micro {
+  font-size: 0.6875rem;
+}
+
+.ops-runtime-settings-card__state {
+  font-size: 0.875rem;
+}
+
 .ops-runtime-settings-card__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--theme-ops-runtime-toggle-gap) * 0.75);
   padding: calc(var(--theme-button-padding-y) * 0.6) calc(var(--theme-button-padding-x) * 0.75);
   border-radius: var(--theme-button-radius);
   background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
   color: var(--theme-page-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.ops-runtime-settings-card__refresh-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.ops-runtime-settings-card__refresh {
+  align-self: flex-start;
 }
 
 .ops-runtime-settings-card__refresh:hover {
@@ -599,10 +716,59 @@ onMounted(() => {
   background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
 }
 
+.ops-runtime-settings-card__meta-grid,
+.ops-runtime-settings-card__fields-grid,
+.ops-runtime-settings-card__advanced-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--theme-ops-runtime-grid-gap);
+}
+
+.ops-runtime-settings-card__advanced-grid {
+  margin-top: calc(var(--theme-ops-runtime-field-gap) * 2);
+}
+
+.ops-runtime-settings-card__fields-grid--advanced {
+  margin-top: var(--theme-ops-runtime-panel-gap);
+}
+
+.ops-runtime-settings-card__meta,
+.ops-runtime-settings-card__field-label {
+  font-size: 0.75rem;
+}
+
+.ops-runtime-settings-card__field-label {
+  font-weight: 500;
+}
+
+.ops-runtime-settings-card__meta-value--inline,
+.ops-runtime-settings-card__advanced-value--inline {
+  margin-left: 0.25rem;
+}
+
+.ops-runtime-settings-card__meta-value--mono,
+.ops-runtime-settings-card__advanced-value--mono,
+.ops-runtime-settings-card__input--mono {
+  font-family: var(--theme-font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace);
+}
+
+.ops-runtime-settings-card__input--mono {
+  font-size: 0.875rem;
+}
+
+.ops-runtime-settings-card__input--compact {
+  font-size: 0.75rem;
+}
+
+.ops-runtime-settings-card__entry,
+.ops-runtime-settings-card__advanced {
+  border: 1px solid color-mix(in srgb, var(--theme-page-border) 74%, transparent);
+}
+
 .ops-runtime-settings-card__subpanel {
   padding: var(--theme-ops-panel-padding);
   border-radius: var(--theme-select-panel-radius);
-  border-color: color-mix(in srgb, var(--theme-page-border) 74%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-page-border) 74%, transparent);
   background: var(--theme-surface);
 }
 
@@ -614,7 +780,12 @@ onMounted(() => {
 }
 
 .ops-runtime-settings-card__summary {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
   color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .ops-runtime-settings-card__summary:hover {
@@ -624,7 +795,9 @@ onMounted(() => {
 .ops-runtime-settings-card__notice {
   padding: calc(var(--theme-ops-panel-padding) * 0.75);
   border-radius: var(--theme-button-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
   border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+  font-size: 0.75rem;
 }
 
 .ops-runtime-settings-card__notice--warning {
@@ -632,7 +805,27 @@ onMounted(() => {
   color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
 }
 
+.ops-runtime-settings-card__validation-list {
+  margin-top: var(--theme-ops-runtime-field-gap);
+  padding-left: 1rem;
+  list-style: disc;
+}
+
+.ops-runtime-settings-card__validation-list li + li {
+  margin-top: var(--theme-ops-runtime-field-gap);
+}
+
+.ops-runtime-settings-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-ops-runtime-toggle-gap);
+  font-size: 0.875rem;
+}
+
 .ops-runtime-settings-card__checkbox {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
   border-color: color-mix(in srgb, var(--theme-input-border) 82%, transparent);
   color: var(--theme-accent);
 }
@@ -644,5 +837,24 @@ onMounted(() => {
 
 .ops-runtime-settings-card__advanced > summary {
   padding: 0;
+}
+
+.ops-runtime-settings-card__footer {
+  justify-content: flex-end;
+  gap: var(--theme-ops-runtime-footer-gap);
+}
+
+@media (min-width: 768px) {
+  .ops-runtime-settings-card__meta-grid,
+  .ops-runtime-settings-card__fields-grid,
+  .ops-runtime-settings-card__advanced-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-runtime-settings-card__meta--wide,
+  .ops-runtime-settings-card__details--wide,
+  .ops-runtime-settings-card__field--wide {
+    grid-column: span 2;
+  }
 }
 </style>

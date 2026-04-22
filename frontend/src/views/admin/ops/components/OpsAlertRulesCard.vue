@@ -643,22 +643,22 @@ function cancelDelete() {
 
 <template>
   <div class="ops-alert-rules-card">
-    <div class="mb-4 flex items-start justify-between gap-4">
-      <div>
-        <h3 class="ops-alert-rules-card__title text-sm font-bold">{{ t('admin.ops.alertRules.title') }}</h3>
-        <p class="ops-alert-rules-card__description mt-1 text-xs">{{ t('admin.ops.alertRules.description') }}</p>
+    <div class="ops-alert-rules-card__header">
+      <div class="ops-alert-rules-card__header-copy">
+        <h3 class="ops-alert-rules-card__title">{{ t('admin.ops.alertRules.title') }}</h3>
+        <p class="ops-alert-rules-card__description ops-alert-rules-card__description--header">{{ t('admin.ops.alertRules.description') }}</p>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="ops-alert-rules-card__header-actions">
         <button class="btn btn-sm btn-primary" :disabled="loading || saving || creatingPresets || deleting" @click="openCreate">
           {{ t('admin.ops.alertRules.create') }}
         </button>
         <button
-          class="ops-alert-rules-card__refresh btn btn-secondary btn-sm flex items-center gap-1.5"
+          class="ops-alert-rules-card__refresh btn btn-secondary btn-sm"
           :disabled="loading || saving || creatingPresets || deleting"
           @click="load()"
         >
-          <svg class="h-3.5 w-3.5" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="ops-alert-rules-card__refresh-icon" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           {{ t('common.refresh') }}
@@ -666,11 +666,11 @@ function cancelDelete() {
       </div>
     </div>
 
-    <div class="ops-alert-rules-card__presets mb-4">
-      <div class="mb-2 flex items-center justify-between gap-3">
+    <div class="ops-alert-rules-card__presets">
+      <div class="ops-alert-rules-card__presets-header">
         <div>
-          <div class="ops-alert-rules-card__text-strong text-xs font-bold">{{ t('admin.ops.alertRules.presets.title') }}</div>
-          <div class="ops-alert-rules-card__description mt-0.5 text-[11px]">
+          <div class="ops-alert-rules-card__text-strong ops-alert-rules-card__text-strong--compact">{{ t('admin.ops.alertRules.presets.title') }}</div>
+          <div class="ops-alert-rules-card__description ops-alert-rules-card__description--compact">
             {{ t('admin.ops.alertRules.presets.description') }}
           </div>
         </div>
@@ -682,40 +682,40 @@ function cancelDelete() {
           {{ t('admin.ops.alertRules.presets.createAll') }}
         </button>
       </div>
-      <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+      <div class="ops-alert-rules-card__presets-grid">
         <button
           v-for="preset in runtimeAlertPresets"
           :key="preset.key"
           type="button"
-          class="ops-alert-rules-card__preset text-left"
+          class="ops-alert-rules-card__preset"
           @click="openPreset(preset)"
         >
-          <div class="flex items-start justify-between gap-2">
-            <div class="ops-alert-rules-card__text-strong text-xs font-bold">{{ preset.name }}</div>
+          <div class="ops-alert-rules-card__preset-header">
+            <div class="ops-alert-rules-card__text-strong ops-alert-rules-card__text-strong--compact">{{ preset.name }}</div>
             <span
               v-if="existingRuntimePresetKeys.has(preset.key)"
-              class="ops-alert-rules-card__preset-badge text-[10px] font-bold"
+              class="ops-alert-rules-card__preset-badge"
             >
               {{ t('admin.ops.alertRules.presets.created') }}
             </span>
           </div>
-          <div class="ops-alert-rules-card__description mt-1 text-[11px]">{{ preset.description }}</div>
+          <div class="ops-alert-rules-card__description ops-alert-rules-card__description--compact ops-alert-rules-card__description--preset">{{ preset.description }}</div>
         </button>
       </div>
     </div>
 
-    <div v-if="loading" class="ops-alert-rules-card__loading ops-alert-rules-card__description text-center text-sm">
+    <div v-if="loading" class="ops-alert-rules-card__loading ops-alert-rules-card__description ops-alert-rules-card__state">
       {{ t('admin.ops.alertRules.loading') }}
     </div>
 
-    <div v-else-if="sortedRules.length === 0" class="ops-alert-rules-card__empty text-center text-sm">
-      <div class="ops-alert-rules-card__text-strong text-sm font-bold">
+    <div v-else-if="sortedRules.length === 0" class="ops-alert-rules-card__empty">
+      <div class="ops-alert-rules-card__text-strong ops-alert-rules-card__text-strong--title">
         {{ t('admin.ops.alertRules.emptyState.title') }}
       </div>
-      <p class="ops-alert-rules-card__description mx-auto mt-2 max-w-2xl text-xs">
+      <p class="ops-alert-rules-card__description ops-alert-rules-card__description--empty">
         {{ t('admin.ops.alertRules.emptyState.description') }}
       </p>
-      <div class="mt-4 flex flex-wrap justify-center gap-2">
+      <div class="ops-alert-rules-card__empty-actions">
         <button
           class="btn btn-sm btn-primary"
           :disabled="creatingPresets || missingRuntimeAlertPresets.length === 0"
@@ -729,24 +729,24 @@ function cancelDelete() {
       </div>
     </div>
 
-    <div v-else class="ops-alert-rules-card__table-shell overflow-hidden">
-      <div class="ops-alert-rules-card__table-scroll overflow-y-auto">
-        <table class="ops-alert-rules-card__table min-w-full">
-          <thead class="ops-alert-rules-card__table-head sticky top-0 z-10">
+    <div v-else class="ops-alert-rules-card__table-shell">
+      <div class="ops-alert-rules-card__table-scroll">
+        <table class="ops-alert-rules-card__table">
+          <thead class="ops-alert-rules-card__table-head">
             <tr>
-              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
+              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular">
                 {{ t('admin.ops.alertRules.table.name') }}
               </th>
-              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
+              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular">
                 {{ t('admin.ops.alertRules.table.metric') }}
               </th>
-              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
+              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular">
                 {{ t('admin.ops.alertRules.table.severity') }}
               </th>
-              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular text-left text-[11px] font-bold uppercase tracking-wider">
+              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular">
                 {{ t('admin.ops.alertRules.table.enabled') }}
               </th>
-              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular text-right text-[11px] font-bold uppercase tracking-wider">
+              <th class="ops-alert-rules-card__table-header ops-alert-rules-card__table-header--regular ops-alert-rules-card__table-header--end">
                 {{ t('admin.ops.alertRules.table.actions') }}
               </th>
             </tr>
@@ -754,28 +754,28 @@ function cancelDelete() {
           <tbody class="ops-alert-rules-card__table-body">
             <tr v-for="row in sortedRules" :key="row.id" class="ops-alert-rules-card__table-row">
               <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular">
-                <div class="ops-alert-rules-card__text-strong text-xs font-bold">{{ row.name }}</div>
-                <div v-if="row.description" class="ops-alert-rules-card__description mt-0.5 line-clamp-2 text-[11px]">
+                <div class="ops-alert-rules-card__text-strong ops-alert-rules-card__text-strong--compact">{{ row.name }}</div>
+                <div v-if="row.description" class="ops-alert-rules-card__description ops-alert-rules-card__description--clamped">
                   {{ row.description }}
                 </div>
-                <div v-if="row.updated_at" class="ops-alert-rules-card__text-soft mt-1 text-[10px]">
+                <div v-if="row.updated_at" class="ops-alert-rules-card__text-soft ops-alert-rules-card__text-soft--compact">
                   {{ formatDateTime(row.updated_at) }}
                 </div>
               </td>
-              <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular ops-alert-rules-card__text-body whitespace-nowrap text-xs">
-                <span class="font-mono">{{ row.metric_type }}</span>
-                <span class="ops-alert-rules-card__text-soft mx-1">{{ row.operator }}</span>
-                <span class="font-mono">{{ row.threshold }}</span>
+              <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular ops-alert-rules-card__text-body ops-alert-rules-card__table-cell--nowrap ops-alert-rules-card__table-cell--compact">
+                <span class="ops-alert-rules-card__mono">{{ row.metric_type }}</span>
+                <span class="ops-alert-rules-card__text-soft ops-alert-rules-card__text-soft--inline">{{ row.operator }}</span>
+                <span class="ops-alert-rules-card__mono">{{ row.threshold }}</span>
               </td>
-              <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular ops-alert-rules-card__text-body whitespace-nowrap text-xs font-bold">
+              <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular ops-alert-rules-card__text-body ops-alert-rules-card__table-cell--nowrap ops-alert-rules-card__table-cell--compact ops-alert-rules-card__text-body--strong">
                 {{ row.severity }}
               </td>
-              <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular ops-alert-rules-card__text-body whitespace-nowrap text-xs">
+              <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular ops-alert-rules-card__text-body ops-alert-rules-card__table-cell--nowrap ops-alert-rules-card__table-cell--compact">
                 {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
               </td>
-              <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular whitespace-nowrap text-right text-xs">
+              <td class="ops-alert-rules-card__table-cell ops-alert-rules-card__table-cell--regular ops-alert-rules-card__table-cell--nowrap ops-alert-rules-card__table-cell--end ops-alert-rules-card__table-cell--compact">
                 <button class="btn btn-sm btn-secondary" @click="openEdit(row)">{{ t('common.edit') }}</button>
-                <button class="ml-2 btn btn-sm btn-danger" @click="requestDelete(row)">{{ t('common.delete') }}</button>
+                <button class="ops-alert-rules-card__danger-action btn btn-sm btn-danger" @click="requestDelete(row)">{{ t('common.delete') }}</button>
               </td>
             </tr>
           </tbody>
@@ -789,21 +789,21 @@ function cancelDelete() {
       width="wide"
       @close="showEditor = false"
     >
-      <div class="space-y-4">
-        <div v-if="!editorValidation.valid" class="ops-alert-rules-card__validation text-xs">
-          <div class="font-bold">{{ t('admin.ops.alertRules.validation.title') }}</div>
-          <ul class="mt-1 list-disc pl-5">
+      <div class="ops-alert-rules-card__editor">
+        <div v-if="!editorValidation.valid" class="ops-alert-rules-card__validation">
+          <div class="ops-alert-rules-card__validation-title">{{ t('admin.ops.alertRules.validation.title') }}</div>
+          <ul class="ops-alert-rules-card__validation-list">
             <li v-for="e in editorValidation.errors" :key="e">{{ e }}</li>
           </ul>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div class="md:col-span-2">
+        <div class="ops-alert-rules-card__editor-grid">
+          <div class="ops-alert-rules-card__editor-field ops-alert-rules-card__editor-field--full">
             <label class="input-label">{{ t('admin.ops.alertRules.form.name') }}</label>
             <input v-model="draft!.name" class="input" type="text" />
           </div>
 
-          <div class="md:col-span-2">
+          <div class="ops-alert-rules-card__editor-field ops-alert-rules-card__editor-field--full">
             <label class="input-label">{{ t('admin.ops.alertRules.form.description') }}</label>
             <input v-model="draft!.description" class="input" type="text" />
           </div>
@@ -811,7 +811,7 @@ function cancelDelete() {
           <div>
             <label class="input-label">{{ t('admin.ops.alertRules.form.metric') }}</label>
             <Select v-model="draft!.metric_type" :options="metricOptions" />
-            <div v-if="selectedMetricDefinition" class="ops-alert-rules-card__description mt-1 space-y-0.5 text-xs">
+            <div v-if="selectedMetricDefinition" class="ops-alert-rules-card__description ops-alert-rules-card__description--hint">
               <p>{{ selectedMetricDefinition.description }}</p>
               <p>
                 {{
@@ -830,10 +830,10 @@ function cancelDelete() {
             <Select v-model="draft!.operator" :options="operatorOptions" />
           </div>
 
-          <div class="md:col-span-2">
+          <div class="ops-alert-rules-card__editor-field ops-alert-rules-card__editor-field--full">
             <label class="input-label">
               {{ t('admin.ops.alertRules.form.groupId') }}
-              <span v-if="isGroupMetricSelected" class="ops-alert-rules-card__required ml-1">*</span>
+              <span v-if="isGroupMetricSelected" class="ops-alert-rules-card__required">*</span>
             </label>
             <Select
               v-model="draftGroupId"
@@ -842,7 +842,7 @@ function cancelDelete() {
               :placeholder="t('admin.ops.alertRules.form.groupPlaceholder')"
               :error="isGroupMetricSelected && !draftGroupId"
             />
-            <p class="ops-alert-rules-card__description mt-1 text-xs">
+            <p class="ops-alert-rules-card__description ops-alert-rules-card__description--hint">
               {{ isGroupMetricSelected ? t('admin.ops.alertRules.hints.groupRequired') : t('admin.ops.alertRules.hints.groupOptional') }}
             </p>
           </div>
@@ -872,20 +872,20 @@ function cancelDelete() {
             <input v-model.number="draft!.cooldown_minutes" class="input" type="number" min="0" max="1440" />
           </div>
 
-          <div class="ops-alert-rules-card__toggle-row flex items-center justify-between md:col-span-2">
-            <span class="ops-alert-rules-card__text-body text-xs font-bold">{{ t('admin.ops.alertRules.form.enabled') }}</span>
-            <input v-model="draft!.enabled" type="checkbox" class="ops-alert-rules-card__checkbox h-4 w-4 rounded" />
+          <div class="ops-alert-rules-card__toggle-row ops-alert-rules-card__editor-field--full">
+            <span class="ops-alert-rules-card__text-body ops-alert-rules-card__text-body--strong">{{ t('admin.ops.alertRules.form.enabled') }}</span>
+            <input v-model="draft!.enabled" type="checkbox" class="ops-alert-rules-card__checkbox" />
           </div>
 
-          <div class="ops-alert-rules-card__toggle-row flex items-center justify-between md:col-span-2">
-            <span class="ops-alert-rules-card__text-body text-xs font-bold">{{ t('admin.ops.alertRules.form.notifyEmail') }}</span>
-            <input v-model="draft!.notify_email" type="checkbox" class="ops-alert-rules-card__checkbox h-4 w-4 rounded" />
+          <div class="ops-alert-rules-card__toggle-row ops-alert-rules-card__editor-field--full">
+            <span class="ops-alert-rules-card__text-body ops-alert-rules-card__text-body--strong">{{ t('admin.ops.alertRules.form.notifyEmail') }}</span>
+            <input v-model="draft!.notify_email" type="checkbox" class="ops-alert-rules-card__checkbox" />
           </div>
         </div>
       </div>
 
       <template #footer>
-        <div class="flex items-center justify-end gap-2">
+        <div class="ops-alert-rules-card__footer">
           <button class="btn btn-secondary" :disabled="saving" @click="showEditor = false">
             {{ t('common.cancel') }}
           </button>
@@ -922,34 +922,138 @@ function cancelDelete() {
   color: var(--theme-page-text);
 }
 
+.ops-alert-rules-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--theme-ops-alert-rules-header-gap);
+  margin-bottom: 1rem;
+}
+
+.ops-alert-rules-card__header-copy {
+  min-width: 0;
+}
+
+.ops-alert-rules-card__title {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
 .ops-alert-rules-card__description {
   color: var(--theme-page-muted);
+}
+
+.ops-alert-rules-card__description--header {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.ops-alert-rules-card__description--compact {
+  font-size: 0.6875rem;
+}
+
+.ops-alert-rules-card__description--preset {
+  margin-top: 0.25rem;
+}
+
+.ops-alert-rules-card__description--empty {
+  max-width: 42rem;
+  margin: var(--theme-ops-alert-rules-empty-gap) auto 0;
+  font-size: 0.75rem;
+}
+
+.ops-alert-rules-card__description--clamped {
+  margin-top: 0.125rem;
+  font-size: 0.6875rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ops-alert-rules-card__description--hint {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.ops-alert-rules-card__description--hint p + p {
+  margin-top: 0.125rem;
 }
 
 .ops-alert-rules-card__loading {
   padding-block: calc(var(--theme-ops-card-padding) * 1.5);
 }
 
+.ops-alert-rules-card__state {
+  text-align: center;
+  font-size: 0.875rem;
+}
+
 .ops-alert-rules-card__text-body {
   color: color-mix(in srgb, var(--theme-page-text) 80%, var(--theme-page-muted));
+}
+
+.ops-alert-rules-card__text-body--strong {
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .ops-alert-rules-card__text-soft {
   color: color-mix(in srgb, var(--theme-page-muted) 76%, transparent);
 }
 
+.ops-alert-rules-card__text-soft--compact {
+  margin-top: 0.25rem;
+  font-size: 0.625rem;
+}
+
+.ops-alert-rules-card__text-soft--inline {
+  margin-inline: 0.25rem;
+}
+
 .ops-alert-rules-card__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-ops-alert-rules-control-gap);
   box-shadow: var(--theme-card-shadow);
 }
 
+.ops-alert-rules-card__refresh-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.ops-alert-rules-card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-ops-alert-rules-control-gap);
+}
+
 .ops-alert-rules-card__presets {
+  margin-bottom: 1rem;
   padding: var(--theme-ops-panel-padding);
   border-radius: var(--theme-select-panel-radius);
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 70%, transparent);
   background: color-mix(in srgb, var(--theme-surface-soft) 90%, var(--theme-surface));
 }
 
+.ops-alert-rules-card__presets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-ops-alert-rules-panel-gap);
+  margin-bottom: 0.5rem;
+}
+
+.ops-alert-rules-card__presets-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--theme-ops-alert-rules-grid-gap);
+}
+
 .ops-alert-rules-card__preset {
+  text-align: left;
   padding: calc(var(--theme-ops-panel-padding) * 0.8);
   border-radius: var(--theme-button-radius);
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 64%, transparent);
@@ -963,11 +1067,20 @@ function cancelDelete() {
   transform: translateY(-1px);
 }
 
+.ops-alert-rules-card__preset-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .ops-alert-rules-card__preset-badge {
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
   background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 16%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 86%, var(--theme-page-text));
+  font-size: 0.625rem;
+  font-weight: 700;
 }
 
 .ops-alert-rules-card__empty {
@@ -976,9 +1089,19 @@ function cancelDelete() {
   border-radius: var(--theme-select-panel-radius);
   color: var(--theme-page-muted);
   background: color-mix(in srgb, var(--theme-surface-soft) 64%, var(--theme-surface));
+  text-align: center;
+}
+
+.ops-alert-rules-card__empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--theme-ops-alert-rules-control-gap);
+  margin-top: 1rem;
 }
 
 .ops-alert-rules-card__table-shell {
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
   border-radius: var(--theme-select-panel-radius);
   background: var(--theme-surface);
@@ -986,9 +1109,11 @@ function cancelDelete() {
 
 .ops-alert-rules-card__table-scroll {
   max-height: var(--theme-ops-table-max-height);
+  overflow-y: auto;
 }
 
 .ops-alert-rules-card__table {
+  width: 100%;
   min-width: var(--theme-ops-table-min-width);
 }
 
@@ -1001,10 +1126,23 @@ function cancelDelete() {
 
 .ops-alert-rules-card__table-head {
   background: var(--theme-table-head-bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .ops-alert-rules-card__table-header {
   color: var(--theme-table-head-text);
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ops-alert-rules-card__table-header--end,
+.ops-alert-rules-card__table-cell--end {
+  text-align: right;
 }
 
 .ops-alert-rules-card__table-row td {
@@ -1024,13 +1162,29 @@ function cancelDelete() {
   border-radius: var(--theme-select-panel-radius);
   background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  font-size: 0.75rem;
+}
+
+.ops-alert-rules-card__validation-title {
+  font-weight: 700;
+}
+
+.ops-alert-rules-card__validation-list {
+  margin-top: 0.25rem;
+  padding-left: 1.25rem;
+  list-style: disc;
 }
 
 .ops-alert-rules-card__required {
+  margin-left: 0.25rem;
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
 }
 
 .ops-alert-rules-card__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-ops-alert-rules-toggle-gap);
   padding:
     var(--theme-ops-table-cell-padding-y)
     var(--theme-ops-table-cell-padding-x);
@@ -1040,5 +1194,71 @@ function cancelDelete() {
 
 .ops-alert-rules-card__checkbox {
   accent-color: var(--theme-accent);
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+}
+
+.ops-alert-rules-card__text-strong--compact {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ops-alert-rules-card__text-strong--title {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.ops-alert-rules-card__table-cell--nowrap {
+  white-space: nowrap;
+}
+
+.ops-alert-rules-card__table-cell--compact {
+  font-size: 0.75rem;
+}
+
+.ops-alert-rules-card__mono {
+  font-family: var(--theme-font-mono);
+}
+
+.ops-alert-rules-card__editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-alert-rules-panel-gap);
+}
+
+.ops-alert-rules-card__editor-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.ops-alert-rules-card__editor-field {
+  min-width: 0;
+}
+
+.ops-alert-rules-card__danger-action {
+  margin-left: 0.5rem;
+}
+
+.ops-alert-rules-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--theme-ops-alert-rules-control-gap);
+}
+
+@media (min-width: 768px) {
+  .ops-alert-rules-card__presets-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-alert-rules-card__editor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-alert-rules-card__editor-field--full {
+    grid-column: 1 / -1;
+  }
 }
 </style>

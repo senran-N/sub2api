@@ -606,12 +606,12 @@ function handleToolbarRefresh() {
 </script>
 
 <template>
-  <div :class="['ops-dashboard-header__surface flex flex-col gap-4', props.fullscreen ? 'ops-dashboard-header__surface--fullscreen' : 'ops-dashboard-header__surface--default']">
+  <div :class="['ops-dashboard-header__surface', props.fullscreen ? 'ops-dashboard-header__surface--fullscreen' : 'ops-dashboard-header__surface--default']">
     <!-- Top Toolbar -->
-    <div class="ops-dashboard-header__divider flex flex-wrap items-center justify-between gap-4 pb-4">
-      <div>
-        <h2 class="ops-dashboard-header__title flex items-center gap-2 text-xl font-black">
-          <svg class="ops-dashboard-header__title-icon h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div class="ops-dashboard-header__divider ops-dashboard-header__toolbar">
+      <div class="ops-dashboard-header__toolbar-copy">
+        <h2 class="ops-dashboard-header__title">
+          <svg class="ops-dashboard-header__title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -622,11 +622,11 @@ function handleToolbarRefresh() {
           {{ t('admin.ops.title') }}
         </h2>
 
-        <div v-if="!props.fullscreen" class="ops-dashboard-header__meta mt-1 flex items-center gap-3 text-xs">
-          <span class="flex items-center gap-1.5" :title="props.loading ? t('admin.ops.loadingText') : t('admin.ops.ready')">
-            <span class="relative flex h-2 w-2">
+        <div v-if="!props.fullscreen" class="ops-dashboard-header__meta ops-dashboard-header__meta--toolbar">
+          <span class="ops-dashboard-header__status" :title="props.loading ? t('admin.ops.loadingText') : t('admin.ops.ready')">
+            <span class="ops-dashboard-header__status-indicator">
               <span
-                class="ops-dashboard-header__status-dot relative inline-flex h-2 w-2 rounded-full"
+                class="ops-dashboard-header__status-dot"
                 :class="props.loading ? 'ops-dashboard-header__status-dot--loading' : 'ops-dashboard-header__status-dot--ready'"
               ></span>
             </span>
@@ -643,8 +643,9 @@ function handleToolbarRefresh() {
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="ops-dashboard-header__toolbar-actions">
         <template v-if="!props.fullscreen">
+          <div class="ops-dashboard-header__toolbar-filters">
           <Select
             :model-value="platform"
             :options="platformOptions"
@@ -659,33 +660,34 @@ function handleToolbarRefresh() {
             @update:model-value="handleGroupChange"
           />
 
-          <div class="ops-dashboard-header__toolbar-divider mx-1 hidden sm:block"></div>
+          <div class="ops-dashboard-header__toolbar-divider ops-dashboard-header__toolbar-divider--desktop"></div>
 
           <Select
             :model-value="timeRange"
             :options="timeRangeOptions"
-            class="ops-dashboard-header__select ops-dashboard-header__select--time-range relative"
+            class="ops-dashboard-header__select ops-dashboard-header__select--time-range ops-dashboard-header__select--anchored"
             @update:model-value="handleTimeRangeChange"
           />
+          </div>
         </template>
 
         <Select
           v-if="false"
           :model-value="queryMode"
           :options="queryModeOptions"
-          class="ops-dashboard-header__select ops-dashboard-header__select--query-mode relative"
+          class="ops-dashboard-header__select ops-dashboard-header__select--query-mode ops-dashboard-header__select--anchored"
           @update:model-value="handleQueryModeChange"
         />
 
         <button
           v-if="!props.fullscreen"
           type="button"
-          class="ops-dashboard-header__icon-button flex h-8 w-8 items-center justify-center transition-colors"
+          class="ops-dashboard-header__icon-button"
           :disabled="loading"
           :title="t('common.refresh')"
           @click="handleToolbarRefresh"
         >
-          <svg class="h-4 w-4" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="ops-dashboard-header__icon" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -695,88 +697,84 @@ function handleToolbarRefresh() {
           </svg>
         </button>
 
-        <div v-if="!props.fullscreen" class="ops-dashboard-header__toolbar-divider mx-1 hidden sm:block"></div>
+        <div v-if="!props.fullscreen" class="ops-dashboard-header__toolbar-divider ops-dashboard-header__toolbar-divider--desktop"></div>
 
         <!-- Alert Rules Button (hidden in fullscreen) -->
         <button
           v-if="!props.fullscreen"
           type="button"
-          class="ops-dashboard-header__action-button ops-dashboard-header__action-button--info flex h-8 items-center gap-1.5 text-xs font-bold transition-colors"
+          class="ops-dashboard-header__action-button ops-dashboard-header__action-button--info"
           :title="t('admin.ops.alertRules.title')"
           @click="emit('openAlertRules')"
         >
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="ops-dashboard-header__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
           </svg>
-          <span class="hidden sm:inline">{{ t('admin.ops.alertRules.manage') }}</span>
+          <span class="ops-dashboard-header__action-label">{{ t('admin.ops.alertRules.manage') }}</span>
         </button>
 
         <!-- Settings Button (hidden in fullscreen) -->
         <button
           v-if="!props.fullscreen"
           type="button"
-          class="ops-dashboard-header__action-button ops-dashboard-header__action-button--neutral flex h-8 items-center gap-1.5 text-xs font-bold transition-colors"
+          class="ops-dashboard-header__action-button ops-dashboard-header__action-button--neutral"
           :title="t('admin.ops.settings.title')"
           @click="emit('openSettings')"
         >
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="ops-dashboard-header__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <span class="hidden sm:inline">{{ t('common.settings') }}</span>
+          <span class="ops-dashboard-header__action-label">{{ t('common.settings') }}</span>
         </button>
 
         <!-- Enter Fullscreen Button (hidden in fullscreen mode) -->
         <button
           v-if="!props.fullscreen"
           type="button"
-          class="ops-dashboard-header__icon-button ops-dashboard-header__action-button--neutral flex h-8 w-8 items-center justify-center transition-colors"
+          class="ops-dashboard-header__icon-button ops-dashboard-header__action-button--neutral"
           :title="t('admin.ops.fullscreen.enter')"
           @click="emit('enterFullscreen')"
         >
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="ops-dashboard-header__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
           </svg>
         </button>
       </div>
     </div>
 
-    <div v-if="overview" class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+    <div v-if="overview" class="ops-dashboard-header__overview-grid">
       <!-- Left: Health + Realtime -->
-      <div :class="['ops-dashboard-header__panel lg:col-span-5', props.fullscreen ? 'ops-dashboard-header__panel--fullscreen' : 'ops-dashboard-header__panel--default']">
-        <div class="grid h-full grid-cols-1 gap-6 md:grid-cols-[200px_1fr] md:items-center">
+      <div :class="['ops-dashboard-header__panel ops-dashboard-header__panel--summary', props.fullscreen ? 'ops-dashboard-header__panel--fullscreen' : 'ops-dashboard-header__panel--default']">
+        <div class="ops-dashboard-header__summary-layout">
           <!-- 1) Health Score -->
-          <div
-            class="ops-dashboard-header__health group relative flex cursor-pointer flex-col items-center justify-center transition-all md:pr-6"
-          >
+          <div class="ops-dashboard-header__health">
             <!-- Diagnosis Popover (hover) -->
-            <div
-              class="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-72 -translate-x-1/2 group-hover:block group-hover:pointer-events-auto md:left-full md:top-0 md:ml-2 md:mt-0 md:translate-x-0"
-            >
+            <div class="ops-dashboard-header__popover-anchor">
               <div class="ops-dashboard-header__popover">
-                <div class="ops-dashboard-header__popover-title mb-3 flex items-center gap-2 pb-2 text-sm font-bold">
+                <div class="ops-dashboard-header__popover-title">
                   <Icon name="brain" size="sm" class="ops-dashboard-header__title-icon" />
                   {{ t('admin.ops.diagnosis.title') }}
                 </div>
 
-                <div class="space-y-3">
-                  <div v-for="(item, idx) in diagnosisReport" :key="idx" class="flex gap-3">
-                    <div class="mt-0.5 shrink-0">
-                      <svg v-if="item.type === 'critical'" class="ops-dashboard-header__tone ops-dashboard-header__tone--critical h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <div class="ops-dashboard-header__popover-list">
+                  <div v-for="(item, idx) in diagnosisReport" :key="idx" class="ops-dashboard-header__popover-item">
+                    <div class="ops-dashboard-header__popover-icon-shell">
+                      <svg v-if="item.type === 'critical'" class="ops-dashboard-header__tone ops-dashboard-header__tone--critical ops-dashboard-header__popover-icon" fill="currentColor" viewBox="0 0 20 20">
                         <path
                           fill-rule="evenodd"
                           d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
                           clip-rule="evenodd"
                         />
                       </svg>
-                      <svg v-else-if="item.type === 'warning'" class="ops-dashboard-header__tone ops-dashboard-header__tone--warning h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                      <svg v-else-if="item.type === 'warning'" class="ops-dashboard-header__tone ops-dashboard-header__tone--warning ops-dashboard-header__popover-icon" fill="currentColor" viewBox="0 0 20 20">
                         <path
                           fill-rule="evenodd"
                           d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
                           clip-rule="evenodd"
                         />
                       </svg>
-                      <svg v-else class="ops-dashboard-header__tone ops-dashboard-header__tone--info h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                      <svg v-else class="ops-dashboard-header__tone ops-dashboard-header__tone--info ops-dashboard-header__popover-icon" fill="currentColor" viewBox="0 0 20 20">
                         <path
                           fill-rule="evenodd"
                           d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 100 2 1 1 0 000-2zm-1 3a1 1 0 012 0v4a1 1 0 11-2 0v-4z"
@@ -784,10 +782,10 @@ function handleToolbarRefresh() {
                         />
                       </svg>
                     </div>
-                    <div class="flex-1">
-                      <div class="ops-dashboard-header__text text-xs font-semibold">{{ item.message }}</div>
-                      <div class="ops-dashboard-header__meta mt-0.5 text-[11px]">{{ item.impact }}</div>
-                      <div v-if="item.action" class="ops-dashboard-header__tone ops-dashboard-header__tone--info mt-1 flex items-center gap-1 text-[11px]">
+                    <div class="ops-dashboard-header__popover-copy">
+                      <div class="ops-dashboard-header__text ops-dashboard-header__popover-message">{{ item.message }}</div>
+                      <div class="ops-dashboard-header__meta ops-dashboard-header__popover-impact">{{ item.impact }}</div>
+                      <div v-if="item.action" class="ops-dashboard-header__tone ops-dashboard-header__tone--info ops-dashboard-header__popover-action">
                         <Icon name="lightbulb" size="xs" />
                         {{ item.action }}
                       </div>
@@ -795,14 +793,18 @@ function handleToolbarRefresh() {
                   </div>
                 </div>
 
-                <div class="ops-dashboard-header__popover-footer mt-3 pt-2 text-[10px]">
+                <div class="ops-dashboard-header__popover-footer ops-dashboard-header__popover-footer--spaced">
                   {{ t('admin.ops.diagnosis.footer') }}
                 </div>
               </div>
             </div>
 
-            <div class="relative flex items-center justify-center">
-              <svg :width="healthScoreDisplay.circleSize" :height="healthScoreDisplay.circleSize" class="-rotate-90 transform">
+            <div class="ops-dashboard-header__health-visual">
+              <svg
+                :width="healthScoreDisplay.circleSize"
+                :height="healthScoreDisplay.circleSize"
+                class="ops-dashboard-header__health-ring"
+              >
                 <circle
                   :cx="healthScoreDisplay.circleSize / 2"
                   :cy="healthScoreDisplay.circleSize / 2"
@@ -826,20 +828,34 @@ function handleToolbarRefresh() {
                 />
               </svg>
 
-              <div class="absolute flex flex-col items-center">
-                <span :class="[props.fullscreen ? 'text-5xl' : 'text-3xl', 'font-black', healthScoreDisplay.className]">
+              <div class="ops-dashboard-header__health-copy">
+                <span
+                  :class="[
+                    'ops-dashboard-header__health-score',
+                    props.fullscreen && 'ops-dashboard-header__health-score--fullscreen',
+                    healthScoreDisplay.className
+                  ]"
+                >
                   {{ isSystemIdle ? t('admin.ops.idleStatus') : (overview.health_score ?? '--') }}
                 </span>
-                <span :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'ops-dashboard-header__muted font-bold uppercase tracking-wider']">{{ t('admin.ops.health') }}</span>
+                <span
+                  :class="[
+                    'ops-dashboard-header__muted',
+                    'ops-dashboard-header__health-label',
+                    props.fullscreen && 'ops-dashboard-header__health-label--fullscreen'
+                  ]"
+                >
+                  {{ t('admin.ops.health') }}
+                </span>
               </div>
             </div>
 
-            <div class="mt-4 text-center" v-if="!props.fullscreen">
-              <div class="ops-dashboard-header__meta flex items-center justify-center gap-1 text-xs font-medium">
+            <div v-if="!props.fullscreen" class="ops-dashboard-header__health-summary">
+              <div class="ops-dashboard-header__meta ops-dashboard-header__health-summary-title">
                 {{ t('admin.ops.healthCondition') }}
                 <HelpTooltip :content="t('admin.ops.healthHelp')" />
               </div>
-              <div class="mt-1 text-xs font-bold" :class="healthScoreDisplay.className">
+              <div class="ops-dashboard-header__health-summary-state" :class="healthScoreDisplay.className">
                 {{
                   isSystemIdle
                     ? t('admin.ops.idleStatus')
@@ -852,24 +868,24 @@ function handleToolbarRefresh() {
           </div>
 
           <!-- 2) Realtime Traffic -->
-          <div class="ops-dashboard-header__realtime flex h-full flex-col justify-center">
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div class="flex items-center gap-2">
-                <div class="relative flex h-3 w-3 shrink-0">
-                  <span class="ops-dashboard-header__realtime-ping absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"></span>
-                  <span class="ops-dashboard-header__realtime-dot relative inline-flex h-3 w-3 rounded-full"></span>
+          <div class="ops-dashboard-header__realtime">
+            <div class="ops-dashboard-header__realtime-header">
+              <div class="ops-dashboard-header__realtime-title-row">
+                <div class="ops-dashboard-header__realtime-indicator">
+                  <span class="ops-dashboard-header__realtime-ping"></span>
+                  <span class="ops-dashboard-header__realtime-dot"></span>
                 </div>
-                <h3 class="ops-dashboard-header__muted text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.realtime.title') }}</h3>
+                <h3 class="ops-dashboard-header__muted ops-dashboard-header__realtime-title">{{ t('admin.ops.realtime.title') }}</h3>
                 <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.qps')" />
               </div>
 
               <!-- Time Window Selector -->
-              <div class="flex flex-wrap gap-1">
+              <div class="ops-dashboard-header__realtime-window-group">
                 <button
                   v-for="window in availableRealtimeWindows"
                   :key="window"
                   type="button"
-                  class="ops-dashboard-header__window text-[9px] font-bold transition-colors sm:text-[10px]"
+                  class="ops-dashboard-header__window"
                   :class="realtimeWindow === window
                     ? 'ops-dashboard-header__window--active'
                     : 'ops-dashboard-header__window--idle'"
@@ -880,58 +896,126 @@ function handleToolbarRefresh() {
               </div>
             </div>
 
-            <div :class="props.fullscreen ? 'space-y-4' : 'space-y-3'">
+            <div :class="['ops-dashboard-header__realtime-body', props.fullscreen && 'ops-dashboard-header__realtime-body--fullscreen']">
               <!-- Row 1: Current -->
-              <div>
-                <div :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'ops-dashboard-header__eyebrow font-bold uppercase']">{{ t('admin.ops.current') }}</div>
-                <div class="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-                  <div class="flex items-baseline gap-1.5">
-                    <span :class="[props.fullscreen ? 'text-4xl' : 'text-xl sm:text-2xl', 'ops-dashboard-header__value font-black']">{{ realtimeTrafficDisplay.qpsCurrent.toFixed(1) }}</span>
-                    <span :class="[props.fullscreen ? 'text-sm' : 'text-xs', 'ops-dashboard-header__label font-bold']">QPS</span>
+              <div class="ops-dashboard-header__realtime-section">
+                <div
+                  :class="[
+                    'ops-dashboard-header__eyebrow',
+                    'ops-dashboard-header__realtime-eyebrow',
+                    props.fullscreen && 'ops-dashboard-header__realtime-eyebrow--fullscreen'
+                  ]"
+                >
+                  {{ t('admin.ops.current') }}
+                </div>
+                <div class="ops-dashboard-header__realtime-current-grid">
+                  <div class="ops-dashboard-header__realtime-current-item">
+                    <span
+                      :class="[
+                        'ops-dashboard-header__value',
+                        'ops-dashboard-header__realtime-current-value',
+                        props.fullscreen && 'ops-dashboard-header__realtime-current-value--fullscreen'
+                      ]"
+                    >
+                      {{ realtimeTrafficDisplay.qpsCurrent.toFixed(1) }}
+                    </span>
+                    <span
+                      :class="[
+                        'ops-dashboard-header__label',
+                        'ops-dashboard-header__realtime-unit',
+                        props.fullscreen && 'ops-dashboard-header__realtime-unit--fullscreen'
+                      ]"
+                    >
+                      QPS
+                    </span>
                   </div>
-                  <div class="flex items-baseline gap-1.5">
-                    <span :class="[props.fullscreen ? 'text-4xl' : 'text-xl sm:text-2xl', 'ops-dashboard-header__value font-black']">{{ realtimeTrafficDisplay.tpsCurrent.toFixed(1) }}</span>
-                    <span :class="[props.fullscreen ? 'text-sm' : 'text-xs', 'ops-dashboard-header__label font-bold']">{{ t('admin.ops.tps') }}</span>
+                  <div class="ops-dashboard-header__realtime-current-item">
+                    <span
+                      :class="[
+                        'ops-dashboard-header__value',
+                        'ops-dashboard-header__realtime-current-value',
+                        props.fullscreen && 'ops-dashboard-header__realtime-current-value--fullscreen'
+                      ]"
+                    >
+                      {{ realtimeTrafficDisplay.tpsCurrent.toFixed(1) }}
+                    </span>
+                    <span
+                      :class="[
+                        'ops-dashboard-header__label',
+                        'ops-dashboard-header__realtime-unit',
+                        props.fullscreen && 'ops-dashboard-header__realtime-unit--fullscreen'
+                      ]"
+                    >
+                      {{ t('admin.ops.tps') }}
+                    </span>
                   </div>
                 </div>
               </div>
 
               <!-- Row 2: Peak + Average -->
-              <div class="grid grid-cols-2 gap-3">
+              <div class="ops-dashboard-header__realtime-stats-grid">
                 <!-- Peak -->
-                <div>
-                  <div :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'ops-dashboard-header__eyebrow font-bold uppercase']">{{ t('admin.ops.peak') }}</div>
-                  <div :class="[props.fullscreen ? 'text-base' : 'text-sm', 'ops-dashboard-header__metric-list mt-1 space-y-0.5 font-medium']">
-                    <div class="flex items-baseline gap-1.5">
-                      <span class="ops-dashboard-header__value font-black">{{ realtimeTrafficDisplay.qpsPeakLabel }}</span>
-                      <span class="text-xs">QPS</span>
+                <div class="ops-dashboard-header__realtime-stat-card">
+                  <div
+                    :class="[
+                      'ops-dashboard-header__eyebrow',
+                      'ops-dashboard-header__realtime-eyebrow',
+                      props.fullscreen && 'ops-dashboard-header__realtime-eyebrow--fullscreen'
+                    ]"
+                  >
+                    {{ t('admin.ops.peak') }}
+                  </div>
+                  <div
+                    :class="[
+                      'ops-dashboard-header__metric-list',
+                      'ops-dashboard-header__realtime-metric-list',
+                      props.fullscreen && 'ops-dashboard-header__realtime-metric-list--fullscreen'
+                    ]"
+                  >
+                    <div class="ops-dashboard-header__realtime-metric-row">
+                      <span class="ops-dashboard-header__value ops-dashboard-header__realtime-metric-value">{{ realtimeTrafficDisplay.qpsPeakLabel }}</span>
+                      <span class="ops-dashboard-header__realtime-metric-suffix">QPS</span>
                     </div>
-                    <div class="flex items-baseline gap-1.5">
-                      <span class="ops-dashboard-header__value font-black">{{ realtimeTrafficDisplay.tpsPeakLabel }}</span>
-                      <span class="text-xs">{{ t('admin.ops.tps') }}</span>
+                    <div class="ops-dashboard-header__realtime-metric-row">
+                      <span class="ops-dashboard-header__value ops-dashboard-header__realtime-metric-value">{{ realtimeTrafficDisplay.tpsPeakLabel }}</span>
+                      <span class="ops-dashboard-header__realtime-metric-suffix">{{ t('admin.ops.tps') }}</span>
                     </div>
                   </div>
                 </div>
 
                 <!-- Average -->
-                <div>
-                  <div :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'ops-dashboard-header__eyebrow font-bold uppercase']">{{ t('admin.ops.average') }}</div>
-                  <div :class="[props.fullscreen ? 'text-base' : 'text-sm', 'ops-dashboard-header__metric-list mt-1 space-y-0.5 font-medium']">
-                    <div class="flex items-baseline gap-1.5">
-                      <span class="ops-dashboard-header__value font-black">{{ realtimeTrafficDisplay.qpsAvgLabel }}</span>
-                      <span class="text-xs">QPS</span>
+                <div class="ops-dashboard-header__realtime-stat-card">
+                  <div
+                    :class="[
+                      'ops-dashboard-header__eyebrow',
+                      'ops-dashboard-header__realtime-eyebrow',
+                      props.fullscreen && 'ops-dashboard-header__realtime-eyebrow--fullscreen'
+                    ]"
+                  >
+                    {{ t('admin.ops.average') }}
+                  </div>
+                  <div
+                    :class="[
+                      'ops-dashboard-header__metric-list',
+                      'ops-dashboard-header__realtime-metric-list',
+                      props.fullscreen && 'ops-dashboard-header__realtime-metric-list--fullscreen'
+                    ]"
+                  >
+                    <div class="ops-dashboard-header__realtime-metric-row">
+                      <span class="ops-dashboard-header__value ops-dashboard-header__realtime-metric-value">{{ realtimeTrafficDisplay.qpsAvgLabel }}</span>
+                      <span class="ops-dashboard-header__realtime-metric-suffix">QPS</span>
                     </div>
-                    <div class="flex items-baseline gap-1.5">
-                      <span class="ops-dashboard-header__value font-black">{{ realtimeTrafficDisplay.tpsAvgLabel }}</span>
-                      <span class="text-xs">{{ t('admin.ops.tps') }}</span>
+                    <div class="ops-dashboard-header__realtime-metric-row">
+                      <span class="ops-dashboard-header__value ops-dashboard-header__realtime-metric-value">{{ realtimeTrafficDisplay.tpsAvgLabel }}</span>
+                      <span class="ops-dashboard-header__realtime-metric-suffix">{{ t('admin.ops.tps') }}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               <!-- Animated Pulse Line (Heart Beat Animation) -->
-              <div class="h-8 w-full overflow-hidden opacity-50">
-                <svg class="h-full w-full" viewBox="0 0 280 32" preserveAspectRatio="none">
+              <div class="ops-dashboard-header__pulse-strip">
+                <svg class="ops-dashboard-header__pulse-svg" viewBox="0 0 280 32" preserveAspectRatio="none">
                   <path
                     class="ops-dashboard-header__pulse-line"
                     d="M0 16 Q 20 16, 40 16 T 80 16 T 120 10 T 160 22 T 200 16 T 240 16 T 280 16"
@@ -953,25 +1037,31 @@ function handleToolbarRefresh() {
               </div>
 
               <div class="ops-dashboard-header__runtime-strip">
-                <div class="mb-2 flex items-center gap-2">
-                  <div :class="[props.fullscreen ? 'text-xs' : 'text-[10px]', 'ops-dashboard-header__eyebrow font-bold uppercase']">
+                <div class="ops-dashboard-header__runtime-strip-header">
+                  <div
+                    :class="[
+                      'ops-dashboard-header__eyebrow',
+                      'ops-dashboard-header__realtime-eyebrow',
+                      props.fullscreen && 'ops-dashboard-header__realtime-eyebrow--fullscreen'
+                    ]"
+                  >
                     {{ t('admin.ops.runtimeObservability.title') }}
                   </div>
                   <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.runtimeObservability.help')" />
                 </div>
-                <div class="grid grid-cols-2 gap-2">
+                <div class="ops-dashboard-header__runtime-grid">
                   <div
                     v-for="item in runtimeObservabilityItems"
                     :key="item.key"
                     class="ops-dashboard-header__runtime-chip"
                     :title="item.hint"
                   >
-                    <div class="ops-dashboard-header__muted text-[10px] font-bold uppercase tracking-wider">
+                    <div class="ops-dashboard-header__muted ops-dashboard-header__runtime-chip-label">
                       {{ item.label }}
                     </div>
-                    <div class="mt-1 flex items-baseline gap-1">
-                      <span class="ops-dashboard-header__value text-sm font-black">{{ item.value }}</span>
-                      <span v-if="item.suffix" class="ops-dashboard-header__label text-[10px] font-bold">{{ item.suffix }}</span>
+                    <div class="ops-dashboard-header__runtime-chip-value-row">
+                      <span class="ops-dashboard-header__value ops-dashboard-header__runtime-chip-value">{{ item.value }}</span>
+                      <span v-if="item.suffix" class="ops-dashboard-header__label ops-dashboard-header__runtime-chip-suffix">{{ item.suffix }}</span>
                     </div>
                   </div>
                 </div>
@@ -986,224 +1076,233 @@ function handleToolbarRefresh() {
            instead of `auto-rows-fr`. The latter falls back to `auto` when the
            container's height comes from an intrinsically-sized outer row
            (chicken-and-egg), which left blank space above/below the cards. -->
-      <div class="ops-dashboard-header__metrics grid h-full grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-7 lg:grid-cols-3 lg:grid-rows-2">
+      <div class="ops-dashboard-header__metrics">
         <!-- Card 1: Requests -->
         <div class="ops-dashboard-header__metric-card" style="order: 1;">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1">
-              <span class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase">{{ t('admin.ops.requestsTitle') }}</span>
+          <div class="ops-dashboard-header__metric-card-header">
+            <div class="ops-dashboard-header__metric-card-heading">
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.requestsTitle') }}</span>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.totalRequests')" />
             </div>
             <button
               v-if="!props.fullscreen"
-              class="ops-dashboard-header__link text-[10px] font-bold"
+              class="ops-dashboard-header__link ops-dashboard-header__metric-card-link"
               type="button"
               @click="openDetails({ title: t('admin.ops.requestDetails.title') })"
             >
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 space-y-2 text-xs">
-            <div class="ops-dashboard-header__stat-row flex justify-between">
+          <div class="ops-dashboard-header__metric-card-body ops-dashboard-header__metric-card-body--spacious">
+            <div class="ops-dashboard-header__stat-row">
               <span class="ops-dashboard-header__label">{{ t('admin.ops.requests') }}:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ totalRequestsLabel }}</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ totalRequestsLabel }}</span>
             </div>
-            <div class="ops-dashboard-header__stat-row flex justify-between">
+            <div class="ops-dashboard-header__stat-row">
               <span class="ops-dashboard-header__label">{{ t('admin.ops.tokens') }}:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ totalTokensLabel }}</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ totalTokensLabel }}</span>
             </div>
-            <div class="ops-dashboard-header__stat-row flex justify-between">
+            <div class="ops-dashboard-header__stat-row">
               <span class="ops-dashboard-header__label">{{ t('admin.ops.avgQps') }}:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ overviewMetricDisplay.qpsAvgLabel }}</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ overviewMetricDisplay.qpsAvgLabel }}</span>
             </div>
-            <div class="ops-dashboard-header__stat-row flex justify-between">
+            <div class="ops-dashboard-header__stat-row">
               <span class="ops-dashboard-header__label">{{ t('admin.ops.avgTps') }}:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ overviewMetricDisplay.tpsAvgLabel }}</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ overviewMetricDisplay.tpsAvgLabel }}</span>
             </div>
           </div>
         </div>
 
         <!-- Card 2: SLA -->
         <div class="ops-dashboard-header__metric-card" style="order: 2;">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase">{{ t('admin.ops.sla') }}</span>
+          <div class="ops-dashboard-header__metric-card-header">
+            <div class="ops-dashboard-header__metric-card-heading ops-dashboard-header__metric-card-heading--wide">
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.sla') }}</span>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.sla')" />
-              <span class="h-1.5 w-1.5 rounded-full" :class="slaDisplay.indicatorClass"></span>
+              <span class="ops-dashboard-header__metric-card-indicator" :class="slaDisplay.indicatorClass"></span>
             </div>
             <button
               v-if="!props.fullscreen"
-              class="ops-dashboard-header__link text-[10px] font-bold"
+              class="ops-dashboard-header__link ops-dashboard-header__metric-card-link"
               type="button"
               @click="openDetails({ title: t('admin.ops.requestDetails.title'), kind: 'error' })"
             >
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 text-3xl font-black" :class="slaDisplay.colorClass">
+          <div class="ops-dashboard-header__metric-card-value ops-dashboard-header__metric-card-value--hero" :class="slaDisplay.colorClass">
             {{ slaDisplay.percent == null ? '-' : `${slaDisplay.percent.toFixed(3)}%` }}
           </div>
-          <div class="ops-dashboard-header__progress-track mt-3 h-2 w-full overflow-hidden rounded-full">
-            <div class="h-full transition-all" :class="slaDisplay.indicatorClass" :style="{ width: slaDisplay.progressWidth }"></div>
+          <div class="ops-dashboard-header__progress-track">
+            <div class="ops-dashboard-header__progress-bar" :class="slaDisplay.indicatorClass" :style="{ width: slaDisplay.progressWidth }"></div>
           </div>
-          <div class="mt-3 text-xs">
-            <div class="ops-dashboard-header__stat-row flex justify-between">
+          <div class="ops-dashboard-header__metric-card-body">
+            <div class="ops-dashboard-header__stat-row">
               <span class="ops-dashboard-header__label">{{ t('admin.ops.exceptions') }}:</span>
-              <span class="ops-dashboard-header__tone ops-dashboard-header__tone--critical font-bold">{{ formatNumber((overview.request_count_sla ?? 0) - (overview.success_count ?? 0)) }}</span>
+              <span class="ops-dashboard-header__tone ops-dashboard-header__tone--critical ops-dashboard-header__metric-card-stat-value">
+                {{ formatNumber((overview.request_count_sla ?? 0) - (overview.success_count ?? 0)) }}
+              </span>
             </div>
           </div>
         </div>
 
         <!-- Card 4: Request Duration -->
         <div class="ops-dashboard-header__metric-card" style="order: 4;">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1">
-              <span class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase">{{ t('admin.ops.latencyDuration') }}</span>
+          <div class="ops-dashboard-header__metric-card-header">
+            <div class="ops-dashboard-header__metric-card-heading">
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.latencyDuration') }}</span>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.latency')" />
             </div>
             <button
               v-if="!props.fullscreen"
-              class="ops-dashboard-header__link text-[10px] font-bold"
+              class="ops-dashboard-header__link ops-dashboard-header__metric-card-link"
               type="button"
               @click="openDetails({ title: t('admin.ops.latencyDuration'), sort: 'duration_desc' })"
             >
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 flex items-baseline gap-2">
-            <div class="ops-dashboard-header__value text-3xl font-black">
+          <div class="ops-dashboard-header__metric-card-value-row">
+            <div class="ops-dashboard-header__value ops-dashboard-header__metric-card-value ops-dashboard-header__metric-card-value--hero">
               {{ durationMetrics.p99_ms ?? '-' }}
             </div>
-            <span class="ops-dashboard-header__eyebrow text-xs font-bold">ms (P99)</span>
+            <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit">ms (P99)</span>
           </div>
-          <div class="mt-3 grid grid-cols-1 gap-x-3 gap-y-1 text-xs 2xl:grid-cols-2">
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+          <div class="ops-dashboard-header__metric-card-grid">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">P95:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ durationMetrics.p95_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ durationMetrics.p95_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">P90:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ durationMetrics.p90_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ durationMetrics.p90_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">P50:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ durationMetrics.p50_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ durationMetrics.p50_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">Avg:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ durationMetrics.avg_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ durationMetrics.avg_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">Max:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ durationMetrics.max_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ durationMetrics.max_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
           </div>
         </div>
 
         <!-- Card 5: TTFT -->
         <div class="ops-dashboard-header__metric-card" style="order: 5;">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1">
-              <span class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase">TTFT</span>
+          <div class="ops-dashboard-header__metric-card-header">
+            <div class="ops-dashboard-header__metric-card-heading">
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">TTFT</span>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.ttft')" />
             </div>
             <button
               v-if="!props.fullscreen"
-              class="ops-dashboard-header__link text-[10px] font-bold"
+              class="ops-dashboard-header__link ops-dashboard-header__metric-card-link"
               type="button"
               @click="openDetails({ title: t('admin.ops.ttftLabel'), sort: 'duration_desc' })"
             >
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 flex items-baseline gap-2">
-            <div class="text-3xl font-black" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p99_ms ?? null))">
+          <div class="ops-dashboard-header__metric-card-value-row">
+            <div
+              class="ops-dashboard-header__metric-card-value ops-dashboard-header__metric-card-value--hero"
+              :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p99_ms ?? null))"
+            >
               {{ ttftMetrics.p99_ms ?? '-' }}
             </div>
-            <span class="ops-dashboard-header__eyebrow text-xs font-bold">ms (P99)</span>
+            <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit">ms (P99)</span>
           </div>
-          <div class="mt-3 grid grid-cols-1 gap-x-3 gap-y-1 text-xs 2xl:grid-cols-2">
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+          <div class="ops-dashboard-header__metric-card-grid">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">P95:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p95_ms ?? null))">{{ ttftMetrics.p95_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__metric-card-stat-value" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p95_ms ?? null))">{{ ttftMetrics.p95_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">P90:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p90_ms ?? null))">{{ ttftMetrics.p90_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__metric-card-stat-value" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p90_ms ?? null))">{{ ttftMetrics.p90_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">P50:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p50_ms ?? null))">{{ ttftMetrics.p50_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__metric-card-stat-value" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.p50_ms ?? null))">{{ ttftMetrics.p50_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">Avg:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.avg_ms ?? null))">{{ ttftMetrics.avg_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__metric-card-stat-value" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.avg_ms ?? null))">{{ ttftMetrics.avg_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
-            <div class="flex items-baseline gap-1 whitespace-nowrap">
+            <div class="ops-dashboard-header__metric-card-grid-row">
               <span class="ops-dashboard-header__label">Max:</span>
-              <span class="font-bold" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.max_ms ?? null))">{{ ttftMetrics.max_ms ?? '-' }}</span>
-              <span class="ops-dashboard-header__eyebrow">ms</span>
+              <span class="ops-dashboard-header__metric-card-stat-value" :class="getThresholdColorClass(getCurrentTTFTThresholdLevel(ttftMetrics.max_ms ?? null))">{{ ttftMetrics.max_ms ?? '-' }}</span>
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-unit--compact">ms</span>
             </div>
           </div>
         </div>
 
         <!-- Card 3: Request Errors -->
         <div class="ops-dashboard-header__metric-card" style="order: 3;">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1">
-              <span class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase">{{ t('admin.ops.requestErrors') }}</span>
+          <div class="ops-dashboard-header__metric-card-header">
+            <div class="ops-dashboard-header__metric-card-heading">
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.requestErrors') }}</span>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.errors')" />
             </div>
-            <button v-if="!props.fullscreen" class="ops-dashboard-header__link text-[10px] font-bold" type="button" @click="openErrorDetails('request')">
+            <button v-if="!props.fullscreen" class="ops-dashboard-header__link ops-dashboard-header__metric-card-link" type="button" @click="openErrorDetails('request')">
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 text-3xl font-black" :class="requestErrorDisplay.colorClass">
+          <div class="ops-dashboard-header__metric-card-value ops-dashboard-header__metric-card-value--hero" :class="requestErrorDisplay.colorClass">
             {{ requestErrorDisplay.percent == null ? '-' : `${requestErrorDisplay.percent.toFixed(2)}%` }}
           </div>
-          <div class="mt-3 space-y-1 text-xs">
-            <div class="ops-dashboard-header__stat-row flex justify-between">
+          <div class="ops-dashboard-header__metric-card-body">
+            <div class="ops-dashboard-header__stat-row">
               <span class="ops-dashboard-header__label">{{ t('admin.ops.errorCount') }}:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ formatNumber(overview.error_count_sla ?? 0) }}</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ formatNumber(overview.error_count_sla ?? 0) }}</span>
             </div>
-            <div class="ops-dashboard-header__stat-row flex justify-between">
-              <span class="ops-dashboard-header__label">{{ t('admin.ops.businessLimited') }}:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ formatNumber(overview.business_limited_count ?? 0) }}</span>
+            <div class="ops-dashboard-header__stat-row">
+              <span class="ops-dashboard-header__label">{{ t('admin.ops.businessLimited') }}</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">{{ formatNumber(overview.business_limited_count ?? 0) }}</span>
             </div>
           </div>
         </div>
 
         <!-- Card 6: Upstream Errors -->
         <div class="ops-dashboard-header__metric-card" style="order: 6;">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1">
-              <span class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase">{{ t('admin.ops.upstreamErrors') }}</span>
+          <div class="ops-dashboard-header__metric-card-header">
+            <div class="ops-dashboard-header__metric-card-heading">
+              <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.upstreamErrors') }}</span>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.upstreamErrors')" />
             </div>
-            <button v-if="!props.fullscreen" class="ops-dashboard-header__link text-[10px] font-bold" type="button" @click="openErrorDetails('upstream')">
+            <button v-if="!props.fullscreen" class="ops-dashboard-header__link ops-dashboard-header__metric-card-link" type="button" @click="openErrorDetails('upstream')">
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
-          <div class="mt-2 text-3xl font-black" :class="upstreamErrorDisplay.colorClass">
+          <div class="ops-dashboard-header__metric-card-value ops-dashboard-header__metric-card-value--hero" :class="upstreamErrorDisplay.colorClass">
             {{ upstreamErrorDisplay.percent == null ? '-' : `${upstreamErrorDisplay.percent.toFixed(2)}%` }}
           </div>
-          <div class="mt-3 space-y-1 text-xs">
-            <div class="ops-dashboard-header__stat-row flex justify-between">
+          <div class="ops-dashboard-header__metric-card-body">
+            <div class="ops-dashboard-header__stat-row">
               <span class="ops-dashboard-header__label">{{ t('admin.ops.errorCountExcl429529') }}:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ formatNumber(overview.upstream_error_count_excl_429_529 ?? 0) }}</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">
+                {{ formatNumber(overview.upstream_error_count_excl_429_529 ?? 0) }}
+              </span>
             </div>
-            <div class="ops-dashboard-header__stat-row flex justify-between">
+            <div class="ops-dashboard-header__stat-row">
               <span class="ops-dashboard-header__label">429/529:</span>
-              <span class="ops-dashboard-header__value font-bold">{{ formatNumber((overview.upstream_429_count ?? 0) + (overview.upstream_529_count ?? 0)) }}</span>
+              <span class="ops-dashboard-header__value ops-dashboard-header__metric-card-stat-value">
+                {{ formatNumber((overview.upstream_429_count ?? 0) + (overview.upstream_529_count ?? 0)) }}
+              </span>
             </div>
           </div>
         </div>
@@ -1211,32 +1310,32 @@ function handleToolbarRefresh() {
     </div>
 
     <!-- Integrated: System health (cards) -->
-    <div v-if="overview" class="ops-dashboard-header__system-section mt-2 pt-4">
-      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div v-if="overview" class="ops-dashboard-header__system-section">
+      <div class="ops-dashboard-header__system-grid">
         <!-- CPU -->
         <div class="ops-dashboard-header__system-card">
-          <div class="flex items-center gap-1">
-            <div class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase tracking-wider">CPU</div>
+          <div class="ops-dashboard-header__system-card-head">
+            <div class="ops-dashboard-header__eyebrow ops-dashboard-header__system-card-eyebrow">CPU</div>
             <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.cpu')" />
           </div>
-          <div class="mt-1 text-lg font-black" :class="cpuPercentClass">
+          <div class="ops-dashboard-header__system-card-value" :class="cpuPercentClass">
             {{ cpuPercentValue == null ? '-' : `${cpuPercentValue.toFixed(1)}%` }}
           </div>
-          <div v-if="!props.fullscreen" class="ops-dashboard-header__label mt-1 text-[10px]">
+          <div v-if="!props.fullscreen" class="ops-dashboard-header__label ops-dashboard-header__system-card-meta">
             {{ t('common.warning') }} 80% · {{ t('common.critical') }} 95%
           </div>
         </div>
 
         <!-- MEM -->
         <div class="ops-dashboard-header__system-card">
-          <div class="flex items-center gap-1">
-            <div class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase tracking-wider">{{ t('admin.ops.memory') }}</div>
+          <div class="ops-dashboard-header__system-card-head">
+            <div class="ops-dashboard-header__eyebrow ops-dashboard-header__system-card-eyebrow">{{ t('admin.ops.memory') }}</div>
             <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.memory')" />
           </div>
-          <div class="mt-1 text-lg font-black" :class="memPercentClass">
+          <div class="ops-dashboard-header__system-card-value" :class="memPercentClass">
             {{ memPercentValue == null ? '-' : `${memPercentValue.toFixed(1)}%` }}
           </div>
-          <div v-if="!props.fullscreen" class="ops-dashboard-header__label mt-1 text-[10px]">
+          <div v-if="!props.fullscreen" class="ops-dashboard-header__label ops-dashboard-header__system-card-meta">
             {{
               systemMetrics?.memory_used_mb == null || systemMetrics?.memory_total_mb == null
                 ? '-'
@@ -1247,14 +1346,14 @@ function handleToolbarRefresh() {
 
         <!-- DB -->
         <div class="ops-dashboard-header__system-card">
-          <div class="flex items-center gap-1">
-            <div class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase tracking-wider">{{ t('admin.ops.db') }}</div>
+          <div class="ops-dashboard-header__system-card-head">
+            <div class="ops-dashboard-header__eyebrow ops-dashboard-header__system-card-eyebrow">{{ t('admin.ops.db') }}</div>
             <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.db')" />
           </div>
-          <div class="mt-1 text-lg font-black" :class="dbMiddleDisplay.className">
+          <div class="ops-dashboard-header__system-card-value" :class="dbMiddleDisplay.className">
             {{ dbMiddleDisplay.label }}
           </div>
-          <div v-if="!props.fullscreen" class="ops-dashboard-header__label mt-1 text-[10px]">
+          <div v-if="!props.fullscreen" class="ops-dashboard-header__label ops-dashboard-header__system-card-meta">
             {{ t('admin.ops.conns') }} {{ dbConnOpenValue ?? '-' }} / {{ dbMaxOpenConnsValue ?? '-' }}
             · {{ t('admin.ops.active') }} {{ dbConnActiveValue ?? '-' }}
             · {{ t('admin.ops.idle') }} {{ dbConnIdleValue ?? '-' }}
@@ -1264,14 +1363,14 @@ function handleToolbarRefresh() {
 
         <!-- Redis -->
         <div class="ops-dashboard-header__system-card">
-          <div class="flex items-center gap-1">
-            <div class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase tracking-wider">Redis</div>
+          <div class="ops-dashboard-header__system-card-head">
+            <div class="ops-dashboard-header__eyebrow ops-dashboard-header__system-card-eyebrow">Redis</div>
             <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.redis')" />
           </div>
-          <div class="mt-1 text-lg font-black" :class="redisMiddleDisplay.className">
+          <div class="ops-dashboard-header__system-card-value" :class="redisMiddleDisplay.className">
             {{ redisMiddleDisplay.label }}
           </div>
-          <div v-if="!props.fullscreen" class="ops-dashboard-header__label mt-1 text-[10px]">
+          <div v-if="!props.fullscreen" class="ops-dashboard-header__label ops-dashboard-header__system-card-meta">
             {{ t('admin.ops.conns') }} {{ redisConnTotalValue ?? '-' }} / {{ redisPoolSizeValue ?? '-' }}
             <span v-if="redisConnActiveValue != null"> · {{ t('admin.ops.active') }} {{ redisConnActiveValue }} </span>
             <span v-if="redisConnIdleValue != null"> · {{ t('admin.ops.idle') }} {{ redisConnIdleValue }} </span>
@@ -1280,80 +1379,80 @@ function handleToolbarRefresh() {
 
         <!-- Goroutines -->
         <div class="ops-dashboard-header__system-card">
-          <div class="flex items-center gap-1">
-            <div class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase tracking-wider">{{ t('admin.ops.goroutines') }}</div>
+          <div class="ops-dashboard-header__system-card-head">
+            <div class="ops-dashboard-header__eyebrow ops-dashboard-header__system-card-eyebrow">{{ t('admin.ops.goroutines') }}</div>
             <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.goroutines')" />
           </div>
-          <div class="mt-1 text-lg font-black" :class="goroutineDisplay.className">
+          <div class="ops-dashboard-header__system-card-value" :class="goroutineDisplay.className">
             {{ goroutineDisplay.label }}
           </div>
-          <div v-if="!props.fullscreen" class="ops-dashboard-header__label mt-1 text-[10px]">
-            {{ t('admin.ops.current') }} <span class="font-mono">{{ goroutineCountValue ?? '-' }}</span>
-            · {{ t('common.warning') }} <span class="font-mono">{{ goroutinesWarnThreshold }}</span>
-            · {{ t('common.critical') }} <span class="font-mono">{{ goroutinesCriticalThreshold }}</span>
+          <div v-if="!props.fullscreen" class="ops-dashboard-header__label ops-dashboard-header__system-card-meta">
+            {{ t('admin.ops.current') }} <span class="ops-dashboard-header__mono">{{ goroutineCountValue ?? '-' }}</span>
+            · {{ t('common.warning') }} <span class="ops-dashboard-header__mono">{{ goroutinesWarnThreshold }}</span>
+            · {{ t('common.critical') }} <span class="ops-dashboard-header__mono">{{ goroutinesCriticalThreshold }}</span>
             <span v-if="systemMetrics?.concurrency_queue_depth != null">
-              · {{ t('admin.ops.queue') }} <span class="font-mono">{{ systemMetrics.concurrency_queue_depth }}</span>
+              · {{ t('admin.ops.queue') }} <span class="ops-dashboard-header__mono">{{ systemMetrics.concurrency_queue_depth }}</span>
             </span>
           </div>
         </div>
 
         <!-- Jobs -->
         <div class="ops-dashboard-header__system-card">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-1">
-              <div class="ops-dashboard-header__eyebrow text-[10px] font-bold uppercase tracking-wider">{{ t('admin.ops.jobs') }}</div>
+          <div class="ops-dashboard-header__system-card-head ops-dashboard-header__system-card-head--split">
+            <div class="ops-dashboard-header__system-card-head">
+              <div class="ops-dashboard-header__eyebrow ops-dashboard-header__system-card-eyebrow">{{ t('admin.ops.jobs') }}</div>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.jobs')" />
             </div>
-            <button v-if="!props.fullscreen" class="ops-dashboard-header__link text-[10px] font-bold" type="button" @click="openJobsDetails">
+            <button v-if="!props.fullscreen" class="ops-dashboard-header__link ops-dashboard-header__metric-card-link" type="button" @click="openJobsDetails">
               {{ t('admin.ops.requestDetails.details') }}
             </button>
           </div>
 
-          <div class="mt-1 text-lg font-black" :class="jobsDisplay.className">
+          <div class="ops-dashboard-header__system-card-value" :class="jobsDisplay.className">
             {{ jobsDisplay.label }}
           </div>
 
-          <div v-if="!props.fullscreen" class="ops-dashboard-header__label mt-1 text-[10px]">
-            {{ t('common.total') }} <span class="font-mono">{{ jobHeartbeats.length }}</span>
-            · {{ t('common.warning') }} <span class="font-mono">{{ jobsDisplay.warnCount }}</span>
+          <div v-if="!props.fullscreen" class="ops-dashboard-header__label ops-dashboard-header__system-card-meta">
+            {{ t('common.total') }} <span class="ops-dashboard-header__mono">{{ jobHeartbeats.length }}</span>
+            · {{ t('common.warning') }} <span class="ops-dashboard-header__mono">{{ jobsDisplay.warnCount }}</span>
           </div>
         </div>
       </div>
     </div>
 
     <BaseDialog :show="showJobsDetails" :title="t('admin.ops.jobs')" width="wide" @close="showJobsDetails = false">
-      <div v-if="!jobHeartbeats.length" class="ops-dashboard-header__label text-sm">
+      <div v-if="!jobHeartbeats.length" class="ops-dashboard-header__job-empty">
         {{ t('admin.ops.noData') }}
       </div>
-      <div v-else class="space-y-3">
+      <div v-else class="ops-dashboard-header__job-list">
         <div
           v-for="hb in jobHeartbeats"
           :key="hb.job_name"
           class="ops-dashboard-header__job-card"
         >
-          <div class="flex items-center justify-between gap-3">
-            <div class="ops-dashboard-header__value truncate text-sm font-semibold">{{ hb.job_name }}</div>
-            <div class="ops-dashboard-header__label flex items-center gap-3 text-xs">
-              <span v-if="hb.last_duration_ms != null" class="font-mono">{{ hb.last_duration_ms }}ms</span>
+          <div class="ops-dashboard-header__job-card-header">
+            <div class="ops-dashboard-header__value ops-dashboard-header__job-card-title" :title="hb.job_name">{{ hb.job_name }}</div>
+            <div class="ops-dashboard-header__label ops-dashboard-header__job-card-meta">
+              <span v-if="hb.last_duration_ms != null" class="ops-dashboard-header__mono">{{ hb.last_duration_ms }}ms</span>
               <span>{{ formatTimeShort(hb.updated_at) }}</span>
             </div>
           </div>
 
-          <div class="ops-dashboard-header__metric-list mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+          <div class="ops-dashboard-header__metric-list ops-dashboard-header__job-card-grid">
             <div>
-              {{ t('admin.ops.lastSuccess') }} <span class="font-mono">{{ formatTimeShort(hb.last_success_at) }}</span>
+              {{ t('admin.ops.lastSuccess') }} <span class="ops-dashboard-header__mono">{{ formatTimeShort(hb.last_success_at) }}</span>
             </div>
             <div>
-              {{ t('admin.ops.lastError') }} <span class="font-mono">{{ formatTimeShort(hb.last_error_at) }}</span>
+              {{ t('admin.ops.lastError') }} <span class="ops-dashboard-header__mono">{{ formatTimeShort(hb.last_error_at) }}</span>
             </div>
             <div>
-              {{ t('admin.ops.result') }} <span class="font-mono">{{ hb.last_result || '-' }}</span>
+              {{ t('admin.ops.result') }} <span class="ops-dashboard-header__mono">{{ hb.last_result || '-' }}</span>
             </div>
           </div>
 
           <div
             v-if="hb.last_error"
-            class="ops-dashboard-header__job-error mt-3 text-xs"
+            class="ops-dashboard-header__job-error"
           >
             {{ hb.last_error }}
           </div>
@@ -1363,38 +1462,38 @@ function handleToolbarRefresh() {
 
     <!-- Custom Time Range Dialog -->
     <BaseDialog :show="showCustomTimeRangeDialog" :title="t('admin.ops.timeRange.custom')" width="narrow" @close="handleCustomTimeRangeCancel">
-      <div class="space-y-4">
-        <div>
-          <label class="ops-dashboard-header__dialog-label mb-1 block text-sm font-medium">
+      <div class="ops-dashboard-header__dialog-body">
+        <div class="ops-dashboard-header__dialog-field">
+          <label class="ops-dashboard-header__dialog-label">
             {{ t('admin.ops.customTimeRange.startTime') }}
           </label>
           <input
             v-model="customStartTimeInput"
             type="datetime-local"
-            class="ops-dashboard-header__dialog-input w-full text-sm"
+            class="ops-dashboard-header__dialog-input"
           />
         </div>
-        <div>
-          <label class="ops-dashboard-header__dialog-label mb-1 block text-sm font-medium">
+        <div class="ops-dashboard-header__dialog-field">
+          <label class="ops-dashboard-header__dialog-label">
             {{ t('admin.ops.customTimeRange.endTime') }}
           </label>
           <input
             v-model="customEndTimeInput"
             type="datetime-local"
-            class="ops-dashboard-header__dialog-input w-full text-sm"
+            class="ops-dashboard-header__dialog-input"
           />
         </div>
-        <div class="flex justify-end gap-3 pt-2">
+        <div class="ops-dashboard-header__dialog-actions">
           <button
             type="button"
-            class="ops-dashboard-header__dialog-button ops-dashboard-header__dialog-button--secondary text-sm font-medium"
+            class="ops-dashboard-header__dialog-button ops-dashboard-header__dialog-button--secondary"
             @click="handleCustomTimeRangeCancel"
           >
             {{ t('common.cancel') }}
           </button>
           <button
             type="button"
-            class="ops-dashboard-header__dialog-button ops-dashboard-header__dialog-button--primary text-sm font-medium"
+            class="ops-dashboard-header__dialog-button ops-dashboard-header__dialog-button--primary"
             @click="handleCustomTimeRangeConfirm"
           >
             {{ t('common.confirm') }}
@@ -1407,6 +1506,9 @@ function handleToolbarRefresh() {
 
 <style scoped>
 .ops-dashboard-header__surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-dashboard-header-gap);
   border-radius: calc(var(--theme-surface-radius) * 2);
   background: var(--theme-surface);
   box-shadow: var(--theme-card-shadow);
@@ -1428,12 +1530,32 @@ function handleToolbarRefresh() {
 }
 
 .ops-dashboard-header__divider {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-ops-dashboard-header-gap);
+  padding-bottom: var(--theme-ops-dashboard-header-gap);
   border-bottom-width: 1px;
 }
 
 .ops-dashboard-header__title,
 .ops-dashboard-header__text {
   color: var(--theme-page-text);
+}
+
+.ops-dashboard-header__toolbar-copy,
+.ops-dashboard-header__dialog-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-dashboard-header__title {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--theme-ops-dashboard-header-control-gap) * 0.75);
+  font-size: var(--theme-ops-dashboard-header-text-xl);
+  font-weight: 900;
 }
 
 .ops-dashboard-header__title-icon,
@@ -1443,10 +1565,59 @@ function handleToolbarRefresh() {
   color: rgb(var(--theme-info-rgb));
 }
 
+.ops-dashboard-header__title-icon {
+  width: var(--theme-ops-dashboard-header-icon-size-md);
+  height: var(--theme-ops-dashboard-header-icon-size-md);
+}
+
 .ops-dashboard-header__meta,
 .ops-dashboard-header__muted,
 .ops-dashboard-header__popover-footer {
   color: var(--theme-page-muted);
+}
+
+.ops-dashboard-header__meta--toolbar,
+.ops-dashboard-header__status,
+.ops-dashboard-header__toolbar-actions,
+.ops-dashboard-header__toolbar-filters,
+.ops-dashboard-header__overview-grid,
+.ops-dashboard-header__dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ops-dashboard-header__meta--toolbar {
+  margin-top: calc(var(--theme-ops-dashboard-header-control-gap) * 0.5);
+  gap: var(--theme-ops-dashboard-header-meta-gap);
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+}
+
+.ops-dashboard-header__status {
+  gap: calc(var(--theme-ops-dashboard-header-control-gap) * 0.5);
+}
+
+.ops-dashboard-header__status-indicator {
+  position: relative;
+  display: flex;
+  width: var(--theme-ops-dashboard-header-dot-size-sm);
+  height: var(--theme-ops-dashboard-header-dot-size-sm);
+}
+
+.ops-dashboard-header__status-dot {
+  position: relative;
+  display: inline-flex;
+  width: var(--theme-ops-dashboard-header-dot-size-sm);
+  height: var(--theme-ops-dashboard-header-dot-size-sm);
+  border-radius: 999px;
+}
+
+.ops-dashboard-header__toolbar-actions {
+  gap: var(--theme-ops-dashboard-header-control-gap);
+}
+
+.ops-dashboard-header__toolbar-filters {
+  gap: var(--theme-ops-dashboard-header-control-gap);
 }
 
 .ops-dashboard-header__eyebrow {
@@ -1476,19 +1647,206 @@ function handleToolbarRefresh() {
 
 .ops-dashboard-header__toolbar-divider {
   width: max(var(--theme-card-border-width), 1px);
-  height: calc(var(--theme-button-padding-y) * 0.4 + 0.75rem);
+  height: var(--theme-ops-dashboard-header-divider-height);
   background: color-mix(in srgb, var(--theme-page-border) 82%, transparent);
+}
+
+.ops-dashboard-header__toolbar-divider--desktop {
+  display: none;
 }
 
 .ops-dashboard-header__select {
   width: 100%;
 }
 
+.ops-dashboard-header__select--anchored {
+  position: relative;
+}
+
+.ops-dashboard-header__icon,
+.ops-dashboard-header__icon-button {
+  width: var(--theme-ops-dashboard-header-icon-size-sm);
+  height: var(--theme-ops-dashboard-header-icon-size-sm);
+}
+
+.ops-dashboard-header__action-label {
+  display: none;
+}
+
+.ops-dashboard-header__mono {
+  font-family: var(--theme-font-mono);
+}
+
 .ops-dashboard-header__realtime {
+  height: 100%;
   padding-block: calc(var(--theme-ops-panel-padding) * 0.5);
+  justify-content: center;
+  gap: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__realtime-header {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--theme-ops-dashboard-header-space-sm);
+}
+
+.ops-dashboard-header__realtime-title-row,
+.ops-dashboard-header__runtime-strip-header {
+  gap: var(--theme-ops-dashboard-header-space-sm);
+}
+
+.ops-dashboard-header__realtime-title {
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ops-dashboard-header__realtime-indicator {
+  position: relative;
+  display: flex;
+  width: var(--theme-ops-dashboard-header-dot-size-md);
+  height: var(--theme-ops-dashboard-header-dot-size-md);
+  flex-shrink: 0;
+}
+
+.ops-dashboard-header__realtime-ping,
+.ops-dashboard-header__realtime-dot {
+  border-radius: 999px;
+}
+
+.ops-dashboard-header__realtime-ping {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  opacity: 0.75;
+  animation: ops-dashboard-header-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.ops-dashboard-header__realtime-dot {
+  position: relative;
+  display: inline-flex;
+  width: var(--theme-ops-dashboard-header-dot-size-md);
+  height: var(--theme-ops-dashboard-header-dot-size-md);
+}
+
+.ops-dashboard-header__realtime-window-group {
+  flex-wrap: wrap;
+  gap: var(--theme-ops-dashboard-header-space-xs);
+}
+
+.ops-dashboard-header__realtime-body {
+  gap: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__realtime-body--fullscreen {
+  gap: var(--theme-ops-dashboard-header-space-lg);
+}
+
+.ops-dashboard-header__realtime-section,
+.ops-dashboard-header__realtime-stat-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-dashboard-header__realtime-eyebrow {
+  font-size: var(--theme-ops-dashboard-header-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ops-dashboard-header__realtime-eyebrow--fullscreen {
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+}
+
+.ops-dashboard-header__realtime-current-grid {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--theme-ops-dashboard-header-space-sm) var(--theme-ops-dashboard-header-space-lg);
+  margin-top: var(--theme-ops-dashboard-header-space-xs);
+}
+
+.ops-dashboard-header__realtime-current-item,
+.ops-dashboard-header__realtime-metric-row,
+.ops-dashboard-header__metric-card-value-row,
+.ops-dashboard-header__metric-card-grid-row {
+  align-items: baseline;
+}
+
+.ops-dashboard-header__realtime-current-item,
+.ops-dashboard-header__realtime-metric-row,
+.ops-dashboard-header__runtime-chip-value-row,
+.ops-dashboard-header__metric-card-grid-row {
+  gap: calc(var(--theme-ops-dashboard-header-space-md) * 0.5);
+}
+
+.ops-dashboard-header__realtime-current-value {
+  font-size: var(--theme-ops-dashboard-header-text-xl);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ops-dashboard-header__realtime-current-value--fullscreen {
+  font-size: var(--theme-ops-dashboard-header-text-hero-lg);
+}
+
+.ops-dashboard-header__realtime-unit {
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+  font-weight: 700;
+}
+
+.ops-dashboard-header__realtime-unit--fullscreen {
+  font-size: var(--theme-ops-dashboard-header-text-md);
+}
+
+.ops-dashboard-header__realtime-stats-grid,
+.ops-dashboard-header__runtime-grid,
+.ops-dashboard-header__metric-card-grid {
+  display: grid;
+  gap: var(--theme-ops-dashboard-header-space-sm);
+}
+
+.ops-dashboard-header__realtime-stats-grid,
+.ops-dashboard-header__runtime-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ops-dashboard-header__realtime-metric-list {
+  margin-top: var(--theme-ops-dashboard-header-space-xs);
+  gap: var(--theme-ops-dashboard-header-space-2xs);
+  font-size: var(--theme-ops-dashboard-header-text-md);
+  font-weight: 500;
+}
+
+.ops-dashboard-header__realtime-metric-list--fullscreen {
+  font-size: var(--theme-button-font-size);
+}
+
+.ops-dashboard-header__realtime-metric-value {
+  font-weight: 900;
+}
+
+.ops-dashboard-header__realtime-metric-suffix {
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+}
+
+.ops-dashboard-header__pulse-strip {
+  width: 100%;
+  height: var(--theme-ops-dashboard-header-button-height);
+  overflow: hidden;
+  opacity: 0.5;
+}
+
+.ops-dashboard-header__pulse-svg {
+  width: 100%;
+  height: 100%;
 }
 
 @media (min-width: 640px) {
+  .ops-dashboard-header__toolbar-divider--desktop {
+    display: block;
+  }
+
   .ops-dashboard-header__select--platform {
     width: calc(var(--theme-ops-table-min-width) * 0.175);
   }
@@ -1504,6 +1862,14 @@ function handleToolbarRefresh() {
   .ops-dashboard-header__select--query-mode {
     width: calc(var(--theme-ops-table-min-width) * 0.2125);
   }
+
+  .ops-dashboard-header__action-label {
+    display: inline;
+  }
+
+  .ops-dashboard-header__window {
+    font-size: var(--theme-ops-dashboard-header-text-xs);
+  }
 }
 
 .ops-dashboard-header__icon-button,
@@ -1511,6 +1877,22 @@ function handleToolbarRefresh() {
   border-radius: var(--theme-button-radius);
   background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
   color: var(--theme-page-muted);
+}
+
+.ops-dashboard-header__icon-button,
+.ops-dashboard-header__action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--theme-ops-dashboard-header-control-gap) * 0.5);
+  height: var(--theme-ops-dashboard-header-button-height);
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+  font-weight: 700;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.ops-dashboard-header__icon-button {
+  width: var(--theme-ops-dashboard-header-button-height);
 }
 
 .ops-dashboard-header__action-button {
@@ -1537,12 +1919,268 @@ function handleToolbarRefresh() {
   background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-surface));
 }
 
+.ops-dashboard-header__overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--theme-ops-dashboard-header-grid-gap);
+}
+
+.ops-dashboard-header__panel--summary {
+  grid-column: span 1;
+}
+
 .ops-dashboard-header__panel--default {
   padding: var(--theme-ops-panel-padding);
 }
 
 .ops-dashboard-header__panel--fullscreen {
   padding: calc(var(--theme-ops-panel-padding) * 1.5);
+}
+
+.ops-dashboard-header__summary-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--theme-ops-dashboard-header-grid-gap);
+  height: 100%;
+}
+
+.ops-dashboard-header__health {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.ops-dashboard-header__popover-anchor {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  z-index: 50;
+  display: none;
+  width: var(--theme-ops-dashboard-header-popover-width);
+  margin-top: var(--theme-ops-dashboard-header-space-sm);
+  transform: translateX(-50%);
+}
+
+.ops-dashboard-header__health:hover .ops-dashboard-header__popover-anchor {
+  display: block;
+  pointer-events: auto;
+}
+
+.ops-dashboard-header__popover-title {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--theme-ops-dashboard-header-control-gap) * 0.75);
+  margin-bottom: var(--theme-ops-dashboard-header-space-md);
+  padding-bottom: var(--theme-ops-dashboard-header-space-sm);
+  font-size: var(--theme-ops-dashboard-header-text-md);
+  font-weight: 700;
+}
+
+.ops-dashboard-header__popover-list,
+.ops-dashboard-header__popover-copy,
+.ops-dashboard-header__realtime,
+.ops-dashboard-header__realtime-body,
+.ops-dashboard-header__metric-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-dashboard-header__popover-list,
+.ops-dashboard-header__metric-card-body--spacious {
+  gap: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__popover-item,
+.ops-dashboard-header__popover-action,
+.ops-dashboard-header__health-summary-title,
+.ops-dashboard-header__realtime-header,
+.ops-dashboard-header__realtime-title-row,
+.ops-dashboard-header__realtime-window-group,
+.ops-dashboard-header__realtime-current-grid,
+.ops-dashboard-header__realtime-current-item,
+.ops-dashboard-header__realtime-metric-row,
+.ops-dashboard-header__runtime-strip-header,
+.ops-dashboard-header__runtime-chip-value-row,
+.ops-dashboard-header__metric-card-header,
+.ops-dashboard-header__metric-card-heading,
+.ops-dashboard-header__metric-card-value-row,
+.ops-dashboard-header__metric-card-grid-row {
+  display: flex;
+  align-items: center;
+}
+
+.ops-dashboard-header__popover-item,
+.ops-dashboard-header__metric-card-header,
+.ops-dashboard-header__stat-row {
+  justify-content: space-between;
+}
+
+.ops-dashboard-header__popover-item {
+  align-items: flex-start;
+  gap: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__popover-icon-shell {
+  margin-top: var(--theme-ops-dashboard-header-space-2xs);
+  flex-shrink: 0;
+}
+
+.ops-dashboard-header__popover-icon {
+  width: var(--theme-ops-dashboard-header-icon-size-sm);
+  height: var(--theme-ops-dashboard-header-icon-size-sm);
+}
+
+.ops-dashboard-header__popover-copy {
+  min-width: 0;
+  flex: 1;
+  gap: var(--theme-ops-dashboard-header-space-2xs);
+}
+
+.ops-dashboard-header__popover-message {
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+  font-weight: 600;
+}
+
+.ops-dashboard-header__popover-impact,
+.ops-dashboard-header__popover-action {
+  font-size: var(--theme-ops-dashboard-header-text-subtle);
+}
+
+.ops-dashboard-header__popover-action {
+  gap: var(--theme-ops-dashboard-header-space-xs);
+  margin-top: var(--theme-ops-dashboard-header-space-2xs);
+}
+
+.ops-dashboard-header__popover-footer--spaced {
+  margin-top: var(--theme-ops-dashboard-header-space-md);
+  padding-top: var(--theme-ops-dashboard-header-space-sm);
+  font-size: var(--theme-ops-dashboard-header-text-xs);
+}
+
+.ops-dashboard-header__health-visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ops-dashboard-header__health-ring {
+  transform: rotate(-90deg);
+}
+
+.ops-dashboard-header__health-copy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ops-dashboard-header__health-score {
+  font-size: var(--theme-ops-dashboard-header-text-hero);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ops-dashboard-header__health-score--fullscreen {
+  font-size: var(--theme-ops-dashboard-header-text-score-lg);
+}
+
+.ops-dashboard-header__health-label {
+  font-size: var(--theme-ops-dashboard-header-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ops-dashboard-header__health-label--fullscreen {
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+}
+
+.ops-dashboard-header__health-summary {
+  margin-top: var(--theme-ops-dashboard-header-space-lg);
+  text-align: center;
+}
+
+.ops-dashboard-header__health-summary-title {
+  justify-content: center;
+  gap: var(--theme-ops-dashboard-header-space-xs);
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+  font-weight: 500;
+}
+
+.ops-dashboard-header__health-summary-state {
+  margin-top: var(--theme-ops-dashboard-header-space-xs);
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+  font-weight: 700;
+}
+
+.ops-dashboard-header__dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-dashboard-header-gap);
+}
+
+.ops-dashboard-header__dialog-field {
+  gap: calc(var(--theme-ops-dashboard-header-control-gap) * 0.5);
+}
+
+.ops-dashboard-header__dialog-label {
+  display: block;
+  font-size: var(--theme-ops-dashboard-header-text-md);
+  font-weight: 500;
+  color: var(--theme-page-text);
+}
+
+.ops-dashboard-header__dialog-input {
+  width: 100%;
+  font-size: var(--theme-ops-dashboard-header-text-md);
+}
+
+.ops-dashboard-header__dialog-actions {
+  justify-content: flex-end;
+  gap: var(--theme-ops-dashboard-header-control-gap);
+  padding-top: calc(var(--theme-ops-dashboard-header-control-gap) * 0.5);
+}
+
+.ops-dashboard-header__dialog-button {
+  font-size: var(--theme-ops-dashboard-header-text-md);
+  font-weight: 500;
+}
+
+@media (min-width: 768px) {
+  .ops-dashboard-header__summary-layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .ops-dashboard-header__health {
+    padding-right: 1.5rem;
+  }
+
+  .ops-dashboard-header__popover-anchor {
+    left: 100%;
+    top: 0;
+    margin-top: 0;
+    margin-left: var(--theme-ops-dashboard-header-space-sm);
+    transform: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ops-dashboard-header__overview-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .ops-dashboard-header__panel--summary {
+    grid-column: span 5;
+  }
 }
 
 .ops-dashboard-header__metric-card,
@@ -1552,7 +2190,16 @@ function handleToolbarRefresh() {
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 64%, transparent);
 }
 
+.ops-dashboard-header__metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--theme-ops-dashboard-header-space-lg);
+  height: 100%;
+}
+
 .ops-dashboard-header__metric-card {
+  display: flex;
+  flex-direction: column;
   padding: var(--theme-ops-panel-padding);
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--theme-surface-contrast) 32%, transparent);
   /* Stretch to fill the row track so both metric rows visually align with the
@@ -1560,6 +2207,74 @@ function handleToolbarRefresh() {
      the card in constrained rows without overflowing. */
   height: 100%;
   min-height: 0;
+}
+
+.ops-dashboard-header__metric-card-header {
+  gap: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__metric-card-heading {
+  gap: var(--theme-ops-dashboard-header-space-xs);
+}
+
+.ops-dashboard-header__metric-card-heading--wide {
+  gap: var(--theme-ops-dashboard-header-space-sm);
+}
+
+.ops-dashboard-header__metric-card-eyebrow {
+  font-size: var(--theme-ops-dashboard-header-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ops-dashboard-header__metric-card-link {
+  font-size: var(--theme-ops-dashboard-header-text-xs);
+  font-weight: 700;
+}
+
+.ops-dashboard-header__metric-card-value {
+  color: var(--theme-page-text);
+}
+
+.ops-dashboard-header__metric-card-value--hero {
+  margin-top: var(--theme-ops-dashboard-header-space-sm);
+  font-size: var(--theme-ops-dashboard-header-text-hero);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ops-dashboard-header__metric-card-body {
+  margin-top: var(--theme-ops-dashboard-header-space-md);
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+}
+
+.ops-dashboard-header__metric-card-grid {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: var(--theme-ops-dashboard-header-space-md);
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+}
+
+.ops-dashboard-header__metric-card-grid-row {
+  white-space: nowrap;
+}
+
+.ops-dashboard-header__metric-card-stat-value {
+  font-weight: 700;
+}
+
+.ops-dashboard-header__metric-card-indicator {
+  width: var(--theme-ops-dashboard-header-indicator-size);
+  height: var(--theme-ops-dashboard-header-indicator-size);
+  border-radius: 999px;
+}
+
+.ops-dashboard-header__metric-card-unit {
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+  font-weight: 700;
+}
+
+.ops-dashboard-header__metric-card-unit--compact {
+  font-size: var(--theme-ops-dashboard-header-text-sm);
 }
 
 .ops-dashboard-header__system-card {
@@ -1570,7 +2285,56 @@ function handleToolbarRefresh() {
 }
 
 .ops-dashboard-header__system-section {
+  margin-top: var(--theme-ops-dashboard-header-space-sm);
+  padding-top: var(--theme-ops-dashboard-header-space-lg);
   border-top: 1px solid color-mix(in srgb, var(--theme-page-border) 78%, transparent);
+}
+
+.ops-dashboard-header__system-grid,
+.ops-dashboard-header__job-card-grid {
+  display: grid;
+  gap: var(--theme-ops-dashboard-header-space-sm);
+}
+
+.ops-dashboard-header__system-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__system-card-head,
+.ops-dashboard-header__job-card-header,
+.ops-dashboard-header__job-card-meta {
+  display: flex;
+  align-items: center;
+}
+
+.ops-dashboard-header__system-card-head {
+  gap: var(--theme-ops-dashboard-header-space-xs);
+}
+
+.ops-dashboard-header__system-card-head--split,
+.ops-dashboard-header__job-card-header {
+  justify-content: space-between;
+  gap: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__system-card-eyebrow {
+  font-size: var(--theme-ops-dashboard-header-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ops-dashboard-header__system-card-value {
+  margin-top: var(--theme-ops-dashboard-header-space-xs);
+  font-size: var(--theme-ops-dashboard-header-text-lg);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.ops-dashboard-header__system-card-meta {
+  margin-top: var(--theme-ops-dashboard-header-space-xs);
+  font-size: var(--theme-ops-dashboard-header-text-xs);
 }
 
 .ops-dashboard-header__link {
@@ -1582,11 +2346,19 @@ function handleToolbarRefresh() {
 }
 
 .ops-dashboard-header__stat-row {
-  gap: 0.75rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--theme-ops-dashboard-header-space-md);
 }
 
 .ops-dashboard-header__progress-track {
   display: none;
+}
+
+.ops-dashboard-header__progress-bar {
+  height: 100%;
+  transition: width 0.2s ease;
 }
 
 .ops-dashboard-header__pulse-line {
@@ -1595,7 +2367,11 @@ function handleToolbarRefresh() {
 
 .ops-dashboard-header__runtime-strip {
   border-top: 1px solid color-mix(in srgb, var(--theme-page-border) 72%, transparent);
-  padding-top: 0.75rem;
+  padding-top: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__runtime-strip-header {
+  margin-bottom: var(--theme-ops-dashboard-header-space-sm);
 }
 
 .ops-dashboard-header__runtime-chip {
@@ -1603,6 +2379,27 @@ function handleToolbarRefresh() {
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 60%, transparent);
   background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
   padding: 0.6rem 0.7rem;
+}
+
+.ops-dashboard-header__runtime-chip-label {
+  font-size: var(--theme-ops-dashboard-header-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ops-dashboard-header__runtime-chip-value-row {
+  margin-top: var(--theme-ops-dashboard-header-space-xs);
+}
+
+.ops-dashboard-header__runtime-chip-value {
+  font-size: var(--theme-ops-dashboard-header-text-md);
+  font-weight: 900;
+}
+
+.ops-dashboard-header__runtime-chip-suffix {
+  font-size: var(--theme-ops-dashboard-header-text-xs);
+  font-weight: 700;
 }
 
 .ops-dashboard-header__health:hover {
@@ -1647,6 +2444,9 @@ function handleToolbarRefresh() {
     calc(var(--theme-button-padding-y) * 0.25)
     calc(var(--theme-button-padding-x) * 0.32);
   border-radius: calc(var(--theme-button-radius) * 0.75);
+  font-size: var(--theme-ops-dashboard-header-text-micro);
+  font-weight: 700;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .ops-dashboard-header__window--idle {
@@ -1665,11 +2465,42 @@ function handleToolbarRefresh() {
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
 }
 
+.ops-dashboard-header__job-empty {
+  font-size: var(--theme-ops-dashboard-header-text-md);
+}
+
+.ops-dashboard-header__job-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-dashboard-header-space-md);
+}
+
+.ops-dashboard-header__job-card-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--theme-ops-dashboard-header-text-md);
+  font-weight: 600;
+}
+
+.ops-dashboard-header__job-card-meta {
+  gap: var(--theme-ops-dashboard-header-space-md);
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+}
+
+.ops-dashboard-header__job-card-grid {
+  margin-top: var(--theme-ops-dashboard-header-space-sm);
+  font-size: var(--theme-ops-dashboard-header-text-sm);
+}
+
 .ops-dashboard-header__job-error {
+  margin-top: var(--theme-ops-dashboard-header-space-md);
   padding: calc(var(--theme-ops-panel-padding) * 0.5);
   border-radius: var(--theme-button-radius);
   background: color-mix(in srgb, rgb(var(--theme-brand-rose-rgb)) 11%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-brand-rose-rgb)) 86%, var(--theme-page-text));
+  font-size: var(--theme-ops-dashboard-header-text-sm);
 }
 
 .ops-dashboard-header__dialog-label {
@@ -1741,5 +2572,42 @@ function handleToolbarRefresh() {
 
 .ops-dashboard-header__tone--muted {
   color: color-mix(in srgb, var(--theme-page-text) 18%, var(--theme-page-muted));
+}
+
+@media (min-width: 1024px) {
+  .ops-dashboard-header__metrics {
+    grid-column: span 7;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-dashboard-header__system-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1536px) {
+  .ops-dashboard-header__metric-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--theme-ops-dashboard-header-metric-column-gap);
+  }
+}
+
+@media (min-width: 640px) {
+  .ops-dashboard-header__system-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ops-dashboard-header__job-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@keyframes ops-dashboard-header-ping {
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
 }
 </style>

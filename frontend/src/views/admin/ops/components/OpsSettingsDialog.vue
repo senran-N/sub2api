@@ -220,22 +220,22 @@ async function saveAllSettings() {
 
 <template>
   <BaseDialog :show="show" :title="t('admin.ops.settings.title')" width="extra-wide" @close="emit('close')">
-    <div v-if="loading" class="ops-settings-dialog__loading ops-settings-dialog__subtitle text-center text-sm">
+    <div v-if="loading" class="ops-settings-dialog__loading ops-settings-dialog__subtitle ops-settings-dialog__loading-text">
       {{ t('common.loading') }}
     </div>
 
-    <div v-else-if="runtimeSettings && emailConfig && advancedSettings" class="space-y-6">
+    <div v-else-if="runtimeSettings && emailConfig && advancedSettings" class="ops-settings-dialog__content">
       <!-- 验证错误 -->
-      <div v-if="!validation.valid" class="ops-settings-dialog__notice ops-settings-dialog__notice--warning border text-xs">
-        <div class="font-bold">{{ t('admin.ops.settings.validation.title') }}</div>
-        <ul class="mt-1 list-disc space-y-1 pl-4">
+      <div v-if="!validation.valid" class="ops-settings-dialog__notice ops-settings-dialog__notice--warning">
+        <div class="ops-settings-dialog__notice-title">{{ t('admin.ops.settings.validation.title') }}</div>
+        <ul class="ops-settings-dialog__notice-list">
           <li v-for="msg in validation.errors" :key="msg">{{ msg }}</li>
         </ul>
       </div>
 
       <!-- 数据采集频率 -->
       <div class="ops-settings-dialog__panel">
-        <h4 class="ops-settings-dialog__title mb-3 text-sm font-semibold">{{ t('admin.ops.settings.dataCollection') }}</h4>
+        <h4 class="ops-settings-dialog__section-title">{{ t('admin.ops.settings.dataCollection') }}</h4>
         <div>
           <label class="input-label">{{ t('admin.ops.settings.evaluationInterval') }}</label>
           <input
@@ -245,25 +245,25 @@ async function saveAllSettings() {
             max="86400"
             class="input"
           />
-          <p class="ops-settings-dialog__subtitle mt-1 text-xs">{{ t('admin.ops.settings.evaluationIntervalHint') }}</p>
+          <p class="ops-settings-dialog__hint">{{ t('admin.ops.settings.evaluationIntervalHint') }}</p>
         </div>
       </div>
 
       <!-- 预警配置 -->
       <div class="ops-settings-dialog__panel">
-        <h4 class="ops-settings-dialog__title mb-3 text-sm font-semibold">{{ t('admin.ops.settings.alertConfig') }}</h4>
+        <h4 class="ops-settings-dialog__section-title">{{ t('admin.ops.settings.alertConfig') }}</h4>
 
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="ops-settings-dialog__label font-medium">{{ t('admin.ops.settings.enableAlert') }}</label>
+        <div class="ops-settings-dialog__stack">
+          <div class="ops-settings-dialog__toggle-row">
+            <div class="ops-settings-dialog__toggle-copy">
+              <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.enableAlert') }}</label>
             </div>
             <Toggle v-model="emailConfig.alert.enabled" />
           </div>
 
-          <div v-if="emailConfig.alert.enabled">
+          <div v-if="emailConfig.alert.enabled" class="ops-settings-dialog__recipient-section">
             <label class="input-label">{{ t('admin.ops.settings.alertRecipients') }}</label>
-            <div class="flex gap-2">
+            <div class="ops-settings-dialog__recipient-entry">
               <input
                 v-model="alertRecipientInput"
                 type="email"
@@ -271,21 +271,21 @@ async function saveAllSettings() {
                 :placeholder="t('admin.ops.settings.emailPlaceholder')"
                 @keydown.enter.prevent="addRecipient('alert')"
               />
-              <button class="btn btn-secondary whitespace-nowrap" type="button" @click="addRecipient('alert')">
+              <button class="ops-settings-dialog__recipient-action btn btn-secondary" type="button" @click="addRecipient('alert')">
                 {{ t('common.add') }}
               </button>
             </div>
-            <div class="mt-2 flex flex-wrap gap-2">
+            <div class="ops-settings-dialog__recipient-list">
               <span
                 v-for="email in emailConfig.alert.recipients"
                 :key="email"
-                class="ops-settings-dialog__recipient-chip theme-chip theme-chip--info theme-chip--regular inline-flex items-center gap-2 text-xs font-medium"
+                class="ops-settings-dialog__recipient-chip theme-chip theme-chip--info theme-chip--regular"
               >
                 {{ email }}
                 <button type="button" class="ops-settings-dialog__chip-remove" @click="removeRecipient('alert', email)">×</button>
               </span>
             </div>
-            <p class="ops-settings-dialog__subtitle mt-2 text-xs">
+            <p class="ops-settings-dialog__hint ops-settings-dialog__hint--spacious">
               {{ t('admin.ops.settings.recipientsHint') }}
             </p>
           </div>
@@ -299,19 +299,19 @@ async function saveAllSettings() {
 
       <!-- 评估报告配置 -->
       <div class="ops-settings-dialog__panel">
-        <h4 class="ops-settings-dialog__title mb-3 text-sm font-semibold">{{ t('admin.ops.settings.reportConfig') }}</h4>
+        <h4 class="ops-settings-dialog__section-title">{{ t('admin.ops.settings.reportConfig') }}</h4>
 
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="ops-settings-dialog__label font-medium">{{ t('admin.ops.settings.enableReport') }}</label>
+        <div class="ops-settings-dialog__stack">
+          <div class="ops-settings-dialog__toggle-row">
+            <div class="ops-settings-dialog__toggle-copy">
+              <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.enableReport') }}</label>
             </div>
             <Toggle v-model="emailConfig.report.enabled" />
           </div>
 
-          <div v-if="emailConfig.report.enabled">
+          <div v-if="emailConfig.report.enabled" class="ops-settings-dialog__recipient-section">
             <label class="input-label">{{ t('admin.ops.settings.reportRecipients') }}</label>
-            <div class="flex gap-2">
+            <div class="ops-settings-dialog__recipient-entry">
               <input
                 v-model="reportRecipientInput"
                 type="email"
@@ -319,50 +319,55 @@ async function saveAllSettings() {
                 :placeholder="t('admin.ops.settings.emailPlaceholder')"
                 @keydown.enter.prevent="addRecipient('report')"
               />
-              <button class="btn btn-secondary whitespace-nowrap" type="button" @click="addRecipient('report')">
+              <button class="ops-settings-dialog__recipient-action btn btn-secondary" type="button" @click="addRecipient('report')">
                 {{ t('common.add') }}
               </button>
             </div>
-            <div class="mt-2 flex flex-wrap gap-2">
+            <div class="ops-settings-dialog__recipient-list">
               <span
                 v-for="email in emailConfig.report.recipients"
                 :key="email"
-                class="ops-settings-dialog__recipient-chip theme-chip theme-chip--info theme-chip--regular inline-flex items-center gap-2 text-xs font-medium"
+                class="ops-settings-dialog__recipient-chip theme-chip theme-chip--info theme-chip--regular"
               >
                 {{ email }}
                 <button type="button" class="ops-settings-dialog__chip-remove" @click="removeRecipient('report', email)">×</button>
               </span>
             </div>
-            <p class="ops-settings-dialog__subtitle mt-2 text-xs">
+            <p class="ops-settings-dialog__hint ops-settings-dialog__hint--spacious">
               {{ t('admin.ops.settings.recipientsHint') }}
             </p>
           </div>
 
-          <div v-if="emailConfig.report.enabled" class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div class="flex items-center justify-between">
-              <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.dailySummary') }}</label>
-              <Toggle v-model="emailConfig.report.daily_summary_enabled" />
-            </div>
-            <div v-if="emailConfig.report.daily_summary_enabled">
-              <input v-model="emailConfig.report.daily_summary_schedule" type="text" class="input" placeholder="0 9 * * *" />
-            </div>
-            <div class="flex items-center justify-between">
-              <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.weeklySummary') }}</label>
-              <Toggle v-model="emailConfig.report.weekly_summary_enabled" />
-            </div>
-            <div v-if="emailConfig.report.weekly_summary_enabled">
-              <input v-model="emailConfig.report.weekly_summary_schedule" type="text" class="input" placeholder="0 9 * * 1" />
-            </div>
+          <div v-if="emailConfig.report.enabled" class="ops-settings-dialog__schedule-list">
+            <section class="ops-settings-dialog__schedule-item">
+              <div class="ops-settings-dialog__toggle-row">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.dailySummary') }}</label>
+                <Toggle v-model="emailConfig.report.daily_summary_enabled" />
+              </div>
+              <div v-if="emailConfig.report.daily_summary_enabled" class="ops-settings-dialog__schedule-input">
+                <input v-model="emailConfig.report.daily_summary_schedule" type="text" class="input" placeholder="0 9 * * *" />
+              </div>
+            </section>
+
+            <section class="ops-settings-dialog__schedule-item">
+              <div class="ops-settings-dialog__toggle-row">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.weeklySummary') }}</label>
+                <Toggle v-model="emailConfig.report.weekly_summary_enabled" />
+              </div>
+              <div v-if="emailConfig.report.weekly_summary_enabled" class="ops-settings-dialog__schedule-input">
+                <input v-model="emailConfig.report.weekly_summary_schedule" type="text" class="input" placeholder="0 9 * * 1" />
+              </div>
+            </section>
           </div>
         </div>
       </div>
 
       <!-- 指标阈值配置 -->
       <div class="ops-settings-dialog__panel">
-        <h4 class="ops-settings-dialog__title mb-3 text-sm font-semibold">{{ t('admin.ops.settings.metricThresholds') }}</h4>
-        <p class="ops-settings-dialog__subtitle mb-4 text-xs">{{ t('admin.ops.settings.metricThresholdsHint') }}</p>
+        <h4 class="ops-settings-dialog__section-title">{{ t('admin.ops.settings.metricThresholds') }}</h4>
+        <p class="ops-settings-dialog__hint ops-settings-dialog__hint--section">{{ t('admin.ops.settings.metricThresholdsHint') }}</p>
 
-        <div class="space-y-4">
+        <div class="ops-settings-dialog__stack">
           <div>
             <label class="input-label">{{ t('admin.ops.settings.slaMinPercent') }}</label>
             <input
@@ -373,7 +378,7 @@ async function saveAllSettings() {
               step="0.1"
               class="input"
             />
-            <p class="ops-settings-dialog__subtitle mt-1 text-xs">{{ t('admin.ops.settings.slaMinPercentHint') }}</p>
+            <p class="ops-settings-dialog__hint">{{ t('admin.ops.settings.slaMinPercentHint') }}</p>
           </div>
 
 
@@ -386,7 +391,7 @@ async function saveAllSettings() {
               step="50"
               class="input"
             />
-            <p class="ops-settings-dialog__subtitle mt-1 text-xs">{{ t('admin.ops.settings.ttftP99MaxMsHint') }}</p>
+            <p class="ops-settings-dialog__hint">{{ t('admin.ops.settings.ttftP99MaxMsHint') }}</p>
           </div>
 
           <div>
@@ -399,7 +404,7 @@ async function saveAllSettings() {
               step="0.1"
               class="input"
             />
-            <p class="ops-settings-dialog__subtitle mt-1 text-xs">{{ t('admin.ops.settings.requestErrorRateMaxPercentHint') }}</p>
+            <p class="ops-settings-dialog__hint">{{ t('admin.ops.settings.requestErrorRateMaxPercentHint') }}</p>
           </div>
 
           <div>
@@ -412,23 +417,23 @@ async function saveAllSettings() {
               step="0.1"
               class="input"
             />
-            <p class="ops-settings-dialog__subtitle mt-1 text-xs">{{ t('admin.ops.settings.upstreamErrorRateMaxPercentHint') }}</p>
+            <p class="ops-settings-dialog__hint">{{ t('admin.ops.settings.upstreamErrorRateMaxPercentHint') }}</p>
           </div>
         </div>
       </div>
 
       <!-- 高级设置 -->
       <details class="ops-settings-dialog__panel">
-        <summary class="ops-settings-dialog__title cursor-pointer text-sm font-semibold">
+        <summary class="ops-settings-dialog__section-title ops-settings-dialog__summary">
           {{ t('admin.ops.settings.advancedSettings') }}
         </summary>
-        <div class="ops-settings-dialog__advanced-content space-y-4">
+        <div class="ops-settings-dialog__advanced-content">
           <!-- 数据保留策略 -->
-          <div class="space-y-3">
-            <h5 class="ops-settings-dialog__label text-xs font-semibold">{{ t('admin.ops.settings.dataRetention') }}</h5>
+          <div class="ops-settings-dialog__advanced-section">
+            <h5 class="ops-settings-dialog__subsection-title">{{ t('admin.ops.settings.dataRetention') }}</h5>
 
-            <div class="flex items-center justify-between">
-              <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.enableCleanup') }}</label>
+            <div class="ops-settings-dialog__toggle-row">
+              <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.enableCleanup') }}</label>
               <Toggle v-model="advancedSettings.data_retention.cleanup_enabled" />
             </div>
 
@@ -440,11 +445,11 @@ async function saveAllSettings() {
                 class="input"
                 placeholder="0 2 * * *"
               />
-              <p class="ops-settings-dialog__subtitle mt-1 text-xs">{{ t('admin.ops.settings.cleanupScheduleHint') }}</p>
+              <p class="ops-settings-dialog__hint">{{ t('admin.ops.settings.cleanupScheduleHint') }}</p>
             </div>
 
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div>
+            <div class="ops-settings-dialog__retention-fields">
+              <div class="ops-settings-dialog__retention-field">
                 <label class="input-label">{{ t('admin.ops.settings.errorLogRetentionDays') }}</label>
                 <input
                   v-model.number="advancedSettings.data_retention.error_log_retention_days"
@@ -454,7 +459,7 @@ async function saveAllSettings() {
                   class="input"
                 />
               </div>
-              <div>
+              <div class="ops-settings-dialog__retention-field">
                 <label class="input-label">{{ t('admin.ops.settings.minuteMetricsRetentionDays') }}</label>
                 <input
                   v-model.number="advancedSettings.data_retention.minute_metrics_retention_days"
@@ -464,7 +469,7 @@ async function saveAllSettings() {
                   class="input"
                 />
               </div>
-              <div>
+              <div class="ops-settings-dialog__retention-field">
                 <label class="input-label">{{ t('admin.ops.settings.hourlyMetricsRetentionDays') }}</label>
                 <input
                   v-model.number="advancedSettings.data_retention.hourly_metrics_retention_days"
@@ -475,70 +480,70 @@ async function saveAllSettings() {
                 />
               </div>
             </div>
-            <p class="ops-settings-dialog__subtitle text-xs">{{ t('admin.ops.settings.retentionDaysHint') }}</p>
+            <p class="ops-settings-dialog__hint">{{ t('admin.ops.settings.retentionDaysHint') }}</p>
           </div>
 
           <!-- 预聚合任务 -->
-          <div class="space-y-3">
-            <h5 class="ops-settings-dialog__label text-xs font-semibold">{{ t('admin.ops.settings.aggregation') }}</h5>
+          <div class="ops-settings-dialog__advanced-section">
+            <h5 class="ops-settings-dialog__subsection-title">{{ t('admin.ops.settings.aggregation') }}</h5>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.enableAggregation') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">{{ t('admin.ops.settings.aggregationHint') }}</p>
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.enableAggregation') }}</label>
+                <p class="ops-settings-dialog__hint">{{ t('admin.ops.settings.aggregationHint') }}</p>
               </div>
               <Toggle v-model="advancedSettings.aggregation.aggregation_enabled" />
             </div>
           </div>
 
           <!-- Error Filtering -->
-          <div class="space-y-3">
-            <h5 class="ops-settings-dialog__label text-xs font-semibold">{{ t('admin.ops.settings.errorFiltering') }}</h5>
+          <div class="ops-settings-dialog__advanced-section">
+            <h5 class="ops-settings-dialog__subsection-title">{{ t('admin.ops.settings.errorFiltering') }}</h5>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.ignoreCountTokensErrors') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.ignoreCountTokensErrors') }}</label>
+                <p class="ops-settings-dialog__hint">
                   {{ t('admin.ops.settings.ignoreCountTokensErrorsHint') }}
                 </p>
               </div>
               <Toggle v-model="advancedSettings.ignore_count_tokens_errors" />
             </div>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.ignoreContextCanceled') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.ignoreContextCanceled') }}</label>
+                <p class="ops-settings-dialog__hint">
                   {{ t('admin.ops.settings.ignoreContextCanceledHint') }}
                 </p>
               </div>
               <Toggle v-model="advancedSettings.ignore_context_canceled" />
             </div>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.ignoreNoAvailableAccounts') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.ignoreNoAvailableAccounts') }}</label>
+                <p class="ops-settings-dialog__hint">
                   {{ t('admin.ops.settings.ignoreNoAvailableAccountsHint') }}
                 </p>
               </div>
               <Toggle v-model="advancedSettings.ignore_no_available_accounts" />
             </div>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.ignoreInvalidApiKeyErrors') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.ignoreInvalidApiKeyErrors') }}</label>
+                <p class="ops-settings-dialog__hint">
                   {{ t('admin.ops.settings.ignoreInvalidApiKeyErrorsHint') }}
                 </p>
               </div>
               <Toggle v-model="advancedSettings.ignore_invalid_api_key_errors" />
             </div>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.ignoreInsufficientBalanceErrors') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.ignoreInsufficientBalanceErrors') }}</label>
+                <p class="ops-settings-dialog__hint">
                   {{ t('admin.ops.settings.ignoreInsufficientBalanceErrorsHint') }}
                 </p>
               </div>
@@ -547,13 +552,13 @@ async function saveAllSettings() {
           </div>
 
           <!-- Auto Refresh -->
-          <div class="space-y-3">
-            <h5 class="ops-settings-dialog__label text-xs font-semibold">{{ t('admin.ops.settings.autoRefresh') }}</h5>
+          <div class="ops-settings-dialog__advanced-section">
+            <h5 class="ops-settings-dialog__subsection-title">{{ t('admin.ops.settings.autoRefresh') }}</h5>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.enableAutoRefresh') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.enableAutoRefresh') }}</label>
+                <p class="ops-settings-dialog__hint">
                   {{ t('admin.ops.settings.enableAutoRefreshHint') }}
                 </p>
               </div>
@@ -574,23 +579,23 @@ async function saveAllSettings() {
           </div>
 
           <!-- Dashboard Cards -->
-          <div class="space-y-3">
-            <h5 class="ops-settings-dialog__label text-xs font-semibold">{{ t('admin.ops.settings.dashboardCards') }}</h5>
+          <div class="ops-settings-dialog__advanced-section">
+            <h5 class="ops-settings-dialog__subsection-title">{{ t('admin.ops.settings.dashboardCards') }}</h5>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.displayAlertEvents') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.displayAlertEvents') }}</label>
+                <p class="ops-settings-dialog__hint">
                   {{ t('admin.ops.settings.displayAlertEventsHint') }}
                 </p>
               </div>
               <Toggle v-model="advancedSettings.display_alert_events" />
             </div>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="ops-settings-dialog__label text-sm font-medium">{{ t('admin.ops.settings.displayOpenAITokenStats') }}</label>
-                <p class="ops-settings-dialog__subtitle mt-1 text-xs">
+            <div class="ops-settings-dialog__toggle-row">
+              <div class="ops-settings-dialog__toggle-copy">
+                <label class="ops-settings-dialog__toggle-label">{{ t('admin.ops.settings.displayOpenAITokenStats') }}</label>
+                <p class="ops-settings-dialog__hint">
                   {{ t('admin.ops.settings.displayOpenAITokenStatsHint') }}
                 </p>
               </div>
@@ -602,7 +607,7 @@ async function saveAllSettings() {
     </div>
 
     <template #footer>
-      <div class="flex justify-end gap-2">
+      <div class="ops-settings-dialog__footer">
         <button class="btn btn-secondary" @click="emit('close')">{{ t('common.cancel') }}</button>
         <button class="btn btn-primary" :disabled="saving || !validation.valid" @click="saveAllSettings">
           {{ saving ? t('common.saving') : t('common.save') }}
@@ -622,8 +627,19 @@ async function saveAllSettings() {
   color: var(--theme-page-muted);
 }
 
+.ops-settings-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-settings-section-gap);
+}
+
 .ops-settings-dialog__loading {
   padding-block: calc(var(--theme-ops-card-padding) * 1.5);
+}
+
+.ops-settings-dialog__loading-text {
+  text-align: center;
+  font-size: 0.875rem;
 }
 
 .ops-settings-dialog__panel {
@@ -632,15 +648,111 @@ async function saveAllSettings() {
   background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
 }
 
+.ops-settings-dialog__section-title {
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .ops-settings-dialog__notice {
-  padding: calc(var(--theme-ops-panel-padding) * 0.75);
+  padding: var(--theme-ops-settings-notice-padding);
   border-radius: var(--theme-button-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
   border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+  font-size: 0.75rem;
 }
 
 .ops-settings-dialog__notice--warning {
   background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+}
+
+.ops-settings-dialog__notice-title {
+  font-weight: 700;
+}
+
+.ops-settings-dialog__notice-list {
+  margin-top: 0.375rem;
+  padding-left: 1rem;
+  list-style: disc;
+}
+
+.ops-settings-dialog__notice-list li + li {
+  margin-top: 0.25rem;
+}
+
+.ops-settings-dialog__stack,
+.ops-settings-dialog__advanced-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-settings-field-gap);
+}
+
+.ops-settings-dialog__subsection-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ops-settings-dialog__toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--theme-ops-settings-toggle-gap);
+}
+
+.ops-settings-dialog__toggle-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ops-settings-dialog__toggle-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.ops-settings-dialog__hint {
+  max-width: min(100%, var(--theme-ops-settings-hint-max-width));
+  margin-top: 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+}
+
+.ops-settings-dialog__hint--section {
+  margin-bottom: 1rem;
+}
+
+.ops-settings-dialog__hint--spacious {
+  margin-top: 0.5rem;
+}
+
+.ops-settings-dialog__recipient-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ops-settings-dialog__recipient-entry,
+.ops-settings-dialog__recipient-list,
+.ops-settings-dialog__footer {
+  display: flex;
+}
+
+.ops-settings-dialog__recipient-entry,
+.ops-settings-dialog__footer {
+  gap: var(--theme-ops-settings-chip-gap);
+}
+
+.ops-settings-dialog__recipient-entry {
+  align-items: center;
+}
+
+.ops-settings-dialog__recipient-action {
+  white-space: nowrap;
+}
+
+.ops-settings-dialog__recipient-list {
+  flex-wrap: wrap;
+  gap: var(--theme-ops-settings-chip-gap);
 }
 
 .ops-settings-dialog__chip-remove {
@@ -649,18 +761,62 @@ async function saveAllSettings() {
 }
 
 .ops-settings-dialog__recipient-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-ops-settings-chip-gap);
   padding: calc(var(--theme-button-padding-y) * 0.35) calc(var(--theme-button-padding-x) * 0.75);
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .ops-settings-dialog__chip-remove:hover {
   opacity: 1;
 }
 
+.ops-settings-dialog__schedule-list,
+.ops-settings-dialog__retention-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--theme-ops-settings-field-gap);
+}
+
+.ops-settings-dialog__schedule-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ops-settings-dialog__schedule-input,
+.ops-settings-dialog__retention-field {
+  min-width: 0;
+}
+
 .ops-settings-dialog__panel > summary {
   padding: 0;
 }
 
+.ops-settings-dialog__summary {
+  cursor: pointer;
+}
+
 .ops-settings-dialog__advanced-content {
   margin-top: var(--theme-ops-panel-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-settings-field-gap);
+}
+
+.ops-settings-dialog__footer {
+  justify-content: flex-end;
+}
+
+@media (min-width: 768px) {
+  .ops-settings-dialog__schedule-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-settings-dialog__retention-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 </style>

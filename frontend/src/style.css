@@ -591,9 +591,37 @@
     color: var(--theme-page-text);
   }
 
+  .ops-chart-card__icon {
+    @apply h-4 w-4;
+  }
+
   .ops-chart-card__legend {
     @apply flex items-center gap-2 text-xs;
     color: var(--theme-page-muted);
+  }
+
+  .ops-chart-card__legend-item {
+    @apply flex items-center gap-1;
+  }
+
+  .ops-chart-card__action-group {
+    @apply flex items-center gap-2;
+  }
+
+  .ops-chart-card__filters {
+    @apply mb-3 flex flex-wrap gap-2;
+  }
+
+  .ops-chart-card__content {
+    @apply min-h-0 flex-1;
+  }
+
+  .ops-chart-card__content--relative {
+    @apply relative;
+  }
+
+  .ops-chart-card__state {
+    @apply flex h-full items-center justify-center;
   }
 
   .ops-chart-card__icon--info {
@@ -661,7 +689,78 @@
     color: var(--theme-page-text);
   }
 
+  .ops-chart-card__filter-chip {
+    @apply inline-flex items-center;
+    gap: var(--theme-ops-chart-filter-gap);
+    padding: calc(var(--theme-button-padding-y) * 0.45) calc(var(--theme-button-padding-x) * 0.75);
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--theme-card-border) 86%, transparent);
+    background: color-mix(in srgb, var(--theme-surface) 92%, var(--theme-surface-soft));
+    color: var(--theme-page-text);
+    font-size: var(--theme-ops-chart-filter-font-size);
+    font-weight: 600;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .ops-chart-card__filter-chip:hover {
+    border-color: color-mix(in srgb, var(--theme-accent) 20%, var(--theme-card-border));
+    background: color-mix(in srgb, var(--theme-accent-soft) 72%, var(--theme-surface));
+    color: var(--theme-accent);
+  }
+
+  .ops-chart-card__filter-count {
+    color: color-mix(in srgb, var(--theme-page-muted) 78%, transparent);
+  }
+
+  .ops-chart-card__filter-chip-label {
+    max-width: var(--theme-ops-chart-filter-label-max-width);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ops-chart-card__filter-chip-platform {
+    text-transform: uppercase;
+  }
+
   .ops-chart-card__placeholder {
+    color: var(--theme-page-muted);
+  }
+
+  .ops-chart-card__placeholder--loading {
+    @apply animate-pulse text-sm;
+  }
+
+  .ops-chart-card__summary-shell {
+    @apply flex h-full flex-col;
+  }
+
+  .ops-chart-card__summary-chart {
+    @apply flex-1;
+  }
+
+  .ops-chart-card__summary-footer {
+    @apply mt-4 flex flex-col items-center gap-2;
+  }
+
+  .ops-chart-card__summary-top {
+    @apply text-xs font-bold;
+    color: var(--theme-page-text);
+  }
+
+  .ops-chart-card__summary-list {
+    @apply flex flex-wrap justify-center gap-3;
+  }
+
+  .ops-chart-card__summary-item {
+    @apply flex items-center gap-1.5 text-xs;
+  }
+
+  .ops-chart-card__summary-dot {
+    @apply h-2 w-2 rounded-full;
+  }
+
+  .ops-chart-card__summary-count {
     color: var(--theme-page-muted);
   }
 

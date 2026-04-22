@@ -112,7 +112,7 @@ const levelBadgeClass = (level: string) => {
 
 const getHealthChipClasses = (tone: 'neutral' | 'warning' | 'danger' = 'neutral') => {
   return joinClassNames(
-    'ops-system-log-table__health-chip theme-chip theme-chip--regular inline-flex',
+    'ops-system-log-table__health-chip theme-chip theme-chip--regular',
     tone === 'warning'
       ? 'theme-chip--warning'
       : tone === 'danger'
@@ -423,12 +423,12 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ops-system-log-table">
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h3 class="ops-system-log-table__title text-sm font-bold">系统日志</h3>
-        <p class="ops-system-log-table__description mt-1 text-xs">默认按最新时间倒序，支持筛选搜索与按条件清理。</p>
+    <div class="ops-system-log-table__header">
+      <div class="ops-system-log-table__header-copy">
+        <h3 class="ops-system-log-table__title">系统日志</h3>
+        <p class="ops-system-log-table__description ops-system-log-table__description--hint">默认按最新时间倒序，支持筛选搜索与按条件清理。</p>
       </div>
-      <div class="flex flex-wrap items-center gap-2 text-xs">
+      <div class="ops-system-log-table__health-list">
         <span :class="getHealthChipClasses()">队列 {{ health.queue_depth }}/{{ health.queue_capacity }}</span>
         <span :class="getHealthChipClasses()">写入 {{ health.written_count }}</span>
         <span :class="getHealthChipClasses('warning')">丢弃 {{ health.dropped_count }}</span>
@@ -436,35 +436,35 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="ops-system-log-table__runtime-panel mb-4">
-      <div class="mb-2 flex items-center justify-between">
-        <div class="ops-system-log-table__panel-title text-xs font-semibold">运行时日志配置（实时生效）</div>
-        <span v-if="runtimeLoading" class="ops-system-log-table__description text-xs">加载中...</span>
+    <div class="ops-system-log-table__runtime-panel">
+      <div class="ops-system-log-table__panel-header">
+        <div class="ops-system-log-table__panel-title">运行时日志配置（实时生效）</div>
+        <span v-if="runtimeLoading" class="ops-system-log-table__description">加载中...</span>
       </div>
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <label class="ops-system-log-table__field text-xs">
+      <div class="ops-system-log-table__runtime-grid">
+        <label class="ops-system-log-table__field">
           级别
           <Select
             id="ops-log-runtime-level"
             v-model="runtimeConfig.level"
             name="runtime_log_level"
-            class="mt-1"
+            class="ops-system-log-table__field-control"
             :options="runtimeLevelOptions"
             aria-label="级别"
           />
         </label>
-        <label class="ops-system-log-table__field text-xs">
+        <label class="ops-system-log-table__field">
           堆栈阈值
           <Select
             id="ops-log-stacktrace-level"
             v-model="runtimeConfig.stacktrace_level"
             name="runtime_stacktrace_level"
-            class="mt-1"
+            class="ops-system-log-table__field-control"
             :options="stacktraceLevelOptions"
             aria-label="堆栈阈值"
           />
         </label>
-        <label class="ops-system-log-table__field text-xs">
+        <label class="ops-system-log-table__field">
           采样初始
           <input
             id="ops-log-sampling-initial"
@@ -473,10 +473,10 @@ onBeforeUnmount(() => {
             type="number"
             min="1"
             autocomplete="off"
-            class="input mt-1"
+            class="input ops-system-log-table__field-control"
           />
         </label>
-        <label class="ops-system-log-table__field text-xs">
+        <label class="ops-system-log-table__field">
           采样后续
           <input
             id="ops-log-sampling-thereafter"
@@ -485,10 +485,10 @@ onBeforeUnmount(() => {
             type="number"
             min="1"
             autocomplete="off"
-            class="input mt-1"
+            class="input ops-system-log-table__field-control"
           />
         </label>
-        <label class="ops-system-log-table__field text-xs">
+        <label class="ops-system-log-table__field">
           保留天数
           <input
             id="ops-log-retention-days"
@@ -498,17 +498,17 @@ onBeforeUnmount(() => {
             min="1"
             max="3650"
             autocomplete="off"
-            class="input mt-1"
+            class="input ops-system-log-table__field-control"
           />
         </label>
-        <div class="md:col-span-2 xl:col-span-6">
-          <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <label class="ops-system-log-table__checkbox-row inline-flex items-center gap-2 text-xs">
+        <div class="ops-system-log-table__runtime-actions-shell">
+          <div class="ops-system-log-table__runtime-actions-grid">
+            <div class="ops-system-log-table__runtime-toggles">
+              <label class="ops-system-log-table__checkbox-row">
                 <input id="ops-log-runtime-caller" v-model="runtimeConfig.caller" name="runtime_caller" type="checkbox" />
                 caller
               </label>
-              <label class="ops-system-log-table__checkbox-row inline-flex items-center gap-2 text-xs">
+              <label class="ops-system-log-table__checkbox-row">
                 <input
                   id="ops-log-enable-sampling"
                   v-model="runtimeConfig.enable_sampling"
@@ -518,7 +518,7 @@ onBeforeUnmount(() => {
                 sampling
               </label>
             </div>
-            <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+            <div class="ops-system-log-table__runtime-actions">
               <button type="button" class="btn btn-primary btn-sm" :disabled="runtimeSaving" @click="saveRuntimeConfig">
                 {{ runtimeSaving ? '保存中...' : '保存并生效' }}
               </button>
@@ -529,22 +529,22 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-      <p v-if="health.last_error" class="ops-system-log-table__error mt-2 text-xs">最近写入错误：{{ health.last_error }}</p>
+      <p v-if="health.last_error" class="ops-system-log-table__error">最近写入错误：{{ health.last_error }}</p>
     </div>
 
-    <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-5">
-      <label class="ops-system-log-table__field text-xs">
+    <div class="ops-system-log-table__filters-grid">
+      <label class="ops-system-log-table__field">
         时间范围
         <Select
           id="ops-log-filter-time-range"
           v-model="filters.time_range"
           name="log_time_range"
-          class="mt-1"
+          class="ops-system-log-table__field-control"
           :options="timeRangeOptions"
           aria-label="时间范围"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         开始时间（可选）
         <input
           id="ops-log-filter-start-time"
@@ -552,10 +552,10 @@ onBeforeUnmount(() => {
           name="log_start_time"
           type="datetime-local"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         结束时间（可选）
         <input
           id="ops-log-filter-end-time"
@@ -563,21 +563,21 @@ onBeforeUnmount(() => {
           name="log_end_time"
           type="datetime-local"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         级别
         <Select
           id="ops-log-filter-level"
           v-model="filters.level"
           name="log_level"
-          class="mt-1"
+          class="ops-system-log-table__field-control"
           :options="filterLevelOptions"
           aria-label="级别"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         组件
         <input
           id="ops-log-filter-component"
@@ -585,11 +585,11 @@ onBeforeUnmount(() => {
           name="log_component"
           type="text"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
           placeholder="如 http.access"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         request_id
         <input
           id="ops-log-filter-request-id"
@@ -597,10 +597,10 @@ onBeforeUnmount(() => {
           name="log_request_id"
           type="text"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         client_request_id
         <input
           id="ops-log-filter-client-request-id"
@@ -608,10 +608,10 @@ onBeforeUnmount(() => {
           name="log_client_request_id"
           type="text"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         user_id
         <input
           id="ops-log-filter-user-id"
@@ -619,10 +619,10 @@ onBeforeUnmount(() => {
           name="log_user_id"
           type="text"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         account_id
         <input
           id="ops-log-filter-account-id"
@@ -630,10 +630,10 @@ onBeforeUnmount(() => {
           name="log_account_id"
           type="text"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         平台
         <input
           id="ops-log-filter-platform"
@@ -641,10 +641,10 @@ onBeforeUnmount(() => {
           name="log_platform"
           type="text"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         模型
         <input
           id="ops-log-filter-model"
@@ -652,10 +652,10 @@ onBeforeUnmount(() => {
           name="log_model"
           type="text"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
         />
       </label>
-      <label class="ops-system-log-table__field text-xs">
+      <label class="ops-system-log-table__field">
         关键词
         <input
           id="ops-log-filter-keyword"
@@ -663,40 +663,40 @@ onBeforeUnmount(() => {
           name="log_keyword"
           type="text"
           autocomplete="off"
-          class="input mt-1"
+          class="input ops-system-log-table__field-control"
           placeholder="消息/request_id"
         />
       </label>
     </div>
 
-    <div class="mb-3 flex flex-wrap gap-2">
+    <div class="ops-system-log-table__filter-actions">
       <button type="button" class="btn btn-primary btn-sm" @click="applyFilters">查询</button>
       <button type="button" class="btn btn-secondary btn-sm" @click="resetFilters">重置</button>
       <button type="button" class="btn btn-danger btn-sm" @click="cleanupCurrentFilter">按当前筛选清理</button>
       <button type="button" class="btn btn-secondary btn-sm" @click="fetchHealth">刷新健康指标</button>
     </div>
 
-    <div class="ops-system-log-table__table-shell overflow-hidden">
-      <div v-if="loading" class="ops-system-log-table__description ops-system-log-table__table-state text-center text-sm">加载中...</div>
-      <div v-else-if="!hasData" class="ops-system-log-table__description ops-system-log-table__table-state text-center text-sm">暂无系统日志</div>
-      <div v-else class="overflow-auto">
-        <table class="ops-system-log-table__table w-full">
+    <div class="ops-system-log-table__table-shell">
+      <div v-if="loading" class="ops-system-log-table__description ops-system-log-table__table-state">加载中...</div>
+      <div v-else-if="!hasData" class="ops-system-log-table__description ops-system-log-table__table-state">暂无系统日志</div>
+      <div v-else class="ops-system-log-table__table-scroll">
+        <table class="ops-system-log-table__table">
           <thead class="ops-system-log-table__table-head">
             <tr>
-              <th class="ops-system-log-table__table-header whitespace-nowrap text-left">时间</th>
-              <th class="ops-system-log-table__table-header whitespace-nowrap text-left">级别</th>
-              <th class="ops-system-log-table__table-header w-full text-left">日志详细信息</th>
+              <th class="ops-system-log-table__table-header ops-system-log-table__table-header--time">时间</th>
+              <th class="ops-system-log-table__table-header ops-system-log-table__table-header--level">级别</th>
+              <th class="ops-system-log-table__table-header ops-system-log-table__table-header--message">日志详细信息</th>
             </tr>
           </thead>
           <tbody class="ops-system-log-table__table-body">
-            <tr v-for="row in logs" :key="row.id" class="ops-system-log-table__table-row align-top">
-              <td class="ops-system-log-table__table-cell ops-system-log-table__text-body whitespace-nowrap text-xs">{{ formatTime(row.created_at) }}</td>
-              <td class="ops-system-log-table__table-cell whitespace-nowrap text-xs">
+            <tr v-for="row in logs" :key="row.id" class="ops-system-log-table__table-row">
+              <td class="ops-system-log-table__table-cell ops-system-log-table__table-cell--time ops-system-log-table__text-body">{{ formatTime(row.created_at) }}</td>
+              <td class="ops-system-log-table__table-cell ops-system-log-table__table-cell--level">
                 <span :class="levelBadgeClass(row.level)">
                   {{ row.level }}
                 </span>
               </td>
-              <td class="ops-system-log-table__table-cell ops-system-log-table__text-body whitespace-normal break-words text-xs">
+              <td class="ops-system-log-table__table-cell ops-system-log-table__table-cell--message ops-system-log-table__text-body">
                 {{ formatSystemLogDetail(row) }}
               </td>
             </tr>
@@ -727,6 +727,7 @@ onBeforeUnmount(() => {
 .ops-system-log-table__title,
 .ops-system-log-table__panel-title {
   color: var(--theme-page-text);
+  font-weight: 700;
 }
 
 .ops-system-log-table__description,
@@ -735,11 +736,91 @@ onBeforeUnmount(() => {
   color: var(--theme-page-muted);
 }
 
+.ops-system-log-table__header,
+.ops-system-log-table__panel-header,
+.ops-system-log-table__runtime-actions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--theme-ops-system-log-header-gap);
+}
+
+.ops-system-log-table__header {
+  margin-bottom: var(--theme-ops-panel-padding);
+}
+
+.ops-system-log-table__header-copy,
+.ops-system-log-table__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-system-log-control-gap);
+}
+
+.ops-system-log-table__title {
+  font-size: 0.875rem;
+}
+
+.ops-system-log-table__panel-title,
+.ops-system-log-table__field,
+.ops-system-log-table__description {
+  font-size: 0.75rem;
+}
+
+.ops-system-log-table__description--hint {
+  margin-top: calc(var(--theme-ops-system-log-control-gap) * 0.5);
+}
+
+.ops-system-log-table__health-list,
+.ops-system-log-table__runtime-toggles,
+.ops-system-log-table__runtime-actions,
+.ops-system-log-table__filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ops-system-log-table__health-list,
+.ops-system-log-table__runtime-actions,
+.ops-system-log-table__filter-actions {
+  gap: var(--theme-ops-system-log-actions-gap);
+}
+
+.ops-system-log-table__runtime-toggles {
+  gap: var(--theme-ops-system-log-grid-gap);
+}
+
 .ops-system-log-table__runtime-panel {
+  margin-bottom: var(--theme-ops-panel-padding);
   padding: var(--theme-ops-panel-padding);
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
   border-radius: var(--theme-select-panel-radius);
   background: color-mix(in srgb, var(--theme-surface-soft) 74%, var(--theme-surface));
+}
+
+.ops-system-log-table__panel-header {
+  margin-bottom: calc(var(--theme-ops-system-log-control-gap) * 2);
+}
+
+.ops-system-log-table__runtime-grid,
+.ops-system-log-table__filters-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--theme-ops-system-log-grid-gap);
+}
+
+.ops-system-log-table__runtime-actions-shell {
+  grid-column: 1 / -1;
+}
+
+.ops-system-log-table__runtime-actions-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--theme-ops-system-log-grid-gap);
+}
+
+.ops-system-log-table__field-control {
+  margin-top: 0;
 }
 
 .ops-system-log-table__checkbox-row input {
@@ -747,22 +828,40 @@ onBeforeUnmount(() => {
 }
 
 .ops-system-log-table__error {
+  margin-top: calc(var(--theme-ops-system-log-control-gap) * 2);
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  font-size: 0.75rem;
+}
+
+.ops-system-log-table__filters-grid {
+  margin-bottom: var(--theme-ops-panel-padding);
+}
+
+.ops-system-log-table__filter-actions {
+  margin-bottom: calc(var(--theme-ops-system-log-control-gap) * 2);
 }
 
 .ops-system-log-table__table-shell {
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
   border-radius: var(--theme-select-panel-radius);
   background: var(--theme-surface);
 }
 
 .ops-system-log-table__table-state {
+  text-align: center;
+  font-size: 0.875rem;
   padding:
     calc(var(--theme-ops-panel-padding) * 0.75)
     var(--theme-ops-panel-padding);
 }
 
+.ops-system-log-table__table-scroll {
+  overflow: auto;
+}
+
 .ops-system-log-table__table {
+  width: 100%;
   min-width: var(--theme-ops-table-min-width);
 }
 
@@ -782,18 +881,38 @@ onBeforeUnmount(() => {
   color: var(--theme-table-head-text);
 }
 
+.ops-system-log-table__table-header--time,
+.ops-system-log-table__table-header--level,
+.ops-system-log-table__table-cell--time,
+.ops-system-log-table__table-cell--level {
+  white-space: nowrap;
+  text-align: left;
+}
+
+.ops-system-log-table__table-header--message {
+  width: 100%;
+  text-align: left;
+}
+
 .ops-system-log-table__table-cell {
   padding:
     calc(var(--theme-ops-table-cell-padding-y) * 0.8)
     var(--theme-ops-table-cell-padding-compact-x);
+  font-size: 0.75rem;
 }
 
 .ops-system-log-table__table-row td {
   border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 62%, transparent);
+  vertical-align: top;
 }
 
 .ops-system-log-table__table-body tr:first-child td {
   border-top: none;
+}
+
+.ops-system-log-table__table-cell--message {
+  white-space: normal;
+  word-break: break-word;
 }
 
 .ops-system-log-table__text-body {
@@ -801,6 +920,35 @@ onBeforeUnmount(() => {
 }
 
 .ops-system-log-table__health-chip {
+  display: inline-flex;
+  align-items: center;
   border-radius: calc(var(--theme-button-radius) * 0.8);
+}
+
+@media (min-width: 768px) {
+  .ops-system-log-table__filters-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .ops-system-log-table__runtime-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .ops-system-log-table__runtime-actions-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .ops-system-log-table__runtime-actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (min-width: 1280px) {
+  .ops-system-log-table__runtime-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 </style>

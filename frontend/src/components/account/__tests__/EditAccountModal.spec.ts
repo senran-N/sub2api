@@ -287,8 +287,7 @@ describe('EditAccountModal', () => {
     expect(wrapper.text()).toContain('sha256:ab12...cd34')
     expect(wrapper.text()).toContain('admin.accounts.grok.runtime.capabilities.video')
     expect(wrapper.text()).toContain('admin.accounts.grok.runtime.probeFailed')
-    expect(wrapper.text()).toContain('admin.accounts.grok.runtime.httpStatus')
-    expect(wrapper.text()).toContain('API returned 401 Unauthorized')
+    expect(wrapper.text()).toContain('admin.accounts.grok.runtime.probeFailedWithCode')
     expect(wrapper.text()).toContain('video tier required')
   })
 

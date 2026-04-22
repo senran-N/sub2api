@@ -204,9 +204,9 @@ const kindBadgeClass = (kind: string) => {
 <template>
   <BaseDialog :show="modelValue" :title="props.preset.title || t('admin.ops.requestDetails.title')" width="full" @close="close">
     <template #default>
-      <div class="ops-request-details-modal flex h-full min-h-0 flex-col">
-        <div class="mb-4 flex flex-shrink-0 items-center justify-between">
-          <div class="ops-request-details-modal__subtitle text-xs">
+      <div class="ops-request-details-modal">
+        <div class="ops-request-details-modal__header">
+          <div class="ops-request-details-modal__subtitle ops-request-details-modal__subtitle--compact">
             {{ t('admin.ops.requestDetails.rangeLabel', { range: rangeLabel }) }}
           </div>
           <button
@@ -219,9 +219,9 @@ const kindBadgeClass = (kind: string) => {
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="ops-request-details-modal__loading flex flex-1 items-center justify-center">
-          <div class="ops-request-details-modal__loading-stack flex flex-col items-center">
-            <svg class="ops-request-details-modal__spinner h-8 w-8 animate-spin" fill="none" viewBox="0 0 24 24">
+        <div v-if="loading" class="ops-request-details-modal__loading">
+          <div class="ops-request-details-modal__loading-stack">
+            <svg class="ops-request-details-modal__spinner animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path
                 class="opacity-75"
@@ -229,20 +229,20 @@ const kindBadgeClass = (kind: string) => {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               ></path>
             </svg>
-            <span class="ops-request-details-modal__subtitle text-sm font-medium">{{ t('common.loading') }}</span>
+            <span class="ops-request-details-modal__subtitle ops-request-details-modal__subtitle--loading">{{ t('common.loading') }}</span>
           </div>
         </div>
 
         <!-- Table -->
-        <div v-else class="flex min-h-0 flex-1 flex-col">
-          <div v-if="items.length === 0" class="ops-request-details-modal__empty text-center">
-            <div class="ops-request-details-modal__text-body text-sm font-medium">{{ t('admin.ops.requestDetails.empty') }}</div>
-            <div class="ops-request-details-modal__text-soft mt-1 text-xs">{{ t('admin.ops.requestDetails.emptyHint') }}</div>
+        <div v-else class="ops-request-details-modal__body">
+          <div v-if="items.length === 0" class="ops-request-details-modal__empty">
+            <div class="ops-request-details-modal__text-body ops-request-details-modal__text-body--empty">{{ t('admin.ops.requestDetails.empty') }}</div>
+            <div class="ops-request-details-modal__text-soft ops-request-details-modal__text-soft--empty">{{ t('admin.ops.requestDetails.emptyHint') }}</div>
           </div>
 
-          <div v-else class="ops-request-details-modal__table-shell flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div class="min-h-0 flex-1 overflow-auto">
-              <table class="ops-request-details-modal__table min-w-full">
+          <div v-else class="ops-request-details-modal__table-shell">
+            <div class="ops-request-details-modal__table-scroll">
+              <table class="ops-request-details-modal__table">
                 <colgroup>
                   <col class="ops-request-details-modal__col ops-request-details-modal__col--time" />
                   <col class="ops-request-details-modal__col ops-request-details-modal__col--kind" />
@@ -259,35 +259,35 @@ const kindBadgeClass = (kind: string) => {
                     class="ops-request-details-modal__col ops-request-details-modal__col--actions"
                   />
                 </colgroup>
-                <thead class="ops-request-details-modal__table-head sticky top-0 z-10">
+                <thead class="ops-request-details-modal__table-head">
                 <tr>
-                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--time text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--time">
                     {{ t('admin.ops.requestDetails.table.time') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--kind text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--kind">
                     {{ t('admin.ops.requestDetails.table.kind') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--platform text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--platform">
                     {{ t('admin.ops.requestDetails.table.platform') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--model text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--model">
                     {{ t('admin.ops.requestDetails.table.model') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--duration text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--duration">
                     {{ t('admin.ops.requestDetails.table.duration') }}
                   </th>
                   <th
                     v-if="showStatusColumn"
-                    class="ops-request-details-modal__table-header ops-request-details-modal__table-header--status text-left"
+                    class="ops-request-details-modal__table-header ops-request-details-modal__table-header--status"
                   >
                     {{ t('admin.ops.requestDetails.table.status') }}
                   </th>
-                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--request-id text-left">
+                  <th class="ops-request-details-modal__table-header ops-request-details-modal__table-header--request-id">
                     {{ t('admin.ops.requestDetails.table.requestId') }}
                   </th>
                   <th
                     v-if="showActionsColumn"
-                    class="ops-request-details-modal__table-header ops-request-details-modal__table-header--actions text-right"
+                    class="ops-request-details-modal__table-header ops-request-details-modal__table-header--actions"
                   >
                     {{ t('admin.ops.requestDetails.table.actions') }}
                   </th>
@@ -295,55 +295,55 @@ const kindBadgeClass = (kind: string) => {
               </thead>
               <tbody class="ops-request-details-modal__table-body">
                 <tr v-for="(row, idx) in items" :key="idx" class="ops-request-details-modal__table-row">
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--time ops-request-details-modal__text-body whitespace-nowrap text-xs">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--time ops-request-details-modal__text-body ops-request-details-modal__table-cell--compact ops-request-details-modal__table-cell--nowrap">
                     {{ formatDateTime(row.created_at) }}
                   </td>
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--kind whitespace-nowrap">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--kind ops-request-details-modal__table-cell--nowrap">
                     <span :class="kindBadgeClass(row.kind)">
                       {{ row.kind === 'error' ? t('admin.ops.requestDetails.kind.error') : t('admin.ops.requestDetails.kind.success') }}
                     </span>
                   </td>
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--platform ops-request-details-modal__text-strong whitespace-nowrap text-xs font-medium">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--platform ops-request-details-modal__text-strong ops-request-details-modal__table-cell--compact ops-request-details-modal__table-cell--nowrap ops-request-details-modal__text-strong--caps">
                     {{ (row.platform || 'unknown').toUpperCase() }}
                   </td>
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--model ops-request-details-modal__text-body truncate text-xs" :title="row.model || ''">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--model ops-request-details-modal__text-body ops-request-details-modal__table-cell--compact ops-request-details-modal__table-cell--truncate" :title="row.model || ''">
                     {{ row.model || '-' }}
                   </td>
-                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--duration ops-request-details-modal__text-body whitespace-nowrap text-xs">
+                  <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--duration ops-request-details-modal__text-body ops-request-details-modal__table-cell--compact ops-request-details-modal__table-cell--nowrap">
                     {{ typeof row.duration_ms === 'number' ? `${row.duration_ms} ms` : '-' }}
                   </td>
                   <td
                     v-if="showStatusColumn"
-                    class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--status ops-request-details-modal__text-body whitespace-nowrap text-xs"
+                    class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--status ops-request-details-modal__text-body ops-request-details-modal__table-cell--compact ops-request-details-modal__table-cell--nowrap"
                   >
                     {{ row.status_code ?? '-' }}
                   </td>
                   <td class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--request-id">
-                    <div v-if="row.request_id" class="flex min-w-0 items-center gap-2">
-                      <span class="ops-request-details-modal__request-id ops-request-details-modal__text-strong min-w-0 flex-1 truncate font-mono text-[11px]" :title="row.request_id">
+                    <div v-if="row.request_id" class="ops-request-details-modal__request-wrap">
+                      <span class="ops-request-details-modal__request-id ops-request-details-modal__text-strong ops-request-details-modal__text-strong--mono ops-request-details-modal__table-cell--truncate" :title="row.request_id">
                         {{ row.request_id }}
                       </span>
                       <button
-                        class="ops-request-details-modal__copy-button text-[10px] font-bold"
+                        class="ops-request-details-modal__copy-button"
                         @click="handleCopyRequestId(row.request_id)"
                       >
                         {{ t('admin.ops.requestDetails.copy') }}
                       </button>
                     </div>
-                    <span v-else class="ops-request-details-modal__text-soft text-xs">-</span>
+                    <span v-else class="ops-request-details-modal__text-soft ops-request-details-modal__text-soft--compact">-</span>
                   </td>
                   <td
                     v-if="showActionsColumn"
-                    class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--actions whitespace-nowrap text-right"
+                    class="ops-request-details-modal__table-cell ops-request-details-modal__table-cell--actions"
                   >
                     <button
                       v-if="row.kind === 'error' && row.error_id"
-                      class="ops-request-details-modal__error-button text-xs font-bold"
+                      class="ops-request-details-modal__error-button"
                       @click="openErrorDetail(row.error_id)"
                     >
                       {{ t('admin.ops.requestDetails.viewError') }}
                     </button>
-                    <span v-else class="ops-request-details-modal__text-soft text-xs">-</span>
+                    <span v-else class="ops-request-details-modal__text-soft ops-request-details-modal__text-soft--compact">-</span>
                   </td>
                 </tr>
               </tbody>
@@ -365,19 +365,61 @@ const kindBadgeClass = (kind: string) => {
 </template>
 
 <style scoped>
+.ops-request-details-modal {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+}
+
+.ops-request-details-modal__header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-ops-request-details-header-gap);
+  margin-bottom: var(--theme-ops-request-details-header-gap);
+}
+
 .ops-request-details-modal__subtitle {
   color: var(--theme-page-muted);
 }
 
+.ops-request-details-modal__subtitle--compact {
+  font-size: var(--theme-ops-request-details-text-compact);
+}
+
+.ops-request-details-modal__subtitle--loading {
+  font-size: var(--theme-ops-request-details-text-regular);
+  font-weight: 500;
+}
+
 .ops-request-details-modal__loading {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
   padding-block: calc(var(--theme-ops-card-padding) * 2);
 }
 
 .ops-request-details-modal__loading-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--theme-ops-request-details-loading-gap);
+}
+
+.ops-request-details-modal__body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
   gap: calc(var(--theme-ops-panel-padding) * 0.75);
 }
 
 .ops-request-details-modal__spinner {
+  width: var(--theme-ops-request-details-spinner-size);
+  height: var(--theme-ops-request-details-spinner-size);
   color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
 }
 
@@ -385,12 +427,36 @@ const kindBadgeClass = (kind: string) => {
   color: var(--theme-page-text);
 }
 
+.ops-request-details-modal__text-strong--caps {
+  font-size: var(--theme-ops-request-details-text-compact);
+  font-weight: 500;
+}
+
+.ops-request-details-modal__text-strong--mono {
+  font-family: var(--theme-font-mono);
+  font-size: var(--theme-ops-request-details-text-mono);
+}
+
 .ops-request-details-modal__text-body {
   color: color-mix(in srgb, var(--theme-page-text) 80%, var(--theme-page-muted));
 }
 
+.ops-request-details-modal__text-body--empty {
+  font-size: var(--theme-ops-request-details-text-regular);
+  font-weight: 500;
+}
+
 .ops-request-details-modal__text-soft {
   color: color-mix(in srgb, var(--theme-page-muted) 76%, transparent);
+}
+
+.ops-request-details-modal__text-soft--empty {
+  margin-top: var(--theme-ops-request-details-empty-gap);
+  font-size: var(--theme-ops-request-details-text-compact);
+}
+
+.ops-request-details-modal__text-soft--compact {
+  font-size: var(--theme-ops-request-details-text-compact);
 }
 
 .ops-request-details-modal__empty {
@@ -398,11 +464,26 @@ const kindBadgeClass = (kind: string) => {
   border-radius: var(--theme-select-panel-radius);
   border: 1px dashed color-mix(in srgb, var(--theme-card-border) 78%, transparent);
   background: color-mix(in srgb, var(--theme-surface-soft) 72%, var(--theme-surface));
+  text-align: center;
+}
+
+.ops-request-details-modal__table-shell {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ops-request-details-modal__table-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
 }
 
 .ops-request-details-modal__table {
   width: 100%;
-  min-width: 44rem;
+  min-width: var(--theme-ops-request-details-table-min-width);
   table-layout: fixed;
 }
 
@@ -414,6 +495,9 @@ const kindBadgeClass = (kind: string) => {
 
 .ops-request-details-modal__table-head {
   background: var(--theme-table-head-bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .ops-request-details-modal__table-header {
@@ -425,6 +509,7 @@ const kindBadgeClass = (kind: string) => {
   letter-spacing: var(--theme-table-head-letter-spacing);
   text-transform: var(--theme-table-head-text-transform);
   color: var(--theme-table-head-text);
+  text-align: left;
 }
 
 .ops-request-details-modal__table-cell {
@@ -433,18 +518,44 @@ const kindBadgeClass = (kind: string) => {
     var(--theme-ops-table-cell-padding-x);
 }
 
+.ops-request-details-modal__table-cell--compact {
+  font-size: var(--theme-ops-request-details-text-compact);
+}
+
 .ops-request-details-modal__table-cell--model {
   overflow: hidden;
 }
 
+.ops-request-details-modal__table-cell--nowrap,
 .ops-request-details-modal__table-cell--actions,
 .ops-request-details-modal__table-header--actions {
   white-space: nowrap;
 }
 
+.ops-request-details-modal__table-cell--truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-request-details-modal__table-cell--actions,
+.ops-request-details-modal__table-header--actions {
+  text-align: right;
+}
+
+.ops-request-details-modal__request-wrap {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--theme-ops-request-details-request-gap);
+}
+
 .ops-request-details-modal__request-id {
   display: inline-block;
   width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .ops-request-details-modal__col--time {
@@ -496,6 +607,8 @@ const kindBadgeClass = (kind: string) => {
   border-radius: calc(var(--theme-button-radius) * 0.8);
   background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
   color: color-mix(in srgb, var(--theme-page-text) 76%, var(--theme-page-muted));
+  font-size: var(--theme-ops-request-details-request-copy-size);
+  font-weight: 700;
 }
 
 .ops-request-details-modal__copy-button:hover {
@@ -507,6 +620,8 @@ const kindBadgeClass = (kind: string) => {
   border-radius: var(--theme-button-radius);
   background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  font-size: var(--theme-ops-request-details-text-compact);
+  font-weight: 700;
 }
 
 .ops-request-details-modal__error-button:hover {

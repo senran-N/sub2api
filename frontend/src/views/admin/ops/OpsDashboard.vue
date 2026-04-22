@@ -1,14 +1,14 @@
 <template>
-  <component :is="isFullscreen ? 'div' : AppLayout" :class="isFullscreen ? 'ops-dashboard__fullscreen flex min-h-screen flex-col' : ''">
+  <component :is="isFullscreen ? 'div' : AppLayout" :class="isFullscreen ? 'ops-dashboard__fullscreen' : ''">
     <div
       :class="[
-        'ops-dashboard__content space-y-6',
+        'ops-dashboard__content',
         { 'ops-dashboard__content--fullscreen': isFullscreen }
       ]"
     >
       <div
         v-if="errorMessage"
-        class="ops-dashboard__error text-sm"
+        class="ops-dashboard__error"
       >
         {{ errorMessage }}
       </div>
@@ -48,15 +48,15 @@
         v-if="showAlertRuleBaselineBanner"
         class="ops-dashboard__baseline-banner"
       >
-        <div>
-          <div class="ops-dashboard__baseline-title text-sm font-bold">
+        <div class="ops-dashboard__baseline-copy">
+          <div class="ops-dashboard__baseline-title">
             {{ t('admin.ops.alertRules.dashboardBaseline.title') }}
           </div>
-          <p class="ops-dashboard__baseline-description mt-1 text-xs">
+          <p class="ops-dashboard__baseline-description">
             {{ t('admin.ops.alertRules.dashboardBaseline.description') }}
           </p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="ops-dashboard__baseline-actions">
           <button class="btn btn-sm btn-primary" @click="openAlertRulesDialog">
             {{ t('admin.ops.alertRules.dashboardBaseline.action') }}
           </button>
@@ -64,11 +64,11 @@
       </div>
 
       <!-- Row: Concurrency + Throughput -->
-      <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <div class="ops-dashboard__panel-min-height lg:col-span-1">
+      <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="ops-dashboard__grid ops-dashboard__grid--overview">
+        <div class="ops-dashboard__panel-min-height ops-dashboard__panel-min-height--single">
           <OpsConcurrencyCard :platform-filter="platform" :group-id-filter="groupId" :refresh-token="dashboardRefreshToken" />
         </div>
-        <div class="ops-dashboard__panel-min-height lg:col-span-1">
+        <div class="ops-dashboard__panel-min-height ops-dashboard__panel-min-height--single">
           <OpsSwitchRateTrendChart
             :points="switchTrend?.points ?? []"
             :loading="loadingSwitchTrend"
@@ -76,7 +76,7 @@
             :fullscreen="isFullscreen"
           />
         </div>
-        <div class="ops-dashboard__panel-min-height lg:col-span-2">
+        <div class="ops-dashboard__panel-min-height ops-dashboard__panel-min-height--double">
           <OpsThroughputTrendChart
             :points="throughputTrend?.points ?? []"
             :by-platform="throughputTrend?.by_platform ?? []"
@@ -92,7 +92,7 @@
       </div>
 
       <!-- Row: Visual Analysis (baseline 3-up grid) -->
-      <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="ops-dashboard__grid ops-dashboard__grid--analytics">
         <OpsLatencyChart :latency-data="latencyHistogram" :loading="loadingLatency" />
         <OpsErrorDistributionChart
           :data="errorDistribution"
@@ -109,7 +109,7 @@
       </div>
 
       <!-- Row: OpenAI Token Stats -->
-      <div v-if="opsEnabled && showOpenAITokenStats && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6">
+      <div v-if="opsEnabled && showOpenAITokenStats && !(loading && !hasLoadedOnce)" class="ops-dashboard__grid ops-dashboard__grid--single">
         <OpsOpenAITokenStatsCard
           :platform-filter="platform"
           :group-id-filter="groupId"
@@ -118,7 +118,10 @@
       </div>
 
       <!-- Alert Events -->
-      <OpsAlertEventsCard v-if="opsEnabled && showAlertEvents && !(loading && !hasLoadedOnce)" />
+      <OpsAlertEventsCard
+        v-if="opsEnabled && showAlertEvents && !(loading && !hasLoadedOnce)"
+        :refresh-token="dashboardRefreshToken"
+      />
 
       <!-- System Logs -->
       <OpsSystemLogTable
@@ -932,10 +935,16 @@ watch(showAlertRulesCard, async (show) => {
    a visible "frame" around the inner white surface (see issue: top dark
    strip above the content). */
 .ops-dashboard__fullscreen {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
   background: var(--theme-page-bg);
 }
 
 .ops-dashboard__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-dashboard-layout-gap);
   padding-bottom: var(--theme-ops-dashboard-content-padding-bottom);
 }
 
@@ -958,25 +967,68 @@ watch(showAlertRulesCard, async (show) => {
   padding: var(--theme-ops-dashboard-error-padding);
   background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  font-size: 0.875rem;
 }
 
 .ops-dashboard__baseline-banner {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--theme-ops-dashboard-banner-gap);
   padding: var(--theme-ops-card-padding);
   border-radius: var(--theme-surface-radius);
   border: 1px solid color-mix(in srgb, rgb(var(--theme-warning-rgb)) 26%, transparent);
   background: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 8%, var(--theme-surface));
 }
 
+.ops-dashboard__baseline-copy {
+  display: flex;
+  flex-direction: column;
+}
+
 .ops-dashboard__baseline-title {
   color: var(--theme-page-text);
+  font-size: 0.875rem;
+  font-weight: 700;
 }
 
 .ops-dashboard__baseline-description {
+  margin-top: calc(var(--theme-ops-dashboard-banner-gap) * 0.5);
   color: color-mix(in srgb, var(--theme-page-text) 72%, var(--theme-page-muted));
+  font-size: 0.75rem;
+}
+
+.ops-dashboard__baseline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--theme-ops-concurrency-control-gap);
+}
+
+.ops-dashboard__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--theme-ops-dashboard-layout-gap);
+}
+
+@media (min-width: 768px) {
+  .ops-dashboard__grid--analytics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .ops-dashboard__grid--overview {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .ops-dashboard__panel-min-height--single {
+    grid-column: span 1;
+  }
+
+  .ops-dashboard__panel-min-height--double {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 767px) {

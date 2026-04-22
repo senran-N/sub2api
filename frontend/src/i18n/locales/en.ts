@@ -2561,6 +2561,8 @@ export default {
           probeStatus: "Probe Status",
           probeHealthy: "Last Probe Succeeded",
           probeFailed: "Last Probe Failed",
+          probeFailedShort: "Failed",
+          probeFailedWithCode: "Failed ({code})",
           lastProbeError: "Last Probe Error",
           lastRuntimeError: "Recent Runtime Error",
           lastFailAt: "Last Fail At",

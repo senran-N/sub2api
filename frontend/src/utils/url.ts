@@ -9,6 +9,26 @@ type SanitizeOptions = {
   allowDataUrl?: boolean
 }
 
+export function sanitizeRedirectPath(
+  value: string | null | undefined,
+  fallback = '/dashboard'
+): string {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return fallback
+  }
+
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
+    return fallback
+  }
+
+  if (trimmed.includes('://') || trimmed.includes('\n') || trimmed.includes('\r')) {
+    return fallback
+  }
+
+  return trimmed
+}
+
 export function sanitizeUrl(value: string, options: SanitizeOptions = {}): string {
   const trimmed = value.trim()
   if (!trimmed) {

@@ -2595,6 +2595,8 @@ export default {
           probeStatus: "探测状态",
           probeHealthy: "最近探测成功",
           probeFailed: "最近探测失败",
+          probeFailedShort: "失败",
+          probeFailedWithCode: "失败（{code}）",
           lastProbeError: "探测错误",
           lastRuntimeError: "最近运行时错误",
           lastFailAt: "最近失败时间",

@@ -166,7 +166,7 @@ const options = computed(() => {
   <div class="ops-chart-card">
     <div class="ops-chart-card__header">
       <h3 class="ops-chart-card__title">
-        <svg class="ops-chart-card__icon--brand-rose h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="ops-chart-card__icon ops-chart-card__icon--brand-rose" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -177,7 +177,7 @@ const options = computed(() => {
         {{ t('admin.ops.errorTrend') }}
         <HelpTooltip :content="t('admin.ops.tooltips.errorTrend')" />
       </h3>
-      <div class="flex items-center gap-2">
+      <div class="ops-chart-card__action-group">
         <button
           type="button"
           class="ops-chart-card__action"
@@ -197,10 +197,10 @@ const options = computed(() => {
       </div>
     </div>
 
-    <div class="min-h-0 flex-1">
+    <div class="ops-chart-card__content">
       <Line v-if="state === 'ready' && chartData" :data="chartData" :options="options" />
-      <div v-else class="flex h-full items-center justify-center">
-        <div v-if="state === 'loading'" class="ops-chart-card__placeholder animate-pulse text-sm">{{ t('common.loading') }}</div>
+      <div v-else class="ops-chart-card__state">
+        <div v-if="state === 'loading'" class="ops-chart-card__placeholder ops-chart-card__placeholder--loading">{{ t('common.loading') }}</div>
         <EmptyState v-else :title="t('common.noData')" :description="t('admin.ops.charts.emptyError')" />
       </div>
     </div>

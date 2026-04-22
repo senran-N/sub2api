@@ -1,38 +1,37 @@
 <template>
   <BaseDialog :show="show" :title="title" width="full" :close-on-click-outside="true" @close="close">
-    <div v-if="loading" class="ops-error-detail-modal__state ops-error-detail-modal__state--loading flex items-center justify-center">
-      <div class="ops-error-detail-modal__stack flex flex-col items-center">
-        <div class="ops-error-detail-modal__spinner h-8 w-8 animate-spin rounded-full border-b-2"></div>
-        <div class="text-sm font-medium">{{ t('admin.ops.errorDetail.loading') }}</div>
+    <div v-if="loading" class="ops-error-detail-modal__state ops-error-detail-modal__state--loading">
+      <div class="ops-error-detail-modal__stack">
+        <div class="ops-error-detail-modal__spinner animate-spin"></div>
+        <div class="ops-error-detail-modal__loading-label">{{ t('admin.ops.errorDetail.loading') }}</div>
       </div>
     </div>
 
-    <div v-else-if="!detail" class="ops-error-detail-modal__state ops-error-detail-modal__state--empty text-center text-sm">
+    <div v-else-if="!detail" class="ops-error-detail-modal__state ops-error-detail-modal__state--empty">
       {{ emptyText }}
     </div>
 
-    <div v-else class="ops-error-detail-modal__content space-y-6">
-      <!-- Summary -->
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div v-else class="ops-error-detail-modal__content">
+      <div class="ops-error-detail-modal__summary-grid">
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.requestId') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 break-all font-mono text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.requestId') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta ops-error-detail-modal__summary-value--break ops-error-detail-modal__mono">
             {{ requestId || '—' }}
           </div>
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.time') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.time') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta">
             {{ formatDateTime(detail.created_at) }}
           </div>
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">
+          <div class="ops-error-detail-modal__summary-kicker">
             {{ isUpstreamError(detail) ? t('admin.ops.errorDetail.account') : t('admin.ops.errorDetail.user') }}
           </div>
-          <div class="ops-error-detail-modal__summary-value mt-1 text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta">
             <template v-if="isUpstreamError(detail)">
               {{ detail.account_name || (detail.account_id != null ? String(detail.account_id) : '—') }}
             </template>
@@ -43,26 +42,26 @@
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.platform') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.platform') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta">
             {{ detail.platform || '—' }}
           </div>
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.group') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.group') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta">
             {{ detail.group_name || (detail.group_id != null ? String(detail.group_id) : '—') }}
           </div>
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.model') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.model') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta">
             <template v-if="hasModelMapping(detail)">
-              <span class="font-mono">{{ detail.requested_model }}</span>
-              <span class="ops-error-detail-modal__summary-arrow mx-1">→</span>
-              <span class="ops-error-detail-modal__accent font-mono">{{ detail.upstream_model }}</span>
+              <span class="ops-error-detail-modal__mono">{{ detail.requested_model }}</span>
+              <span class="ops-error-detail-modal__summary-arrow">→</span>
+              <span class="ops-error-detail-modal__accent ops-error-detail-modal__mono">{{ detail.upstream_model }}</span>
             </template>
             <template v-else>
               {{ displayModel(detail) || '—' }}
@@ -71,22 +70,22 @@
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.inboundEndpoint') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 break-all font-mono text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.inboundEndpoint') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta ops-error-detail-modal__summary-value--break ops-error-detail-modal__mono">
             {{ detail.inbound_endpoint || '—' }}
           </div>
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.upstreamEndpoint') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 break-all font-mono text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.upstreamEndpoint') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta ops-error-detail-modal__summary-value--break ops-error-detail-modal__mono">
             {{ detail.upstream_endpoint || '—' }}
           </div>
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.status') }}</div>
-          <div class="mt-1">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.status') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta">
             <span :class="statusClass">
               {{ detail.status_code }}
             </span>
@@ -94,81 +93,79 @@
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.requestType') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 text-sm font-medium">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.requestType') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta">
             {{ formatRequestTypeLabel(detail.request_type) }}
           </div>
         </div>
 
         <div class="ops-error-detail-modal__summary-card">
-          <div class="ops-error-detail-modal__summary-kicker text-xs font-bold uppercase tracking-wider">{{ t('admin.ops.errorDetail.message') }}</div>
-          <div class="ops-error-detail-modal__summary-value mt-1 truncate text-sm font-medium" :title="detail.message">
+          <div class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.message') }}</div>
+          <div class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta ops-error-detail-modal__summary-value--truncate" :title="detail.message">
             {{ detail.message || '—' }}
           </div>
         </div>
       </div>
 
       <div v-if="timingEntries.length" class="ops-error-detail-modal__panel">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="ops-error-detail-modal__title text-sm font-black uppercase tracking-wider">
+        <div class="ops-error-detail-modal__title-row">
+          <h3 class="ops-error-detail-modal__title">
             {{ t('admin.ops.errorDetail.timings') }}
           </h3>
-          <div class="ops-error-detail-modal__subtitle text-xs">
+          <div class="ops-error-detail-modal__subtitle ops-error-detail-modal__subtitle--compact">
             {{ t('admin.ops.errorDetail.timingsHint') }}
           </div>
         </div>
 
-        <div class="ops-error-detail-modal__timing-grid mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="ops-error-detail-modal__timing-grid">
           <div
             v-for="entry in timingEntries"
             :key="entry.key"
             class="ops-error-detail-modal__timing-card"
           >
-            <div class="ops-error-detail-modal__summary-kicker text-[11px] font-bold uppercase tracking-wider">
+            <div class="ops-error-detail-modal__summary-kicker ops-error-detail-modal__summary-kicker--compact">
               {{ entry.label }}
             </div>
-            <div class="ops-error-detail-modal__timing-value mt-2 text-xl font-semibold">
+            <div class="ops-error-detail-modal__timing-value">
               {{ entry.value }}ms
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Response content (client request -> error_body; upstream -> upstream_error_detail/message) -->
       <div class="ops-error-detail-modal__panel">
-        <h3 class="ops-error-detail-modal__title text-sm font-black uppercase tracking-wider">{{ t('admin.ops.errorDetail.responseBody') }}</h3>
-        <pre class="ops-error-detail-modal__code ops-error-detail-modal__code--primary mt-4 overflow-auto border text-xs"><code>{{ prettyJSON(primaryResponseBody || '') }}</code></pre>
+        <h3 class="ops-error-detail-modal__title">{{ t('admin.ops.errorDetail.responseBody') }}</h3>
+        <pre class="ops-error-detail-modal__code ops-error-detail-modal__code--primary"><code>{{ prettyJSON(primaryResponseBody || '') }}</code></pre>
       </div>
 
-      <!-- Upstream errors list (only for request errors) -->
       <div v-if="showUpstreamList" class="ops-error-detail-modal__panel">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="ops-error-detail-modal__title text-sm font-black uppercase tracking-wider">{{ t('admin.ops.errorDetails.upstreamErrors') }}</h3>
-          <div class="ops-error-detail-modal__subtitle text-xs" v-if="correlatedUpstreamLoading">{{ t('common.loading') }}</div>
+        <div class="ops-error-detail-modal__title-row">
+          <h3 class="ops-error-detail-modal__title">{{ t('admin.ops.errorDetails.upstreamErrors') }}</h3>
+          <div v-if="correlatedUpstreamLoading" class="ops-error-detail-modal__subtitle ops-error-detail-modal__subtitle--compact">{{ t('common.loading') }}</div>
         </div>
 
-        <div v-if="!correlatedUpstreamLoading && !correlatedUpstreamErrors.length" class="ops-error-detail-modal__subtitle mt-3 text-sm">
+        <div v-if="!correlatedUpstreamLoading && !correlatedUpstreamErrors.length" class="ops-error-detail-modal__subtitle ops-error-detail-modal__subtitle--empty">
           {{ t('common.noData') }}
         </div>
 
-        <div v-else class="mt-4 space-y-3">
+        <div v-else class="ops-error-detail-modal__item-list">
           <div
             v-for="(ev, idx) in correlatedUpstreamErrors"
             :key="ev.id"
-            class="ops-error-detail-modal__item border"
+            class="ops-error-detail-modal__item"
           >
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="ops-error-detail-modal__title text-xs font-black">
+            <div class="ops-error-detail-modal__item-header">
+              <div class="ops-error-detail-modal__item-title">
                 #{{ idx + 1 }}
-                <span v-if="ev.type" class="ops-error-detail-modal__type-chip theme-chip theme-chip--neutral theme-chip--compact ml-2 font-mono text-[10px] font-bold">{{ ev.type }}</span>
+                <span v-if="ev.type" class="ops-error-detail-modal__type-chip theme-chip theme-chip--neutral theme-chip--compact ops-error-detail-modal__mono">{{ ev.type }}</span>
               </div>
-              <div class="flex items-center gap-2">
-                <div class="ops-error-detail-modal__subtitle font-mono text-xs">
+              <div class="ops-error-detail-modal__item-actions">
+                <div class="ops-error-detail-modal__subtitle ops-error-detail-modal__subtitle--compact ops-error-detail-modal__mono">
                   {{ ev.status_code ?? '—' }}
                 </div>
                 <button
                   type="button"
-                  class="ops-error-detail-modal__toggle inline-flex items-center gap-1.5 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
+                  class="ops-error-detail-modal__toggle"
                   :disabled="!getUpstreamResponsePreview(ev)"
                   :title="getUpstreamResponsePreview(ev) ? '' : t('common.noData')"
                   @click="toggleUpstreamDetail(ev.id)"
@@ -189,22 +186,24 @@
               </div>
             </div>
 
-            <div class="ops-error-detail-modal__meta-grid mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+            <div class="ops-error-detail-modal__meta-grid">
               <div>
                 <span class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.upstreamEvent.status') }}:</span>
-                <span class="ml-1 font-mono">{{ ev.status_code ?? '—' }}</span>
+                <span class="ops-error-detail-modal__meta-value ops-error-detail-modal__mono">{{ ev.status_code ?? '—' }}</span>
               </div>
               <div>
                 <span class="ops-error-detail-modal__summary-kicker">{{ t('admin.ops.errorDetail.upstreamEvent.requestId') }}:</span>
-                <span class="ml-1 font-mono">{{ ev.request_id || ev.client_request_id || '—' }}</span>
+                <span class="ops-error-detail-modal__meta-value ops-error-detail-modal__mono">{{ ev.request_id || ev.client_request_id || '—' }}</span>
               </div>
             </div>
 
-            <div v-if="ev.message" class="ops-error-detail-modal__summary-value mt-3 break-words text-sm font-medium">{{ ev.message }}</div>
+            <div v-if="ev.message" class="ops-error-detail-modal__summary-value ops-error-detail-modal__summary-value--meta ops-error-detail-modal__summary-value--break">
+              {{ ev.message }}
+            </div>
 
             <pre
               v-if="expandedUpstreamDetailIds.has(ev.id)"
-              class="ops-error-detail-modal__code ops-error-detail-modal__code--secondary mt-3 overflow-auto border text-xs"
+              class="ops-error-detail-modal__code ops-error-detail-modal__code--secondary"
             ><code>{{ prettyJSON(getUpstreamResponsePreview(ev)) }}</code></pre>
           </div>
         </div>
@@ -465,10 +464,10 @@ watch(
 
 const statusClass = computed(() => {
   const code = detail.value?.status_code ?? 0
-  if (code >= 500) return 'ops-error-detail-modal__status-chip theme-chip theme-chip--danger theme-chip--regular inline-flex items-center text-xs font-black shadow-sm'
-  if (code === 429) return 'ops-error-detail-modal__status-chip theme-chip theme-chip--brand-purple theme-chip--regular inline-flex items-center text-xs font-black shadow-sm'
-  if (code >= 400) return 'ops-error-detail-modal__status-chip theme-chip theme-chip--warning theme-chip--regular inline-flex items-center text-xs font-black shadow-sm'
-  return 'ops-error-detail-modal__status-chip theme-chip theme-chip--neutral theme-chip--regular inline-flex items-center text-xs font-black shadow-sm'
+  if (code >= 500) return 'ops-error-detail-modal__status-chip theme-chip theme-chip--danger theme-chip--regular'
+  if (code === 429) return 'ops-error-detail-modal__status-chip theme-chip theme-chip--brand-purple theme-chip--regular'
+  if (code >= 400) return 'ops-error-detail-modal__status-chip theme-chip theme-chip--warning theme-chip--regular'
+  return 'ops-error-detail-modal__status-chip theme-chip theme-chip--neutral theme-chip--regular'
 })
 
 </script>
@@ -480,20 +479,36 @@ const statusClass = computed(() => {
   color: var(--theme-page-muted);
 }
 
+.ops-error-detail-modal__state {
+  text-align: center;
+}
+
 .ops-error-detail-modal__state--loading {
   padding-block: calc(var(--theme-ops-card-padding) * 2);
 }
 
 .ops-error-detail-modal__state--empty {
   padding-block: calc(var(--theme-ops-card-padding) * 1.4);
+  font-size: var(--theme-ops-error-detail-text-regular);
 }
 
 .ops-error-detail-modal__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: calc(var(--theme-ops-panel-padding) * 0.75);
+}
+
+.ops-error-detail-modal__loading-label {
+  font-size: var(--theme-ops-error-detail-text-regular);
+  font-weight: 500;
 }
 
 .ops-error-detail-modal__content {
   padding: calc(var(--theme-ops-card-padding) * 0.95);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-error-detail-content-gap);
 }
 
 .ops-error-detail-modal__title,
@@ -503,8 +518,19 @@ const statusClass = computed(() => {
 }
 
 .ops-error-detail-modal__spinner {
+  width: var(--theme-ops-error-detail-spinner-size);
+  height: var(--theme-ops-error-detail-spinner-size);
+  border-width: 0 0 2px 0;
+  border-style: solid;
+  border-radius: 9999px;
   border-color: color-mix(in srgb, var(--theme-page-border) 68%, transparent);
   border-bottom-color: var(--theme-accent);
+}
+
+.ops-error-detail-modal__summary-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--theme-ops-error-detail-grid-gap);
 }
 
 .ops-error-detail-modal__summary-card,
@@ -514,6 +540,33 @@ const statusClass = computed(() => {
   padding: var(--theme-ops-panel-padding);
   border-radius: var(--theme-select-panel-radius);
   background: color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface));
+}
+
+.ops-error-detail-modal__summary-kicker {
+  font-size: var(--theme-ops-error-detail-text-compact);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ops-error-detail-modal__summary-kicker--compact {
+  font-size: var(--theme-ops-error-detail-text-subtle);
+}
+
+.ops-error-detail-modal__summary-value--meta {
+  margin-top: 0.25rem;
+  font-size: var(--theme-ops-error-detail-text-regular);
+  font-weight: 500;
+}
+
+.ops-error-detail-modal__summary-value--break {
+  overflow-wrap: anywhere;
+}
+
+.ops-error-detail-modal__summary-value--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ops-error-detail-modal__item,
@@ -532,11 +585,15 @@ const statusClass = computed(() => {
 }
 
 .ops-error-detail-modal__timing-value {
+  margin-top: 0.5rem;
   color: color-mix(in srgb, var(--theme-accent) 72%, var(--theme-page-text));
+  font-size: var(--theme-ops-error-detail-timing-size);
+  font-weight: 600;
 }
 
 .ops-error-detail-modal__summary-arrow {
   color: color-mix(in srgb, var(--theme-page-muted) 72%, transparent);
+  margin-inline: 0.25rem;
 }
 
 .ops-error-detail-modal__accent,
@@ -545,33 +602,50 @@ const statusClass = computed(() => {
 }
 
 .ops-error-detail-modal__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   padding: calc(var(--theme-button-padding-y) * 0.4) calc(var(--theme-button-padding-x) * 0.32);
   border-radius: calc(var(--theme-button-radius) * 0.8);
+  font-size: var(--theme-ops-error-detail-text-micro);
+  font-weight: 700;
 }
 
 .ops-error-detail-modal__toggle:hover {
   background: color-mix(in srgb, var(--theme-accent-soft) 86%, var(--theme-surface));
 }
 
+.ops-error-detail-modal__toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .ops-error-detail-modal__code {
   border-radius: var(--theme-select-panel-radius);
+  border: 1px solid color-mix(in srgb, var(--theme-page-border) 74%, transparent);
   border-color: color-mix(in srgb, var(--theme-page-border) 74%, transparent);
   background: var(--theme-surface);
   color: var(--theme-page-text);
+  overflow: auto;
+  font-size: var(--theme-ops-error-detail-text-compact);
 }
 
 .ops-error-detail-modal__code--primary {
   max-height: calc(var(--theme-ops-table-max-height) * 0.92);
   padding: var(--theme-ops-panel-padding);
+  margin-top: var(--theme-ops-error-detail-code-gap);
 }
 
 .ops-error-detail-modal__code--secondary {
   max-height: calc(var(--theme-ops-list-max-height) * 0.9);
   padding: calc(var(--theme-ops-panel-padding) * 0.75);
+  margin-top: var(--theme-ops-error-detail-item-gap);
 }
 
 .ops-error-detail-modal__status-chip,
 .ops-error-detail-modal__type-chip {
+  display: inline-flex;
+  align-items: center;
   padding:
     calc(var(--theme-button-padding-y) * 0.35)
     calc(var(--theme-button-padding-x) * 0.5);
@@ -579,9 +653,110 @@ const statusClass = computed(() => {
 
 .ops-error-detail-modal__status-chip {
   border-radius: var(--theme-button-radius);
+  font-size: var(--theme-ops-error-detail-text-compact);
+  font-weight: 900;
 }
 
 .ops-error-detail-modal__type-chip {
   border-radius: calc(var(--theme-button-radius) * 0.8);
+  margin-left: 0.5rem;
+  font-size: var(--theme-ops-error-detail-text-micro);
+  font-weight: 700;
+}
+
+.ops-error-detail-modal__title-row,
+.ops-error-detail-modal__item-header,
+.ops-error-detail-modal__item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ops-error-detail-modal__title-row,
+.ops-error-detail-modal__item-header {
+  justify-content: space-between;
+  gap: var(--theme-ops-error-detail-title-gap);
+}
+
+.ops-error-detail-modal__item-actions {
+  gap: 0.5rem;
+}
+
+.ops-error-detail-modal__title {
+  font-size: var(--theme-ops-error-detail-text-regular);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ops-error-detail-modal__subtitle--compact {
+  font-size: var(--theme-ops-error-detail-text-compact);
+}
+
+.ops-error-detail-modal__subtitle--empty {
+  margin-top: 0.75rem;
+  font-size: var(--theme-ops-error-detail-text-regular);
+}
+
+.ops-error-detail-modal__timing-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-top: var(--theme-ops-error-detail-code-gap);
+}
+
+.ops-error-detail-modal__item-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-error-detail-item-gap);
+  margin-top: var(--theme-ops-error-detail-code-gap);
+}
+
+.ops-error-detail-modal__item {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.ops-error-detail-modal__item-title {
+  font-size: var(--theme-ops-error-detail-text-compact);
+  font-weight: 900;
+}
+
+.ops-error-detail-modal__meta-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--theme-ops-error-detail-meta-gap);
+  margin-top: var(--theme-ops-error-detail-item-gap);
+  font-size: var(--theme-ops-error-detail-text-compact);
+}
+
+.ops-error-detail-modal__meta-value {
+  margin-left: 0.25rem;
+}
+
+.ops-error-detail-modal__mono {
+  font-family: var(--theme-font-mono);
+}
+
+@media (min-width: 640px) {
+  .ops-error-detail-modal__summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-error-detail-modal__timing-grid,
+  .ops-error-detail-modal__meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .ops-error-detail-modal__summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .ops-error-detail-modal__timing-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 </style>

@@ -103,6 +103,9 @@ function makeAlertList(count: number, prefix: string) {
 async function mountCard(initialEvents = makeAlertList(2, 'initial')) {
   mockListAlertEvents.mockResolvedValueOnce(initialEvents)
   const wrapper = mount(OpsAlertEventsCard, {
+    props: {
+      refreshToken: 0,
+    },
     global: {
       stubs: {
         BaseDialog: BaseDialogStub,
@@ -230,5 +233,16 @@ describe('OpsAlertEventsCard', () => {
     expect(text).not.toContain('detail one only')
     expect(text).toContain('33.33 / 44.44')
     expect(text).not.toContain('11.11 / 22.22')
+  })
+
+  it('reloads alert events when the dashboard refresh token changes', async () => {
+    const wrapper = await mountCard([makeAlertEvent(1, 'before refresh')])
+
+    mockListAlertEvents.mockResolvedValueOnce([makeAlertEvent(2, 'after refresh')])
+
+    await wrapper.setProps({ refreshToken: 1 })
+    await flushPromises()
+
+    expect(mockListAlertEvents).toHaveBeenCalledTimes(2)
   })
 })

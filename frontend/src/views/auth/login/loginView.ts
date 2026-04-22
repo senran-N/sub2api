@@ -1,4 +1,5 @@
 import type { LoginRequest, PublicSettings, TotpLoginResponse } from '@/types'
+import { sanitizeRedirectPath } from '@/utils/url'
 
 export interface LoginFormData {
   email: string
@@ -154,11 +155,10 @@ export function resolveLoginRedirectTarget(
   redirect: unknown,
   isAdmin = false
 ): string {
-  if (typeof redirect === 'string' && redirect) {
-    return redirect
-  }
-
-  return isAdmin ? '/admin/dashboard' : '/dashboard'
+  return sanitizeRedirectPath(
+    typeof redirect === 'string' ? redirect : undefined,
+    isAdmin ? '/admin/dashboard' : '/dashboard'
+  )
 }
 
 export function resolveLoginErrorMessage(

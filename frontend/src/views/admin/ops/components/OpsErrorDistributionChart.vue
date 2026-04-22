@@ -115,7 +115,7 @@ const options = computed(() => ({
   <div class="ops-chart-card">
     <div class="ops-chart-card__header">
       <h3 class="ops-chart-card__title">
-        <svg class="ops-chart-card__icon--danger h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="ops-chart-card__icon ops-chart-card__icon--danger" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -137,26 +137,26 @@ const options = computed(() => ({
       </button>
     </div>
 
-    <div class="relative min-h-0 flex-1">
-      <div v-if="state === 'ready' && chartData" class="flex h-full flex-col">
-        <div class="flex-1">
+    <div class="ops-chart-card__content ops-chart-card__content--relative">
+      <div v-if="state === 'ready' && chartData" class="ops-chart-card__summary-shell">
+        <div class="ops-chart-card__summary-chart">
           <Doughnut :data="chartData" :options="{ ...options, cutout: '65%' }" />
         </div>
-        <div class="mt-4 flex flex-col items-center gap-2">
-          <div v-if="topReason" class="text-xs font-bold text-[color:var(--theme-page-text)]">
+        <div class="ops-chart-card__summary-footer">
+          <div v-if="topReason" class="ops-chart-card__summary-top">
             {{ t('admin.ops.top') }}: <span :style="{ color: topReason.color }">{{ topReason.label }}</span>
           </div>
-          <div class="flex flex-wrap justify-center gap-3">
-            <div v-for="item in categories" :key="item.label" class="flex items-center gap-1.5 text-xs">
-              <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: item.color }"></span>
-              <span class="text-[color:var(--theme-page-muted)]">{{ item.count }}</span>
+          <div class="ops-chart-card__summary-list">
+            <div v-for="item in categories" :key="item.label" class="ops-chart-card__summary-item">
+              <span class="ops-chart-card__summary-dot" :style="{ backgroundColor: item.color }"></span>
+              <span class="ops-chart-card__summary-count">{{ item.count }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-else class="flex h-full items-center justify-center">
-        <div v-if="state === 'loading'" class="ops-chart-card__placeholder animate-pulse text-sm">{{ t('common.loading') }}</div>
+      <div v-else class="ops-chart-card__state">
+        <div v-if="state === 'loading'" class="ops-chart-card__placeholder ops-chart-card__placeholder--loading">{{ t('common.loading') }}</div>
         <EmptyState v-else :title="t('common.noData')" :description="t('admin.ops.charts.emptyError')" />
       </div>
     </div>

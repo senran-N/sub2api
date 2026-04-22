@@ -470,7 +470,7 @@ function resolveLoadTone(loadPct: number): ConcurrencyTone {
 function getLoadBarClass(loadPct: number): string {
   const tone = resolveLoadTone(loadPct)
   return joinClassNames([
-    'ops-concurrency-card__bar h-full rounded-full transition-all duration-300',
+    'ops-concurrency-card__bar',
     tone === 'danger' && 'ops-concurrency-card__bar--danger',
     tone === 'info' && 'ops-concurrency-card__bar--info',
     tone === 'success' && 'ops-concurrency-card__bar--success',
@@ -485,7 +485,7 @@ function getLoadBarStyle(loadPct: number): string {
 function getLoadTextClass(loadPct: number): string {
   const tone = resolveLoadTone(loadPct)
   return joinClassNames([
-    'ops-concurrency-card__load-text font-bold',
+    'ops-concurrency-card__load-text',
     tone === 'danger' && 'ops-concurrency-card__load-text--danger',
     tone === 'info' && 'ops-concurrency-card__load-text--info',
     tone === 'success' && 'ops-concurrency-card__load-text--success',
@@ -495,7 +495,7 @@ function getLoadTextClass(loadPct: number): string {
 
 function getViewToggleClasses(isActive: boolean): string {
   return joinClassNames([
-    'ops-concurrency-card__view-toggle flex items-center justify-center transition-colors',
+    'ops-concurrency-card__view-toggle',
     isActive
       ? 'ops-concurrency-card__view-toggle--active'
       : 'ops-concurrency-card__view-toggle--idle'
@@ -504,7 +504,7 @@ function getViewToggleClasses(isActive: boolean): string {
 
 function getRuntimeHeadlineClasses(tone: RuntimeTone): string {
   return joinClassNames([
-    'ops-concurrency-card__runtime-headline flex items-start justify-between gap-3 rounded-xl border px-3 py-2.5',
+    'ops-concurrency-card__runtime-headline',
     tone === 'critical' && 'ops-concurrency-card__runtime-headline--critical',
     tone === 'warning' && 'ops-concurrency-card__runtime-headline--warning',
     tone === 'healthy' && 'ops-concurrency-card__runtime-headline--healthy'
@@ -513,7 +513,7 @@ function getRuntimeHeadlineClasses(tone: RuntimeTone): string {
 
 function getRuntimeMetricClasses(tone: RuntimeTone): string {
   return joinClassNames([
-    'ops-concurrency-card__runtime-metric rounded-lg border px-2.5 py-2',
+    'ops-concurrency-card__runtime-metric',
     tone === 'critical' && 'ops-concurrency-card__runtime-metric--critical',
     tone === 'warning' && 'ops-concurrency-card__runtime-metric--warning',
     tone === 'healthy' && 'ops-concurrency-card__runtime-metric--healthy'
@@ -522,7 +522,7 @@ function getRuntimeMetricClasses(tone: RuntimeTone): string {
 
 function getStatusChipClasses(tone: ConcurrencyTone): string {
   return joinClassNames([
-    'ops-concurrency-card__status-chip theme-chip theme-chip--compact inline-flex items-center gap-1 text-[10px] font-medium',
+    'ops-concurrency-card__status-chip theme-chip theme-chip--compact',
     tone === 'danger' && 'theme-chip--danger',
     tone === 'info' && 'theme-chip--info',
     tone === 'neutral' && 'theme-chip--neutral',
@@ -561,34 +561,34 @@ watch(
 </script>
 
 <template>
-  <div class="ops-concurrency-card flex h-full flex-col">
+  <div class="ops-concurrency-card">
     <!-- 头部 -->
-    <div class="mb-4 flex shrink-0 items-center justify-between gap-3">
-      <h3 class="ops-concurrency-card__title flex items-center gap-2 text-sm font-bold">
-        <svg class="ops-concurrency-card__title-icon h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div class="ops-concurrency-card__header">
+      <h3 class="ops-concurrency-card__title">
+        <svg class="ops-concurrency-card__title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
         {{ t('admin.ops.concurrency.title') }}
       </h3>
-      <div class="flex items-center gap-2">
+      <div class="ops-concurrency-card__header-actions">
         <!-- 用户视图切换按钮 -->
         <button
           :class="getViewToggleClasses(showByUser)"
           :title="showByUser ? t('admin.ops.concurrency.switchToPlatform') : t('admin.ops.concurrency.switchToUser')"
           @click="showByUser = !showByUser"
         >
-          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="ops-concurrency-card__icon-button-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
         </button>
         <!-- 刷新按钮 -->
         <button
-          class="ops-concurrency-card__refresh flex items-center gap-1 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          class="ops-concurrency-card__refresh"
           :disabled="loading"
           :title="t('common.refresh')"
           @click="loadData"
         >
-          <svg class="h-3 w-3" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="ops-concurrency-card__refresh-icon" :class="{ 'animate-spin': loading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         </button>
@@ -596,60 +596,60 @@ watch(
     </div>
 
     <!-- 错误提示 -->
-    <div v-if="errorMessage" class="ops-concurrency-card__error mb-3 shrink-0 text-xs">
+    <div v-if="errorMessage" class="ops-concurrency-card__error">
       {{ errorMessage }}
     </div>
 
     <!-- 禁用状态 -->
     <div
       v-if="!realtimeEnabled"
-      class="ops-concurrency-card__empty flex flex-1 items-center justify-center border border-dashed text-sm"
+      class="ops-concurrency-card__empty ops-concurrency-card__empty--disabled"
     >
       {{ t('admin.ops.concurrency.disabledHint') }}
     </div>
 
     <!-- 数据展示区域 -->
-    <div v-else class="ops-concurrency-card__shell flex min-h-0 flex-1 flex-col overflow-hidden border">
+    <div v-else class="ops-concurrency-card__shell">
       <!-- 维度标题栏 -->
-      <div class="ops-concurrency-card__shell-head flex shrink-0 items-center justify-between border-b">
-        <span class="ops-concurrency-card__subtitle text-[10px] font-bold uppercase tracking-wider">
+      <div class="ops-concurrency-card__shell-head">
+        <span class="ops-concurrency-card__subtitle ops-concurrency-card__subtitle--label">
           {{ displayTitle }}
         </span>
-        <span class="ops-concurrency-card__subtitle text-[10px]">
+        <span class="ops-concurrency-card__subtitle ops-concurrency-card__subtitle--count">
           {{ t('admin.ops.concurrency.totalRows', { count: displayRows.length }) }}
         </span>
       </div>
 
-      <div v-if="runtimeHeadline" class="ops-concurrency-card__runtime border-b px-3 py-3">
+      <div v-if="runtimeHeadline" class="ops-concurrency-card__runtime">
         <div :class="getRuntimeHeadlineClasses(runtimeHeadline.tone)">
-          <div class="min-w-0 flex-1">
-            <div class="ops-concurrency-card__runtime-title text-[11px] font-bold">
+          <div class="ops-concurrency-card__runtime-copy">
+            <div class="ops-concurrency-card__runtime-title">
               {{ runtimeHeadline.title }}
             </div>
-            <div class="ops-concurrency-card__runtime-detail mt-1 text-[10px]">
+            <div class="ops-concurrency-card__runtime-detail">
               {{ runtimeHeadline.detail }}
             </div>
           </div>
-          <div class="ops-concurrency-card__runtime-probes shrink-0 text-right">
-            <div class="ops-concurrency-card__subtitle text-[9px] font-bold uppercase tracking-wider">
+          <div class="ops-concurrency-card__runtime-probes">
+            <div class="ops-concurrency-card__subtitle ops-concurrency-card__subtitle--micro-label">
               {{ t('admin.ops.runtimeObservability.runtimeProbes') }}
             </div>
-            <div class="ops-concurrency-card__primary mt-1 text-sm font-black">
+            <div class="ops-concurrency-card__primary ops-concurrency-card__primary--hero">
               {{ runtimeObservability?.summary?.scheduling_runtime_kernel?.total_runtime_probes ?? 0 }}
             </div>
           </div>
         </div>
 
-        <div class="mt-2 grid grid-cols-2 gap-2">
+        <div class="ops-concurrency-card__runtime-grid">
           <div
             v-for="item in runtimeHealthItems"
             :key="item.key"
             :class="getRuntimeMetricClasses(item.tone)"
           >
-            <div class="ops-concurrency-card__subtitle text-[9px] font-bold uppercase tracking-wider">
+            <div class="ops-concurrency-card__subtitle ops-concurrency-card__subtitle--micro-label">
               {{ item.label }}
             </div>
-            <div class="ops-concurrency-card__primary mt-1 text-[13px] font-black">
+            <div class="ops-concurrency-card__primary ops-concurrency-card__primary--metric">
               {{ item.value }}
             </div>
           </div>
@@ -657,37 +657,37 @@ watch(
       </div>
 
       <!-- 空状态 -->
-      <div v-if="displayRows.length === 0" class="ops-concurrency-card__empty flex flex-1 items-center justify-center text-sm">
+      <div v-if="displayRows.length === 0" class="ops-concurrency-card__empty">
         {{ t('admin.ops.concurrency.empty') }}
       </div>
 
       <!-- 用户视图 -->
-      <div v-else-if="displayDimension === 'user'" class="ops-concurrency-card__list custom-scrollbar flex-1 space-y-2 overflow-y-auto">
+      <div v-else-if="displayDimension === 'user'" class="ops-concurrency-card__list custom-scrollbar">
         <div v-for="row in (displayRows as UserRow[])" :key="row.key" class="ops-concurrency-card__row ops-concurrency-card__row--compact">
           <!-- 用户信息和并发 -->
-          <div class="mb-1.5 flex items-center justify-between gap-2">
-            <div class="flex min-w-0 flex-1 items-center gap-1.5">
-              <span class="ops-concurrency-card__primary truncate text-[11px] font-bold" :title="row.username || row.user_email">
+          <div class="ops-concurrency-card__row-head">
+            <div class="ops-concurrency-card__row-identity">
+              <span class="ops-concurrency-card__primary ops-concurrency-card__primary--compact ops-concurrency-card__truncate" :title="row.username || row.user_email">
                 {{ row.username || row.user_email }}
               </span>
-              <span v-if="row.username" class="ops-concurrency-card__subtitle shrink-0 truncate text-[10px]" :title="row.user_email">
+              <span v-if="row.username" class="ops-concurrency-card__subtitle ops-concurrency-card__subtitle--compact ops-concurrency-card__truncate" :title="row.user_email">
                 {{ row.user_email }}
               </span>
             </div>
-            <div class="flex shrink-0 items-center gap-2 text-[10px]">
-              <span class="ops-concurrency-card__primary font-mono font-bold"> {{ row.current_in_use }}/{{ row.max_capacity }} </span>
-              <span :class="['font-bold', getLoadTextClass(row.load_percentage)]"> {{ Math.round(row.load_percentage) }}% </span>
+            <div class="ops-concurrency-card__row-metrics">
+              <span class="ops-concurrency-card__primary ops-concurrency-card__primary--mono"> {{ row.current_in_use }}/{{ row.max_capacity }} </span>
+              <span :class="getLoadTextClass(row.load_percentage)"> {{ Math.round(row.load_percentage) }}% </span>
             </div>
           </div>
 
           <!-- 进度条 -->
-          <div class="ops-concurrency-card__track h-1.5 w-full overflow-hidden rounded-full">
+          <div class="ops-concurrency-card__track">
             <div :class="getLoadBarClass(row.load_percentage)" :style="getLoadBarStyle(row.load_percentage)"></div>
           </div>
 
           <!-- 等待队列 -->
-          <div v-if="row.waiting_in_queue > 0" class="mt-1.5 flex justify-end">
-            <span class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact text-[10px] font-semibold">
+          <div v-if="row.waiting_in_queue > 0" class="ops-concurrency-card__status-row ops-concurrency-card__status-row--end">
+            <span class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact">
               {{ t('admin.ops.concurrency.queued', { count: row.waiting_in_queue }) }}
             </span>
           </div>
@@ -695,26 +695,26 @@ watch(
       </div>
 
       <!-- 汇总视图（平台/分组） -->
-      <div v-else-if="displayDimension === 'platform' || displayDimension === 'group'" class="ops-concurrency-card__list custom-scrollbar flex-1 space-y-2 overflow-y-auto">
+      <div v-else-if="displayDimension === 'platform' || displayDimension === 'group'" class="ops-concurrency-card__list custom-scrollbar">
         <div v-for="row in (displayRows as SummaryRow[])" :key="row.key" class="ops-concurrency-card__row ops-concurrency-card__row--regular">
           <!-- 标题行 -->
-          <div class="mb-2 flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <div class="ops-concurrency-card__primary truncate text-[11px] font-bold" :title="row.name">
+          <div class="ops-concurrency-card__row-head ops-concurrency-card__row-head--regular">
+            <div class="ops-concurrency-card__row-title-group">
+              <div class="ops-concurrency-card__primary ops-concurrency-card__primary--compact ops-concurrency-card__truncate" :title="row.name">
                 {{ row.name }}
               </div>
-              <span v-if="displayDimension === 'group' && row.platform" class="ops-concurrency-card__subtitle text-[10px]">
+              <span v-if="displayDimension === 'group' && row.platform" class="ops-concurrency-card__subtitle ops-concurrency-card__subtitle--compact">
                 {{ row.platform.toUpperCase() }}
               </span>
             </div>
-            <div class="flex shrink-0 items-center gap-2 text-[10px]">
-              <span class="ops-concurrency-card__primary font-mono font-bold"> {{ row.used_concurrency }}/{{ row.total_concurrency }} </span>
-              <span :class="['font-bold', getLoadTextClass(row.concurrency_percentage)]"> {{ row.concurrency_percentage }}% </span>
+            <div class="ops-concurrency-card__row-metrics">
+              <span class="ops-concurrency-card__primary ops-concurrency-card__primary--mono"> {{ row.used_concurrency }}/{{ row.total_concurrency }} </span>
+              <span :class="getLoadTextClass(row.concurrency_percentage)"> {{ row.concurrency_percentage }}% </span>
             </div>
           </div>
 
           <!-- 进度条 -->
-          <div class="ops-concurrency-card__track mb-2 h-1.5 w-full overflow-hidden rounded-full">
+          <div class="ops-concurrency-card__track ops-concurrency-card__track--spaced">
             <div
               :class="getLoadBarClass(row.concurrency_percentage)"
               :style="getLoadBarStyle(row.concurrency_percentage)"
@@ -722,10 +722,10 @@ watch(
           </div>
 
           <!-- 统计信息 -->
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
+          <div class="ops-concurrency-card__status-row">
             <!-- 账号统计 -->
-            <div class="flex items-center gap-1">
-              <svg class="ops-concurrency-card__subtitle h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="ops-concurrency-card__status-inline">
+              <svg class="ops-concurrency-card__subtitle ops-concurrency-card__status-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -734,7 +734,7 @@ watch(
                 />
               </svg>
               <span class="ops-concurrency-card__secondary">
-                <span class="ops-concurrency-card__success font-bold">{{ row.available_accounts }}</span
+                <span class="ops-concurrency-card__success ops-concurrency-card__text-strong">{{ row.available_accounts }}</span
                 >/{{ row.total_accounts }}
               </span>
               <span class="ops-concurrency-card__subtitle">{{ row.availability_percentage }}%</span>
@@ -743,7 +743,7 @@ watch(
             <!-- 限流账号 -->
             <span
               v-if="row.rate_limited_accounts > 0"
-              class="ops-concurrency-card__status-chip theme-chip theme-chip--warning theme-chip--compact font-semibold"
+              class="ops-concurrency-card__status-chip theme-chip theme-chip--warning theme-chip--compact"
             >
               {{ t('admin.ops.concurrency.rateLimited', { count: row.rate_limited_accounts }) }}
             </span>
@@ -751,7 +751,7 @@ watch(
             <!-- 异常账号 -->
             <span
               v-if="row.error_accounts > 0"
-              class="ops-concurrency-card__status-chip theme-chip theme-chip--danger theme-chip--compact font-semibold"
+              class="ops-concurrency-card__status-chip theme-chip theme-chip--danger theme-chip--compact"
             >
               {{ t('admin.ops.concurrency.errorAccounts', { count: row.error_accounts }) }}
             </span>
@@ -759,7 +759,7 @@ watch(
             <!-- 等待队列 -->
             <span
               v-if="row.waiting_in_queue > 0"
-              class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact font-semibold"
+              class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact"
             >
               {{ t('admin.ops.concurrency.queued', { count: row.waiting_in_queue }) }}
             </span>
@@ -768,21 +768,21 @@ watch(
       </div>
 
       <!-- 账号详细视图 -->
-      <div v-else class="ops-concurrency-card__list custom-scrollbar flex-1 space-y-2 overflow-y-auto">
+      <div v-else class="ops-concurrency-card__list custom-scrollbar">
         <div v-for="row in (displayRows as AccountRow[])" :key="row.key" class="ops-concurrency-card__row ops-concurrency-card__row--compact">
           <!-- 账号名称和并发 -->
-          <div class="mb-1.5 flex items-center justify-between gap-2">
-            <div class="min-w-0 flex-1">
-              <div class="ops-concurrency-card__primary truncate text-[11px] font-bold" :title="row.name">
+          <div class="ops-concurrency-card__row-head">
+            <div class="ops-concurrency-card__row-copy">
+              <div class="ops-concurrency-card__primary ops-concurrency-card__primary--compact ops-concurrency-card__truncate" :title="row.name">
                 {{ row.name }}
               </div>
-              <div class="ops-concurrency-card__subtitle mt-0.5 text-[9px]">
+              <div class="ops-concurrency-card__subtitle ops-concurrency-card__subtitle--micro">
                 {{ row.group_name }}
               </div>
             </div>
-            <div class="flex shrink-0 items-center gap-2">
+            <div class="ops-concurrency-card__row-metrics ops-concurrency-card__row-metrics--status">
               <!-- 并发使用 -->
-              <span class="ops-concurrency-card__primary font-mono text-[11px] font-bold"> {{ row.current_in_use }}/{{ row.max_capacity }} </span>
+              <span class="ops-concurrency-card__primary ops-concurrency-card__primary--mono"> {{ row.current_in_use }}/{{ row.max_capacity }} </span>
               <!-- 状态徽章 -->
               <span
                 v-if="row.is_available"
@@ -835,13 +835,13 @@ watch(
           </div>
 
           <!-- 进度条 -->
-          <div class="ops-concurrency-card__track h-1.5 w-full overflow-hidden rounded-full">
+          <div class="ops-concurrency-card__track">
             <div :class="getLoadBarClass(row.load_percentage)" :style="getLoadBarStyle(row.load_percentage)"></div>
           </div>
 
           <!-- 等待队列 -->
-          <div v-if="row.waiting_in_queue > 0" class="mt-1.5 flex justify-end">
-            <span class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact text-[10px] font-semibold">
+          <div v-if="row.waiting_in_queue > 0" class="ops-concurrency-card__status-row ops-concurrency-card__status-row--end">
+            <span class="ops-concurrency-card__status-chip theme-chip theme-chip--brand-purple theme-chip--compact">
               {{ t('admin.ops.concurrency.queued', { count: row.waiting_in_queue }) }}
             </span>
           </div>
@@ -853,6 +853,9 @@ watch(
 
 <style scoped>
 .ops-concurrency-card {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
   padding: var(--theme-ops-card-padding);
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
   border-radius: var(--theme-surface-radius);
@@ -866,12 +869,89 @@ watch(
   color: var(--theme-page-text);
 }
 
+.ops-concurrency-card__header,
+.ops-concurrency-card__shell-head,
+.ops-concurrency-card__row-head,
+.ops-concurrency-card__runtime-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-ops-concurrency-header-gap);
+}
+
+.ops-concurrency-card__header {
+  margin-bottom: var(--theme-ops-dashboard-banner-gap);
+  flex-shrink: 0;
+}
+
+.ops-concurrency-card__header-actions,
+.ops-concurrency-card__row-identity,
+.ops-concurrency-card__row-title-group,
+.ops-concurrency-card__row-metrics,
+.ops-concurrency-card__status-row,
+.ops-concurrency-card__status-inline {
+  display: flex;
+  align-items: center;
+}
+
+.ops-concurrency-card__header-actions,
+.ops-concurrency-card__row-metrics,
+.ops-concurrency-card__status-inline {
+  gap: var(--theme-ops-concurrency-control-gap);
+}
+
+.ops-concurrency-card__status-row {
+  flex-wrap: wrap;
+  gap: var(--theme-ops-concurrency-status-gap);
+}
+
+.ops-concurrency-card__status-row--end {
+  margin-top: calc(var(--theme-ops-concurrency-control-gap) * 3);
+  justify-content: flex-end;
+}
+
+.ops-concurrency-card__row-identity,
+.ops-concurrency-card__row-copy,
+.ops-concurrency-card__runtime-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.ops-concurrency-card__row-copy,
+.ops-concurrency-card__runtime-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-concurrency-card__row-identity {
+  flex: 1;
+  gap: calc(var(--theme-ops-concurrency-control-gap) * 0.75);
+}
+
 .ops-concurrency-card__subtitle {
   color: var(--theme-page-muted);
 }
 
+.ops-concurrency-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--theme-ops-concurrency-control-gap);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
 .ops-concurrency-card__title-icon {
+  width: 1rem;
+  height: 1rem;
   color: rgb(var(--theme-info-rgb));
+}
+
+.ops-concurrency-card__view-toggle,
+.ops-concurrency-card__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .ops-concurrency-card__view-toggle--active {
@@ -889,6 +969,22 @@ watch(
   color: var(--theme-page-muted);
 }
 
+.ops-concurrency-card__icon-button-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.ops-concurrency-card__refresh {
+  gap: calc(var(--theme-ops-concurrency-control-gap) * 0.5);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.ops-concurrency-card__refresh-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
 .ops-concurrency-card__view-toggle--idle:hover,
 .ops-concurrency-card__refresh:hover {
   background: color-mix(in srgb, var(--theme-page-border) 66%, var(--theme-surface));
@@ -896,10 +992,13 @@ watch(
 }
 
 .ops-concurrency-card__error {
+  margin-bottom: var(--theme-ops-concurrency-control-gap);
+  flex-shrink: 0;
   padding: var(--theme-ops-row-padding-compact);
   border-radius: var(--theme-select-panel-radius);
   background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  font-size: 0.75rem;
 }
 
 .ops-concurrency-card__empty,
@@ -908,25 +1007,79 @@ watch(
   border-color: color-mix(in srgb, var(--theme-page-border) 74%, transparent);
 }
 
+.ops-concurrency-card__empty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+}
+
+.ops-concurrency-card__empty--disabled {
+  border: 1px dashed color-mix(in srgb, var(--theme-page-border) 74%, transparent);
+}
+
+.ops-concurrency-card__shell {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--theme-page-border) 74%, transparent);
+}
+
 .ops-concurrency-card__shell-head {
+  flex-shrink: 0;
   padding:
     var(--theme-ops-table-cell-padding-compact-y)
     var(--theme-ops-table-cell-padding-compact-x);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-page-border) 70%, transparent);
   border-color: color-mix(in srgb, var(--theme-page-border) 70%, transparent);
   background: color-mix(in srgb, var(--theme-surface-soft) 92%, var(--theme-surface));
 }
 
 .ops-concurrency-card__runtime {
+  padding: 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-page-border) 68%, transparent);
   border-color: color-mix(in srgb, var(--theme-page-border) 68%, transparent);
   background: color-mix(in srgb, var(--theme-surface-soft) 82%, var(--theme-surface));
 }
 
+.ops-concurrency-card__runtime-headline {
+  align-items: flex-start;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+}
+
 .ops-concurrency-card__runtime-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
   color: var(--theme-page-text);
 }
 
 .ops-concurrency-card__runtime-detail {
+  margin-top: calc(var(--theme-ops-concurrency-control-gap) * 0.5);
+  font-size: 0.625rem;
   color: var(--theme-page-muted);
+}
+
+.ops-concurrency-card__runtime-probes {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.ops-concurrency-card__runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--theme-ops-concurrency-metric-gap);
+  margin-top: var(--theme-ops-concurrency-metric-gap);
+}
+
+.ops-concurrency-card__runtime-metric {
+  padding: 0.5rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
 }
 
 .ops-concurrency-card__runtime-headline--healthy,
@@ -948,8 +1101,13 @@ watch(
 }
 
 .ops-concurrency-card__list {
+  flex: 1;
   max-height: var(--theme-ops-list-max-height);
+  overflow-y: auto;
   padding: var(--theme-ops-table-cell-padding-compact-x);
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-concurrency-list-gap);
 }
 
 .ops-concurrency-card__row {
@@ -965,15 +1123,107 @@ watch(
   padding: var(--theme-ops-row-padding-regular);
 }
 
+.ops-concurrency-card__row-head--regular {
+  margin-bottom: var(--theme-ops-concurrency-control-gap);
+}
+
 .ops-concurrency-card__status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--theme-ops-concurrency-control-gap) * 0.5);
   padding:
     calc(var(--theme-button-padding-y) * 0.2)
     calc(var(--theme-button-padding-x) * 0.32);
   border-radius: calc(var(--theme-button-radius) * 0.75);
+  font-size: 0.625rem;
+  font-weight: 600;
 }
 
 .ops-concurrency-card__track {
+  width: 100%;
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--theme-page-border) 62%, var(--theme-surface));
+}
+
+.ops-concurrency-card__track--spaced {
+  margin-bottom: var(--theme-ops-concurrency-control-gap);
+}
+
+.ops-concurrency-card__bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.ops-concurrency-card__load-text {
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.ops-concurrency-card__primary--compact {
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.ops-concurrency-card__primary--mono {
+  font-family: var(--theme-font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.ops-concurrency-card__primary--hero {
+  margin-top: calc(var(--theme-ops-concurrency-control-gap) * 0.5);
+  font-size: 0.875rem;
+  font-weight: 900;
+}
+
+.ops-concurrency-card__primary--metric {
+  margin-top: calc(var(--theme-ops-concurrency-control-gap) * 0.5);
+  font-size: 0.8125rem;
+  font-weight: 900;
+}
+
+.ops-concurrency-card__subtitle--label,
+.ops-concurrency-card__subtitle--micro-label {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ops-concurrency-card__subtitle--label,
+.ops-concurrency-card__subtitle--count,
+.ops-concurrency-card__subtitle--compact {
+  font-size: 0.625rem;
+}
+
+.ops-concurrency-card__subtitle--micro,
+.ops-concurrency-card__subtitle--micro-label {
+  font-size: 0.5625rem;
+}
+
+.ops-concurrency-card__subtitle--micro {
+  margin-top: calc(var(--theme-ops-concurrency-control-gap) * 0.25);
+}
+
+.ops-concurrency-card__status-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.ops-concurrency-card__text-strong {
+  font-weight: 700;
+}
+
+.ops-concurrency-card__truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-concurrency-card__row-metrics--status {
+  flex-shrink: 0;
 }
 
 .ops-concurrency-card__bar--danger {

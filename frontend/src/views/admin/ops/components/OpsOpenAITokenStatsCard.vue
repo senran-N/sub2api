@@ -181,22 +181,22 @@ function onNextPage() {
 
 <template>
   <section class="card ops-openai-token-stats-card">
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h3 class="ops-openai-token-stats-card__title text-sm font-bold">
+    <div class="ops-openai-token-stats-card__header">
+      <h3 class="ops-openai-token-stats-card__title">
         {{ t('admin.ops.openaiTokenStats.title') }}
       </h3>
-      <div class="flex flex-wrap items-center gap-2">
-        <div class="w-36">
+      <div class="ops-openai-token-stats-card__controls">
+        <div class="ops-openai-token-stats-card__control">
           <Select v-model="timeRange" :options="timeRangeOptions" />
         </div>
-        <div class="w-36">
+        <div class="ops-openai-token-stats-card__control">
           <Select v-model="viewMode" :options="viewModeOptions" />
         </div>
-        <div v-if="viewMode === 'topn'" class="w-28">
+        <div v-if="viewMode === 'topn'" class="ops-openai-token-stats-card__control ops-openai-token-stats-card__control--narrow">
           <Select v-model="topN" :options="topNOptions" />
         </div>
         <template v-else>
-          <div class="w-24">
+          <div class="ops-openai-token-stats-card__control ops-openai-token-stats-card__control--narrow">
             <Select v-model="pageSize" :options="pageSizeOptions" />
           </div>
           <button
@@ -213,18 +213,18 @@ function onNextPage() {
           >
             {{ t('admin.ops.openaiTokenStats.nextPage') }}
           </button>
-          <span class="ops-openai-token-stats-card__muted text-xs">
+          <span class="ops-openai-token-stats-card__muted ops-openai-token-stats-card__page-info">
             {{ t('admin.ops.openaiTokenStats.pageInfo', { page, total: totalPages }) }}
           </span>
         </template>
       </div>
     </div>
 
-    <div v-if="errorMessage" class="ops-openai-token-stats-card__error mb-4 text-xs">
+    <div v-if="errorMessage" class="ops-openai-token-stats-card__error">
       {{ errorMessage }}
     </div>
 
-    <div v-if="loading" class="ops-openai-token-stats-card__loading ops-openai-token-stats-card__muted text-center text-sm">
+    <div v-if="loading" class="ops-openai-token-stats-card__loading ops-openai-token-stats-card__muted">
       {{ t('admin.ops.loadingText') }}
     </div>
 
@@ -234,28 +234,28 @@ function onNextPage() {
       :description="t('admin.ops.openaiTokenStats.empty')"
     />
 
-    <div v-else class="space-y-3">
-      <div class="ops-openai-token-stats-card__table-wrap overflow-hidden border">
-        <div class="ops-openai-token-stats-card__table-scroll overflow-auto">
-          <table class="ops-openai-token-stats-card__table min-w-full text-left text-xs md:text-sm">
-            <thead class="ops-openai-token-stats-card__thead sticky top-0 z-10">
-              <tr class="ops-openai-token-stats-card__thead-row border-b">
-                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head font-semibold">{{ t('admin.ops.openaiTokenStats.table.model') }}</th>
-                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head font-semibold">{{ t('admin.ops.openaiTokenStats.table.requestCount') }}</th>
-                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head font-semibold">{{ t('admin.ops.openaiTokenStats.table.avgTokensPerSec') }}</th>
-                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head font-semibold">{{ t('admin.ops.openaiTokenStats.table.avgFirstTokenMs') }}</th>
-                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head font-semibold">{{ t('admin.ops.openaiTokenStats.table.totalOutputTokens') }}</th>
-                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head font-semibold">{{ t('admin.ops.openaiTokenStats.table.avgDurationMs') }}</th>
-                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head font-semibold">{{ t('admin.ops.openaiTokenStats.table.requestsWithFirstToken') }}</th>
+    <div v-else class="ops-openai-token-stats-card__content">
+      <div class="ops-openai-token-stats-card__table-wrap">
+        <div class="ops-openai-token-stats-card__table-scroll">
+          <table class="ops-openai-token-stats-card__table">
+            <thead class="ops-openai-token-stats-card__thead">
+              <tr class="ops-openai-token-stats-card__thead-row">
+                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head">{{ t('admin.ops.openaiTokenStats.table.model') }}</th>
+                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head">{{ t('admin.ops.openaiTokenStats.table.requestCount') }}</th>
+                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head">{{ t('admin.ops.openaiTokenStats.table.avgTokensPerSec') }}</th>
+                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head">{{ t('admin.ops.openaiTokenStats.table.avgFirstTokenMs') }}</th>
+                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head">{{ t('admin.ops.openaiTokenStats.table.totalOutputTokens') }}</th>
+                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head">{{ t('admin.ops.openaiTokenStats.table.avgDurationMs') }}</th>
+                <th class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__cell--head">{{ t('admin.ops.openaiTokenStats.table.requestsWithFirstToken') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr
                 v-for="row in items"
                 :key="row.model"
-                class="ops-openai-token-stats-card__row border-b last:border-b-0"
+                class="ops-openai-token-stats-card__row"
               >
-                <td class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__model font-medium">{{ row.model }}</td>
+                <td class="ops-openai-token-stats-card__cell ops-openai-token-stats-card__model">{{ row.model }}</td>
                 <td class="ops-openai-token-stats-card__cell">{{ formatInt(row.request_count) }}</td>
                 <td class="ops-openai-token-stats-card__cell">{{ formatRate(row.avg_tokens_per_sec) }}</td>
                 <td class="ops-openai-token-stats-card__cell">{{ formatRate(row.avg_first_token_ms) }}</td>
@@ -267,7 +267,7 @@ function onNextPage() {
           </table>
         </div>
       </div>
-      <div v-if="viewMode === 'topn'" class="ops-openai-token-stats-card__muted mt-3 text-xs">
+      <div v-if="viewMode === 'topn'" class="ops-openai-token-stats-card__muted ops-openai-token-stats-card__note">
         {{ t('admin.ops.openaiTokenStats.totalModels', { total }) }}
       </div>
     </div>
@@ -279,10 +279,24 @@ function onNextPage() {
   padding: var(--theme-ops-card-padding);
 }
 
+.ops-openai-token-stats-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-ops-openai-stats-header-gap);
+  margin-bottom: 1rem;
+}
+
 .ops-openai-token-stats-card__title,
 .ops-openai-token-stats-card__model,
 .ops-openai-token-stats-card__row {
   color: var(--theme-page-text);
+}
+
+.ops-openai-token-stats-card__title {
+  font-size: 0.875rem;
+  font-weight: 700;
 }
 
 .ops-openai-token-stats-card__muted,
@@ -290,18 +304,49 @@ function onNextPage() {
   color: var(--theme-page-muted);
 }
 
+.ops-openai-token-stats-card__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--theme-ops-openai-stats-control-gap);
+}
+
+.ops-openai-token-stats-card__control {
+  width: var(--theme-ops-openai-stats-control-width);
+}
+
+.ops-openai-token-stats-card__control--narrow {
+  width: var(--theme-ops-openai-stats-control-width-narrow);
+}
+
+.ops-openai-token-stats-card__page-info {
+  font-size: 0.75rem;
+}
+
 .ops-openai-token-stats-card__error {
+  margin-bottom: 1rem;
   padding: calc(var(--theme-ops-panel-padding) * 0.75);
   border-radius: var(--theme-button-radius);
   background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  font-size: 0.75rem;
 }
 
 .ops-openai-token-stats-card__loading {
   padding-block: calc(var(--theme-ops-card-padding) * 1.25);
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.ops-openai-token-stats-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-ops-openai-stats-note-gap);
 }
 
 .ops-openai-token-stats-card__table-wrap {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 88%, transparent);
   border-color: color-mix(in srgb, var(--theme-card-border) 88%, transparent);
   border-radius: var(--theme-select-panel-radius);
   background: var(--theme-surface);
@@ -309,18 +354,26 @@ function onNextPage() {
 
 .ops-openai-token-stats-card__table-scroll {
   max-height: calc(var(--theme-ops-table-max-height) * 0.7);
+  overflow: auto;
 }
 
 .ops-openai-token-stats-card__table {
   min-width: var(--theme-ops-table-min-width);
+  width: 100%;
+  text-align: left;
+  font-size: 0.75rem;
 }
 
 .ops-openai-token-stats-card__thead {
   background: var(--theme-table-head-bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .ops-openai-token-stats-card__thead-row {
   border-color: color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 76%, transparent);
 }
 
 .ops-openai-token-stats-card__cell {
@@ -331,9 +384,28 @@ function onNextPage() {
 
 .ops-openai-token-stats-card__cell--head {
   color: var(--theme-table-head-text);
+  font-weight: 600;
 }
 
 .ops-openai-token-stats-card__row {
   border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.ops-openai-token-stats-card__row + .ops-openai-token-stats-card__row td {
+  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.ops-openai-token-stats-card__model {
+  font-weight: 500;
+}
+
+.ops-openai-token-stats-card__note {
+  font-size: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .ops-openai-token-stats-card__table {
+    font-size: 0.875rem;
+  }
 }
 </style>
