@@ -57,21 +57,36 @@ const eyebrowLabel = computed(() => t('home.status.online'))
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  font-family: var(--theme-font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  padding: var(--theme-home-hero-eyebrow-padding);
+  border: var(--theme-home-hero-eyebrow-border);
+  background: var(--theme-home-hero-eyebrow-bg);
+  box-shadow: var(--theme-home-hero-eyebrow-shadow);
+  border-radius: var(--theme-home-hero-eyebrow-radius);
+  font-family: var(--theme-home-hero-eyebrow-font);
+  font-style: var(--theme-home-hero-eyebrow-font-style);
+  font-size: var(--theme-home-hero-eyebrow-font-size);
+  font-weight: var(--theme-home-hero-eyebrow-font-weight);
+  letter-spacing: var(--theme-home-hero-eyebrow-letter-spacing);
+  text-transform: var(--theme-home-hero-eyebrow-transform);
+  color: var(--theme-home-hero-eyebrow-text-color);
 }
 
 .home-hero__eyebrow-dot {
-  width: 8px;
-  height: 8px;
-  background: rgb(var(--theme-success-rgb));
-  box-shadow: 0 0 12px rgb(var(--theme-success-rgb) / 0.8);
+  width: var(--theme-home-hero-dot-size);
+  height: var(--theme-home-hero-dot-size);
+  border-radius: var(--theme-home-hero-dot-radius);
+  background: var(--theme-home-hero-dot-bg);
+  box-shadow: var(--theme-home-hero-dot-shadow);
+  animation: var(--theme-home-hero-dot-animation);
 }
 
 .home-hero__eyebrow-text {
-  color: var(--theme-page-muted);
+  color: inherit;
+}
+
+.home-hero__eyebrow-text::before {
+  content: var(--theme-home-hero-eyebrow-prefix);
+  color: var(--theme-home-hero-eyebrow-prefix-color);
 }
 
 .home-hero__title {
@@ -79,209 +94,84 @@ const eyebrowLabel = computed(() => t('home.status.online'))
   font-weight: var(--theme-home-title-weight);
   letter-spacing: var(--theme-home-title-letter-spacing);
   line-height: 1.05;
+  text-transform: var(--theme-home-title-transform);
 }
 
 .home-hero__subtitle {
   font-family: var(--theme-home-subtitle-font);
+  font-style: var(--theme-home-hero-subtitle-font-style);
+  letter-spacing: var(--theme-home-hero-subtitle-letter-spacing);
+  position: relative;
+  padding-left: var(--theme-home-hero-subtitle-padding-left);
+}
+
+.home-hero__subtitle::before {
+  content: var(--theme-home-hero-subtitle-prefix);
+  position: absolute;
+  left: 0;
+  color: var(--theme-home-hero-subtitle-prefix-color);
+  font-weight: 700;
 }
 
 .home-hero__ornament {
   margin: 0 auto 1.25rem;
-  width: 180px;
-  height: 2px;
+  width: var(--theme-home-hero-ornament-width);
+  max-width: var(--theme-home-hero-ornament-max-width);
+  height: var(--theme-home-hero-ornament-height);
+  background: var(--theme-home-hero-ornament-bg);
+  display: var(--theme-home-hero-ornament-display);
+  align-items: center;
+  justify-content: var(--theme-home-hero-ornament-justify);
+  color: var(--theme-home-hero-ornament-color);
+  position: relative;
+}
+
+.home-hero__ornament::before,
+.home-hero__ornament::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+}
+
+.home-hero__ornament::before {
+  display: var(--theme-home-hero-ornament-before-display);
+  background: var(--theme-home-hero-ornament-before-bg);
+  margin: var(--theme-home-hero-ornament-before-margin);
+}
+
+.home-hero__ornament::after {
+  display: var(--theme-home-hero-ornament-after-display);
+  background: var(--theme-home-hero-ornament-after-bg);
+  margin: var(--theme-home-hero-ornament-after-margin);
 }
 
 .home-hero__cta {
   padding:
     calc(var(--theme-markdown-block-padding) - 0.25rem)
     calc(var(--theme-auth-card-padding) - 0.5rem);
+  box-shadow: var(--theme-home-hero-cta-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.home-hero__cta:hover {
+  transform: var(--theme-home-hero-cta-hover-transform);
+  box-shadow: var(--theme-home-hero-cta-hover-shadow);
+}
+
+.home-hero__cta:active {
+  transform: var(--theme-home-hero-cta-active-transform);
+  box-shadow: var(--theme-home-hero-cta-active-shadow);
 }
 
 @media (min-width: 1024px) {
   .home-hero__ornament {
     margin-left: 0;
-  }
-}
-
-/* ============== Factory: terminal-status eyebrow, blueprint ornament ============== */
-:root[data-brand-theme='factory'] .home-hero__eyebrow {
-  padding: 6px 12px;
-  border: 2px solid var(--theme-page-text);
-  background: var(--theme-surface);
-  box-shadow: 3px 3px 0 var(--theme-page-text);
-  border-radius: 0;
-}
-
-:root[data-brand-theme='factory'] .home-hero__eyebrow-dot {
-  border-radius: 0;
-  width: 10px;
-  height: 10px;
-  animation: home-hero-pulse 1.8s ease-in-out infinite;
-}
-
-:root[data-brand-theme='factory'] .home-hero__eyebrow-text {
-  color: var(--theme-page-text);
-  font-weight: 700;
-}
-
-:root[data-brand-theme='factory'] .home-hero__title {
-  text-transform: uppercase;
-}
-
-:root[data-brand-theme='factory'] .home-hero__ornament {
-  width: 100%;
-  max-width: 280px;
-  height: 8px;
-  background-image:
-    linear-gradient(90deg, var(--theme-page-text) 0 24px, transparent 24px 36px),
-    repeating-linear-gradient(
-      90deg,
-      var(--theme-page-text) 0 2px,
-      transparent 2px 10px
-    );
-  background-size: 36px 2px, 100% 2px;
-  background-position: 0 0, 0 100%;
-  background-repeat: repeat-x;
-}
-
-:root[data-brand-theme='factory'] .home-hero__subtitle {
-  font-family: var(--theme-font-mono);
-  position: relative;
-  padding-left: 1.25rem;
-}
-
-:root[data-brand-theme='factory'] .home-hero__subtitle::before {
-  content: '>';
-  position: absolute;
-  left: 0;
-  color: var(--theme-accent);
-  font-weight: 700;
-}
-
-:root[data-brand-theme='factory'] .home-hero__cta {
-  box-shadow: 6px 6px 0 var(--theme-page-text);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-:root[data-brand-theme='factory'] .home-hero__cta:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 8px 8px 0 var(--theme-page-text);
-}
-
-:root[data-brand-theme='factory'] .home-hero__cta:active {
-  transform: translate(2px, 2px);
-  box-shadow: 2px 2px 0 var(--theme-page-text);
-}
-
-.dark[data-brand-theme='factory'] .home-hero__eyebrow {
-  background: var(--theme-surface-muted);
-  border-color: rgba(255, 255, 255, 0.4);
-  box-shadow: 3px 3px 0 rgba(255, 255, 255, 0.3);
-}
-
-.dark[data-brand-theme='factory'] .home-hero__cta {
-  box-shadow: 6px 6px 0 rgba(255, 255, 255, 0.3);
-}
-
-.dark[data-brand-theme='factory'] .home-hero__cta:hover {
-  box-shadow: 8px 8px 0 rgba(255, 255, 255, 0.3);
-}
-
-.dark[data-brand-theme='factory'] .home-hero__ornament {
-  background-image:
-    linear-gradient(90deg, var(--theme-page-text) 0 24px, transparent 24px 36px),
-    repeating-linear-gradient(
-      90deg,
-      var(--theme-page-text) 0 2px,
-      transparent 2px 10px
-    );
-}
-
-/* ============== Claude: editorial issue badge, ornament divider ============== */
-:root[data-brand-theme='claude'] .home-hero__eyebrow {
-  font-family: var(--theme-font-display);
-  font-style: italic;
-  font-size: 0.875rem;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  color: color-mix(in srgb, var(--theme-accent) 82%, var(--theme-page-text));
-}
-
-:root[data-brand-theme='claude'] .home-hero__eyebrow-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--theme-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent) 20%, transparent);
-}
-
-:root[data-brand-theme='claude'] .home-hero__eyebrow-text::before {
-  content: '— ';
-  color: var(--theme-accent);
-}
-
-:root[data-brand-theme='claude'] .home-hero__title {
-  font-family: var(--theme-font-display);
-}
-
-:root[data-brand-theme='claude'] .home-hero__ornament {
-  width: auto;
-  max-width: 220px;
-  height: 1rem;
-  background: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: color-mix(in srgb, var(--theme-accent) 70%, var(--theme-page-muted));
-  position: relative;
-}
-
-:root[data-brand-theme='claude'] .home-hero__ornament::before,
-:root[data-brand-theme='claude'] .home-hero__ornament::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--theme-accent) 40%, var(--theme-page-border)) 50%,
-    transparent
-  );
-}
-
-:root[data-brand-theme='claude'] .home-hero__ornament::after {
-  margin-left: 8px;
-}
-
-:root[data-brand-theme='claude'] .home-hero__ornament::before {
-  margin-right: 8px;
-}
-
-@media (min-width: 1024px) {
-  :root[data-brand-theme='claude'] .home-hero__ornament {
-    margin-left: 0;
-    justify-content: flex-start;
+    justify-content: var(--theme-home-hero-ornament-desktop-justify);
   }
 
-  :root[data-brand-theme='claude'] .home-hero__ornament::before {
-    display: none;
+  .home-hero__ornament::before {
+    display: var(--theme-home-hero-ornament-before-desktop-display);
   }
-}
-
-:root[data-brand-theme='claude'] .home-hero__subtitle {
-  font-style: italic;
-  font-family: var(--theme-font-display);
-  letter-spacing: -0.01em;
-}
-
-:root[data-brand-theme='claude'] .home-hero__cta {
-  box-shadow: 0 14px 28px color-mix(in srgb, var(--theme-accent) 22%, transparent);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-:root[data-brand-theme='claude'] .home-hero__cta:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 20px 38px color-mix(in srgb, var(--theme-accent) 32%, transparent);
 }
 
 @keyframes home-hero-pulse {
@@ -290,7 +180,7 @@ const eyebrowLabel = computed(() => t('home.status.online'))
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root[data-brand-theme='factory'] .home-hero__eyebrow-dot {
+  .home-hero__eyebrow-dot {
     animation: none;
   }
 }

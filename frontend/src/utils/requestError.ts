@@ -4,6 +4,7 @@ interface ErrorResponsePayload {
 }
 
 interface RequestErrorLike {
+  status?: number
   name?: string
   code?: string
   message?: string
@@ -55,5 +56,5 @@ export function hasResponseStatus(error: unknown, status: number): boolean {
   }
 
   const maybeError = error as RequestErrorLike
-  return maybeError.response?.status === status
+  return maybeError.status === status || maybeError.response?.status === status
 }

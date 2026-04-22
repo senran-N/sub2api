@@ -1,6 +1,6 @@
 <template>
   <span
-    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+    class="order-status-badge"
     :class="statusClass"
   >
     {{ statusLabel }}
@@ -19,18 +19,18 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const statusMap: Record<OrderStatus, { key: string; class: string }> = {
-  PENDING: { key: 'payment.status.pending', class: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' },
-  PAID: { key: 'payment.status.paid', class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-  RECHARGING: { key: 'payment.status.recharging', class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-  COMPLETED: { key: 'payment.status.completed', class: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
-  EXPIRED: { key: 'payment.status.expired', class: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' },
-  CANCELLED: { key: 'payment.status.cancelled', class: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' },
-  FAILED: { key: 'payment.status.failed', class: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
-  REFUND_REQUESTED: { key: 'payment.status.refund_requested', class: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' },
-  REFUNDING: { key: 'payment.status.refunding', class: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' },
-  REFUNDED: { key: 'payment.status.refunded', class: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
-  PARTIALLY_REFUNDED: { key: 'payment.status.partially_refunded', class: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
-  REFUND_FAILED: { key: 'payment.status.refund_failed', class: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
+  PENDING: { key: 'payment.status.pending', class: 'order-status-badge--warning' },
+  PAID: { key: 'payment.status.paid', class: 'order-status-badge--info' },
+  RECHARGING: { key: 'payment.status.recharging', class: 'order-status-badge--info' },
+  COMPLETED: { key: 'payment.status.completed', class: 'order-status-badge--success' },
+  EXPIRED: { key: 'payment.status.expired', class: 'order-status-badge--muted' },
+  CANCELLED: { key: 'payment.status.cancelled', class: 'order-status-badge--muted' },
+  FAILED: { key: 'payment.status.failed', class: 'order-status-badge--danger' },
+  REFUND_REQUESTED: { key: 'payment.status.refund_requested', class: 'order-status-badge--brand-orange' },
+  REFUNDING: { key: 'payment.status.refunding', class: 'order-status-badge--brand-orange' },
+  REFUNDED: { key: 'payment.status.refunded', class: 'order-status-badge--brand-purple' },
+  PARTIALLY_REFUNDED: { key: 'payment.status.partially_refunded', class: 'order-status-badge--brand-purple' },
+  REFUND_FAILED: { key: 'payment.status.refund_failed', class: 'order-status-badge--danger' },
 }
 
 const statusLabel = computed(() => {
@@ -40,6 +40,57 @@ const statusLabel = computed(() => {
 
 const statusClass = computed(() => {
   const entry = statusMap[props.status]
-  return entry?.class ?? 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+  return entry?.class ?? 'order-status-badge--muted'
 })
 </script>
+
+<style scoped>
+.order-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--theme-chip-border, color-mix(in srgb, var(--theme-card-border) 72%, transparent));
+  border-radius: 999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  background: var(--theme-chip-bg, color-mix(in srgb, var(--theme-surface-soft) 88%, var(--theme-surface)));
+  color: var(--theme-chip-fg, var(--theme-page-muted));
+}
+
+.order-status-badge--success {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-success-rgb)) 18%, var(--theme-card-border));
+}
+
+.order-status-badge--info {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-info-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-info-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-info-rgb)) 18%, var(--theme-card-border));
+}
+
+.order-status-badge--warning {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-warning-rgb)) 18%, var(--theme-card-border));
+}
+
+.order-status-badge--danger {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 18%, var(--theme-card-border));
+}
+
+.order-status-badge--brand-orange {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-brand-orange-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-brand-orange-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-brand-orange-rgb)) 18%, var(--theme-card-border));
+}
+
+.order-status-badge--brand-purple {
+  --theme-chip-bg: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 10%, var(--theme-surface));
+  --theme-chip-fg: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 84%, var(--theme-page-text));
+  --theme-chip-border: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 18%, var(--theme-card-border));
+}
+</style>

@@ -172,7 +172,7 @@ onUnmounted(() => {
 
 <style scoped>
 .modal-sheet__handle {
-  background: color-mix(in srgb, var(--theme-page-muted) 28%, transparent);
+  background: var(--theme-modal-handle-bg);
 }
 
 .modal-width--narrow {

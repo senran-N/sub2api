@@ -64,7 +64,7 @@
                 id="accounts-select-all-visible"
                 :checked="allVisibleSelected"
                 name="select_all_visible_accounts"
-                :aria-label="t('admin.accounts.bulkActions.selectPage')"
+                :aria-label="t('admin.accounts.bulkActions.selectCurrentPage')"
                 @change="toggleSelectAllVisible"
               />
             </template>

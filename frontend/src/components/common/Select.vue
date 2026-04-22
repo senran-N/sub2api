@@ -214,6 +214,13 @@ const dropdownStyle = computed(() => {
   if (!triggerRect.value) return {}
 
   const rect = triggerRect.value
+  const dropdownOffset = typeof document === 'undefined'
+    ? 4
+    : Number.parseFloat(
+        getComputedStyle(document.documentElement)
+          .getPropertyValue('--theme-dropdown-offset')
+          .trim() || '4'
+      )
   const style: Record<string, string> = {
     position: 'fixed',
     left: `${rect.left}px`,
@@ -222,9 +229,9 @@ const dropdownStyle = computed(() => {
   }
 
   if (dropdownPosition.value === 'top') {
-    style.bottom = `${window.innerHeight - rect.top + 4}px`
+    style.bottom = `${window.innerHeight - rect.top + dropdownOffset}px`
   } else {
-    style.top = `${rect.bottom + 4}px`
+    style.top = `${rect.bottom + dropdownOffset}px`
   }
 
   return style

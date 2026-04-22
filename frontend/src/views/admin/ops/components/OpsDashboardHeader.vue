@@ -449,16 +449,15 @@ const healthScoreDisplay = computed(() => {
   const score = healthScoreValue.value
   const tone =
     isSystemIdle.value || score == null
-      ? { color: 'color-mix(in srgb, var(--theme-page-muted) 70%, transparent)', className: 'ops-dashboard-header__tone ops-dashboard-header__tone--muted' }
+      ? { className: 'ops-dashboard-header__tone ops-dashboard-header__tone--muted' }
       : score >= 90
-        ? { color: 'rgb(var(--theme-success-rgb))', className: 'ops-dashboard-header__tone ops-dashboard-header__tone--healthy' }
+        ? { className: 'ops-dashboard-header__tone ops-dashboard-header__tone--healthy' }
         : score >= 60
-          ? { color: 'rgb(var(--theme-warning-rgb))', className: 'ops-dashboard-header__tone ops-dashboard-header__tone--warning' }
-          : { color: 'rgb(var(--theme-danger-rgb))', className: 'ops-dashboard-header__tone ops-dashboard-header__tone--critical' }
+          ? { className: 'ops-dashboard-header__tone ops-dashboard-header__tone--warning' }
+          : { className: 'ops-dashboard-header__tone ops-dashboard-header__tone--critical' }
 
   const clampedScore = score == null ? 0 : Math.max(0, Math.min(100, score))
   return {
-    color: tone.color,
     className: tone.className,
     circleSize,
     strokeWidth,
@@ -820,11 +819,15 @@ function handleToolbarRefresh() {
                   :r="healthScoreDisplay.radius"
                   :stroke-width="healthScoreDisplay.strokeWidth"
                   fill="transparent"
-                  :stroke="healthScoreDisplay.color"
+                  stroke="currentColor"
                   stroke-linecap="round"
                   :stroke-dasharray="healthScoreDisplay.circumference"
                   :stroke-dashoffset="healthScoreDisplay.dashOffset"
-                  class="transition-all duration-1000 ease-out"
+                  :class="[
+                    'transition-all duration-1000 ease-out',
+                    'ops-dashboard-header__health-ring-progress',
+                    healthScoreDisplay.className
+                  ]"
                 />
               </svg>
 
@@ -1078,7 +1081,7 @@ function handleToolbarRefresh() {
            (chicken-and-egg), which left blank space above/below the cards. -->
       <div class="ops-dashboard-header__metrics">
         <!-- Card 1: Requests -->
-        <div class="ops-dashboard-header__metric-card" style="order: 1;">
+        <div class="ops-dashboard-header__metric-card ops-dashboard-header__metric-card--requests">
           <div class="ops-dashboard-header__metric-card-header">
             <div class="ops-dashboard-header__metric-card-heading">
               <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.requestsTitle') }}</span>
@@ -1114,7 +1117,7 @@ function handleToolbarRefresh() {
         </div>
 
         <!-- Card 2: SLA -->
-        <div class="ops-dashboard-header__metric-card" style="order: 2;">
+        <div class="ops-dashboard-header__metric-card ops-dashboard-header__metric-card--sla">
           <div class="ops-dashboard-header__metric-card-header">
             <div class="ops-dashboard-header__metric-card-heading ops-dashboard-header__metric-card-heading--wide">
               <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.sla') }}</span>
@@ -1147,7 +1150,7 @@ function handleToolbarRefresh() {
         </div>
 
         <!-- Card 4: Request Duration -->
-        <div class="ops-dashboard-header__metric-card" style="order: 4;">
+        <div class="ops-dashboard-header__metric-card ops-dashboard-header__metric-card--duration">
           <div class="ops-dashboard-header__metric-card-header">
             <div class="ops-dashboard-header__metric-card-heading">
               <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.latencyDuration') }}</span>
@@ -1198,7 +1201,7 @@ function handleToolbarRefresh() {
         </div>
 
         <!-- Card 5: TTFT -->
-        <div class="ops-dashboard-header__metric-card" style="order: 5;">
+        <div class="ops-dashboard-header__metric-card ops-dashboard-header__metric-card--ttft">
           <div class="ops-dashboard-header__metric-card-header">
             <div class="ops-dashboard-header__metric-card-heading">
               <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">TTFT</span>
@@ -1252,7 +1255,7 @@ function handleToolbarRefresh() {
         </div>
 
         <!-- Card 3: Request Errors -->
-        <div class="ops-dashboard-header__metric-card" style="order: 3;">
+        <div class="ops-dashboard-header__metric-card ops-dashboard-header__metric-card--request-errors">
           <div class="ops-dashboard-header__metric-card-header">
             <div class="ops-dashboard-header__metric-card-heading">
               <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.requestErrors') }}</span>
@@ -1278,7 +1281,7 @@ function handleToolbarRefresh() {
         </div>
 
         <!-- Card 6: Upstream Errors -->
-        <div class="ops-dashboard-header__metric-card" style="order: 6;">
+        <div class="ops-dashboard-header__metric-card ops-dashboard-header__metric-card--upstream-errors">
           <div class="ops-dashboard-header__metric-card-header">
             <div class="ops-dashboard-header__metric-card-heading">
               <span class="ops-dashboard-header__eyebrow ops-dashboard-header__metric-card-eyebrow">{{ t('admin.ops.upstreamErrors') }}</span>
@@ -2207,6 +2210,30 @@ function handleToolbarRefresh() {
      the card in constrained rows without overflowing. */
   height: 100%;
   min-height: 0;
+}
+
+.ops-dashboard-header__metric-card--requests {
+  order: 1;
+}
+
+.ops-dashboard-header__metric-card--sla {
+  order: 2;
+}
+
+.ops-dashboard-header__metric-card--request-errors {
+  order: 3;
+}
+
+.ops-dashboard-header__metric-card--duration {
+  order: 4;
+}
+
+.ops-dashboard-header__metric-card--ttft {
+  order: 5;
+}
+
+.ops-dashboard-header__metric-card--upstream-errors {
+  order: 6;
 }
 
 .ops-dashboard-header__metric-card-header {

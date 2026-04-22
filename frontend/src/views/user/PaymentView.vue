@@ -1,15 +1,20 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-4xl space-y-6">
-      <div v-if="loading" class="flex items-center justify-center py-20">
-        <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
+    <div class="payment-page payment-page--wide">
+      <div v-if="loading" class="payment-loading">
+        <div class="payment-spinner"></div>
+      </div>
+      <div v-else-if="paymentUnavailable" class="payment-panel payment-panel--center">
+        <Icon name="creditCard" size="xl" class="mx-auto mb-3 payment-muted" />
+        <p class="payment-title">{{ t('purchase.notEnabledTitle') }}</p>
+        <p class="payment-muted mt-2 text-center text-sm">{{ paymentUnavailableMessage }}</p>
       </div>
       <template v-else>
         <!-- Tab Switcher (hide during payment and subscription confirm) -->
-        <div v-if="tabs.length > 1 && paymentPhase === 'select' && !selectedPlan" class="flex space-x-1 rounded-xl bg-gray-100 p-1 dark:bg-dark-800">
+        <div v-if="tabs.length > 1 && paymentPhase === 'select' && !selectedPlan" class="payment-tab-list">
           <button v-for="tab in tabs" :key="tab.key"
-            class="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all"
-            :class="activeTab === tab.key ? 'bg-white text-gray-900 shadow dark:bg-dark-700 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+            class="payment-tab"
+            :class="{ 'payment-tab--active': activeTab === tab.key }"
             @click="activeTab = tab.key">{{ tab.label }}</button>
         </div>
         <!-- Payment in progress (shared by recharge and subscription) -->
@@ -44,63 +49,63 @@
           <!-- Top-up Tab -->
           <template v-if="activeTab === 'recharge'">
             <!-- Recharge Account Card -->
-            <div class="card p-5">
-              <p class="text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.rechargeAccount') }}</p>
-              <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">{{ user?.username || '' }}</p>
-              <p class="mt-0.5 text-sm font-medium text-green-600 dark:text-green-400">{{ t('payment.currentBalance') }}: {{ user?.balance?.toFixed(2) || '0.00' }}</p>
+            <div class="payment-panel">
+              <p class="payment-section-label">{{ t('payment.rechargeAccount') }}</p>
+              <p class="payment-title mt-1">{{ user?.username || '' }}</p>
+              <p class="payment-status-description mt-0.5">{{ t('payment.currentBalance') }}: {{ user?.balance?.toFixed(2) || '0.00' }}</p>
             </div>
-            <div v-if="enabledMethods.length === 0" class="card py-16 text-center">
-              <p class="text-gray-500 dark:text-gray-400">{{ t('payment.notAvailable') }}</p>
+            <div v-if="enabledMethods.length === 0" class="payment-panel payment-panel--center">
+              <p class="payment-muted">{{ t('payment.notAvailable') }}</p>
             </div>
             <template v-else>
-            <div class="card p-6">
+            <div class="payment-panel">
               <AmountInput
                 v-model="amount"
                 :amounts="[10, 20, 50, 100, 200, 500, 1000, 2000, 5000]"
                 :min="globalMinAmount"
                 :max="globalMaxAmount"
               />
-              <p v-if="amountError" class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ amountError }}</p>
+              <p v-if="amountError" class="payment-feedback payment-feedback--warning mt-3">{{ amountError }}</p>
             </div>
-            <div v-if="enabledMethods.length >= 1" class="card p-6">
+            <div v-if="enabledMethods.length >= 1" class="payment-panel">
               <PaymentMethodSelector
                 :methods="methodOptions"
                 :selected="selectedMethod"
                 @select="selectedMethod = $event"
               />
             </div>
-            <div v-if="validAmount > 0" class="card p-6">
-              <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                  <span class="text-gray-500 dark:text-gray-400">{{ t('payment.paymentAmount') }}</span>
-                  <span class="text-gray-900 dark:text-white">¥{{ validAmount.toFixed(2) }}</span>
+            <div v-if="validAmount > 0" class="payment-panel">
+              <div class="payment-detail-list">
+                <div class="payment-detail-row">
+                  <span class="payment-detail-label">{{ t('payment.paymentAmount') }}</span>
+                  <span class="payment-detail-value">¥{{ validAmount.toFixed(2) }}</span>
                 </div>
-                <div v-if="feeRate > 0" class="flex justify-between">
-                  <span class="text-gray-500 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
-                  <span class="text-gray-900 dark:text-white">¥{{ feeAmount.toFixed(2) }}</span>
+                <div v-if="feeRate > 0" class="payment-detail-row">
+                  <span class="payment-detail-label">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
+                  <span class="payment-detail-value">¥{{ feeAmount.toFixed(2) }}</span>
                 </div>
-                <div v-if="feeRate > 0" class="flex justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
-                  <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
-                  <span class="text-lg font-bold text-primary-600 dark:text-primary-400">¥{{ totalAmount.toFixed(2) }}</span>
+                <div v-if="feeRate > 0" class="payment-detail-row payment-detail-row--divided">
+                  <span class="payment-detail-value">{{ t('payment.actualPay') }}</span>
+                  <span class="payment-detail-value payment-detail-value--accent">¥{{ totalAmount.toFixed(2) }}</span>
                 </div>
-                <div v-if="balanceRechargeMultiplier !== 1" class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': feeRate <= 0 }">
-                  <span class="text-gray-500 dark:text-gray-400">{{ t('payment.creditedBalance') }}</span>
-                  <span class="text-gray-900 dark:text-white">${{ creditedAmount.toFixed(2) }}</span>
+                <div v-if="balanceRechargeMultiplier !== 1" class="payment-detail-row" :class="{ 'payment-detail-row--divided': feeRate <= 0 }">
+                  <span class="payment-detail-label">{{ t('payment.creditedBalance') }}</span>
+                  <span class="payment-detail-value">${{ creditedAmount.toFixed(2) }}</span>
                 </div>
-                <p v-if="balanceRechargeMultiplier !== 1" class="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
+                <p v-if="balanceRechargeMultiplier !== 1" class="payment-detail-note">
                   {{ t('payment.rechargeRatePreview', { usd: balanceRechargeMultiplier.toFixed(2) }) }}
                 </p>
               </div>
             </div>
-            <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmit || submitting" @click="handleSubmitRecharge">
+            <button :class="['btn w-full py-3 text-base font-medium payment-submit-button', paymentButtonClass]" :disabled="!canSubmit || submitting" @click="handleSubmitRecharge">
               <span v-if="submitting" class="flex items-center justify-center gap-2">
-                <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                <span class="payment-spinner payment-spinner--sm"></span>
                 {{ t('common.processing') }}
               </span>
               <span v-else>{{ t('payment.createOrder') }} ¥{{ totalAmount.toFixed(2) }}</span>
             </button>
-            <div v-if="errorMessage" class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20">
-              <p class="text-sm text-red-700 dark:text-red-400">{{ errorMessage }}</p>
+            <div v-if="errorMessage" class="payment-feedback payment-feedback--danger">
+              <p>{{ errorMessage }}</p>
             </div>
             </template>
           </template>
@@ -108,109 +113,108 @@
           <template v-else-if="activeTab === 'subscription'">
             <!-- Subscription confirm (inline, replaces plan list) -->
             <template v-if="selectedPlan">
-              <div class="card p-5">
+              <div :class="['payment-panel', planToneClassName]">
                 <!-- Header: platform badge + plan name -->
                 <div class="mb-3 flex flex-wrap items-center gap-2">
-                  <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', planBadgeClass]">
+                  <span :class="['theme-chip theme-chip--regular', planBadgeClass]">
                     {{ platformLabel(selectedPlan.group_platform || '') }}
                   </span>
-                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ selectedPlan.name }}</h3>
+                  <h3 class="payment-title">{{ selectedPlan.name }}</h3>
                 </div>
                 <!-- Price -->
                 <div class="flex items-baseline gap-2">
-                  <span v-if="selectedPlan.original_price" class="text-sm text-gray-400 line-through dark:text-gray-500">
+                  <span v-if="selectedPlan.original_price" class="payment-muted text-sm line-through">
                     ¥{{ selectedPlan.original_price }}
                   </span>
-                  <span :class="['text-3xl font-bold', planTextClass]">¥{{ selectedPlan.price }}</span>
-                  <span class="text-sm text-gray-500 dark:text-gray-400">/ {{ planValiditySuffix }}</span>
+                  <span class="payment-plan-card__price text-3xl font-bold">¥{{ selectedPlan.price }}</span>
+                  <span class="payment-muted text-sm">/ {{ planValiditySuffix }}</span>
                 </div>
                 <!-- Description -->
-                <p v-if="selectedPlan.description" class="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+                <p v-if="selectedPlan.description" class="payment-muted mt-2 text-sm leading-relaxed">
                   {{ selectedPlan.description }}
                 </p>
                 <!-- Rate + Limits grid -->
-                <div class="mt-3 grid grid-cols-2 gap-3">
+                <div class="payment-plan-card__quota mt-3">
                   <div>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.rate') }}</span>
+                    <span class="payment-plan-card__quota-label">{{ t('payment.planCard.rate') }}</span>
                     <div class="flex items-baseline">
-                      <span :class="['text-lg font-bold', planTextClass]">×{{ selectedPlan.rate_multiplier ?? 1 }}</span>
+                      <span class="payment-plan-card__price text-lg font-bold">×{{ selectedPlan.rate_multiplier ?? 1 }}</span>
                     </div>
                   </div>
                   <div v-if="selectedPlan.daily_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.dailyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.daily_limit_usd }}</div>
+                    <span class="payment-plan-card__quota-label">{{ t('payment.planCard.dailyLimit') }}</span>
+                    <div class="payment-plan-card__quota-value text-lg font-semibold">${{ selectedPlan.daily_limit_usd }}</div>
                   </div>
                   <div v-if="selectedPlan.weekly_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.weeklyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.weekly_limit_usd }}</div>
+                    <span class="payment-plan-card__quota-label">{{ t('payment.planCard.weeklyLimit') }}</span>
+                    <div class="payment-plan-card__quota-value text-lg font-semibold">${{ selectedPlan.weekly_limit_usd }}</div>
                   </div>
                   <div v-if="selectedPlan.monthly_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.monthlyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.monthly_limit_usd }}</div>
+                    <span class="payment-plan-card__quota-label">{{ t('payment.planCard.monthlyLimit') }}</span>
+                    <div class="payment-plan-card__quota-value text-lg font-semibold">${{ selectedPlan.monthly_limit_usd }}</div>
                   </div>
                   <div v-if="selectedPlan.daily_limit_usd == null && selectedPlan.weekly_limit_usd == null && selectedPlan.monthly_limit_usd == null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.quota') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ t('payment.planCard.unlimited') }}</div>
+                    <span class="payment-plan-card__quota-label">{{ t('payment.planCard.quota') }}</span>
+                    <div class="payment-plan-card__quota-value text-lg font-semibold">{{ t('payment.planCard.unlimited') }}</div>
                   </div>
                 </div>
               </div>
-              <div v-if="enabledMethods.length >= 1" class="card p-6">
+              <div v-if="enabledMethods.length >= 1" class="payment-panel">
                 <PaymentMethodSelector
                   :methods="subMethodOptions"
                   :selected="selectedMethod"
                   @select="selectedMethod = $event"
                 />
               </div>
-              <div v-if="feeRate > 0 && selectedPlan.price > 0" class="card p-6">
-                <div class="space-y-2 text-sm">
-                  <div class="flex justify-between">
-                    <span class="text-gray-500 dark:text-gray-400">{{ t('payment.amountLabel') }}</span>
-                    <span class="text-gray-900 dark:text-white">¥{{ selectedPlan.price.toFixed(2) }}</span>
+              <div v-if="feeRate > 0 && selectedPlan.price > 0" class="payment-panel">
+                <div class="payment-detail-list">
+                  <div class="payment-detail-row">
+                    <span class="payment-detail-label">{{ t('payment.amountLabel') }}</span>
+                    <span class="payment-detail-value">¥{{ selectedPlan.price.toFixed(2) }}</span>
                   </div>
-                  <div class="flex justify-between">
-                    <span class="text-gray-500 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
-                    <span class="text-gray-900 dark:text-white">¥{{ subFeeAmount.toFixed(2) }}</span>
+                  <div class="payment-detail-row">
+                    <span class="payment-detail-label">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
+                    <span class="payment-detail-value">¥{{ subFeeAmount.toFixed(2) }}</span>
                   </div>
-                  <div class="flex justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
-                    <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
-                    <span class="text-lg font-bold text-primary-600 dark:text-primary-400">¥{{ subTotalAmount.toFixed(2) }}</span>
+                  <div class="payment-detail-row payment-detail-row--divided">
+                    <span class="payment-detail-value">{{ t('payment.actualPay') }}</span>
+                    <span class="payment-detail-value payment-detail-value--accent">¥{{ subTotalAmount.toFixed(2) }}</span>
                   </div>
                 </div>
               </div>
-              <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmitSubscription || submitting" @click="confirmSubscribe">
+              <button :class="['btn w-full py-3 text-base font-medium payment-submit-button', paymentButtonClass]" :disabled="!canSubmitSubscription || submitting" @click="confirmSubscribe">
                 <span v-if="submitting" class="flex items-center justify-center gap-2">
-                  <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                  <span class="payment-spinner payment-spinner--sm"></span>
                   {{ t('common.processing') }}
                 </span>
                 <span v-else>{{ t('payment.createOrder') }} ¥{{ (feeRate > 0 ? subTotalAmount : selectedPlan.price).toFixed(2) }}</span>
               </button>
               <button class="btn btn-secondary w-full" @click="selectedPlan = null">{{ t('common.cancel') }}</button>
-              <div v-if="errorMessage" class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20">
-                <p class="text-sm text-red-700 dark:text-red-400">{{ errorMessage }}</p>
+              <div v-if="errorMessage" class="payment-feedback payment-feedback--danger">
+                <p>{{ errorMessage }}</p>
               </div>
             </template>
             <!-- Plan list -->
             <template v-else>
-              <div v-if="checkout.plans.length === 0" class="card py-16 text-center">
-                <Icon name="gift" size="xl" class="mx-auto mb-3 text-gray-300 dark:text-dark-600" />
-                <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
+              <div v-if="checkout.plans.length === 0" class="payment-panel payment-panel--center">
+                <Icon name="gift" size="xl" class="mx-auto mb-3 payment-muted" />
+                <p class="payment-muted">{{ t('payment.noPlans') }}</p>
               </div>
               <div v-else :class="planGridClass">
                 <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlan" />
               </div>
               <!-- Active subscriptions (compact, below plan list) -->
               <div v-if="activeSubscriptions.length > 0">
-                <p class="mb-2 text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.activeSubscription') }}</p>
+                <p class="payment-section-label mb-2">{{ t('payment.activeSubscription') }}</p>
                 <div class="space-y-2">
-                  <div v-for="sub in activeSubscriptions" :key="sub.id"
-                    class="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2 dark:border-dark-700 dark:bg-dark-800">
-                    <div :class="['h-6 w-1 shrink-0 rounded-full', platformAccentBarClass(sub.group?.platform || '')]" />
-                    <div class="min-w-0 flex-1">
+                  <div v-for="sub in activeSubscriptions" :key="sub.id" :class="['payment-subscription-strip', planToneClass(sub.group?.platform || '')]">
+                    <div class="payment-subscription-strip__accent" />
+                    <div class="payment-subscription-strip__body">
                       <div class="flex items-center gap-1.5">
-                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ sub.group?.name || `Group #${sub.group_id}` }}</span>
-                        <span :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group?.platform || '')]">{{ platformLabel(sub.group?.platform || '') }}</span>
+                        <span class="payment-subscription-strip__title">{{ sub.group?.name || `Group #${sub.group_id}` }}</span>
+                        <span :class="['theme-chip theme-chip--compact', platformChipClass(sub.group?.platform || '')]">{{ platformLabel(sub.group?.platform || '') }}</span>
                       </div>
-                      <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
+                      <div class="payment-subscription-strip__meta">
                         <span>{{ t('payment.planCard.rate') }}: ×{{ sub.group?.rate_multiplier ?? 1 }}</span>
                         <span v-if="sub.group?.daily_limit_usd == null && sub.group?.weekly_limit_usd == null && sub.group?.monthly_limit_usd == null">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
@@ -224,12 +228,12 @@
             </template>
           </template>
         </template>
-        <div v-if="(checkout.help_text || checkout.help_image_url) && paymentPhase === 'select' && !selectedPlan" class="card p-4">
+        <div v-if="(checkout.help_text || checkout.help_image_url) && paymentPhase === 'select' && !selectedPlan" class="payment-panel payment-panel--tight">
           <div class="flex flex-col items-center gap-3">
             <img v-if="checkout.help_image_url" :src="checkout.help_image_url" alt=""
-              class="h-40 max-w-full cursor-pointer rounded-lg object-contain transition-opacity hover:opacity-80"
+              class="payment-help-image"
               @click="previewImage = checkout.help_image_url" />
-            <p v-if="checkout.help_text" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ checkout.help_text }}</p>
+            <p v-if="checkout.help_text" class="payment-muted text-center text-sm">{{ checkout.help_text }}</p>
           </div>
         </div>
       </template>
@@ -237,13 +241,13 @@
     <!-- Renewal Plan Selection Modal -->
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="showRenewalModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeRenewalModal">
-          <div class="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-dark-700 dark:bg-dark-900">
+        <div v-if="showRenewalModal" class="payment-modal-shell" @click.self="closeRenewalModal">
+          <div class="payment-panel payment-modal-card">
             <!-- Close button -->
-            <button class="absolute right-4 top-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-200" @click="closeRenewalModal">
+            <button class="btn btn-secondary btn-icon absolute right-4 top-4" @click="closeRenewalModal">
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
-            <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
+            <h3 class="mb-4 text-lg font-semibold">{{ t('payment.selectPlan') }}</h3>
             <div class="space-y-4">
               <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlanFromModal" />
             </div>
@@ -254,8 +258,8 @@
     <!-- Image Preview Overlay -->
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="previewImage" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm" @click="previewImage = ''">
-          <img :src="previewImage" alt="" class="max-h-[85vh] max-w-[90vw] rounded-xl object-contain shadow-2xl" />
+        <div v-if="previewImage" class="payment-preview-overlay" @click="previewImage = ''">
+          <img :src="previewImage" alt="" class="payment-preview-image" />
         </div>
       </Transition>
     </Teleport>
@@ -278,12 +282,13 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import { METHOD_ORDER, getPaymentPopupFeatures } from '@/components/payment/providerConfig'
-import { platformAccentBarClass, platformBadgeLightClass, platformBadgeClass, platformTextClass, platformLabel } from '@/utils/platformColors'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
 import StripePaymentInline from '@/components/payment/StripePaymentInline.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { PaymentMethodOption } from '@/components/payment/PaymentMethodSelector.vue'
+import { hasResponseStatus } from '@/utils/requestError'
+import '@/components/payment/paymentTheme.css'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -303,6 +308,8 @@ function getDaysRemaining(expiresAt: string): number {
 const loading = ref(true)
 const submitting = ref(false)
 const errorMessage = ref('')
+const paymentUnavailable = ref(false)
+const paymentUnavailableMessage = ref('')
 const activeTab = ref<'recharge' | 'subscription'>('recharge')
 const amount = ref<number | null>(null)
 const selectedMethod = ref('')
@@ -488,16 +495,59 @@ watch(() => [validAmount.value, selectedMethod.value] as const, ([amt, method]) 
 // Payment button class: follows selected payment method color
 const paymentButtonClass = computed(() => {
   const m = selectedMethod.value
-  if (!m) return 'btn-primary'
-  if (m.includes('alipay')) return 'btn-alipay'
-  if (m.includes('wxpay')) return 'btn-wxpay'
-  if (m === 'stripe') return 'btn-stripe'
-  return 'btn-primary'
+  if (m.includes('alipay')) return 'payment-submit-button--alipay'
+  if (m.includes('wxpay')) return 'payment-submit-button--wxpay'
+  if (m === 'stripe') return 'payment-submit-button--stripe'
+  return ''
 })
 
-// Subscription confirm: platform accent colors (clean card, no gradient)
-const planBadgeClass = computed(() => platformBadgeClass(selectedPlan.value?.group_platform || ''))
-const planTextClass = computed(() => platformTextClass(selectedPlan.value?.group_platform || ''))
+function planToneClass(platform: string): string {
+  switch (platform) {
+    case 'anthropic':
+      return 'payment-plan-card--anthropic'
+    case 'openai':
+      return 'payment-plan-card--openai'
+    case 'antigravity':
+      return 'payment-plan-card--antigravity'
+    case 'gemini':
+      return 'payment-plan-card--gemini'
+    default:
+      return ''
+  }
+}
+
+function platformChipClass(platform: string): string {
+  switch (platform) {
+    case 'anthropic':
+      return 'theme-chip--brand-orange'
+    case 'openai':
+      return 'theme-chip--success'
+    case 'antigravity':
+      return 'theme-chip--brand-purple'
+    case 'gemini':
+      return 'theme-chip--info'
+    default:
+      return 'theme-chip--accent'
+  }
+}
+
+function platformLabel(platform: string): string {
+  switch (platform) {
+    case 'anthropic':
+      return 'Anthropic'
+    case 'openai':
+      return 'OpenAI'
+    case 'antigravity':
+      return 'Antigravity'
+    case 'gemini':
+      return 'Gemini'
+    default:
+      return platform || 'API'
+  }
+}
+
+const planToneClassName = computed(() => planToneClass(selectedPlan.value?.group_platform || ''))
+const planBadgeClass = computed(() => platformChipClass(selectedPlan.value?.group_platform || ''))
 
 // Renewal modal state
 const showRenewalModal = ref(false)
@@ -648,7 +698,14 @@ onMounted(async () => {
         }
       }
     }
-  } catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
+  } catch (err: unknown) {
+    if (hasResponseStatus(err, 404)) {
+      paymentUnavailable.value = true
+      paymentUnavailableMessage.value = t('purchase.notEnabledDesc')
+    } else {
+      appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
+    }
+  }
   finally { loading.value = false }
   // Fetch active subscriptions (uses cache, non-blocking)
   subscriptionStore.fetchActiveSubscriptions().catch(() => {})

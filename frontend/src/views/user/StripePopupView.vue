@@ -1,52 +1,45 @@
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
-    <div
-      class="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-lg dark:border-slate-700 dark:bg-slate-900"
-    >
+  <div class="payment-popup-surface stripe-popup-view" :class="methodToneClass">
+    <div class="payment-page payment-page--compact payment-page--centered">
+      <div class="payment-panel stripe-popup-view__card">
       <!-- Amount + Order ID -->
-      <div v-if="amount" class="text-center">
-        <p class="text-3xl font-bold" :style="{ color: methodColor }">¥{{ amount }}</p>
-        <p v-if="orderId" class="mt-1 text-sm text-gray-500 dark:text-slate-400">
+        <div v-if="amount" class="stripe-popup-view__header">
+          <p class="stripe-popup-view__amount">¥{{ amount }}</p>
+          <p v-if="orderId" class="payment-muted mt-1 text-sm">
           {{ t('payment.orders.orderId') }}: {{ orderId }}
-        </p>
-      </div>
-
-      <!-- Error -->
-      <div v-if="error" class="space-y-3">
-        <div
-          class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400"
-        >
-          {{ error }}
+          </p>
         </div>
-        <button
-          class="w-full text-sm underline dark:text-blue-400 dark:hover:text-blue-300"
-          :style="{ color: methodColor }"
-          @click="closeWindow"
-        >
-          {{ t('common.close') }}
-        </button>
-      </div>
 
-      <!-- Success -->
-      <div v-else-if="success" class="space-y-3 py-4 text-center">
-        <div class="text-5xl text-green-600 dark:text-green-400">✓</div>
-        <p class="text-sm text-gray-500 dark:text-slate-400">{{ t('payment.result.success') }}</p>
-        <button
-          class="text-sm underline dark:text-blue-400 dark:hover:text-blue-300"
-          :style="{ color: methodColor }"
-          @click="closeWindow"
-        >
-          {{ t('common.close') }}
-        </button>
-      </div>
+        <!-- Error -->
+        <div v-if="error" class="space-y-3">
+          <div class="payment-feedback payment-feedback--danger">
+            {{ error }}
+          </div>
+          <button
+            class="stripe-popup-view__action"
+            @click="closeWindow"
+          >
+            {{ t('common.close') }}
+          </button>
+        </div>
 
-      <!-- Loading / Redirecting -->
-      <div v-else class="flex items-center justify-center py-8">
-        <div
-          class="h-8 w-8 animate-spin rounded-full border-2 border-t-transparent"
-          :style="{ borderColor: methodColor, borderTopColor: 'transparent' }"
-        />
-        <span class="ml-3 text-sm text-gray-500 dark:text-slate-400">{{ hint }}</span>
+        <!-- Success -->
+        <div v-else-if="success" class="payment-status-block">
+          <div class="payment-status-icon payment-status-icon--success stripe-popup-view__success-icon">✓</div>
+          <p class="payment-status-description">{{ t('payment.result.success') }}</p>
+          <button
+            class="stripe-popup-view__action"
+            @click="closeWindow"
+          >
+            {{ t('common.close') }}
+          </button>
+        </div>
+
+        <!-- Loading / Redirecting -->
+        <div v-else class="stripe-popup-view__loading">
+          <div class="payment-spinner stripe-popup-view__spinner"></div>
+          <span class="payment-muted text-sm">{{ hint }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -58,16 +51,11 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
+import '@/components/payment/paymentTheme.css'
 
 interface StripeWithWechatPay {
   confirmWechatPayPayment(clientSecret: string, options: Record<string, unknown>): Promise<{ error?: { message?: string }; paymentIntent?: { status: string } }>
 }
-
-const METHOD_COLORS: Record<string, string> = {
-  alipay: '#00AEEF',
-  wechat_pay: '#07C160',
-}
-const DEFAULT_METHOD_COLOR = '#635bff'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -76,7 +64,11 @@ const orderId = String(route.query.order_id || '')
 const method = String(route.query.method || 'alipay')
 const amount = String(route.query.amount || '')
 
-const methodColor = computed(() => METHOD_COLORS[method] || DEFAULT_METHOD_COLOR)
+const methodToneClass = computed(() => {
+  if (method === 'alipay') return 'stripe-popup-view--alipay'
+  if (method === 'wechat_pay') return 'stripe-popup-view--wechat'
+  return 'stripe-popup-view--default'
+})
 
 const error = ref('')
 const success = ref(false)
@@ -168,3 +160,59 @@ function startPolling() {
   }, 3000)
 }
 </script>
+
+<style scoped>
+.stripe-popup-view--alipay {
+  --stripe-popup-view-tone: rgb(var(--theme-info-rgb));
+}
+
+.stripe-popup-view--wechat {
+  --stripe-popup-view-tone: rgb(var(--theme-success-rgb));
+}
+
+.stripe-popup-view--default {
+  --stripe-popup-view-tone: var(--theme-accent);
+}
+
+.stripe-popup-view__card {
+  width: 100%;
+  max-width: 28rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stripe-popup-view__header {
+  text-align: center;
+}
+
+.stripe-popup-view__amount {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--stripe-popup-view-tone);
+}
+
+.stripe-popup-view__action {
+  width: 100%;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  color: var(--stripe-popup-view-tone);
+}
+
+.stripe-popup-view__success-icon {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.stripe-popup-view__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding-block: 2rem;
+}
+
+.stripe-popup-view__spinner {
+  color: var(--stripe-popup-view-tone);
+}
+</style>

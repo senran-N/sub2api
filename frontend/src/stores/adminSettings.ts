@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { CustomMenuItem } from '@/types'
+import { hasResponseStatus } from '@/utils/requestError'
 
 type AdminSettingsApiModule = typeof import('@/api/admin/settings')
 type AdminPaymentApiModule = typeof import('@/api/admin/payment')
@@ -84,7 +85,13 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
       ])
       const [settings, paymentConfigResponse] = await Promise.all([
         getSettings(),
-        adminPaymentAPI.getConfig()
+        adminPaymentAPI.getConfig().catch((err: unknown) => {
+          if (hasResponseStatus(err, 404)) {
+            return null
+          }
+
+          throw err
+        })
       ])
       opsMonitoringEnabled.value = settings.ops_monitoring_enabled ?? true
       writeCachedBool('ops_monitoring_enabled_cached', opsMonitoringEnabled.value)
@@ -96,7 +103,7 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
       writeCachedString('ops_query_mode_default_cached', opsQueryModeDefault.value)
 
       customMenuItems.value = Array.isArray(settings.custom_menu_items) ? settings.custom_menu_items : []
-      paymentEnabled.value = paymentConfigResponse.data?.enabled ?? false
+      paymentEnabled.value = paymentConfigResponse?.data?.enabled ?? settings.payment_enabled ?? false
       writeCachedBool('payment_enabled_cached', paymentEnabled.value)
 
       loaded.value = true

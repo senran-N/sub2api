@@ -60,9 +60,10 @@ defineProps<{
 }
 
 .home-providers__title {
-  font-family: var(--theme-home-section-title-font);
+  font-family: var(--theme-home-provider-title-font);
   font-size: var(--theme-home-section-title-size);
   letter-spacing: var(--theme-home-section-title-letter-spacing);
+  text-transform: var(--theme-home-provider-title-transform);
 }
 
 .home-providers__description {
@@ -75,19 +76,27 @@ defineProps<{
   gap: 0.5rem;
   padding: calc(var(--theme-markdown-block-padding) - 0.25rem) calc(var(--theme-markdown-block-padding) + 0.25rem);
   border-radius: var(--theme-home-provider-radius);
-  backdrop-filter: blur(6px);
+  backdrop-filter: var(--theme-home-provider-chip-backdrop-filter);
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .home-providers__chip--supported {
-  border: 1px solid color-mix(in srgb, var(--theme-accent) 18%, var(--theme-card-border));
-  background: color-mix(in srgb, var(--theme-surface) 72%, transparent);
+  border: var(--theme-home-provider-chip-supported-border);
+  background: var(--theme-home-provider-chip-supported-bg);
+  box-shadow: var(--theme-home-provider-chip-supported-shadow);
 }
 
 .home-providers__chip--unsupported {
-  border: 1px solid color-mix(in srgb, var(--theme-card-border) 56%, transparent);
-  background: color-mix(in srgb, var(--theme-surface) 40%, transparent);
-  opacity: 0.6;
+  border: var(--theme-home-provider-chip-unsupported-border);
+  background: var(--theme-home-provider-chip-unsupported-bg);
+  box-shadow: var(--theme-home-provider-chip-unsupported-shadow);
+  opacity: var(--theme-home-provider-chip-unsupported-opacity);
+}
+
+.home-providers__chip:hover {
+  transform: var(--theme-home-provider-chip-hover-transform);
+  box-shadow: var(--theme-home-provider-chip-hover-shadow);
+  border-color: var(--theme-home-provider-chip-hover-border);
 }
 
 .home-providers__avatar {
@@ -107,7 +116,10 @@ defineProps<{
 
 .home-providers__label {
   font-size: 0.875rem;
-  font-weight: 500;
+  font-family: var(--theme-home-provider-label-font);
+  font-weight: var(--theme-home-provider-label-weight);
+  letter-spacing: var(--theme-home-provider-label-letter-spacing);
+  text-transform: var(--theme-home-provider-label-transform);
 }
 
 .home-providers__status {
@@ -115,11 +127,14 @@ defineProps<{
   align-items: center;
   gap: 0.375rem;
   padding: var(--theme-account-usage-pill-padding-y) var(--theme-account-usage-pill-padding-x);
-  border-radius: var(--theme-public-action-radius);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  border-radius: var(--theme-home-provider-status-radius);
+  border: var(--theme-home-provider-status-border);
+  font-family: var(--theme-home-provider-status-font);
+  font-style: var(--theme-home-provider-status-font-style);
+  font-size: var(--theme-home-provider-status-font-size);
+  font-weight: var(--theme-home-provider-status-font-weight);
+  letter-spacing: var(--theme-home-provider-status-letter-spacing);
+  text-transform: var(--theme-home-provider-status-transform);
 }
 
 .home-providers__status-dot {
@@ -186,78 +201,5 @@ defineProps<{
     color-mix(in srgb, var(--theme-page-muted) 84%, var(--theme-page-text)),
     color-mix(in srgb, var(--theme-page-muted) 64%, var(--theme-accent-strong))
   );
-}
-
-/* ============== Factory: spec-sheet chip ============== */
-:root[data-brand-theme='factory'] .home-providers__title {
-  text-transform: uppercase;
-}
-
-:root[data-brand-theme='factory'] .home-providers__chip {
-  border-radius: 0;
-  border-width: 2px;
-  background: var(--theme-surface);
-  box-shadow: 2px 2px 0 var(--theme-page-text);
-  backdrop-filter: none;
-}
-
-:root[data-brand-theme='factory'] .home-providers__chip--supported {
-  border-color: var(--theme-page-text);
-}
-
-:root[data-brand-theme='factory'] .home-providers__chip:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 var(--theme-page-text);
-}
-
-:root[data-brand-theme='factory'] .home-providers__avatar {
-  border-radius: 0;
-}
-
-:root[data-brand-theme='factory'] .home-providers__label {
-  font-family: var(--theme-font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 700;
-}
-
-:root[data-brand-theme='factory'] .home-providers__status {
-  border-radius: 0;
-  border: 1px solid currentColor;
-  font-family: var(--theme-font-mono);
-}
-
-.dark[data-brand-theme='factory'] .home-providers__chip {
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 2px 2px 0 rgba(255, 255, 255, 0.2);
-}
-
-/* ============== Claude: editorial pill ============== */
-:root[data-brand-theme='claude'] .home-providers__title {
-  font-family: var(--theme-font-display);
-}
-
-:root[data-brand-theme='claude'] .home-providers__chip--supported {
-  background: var(--theme-surface);
-  box-shadow: var(--theme-card-shadow);
-}
-
-:root[data-brand-theme='claude'] .home-providers__chip:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--theme-accent) 40%, var(--theme-page-border));
-}
-
-:root[data-brand-theme='claude'] .home-providers__label {
-  font-family: var(--theme-font-display);
-  font-weight: 700;
-}
-
-:root[data-brand-theme='claude'] .home-providers__status {
-  text-transform: none;
-  letter-spacing: 0.01em;
-  font-style: italic;
-  font-family: var(--theme-font-display);
-  font-weight: 600;
-  font-size: 0.72rem;
 }
 </style>

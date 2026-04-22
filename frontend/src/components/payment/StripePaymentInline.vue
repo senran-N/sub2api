@@ -1,33 +1,37 @@
 <template>
-  <div class="space-y-4">
-    <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
+  <div class="payment-page">
+    <div v-if="loading" class="payment-loading">
+      <div class="payment-spinner"></div>
     </div>
-    <div v-else-if="initError" class="card p-6 text-center">
-      <p class="text-sm text-red-600 dark:text-red-400">{{ initError }}</p>
+    <div v-else-if="initError" class="payment-panel payment-panel--center">
+      <div class="payment-status-block !py-0">
+        <div class="payment-status-icon payment-status-icon--danger">
+          <Icon name="x" size="lg" />
+        </div>
+        <p class="payment-status-description">{{ initError }}</p>
+      </div>
       <button class="btn btn-secondary mt-4" @click="$emit('back')">{{ t('payment.result.backToRecharge') }}</button>
     </div>
-    <!-- Success -->
     <template v-else-if="success">
-      <div class="card p-6">
-        <div class="flex flex-col items-center space-y-4 py-4">
-          <div class="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-            <Icon name="check" size="lg" class="text-green-500" />
+      <div class="payment-panel">
+        <div class="payment-status-block">
+          <div class="payment-status-icon payment-status-icon--success">
+            <Icon name="check" size="lg" />
           </div>
-          <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t('payment.result.success') }}</p>
-          <div class="w-full rounded-xl bg-gray-50 p-4 dark:bg-dark-800">
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderId') }}</span>
-                <span class="font-medium text-gray-900 dark:text-white">#{{ orderId }}</span>
+          <p class="payment-status-title">{{ t('payment.result.success') }}</p>
+          <div class="payment-panel payment-panel--soft w-full">
+            <div class="payment-detail-list">
+              <div class="payment-detail-row">
+                <span class="payment-detail-label">{{ t('payment.orders.orderId') }}</span>
+                <span class="payment-detail-value">#{{ orderId }}</span>
               </div>
-              <div v-if="amount > 0" class="flex justify-between">
-                <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.amount') }}</span>
-                <span class="font-medium text-gray-900 dark:text-white">{{ orderType === 'balance' ? '$' : '¥' }}{{ amount.toFixed(2) }}</span>
+              <div v-if="amount > 0" class="payment-detail-row">
+                <span class="payment-detail-label">{{ t('payment.orders.amount') }}</span>
+                <span class="payment-detail-value">{{ orderType === 'balance' ? '$' : '¥' }}{{ amount.toFixed(2) }}</span>
               </div>
-              <div class="flex justify-between">
-                <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
-                <span class="font-medium text-gray-900 dark:text-white">¥{{ payAmount.toFixed(2) }}</span>
+              <div class="payment-detail-row">
+                <span class="payment-detail-label">{{ t('payment.orders.payAmount') }}</span>
+                <span class="payment-detail-value payment-detail-value--strong">¥{{ payAmount.toFixed(2) }}</span>
               </div>
             </div>
           </div>
@@ -36,20 +40,18 @@
       </div>
     </template>
     <template v-else>
-      <!-- Amount -->
-      <div class="card overflow-hidden">
-        <div class="bg-gradient-to-br from-[#635bff] to-[#4f46e5] px-6 py-5 text-center">
-          <p class="text-sm font-medium text-indigo-200">{{ t('payment.actualPay') }}</p>
-          <p class="mt-1 text-3xl font-bold text-white">¥{{ payAmount.toFixed(2) }}</p>
+      <div class="payment-panel overflow-hidden p-0">
+        <div class="payment-hero payment-hero--stripe">
+          <p class="payment-hero__label">{{ t('payment.actualPay') }}</p>
+          <p class="payment-hero__value">¥{{ payAmount.toFixed(2) }}</p>
         </div>
       </div>
-      <!-- Stripe Payment Element -->
-      <div class="card p-6">
+      <div class="payment-panel">
         <div ref="stripeMount" class="min-h-[200px]"></div>
-        <p v-if="error" class="mt-4 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
-        <button class="btn btn-stripe mt-6 w-full py-3 text-base" :disabled="submitting || !ready" @click="handlePay">
+        <p v-if="error" class="payment-feedback payment-feedback--danger mt-4">{{ error }}</p>
+        <button class="btn payment-submit-button payment-submit-button--stripe mt-6 w-full py-3 text-base" :disabled="submitting || !ready" @click="handlePay">
           <span v-if="submitting" class="flex items-center justify-center gap-2">
-            <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+            <span class="payment-spinner payment-spinner--sm"></span>
             {{ t('common.processing') }}
           </span>
           <span v-else>{{ t('payment.stripePay') }}</span>
@@ -73,6 +75,7 @@ import { useAppStore } from '@/stores'
 import { getPaymentPopupFeatures } from '@/components/payment/providerConfig'
 import type { Stripe, StripeElements } from '@stripe/stripe-js'
 import Icon from '@/components/icons/Icon.vue'
+import '@/components/payment/paymentTheme.css'
 
 // Stripe payment methods that open a popup (redirect or QR code)
 const POPUP_METHODS = new Set(['alipay', 'wechat_pay'])

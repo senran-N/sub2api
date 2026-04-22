@@ -56,92 +56,41 @@
   background: color-mix(in srgb, rgb(var(--theme-brand-orange-rgb)) 10%, transparent);
 }
 
-/* Default: hidden. Each theme opts in below. */
-.home-bg__grid,
-.home-bg__scanlines,
-.home-bg__paper,
-.home-bg__rivet {
-  display: none;
-}
-
-/* ============== Factory: blueprint grid + scanlines + rivets ============== */
-:root[data-brand-theme='factory'] .home-bg__grid {
-  display: block;
-  background-image:
-    linear-gradient(
-      color-mix(in srgb, var(--theme-page-text) 10%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--theme-page-text) 10%, transparent) 1px,
-      transparent 1px
-    );
+.home-bg__grid {
+  display: var(--theme-home-bg-grid-display);
+  background-image: var(--theme-home-bg-grid-image);
   background-size: var(--theme-home-decor-grid-size) var(--theme-home-decor-grid-size);
-  mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
-  -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+  mask-image: var(--theme-home-bg-grid-mask);
+  -webkit-mask-image: var(--theme-home-bg-grid-mask);
 }
 
-:root[data-brand-theme='factory'] .home-bg__scanlines {
-  display: block;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent 0,
-    transparent 3px,
-    color-mix(in srgb, var(--theme-page-text) 4%, transparent) 3px,
-    color-mix(in srgb, var(--theme-page-text) 4%, transparent) 4px
-  );
-  opacity: 0.5;
+.home-bg__scanlines {
+  display: var(--theme-home-bg-scanlines-display);
+  background-image: var(--theme-home-bg-scanlines-image);
+  background-size: var(--theme-home-bg-scanlines-size);
+  opacity: var(--theme-home-bg-scanlines-opacity);
+  mix-blend-mode: var(--theme-home-bg-scanlines-blend);
 }
 
-:root[data-brand-theme='factory'] .home-bg__rivet {
-  display: block;
+.home-bg__paper {
+  display: var(--theme-home-bg-paper-display);
+  background-image: var(--theme-home-bg-paper-image);
+  background-size: var(--theme-home-bg-paper-size);
+  opacity: var(--theme-home-bg-paper-opacity);
+  mix-blend-mode: var(--theme-home-bg-paper-blend);
+}
+
+.home-bg__rivet {
+  display: var(--theme-home-bg-rivet-display);
   position: absolute;
-  width: 10px;
-  height: 10px;
-  background: var(--theme-page-text);
-  border-radius: 0;
+  width: var(--theme-home-bg-rivet-size);
+  height: var(--theme-home-bg-rivet-size);
+  background: var(--theme-home-bg-rivet-color);
+  border-radius: var(--theme-home-bg-rivet-radius);
 }
 
-:root[data-brand-theme='factory'] .home-bg__rivet--tl { top: 16px; left: 16px; }
-:root[data-brand-theme='factory'] .home-bg__rivet--tr { top: 16px; right: 16px; }
-:root[data-brand-theme='factory'] .home-bg__rivet--bl { bottom: 16px; left: 16px; }
-:root[data-brand-theme='factory'] .home-bg__rivet--br { bottom: 16px; right: 16px; }
-
-.dark[data-brand-theme='factory'] .home-bg__scanlines {
-  opacity: 0.3;
-}
-
-/* ============== Claude: warm paper wash + soft radial glow ============== */
-:root[data-brand-theme='claude'] .home-bg__paper {
-  display: block;
-  background-image:
-    radial-gradient(
-      circle at 20% 20%,
-      color-mix(in srgb, var(--theme-accent) 14%, transparent),
-      transparent 45%
-    ),
-    radial-gradient(
-      circle at 80% 85%,
-      color-mix(in srgb, rgb(var(--theme-warning-rgb)) 10%, transparent),
-      transparent 50%
-    );
-}
-
-:root[data-brand-theme='claude'] .home-bg__scanlines {
-  display: block;
-  background-image:
-    radial-gradient(
-      color-mix(in srgb, var(--theme-page-text) 4%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 6px 6px;
-  opacity: 0.45;
-  mix-blend-mode: multiply;
-}
-
-.dark[data-brand-theme='claude'] .home-bg__scanlines {
-  mix-blend-mode: screen;
-  opacity: 0.2;
-}
+.home-bg__rivet--tl { top: 16px; left: 16px; }
+.home-bg__rivet--tr { top: 16px; right: 16px; }
+.home-bg__rivet--bl { bottom: 16px; left: 16px; }
+.home-bg__rivet--br { bottom: 16px; right: 16px; }
 </style>

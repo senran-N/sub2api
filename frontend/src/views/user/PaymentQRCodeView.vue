@@ -1,24 +1,26 @@
 <template>
   <AppLayout>
-    <div class="mx-auto flex max-w-md flex-col items-center space-y-6 py-8">
-      <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+    <div class="payment-page payment-page--medium">
+      <h2 class="payment-title payment-title--xl text-center">
         {{ qrUrl ? scanTitle : t('payment.qr.payInNewWindow') }}
       </h2>
-      <div v-if="qrUrl" class="rounded-2xl bg-white p-6 shadow-lg dark:bg-dark-800">
-        <canvas ref="qrCanvas" class="mx-auto"></canvas>
+      <div v-if="qrUrl" class="payment-panel payment-panel--center">
+        <div :class="['payment-qr-shell', qrToneClass]">
+          <canvas ref="qrCanvas" class="payment-qr-canvas"></canvas>
+        </div>
       </div>
       <!-- Scan prompt for QR code -->
-      <p v-if="qrUrl && !expired && scanHint" class="text-center text-sm text-gray-500 dark:text-gray-400">
+      <p v-if="qrUrl && !expired && scanHint" class="payment-status-description text-center">
         {{ scanHint }}
       </p>
-      <div v-if="expired" class="text-center">
-        <p class="text-lg font-medium text-red-500">{{ t('payment.qr.expired') }}</p>
+      <div v-if="expired" class="payment-status-block">
+        <p class="payment-status-title payment-qrcode-view__expired-title">{{ t('payment.qr.expired') }}</p>
         <button class="btn btn-primary mt-4" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
       </div>
-      <div v-else class="text-center">
-        <p class="text-sm text-gray-500 dark:text-gray-400">{{ qrUrl ? t('payment.qr.expiresIn') : t('payment.qr.payInNewWindowHint') }}</p>
-        <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
-        <p class="mt-2 text-sm text-gray-400 dark:text-gray-500">{{ t('payment.qr.waitingPayment') }}</p>
+      <div v-else class="payment-countdown">
+        <p class="payment-countdown__label">{{ qrUrl ? t('payment.qr.expiresIn') : t('payment.qr.payInNewWindowHint') }}</p>
+        <p class="payment-countdown__value">{{ countdownDisplay }}</p>
+        <p class="payment-countdown__hint mt-2">{{ t('payment.qr.waitingPayment') }}</p>
       </div>
       <a v-if="payUrl && !qrUrl && !expired" :href="payUrl" target="_blank" rel="noopener noreferrer"
         class="btn btn-primary w-full py-3">
@@ -44,6 +46,7 @@ import { useAppStore } from '@/stores'
 import QRCode from 'qrcode'
 import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
+import '@/components/payment/paymentTheme.css'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -84,6 +87,12 @@ const scanHint = computed(() => {
   return ''
 })
 
+const qrToneClass = computed(() => {
+  if (isAlipay.value) return 'payment-qr-shell--alipay'
+  if (isWxpay.value) return 'payment-qr-shell--wxpay'
+  return ''
+})
+
 function getLogoForType(): string | null {
   if (isAlipay.value) return alipayIcon
   if (isWxpay.value) return wxpayIcon
@@ -117,7 +126,9 @@ async function renderQR() {
     const y = (canvas.height - logoSize) / 2
     // White background with rounded corners
     const pad = 5
-    ctx.fillStyle = '#FFFFFF'
+    ctx.fillStyle =
+      getComputedStyle(document.documentElement).getPropertyValue('--theme-surface').trim()
+      || getComputedStyle(document.body).backgroundColor
     ctx.beginPath()
     const r = 6
     ctx.moveTo(x - pad + r, y - pad)
@@ -201,3 +212,9 @@ onMounted(() => {
 
 onUnmounted(() => cleanup())
 </script>
+
+<style scoped>
+.payment-qrcode-view__expired-title {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+</style>

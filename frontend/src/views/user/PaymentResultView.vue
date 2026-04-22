@@ -1,86 +1,86 @@
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-dark-900">
-    <div class="w-full max-w-md space-y-6">
+  <div class="payment-result-view">
+    <div class="payment-result-view__shell">
       <!-- Loading -->
-      <div v-if="loading" class="flex items-center justify-center py-20">
-        <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
+      <div v-if="loading" class="payment-result-view__loading">
+        <div class="payment-result-view__spinner"></div>
       </div>
       <template v-else>
         <!-- Status Icon -->
-        <div class="text-center">
+        <div class="payment-result-view__hero">
           <div v-if="isSuccess"
-            class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-            <svg class="h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            class="payment-result-view__hero-icon payment-result-view__hero-icon--success">
+            <svg class="payment-result-view__hero-symbol payment-result-view__hero-symbol--success" fill="none" viewBox="0 0 24 24" stroke="currentColor"
               stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
           <div v-else
-            class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-            <svg class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            class="payment-result-view__hero-icon payment-result-view__hero-icon--danger">
+            <svg class="payment-result-view__hero-symbol payment-result-view__hero-symbol--danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h2 class="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 class="payment-result-view__title">
             {{ isSuccess ? t('payment.result.success') : t('payment.result.failed') }}
           </h2>
         </div>
         <!-- Order Info -->
-        <div v-if="order" class="rounded-xl bg-white p-5 shadow-sm dark:bg-dark-800">
-          <div class="space-y-3 text-sm">
-            <div class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderId') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">#{{ order.id }}</span>
+        <div v-if="order" class="payment-result-view__card">
+          <div class="payment-result-view__details">
+            <div class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.orderId') }}</span>
+              <span class="payment-result-view__value">#{{ order.id }}</span>
             </div>
-            <div v-if="order.out_trade_no" class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderNo') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ order.out_trade_no }}</span>
+            <div v-if="order.out_trade_no" class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.orderNo') }}</span>
+              <span class="payment-result-view__value">{{ order.out_trade_no }}</span>
             </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.baseAmount') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">&#165;{{ baseAmount.toFixed(2) }}</span>
+            <div class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.baseAmount') }}</span>
+              <span class="payment-result-view__value">&#165;{{ baseAmount.toFixed(2) }}</span>
             </div>
-            <div v-if="order.fee_rate > 0" class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.fee') }} ({{ order.fee_rate }}%)</span>
-              <span class="font-medium text-gray-900 dark:text-white">&#165;{{ feeAmount.toFixed(2) }}</span>
+            <div v-if="order.fee_rate > 0" class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.fee') }} ({{ order.fee_rate }}%)</span>
+              <span class="payment-result-view__value">&#165;{{ feeAmount.toFixed(2) }}</span>
             </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
-              <span class="font-bold text-primary-600 dark:text-primary-400">&#165;{{ order.pay_amount.toFixed(2) }}</span>
+            <div class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.payAmount') }}</span>
+              <span class="payment-result-view__value payment-result-view__value--accent">&#165;{{ order.pay_amount.toFixed(2) }}</span>
             </div>
-            <div v-if="order.amount !== order.pay_amount" class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.creditedAmount') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ order.order_type === 'balance' ? '$' : '¥' }}{{ order.amount.toFixed(2) }}</span>
+            <div v-if="order.amount !== order.pay_amount" class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.creditedAmount') }}</span>
+              <span class="payment-result-view__value">{{ order.order_type === 'balance' ? '$' : '¥' }}{{ order.amount.toFixed(2) }}</span>
             </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.paymentMethod') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ t('payment.methods.' + order.payment_type, order.payment_type) }}</span>
+            <div class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.paymentMethod') }}</span>
+              <span class="payment-result-view__value">{{ t('payment.methods.' + order.payment_type, order.payment_type) }}</span>
             </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.status') }}</span>
+            <div class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.status') }}</span>
               <OrderStatusBadge :status="order.status" />
             </div>
           </div>
         </div>
         <!-- EasyPay return info (when no order loaded) -->
-        <div v-else-if="returnInfo" class="rounded-xl bg-white p-5 shadow-sm dark:bg-dark-800">
-          <div class="space-y-3 text-sm">
-            <div v-if="returnInfo.outTradeNo" class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderId') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ returnInfo.outTradeNo }}</span>
+        <div v-else-if="returnInfo" class="payment-result-view__card">
+          <div class="payment-result-view__details">
+            <div v-if="returnInfo.outTradeNo" class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.orderId') }}</span>
+              <span class="payment-result-view__value">{{ returnInfo.outTradeNo }}</span>
             </div>
-            <div v-if="returnInfo.money" class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">&#165;{{ returnInfo.money }}</span>
+            <div v-if="returnInfo.money" class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.payAmount') }}</span>
+              <span class="payment-result-view__value">&#165;{{ returnInfo.money }}</span>
             </div>
-            <div v-if="returnInfo.type" class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.paymentMethod') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ t('payment.methods.' + returnInfo.type, returnInfo.type) }}</span>
+            <div v-if="returnInfo.type" class="payment-result-view__row">
+              <span class="payment-result-view__label">{{ t('payment.orders.paymentMethod') }}</span>
+              <span class="payment-result-view__value">{{ t('payment.methods.' + returnInfo.type, returnInfo.type) }}</span>
             </div>
           </div>
         </div>
         <!-- Actions -->
-        <div class="flex gap-3">
+        <div class="payment-result-view__actions">
           <button class="btn btn-secondary flex-1" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
           <button class="btn btn-primary flex-1" @click="router.push('/orders')">{{ t('payment.result.viewOrders') }}</button>
         </div>
@@ -187,3 +187,130 @@ onMounted(async () => {
   loading.value = false
 })
 </script>
+
+<style scoped>
+.payment-result-view {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--theme-page-bg) 92%, var(--theme-surface-soft)),
+      var(--theme-page-bg)
+    );
+  padding: 1rem;
+}
+
+.payment-result-view__shell {
+  width: 100%;
+  max-width: 28rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.payment-result-view__loading {
+  display: flex;
+  justify-content: center;
+  padding-block: 5rem;
+}
+
+.payment-result-view__spinner {
+  height: 2rem;
+  width: 2rem;
+  animation: payment-result-view-spin 1s linear infinite;
+  border: 4px solid rgb(var(--theme-accent-rgb));
+  border-top-color: transparent;
+  border-radius: 999px;
+}
+
+.payment-result-view__hero {
+  text-align: center;
+}
+
+@keyframes payment-result-view-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.payment-result-view__hero-icon {
+  margin: 0 auto;
+  display: flex;
+  height: 5rem;
+  width: 5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.payment-result-view__hero-icon--success {
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 12%, var(--theme-surface));
+}
+
+.payment-result-view__hero-icon--danger {
+  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 12%, var(--theme-surface));
+}
+
+.payment-result-view__hero-symbol {
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.payment-result-view__hero-symbol--success {
+  color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 84%, var(--theme-page-text));
+}
+
+.payment-result-view__hero-symbol--danger {
+  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
+}
+
+.payment-result-view__title {
+  margin-top: 1rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--theme-page-text);
+}
+
+.payment-result-view__card {
+  border: var(--theme-card-border-width) solid var(--theme-card-border);
+  border-radius: calc(var(--theme-surface-radius) + 10px);
+  background: var(--theme-surface);
+  box-shadow: var(--theme-card-shadow);
+  padding: 1.25rem;
+}
+
+.payment-result-view__details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.payment-result-view__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.payment-result-view__label {
+  color: var(--theme-page-muted);
+}
+
+.payment-result-view__value {
+  font-weight: 600;
+  color: var(--theme-page-text);
+}
+
+.payment-result-view__value--accent {
+  color: var(--theme-accent);
+}
+
+.payment-result-view__actions {
+  display: flex;
+  gap: 0.75rem;
+}
+</style>

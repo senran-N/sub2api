@@ -1,31 +1,31 @@
 <template>
-  <div>
-    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+  <div class="payment-method-selector">
+    <label class="payment-method-selector__label">
       {{ t('payment.paymentMethod') }}
     </label>
-    <div class="grid grid-cols-2 gap-3 sm:flex">
+    <div class="payment-method-selector__grid">
       <button
         v-for="method in sortedMethods"
         :key="method.type"
         type="button"
         :disabled="!method.available"
         :class="[
-          'relative flex h-[60px] flex-col items-center justify-center rounded-lg border px-3 transition-all sm:flex-1',
+          'payment-method-selector__option',
           !method.available
-            ? 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-50 dark:border-dark-700 dark:bg-dark-800/50'
+            ? 'payment-method-selector__option--disabled'
             : selected === method.type
               ? methodSelectedClass(method.type)
-              : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200 dark:hover:border-dark-500',
+              : 'payment-method-selector__option--idle',
         ]"
         @click="method.available && emit('select', method.type)"
       >
-        <span class="flex items-center gap-2">
+        <span class="payment-method-selector__content">
           <img :src="methodIcon(method.type)" :alt="t(`payment.methods.${method.type}`)" class="h-7 w-7" />
-          <span class="flex flex-col items-start leading-none">
-            <span class="text-base font-semibold">{{ t(`payment.methods.${method.type}`) }}</span>
+          <span class="payment-method-selector__copy">
+            <span class="payment-method-selector__title">{{ t(`payment.methods.${method.type}`) }}</span>
             <span
               v-if="method.fee_rate > 0"
-              class="text-[10px] tracking-wide text-gray-500 dark:text-dark-400"
+              class="payment-method-selector__fee"
             >
               {{ t('payment.fee') }} {{ method.fee_rate }}%
             </span>
@@ -83,9 +83,128 @@ function methodIcon(type: string): string {
 }
 
 function methodSelectedClass(type: string): string {
-  if (type.includes('alipay')) return 'border-[#02A9F1] bg-blue-50 text-gray-900 shadow-sm dark:bg-blue-950 dark:text-gray-100'
-  if (type.includes('wxpay')) return 'border-[#09BB07] bg-green-50 text-gray-900 shadow-sm dark:bg-green-950 dark:text-gray-100'
-  if (type === 'stripe') return 'border-[#676BE5] bg-indigo-50 text-gray-900 shadow-sm dark:bg-indigo-950 dark:text-gray-100'
-  return 'border-primary-500 bg-primary-50 text-gray-900 shadow-sm dark:bg-primary-950 dark:text-gray-100'
+  if (type.includes('alipay')) return 'payment-method-selector__option--alipay'
+  if (type.includes('wxpay')) return 'payment-method-selector__option--wxpay'
+  if (type === 'stripe') return 'payment-method-selector__option--stripe'
+  return 'payment-method-selector__option--default'
 }
 </script>
+
+<style scoped>
+.payment-method-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.payment-method-selector__label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--theme-page-text);
+}
+
+.payment-method-selector__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.payment-method-selector__option {
+  display: flex;
+  min-height: 60px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--theme-input-border) 88%, transparent);
+  border-radius: calc(var(--theme-surface-radius) + 6px);
+  background: color-mix(in srgb, var(--theme-surface) 92%, transparent);
+  color: var(--theme-page-text);
+  padding: 0.75rem;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.payment-method-selector__option:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--theme-accent) 24%, var(--theme-card-border));
+  transform: translateY(-1px);
+}
+
+.payment-method-selector__option--idle {
+  box-shadow: var(--theme-card-shadow);
+}
+
+.payment-method-selector__option--disabled {
+  cursor: not-allowed;
+  background: var(--theme-disabled-surface);
+  border-color: var(--theme-disabled-border);
+  color: var(--theme-disabled-text);
+  opacity: 0.7;
+  box-shadow: none;
+}
+
+.payment-method-selector__option--alipay,
+.payment-method-selector__option--wxpay,
+.payment-method-selector__option--stripe,
+.payment-method-selector__option--default {
+  box-shadow: var(--theme-card-shadow);
+}
+
+.payment-method-selector__option--alipay {
+  border-color: color-mix(in srgb, rgb(var(--theme-info-rgb)) 32%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-info-rgb)) 10%, var(--theme-surface));
+}
+
+.payment-method-selector__option--wxpay {
+  border-color: color-mix(in srgb, rgb(var(--theme-success-rgb)) 32%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-success-rgb)) 10%, var(--theme-surface));
+}
+
+.payment-method-selector__option--stripe {
+  border-color: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 32%, var(--theme-card-border));
+  background: color-mix(in srgb, rgb(var(--theme-brand-purple-rgb)) 10%, var(--theme-surface));
+}
+
+.payment-method-selector__option--default {
+  border-color: color-mix(in srgb, var(--theme-accent) 28%, var(--theme-card-border));
+  background: color-mix(in srgb, var(--theme-accent-soft) 82%, var(--theme-surface));
+}
+
+.payment-method-selector__content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.payment-method-selector__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  line-height: 1;
+}
+
+.payment-method-selector__title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.payment-method-selector__fee {
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--theme-page-muted);
+}
+
+@media (min-width: 640px) {
+  .payment-method-selector__grid {
+    display: flex;
+  }
+
+  .payment-method-selector__option {
+    flex: 1;
+  }
+}
+</style>

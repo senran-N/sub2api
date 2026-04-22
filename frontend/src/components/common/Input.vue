@@ -109,7 +109,6 @@ defineExpose({
 
 .input-disabled {
   cursor: not-allowed;
-  background: color-mix(in srgb, var(--theme-surface-soft) 86%, var(--theme-input-bg));
   opacity: 0.6;
 }
 

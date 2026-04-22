@@ -171,7 +171,9 @@ async function renderQR() {
     const x = (canvas.width - logoSize) / 2
     const y = (canvas.height - logoSize) / 2
     const pad = 4
-    ctx.fillStyle = '#FFFFFF'
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--theme-surface').trim()
+      || getComputedStyle(document.documentElement).backgroundColor
+      || 'white'
     ctx.beginPath()
     const r = 5
     ctx.moveTo(x - pad + r, y - pad)
