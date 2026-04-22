@@ -3391,6 +3391,10 @@ import {
   formatDateTimeLocalInput,
   parseDateTimeLocalInput,
 } from "@/utils/format";
+import {
+  findInvalidGrokSessionBatchImportLine,
+  normalizeGrokSessionToken,
+} from "@/utils/grokSessionToken";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import {
   OPENAI_WS_MODE_OFF,
@@ -4787,6 +4791,13 @@ const submitGrokSessionBatchImport = async (
     appStore.showError(t("admin.accounts.grok.batchImportInputRequired"));
     return;
   }
+  const invalidLine = findInvalidGrokSessionBatchImportLine(rawInput);
+  if (invalidLine !== null) {
+    appStore.showError(
+      t("admin.accounts.grok.batchImportInvalidFormat", { line: invalidLine }),
+    );
+    return;
+  }
   if (!isActiveCreateRequest(requestContext)) {
     return;
   }
@@ -5057,11 +5068,16 @@ const handleSubmit = async () => {
       appStore.showError(t("admin.accounts.grok.sessionTokenRequired"));
       return;
     }
+    const normalizedSessionToken = normalizeGrokSessionToken(sessionToken)
+    if (!normalizedSessionToken) {
+      appStore.showError(t("admin.accounts.grok.sessionTokenInvalidFormat"));
+      return;
+    }
 
     await createAccountAndFinish(
       form.platform,
       "session",
-      { session_token: sessionToken },
+      { session_token: normalizedSessionToken },
       undefined,
       requestContext,
     );

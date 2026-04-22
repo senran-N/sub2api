@@ -284,11 +284,23 @@ describe('EditAccountModal', () => {
 
     expect(wrapper.text()).toContain('admin.accounts.grok.runtime.title')
     expect(wrapper.text()).toContain('admin.accounts.grok.runtime.tiers.heavy')
-    expect(wrapper.text()).toContain('sha256:ab12...cd34')
     expect(wrapper.text()).toContain('admin.accounts.grok.runtime.capabilities.video')
     expect(wrapper.text()).toContain('admin.accounts.grok.runtime.probeFailed')
     expect(wrapper.text()).toContain('admin.accounts.grok.runtime.probeFailedWithCode')
+    expect(wrapper.text()).not.toContain('API returned 401 Unauthorized')
     expect(wrapper.text()).toContain('video tier required')
+  })
+
+  it('rejects an invalid Grok session token update', async () => {
+    const wrapper = mountModal(buildGrokSessionAccount())
+    const sessionInput = wrapper.get('input[placeholder="admin.accounts.grok.sessionTokenPlaceholder"]')
+
+    await sessionInput.setValue('abc')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    expect(showErrorMock).toHaveBeenCalledWith('admin.accounts.grok.sessionTokenInvalidFormat')
   })
 
   it('hydrates Grok upstream settings and keeps the existing API key on save', async () => {

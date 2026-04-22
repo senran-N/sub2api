@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Account } from '@/types'
-import { getGrokAccountRuntime } from '../grokAccountRuntime'
+import { getGrokAccountRuntime, getGrokProbeOutcome } from '../grokAccountRuntime'
 
 function createAccount(overrides: Partial<Account> = {}): Account {
   return {
@@ -111,6 +111,7 @@ describe('getGrokAccountRuntime', () => {
     expect(runtime?.capabilities.models).toEqual(['grok-4', 'grok-4-video'])
     expect(runtime?.quotaWindows.map((window) => window.name)).toEqual(['auto', 'heavy'])
     expect(runtime?.sync.lastProbeStatusCode).toBe(401)
+    expect(getGrokProbeOutcome(runtime?.sync)).toBe('failed')
     expect(runtime?.runtime.lastFailReason).toBe('video tier required')
     expect(runtime?.runtime.cooldownModel).toBe('grok-4-video')
   })

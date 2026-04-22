@@ -203,7 +203,7 @@
         <div class="space-y-2">
           <div
             v-for="item in result.results"
-            :key="`${item.line}-${item.fingerprint || item.name || item.reason || item.success}`"
+            :key="`${item.line}-${item.name || item.reason || item.success}`"
             class="grok-session-panel__result-row"
           >
             <div class="flex flex-wrap items-center gap-2">
@@ -228,12 +228,6 @@
                 item.name
               }}</span>
             </div>
-            <p
-              v-if="item.fingerprint"
-              class="grok-session-panel__fingerprint mt-1 text-xs"
-            >
-              {{ item.fingerprint }}
-            </p>
             <p
               v-if="item.reason"
               class="grok-session-panel__muted mt-1 text-xs"
@@ -435,11 +429,4 @@ const parsedLineCount = computed(() => countMultilineEntries(props.batchInput));
   color: var(--theme-page-muted);
 }
 
-.grok-session-panel__fingerprint {
-  word-break: break-all;
-  /* Fingerprints are technical identifiers — render them in a muted monospace
-     tone so they don't compete with semantic status chips and primary text. */
-  font-family: var(--theme-font-mono);
-  color: var(--theme-page-muted);
-}
 </style>

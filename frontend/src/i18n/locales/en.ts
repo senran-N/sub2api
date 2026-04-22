@@ -2501,6 +2501,8 @@ export default {
         sessionTokenHint:
           "Used for Grok Web session accounts and tier-aware scheduling.",
         sessionTokenRequired: "Session token is required.",
+        sessionTokenInvalidFormat:
+          "Invalid session token format. Paste a full Grok SSO value or a Cookie string containing sso=.",
         batchNamePrefix: "Account Name Prefix",
         batchNamePrefixPlaceholder: "Optional prefix, defaults to grok-sso",
         batchNamePrefixHint:
@@ -2524,6 +2526,8 @@ export default {
           "Dedupe strategy is fixed to skip existing fingerprints. Raw tokens are never shown in results.",
         batchImportInputRequired:
           "Please enter at least one Grok SSO token or cookie.",
+        batchImportInvalidFormat:
+          "Line {line} has an invalid Grok SSO format. Check the input and try again.",
         previewBatchImport: "Preview Batch Import",
         batchImportAction: "Import Grok SSO Tokens",
         batchImportSummaryTotal: "Total {count}",

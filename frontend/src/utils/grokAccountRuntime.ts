@@ -37,6 +37,8 @@ export interface GrokRuntimeSyncInfo {
   lastProbeStatusCode: number | null
 }
 
+export type GrokProbeOutcome = 'unknown' | 'healthy' | 'failed'
+
 export interface GrokRuntimeFeedbackInfo {
   lastRequestAt: string | null
   lastRequestCapability: string | null
@@ -100,6 +102,14 @@ function asStringArray(value: unknown): string[] {
   return value
     .map((item) => asString(item))
     .filter((item): item is string => Boolean(item))
+}
+
+function parseRuntimeTimestamp(value: string | null | undefined): number | null {
+  if (!value) {
+    return null
+  }
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : null
 }
 
 function inferTierFromQuotaWindows(quotaWindows: UnknownRecord | null): string {
@@ -214,6 +224,28 @@ function parseSyncInfo(grok: UnknownRecord): GrokRuntimeSyncInfo {
     lastProbeError: asString(sync?.last_probe_error),
     lastProbeStatusCode: asNumber(sync?.last_probe_status_code)
   }
+}
+
+export function getGrokProbeOutcome(sync: GrokRuntimeSyncInfo | null | undefined): GrokProbeOutcome {
+  if (!sync) {
+    return 'unknown'
+  }
+
+  const lastProbeOkAt = parseRuntimeTimestamp(sync.lastProbeOkAt)
+  const lastProbeErrorAt = parseRuntimeTimestamp(sync.lastProbeErrorAt)
+  if (lastProbeOkAt !== null && (lastProbeErrorAt === null || lastProbeOkAt >= lastProbeErrorAt)) {
+    return 'healthy'
+  }
+  if (lastProbeErrorAt !== null || sync.lastProbeError) {
+    return 'failed'
+  }
+
+  const code = sync.lastProbeStatusCode
+  if (code !== null) {
+    return code >= 200 && code < 300 ? 'healthy' : 'failed'
+  }
+
+  return sync.lastProbeAt ? 'unknown' : 'unknown'
 }
 
 function parseRuntimeInfo(grok: UnknownRecord): GrokRuntimeFeedbackInfo {

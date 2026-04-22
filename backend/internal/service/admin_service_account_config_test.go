@@ -142,3 +142,45 @@ func TestAdminServiceUpdateAccountRejectsMissingProxyBeforeUpdate(t *testing.T) 
 	require.ErrorIs(t, err, ErrProxyNotFound)
 	require.Zero(t, accountRepo.updateCalls)
 }
+
+func TestAdminServiceCreateAccountRejectsInvalidGrokSessionToken(t *testing.T) {
+	accountRepo := &groupBindingRuleAccountRepoStub{}
+	svc := &adminServiceImpl{
+		accountRepo: accountRepo,
+	}
+
+	account, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:                 "invalid-grok-session",
+		Platform:             PlatformGrok,
+		Type:                 AccountTypeSession,
+		Credentials:          map[string]any{"session_token": "abc"},
+		SkipDefaultGroupBind: true,
+	})
+
+	require.Nil(t, account)
+	require.ErrorContains(t, err, "invalid session_token")
+	require.ErrorContains(t, err, "grok session token format is invalid")
+	require.Zero(t, accountRepo.createCalls)
+}
+
+func TestAdminServiceUpdateAccountRejectsInvalidGrokSessionToken(t *testing.T) {
+	accountRepo := &groupBindingRuleAccountRepoStub{
+		getByIDAccount: &Account{
+			ID:       7,
+			Platform: PlatformGrok,
+			Type:     AccountTypeSession,
+		},
+	}
+	svc := &adminServiceImpl{
+		accountRepo: accountRepo,
+	}
+
+	account, err := svc.UpdateAccount(context.Background(), 7, &UpdateAccountInput{
+		Credentials: map[string]any{"session_token": "abc"},
+	})
+
+	require.Nil(t, account)
+	require.ErrorContains(t, err, "invalid session_token")
+	require.ErrorContains(t, err, "grok session token format is invalid")
+	require.Zero(t, accountRepo.updateCalls)
+}

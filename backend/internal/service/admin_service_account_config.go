@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -79,6 +80,25 @@ func validateAccountRateMultiplier(value *float64) error {
 	return nil
 }
 
+func normalizeGrokSessionCredentialsForMutation(platform string, accountType string, credentials map[string]any) (map[string]any, error) {
+	if NormalizeCompatibleGatewayPlatform(platform) != PlatformGrok || accountType != AccountTypeSession || len(credentials) == 0 {
+		return credentials, nil
+	}
+
+	normalized := cloneAnyMap(credentials)
+	rawSessionToken := strings.TrimSpace(getStringFromMaps(normalized, nil, "session_token"))
+	if rawSessionToken == "" {
+		return nil, errors.New("session_token is required for grok session accounts")
+	}
+
+	cookieHeader, err := ValidateGrokSessionImportToken(rawSessionToken)
+	if err != nil {
+		return nil, fmt.Errorf("invalid session_token: %w", err)
+	}
+	normalized["session_token"] = cookieHeader
+	return normalized, nil
+}
+
 func (s *adminServiceImpl) buildAccountForCreate(input *CreateAccountInput) (*Account, error) {
 	if err := validateAccountRateMultiplier(input.RateMultiplier); err != nil {
 		return nil, err
@@ -89,12 +109,17 @@ func (s *adminServiceImpl) buildAccountForCreate(input *CreateAccountInput) (*Ac
 		return nil, err
 	}
 
+	credentials, err := normalizeGrokSessionCredentialsForMutation(input.Platform, input.Type, input.Credentials)
+	if err != nil {
+		return nil, err
+	}
+
 	account := &Account{
 		Name:               input.Name,
 		Notes:              normalizeAccountNotes(input.Notes),
 		Platform:           input.Platform,
 		Type:               input.Type,
-		Credentials:        input.Credentials,
+		Credentials:        credentials,
 		Extra:              input.Extra,
 		ProxyID:            input.ProxyID,
 		Concurrency:        input.Concurrency,
@@ -172,7 +197,11 @@ func (s *adminServiceImpl) applyAccountUpdateInput(ctx context.Context, account 
 		account.Notes = normalizeAccountNotes(input.Notes)
 	}
 	if len(input.Credentials) > 0 {
-		account.Credentials = input.Credentials
+		credentials, err := normalizeGrokSessionCredentialsForMutation(account.Platform, account.Type, input.Credentials)
+		if err != nil {
+			return err
+		}
+		account.Credentials = credentials
 	}
 	if err := applyMutableAccountExtra(account, input.Extra, wasOveragesEnabled); err != nil {
 		return err

@@ -48,10 +48,6 @@
                 <div class="font-medium">{{ grokAuthModeLabel }}</div>
               </div>
               <div>
-                <span class="edit-account-modal__muted">{{ t('admin.accounts.grok.runtime.fingerprint') }}</span>
-                <div class="font-mono">{{ grokFingerprintDisplay }}</div>
-              </div>
-              <div>
                 <span class="edit-account-modal__muted">{{ t('admin.accounts.grok.runtime.source') }}</span>
                 <div>{{ grokTierSourceDisplay }}</div>
               </div>
@@ -1770,7 +1766,8 @@ import {
   removeModelMappingAt
 } from '@/components/account/accountModalInteractions'
 import { formatDateTime, formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
-import { getGrokAccountRuntime } from '@/utils/grokAccountRuntime'
+import { normalizeGrokSessionToken } from '@/utils/grokSessionToken'
+import { getGrokAccountRuntime, getGrokProbeOutcome } from '@/utils/grokAccountRuntime'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import {
   OPENAI_WS_MODE_OFF,
@@ -1965,7 +1962,6 @@ const grokAuthModeLabel = computed(() => {
   return mode ? t(`admin.accounts.grok.runtime.authModes.${mode}`) : emptyRuntimeValue
 })
 
-const grokFingerprintDisplay = computed(() => grokRuntimeState.value?.authFingerprint ?? emptyRuntimeValue)
 const grokTierSourceDisplay = computed(() => grokRuntimeState.value?.tier.source ?? emptyRuntimeValue)
 const grokTierConfidenceDisplay = computed(() => {
   const confidence = grokRuntimeState.value?.tier.confidence
@@ -1974,35 +1970,18 @@ const grokTierConfidenceDisplay = computed(() => {
 const grokCapabilities = computed(() => grokRuntimeState.value?.capabilities.operations ?? [])
 const grokModels = computed(() => grokRuntimeState.value?.capabilities.models ?? [])
 const grokQuotaWindows = computed(() => grokRuntimeState.value?.quotaWindows.filter((window) => window.hasSignal) ?? [])
-const parseRuntimeTimestamp = (value: string | null | undefined): number | null => {
-  if (!value) {
-    return null
-  }
-  const timestamp = Date.parse(value)
-  return Number.isFinite(timestamp) ? timestamp : null
-}
+const grokProbeOutcome = computed(() => getGrokProbeOutcome(grokRuntimeState.value?.sync))
 
 const grokProbeStatusDisplay = computed(() => {
   const sync = grokRuntimeState.value?.sync
-  if (!sync?.lastProbeAt) {
+  if (!sync) {
     return emptyRuntimeValue
   }
 
-  const lastProbeOKAt = parseRuntimeTimestamp(sync.lastProbeOkAt)
-  const lastProbeErrorAt = parseRuntimeTimestamp(sync.lastProbeErrorAt)
-
-  if (lastProbeOKAt !== null && (lastProbeErrorAt === null || lastProbeOKAt >= lastProbeErrorAt)) {
+  if (grokProbeOutcome.value === 'healthy') {
     return t('admin.accounts.grok.runtime.probeHealthy')
   }
-  if (lastProbeErrorAt !== null) {
-    return t('admin.accounts.grok.runtime.probeFailed')
-  }
-
-  const code = sync.lastProbeStatusCode
-  if (code !== null && code >= 200 && code < 300) {
-    return t('admin.accounts.grok.runtime.probeHealthy')
-  }
-  if (code !== null) {
+  if (grokProbeOutcome.value === 'failed') {
     return t('admin.accounts.grok.runtime.probeFailed')
   }
   return emptyRuntimeValue
@@ -2014,12 +1993,10 @@ const grokProbeErrorDisplay = computed(() => {
   }
 
   const code = sync.lastProbeStatusCode
-  if (code !== null && code >= 200 && code < 300) {
+  if (grokProbeOutcome.value === 'healthy') {
     return t('common.success')
   }
-
-  const hasFailedProbe = Boolean(sync.lastProbeError) || grokProbeStatusDisplay.value === t('admin.accounts.grok.runtime.probeFailed')
-  if (hasFailedProbe) {
+  if (grokProbeOutcome.value === 'failed') {
     return code !== null
       ? t('admin.accounts.grok.runtime.probeFailedWithCode', { code })
       : t('admin.accounts.grok.runtime.probeFailedShort')
@@ -2765,7 +2742,12 @@ const handleSubmit = async () => {
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
 
       if (editSessionToken.value.trim()) {
-        newCredentials.session_token = editSessionToken.value.trim()
+        const normalizedSessionToken = normalizeGrokSessionToken(editSessionToken.value)
+        if (!normalizedSessionToken) {
+          appStore.showError(t('admin.accounts.grok.sessionTokenInvalidFormat'))
+          return
+        }
+        newCredentials.session_token = normalizedSessionToken
       } else if (currentCredentials.session_token) {
         newCredentials.session_token = currentCredentials.session_token
       } else {

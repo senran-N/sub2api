@@ -270,9 +270,12 @@ func TestAdminServiceBatchImportGrokSessionAccounts_CreatesNormalizedAccounts(t 
 		accountRepo: accountRepo,
 		groupRepo:   grokSessionBatchImportGroupRepoStub{},
 	}
+	rawTokenA := "groksessiontoken1234567890abcd"
+	rawTokenB := "abcdefghijklmnopqrstuvwxyz123456"
+	rawTokenBRW := "mnopqrstuvwxyzabcdef123456"
 
 	result, err := svc.BatchImportGrokSessionAccounts(context.Background(), &GrokSessionBatchImportInput{
-		RawInput:    "token-a\nCookie: sso=token-b; sso-rw=rw-b\n",
+		RawInput:    rawTokenA + "\nCookie: sso=" + rawTokenB + "; sso-rw=" + rawTokenBRW + "\n",
 		Concurrency: 1,
 	})
 
@@ -284,16 +287,17 @@ func TestAdminServiceBatchImportGrokSessionAccounts_CreatesNormalizedAccounts(t 
 	require.Len(t, accountRepo.createdAccounts, 2)
 	require.Equal(t, PlatformGrok, accountRepo.createdAccounts[0].Platform)
 	require.Equal(t, AccountTypeSession, accountRepo.createdAccounts[0].Type)
-	require.Equal(t, "sso=token-a; sso-rw=token-a", accountRepo.createdAccounts[0].GetCredential("session_token"))
-	require.Equal(t, "sso=token-b; sso-rw=rw-b", accountRepo.createdAccounts[1].GetCredential("session_token"))
+	require.Equal(t, "sso="+rawTokenA+"; sso-rw="+rawTokenA, accountRepo.createdAccounts[0].GetCredential("session_token"))
+	require.Equal(t, "sso="+rawTokenB+"; sso-rw="+rawTokenBRW, accountRepo.createdAccounts[1].GetCredential("session_token"))
 	require.NotEmpty(t, getStringFromMaps(accountRepo.createdAccounts[0].grokExtraMap(), nil, "auth_fingerprint"))
-	require.NotContains(t, result.Results[0].Fingerprint, "token-a")
+	require.NotContains(t, result.Results[0].Fingerprint, rawTokenA)
 	require.Equal(t, "grok-sso-001", result.Results[0].Name)
 	require.Equal(t, "grok-sso-002", result.Results[1].Name)
 }
 
 func TestAdminServiceBatchImportGrokSessionAccounts_DedupesExistingAndRejectsMissingSSO(t *testing.T) {
-	existingCookie := "sso=existing-token"
+	existingToken := "abcdefghijklmnopqrstuvwxyz123456"
+	existingCookie := "sso=" + existingToken
 	accountRepo := &grokSessionBatchImportAccountRepoStub{
 		existingAccounts: []Account{
 			{
@@ -310,7 +314,7 @@ func TestAdminServiceBatchImportGrokSessionAccounts_DedupesExistingAndRejectsMis
 	}
 
 	result, err := svc.BatchImportGrokSessionAccounts(context.Background(), &GrokSessionBatchImportInput{
-		RawInput: "existing-token\nx-anonuserid=anon-only\nexisting-token\n",
+		RawInput: existingToken + "\nx-anonuserid=anon-only\n" + existingToken + "\n",
 	})
 
 	require.NoError(t, err)
@@ -320,7 +324,7 @@ func TestAdminServiceBatchImportGrokSessionAccounts_DedupesExistingAndRejectsMis
 	require.Equal(t, 1, result.Invalid)
 	require.Len(t, accountRepo.createdAccounts, 0)
 	require.Equal(t, "missing sso cookie", result.Results[1].Reason)
-	require.NotContains(t, result.Results[0].Reason, "existing-token")
+	require.NotContains(t, result.Results[0].Reason, existingToken)
 }
 
 func TestAdminServiceBatchImportGrokSessionAccounts_SyncsCreatedSessionAccount(t *testing.T) {
@@ -333,7 +337,7 @@ func TestAdminServiceBatchImportGrokSessionAccounts_SyncsCreatedSessionAccount(t
 	}
 
 	result, err := svc.BatchImportGrokSessionAccounts(context.Background(), &GrokSessionBatchImportInput{
-		RawInput:    "token-a\n",
+		RawInput:    "groksessiontoken1234567890abcd\n",
 		Concurrency: 1,
 	})
 

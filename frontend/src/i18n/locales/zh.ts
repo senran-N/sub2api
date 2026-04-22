@@ -2538,6 +2538,7 @@ export default {
         sessionTokenPlaceholder: "粘贴 Grok Web Session Token",
         sessionTokenHint: "用于 Grok Web Session 账号以及基于等级的调度。",
         sessionTokenRequired: "请输入 Session Token。",
+        sessionTokenInvalidFormat: "Session Token 格式不正确，请粘贴完整的 Grok SSO 值或包含 sso= 的 Cookie。",
         batchNamePrefix: "账号名称前缀",
         batchNamePrefixPlaceholder: "可选，留空时默认使用 grok-sso",
         batchNamePrefixHint:
@@ -2559,6 +2560,7 @@ export default {
         batchImportDedupeHint:
           "去重策略固定为跳过已有指纹，结果中不会显示原始 token。",
         batchImportInputRequired: "请至少输入一条 Grok SSO token 或 Cookie。",
+        batchImportInvalidFormat: "第 {line} 行的 Grok SSO 格式不正确，请检查后重试。",
         previewBatchImport: "预览批量导入",
         batchImportAction: "导入 Grok SSO Token",
         batchImportSummaryTotal: "总计 {count}",

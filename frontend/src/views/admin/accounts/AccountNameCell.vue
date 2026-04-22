@@ -9,13 +9,6 @@
       {{ emailAddress }}
     </span>
     <span
-      v-if="authFingerprint"
-      class="theme-text-muted truncate font-mono text-[11px]"
-      :title="authFingerprint"
-    >
-      {{ authFingerprint }}
-    </span>
-    <span
       v-if="grokSyncSummary"
       class="theme-text-muted truncate text-[11px]"
       :title="grokSyncSummary"
@@ -36,7 +29,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/types'
-import { getGrokAccountRuntime } from '@/utils/grokAccountRuntime'
+import { getGrokAccountRuntime, getGrokProbeOutcome } from '@/utils/grokAccountRuntime'
 import { formatRelativeTime } from '@/utils/format'
 
 const props = defineProps<{
@@ -51,8 +44,6 @@ const emailAddress = computed(() => {
   const value = props.account.extra?.email_address
   return typeof value === 'string' ? value : null
 })
-
-const authFingerprint = computed(() => grokRuntime.value?.authFingerprint ?? null)
 
 const grokSyncSummary = computed(() => {
   const runtime = grokRuntime.value
@@ -77,8 +68,12 @@ const grokRecentErrorSummary = computed(() => {
     return null
   }
 
-  if (runtime.sync.lastProbeError) {
-    return `${t('admin.accounts.grok.runtime.lastProbeError')}: ${runtime.sync.lastProbeError}`
+  if (getGrokProbeOutcome(runtime.sync) === 'failed') {
+    const code = runtime.sync.lastProbeStatusCode
+    const probeSummary = code !== null
+      ? t('admin.accounts.grok.runtime.probeFailedWithCode', { code })
+      : t('admin.accounts.grok.runtime.probeFailedShort')
+    return `${t('admin.accounts.grok.runtime.lastProbeError')}: ${probeSummary}`
   }
   if (runtime.runtime.lastFailReason) {
     return `${t('admin.accounts.grok.runtime.lastRuntimeError')}: ${runtime.runtime.lastFailReason}`

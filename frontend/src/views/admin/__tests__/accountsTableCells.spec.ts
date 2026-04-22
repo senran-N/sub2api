@@ -145,7 +145,7 @@ describe('account table cells', () => {
     expect(lastUsedWrapper.text()).toContain('relative:2026-04-04T00:00:00Z')
   })
 
-  it('renders Grok runtime fingerprint, tier, quota, and capability hints', () => {
+  it('renders Grok runtime tier, quota, and capability hints', () => {
     const account = createAccount({
       name: 'Grok Session',
       platform: 'grok',
@@ -163,7 +163,8 @@ describe('account table cells', () => {
           sync_state: {
             last_sync_at: '2026-04-20T00:30:00Z',
             last_probe_at: '2026-04-20T01:00:00Z',
-            last_probe_error: 'API returned 401 Unauthorized'
+            last_probe_error: 'API returned 401 Unauthorized',
+            last_probe_status_code: 401
           },
           capabilities: {
             operations: ['chat', 'video']
@@ -189,11 +190,11 @@ describe('account table cells', () => {
         account
       }
     })
-    expect(nameWrapper.text()).toContain('sha256:ab12...cd34')
     expect(nameWrapper.text()).toContain('admin.accounts.grok.runtime.lastSyncAt')
     expect(nameWrapper.text()).toContain('relative:2026-04-20T00:30:00Z')
     expect(nameWrapper.text()).toContain('admin.accounts.grok.runtime.lastProbeError')
-    expect(nameWrapper.text()).toContain('API returned 401 Unauthorized')
+    expect(nameWrapper.text()).toContain('admin.accounts.grok.runtime.probeFailedWithCode')
+    expect(nameWrapper.text()).not.toContain('API returned 401 Unauthorized')
 
     const platformWrapper = mount(AccountPlatformTypeCell, {
       props: {

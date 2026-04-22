@@ -9,6 +9,7 @@ import (
 )
 
 const grokSessionFingerprintPrefix = "sha256:"
+const minGrokSessionTokenLength = 24
 
 func NormalizeGrokSessionCookieHeader(raw string) (string, error) {
 	return BuildGrokSessionCookieHeader(raw, "", "")
@@ -63,8 +64,20 @@ func ValidateGrokSessionImportToken(raw string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !grokSessionCookieHeaderHasSSO(normalized) {
+	jar, err := parseOptionalGrokSessionCookieHeader(normalized)
+	if err != nil {
+		return "", err
+	}
+
+	sessionToken := firstNonEmptyGrokSessionCookieValue(
+		jar.Get(grokSessionCookieNameSSO),
+		jar.Get(grokSessionCookieNameSSORW),
+	)
+	if sessionToken == "" {
 		return "", errors.New("missing sso cookie")
+	}
+	if err := validateGrokSessionPrimaryTokenValue(sessionToken); err != nil {
+		return "", err
 	}
 	return normalized, nil
 }
@@ -110,6 +123,20 @@ func grokSessionCookieHeaderHasSSO(cookieHeader string) bool {
 		jar.Get(grokSessionCookieNameSSO),
 		jar.Get(grokSessionCookieNameSSORW),
 	) != ""
+}
+
+func validateGrokSessionPrimaryTokenValue(token string) error {
+	normalized := strings.TrimSpace(token)
+	if normalized == "" {
+		return errors.New("missing sso cookie")
+	}
+	if len(normalized) < minGrokSessionTokenLength {
+		return errors.New("grok session token format is invalid")
+	}
+	if strings.ContainsAny(normalized, " \t\r\n;") {
+		return errors.New("grok session token format is invalid")
+	}
+	return nil
 }
 
 const (

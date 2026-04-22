@@ -452,6 +452,7 @@ describe("CreateAccountModal", () => {
   });
 
   it("creates a Grok session account with session_token credentials", async () => {
+    const rawSessionToken = "groksessiontoken1234567890abcd";
     const wrapper = mountModal();
 
     await wrapper
@@ -473,7 +474,7 @@ describe("CreateAccountModal", () => {
     const sessionInput = wrapper.get(
       'input[placeholder="admin.accounts.grok.sessionTokenPlaceholder"]',
     );
-    await sessionInput.setValue("grok-session-token");
+    await sessionInput.setValue(rawSessionToken);
 
     await wrapper.get("#create-account-form").trigger("submit.prevent");
     await flushPromises();
@@ -484,9 +485,42 @@ describe("CreateAccountModal", () => {
         platform: "grok",
         type: "session",
         credentials: {
-          session_token: "grok-session-token",
+          session_token: `sso=${rawSessionToken}; sso-rw=${rawSessionToken}`,
         },
       }),
+    );
+  });
+
+  it("rejects an invalid Grok session token before create", async () => {
+    const wrapper = mountModal();
+
+    await wrapper
+      .get('[data-tour="account-form-name"]')
+      .setValue("Invalid Grok Session Account");
+    const grokButton = findButtonByText(wrapper, "Grok");
+    expect(grokButton).toBeTruthy();
+    await grokButton!.trigger("click");
+    await flushPromises();
+
+    const sessionButton = findButtonByText(
+      wrapper,
+      "admin.accounts.types.grokSession",
+    );
+    expect(sessionButton).toBeTruthy();
+    await sessionButton!.trigger("click");
+    await flushPromises();
+
+    const sessionInput = wrapper.get(
+      'input[placeholder="admin.accounts.grok.sessionTokenPlaceholder"]',
+    );
+    await sessionInput.setValue("abc");
+
+    await wrapper.get("#create-account-form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(createAccountMock).not.toHaveBeenCalled();
+    expect(showErrorMock).toHaveBeenCalledWith(
+      "admin.accounts.grok.sessionTokenInvalidFormat",
     );
   });
 
@@ -534,7 +568,9 @@ describe("CreateAccountModal", () => {
 
     await wrapper
       .get('[data-testid="grok-session-batch-input"]')
-      .setValue("sso=token-1\nsso=token-2");
+      .setValue(
+        "sso=abcdefghijklmnopqrstuvwxyz123456\nsso=mnopqrstuvwxyzabcdef123456",
+      );
 
     await wrapper.get("#create-account-form").trigger("submit.prevent");
     await flushPromises();
@@ -542,7 +578,8 @@ describe("CreateAccountModal", () => {
     expect(batchImportGrokSessionMock).toHaveBeenCalledTimes(1);
     expect(batchImportGrokSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        raw_input: "sso=token-1\nsso=token-2",
+        raw_input:
+          "sso=abcdefghijklmnopqrstuvwxyz123456\nsso=mnopqrstuvwxyzabcdef123456",
         name_prefix: undefined,
         dedupe_strategy: "skip_existing",
         dry_run: false,
@@ -557,5 +594,39 @@ describe("CreateAccountModal", () => {
     expect(
       wrapper.find('[data-testid="grok-session-batch-result"]').exists(),
     ).toBe(true);
+  });
+
+  it("rejects an invalid Grok session batch line before import", async () => {
+    const wrapper = mountModal();
+
+    const grokButton = findButtonByText(wrapper, "Grok");
+    expect(grokButton).toBeTruthy();
+    await grokButton!.trigger("click");
+    await flushPromises();
+
+    const sessionButton = findButtonByText(
+      wrapper,
+      "admin.accounts.types.grokSession",
+    );
+    expect(sessionButton).toBeTruthy();
+    await sessionButton!.trigger("click");
+    await flushPromises();
+
+    await wrapper
+      .get('[data-testid="grok-session-mode-batch"]')
+      .trigger("click");
+    await flushPromises();
+
+    await wrapper
+      .get('[data-testid="grok-session-batch-input"]')
+      .setValue("abc\nsso=abcdefghijklmnopqrstuvwxyz123456");
+
+    await wrapper.get("#create-account-form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(batchImportGrokSessionMock).not.toHaveBeenCalled();
+    expect(showErrorMock).toHaveBeenCalledWith(
+      "admin.accounts.grok.batchImportInvalidFormat",
+    );
   });
 });
