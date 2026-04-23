@@ -91,6 +91,12 @@ func (PaymentOrder) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			MaxLen(64),
+		field.String("provider_key").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "text"}),
+		field.JSON("provider_snapshot", map[string]any{}).
+			Optional(),
 
 		// 状态
 		field.String("status").

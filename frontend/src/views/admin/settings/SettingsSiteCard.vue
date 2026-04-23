@@ -24,6 +24,7 @@
           id="settings-site-backend-mode"
           v-model="form.backend_mode_enabled"
           name="backend_mode_enabled"
+          :aria-label="t('admin.settings.site.backendMode')"
           aria-labelledby="settings-site-backend-mode-label"
         />
       </div>
@@ -296,6 +297,7 @@
           id="settings-site-hide-ccs-toggle"
           v-model="form.hide_ccs_import_button"
           name="hide_ccs_import_button"
+          :aria-label="t('admin.settings.site.hideCcsImportButton')"
           aria-labelledby="settings-site-hide-ccs-label"
         />
       </div>

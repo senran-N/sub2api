@@ -385,6 +385,38 @@ func (_u *PaymentOrderUpdate) ClearProviderInstanceID() *PaymentOrderUpdate {
 	return _u
 }
 
+// SetProviderKey sets the "provider_key" field.
+func (_u *PaymentOrderUpdate) SetProviderKey(v string) *PaymentOrderUpdate {
+	_u.mutation.SetProviderKey(v)
+	return _u
+}
+
+// SetNillableProviderKey sets the "provider_key" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableProviderKey(v *string) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetProviderKey(*v)
+	}
+	return _u
+}
+
+// ClearProviderKey clears the value of the "provider_key" field.
+func (_u *PaymentOrderUpdate) ClearProviderKey() *PaymentOrderUpdate {
+	_u.mutation.ClearProviderKey()
+	return _u
+}
+
+// SetProviderSnapshot sets the "provider_snapshot" field.
+func (_u *PaymentOrderUpdate) SetProviderSnapshot(v map[string]interface{}) *PaymentOrderUpdate {
+	_u.mutation.SetProviderSnapshot(v)
+	return _u
+}
+
+// ClearProviderSnapshot clears the value of the "provider_snapshot" field.
+func (_u *PaymentOrderUpdate) ClearProviderSnapshot() *PaymentOrderUpdate {
+	_u.mutation.ClearProviderSnapshot()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *PaymentOrderUpdate) SetStatus(v string) *PaymentOrderUpdate {
 	_u.mutation.SetStatus(v)
@@ -910,6 +942,18 @@ func (_u *PaymentOrderUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if _u.mutation.ProviderInstanceIDCleared() {
 		_spec.ClearField(paymentorder.FieldProviderInstanceID, field.TypeString)
 	}
+	if value, ok := _u.mutation.ProviderKey(); ok {
+		_spec.SetField(paymentorder.FieldProviderKey, field.TypeString, value)
+	}
+	if _u.mutation.ProviderKeyCleared() {
+		_spec.ClearField(paymentorder.FieldProviderKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProviderSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldProviderSnapshot, field.TypeJSON, value)
+	}
+	if _u.mutation.ProviderSnapshotCleared() {
+		_spec.ClearField(paymentorder.FieldProviderSnapshot, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(paymentorder.FieldStatus, field.TypeString, value)
 	}
@@ -1396,6 +1440,38 @@ func (_u *PaymentOrderUpdateOne) SetNillableProviderInstanceID(v *string) *Payme
 // ClearProviderInstanceID clears the value of the "provider_instance_id" field.
 func (_u *PaymentOrderUpdateOne) ClearProviderInstanceID() *PaymentOrderUpdateOne {
 	_u.mutation.ClearProviderInstanceID()
+	return _u
+}
+
+// SetProviderKey sets the "provider_key" field.
+func (_u *PaymentOrderUpdateOne) SetProviderKey(v string) *PaymentOrderUpdateOne {
+	_u.mutation.SetProviderKey(v)
+	return _u
+}
+
+// SetNillableProviderKey sets the "provider_key" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableProviderKey(v *string) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetProviderKey(*v)
+	}
+	return _u
+}
+
+// ClearProviderKey clears the value of the "provider_key" field.
+func (_u *PaymentOrderUpdateOne) ClearProviderKey() *PaymentOrderUpdateOne {
+	_u.mutation.ClearProviderKey()
+	return _u
+}
+
+// SetProviderSnapshot sets the "provider_snapshot" field.
+func (_u *PaymentOrderUpdateOne) SetProviderSnapshot(v map[string]interface{}) *PaymentOrderUpdateOne {
+	_u.mutation.SetProviderSnapshot(v)
+	return _u
+}
+
+// ClearProviderSnapshot clears the value of the "provider_snapshot" field.
+func (_u *PaymentOrderUpdateOne) ClearProviderSnapshot() *PaymentOrderUpdateOne {
+	_u.mutation.ClearProviderSnapshot()
 	return _u
 }
 
@@ -1953,6 +2029,18 @@ func (_u *PaymentOrderUpdateOne) sqlSave(ctx context.Context) (_node *PaymentOrd
 	}
 	if _u.mutation.ProviderInstanceIDCleared() {
 		_spec.ClearField(paymentorder.FieldProviderInstanceID, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProviderKey(); ok {
+		_spec.SetField(paymentorder.FieldProviderKey, field.TypeString, value)
+	}
+	if _u.mutation.ProviderKeyCleared() {
+		_spec.ClearField(paymentorder.FieldProviderKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProviderSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldProviderSnapshot, field.TypeJSON, value)
+	}
+	if _u.mutation.ProviderSnapshotCleared() {
+		_spec.ClearField(paymentorder.FieldProviderSnapshot, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(paymentorder.FieldStatus, field.TypeString, value)

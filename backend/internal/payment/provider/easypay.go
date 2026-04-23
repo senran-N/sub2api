@@ -1,4 +1,3 @@
-// Package provider contains concrete payment provider implementations.
 package provider
 
 import (
@@ -19,27 +18,23 @@ import (
 	"github.com/senran-N/sub2api/internal/payment"
 )
 
-// EasyPay constants.
 const (
 	easypayCodeSuccess     = 1
 	easypayStatusPaid      = 1
 	easypayHTTPTimeout     = 10 * time.Second
-	maxEasypayResponseSize = 1 << 20 // 1MB
+	maxEasypayResponseSize = 1 << 20
 	tradeStatusSuccess     = "TRADE_SUCCESS"
 	signTypeMD5            = "MD5"
 	paymentModePopup       = "popup"
 	deviceMobile           = "mobile"
 )
 
-// EasyPay implements payment.Provider for the EasyPay aggregation platform.
 type EasyPay struct {
 	instanceID string
 	config     map[string]string
 	httpClient *http.Client
 }
 
-// NewEasyPay creates a new EasyPay provider.
-// config keys: pid, pkey, apiBase, notifyUrl, returnUrl, cid, cidAlipay, cidWxpay
 func NewEasyPay(instanceID string, config map[string]string) (*EasyPay, error) {
 	for _, k := range []string{"pid", "pkey", "apiBase", "notifyUrl", "returnUrl"} {
 		if config[k] == "" {
@@ -59,9 +54,18 @@ func (e *EasyPay) SupportedTypes() []payment.PaymentType {
 	return []payment.PaymentType{payment.TypeAlipay, payment.TypeWxpay}
 }
 
+func (e *EasyPay) MerchantIdentityMetadata() map[string]string {
+	if e == nil {
+		return nil
+	}
+	pid := strings.TrimSpace(e.config["pid"])
+	if pid == "" {
+		return nil
+	}
+	return map[string]string{"pid": pid}
+}
+
 func (e *EasyPay) CreatePayment(ctx context.Context, req payment.CreatePaymentRequest) (*payment.CreatePaymentResponse, error) {
-	// Payment mode determined by instance config, not payment type.
-	// "popup" → hosted page (submit.php); "qrcode"/default → API call (mapi.php).
 	mode := e.config["paymentMode"]
 	if mode == paymentModePopup {
 		return e.createRedirectPayment(req)
@@ -69,16 +73,16 @@ func (e *EasyPay) CreatePayment(ctx context.Context, req payment.CreatePaymentRe
 	return e.createAPIPayment(ctx, req)
 }
 
-// createRedirectPayment builds a submit.php URL for browser redirect.
-// No server-side API call — the user is redirected to EasyPay's hosted page.
-// TradeNo is empty; it arrives via the notify callback after payment.
 func (e *EasyPay) createRedirectPayment(req payment.CreatePaymentRequest) (*payment.CreatePaymentResponse, error) {
 	notifyURL, returnURL := e.resolveURLs(req)
 	params := map[string]string{
-		"pid": e.config["pid"], "type": req.PaymentType,
-		"out_trade_no": req.OrderID, "notify_url": notifyURL,
-		"return_url": returnURL, "name": req.Subject,
-		"money": req.Amount,
+		"pid":          e.config["pid"],
+		"type":         req.PaymentType,
+		"out_trade_no": req.OrderID,
+		"notify_url":   notifyURL,
+		"return_url":   returnURL,
+		"name":         req.Subject,
+		"money":        req.Amount,
 	}
 	if cid := e.resolveCID(req.PaymentType); cid != "" {
 		params["cid"] = cid
@@ -98,14 +102,17 @@ func (e *EasyPay) createRedirectPayment(req payment.CreatePaymentRequest) (*paym
 	return &payment.CreatePaymentResponse{PayURL: payURL}, nil
 }
 
-// createAPIPayment calls mapi.php to get payurl/qrcode (existing behavior).
 func (e *EasyPay) createAPIPayment(ctx context.Context, req payment.CreatePaymentRequest) (*payment.CreatePaymentResponse, error) {
 	notifyURL, returnURL := e.resolveURLs(req)
 	params := map[string]string{
-		"pid": e.config["pid"], "type": req.PaymentType,
-		"out_trade_no": req.OrderID, "notify_url": notifyURL,
-		"return_url": returnURL, "name": req.Subject,
-		"money": req.Amount, "clientip": req.ClientIP,
+		"pid":          e.config["pid"],
+		"type":         req.PaymentType,
+		"out_trade_no": req.OrderID,
+		"notify_url":   notifyURL,
+		"return_url":   returnURL,
+		"name":         req.Subject,
+		"money":        req.Amount,
+		"clientip":     req.ClientIP,
 	}
 	if cid := e.resolveCID(req.PaymentType); cid != "" {
 		params["cid"] = cid
@@ -125,7 +132,7 @@ func (e *EasyPay) createAPIPayment(ctx context.Context, req payment.CreatePaymen
 		Msg     string `json:"msg"`
 		TradeNo string `json:"trade_no"`
 		PayURL  string `json:"payurl"`
-		PayURL2 string `json:"payurl2"` // H5 mobile payment URL
+		PayURL2 string `json:"payurl2"`
 		QRCode  string `json:"qrcode"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -141,8 +148,6 @@ func (e *EasyPay) createAPIPayment(ctx context.Context, req payment.CreatePaymen
 	return &payment.CreatePaymentResponse{TradeNo: resp.TradeNo, PayURL: payURL, QRCode: resp.QRCode}, nil
 }
 
-// resolveURLs returns (notifyURL, returnURL) preferring request values,
-// falling back to instance config.
 func (e *EasyPay) resolveURLs(req payment.CreatePaymentRequest) (string, string) {
 	notifyURL := req.NotifyURL
 	if notifyURL == "" {
@@ -157,8 +162,10 @@ func (e *EasyPay) resolveURLs(req payment.CreatePaymentRequest) (string, string)
 
 func (e *EasyPay) QueryOrder(ctx context.Context, tradeNo string) (*payment.QueryOrderResponse, error) {
 	params := map[string]string{
-		"act": "order", "pid": e.config["pid"],
-		"key": e.config["pkey"], "out_trade_no": tradeNo,
+		"act":          "order",
+		"pid":          e.config["pid"],
+		"key":          e.config["pkey"],
+		"out_trade_no": tradeNo,
 	}
 	body, err := e.post(ctx, e.config["apiBase"]+"/api.php", params)
 	if err != nil {
@@ -178,7 +185,12 @@ func (e *EasyPay) QueryOrder(ctx context.Context, tradeNo string) (*payment.Quer
 		status = payment.ProviderStatusPaid
 	}
 	amount, _ := strconv.ParseFloat(resp.Money, 64)
-	return &payment.QueryOrderResponse{TradeNo: tradeNo, Status: status, Amount: amount}, nil
+	return &payment.QueryOrderResponse{
+		TradeNo:  tradeNo,
+		Status:   status,
+		Amount:   amount,
+		Metadata: e.MerchantIdentityMetadata(),
+	}, nil
 }
 
 func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[string]string) (*payment.PaymentNotification, error) {
@@ -186,7 +198,6 @@ func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[st
 	if err != nil {
 		return nil, fmt.Errorf("parse notify: %w", err)
 	}
-	// url.ParseQuery already decodes values — no additional decode needed.
 	params := make(map[string]string)
 	for k := range values {
 		params[k] = values.Get(k)
@@ -203,16 +214,30 @@ func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[st
 		status = payment.ProviderStatusSuccess
 	}
 	amount, _ := strconv.ParseFloat(params["money"], 64)
+	metadata := e.MerchantIdentityMetadata()
+	if pid := strings.TrimSpace(params["pid"]); pid != "" {
+		if metadata == nil {
+			metadata = map[string]string{}
+		}
+		metadata["pid"] = pid
+	}
 	return &payment.PaymentNotification{
-		TradeNo: params["trade_no"], OrderID: params["out_trade_no"],
-		Amount: amount, Status: status, RawData: rawBody,
+		TradeNo:  params["trade_no"],
+		OrderID:  params["out_trade_no"],
+		Amount:   amount,
+		Status:   status,
+		RawData:  rawBody,
+		Metadata: metadata,
 	}, nil
 }
 
 func (e *EasyPay) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	params := map[string]string{
-		"pid": e.config["pid"], "key": e.config["pkey"],
-		"trade_no": req.TradeNo, "out_trade_no": req.OrderID, "money": req.Amount,
+		"pid":          e.config["pid"],
+		"key":          e.config["pkey"],
+		"trade_no":     req.TradeNo,
+		"out_trade_no": req.OrderID,
+		"money":        req.Amount,
 	}
 	body, err := e.post(ctx, e.config["apiBase"]+"/api.php?act=refund", params)
 	if err != nil {
@@ -286,3 +311,5 @@ func easyPaySign(params map[string]string, pkey string) string {
 func easyPayVerifySign(params map[string]string, pkey string, sign string) bool {
 	return hmac.Equal([]byte(easyPaySign(params, pkey)), []byte(sign))
 }
+
+var _ payment.MerchantIdentityProvider = (*EasyPay)(nil)

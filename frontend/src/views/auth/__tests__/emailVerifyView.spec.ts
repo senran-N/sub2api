@@ -57,6 +57,8 @@ describe('emailVerifyView', () => {
       initialTurnstileToken: 'turnstile-token',
       promoCode: 'PROMO',
       invitationCode: 'INVITE',
+      pendingProvider: '',
+      adoptDisplayName: false,
       hasRegisterData: true
     })
 
@@ -66,6 +68,8 @@ describe('emailVerifyView', () => {
       initialTurnstileToken: '',
       promoCode: '',
       invitationCode: '',
+      pendingProvider: '',
+      adoptDisplayName: false,
       hasRegisterData: false
     })
   })

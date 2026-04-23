@@ -2,13 +2,16 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
+	"github.com/senran-N/sub2api/internal/payment"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/oauth"
 	"github.com/senran-N/sub2api/internal/pkg/response"
@@ -29,6 +32,13 @@ const (
 	wechatOAuthDefaultRedirectTo  = "/dashboard"
 	wechatOAuthDefaultFrontendCB  = "/auth/wechat/callback"
 	wechatOAuthProviderKey        = "wechat-main"
+	wechatPaymentOAuthCookiePath  = "/api/v1/auth/oauth/wechat/payment"
+	wechatPaymentOAuthStateName   = "wechat_payment_oauth_state"
+	wechatPaymentOAuthRedirect    = "wechat_payment_oauth_redirect"
+	wechatPaymentOAuthContextName = "wechat_payment_oauth_context"
+	wechatPaymentOAuthScopeName   = "wechat_payment_oauth_scope"
+	wechatPaymentOAuthDefaultTo   = "/purchase"
+	wechatPaymentOAuthFrontendCB  = "/auth/wechat/payment/callback"
 )
 
 var (
@@ -66,6 +76,13 @@ type wechatOAuthUserInfoResponse struct {
 	UnionID    string `json:"unionid"`
 	ErrCode    int64  `json:"errcode"`
 	ErrMsg     string `json:"errmsg"`
+}
+
+type wechatPaymentOAuthContext struct {
+	PaymentType string `json:"payment_type"`
+	Amount      string `json:"amount,omitempty"`
+	OrderType   string `json:"order_type,omitempty"`
+	PlanID      int64  `json:"plan_id,omitempty"`
 }
 
 func (h *AuthHandler) WeChatOAuthStart(c *gin.Context) {
@@ -276,21 +293,181 @@ func (h *AuthHandler) WeChatOAuthCallback(c *gin.Context) {
 		BrowserSessionKey:      browserSessionKey,
 		UpstreamIdentityClaims: upstreamClaims,
 		CompletionResponse: map[string]any{
-			"step":                   oauthPendingChoiceStep,
-			"adoption_required":      true,
-			"redirect":               redirectTo,
-			"email":                  "",
-			"resolved_email":         "",
-			"existing_account_email": "",
+			"step":                      oauthPendingChoiceStep,
+			"adoption_required":         true,
+			"redirect":                  redirectTo,
+			"email":                     "",
+			"resolved_email":            "",
+			"existing_account_email":    "",
 			"existing_account_bindable": true,
-			"create_account_allowed": true,
-			"choice_reason":          "third_party_signup",
+			"create_account_allowed":    true,
+			"choice_reason":             "third_party_signup",
 		},
 	}); err != nil {
 		redirectOAuthError(c, frontendCallback, "session_error", "failed to continue oauth login", "")
 		return
 	}
 	redirectToFrontendCallback(c, frontendCallback)
+}
+
+// WeChatPaymentOAuthStart starts the WeChat payment OAuth flow.
+// GET /api/v1/auth/oauth/wechat/payment/start
+func (h *AuthHandler) WeChatPaymentOAuthStart(c *gin.Context) {
+	cfg, err := h.getWeChatOAuthConfig(c.Request.Context(), "mp")
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	paymentType := normalizeWeChatPaymentType(c.Query("payment_type"))
+	if paymentType == "" {
+		response.BadRequest(c, "Invalid payment type")
+		return
+	}
+
+	state, err := oauth.GenerateState()
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_STATE_GEN_FAILED", "failed to generate oauth state").WithCause(err))
+		return
+	}
+
+	redirectTo := normalizeWeChatPaymentRedirectPath(sanitizeFrontendRedirectPath(c.Query("redirect")))
+	if redirectTo == "" {
+		redirectTo = wechatPaymentOAuthDefaultTo
+	}
+	rawContext, err := encodeWeChatPaymentOAuthContext(wechatPaymentOAuthContext{
+		PaymentType: paymentType,
+		Amount:      strings.TrimSpace(c.Query("amount")),
+		OrderType:   strings.TrimSpace(c.Query("order_type")),
+		PlanID:      parseWeChatPaymentPlanID(c.Query("plan_id")),
+	})
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_CONTEXT_ENCODE_FAILED", "failed to encode oauth context").WithCause(err))
+		return
+	}
+
+	scope := normalizeWeChatPaymentScope(c.Query("scope"))
+	secureCookie := isRequestHTTPS(c)
+	wechatPaymentSetCookie(c, wechatPaymentOAuthStateName, encodeCookieValue(state), wechatOAuthCookieMaxAgeSec, secureCookie)
+	wechatPaymentSetCookie(c, wechatPaymentOAuthRedirect, encodeCookieValue(redirectTo), wechatOAuthCookieMaxAgeSec, secureCookie)
+	wechatPaymentSetCookie(c, wechatPaymentOAuthContextName, encodeCookieValue(rawContext), wechatOAuthCookieMaxAgeSec, secureCookie)
+	wechatPaymentSetCookie(c, wechatPaymentOAuthScopeName, encodeCookieValue(scope), wechatOAuthCookieMaxAgeSec, secureCookie)
+
+	cfg.redirectURI = h.resolveWeChatPaymentOAuthCallbackURL(c)
+	cfg.scope = scope
+	authURL, err := buildWeChatAuthorizeURL(cfg, state)
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_BUILD_URL_FAILED", "failed to build oauth authorization url").WithCause(err))
+		return
+	}
+
+	c.Redirect(http.StatusFound, authURL)
+}
+
+// WeChatPaymentOAuthCallback exchanges the code for an OpenID and forwards the
+// browser back to the frontend callback route.
+func (h *AuthHandler) WeChatPaymentOAuthCallback(c *gin.Context) {
+	frontendCallback := wechatPaymentOAuthFrontendCB
+
+	if providerErr := strings.TrimSpace(c.Query("error")); providerErr != "" {
+		redirectOAuthError(c, frontendCallback, "provider_error", providerErr, c.Query("error_description"))
+		return
+	}
+
+	code := strings.TrimSpace(c.Query("code"))
+	state := strings.TrimSpace(c.Query("state"))
+	if code == "" || state == "" {
+		redirectOAuthError(c, frontendCallback, "missing_params", "missing code/state", "")
+		return
+	}
+
+	secureCookie := isRequestHTTPS(c)
+	defer func() {
+		wechatPaymentClearCookie(c, wechatPaymentOAuthStateName, secureCookie)
+		wechatPaymentClearCookie(c, wechatPaymentOAuthRedirect, secureCookie)
+		wechatPaymentClearCookie(c, wechatPaymentOAuthContextName, secureCookie)
+		wechatPaymentClearCookie(c, wechatPaymentOAuthScopeName, secureCookie)
+	}()
+
+	expectedState, err := readCookieDecoded(c, wechatPaymentOAuthStateName)
+	if err != nil || expectedState == "" || state != expectedState {
+		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth state", "")
+		return
+	}
+
+	redirectTo, _ := readCookieDecoded(c, wechatPaymentOAuthRedirect)
+	redirectTo = normalizeWeChatPaymentRedirectPath(sanitizeFrontendRedirectPath(redirectTo))
+	if redirectTo == "" {
+		redirectTo = wechatPaymentOAuthDefaultTo
+	}
+
+	rawContext, _ := readCookieDecoded(c, wechatPaymentOAuthContextName)
+	paymentContext, err := decodeWeChatPaymentOAuthContext(rawContext)
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "invalid_context", "invalid oauth context", "")
+		return
+	}
+	if paymentContext.PaymentType == "" {
+		paymentContext.PaymentType = payment.TypeWxpay
+	}
+
+	scope, _ := readCookieDecoded(c, wechatPaymentOAuthScopeName)
+	scope = normalizeWeChatPaymentScope(scope)
+
+	cfg, err := h.getWeChatOAuthConfig(c.Request.Context(), "mp")
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "provider_error", infraerrors.Reason(err), infraerrors.Message(err))
+		return
+	}
+	cfg.redirectURI = h.resolveWeChatPaymentOAuthCallbackURL(c)
+
+	tokenResp, err := exchangeWeChatOAuthCode(c.Request.Context(), cfg, code)
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "token_exchange_failed", "failed to exchange oauth code", singleLine(err.Error()))
+		return
+	}
+
+	openid := strings.TrimSpace(tokenResp.OpenID)
+	if openid == "" {
+		redirectOAuthError(c, frontendCallback, "missing_openid", "missing openid", "")
+		return
+	}
+	if strings.TrimSpace(tokenResp.Scope) != "" {
+		scope = strings.TrimSpace(tokenResp.Scope)
+	}
+
+	resumeToken, err := h.wechatPaymentResumeService().CreateWeChatPaymentResumeToken(service.WeChatPaymentResumeClaims{
+		OpenID:      openid,
+		PaymentType: paymentContext.PaymentType,
+		Amount:      paymentContext.Amount,
+		OrderType:   paymentContext.OrderType,
+		PlanID:      paymentContext.PlanID,
+		RedirectTo:  redirectTo,
+		Scope:       scope,
+	})
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "invalid_context", "failed to encode payment resume context", "")
+		return
+	}
+
+	fragment := url.Values{}
+	fragment.Set("wechat_resume_token", resumeToken)
+	fragment.Set("openid", openid)
+	fragment.Set("payment_type", paymentContext.PaymentType)
+	fragment.Set("redirect", redirectTo)
+	if paymentContext.Amount != "" {
+		fragment.Set("amount", paymentContext.Amount)
+	}
+	if paymentContext.OrderType != "" {
+		fragment.Set("order_type", paymentContext.OrderType)
+	}
+	if paymentContext.PlanID > 0 {
+		fragment.Set("plan_id", strconv.FormatInt(paymentContext.PlanID, 10))
+	}
+	if scope != "" {
+		fragment.Set("scope", scope)
+	}
+	redirectWithFragment(c, frontendCallback, fragment)
 }
 
 func (h *AuthHandler) getWeChatOAuthConfig(ctx context.Context, requestedMode string) (*wechatOAuthRuntimeConfig, error) {
@@ -526,6 +703,120 @@ func wechatClearCookie(c *gin.Context, name string, secure bool) {
 		Name:     name,
 		Value:    "",
 		Path:     wechatOAuthCookiePath,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (h *AuthHandler) wechatPaymentResumeService() *service.PaymentResumeService {
+	var legacyKey []byte
+	if key, err := payment.ProvideEncryptionKey(h.cfg); err == nil {
+		legacyKey = []byte(key)
+	}
+	return service.NewLegacyAwarePaymentResumeService(legacyKey)
+}
+
+func (h *AuthHandler) resolveWeChatPaymentOAuthCallbackURL(c *gin.Context) string {
+	scheme := "http"
+	if isRequestHTTPS(c) {
+		scheme = "https"
+	}
+	host := strings.TrimSpace(c.Request.Host)
+	if host == "" {
+		return ""
+	}
+	return scheme + "://" + host + "/api/v1/auth/oauth/wechat/payment/callback"
+}
+
+func normalizeWeChatPaymentType(raw string) string {
+	normalized := service.NormalizeVisibleMethod(raw)
+	if normalized == "" {
+		return payment.TypeWxpay
+	}
+	if normalized != payment.TypeWxpay {
+		return ""
+	}
+	return normalized
+}
+
+func normalizeWeChatPaymentRedirectPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return wechatPaymentOAuthDefaultTo
+	}
+	if path == "/payment" {
+		return wechatPaymentOAuthDefaultTo
+	}
+	if strings.HasPrefix(path, "/payment?") {
+		return wechatPaymentOAuthDefaultTo + path[len("/payment"):]
+	}
+	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.Contains(path, "://") {
+		return wechatPaymentOAuthDefaultTo
+	}
+	return path
+}
+
+func normalizeWeChatPaymentScope(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "snsapi_userinfo":
+		return "snsapi_userinfo"
+	default:
+		return "snsapi_base"
+	}
+}
+
+func encodeWeChatPaymentOAuthContext(ctx wechatPaymentOAuthContext) (string, error) {
+	payload, err := json.Marshal(ctx)
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
+}
+
+func decodeWeChatPaymentOAuthContext(raw string) (*wechatPaymentOAuthContext, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return &wechatPaymentOAuthContext{}, nil
+	}
+	var out wechatPaymentOAuthContext
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, err
+	}
+	out.PaymentType = normalizeWeChatPaymentType(out.PaymentType)
+	return &out, nil
+}
+
+func parseWeChatPaymentPlanID(raw string) int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	planID, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || planID <= 0 {
+		return 0
+	}
+	return planID
+}
+
+func wechatPaymentSetCookie(c *gin.Context, name, value string, maxAge int, secure bool) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     wechatPaymentOAuthCookiePath,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func wechatPaymentClearCookie(c *gin.Context, name string, secure bool) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     name,
+		Value:    "",
+		Path:     wechatPaymentOAuthCookiePath,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   secure,

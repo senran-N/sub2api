@@ -15,6 +15,9 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
+          <div v-else-if="isPending" class="payment-result-view__hero-icon">
+            <div class="payment-result-view__spinner"></div>
+          </div>
           <div v-else
             class="payment-result-view__hero-icon payment-result-view__hero-icon--danger">
             <svg class="payment-result-view__hero-symbol payment-result-view__hero-symbol--danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -22,7 +25,7 @@
             </svg>
           </div>
           <h2 class="payment-result-view__title">
-            {{ isSuccess ? t('payment.result.success') : t('payment.result.failed') }}
+            {{ statusTitle }}
           </h2>
         </div>
         <!-- Order Info -->
@@ -90,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import OrderStatusBadge from '@/components/payment/OrderStatusBadge.vue'
@@ -115,6 +118,12 @@ interface ReturnInfo {
 const returnInfo = ref<ReturnInfo | null>(null)
 
 const SUCCESS_STATUSES = new Set(['COMPLETED', 'PAID', 'RECHARGING'])
+const PENDING_STATUSES = new Set(['PENDING', 'CREATED', 'WAITING', 'PROCESSING'])
+const STATUS_REFRESH_INTERVAL_MS = 2000
+const STATUS_REFRESH_MAX_ATTEMPTS = 15
+
+let statusRefreshTimer: ReturnType<typeof setTimeout> | null = null
+const refreshAttempts = ref(0)
 
 /** 充值金额 = pay_amount / (1 + fee_rate/100)，fee_rate=0 时等于 pay_amount */
 const baseAmount = computed(() => {
@@ -129,62 +138,129 @@ const feeAmount = computed(() => {
 })
 
 const isSuccess = computed(() => {
-  // Always prioritize actual order status from backend
   if (order.value) {
     return SUCCESS_STATUSES.has(order.value.status)
   }
-  // Fallback only when order not loaded
   if (route.query.status === 'success') return true
   if (route.query.trade_status === 'TRADE_SUCCESS') return true
   return false
 })
 
-/** Extract numeric order ID from out_trade_no like "sub2_46" → 46 */
+const isPending = computed(() => {
+  if (order.value) {
+    return PENDING_STATUSES.has(order.value.status)
+  }
+  return false
+})
+
+const statusTitle = computed(() => {
+  if (isSuccess.value) return t('payment.result.success')
+  if (isPending.value) return t('payment.result.processing')
+  return t('payment.result.failed')
+})
+
+function readQueryString(key: string): string {
+  const value = route.query[key]
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : ''
+  }
+  return typeof value === 'string' ? value : ''
+}
+
 function parseOutTradeNo(outTradeNo: string): number {
   const match = outTradeNo.match(/_(\d+)$/)
   return match ? Number(match[1]) : 0
 }
 
-onMounted(async () => {
-  // Try order_id first (internal navigation from QRCode/Stripe pages)
-  let orderId = Number(route.query.order_id) || 0
-  const outTradeNo = String(route.query.out_trade_no || '')
+async function resolveOrderFromResumeToken(resumeToken: string): Promise<PaymentOrder | null> {
+  try {
+    const result = await paymentAPI.resolveOrderPublicByResumeToken(resumeToken)
+    return result.data
+  } catch (_err: unknown) {
+    return null
+  }
+}
 
-  // Fallback: EasyPay return URL with out_trade_no
+async function resolveOrderFromOutTradeNo(outTradeNo: string): Promise<PaymentOrder | null> {
+  try {
+    const result = await paymentAPI.verifyOrderPublic(outTradeNo)
+    return result.data
+  } catch (_err: unknown) {
+    try {
+      const result = await paymentAPI.verifyOrder(outTradeNo)
+      return result.data
+    } catch (_verifyErr: unknown) {
+      return null
+    }
+  }
+}
+
+async function resolveOrderFromID(orderId: number): Promise<PaymentOrder | null> {
+  try {
+    return await paymentStore.pollOrderStatus(orderId)
+  } catch (_err: unknown) {
+    return null
+  }
+}
+
+function clearStatusRefreshTimer() {
+  if (statusRefreshTimer !== null) {
+    clearTimeout(statusRefreshTimer)
+    statusRefreshTimer = null
+  }
+}
+
+function scheduleStatusRefresh(refreshOrder: (() => Promise<PaymentOrder | null>) | null) {
+  clearStatusRefreshTimer()
+  if (!refreshOrder || !isPending.value || refreshAttempts.value >= STATUS_REFRESH_MAX_ATTEMPTS) {
+    return
+  }
+  statusRefreshTimer = setTimeout(async () => {
+    refreshAttempts.value += 1
+    const refreshedOrder = await refreshOrder()
+    if (refreshedOrder) {
+      order.value = refreshedOrder
+    }
+    scheduleStatusRefresh(refreshOrder)
+  }, STATUS_REFRESH_INTERVAL_MS)
+}
+
+onMounted(async () => {
+  let orderId = Number(readQueryString('order_id')) || 0
+  const resumeToken = readQueryString('resume_token') || readQueryString('wechat_resume_token')
+  const outTradeNo = readQueryString('out_trade_no')
+  let refreshOrder: (() => Promise<PaymentOrder | null>) | null = null
+
   if (!orderId && outTradeNo) {
     orderId = parseOutTradeNo(outTradeNo)
-    // Store return info for display when order lookup fails
     returnInfo.value = {
       outTradeNo,
-      money: String(route.query.money || ''),
-      type: String(route.query.type || ''),
-      tradeStatus: String(route.query.trade_status || ''),
+      money: readQueryString('money'),
+      type: readQueryString('type'),
+      tradeStatus: readQueryString('trade_status'),
     }
   }
 
-  // Verify payment via public endpoint (works without login)
-  if (outTradeNo) {
-    try {
-      const result = await paymentAPI.verifyOrderPublic(outTradeNo)
-      order.value = result.data
-    } catch (_err: unknown) {
-      // Public verify failed, try authenticated endpoint if logged in
-      try {
-        const result = await paymentAPI.verifyOrder(outTradeNo)
-        order.value = result.data
-      } catch (_e: unknown) { /* fall through */ }
-    }
+  if (resumeToken) {
+    order.value = await resolveOrderFromResumeToken(resumeToken)
+    refreshOrder = () => resolveOrderFromResumeToken(resumeToken)
   }
-
-  // Normal order lookup by ID (if verify didn't load the order)
+  if (!order.value && outTradeNo) {
+    order.value = await resolveOrderFromOutTradeNo(outTradeNo)
+    refreshOrder = () => resolveOrderFromOutTradeNo(outTradeNo)
+  }
   if (!order.value && orderId) {
-    try {
-      order.value = await paymentStore.pollOrderStatus(orderId)
-    } catch (_err: unknown) {
-      // Order lookup failed, will show returnInfo fallback
-    }
+    order.value = await resolveOrderFromID(orderId)
+    refreshOrder = () => resolveOrderFromID(orderId)
+  }
+  if (order.value) {
+    scheduleStatusRefresh(refreshOrder)
   }
   loading.value = false
+})
+
+onBeforeUnmount(() => {
+  clearStatusRefreshTimer()
 })
 </script>
 

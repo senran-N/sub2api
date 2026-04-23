@@ -22,6 +22,7 @@
           id="settings-purchase-enabled-toggle"
           v-model="form.purchase_subscription_enabled"
           name="purchase_subscription_enabled"
+          :aria-label="t('admin.settings.purchase.enabled')"
           aria-labelledby="settings-purchase-enabled-label"
         />
       </div>

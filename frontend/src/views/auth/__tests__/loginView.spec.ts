@@ -51,6 +51,9 @@ describe('loginView', () => {
       turnstileEnabled: true,
       turnstileSiteKey: 'turnstile-site-key',
       linuxdoOAuthEnabled: true,
+      wechatOAuthEnabled: false,
+      oidcOAuthEnabled: false,
+      oidcOAuthProviderName: 'OIDC',
       backendModeEnabled: true,
       passwordResetEnabled: true
     })

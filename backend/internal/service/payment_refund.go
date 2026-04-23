@@ -21,6 +21,9 @@ import (
 // getOrderProviderInstance looks up the provider instance that processed this order.
 // Returns nil, nil for legacy orders without provider_instance_id.
 func (s *PaymentService) getOrderProviderInstance(ctx context.Context, o *dbent.PaymentOrder) (*dbent.PaymentProviderInstance, error) {
+	if snapshot := psOrderProviderSnapshot(o); snapshot != nil {
+		return s.resolveSnapshotOrderProviderInstance(ctx, o, snapshot)
+	}
 	if o.ProviderInstanceID == nil || *o.ProviderInstanceID == "" {
 		return nil, nil
 	}

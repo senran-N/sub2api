@@ -88,14 +88,14 @@ export function applyLoginPublicSettings(
   state: LoginSettingsState,
   settings: PublicSettings
 ): void {
-  state.turnstileEnabled = settings.turnstile_enabled
+  state.turnstileEnabled = settings.turnstile_enabled === true
   state.turnstileSiteKey = settings.turnstile_site_key || ''
-  state.linuxdoOAuthEnabled = settings.linuxdo_oauth_enabled
-  state.wechatOAuthEnabled = settings.wechat_oauth_enabled
-  state.oidcOAuthEnabled = settings.oidc_oauth_enabled
+  state.linuxdoOAuthEnabled = settings.linuxdo_oauth_enabled === true
+  state.wechatOAuthEnabled = settings.wechat_oauth_enabled === true
+  state.oidcOAuthEnabled = settings.oidc_oauth_enabled === true
   state.oidcOAuthProviderName = settings.oidc_oauth_provider_name || 'OIDC'
-  state.backendModeEnabled = settings.backend_mode_enabled
-  state.passwordResetEnabled = settings.password_reset_enabled
+  state.backendModeEnabled = settings.backend_mode_enabled === true
+  state.passwordResetEnabled = settings.password_reset_enabled === true
 }
 
 export function isLoginEmailValid(email: string): boolean {

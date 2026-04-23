@@ -3,7 +3,9 @@ package handler
 import (
 	"strconv"
 	"strings"
+	"time"
 
+	dbent "github.com/senran-N/sub2api/ent"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/senran-N/sub2api/internal/pkg/response"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
@@ -202,10 +204,14 @@ func (h *PaymentHandler) GetLimits(c *gin.Context) {
 
 // CreateOrderRequest is the request body for creating a payment order.
 type CreateOrderRequest struct {
-	Amount      float64 `json:"amount"`
-	PaymentType string  `json:"payment_type" binding:"required"`
-	OrderType   string  `json:"order_type"`
-	PlanID      int64   `json:"plan_id"`
+	Amount            float64 `json:"amount"`
+	PaymentType       string  `json:"payment_type" binding:"required"`
+	OrderType         string  `json:"order_type"`
+	PlanID            int64   `json:"plan_id"`
+	ReturnURL         string  `json:"return_url,omitempty"`
+	OpenID            string  `json:"openid,omitempty"`
+	PaymentSource     string  `json:"payment_source,omitempty"`
+	WeChatResumeToken string  `json:"wechat_resume_token,omitempty"`
 	// IsMobile lets the frontend declare its mobile status directly. When
 	// nil we fall back to User-Agent heuristics (which miss iPadOS / some
 	// embedded browsers that strip the "Mobile" keyword).
@@ -231,15 +237,20 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 		mobile = *req.IsMobile
 	}
 	result, err := h.paymentService.CreateOrder(c.Request.Context(), service.CreateOrderRequest{
-		UserID:      subject.UserID,
-		Amount:      req.Amount,
-		PaymentType: req.PaymentType,
-		ClientIP:    c.ClientIP(),
-		IsMobile:    mobile,
-		SrcHost:     c.Request.Host,
-		SrcURL:      c.Request.Referer(),
-		OrderType:   req.OrderType,
-		PlanID:      req.PlanID,
+		UserID:            subject.UserID,
+		Amount:            req.Amount,
+		PaymentType:       req.PaymentType,
+		ClientIP:          c.ClientIP(),
+		IsMobile:          mobile,
+		IsWeChatBrowser:   isWeChatBrowser(c),
+		SrcHost:           c.Request.Host,
+		SrcURL:            c.Request.Referer(),
+		OrderType:         req.OrderType,
+		PlanID:            req.PlanID,
+		ReturnURL:         req.ReturnURL,
+		OpenID:            req.OpenID,
+		PaymentSource:     req.PaymentSource,
+		WeChatResumeToken: req.WeChatResumeToken,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -362,6 +373,10 @@ type VerifyOrderRequest struct {
 	OutTradeNo string `json:"out_trade_no" binding:"required"`
 }
 
+type ResolveOrderByResumeTokenRequest struct {
+	ResumeToken string `json:"resume_token" binding:"required"`
+}
+
 // VerifyOrder actively queries the upstream payment provider to check
 // if payment was made, and processes it if so.
 // POST /api/v1/payment/orders/verify
@@ -388,13 +403,47 @@ func (h *PaymentHandler) VerifyOrder(c *gin.Context) {
 // PublicOrderResult is the limited order info returned by the public verify endpoint.
 // No user details are exposed — only payment status information.
 type PublicOrderResult struct {
-	ID          int64   `json:"id"`
-	OutTradeNo  string  `json:"out_trade_no"`
-	Amount      float64 `json:"amount"`
-	PayAmount   float64 `json:"pay_amount"`
-	PaymentType string  `json:"payment_type"`
-	OrderType   string  `json:"order_type"`
-	Status      string  `json:"status"`
+	ID                  int64      `json:"id"`
+	OutTradeNo          string     `json:"out_trade_no"`
+	Amount              float64    `json:"amount"`
+	PayAmount           float64    `json:"pay_amount"`
+	FeeRate             float64    `json:"fee_rate"`
+	PaymentType         string     `json:"payment_type"`
+	OrderType           string     `json:"order_type"`
+	Status              string     `json:"status"`
+	CreatedAt           time.Time  `json:"created_at"`
+	ExpiresAt           time.Time  `json:"expires_at"`
+	PaidAt              *time.Time `json:"paid_at,omitempty"`
+	CompletedAt         *time.Time `json:"completed_at,omitempty"`
+	RefundAmount        float64    `json:"refund_amount"`
+	RefundReason        *string    `json:"refund_reason,omitempty"`
+	RefundRequestedAt   *time.Time `json:"refund_requested_at,omitempty"`
+	RefundRequestedBy   *string    `json:"refund_requested_by,omitempty"`
+	RefundRequestReason *string    `json:"refund_request_reason,omitempty"`
+	PlanID              *int64     `json:"plan_id,omitempty"`
+}
+
+func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
+	return PublicOrderResult{
+		ID:                  order.ID,
+		OutTradeNo:          order.OutTradeNo,
+		Amount:              order.Amount,
+		PayAmount:           order.PayAmount,
+		FeeRate:             order.FeeRate,
+		PaymentType:         order.PaymentType,
+		OrderType:           order.OrderType,
+		Status:              order.Status,
+		CreatedAt:           order.CreatedAt,
+		ExpiresAt:           order.ExpiresAt,
+		PaidAt:              order.PaidAt,
+		CompletedAt:         order.CompletedAt,
+		RefundAmount:        order.RefundAmount,
+		RefundReason:        order.RefundReason,
+		RefundRequestedAt:   order.RefundRequestedAt,
+		RefundRequestedBy:   order.RefundRequestedBy,
+		RefundRequestReason: order.RefundRequestReason,
+		PlanID:              order.PlanID,
+	}
 }
 
 // VerifyOrderPublic verifies payment status without requiring authentication.
@@ -411,15 +460,23 @@ func (h *PaymentHandler) VerifyOrderPublic(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, PublicOrderResult{
-		ID:          order.ID,
-		OutTradeNo:  order.OutTradeNo,
-		Amount:      order.Amount,
-		PayAmount:   order.PayAmount,
-		PaymentType: order.PaymentType,
-		OrderType:   order.OrderType,
-		Status:      order.Status,
-	})
+	response.Success(c, buildPublicOrderResult(order))
+}
+
+// ResolveOrderPublicByResumeToken resolves a payment order from a signed resume token.
+// POST /api/v1/payment/public/orders/resolve
+func (h *PaymentHandler) ResolveOrderPublicByResumeToken(c *gin.Context) {
+	var req ResolveOrderByResumeTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	order, err := h.paymentService.GetPublicOrderByResumeToken(c.Request.Context(), req.ResumeToken)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, buildPublicOrderResult(order))
 }
 
 // requireAuth extracts the authenticated subject from the context.
@@ -442,4 +499,8 @@ func isMobile(c *gin.Context) bool {
 		}
 	}
 	return false
+}
+
+func isWeChatBrowser(c *gin.Context) bool {
+	return strings.Contains(strings.ToLower(c.GetHeader("User-Agent")), "micromessenger")
 }

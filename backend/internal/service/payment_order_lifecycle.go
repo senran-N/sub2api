@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	dbent "github.com/senran-N/sub2api/ent"
@@ -151,7 +152,13 @@ func (s *PaymentService) checkPaid(ctx context.Context, o *dbent.PaymentOrder) s
 		return ""
 	}
 	if resp.Status == payment.ProviderStatusPaid {
-		if err := s.HandlePaymentNotification(ctx, &payment.PaymentNotification{TradeNo: o.PaymentTradeNo, OrderID: o.OutTradeNo, Amount: resp.Amount, Status: payment.ProviderStatusSuccess}, prov.ProviderKey()); err != nil {
+		if err := s.HandlePaymentNotification(ctx, &payment.PaymentNotification{
+			TradeNo:  o.PaymentTradeNo,
+			OrderID:  o.OutTradeNo,
+			Amount:   resp.Amount,
+			Status:   payment.ProviderStatusSuccess,
+			Metadata: resp.Metadata,
+		}, prov.ProviderKey()); err != nil {
 			slog.Error("fulfillment failed during checkPaid", "orderID", o.ID, "error", err)
 			// Still return already_paid — order was paid, fulfillment can be retried
 		}
@@ -236,22 +243,74 @@ func (s *PaymentService) ExpireTimedOutOrders(ctx context.Context) (int, error) 
 // getOrderProvider creates a provider using the order's original instance config.
 // Falls back to registry lookup if instance ID is missing (legacy orders).
 func (s *PaymentService) getOrderProvider(ctx context.Context, o *dbent.PaymentOrder) (payment.Provider, error) {
-	if o.ProviderInstanceID != nil && *o.ProviderInstanceID != "" {
-		instID, err := strconv.ParseInt(*o.ProviderInstanceID, 10, 64)
-		if err == nil {
-			cfg, err := s.loadBalancer.GetInstanceConfig(ctx, instID)
-			if err == nil {
-				providerKey := s.registry.GetProviderKey(o.PaymentType)
-				if providerKey == "" {
-					providerKey = o.PaymentType
-				}
-				p, err := provider.CreateProvider(providerKey, *o.ProviderInstanceID, cfg)
-				if err == nil {
-					return p, nil
-				}
-			}
+	inst, err := s.getOrderProviderInstance(ctx, o)
+	if err == nil && inst != nil {
+		return s.createProviderFromInstance(ctx, inst)
+	}
+	if !paymentOrderAllowsRegistryFallback(o) {
+		if err != nil {
+			return nil, err
 		}
+		return nil, fmt.Errorf("order %d provider fallback is not allowed", o.ID)
+	}
+	providerKey := paymentOrderFallbackProviderKey(s.registry, o)
+	if !s.webhookRegistryFallbackAllowed(ctx, providerKey) {
+		return nil, fmt.Errorf("order %d provider fallback is ambiguous for %s", o.ID, providerKey)
 	}
 	s.EnsureProviders(ctx)
 	return s.registry.GetProvider(o.PaymentType)
+}
+
+func paymentOrderAllowsRegistryFallback(order *dbent.PaymentOrder) bool {
+	if order == nil {
+		return false
+	}
+	if psOrderProviderSnapshot(order) != nil {
+		return false
+	}
+	if strings.TrimSpace(psStringValue(order.ProviderInstanceID)) != "" {
+		return false
+	}
+	if strings.TrimSpace(psStringValue(order.ProviderKey)) != "" {
+		return false
+	}
+	return true
+}
+
+func paymentOrderFallbackProviderKey(registry *payment.Registry, order *dbent.PaymentOrder) string {
+	if order == nil {
+		return ""
+	}
+	if registry != nil {
+		if key := strings.TrimSpace(registry.GetProviderKey(payment.PaymentType(order.PaymentType))); key != "" {
+			return key
+		}
+	}
+	return strings.TrimSpace(payment.GetBasePaymentType(strings.TrimSpace(order.PaymentType)))
+}
+
+func (s *PaymentService) createProviderFromInstance(ctx context.Context, inst *dbent.PaymentProviderInstance) (payment.Provider, error) {
+	if inst == nil {
+		return nil, fmt.Errorf("payment provider instance is missing")
+	}
+	cfg, err := s.loadBalancer.GetInstanceConfig(ctx, int64(inst.ID))
+	if err != nil {
+		return nil, fmt.Errorf("load provider instance config: %w", err)
+	}
+	if inst.PaymentMode != "" {
+		cfg["paymentMode"] = inst.PaymentMode
+	}
+	instID := strconv.FormatInt(int64(inst.ID), 10)
+	prov, err := provider.CreateProvider(inst.ProviderKey, instID, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create provider from instance: %w", err)
+	}
+	return prov, nil
+}
+
+func psStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

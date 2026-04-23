@@ -269,7 +269,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePaymentStore } from '@/stores/payment'
 import { useSubscriptionStore } from '@/stores/subscriptions'
@@ -287,11 +287,27 @@ import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
 import StripePaymentInline from '@/components/payment/StripePaymentInline.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { PaymentMethodOption } from '@/components/payment/PaymentMethodSelector.vue'
+import {
+  buildCreateOrderPayload,
+  clearPaymentSnapshot,
+  createPaymentSnapshot,
+  interpretWeChatJSAPIResult,
+  invokeWeChatJSAPI,
+  persistPaymentSnapshot,
+  readPaymentSnapshot,
+  resolvePaymentLaunch,
+  type PaymentResumeInput,
+} from '@/components/payment/paymentFlow'
 import { hasResponseStatus } from '@/utils/requestError'
+import {
+  resolvePaymentWechatResumeIntent,
+  stripPaymentWechatResumeQuery,
+} from '@/views/user/paymentWechatResume'
 import '@/components/payment/paymentTheme.css'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const paymentStore = usePaymentStore()
 const subscriptionStore = useSubscriptionStore()
@@ -315,6 +331,7 @@ const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const previewImage = ref('')
+const wechatResumeHandled = ref(false)
 
 // Payment phase: 'select' → 'paying' (QR/redirect) or 'stripe' (inline Stripe)
 const paymentPhase = ref<'select' | 'paying' | 'stripe'>('select')
@@ -333,6 +350,7 @@ const paymentState = ref<{
 function resetPayment() {
   paymentPhase.value = 'select'
   paymentState.value = { orderId: 0, amount: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', payAmount: 0, orderType: '' }
+  clearPaymentSnapshot()
 }
 
 function onPaymentDone() {
@@ -345,6 +363,7 @@ function onPaymentDone() {
 }
 
 function onPaymentSuccess() {
+  clearPaymentSnapshot()
   authStore.refreshUser()
   if (paymentState.value.orderType === 'subscription') {
     subscriptionStore.fetchActiveSubscriptions(true).catch(() => {})
@@ -582,6 +601,85 @@ function closeRenewalModal() {
   renewGroupId.value = null
 }
 
+function openWindow(url: string) {
+  const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
+  if (!win || win.closed) {
+    window.location.href = url
+  }
+}
+
+async function stripConsumedWechatResumeQuery() {
+  const strippedQuery = stripPaymentWechatResumeQuery(route.query)
+  const currentKeys = Object.keys(route.query)
+  const strippedKeys = Object.keys(strippedQuery)
+  if (currentKeys.length === strippedKeys.length) {
+    return
+  }
+  await router.replace({
+    path: route.path,
+    query: strippedQuery,
+  })
+}
+
+function applyWechatResumeSelection(intent: {
+  paymentType?: string
+  amount?: number
+  orderType: OrderType
+  planId?: number
+}) {
+  if (intent.paymentType && enabledMethods.value.includes(intent.paymentType)) {
+    selectedMethod.value = intent.paymentType
+  }
+
+  if (intent.orderType === 'subscription') {
+    activeTab.value = 'subscription'
+    if (intent.planId) {
+      const matchedPlan = checkout.value.plans.find((plan) => plan.id === intent.planId)
+      if (matchedPlan) {
+        selectedPlan.value = matchedPlan
+      }
+    }
+    return
+  }
+
+  activeTab.value = 'recharge'
+  if (intent.amount && intent.amount > 0) {
+    amount.value = intent.amount
+  }
+}
+
+async function maybeResumeWechatPayment() {
+  if (wechatResumeHandled.value) {
+    return
+  }
+
+  const intent = resolvePaymentWechatResumeIntent(route.query, readPaymentSnapshot())
+  if (!intent?.shouldResume) {
+    return
+  }
+
+  wechatResumeHandled.value = true
+  applyWechatResumeSelection(intent)
+  await stripConsumedWechatResumeQuery()
+
+  if (intent.orderType === 'subscription') {
+    if (!intent.planId) {
+      return
+    }
+    const matchedPlan = checkout.value.plans.find((plan) => plan.id === intent.planId)
+    if (!matchedPlan) {
+      return
+    }
+    selectedPlan.value = matchedPlan
+    await createOrder(matchedPlan.price, 'subscription', matchedPlan.id, intent.resume)
+    return
+  }
+
+  if (intent.amount && intent.amount > 0) {
+    await createOrder(intent.amount, 'balance', undefined, intent.resume)
+  }
+}
+
 async function handleSubmitRecharge() {
   if (!canSubmit.value || submitting.value) return
   await createOrder(validAmount.value, 'balance')
@@ -592,66 +690,113 @@ async function confirmSubscribe() {
   await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id)
 }
 
-async function createOrder(orderAmount: number, orderType: OrderType, planId?: number) {
+async function createOrder(
+  orderAmount: number,
+  orderType: OrderType,
+  planId?: number,
+  resume?: PaymentResumeInput | null,
+) {
   submitting.value = true
   errorMessage.value = ''
   try {
-    const result = await paymentStore.createOrder({
+    const isMobile = isMobileDevice()
+    persistPaymentSnapshot(createPaymentSnapshot({
       amount: orderAmount,
-      payment_type: selectedMethod.value,
-      order_type: orderType,
-      plan_id: planId,
-      is_mobile: isMobileDevice(),
+      orderType,
+      paymentType: selectedMethod.value,
+      planId,
+    }))
+
+    const result = await paymentStore.createOrder(buildCreateOrderPayload({
+      amount: orderAmount,
+      orderType,
+      paymentType: selectedMethod.value,
+      planId,
+      isMobile,
+      resume,
+    }))
+
+    const launch = resolvePaymentLaunch(result, {
+      paymentType: selectedMethod.value,
+      orderType,
+      isMobile,
     })
-    const openWindow = (url: string) => {
-      const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
-      if (!win || win.closed) {
-        window.location.href = url
+
+    if (launch.kind === 'oauth_redirect') {
+      if (!launch.redirectUrl) {
+        throw new Error('missing_oauth_redirect')
       }
-    }
-    if (result.client_secret) {
-      // Stripe: show Payment Element inline (user picks method → confirms → redirect if needed)
-      paymentState.value = {
-        orderId: result.order_id, amount: result.amount, qrCode: '', expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value, payUrl: '',
-        clientSecret: result.client_secret, payAmount: result.pay_amount,
-        orderType,
-      }
-      paymentPhase.value = 'stripe'
-    } else if (isMobileDevice() && result.pay_url) {
-      // Mobile + pay_url: redirect directly instead of QR/popup (mobile browsers block popups)
-      paymentState.value = {
-        orderId: result.order_id, amount: result.amount, qrCode: '', expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value, payUrl: result.pay_url,
-        clientSecret: '', payAmount: 0,
-        orderType,
-      }
-      paymentPhase.value = 'paying'
-      window.location.href = result.pay_url
+      window.location.href = launch.redirectUrl
       return
-    } else if (result.qr_code) {
-      // QR mode: show QR code inline
-      paymentState.value = {
-        orderId: result.order_id, amount: result.amount, qrCode: result.qr_code,
-        expiresAt: result.expires_at || '', paymentType: selectedMethod.value, payUrl: '',
-        clientSecret: '', payAmount: 0,
-        orderType,
-      }
-      paymentPhase.value = 'paying'
-    } else if (result.pay_url) {
-      // Redirect/popup mode: open payment URL, show waiting state inline
-      openWindow(result.pay_url)
-      paymentState.value = {
-        orderId: result.order_id, amount: result.amount, qrCode: '', expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value, payUrl: result.pay_url,
-        clientSecret: '', payAmount: 0,
-        orderType,
-      }
-      paymentPhase.value = 'paying'
-    } else {
-      errorMessage.value = t('payment.result.failed')
-      appStore.showError(errorMessage.value)
     }
+
+    if (launch.kind === 'stripe') {
+      paymentState.value = launch.paymentState
+      paymentPhase.value = 'stripe'
+      return
+    }
+
+    if (launch.kind === 'jsapi') {
+      paymentState.value = {
+        ...launch.paymentState,
+        qrCode: '',
+      }
+      paymentPhase.value = 'paying'
+
+      try {
+        const jsapiResult = await invokeWeChatJSAPI(launch.jsapiParams || {})
+        const jsapiOutcome = interpretWeChatJSAPIResult(jsapiResult)
+
+        if ((jsapiOutcome === 'cancel' || jsapiOutcome === 'fail') && launch.paymentState.qrCode) {
+          paymentState.value = launch.paymentState
+        } else if (jsapiOutcome === 'fail' && launch.paymentState.payUrl) {
+          paymentState.value = launch.paymentState
+          window.location.href = launch.paymentState.payUrl
+          return
+        }
+      } catch (_err: unknown) {
+        if (launch.paymentState.qrCode) {
+          paymentState.value = launch.paymentState
+        } else if (launch.paymentState.payUrl) {
+          paymentState.value = launch.paymentState
+          window.location.href = launch.paymentState.payUrl
+          return
+        } else {
+          errorMessage.value = t('payment.result.failed')
+          appStore.showError(errorMessage.value)
+        }
+      }
+      return
+    }
+
+    if (launch.kind === 'mobile_redirect') {
+      if (!launch.redirectUrl) {
+        throw new Error('missing_mobile_redirect')
+      }
+      paymentState.value = launch.paymentState
+      paymentPhase.value = 'paying'
+      window.location.href = launch.redirectUrl
+      return
+    }
+
+    if (launch.kind === 'qr') {
+      paymentState.value = launch.paymentState
+      paymentPhase.value = 'paying'
+      return
+    }
+
+    if (launch.kind === 'popup') {
+      if (!launch.redirectUrl) {
+        throw new Error('missing_popup_redirect')
+      }
+      openWindow(launch.redirectUrl)
+      paymentState.value = launch.paymentState
+      paymentPhase.value = 'paying'
+      return
+    }
+
+    errorMessage.value = t('payment.result.failed')
+    appStore.showError(errorMessage.value)
   } catch (err: unknown) {
     const apiErr = err as Record<string, unknown>
     if (apiErr.reason === 'TOO_MANY_PENDING') {
@@ -698,6 +843,7 @@ onMounted(async () => {
         }
       }
     }
+    await maybeResumeWechatPayment()
   } catch (err: unknown) {
     if (hasResponseStatus(err, 404)) {
       paymentUnavailable.value = true

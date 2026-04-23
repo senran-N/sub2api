@@ -236,7 +236,7 @@ function onNextPage() {
 
     <div v-else class="ops-openai-token-stats-card__content">
       <div class="ops-openai-token-stats-card__table-wrap">
-        <div class="ops-openai-token-stats-card__table-scroll">
+        <div class="ops-openai-token-stats-card__table-scroll overflow-auto">
           <table class="ops-openai-token-stats-card__table">
             <thead class="ops-openai-token-stats-card__thead">
               <tr class="ops-openai-token-stats-card__thead-row">

@@ -488,6 +488,12 @@ export default {
       completing: "Completing registration…",
       completeRegistrationFailed: "Registration failed. Please try again.",
     },
+    wechatPayment: {
+      callbackTitle: "Preparing WeChat payment",
+      callbackProcessing: "Restoring the payment session, please wait...",
+      backToPayment: "Back to Payment",
+      callbackMissingResumeToken: "Missing payment resume token, please restart WeChat payment.",
+    },
     wechatProviderName: "WeChat",
     wechatCallbackPageTitle: "WeChat OAuth Callback",
     oauthFlow: {
@@ -5783,6 +5789,7 @@ export default {
     result: {
       success: "Payment Successful",
       subscriptionSuccess: "Subscription Successful",
+      processing: "Payment Processing",
       failed: "Payment Failed",
       backToRecharge: "Back to Recharge",
       viewOrders: "View Orders",

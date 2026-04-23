@@ -477,6 +477,12 @@ export default {
       completing: "正在完成注册...",
       completeRegistrationFailed: "注册失败，请重试。",
     },
+    wechatPayment: {
+      callbackTitle: "正在恢复微信支付",
+      callbackProcessing: "正在恢复支付会话，请稍候...",
+      backToPayment: "返回支付页",
+      callbackMissingResumeToken: "缺少支付恢复凭证，请重新发起微信支付。",
+    },
     wechatProviderName: "微信",
     wechatCallbackPageTitle: "微信 OAuth 回调",
     oauthFlow: {
@@ -5720,6 +5726,7 @@ export default {
     result: {
       success: "支付成功",
       subscriptionSuccess: "订阅成功",
+      processing: "支付处理中",
       failed: "支付失败",
       backToRecharge: "返回充值",
       viewOrders: "查看订单",

@@ -155,7 +155,13 @@ export interface CreateOrderRequest {
   order_type: string
   plan_id?: number
   is_mobile?: boolean
+  return_url?: string
+  payment_source?: string
+  wechat_resume_token?: string
+  openid?: string
 }
+
+export type CreateOrderResultType = 'standard' | 'oauth_required' | 'jsapi_ready'
 
 export interface CreateOrderResult {
   order_id: number
@@ -167,6 +173,12 @@ export interface CreateOrderResult {
   fee_rate: number
   expires_at: string
   payment_mode?: string
+  result_type?: CreateOrderResultType
+  redirect_url?: string
+  message?: string
+  openid?: string
+  wechat_resume_token?: string
+  jsapi_params?: Record<string, string>
 }
 
 export interface DashboardStats {
