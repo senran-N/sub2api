@@ -73,6 +73,12 @@ const (
 // LinuxDoConnectSyntheticEmailDomain 是 LinuxDo Connect 用户的合成邮箱后缀（RFC 保留域名）。
 const LinuxDoConnectSyntheticEmailDomain = "@linuxdo-connect.invalid"
 
+// OIDCConnectSyntheticEmailDomain 是 OIDC 用户的合成邮箱后缀（RFC 保留域名）。
+const OIDCConnectSyntheticEmailDomain = "@oidc-connect.invalid"
+
+// WeChatConnectSyntheticEmailDomain 是 WeChat 用户的合成邮箱后缀（RFC 保留域名）。
+const WeChatConnectSyntheticEmailDomain = "@wechat-connect.invalid"
+
 // Setting keys
 const (
 	// 注册设置
@@ -93,6 +99,12 @@ const (
 	SettingKeySMTPFromName = "smtp_from_name" // 发件人名称
 	SettingKeySMTPUseTLS   = "smtp_use_tls"   // 是否使用TLS
 
+	SettingKeyBalanceLowNotifyEnabled     = "balance_low_notify_enabled"      // 余额不足提醒总开关
+	SettingKeyBalanceLowNotifyThreshold   = "balance_low_notify_threshold"    // 默认余额提醒阈值
+	SettingKeyBalanceLowNotifyRechargeURL = "balance_low_notify_recharge_url" // 充值页面 URL
+	SettingKeyAccountQuotaNotifyEnabled   = "account_quota_notify_enabled"    // 账号配额提醒总开关
+	SettingKeyAccountQuotaNotifyEmails    = "account_quota_notify_emails"     // 管理员提醒邮箱列表
+
 	// Cloudflare Turnstile 设置
 	SettingKeyTurnstileEnabled   = "turnstile_enabled"    // 是否启用 Turnstile 验证
 	SettingKeyTurnstileSiteKey   = "turnstile_site_key"   // Turnstile Site Key
@@ -106,6 +118,48 @@ const (
 	SettingKeyLinuxDoConnectClientID     = "linuxdo_connect_client_id"
 	SettingKeyLinuxDoConnectClientSecret = "linuxdo_connect_client_secret"
 	SettingKeyLinuxDoConnectRedirectURL  = "linuxdo_connect_redirect_url"
+
+	// WeChat Connect OAuth 登录设置
+	SettingKeyWeChatConnectEnabled             = "wechat_connect_enabled"
+	SettingKeyWeChatConnectAppID               = "wechat_connect_app_id"
+	SettingKeyWeChatConnectAppSecret           = "wechat_connect_app_secret"
+	SettingKeyWeChatConnectOpenAppID           = "wechat_connect_open_app_id"
+	SettingKeyWeChatConnectOpenAppSecret       = "wechat_connect_open_app_secret"
+	SettingKeyWeChatConnectMPAppID             = "wechat_connect_mp_app_id"
+	SettingKeyWeChatConnectMPAppSecret         = "wechat_connect_mp_app_secret"
+	SettingKeyWeChatConnectMobileAppID         = "wechat_connect_mobile_app_id"
+	SettingKeyWeChatConnectMobileAppSecret     = "wechat_connect_mobile_app_secret"
+	SettingKeyWeChatConnectOpenEnabled         = "wechat_connect_open_enabled"
+	SettingKeyWeChatConnectMPEnabled           = "wechat_connect_mp_enabled"
+	SettingKeyWeChatConnectMobileEnabled       = "wechat_connect_mobile_enabled"
+	SettingKeyWeChatConnectMode                = "wechat_connect_mode"
+	SettingKeyWeChatConnectScopes              = "wechat_connect_scopes"
+	SettingKeyWeChatConnectRedirectURL         = "wechat_connect_redirect_url"
+	SettingKeyWeChatConnectFrontendRedirectURL = "wechat_connect_frontend_redirect_url"
+
+	// Generic OIDC OAuth 登录设置
+	SettingKeyOIDCConnectEnabled              = "oidc_connect_enabled"
+	SettingKeyOIDCConnectProviderName         = "oidc_connect_provider_name"
+	SettingKeyOIDCConnectClientID             = "oidc_connect_client_id"
+	SettingKeyOIDCConnectClientSecret         = "oidc_connect_client_secret"
+	SettingKeyOIDCConnectIssuerURL            = "oidc_connect_issuer_url"
+	SettingKeyOIDCConnectDiscoveryURL         = "oidc_connect_discovery_url"
+	SettingKeyOIDCConnectAuthorizeURL         = "oidc_connect_authorize_url"
+	SettingKeyOIDCConnectTokenURL             = "oidc_connect_token_url"
+	SettingKeyOIDCConnectUserInfoURL          = "oidc_connect_userinfo_url"
+	SettingKeyOIDCConnectJWKSURL              = "oidc_connect_jwks_url"
+	SettingKeyOIDCConnectScopes               = "oidc_connect_scopes"
+	SettingKeyOIDCConnectRedirectURL          = "oidc_connect_redirect_url"
+	SettingKeyOIDCConnectFrontendRedirectURL  = "oidc_connect_frontend_redirect_url"
+	SettingKeyOIDCConnectTokenAuthMethod      = "oidc_connect_token_auth_method"
+	SettingKeyOIDCConnectUsePKCE              = "oidc_connect_use_pkce"
+	SettingKeyOIDCConnectValidateIDToken      = "oidc_connect_validate_id_token"
+	SettingKeyOIDCConnectAllowedSigningAlgs   = "oidc_connect_allowed_signing_algs"
+	SettingKeyOIDCConnectClockSkewSeconds     = "oidc_connect_clock_skew_seconds"
+	SettingKeyOIDCConnectRequireEmailVerified = "oidc_connect_require_email_verified"
+	SettingKeyOIDCConnectUserInfoEmailPath    = "oidc_connect_userinfo_email_path"
+	SettingKeyOIDCConnectUserInfoIDPath       = "oidc_connect_userinfo_id_path"
+	SettingKeyOIDCConnectUserInfoUsernamePath = "oidc_connect_userinfo_username_path"
 
 	// OEM设置
 	SettingKeySiteName                    = "site_name"                     // 网站名称
@@ -126,6 +180,29 @@ const (
 	SettingKeyDefaultConcurrency   = "default_concurrency"   // 新用户默认并发量
 	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
 	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
+
+	// 按登录来源发放的默认权益配置
+	SettingKeyAuthSourceDefaultEmailBalance            = "auth_source_default_email_balance"
+	SettingKeyAuthSourceDefaultEmailConcurrency        = "auth_source_default_email_concurrency"
+	SettingKeyAuthSourceDefaultEmailSubscriptions      = "auth_source_default_email_subscriptions"
+	SettingKeyAuthSourceDefaultEmailGrantOnSignup      = "auth_source_default_email_grant_on_signup"
+	SettingKeyAuthSourceDefaultEmailGrantOnFirstBind   = "auth_source_default_email_grant_on_first_bind"
+	SettingKeyAuthSourceDefaultLinuxDoBalance          = "auth_source_default_linuxdo_balance"
+	SettingKeyAuthSourceDefaultLinuxDoConcurrency      = "auth_source_default_linuxdo_concurrency"
+	SettingKeyAuthSourceDefaultLinuxDoSubscriptions    = "auth_source_default_linuxdo_subscriptions"
+	SettingKeyAuthSourceDefaultLinuxDoGrantOnSignup    = "auth_source_default_linuxdo_grant_on_signup"
+	SettingKeyAuthSourceDefaultLinuxDoGrantOnFirstBind = "auth_source_default_linuxdo_grant_on_first_bind"
+	SettingKeyAuthSourceDefaultOIDCBalance             = "auth_source_default_oidc_balance"
+	SettingKeyAuthSourceDefaultOIDCConcurrency         = "auth_source_default_oidc_concurrency"
+	SettingKeyAuthSourceDefaultOIDCSubscriptions       = "auth_source_default_oidc_subscriptions"
+	SettingKeyAuthSourceDefaultOIDCGrantOnSignup       = "auth_source_default_oidc_grant_on_signup"
+	SettingKeyAuthSourceDefaultOIDCGrantOnFirstBind    = "auth_source_default_oidc_grant_on_first_bind"
+	SettingKeyAuthSourceDefaultWeChatBalance           = "auth_source_default_wechat_balance"
+	SettingKeyAuthSourceDefaultWeChatConcurrency       = "auth_source_default_wechat_concurrency"
+	SettingKeyAuthSourceDefaultWeChatSubscriptions     = "auth_source_default_wechat_subscriptions"
+	SettingKeyAuthSourceDefaultWeChatGrantOnSignup     = "auth_source_default_wechat_grant_on_signup"
+	SettingKeyAuthSourceDefaultWeChatGrantOnFirstBind  = "auth_source_default_wechat_grant_on_first_bind"
+	SettingKeyForceEmailOnThirdPartySignup             = "force_email_on_third_party_signup"
 
 	// 管理员 API Key
 	SettingKeyAdminAPIKey = "admin_api_key" // 全局管理员 API Key（用于外部系统集成）

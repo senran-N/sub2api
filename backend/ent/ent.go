@@ -17,12 +17,14 @@ import (
 	"github.com/senran-N/sub2api/ent/announcement"
 	"github.com/senran-N/sub2api/ent/announcementread"
 	"github.com/senran-N/sub2api/ent/apikey"
+	"github.com/senran-N/sub2api/ent/authidentity"
 	"github.com/senran-N/sub2api/ent/errorpassthroughrule"
 	"github.com/senran-N/sub2api/ent/group"
 	"github.com/senran-N/sub2api/ent/idempotencyrecord"
 	"github.com/senran-N/sub2api/ent/paymentauditlog"
 	"github.com/senran-N/sub2api/ent/paymentorder"
 	"github.com/senran-N/sub2api/ent/paymentproviderinstance"
+	"github.com/senran-N/sub2api/ent/pendingauthsession"
 	"github.com/senran-N/sub2api/ent/promocode"
 	"github.com/senran-N/sub2api/ent/promocodeusage"
 	"github.com/senran-N/sub2api/ent/proxy"
@@ -103,12 +105,14 @@ func checkColumn(t, c string) error {
 			accountgroup.Table:            accountgroup.ValidColumn,
 			announcement.Table:            announcement.ValidColumn,
 			announcementread.Table:        announcementread.ValidColumn,
+			authidentity.Table:            authidentity.ValidColumn,
 			errorpassthroughrule.Table:    errorpassthroughrule.ValidColumn,
 			group.Table:                   group.ValidColumn,
 			idempotencyrecord.Table:       idempotencyrecord.ValidColumn,
 			paymentauditlog.Table:         paymentauditlog.ValidColumn,
 			paymentorder.Table:            paymentorder.ValidColumn,
 			paymentproviderinstance.Table: paymentproviderinstance.ValidColumn,
+			pendingauthsession.Table:      pendingauthsession.ValidColumn,
 			promocode.Table:               promocode.ValidColumn,
 			promocodeusage.Table:          promocodeusage.ValidColumn,
 			proxy.Table:                   proxy.ValidColumn,

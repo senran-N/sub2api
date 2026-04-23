@@ -189,6 +189,7 @@ type GatewayService struct {
 	debugClaudeMimic      atomic.Bool
 	channelService        *ChannelService
 	resolver              *ModelPricingResolver
+	balanceNotifyService  *BalanceNotifyService
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
 	grokSelectionRecovery grokOnDemandSelectionRecovery
@@ -340,3 +341,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 // GetAvailableModels returns the list of models available for a group
 // It aggregates model_mapping keys from all schedulable accounts in the group
+
+func (s *GatewayService) SetBalanceNotifyService(balanceNotifyService *BalanceNotifyService) {
+	s.balanceNotifyService = balanceNotifyService
+}

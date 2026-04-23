@@ -27,6 +27,12 @@ export interface FetchOptions {
 
 // ==================== User & Auth Types ====================
 
+export interface NotifyEmailEntry {
+  email: string
+  disabled: boolean
+  verified: boolean
+}
+
 export interface User {
   id: number
   username: string
@@ -37,6 +43,15 @@ export interface User {
   status: 'active' | 'disabled' // Account status
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
   subscriptions?: UserSubscription[] // User's active subscriptions
+  balance_notify_enabled: boolean
+  balance_notify_threshold_type: string
+  balance_notify_threshold: number | null
+  balance_notify_extra_emails: NotifyEmailEntry[]
+  total_recharged: number
+  email_bound: boolean
+  linuxdo_bound: boolean
+  oidc_bound: boolean
+  wechat_bound: boolean
   created_at: string
   updated_at: string
 }
@@ -75,6 +90,18 @@ export interface SendVerifyCodeResponse {
   countdown: number
 }
 
+export type PendingAuthTokenField = 'pending_auth_token' | 'pending_oauth_token'
+
+export interface PendingAuthSessionSummary {
+  token?: string
+  token_field?: PendingAuthTokenField
+  provider: string
+  redirect?: string
+  adoption_required?: boolean
+  suggested_display_name?: string
+  suggested_avatar_url?: string
+}
+
 export interface CustomMenuItem {
   id: string
   label: string
@@ -93,6 +120,7 @@ export interface CustomEndpoint {
 export interface PublicSettings {
   registration_enabled: boolean
   email_verify_enabled: boolean
+  force_email_on_third_party_signup?: boolean
   registration_email_suffix_whitelist: string[]
   promo_code_enabled: boolean
   password_reset_enabled: boolean
@@ -114,7 +142,17 @@ export interface PublicSettings {
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
   linuxdo_oauth_enabled: boolean
+  wechat_oauth_enabled: boolean
+  wechat_oauth_open_enabled?: boolean
+  wechat_oauth_mp_enabled?: boolean
+  wechat_oauth_mobile_enabled?: boolean
+  oidc_oauth_enabled: boolean
+  oidc_oauth_provider_name: string
   backend_mode_enabled: boolean
+  balance_low_notify_enabled: boolean
+  account_quota_notify_enabled: boolean
+  balance_low_notify_threshold: number
+  balance_low_notify_recharge_url: string
   version: string
 }
 

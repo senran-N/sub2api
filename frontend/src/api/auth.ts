@@ -187,6 +187,92 @@ export interface RefreshTokenResponse {
   token_type: string
 }
 
+export interface OAuthTokenResponse {
+  access_token: string
+  refresh_token?: string
+  expires_in?: number
+  token_type?: string
+}
+
+export interface PendingOAuthBindLoginResponse extends Partial<OAuthTokenResponse> {
+  auth_result?: string
+  redirect?: string
+  error?: string
+  step?: string
+  provider?: string
+  intent?: string
+  email?: string
+  resolved_email?: string
+  create_account_allowed?: boolean
+  existing_account_bindable?: boolean
+  adoption_required?: boolean
+  suggested_display_name?: string
+  suggested_avatar_url?: string
+  requires_2fa?: boolean
+  temp_token?: string
+  user_email_masked?: string
+}
+
+export interface PendingOAuthCreateAccountResponse extends Partial<OAuthTokenResponse> {
+  auth_result?: string
+  error?: string
+  step?: string
+  email?: string
+  resolved_email?: string
+  create_account_allowed?: boolean
+  existing_account_bindable?: boolean
+}
+
+export interface PendingOAuthSendVerifyCodeResponse extends SendVerifyCodeResponse {
+  auth_result?: string
+  provider?: string
+  redirect?: string
+}
+
+export type PendingOAuthExchangeResponse = PendingOAuthBindLoginResponse
+export type OAuthCompletionKind = 'login' | 'bind'
+
+export interface OAuthAdoptionDecision {
+  adoptDisplayName?: boolean
+  adoptAvatar?: boolean
+}
+
+export function isOAuthLoginCompletion(
+  completion: Partial<OAuthTokenResponse>
+): completion is OAuthTokenResponse {
+  return typeof completion.access_token === 'string' && completion.access_token.trim().length > 0
+}
+
+export function getOAuthCompletionKind(
+  completion: Partial<OAuthTokenResponse>
+): OAuthCompletionKind {
+  return isOAuthLoginCompletion(completion) ? 'login' : 'bind'
+}
+
+export function persistOAuthTokenContext(tokens: Partial<OAuthTokenResponse>): void {
+  if (tokens.refresh_token) {
+    setRefreshToken(tokens.refresh_token)
+  }
+  if (tokens.expires_in) {
+    setTokenExpiresAt(tokens.expires_in)
+  }
+}
+
+function serializeOAuthAdoptionDecision(
+  decision?: OAuthAdoptionDecision
+): Record<string, boolean> {
+  const payload: Record<string, boolean> = {}
+
+  if (typeof decision?.adoptDisplayName === 'boolean') {
+    payload.adopt_display_name = decision.adoptDisplayName
+  }
+  if (typeof decision?.adoptAvatar === 'boolean') {
+    payload.adopt_avatar = decision.adoptAvatar
+  }
+
+  return payload
+}
+
 /**
  * Refresh the access token using the refresh token
  * @returns New token pair
@@ -243,6 +329,16 @@ export async function sendVerifyCode(
   request: SendVerifyCodeRequest
 ): Promise<SendVerifyCodeResponse> {
   const { data } = await apiClient.post<SendVerifyCodeResponse>('/auth/send-verify-code', request)
+  return data
+}
+
+export async function sendPendingOAuthVerifyCode(
+  request: SendVerifyCodeRequest
+): Promise<PendingOAuthSendVerifyCodeResponse> {
+  const { data } = await apiClient.post<PendingOAuthSendVerifyCodeResponse>(
+    '/auth/oauth/pending/send-verify-code',
+    request
+  )
   return data
 }
 
@@ -335,24 +431,101 @@ export async function resetPassword(request: ResetPasswordRequest): Promise<Rese
   return data
 }
 
-/**
- * Complete LinuxDo OAuth registration by supplying an invitation code
- * @param pendingOAuthToken - Short-lived JWT from the OAuth callback
- * @param invitationCode - Invitation code entered by the user
- * @returns Token pair on success
- */
+
+export type WeChatOAuthUnavailableReason =
+  | 'external_browser_required'
+  | 'wechat_browser_required'
+  | 'native_app_required'
+  | 'not_configured'
+  | null
+
+export interface ResolvedWeChatOAuthStart {
+  mode: 'open' | 'mp' | null
+  unavailableReason: WeChatOAuthUnavailableReason
+}
+
+function isWeChatBrowser(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+  return /MicroMessenger/i.test(navigator.userAgent || '')
+}
+
+export function resolveWeChatOAuthStart(settings?: PublicSettings | null): ResolvedWeChatOAuthStart {
+  if (!settings?.wechat_oauth_enabled) {
+    return { mode: null, unavailableReason: 'not_configured' }
+  }
+
+  const inWeChat = isWeChatBrowser()
+  const openEnabled = !!settings.wechat_oauth_open_enabled
+  const mpEnabled = !!settings.wechat_oauth_mp_enabled
+  const mobileEnabled = !!settings.wechat_oauth_mobile_enabled
+
+  if (inWeChat) {
+    if (mpEnabled) return { mode: 'mp', unavailableReason: null }
+    if (openEnabled) return { mode: null, unavailableReason: 'external_browser_required' }
+    if (mobileEnabled) return { mode: null, unavailableReason: 'native_app_required' }
+    return { mode: null, unavailableReason: 'not_configured' }
+  }
+
+  if (openEnabled) return { mode: 'open', unavailableReason: null }
+  if (mpEnabled) return { mode: null, unavailableReason: 'wechat_browser_required' }
+  if (mobileEnabled) return { mode: null, unavailableReason: 'native_app_required' }
+  return { mode: null, unavailableReason: 'not_configured' }
+}
+
+export async function exchangePendingOAuthCompletion(
+  decision?: OAuthAdoptionDecision
+): Promise<PendingOAuthExchangeResponse> {
+  const payload = serializeOAuthAdoptionDecision(decision)
+  const { data } = await apiClient.post<PendingOAuthExchangeResponse>('/auth/oauth/pending/exchange', payload)
+  return data
+}
+
+export async function bindLinuxDoOAuthLogin(
+  request: { email: string; password: string } & OAuthAdoptionDecision
+): Promise<PendingOAuthBindLoginResponse> {
+  const { data } = await apiClient.post<PendingOAuthBindLoginResponse>('/auth/oauth/linuxdo/bind-login', {
+    email: request.email,
+    password: request.password,
+    ...serializeOAuthAdoptionDecision(request)
+  })
+  return data
+}
+
 export async function completeLinuxDoOAuthRegistration(
-  pendingOAuthToken: string,
-  invitationCode: string
-): Promise<{ access_token: string; refresh_token: string; expires_in: number; token_type: string }> {
-  const { data } = await apiClient.post<{
-    access_token: string
-    refresh_token: string
-    expires_in: number
-    token_type: string
-  }>('/auth/oauth/linuxdo/complete-registration', {
-    pending_oauth_token: pendingOAuthToken,
-    invitation_code: invitationCode
+  request: {
+    email: string
+    password: string
+    verify_code?: string
+    invitation_code?: string
+  } & OAuthAdoptionDecision
+): Promise<PendingOAuthCreateAccountResponse> {
+  const { data } = await apiClient.post<PendingOAuthCreateAccountResponse>('/auth/oauth/linuxdo/complete-registration', {
+    email: request.email,
+    password: request.password,
+    verify_code: request.verify_code,
+    invitation_code: request.invitation_code,
+    ...serializeOAuthAdoptionDecision(request)
+  })
+  return data
+}
+
+
+export async function completeOIDCOAuthRegistration(
+  request: {
+    email: string
+    password: string
+    verify_code?: string
+    invitation_code?: string
+  } & OAuthAdoptionDecision
+): Promise<PendingOAuthCreateAccountResponse> {
+  const { data } = await apiClient.post<PendingOAuthCreateAccountResponse>('/auth/oauth/pending/create-account', {
+    email: request.email,
+    password: request.password,
+    verify_code: request.verify_code,
+    invitation_code: request.invitation_code,
+    ...serializeOAuthAdoptionDecision(request)
   })
   return data
 }
@@ -374,13 +547,21 @@ export const authAPI = {
   clearAuthToken,
   getPublicSettings,
   sendVerifyCode,
+  sendPendingOAuthVerifyCode,
   validatePromoCode,
   validateInvitationCode,
   forgotPassword,
   resetPassword,
   refreshToken,
   revokeAllSessions,
-  completeLinuxDoOAuthRegistration
+  exchangePendingOAuthCompletion,
+  bindLinuxDoOAuthLogin,
+  completeLinuxDoOAuthRegistration,
+  completeOIDCOAuthRegistration,
+  resolveWeChatOAuthStart,
+  getOAuthCompletionKind,
+  isOAuthLoginCompletion,
+  persistOAuthTokenContext
 }
 
 export default authAPI

@@ -124,6 +124,11 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeySMTPFrom] = settings.SMTPFrom
 	updates[SettingKeySMTPFromName] = settings.SMTPFromName
 	updates[SettingKeySMTPUseTLS] = strconv.FormatBool(settings.SMTPUseTLS)
+	updates[SettingKeyBalanceLowNotifyEnabled] = strconv.FormatBool(settings.BalanceLowNotifyEnabled)
+	updates[SettingKeyBalanceLowNotifyThreshold] = strconv.FormatFloat(settings.BalanceLowNotifyThreshold, 'f', 8, 64)
+	updates[SettingKeyBalanceLowNotifyRechargeURL] = strings.TrimSpace(settings.BalanceLowNotifyRechargeURL)
+	updates[SettingKeyAccountQuotaNotifyEnabled] = strconv.FormatBool(settings.AccountQuotaNotifyEnabled)
+	updates[SettingKeyAccountQuotaNotifyEmails] = MarshalNotifyEmails(settings.AccountQuotaNotifyEmails)
 
 	// Cloudflare Turnstile 设置（只有非空才更新密钥）
 	updates[SettingKeyTurnstileEnabled] = strconv.FormatBool(settings.TurnstileEnabled)
@@ -138,6 +143,54 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyLinuxDoConnectRedirectURL] = settings.LinuxDoConnectRedirectURL
 	if settings.LinuxDoConnectClientSecret != "" {
 		updates[SettingKeyLinuxDoConnectClientSecret] = settings.LinuxDoConnectClientSecret
+	}
+
+	// WeChat Connect OAuth 登录
+	updates[SettingKeyWeChatConnectEnabled] = strconv.FormatBool(settings.WeChatConnectEnabled)
+	updates[SettingKeyWeChatConnectOpenAppID] = strings.TrimSpace(settings.WeChatConnectOpenAppID)
+	updates[SettingKeyWeChatConnectMPAppID] = strings.TrimSpace(settings.WeChatConnectMPAppID)
+	updates[SettingKeyWeChatConnectMobileAppID] = strings.TrimSpace(settings.WeChatConnectMobileAppID)
+	updates[SettingKeyWeChatConnectOpenEnabled] = strconv.FormatBool(settings.WeChatConnectOpenEnabled)
+	updates[SettingKeyWeChatConnectMPEnabled] = strconv.FormatBool(settings.WeChatConnectMPEnabled)
+	updates[SettingKeyWeChatConnectMobileEnabled] = strconv.FormatBool(settings.WeChatConnectMobileEnabled)
+	updates[SettingKeyWeChatConnectMode] = strings.TrimSpace(settings.WeChatConnectMode)
+	updates[SettingKeyWeChatConnectScopes] = strings.TrimSpace(settings.WeChatConnectScopes)
+	updates[SettingKeyWeChatConnectRedirectURL] = strings.TrimSpace(settings.WeChatConnectRedirectURL)
+	updates[SettingKeyWeChatConnectFrontendRedirectURL] = strings.TrimSpace(settings.WeChatConnectFrontendRedirectURL)
+	if settings.WeChatConnectOpenAppSecret != "" {
+		updates[SettingKeyWeChatConnectOpenAppSecret] = settings.WeChatConnectOpenAppSecret
+	}
+	if settings.WeChatConnectMPAppSecret != "" {
+		updates[SettingKeyWeChatConnectMPAppSecret] = settings.WeChatConnectMPAppSecret
+	}
+	if settings.WeChatConnectMobileAppSecret != "" {
+		updates[SettingKeyWeChatConnectMobileAppSecret] = settings.WeChatConnectMobileAppSecret
+	}
+
+	// OIDC Connect OAuth 登录
+	updates[SettingKeyOIDCConnectEnabled] = strconv.FormatBool(settings.OIDCConnectEnabled)
+	updates[SettingKeyOIDCConnectProviderName] = strings.TrimSpace(settings.OIDCConnectProviderName)
+	updates[SettingKeyOIDCConnectClientID] = strings.TrimSpace(settings.OIDCConnectClientID)
+	updates[SettingKeyOIDCConnectIssuerURL] = strings.TrimSpace(settings.OIDCConnectIssuerURL)
+	updates[SettingKeyOIDCConnectDiscoveryURL] = strings.TrimSpace(settings.OIDCConnectDiscoveryURL)
+	updates[SettingKeyOIDCConnectAuthorizeURL] = strings.TrimSpace(settings.OIDCConnectAuthorizeURL)
+	updates[SettingKeyOIDCConnectTokenURL] = strings.TrimSpace(settings.OIDCConnectTokenURL)
+	updates[SettingKeyOIDCConnectUserInfoURL] = strings.TrimSpace(settings.OIDCConnectUserInfoURL)
+	updates[SettingKeyOIDCConnectJWKSURL] = strings.TrimSpace(settings.OIDCConnectJWKSURL)
+	updates[SettingKeyOIDCConnectScopes] = strings.TrimSpace(settings.OIDCConnectScopes)
+	updates[SettingKeyOIDCConnectRedirectURL] = strings.TrimSpace(settings.OIDCConnectRedirectURL)
+	updates[SettingKeyOIDCConnectFrontendRedirectURL] = strings.TrimSpace(settings.OIDCConnectFrontendRedirectURL)
+	updates[SettingKeyOIDCConnectTokenAuthMethod] = strings.TrimSpace(settings.OIDCConnectTokenAuthMethod)
+	updates[SettingKeyOIDCConnectUsePKCE] = strconv.FormatBool(settings.OIDCConnectUsePKCE)
+	updates[SettingKeyOIDCConnectValidateIDToken] = strconv.FormatBool(settings.OIDCConnectValidateIDToken)
+	updates[SettingKeyOIDCConnectAllowedSigningAlgs] = strings.TrimSpace(settings.OIDCConnectAllowedSigningAlgs)
+	updates[SettingKeyOIDCConnectClockSkewSeconds] = strconv.Itoa(settings.OIDCConnectClockSkewSeconds)
+	updates[SettingKeyOIDCConnectRequireEmailVerified] = strconv.FormatBool(settings.OIDCConnectRequireEmailVerified)
+	updates[SettingKeyOIDCConnectUserInfoEmailPath] = strings.TrimSpace(settings.OIDCConnectUserInfoEmailPath)
+	updates[SettingKeyOIDCConnectUserInfoIDPath] = strings.TrimSpace(settings.OIDCConnectUserInfoIDPath)
+	updates[SettingKeyOIDCConnectUserInfoUsernamePath] = strings.TrimSpace(settings.OIDCConnectUserInfoUsernamePath)
+	if settings.OIDCConnectClientSecret != "" {
+		updates[SettingKeyOIDCConnectClientSecret] = settings.OIDCConnectClientSecret
 	}
 
 	// OEM设置
@@ -317,22 +370,43 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 
 	// 初始化默认设置
 	defaults := map[string]string{
-		SettingKeyRegistrationEnabled:              "true",
-		SettingKeyEmailVerifyEnabled:               "false",
-		SettingKeyRegistrationEmailSuffixWhitelist: "[]",
-		SettingKeyPromoCodeEnabled:                 "true", // 默认启用优惠码功能
-		SettingKeySiteName:                         "Sub2API",
-		SettingKeySiteLogo:                         "",
-		SettingKeyFrontendTheme:                    "factory",
-		SettingKeyPurchaseSubscriptionEnabled:      "false",
-		SettingKeyPurchaseSubscriptionURL:          "",
-		SettingKeyCustomMenuItems:                  "[]",
-		SettingKeyCustomEndpoints:                  "[]",
-		SettingKeyDefaultConcurrency:               strconv.Itoa(s.cfg.Default.UserConcurrency),
-		SettingKeyDefaultBalance:                   strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
-		SettingKeyDefaultSubscriptions:             "[]",
-		SettingKeySMTPPort:                         "587",
-		SettingKeySMTPUseTLS:                       "false",
+		SettingKeyRegistrationEnabled:                      "true",
+		SettingKeyEmailVerifyEnabled:                       "false",
+		SettingKeyRegistrationEmailSuffixWhitelist:         "[]",
+		SettingKeyPromoCodeEnabled:                         "true", // 默认启用优惠码功能
+		SettingKeySiteName:                                 "Sub2API",
+		SettingKeySiteLogo:                                 "",
+		SettingKeyFrontendTheme:                            "factory",
+		SettingKeyPurchaseSubscriptionEnabled:              "false",
+		SettingKeyPurchaseSubscriptionURL:                  "",
+		SettingKeyCustomMenuItems:                          "[]",
+		SettingKeyCustomEndpoints:                          "[]",
+		SettingKeyDefaultConcurrency:                       strconv.Itoa(s.cfg.Default.UserConcurrency),
+		SettingKeyDefaultBalance:                           strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyDefaultSubscriptions:                     "[]",
+		SettingKeyAuthSourceDefaultEmailBalance:            "0",
+		SettingKeyAuthSourceDefaultEmailConcurrency:        "5",
+		SettingKeyAuthSourceDefaultEmailSubscriptions:      "[]",
+		SettingKeyAuthSourceDefaultEmailGrantOnSignup:      "false",
+		SettingKeyAuthSourceDefaultEmailGrantOnFirstBind:   "false",
+		SettingKeyAuthSourceDefaultLinuxDoBalance:          "0",
+		SettingKeyAuthSourceDefaultLinuxDoConcurrency:      "5",
+		SettingKeyAuthSourceDefaultLinuxDoSubscriptions:    "[]",
+		SettingKeyAuthSourceDefaultLinuxDoGrantOnSignup:    "false",
+		SettingKeyAuthSourceDefaultLinuxDoGrantOnFirstBind: "false",
+		SettingKeyAuthSourceDefaultOIDCBalance:             "0",
+		SettingKeyAuthSourceDefaultOIDCConcurrency:         "5",
+		SettingKeyAuthSourceDefaultOIDCSubscriptions:       "[]",
+		SettingKeyAuthSourceDefaultOIDCGrantOnSignup:       "false",
+		SettingKeyAuthSourceDefaultOIDCGrantOnFirstBind:    "false",
+		SettingKeyAuthSourceDefaultWeChatBalance:           "0",
+		SettingKeyAuthSourceDefaultWeChatConcurrency:       "5",
+		SettingKeyAuthSourceDefaultWeChatSubscriptions:     "[]",
+		SettingKeyAuthSourceDefaultWeChatGrantOnSignup:     "false",
+		SettingKeyAuthSourceDefaultWeChatGrantOnFirstBind:  "false",
+		SettingKeyForceEmailOnThirdPartySignup:             "false",
+		SettingKeySMTPPort:                                 "587",
+		SettingKeySMTPUseTLS:                               "false",
 		// Model fallback defaults
 		SettingKeyEnableModelFallback:                "false",
 		SettingKeyFallbackModelAnthropic:             "claude-3-5-sonnet-20241022",
@@ -393,6 +467,10 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		SMTPFromName:                     settings[SettingKeySMTPFromName],
 		SMTPUseTLS:                       settings[SettingKeySMTPUseTLS] == "true",
 		SMTPPasswordConfigured:           settings[SettingKeySMTPPassword] != "",
+		BalanceLowNotifyEnabled:          settings[SettingKeyBalanceLowNotifyEnabled] == "true",
+		BalanceLowNotifyRechargeURL:      strings.TrimSpace(settings[SettingKeyBalanceLowNotifyRechargeURL]),
+		AccountQuotaNotifyEnabled:        settings[SettingKeyAccountQuotaNotifyEnabled] == "true",
+		AccountQuotaNotifyEmails:         ParseNotifyEmails(settings[SettingKeyAccountQuotaNotifyEmails]),
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
 		TurnstileSecretKeyConfigured:     settings[SettingKeyTurnstileSecretKey] != "",
@@ -433,6 +511,12 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
 
+	if threshold, err := strconv.ParseFloat(settings[SettingKeyBalanceLowNotifyThreshold], 64); err == nil {
+		result.BalanceLowNotifyThreshold = threshold
+	} else {
+		result.BalanceLowNotifyThreshold = 5
+	}
+
 	// 敏感信息直接返回，方便测试连接时使用
 	result.SMTPPassword = settings[SettingKeySMTPPassword]
 	result.TurnstileSecretKey = settings[SettingKeyTurnstileSecretKey]
@@ -468,6 +552,136 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.LinuxDoConnectClientSecret = strings.TrimSpace(linuxDoBase.ClientSecret)
 	}
 	result.LinuxDoConnectClientSecretConfigured = result.LinuxDoConnectClientSecret != ""
+
+	wechatBase := s.effectiveWeChatConnectOAuthConfig(settings)
+	result.WeChatConnectEnabled = wechatBase.Enabled
+	result.WeChatConnectOpenAppID = strings.TrimSpace(wechatBase.OpenAppID)
+	result.WeChatConnectOpenAppSecret = strings.TrimSpace(wechatBase.OpenAppSecret)
+	result.WeChatConnectOpenAppSecretConfigured = result.WeChatConnectOpenAppSecret != ""
+	result.WeChatConnectMPAppID = strings.TrimSpace(wechatBase.MPAppID)
+	result.WeChatConnectMPAppSecret = strings.TrimSpace(wechatBase.MPAppSecret)
+	result.WeChatConnectMPAppSecretConfigured = result.WeChatConnectMPAppSecret != ""
+	result.WeChatConnectMobileAppID = strings.TrimSpace(wechatBase.MobileAppID)
+	result.WeChatConnectMobileAppSecret = strings.TrimSpace(wechatBase.MobileAppSecret)
+	result.WeChatConnectMobileAppSecretConfigured = result.WeChatConnectMobileAppSecret != ""
+	result.WeChatConnectOpenEnabled = wechatBase.OpenEnabled
+	result.WeChatConnectMPEnabled = wechatBase.MPEnabled
+	result.WeChatConnectMobileEnabled = wechatBase.MobileEnabled
+	result.WeChatConnectMode = strings.TrimSpace(wechatBase.Mode)
+	if result.WeChatConnectMode == "" {
+		result.WeChatConnectMode = defaultWeChatConnectMode
+	}
+	result.WeChatConnectScopes = strings.TrimSpace(wechatBase.Scopes)
+	if result.WeChatConnectScopes == "" {
+		result.WeChatConnectScopes = defaultWeChatConnectScopeForMode(result.WeChatConnectMode)
+	}
+	result.WeChatConnectRedirectURL = strings.TrimSpace(wechatBase.RedirectURL)
+	result.WeChatConnectFrontendRedirectURL = strings.TrimSpace(wechatBase.FrontendRedirectURL)
+	if result.WeChatConnectFrontendRedirectURL == "" {
+		result.WeChatConnectFrontendRedirectURL = defaultWeChatConnectFrontend
+	}
+
+	oidcBase := config.OIDCConnectConfig{}
+	if s.cfg != nil {
+		oidcBase = s.cfg.OIDC
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectEnabled]; ok {
+		result.OIDCConnectEnabled = raw == "true"
+	} else {
+		result.OIDCConnectEnabled = oidcBase.Enabled
+	}
+	result.OIDCConnectProviderName = strings.TrimSpace(settings[SettingKeyOIDCConnectProviderName])
+	if result.OIDCConnectProviderName == "" {
+		result.OIDCConnectProviderName = strings.TrimSpace(oidcBase.ProviderName)
+	}
+	result.OIDCConnectClientID = strings.TrimSpace(settings[SettingKeyOIDCConnectClientID])
+	if result.OIDCConnectClientID == "" {
+		result.OIDCConnectClientID = strings.TrimSpace(oidcBase.ClientID)
+	}
+	result.OIDCConnectIssuerURL = strings.TrimSpace(settings[SettingKeyOIDCConnectIssuerURL])
+	if result.OIDCConnectIssuerURL == "" {
+		result.OIDCConnectIssuerURL = strings.TrimSpace(oidcBase.IssuerURL)
+	}
+	result.OIDCConnectDiscoveryURL = strings.TrimSpace(settings[SettingKeyOIDCConnectDiscoveryURL])
+	if result.OIDCConnectDiscoveryURL == "" {
+		result.OIDCConnectDiscoveryURL = strings.TrimSpace(oidcBase.DiscoveryURL)
+	}
+	result.OIDCConnectAuthorizeURL = strings.TrimSpace(settings[SettingKeyOIDCConnectAuthorizeURL])
+	if result.OIDCConnectAuthorizeURL == "" {
+		result.OIDCConnectAuthorizeURL = strings.TrimSpace(oidcBase.AuthorizeURL)
+	}
+	result.OIDCConnectTokenURL = strings.TrimSpace(settings[SettingKeyOIDCConnectTokenURL])
+	if result.OIDCConnectTokenURL == "" {
+		result.OIDCConnectTokenURL = strings.TrimSpace(oidcBase.TokenURL)
+	}
+	result.OIDCConnectUserInfoURL = strings.TrimSpace(settings[SettingKeyOIDCConnectUserInfoURL])
+	if result.OIDCConnectUserInfoURL == "" {
+		result.OIDCConnectUserInfoURL = strings.TrimSpace(oidcBase.UserInfoURL)
+	}
+	result.OIDCConnectJWKSURL = strings.TrimSpace(settings[SettingKeyOIDCConnectJWKSURL])
+	if result.OIDCConnectJWKSURL == "" {
+		result.OIDCConnectJWKSURL = strings.TrimSpace(oidcBase.JWKSURL)
+	}
+	result.OIDCConnectScopes = strings.TrimSpace(settings[SettingKeyOIDCConnectScopes])
+	if result.OIDCConnectScopes == "" {
+		result.OIDCConnectScopes = strings.TrimSpace(oidcBase.Scopes)
+	}
+	result.OIDCConnectRedirectURL = strings.TrimSpace(settings[SettingKeyOIDCConnectRedirectURL])
+	if result.OIDCConnectRedirectURL == "" {
+		result.OIDCConnectRedirectURL = strings.TrimSpace(oidcBase.RedirectURL)
+	}
+	result.OIDCConnectFrontendRedirectURL = strings.TrimSpace(settings[SettingKeyOIDCConnectFrontendRedirectURL])
+	if result.OIDCConnectFrontendRedirectURL == "" {
+		result.OIDCConnectFrontendRedirectURL = strings.TrimSpace(oidcBase.FrontendRedirectURL)
+	}
+	result.OIDCConnectTokenAuthMethod = strings.TrimSpace(settings[SettingKeyOIDCConnectTokenAuthMethod])
+	if result.OIDCConnectTokenAuthMethod == "" {
+		result.OIDCConnectTokenAuthMethod = strings.TrimSpace(oidcBase.TokenAuthMethod)
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectUsePKCE]; ok {
+		result.OIDCConnectUsePKCE = raw == "true"
+	} else {
+		result.OIDCConnectUsePKCE = oidcBase.UsePKCE
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectValidateIDToken]; ok {
+		result.OIDCConnectValidateIDToken = raw == "true"
+	} else {
+		result.OIDCConnectValidateIDToken = oidcBase.ValidateIDToken
+	}
+	result.OIDCConnectAllowedSigningAlgs = strings.TrimSpace(settings[SettingKeyOIDCConnectAllowedSigningAlgs])
+	if result.OIDCConnectAllowedSigningAlgs == "" {
+		result.OIDCConnectAllowedSigningAlgs = strings.TrimSpace(oidcBase.AllowedSigningAlgs)
+	}
+	if raw := strings.TrimSpace(settings[SettingKeyOIDCConnectClockSkewSeconds]); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			result.OIDCConnectClockSkewSeconds = parsed
+		}
+	}
+	if result.OIDCConnectClockSkewSeconds == 0 {
+		result.OIDCConnectClockSkewSeconds = oidcBase.ClockSkewSeconds
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectRequireEmailVerified]; ok {
+		result.OIDCConnectRequireEmailVerified = raw == "true"
+	} else {
+		result.OIDCConnectRequireEmailVerified = oidcBase.RequireEmailVerified
+	}
+	result.OIDCConnectUserInfoEmailPath = strings.TrimSpace(settings[SettingKeyOIDCConnectUserInfoEmailPath])
+	if result.OIDCConnectUserInfoEmailPath == "" {
+		result.OIDCConnectUserInfoEmailPath = strings.TrimSpace(oidcBase.UserInfoEmailPath)
+	}
+	result.OIDCConnectUserInfoIDPath = strings.TrimSpace(settings[SettingKeyOIDCConnectUserInfoIDPath])
+	if result.OIDCConnectUserInfoIDPath == "" {
+		result.OIDCConnectUserInfoIDPath = strings.TrimSpace(oidcBase.UserInfoIDPath)
+	}
+	result.OIDCConnectUserInfoUsernamePath = strings.TrimSpace(settings[SettingKeyOIDCConnectUserInfoUsernamePath])
+	if result.OIDCConnectUserInfoUsernamePath == "" {
+		result.OIDCConnectUserInfoUsernamePath = strings.TrimSpace(oidcBase.UserInfoUsernamePath)
+	}
+	result.OIDCConnectClientSecret = strings.TrimSpace(settings[SettingKeyOIDCConnectClientSecret])
+	if result.OIDCConnectClientSecret == "" {
+		result.OIDCConnectClientSecret = strings.TrimSpace(oidcBase.ClientSecret)
+	}
+	result.OIDCConnectClientSecretConfigured = result.OIDCConnectClientSecret != ""
 
 	// Model fallback settings
 	result.EnableModelFallback = settings[SettingKeyEnableModelFallback] == "true"
@@ -689,6 +903,179 @@ func (s *SettingService) GetLinuxDoConnectOAuthConfig(ctx context.Context) (conf
 		}
 	default:
 		return config.LinuxDoConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth token_auth_method invalid")
+	}
+
+	return effective, nil
+}
+
+// GetOIDCConnectOAuthConfig 返回用于登录的"最终生效" OIDC 配置。
+func (s *SettingService) GetOIDCConnectOAuthConfig(ctx context.Context) (config.OIDCConnectConfig, error) {
+	if s == nil || s.cfg == nil {
+		return config.OIDCConnectConfig{}, infraerrors.ServiceUnavailable("CONFIG_NOT_READY", "config not loaded")
+	}
+
+	effective := s.cfg.OIDC
+	keys := []string{
+		SettingKeyOIDCConnectEnabled,
+		SettingKeyOIDCConnectProviderName,
+		SettingKeyOIDCConnectClientID,
+		SettingKeyOIDCConnectClientSecret,
+		SettingKeyOIDCConnectIssuerURL,
+		SettingKeyOIDCConnectDiscoveryURL,
+		SettingKeyOIDCConnectAuthorizeURL,
+		SettingKeyOIDCConnectTokenURL,
+		SettingKeyOIDCConnectUserInfoURL,
+		SettingKeyOIDCConnectJWKSURL,
+		SettingKeyOIDCConnectScopes,
+		SettingKeyOIDCConnectRedirectURL,
+		SettingKeyOIDCConnectFrontendRedirectURL,
+		SettingKeyOIDCConnectTokenAuthMethod,
+		SettingKeyOIDCConnectUsePKCE,
+		SettingKeyOIDCConnectValidateIDToken,
+		SettingKeyOIDCConnectAllowedSigningAlgs,
+		SettingKeyOIDCConnectClockSkewSeconds,
+		SettingKeyOIDCConnectRequireEmailVerified,
+		SettingKeyOIDCConnectUserInfoEmailPath,
+		SettingKeyOIDCConnectUserInfoIDPath,
+		SettingKeyOIDCConnectUserInfoUsernamePath,
+	}
+	settings, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return config.OIDCConnectConfig{}, fmt.Errorf("get oidc connect settings: %w", err)
+	}
+
+	if raw, ok := settings[SettingKeyOIDCConnectEnabled]; ok {
+		effective.Enabled = raw == "true"
+	}
+	if v, ok := settings[SettingKeyOIDCConnectProviderName]; ok && strings.TrimSpace(v) != "" {
+		effective.ProviderName = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectClientID]; ok && strings.TrimSpace(v) != "" {
+		effective.ClientID = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectClientSecret]; ok && strings.TrimSpace(v) != "" {
+		effective.ClientSecret = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectIssuerURL]; ok && strings.TrimSpace(v) != "" {
+		effective.IssuerURL = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectDiscoveryURL]; ok && strings.TrimSpace(v) != "" {
+		effective.DiscoveryURL = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectAuthorizeURL]; ok && strings.TrimSpace(v) != "" {
+		effective.AuthorizeURL = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectTokenURL]; ok && strings.TrimSpace(v) != "" {
+		effective.TokenURL = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectUserInfoURL]; ok && strings.TrimSpace(v) != "" {
+		effective.UserInfoURL = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectJWKSURL]; ok && strings.TrimSpace(v) != "" {
+		effective.JWKSURL = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectScopes]; ok && strings.TrimSpace(v) != "" {
+		effective.Scopes = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectRedirectURL]; ok && strings.TrimSpace(v) != "" {
+		effective.RedirectURL = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectFrontendRedirectURL]; ok && strings.TrimSpace(v) != "" {
+		effective.FrontendRedirectURL = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectTokenAuthMethod]; ok && strings.TrimSpace(v) != "" {
+		effective.TokenAuthMethod = strings.ToLower(strings.TrimSpace(v))
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectUsePKCE]; ok {
+		effective.UsePKCE = raw == "true"
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectValidateIDToken]; ok {
+		effective.ValidateIDToken = raw == "true"
+	}
+	if v, ok := settings[SettingKeyOIDCConnectAllowedSigningAlgs]; ok && strings.TrimSpace(v) != "" {
+		effective.AllowedSigningAlgs = strings.TrimSpace(v)
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectClockSkewSeconds]; ok && strings.TrimSpace(raw) != "" {
+		if parsed, parseErr := strconv.Atoi(strings.TrimSpace(raw)); parseErr == nil {
+			effective.ClockSkewSeconds = parsed
+		}
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectRequireEmailVerified]; ok {
+		effective.RequireEmailVerified = raw == "true"
+	}
+	if v, ok := settings[SettingKeyOIDCConnectUserInfoEmailPath]; ok && strings.TrimSpace(v) != "" {
+		effective.UserInfoEmailPath = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectUserInfoIDPath]; ok && strings.TrimSpace(v) != "" {
+		effective.UserInfoIDPath = strings.TrimSpace(v)
+	}
+	if v, ok := settings[SettingKeyOIDCConnectUserInfoUsernamePath]; ok && strings.TrimSpace(v) != "" {
+		effective.UserInfoUsernamePath = strings.TrimSpace(v)
+	}
+
+	if !effective.Enabled {
+		return config.OIDCConnectConfig{}, infraerrors.NotFound("OAUTH_DISABLED", "oauth login is disabled")
+	}
+	if strings.TrimSpace(effective.ClientID) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth client id not configured")
+	}
+	if strings.TrimSpace(effective.AuthorizeURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth authorize url not configured")
+	}
+	if strings.TrimSpace(effective.TokenURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth token url not configured")
+	}
+	if strings.TrimSpace(effective.RedirectURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth redirect url not configured")
+	}
+	if strings.TrimSpace(effective.FrontendRedirectURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth frontend redirect url not configured")
+	}
+	if err := config.ValidateAbsoluteHTTPURL(effective.AuthorizeURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth authorize url invalid")
+	}
+	if err := config.ValidateAbsoluteHTTPURL(effective.TokenURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth token url invalid")
+	}
+	if strings.TrimSpace(effective.UserInfoURL) != "" {
+		if err := config.ValidateAbsoluteHTTPURL(effective.UserInfoURL); err != nil {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth userinfo url invalid")
+		}
+	}
+	if strings.TrimSpace(effective.JWKSURL) != "" {
+		if err := config.ValidateAbsoluteHTTPURL(effective.JWKSURL); err != nil {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth jwks url invalid")
+		}
+	}
+	if strings.TrimSpace(effective.IssuerURL) != "" {
+		if err := config.ValidateAbsoluteHTTPURL(effective.IssuerURL); err != nil {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth issuer url invalid")
+		}
+	}
+	if strings.TrimSpace(effective.DiscoveryURL) != "" {
+		if err := config.ValidateAbsoluteHTTPURL(effective.DiscoveryURL); err != nil {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth discovery url invalid")
+		}
+	}
+	if err := config.ValidateAbsoluteHTTPURL(effective.RedirectURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth redirect url invalid")
+	}
+	if err := config.ValidateFrontendRedirectURL(effective.FrontendRedirectURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth frontend redirect url invalid")
+	}
+
+	method := strings.ToLower(strings.TrimSpace(effective.TokenAuthMethod))
+	switch method {
+	case "", "client_secret_post", "client_secret_basic":
+		if strings.TrimSpace(effective.ClientSecret) == "" {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth client secret not configured")
+		}
+	case "none":
+		if !effective.UsePKCE {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth pkce must be enabled when token_auth_method=none")
+		}
+	default:
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth token_auth_method invalid")
 	}
 
 	return effective, nil

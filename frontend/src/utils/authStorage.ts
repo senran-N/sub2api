@@ -12,3 +12,5 @@ export const AUTH_TOKEN_KEY = 'auth_token'
 export const AUTH_USER_KEY = 'auth_user'
 export const REFRESH_TOKEN_KEY = 'refresh_token'
 export const TOKEN_EXPIRES_AT_KEY = 'token_expires_at'
+
+export const PENDING_AUTH_SESSION_KEY = 'pending_auth_session'

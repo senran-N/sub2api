@@ -19,7 +19,7 @@ import (
 // - 如果邮箱已存在：直接登录（不需要本地密码）
 // - 如果邮箱不存在：创建新用户并登录
 func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username string) (string, *User, error) {
-	user, normalizedUsername, err := s.findOrCreateOAuthUser(ctx, email, username, "", false)
+	user, normalizedUsername, err := s.findOrCreateOAuthUser(ctx, email, username, "", false, "")
 	if err != nil {
 		return "", nil, err
 	}
@@ -39,11 +39,15 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 // LoginOrRegisterOAuthWithTokenPair 用于第三方 OAuth/SSO 登录，返回完整的 TokenPair。
 // invitationCode 仅在邀请码注册模式下新用户注册时使用；已有账号登录时忽略。
 func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, email, username, invitationCode string) (*TokenPair, *User, error) {
+	return s.LoginOrRegisterOAuthWithTokenPairForSource(ctx, email, username, invitationCode, "")
+}
+
+func (s *AuthService) LoginOrRegisterOAuthWithTokenPairForSource(ctx context.Context, email, username, invitationCode, signupSource string) (*TokenPair, *User, error) {
 	if s.refreshTokenCache == nil {
 		return nil, nil, errors.New("refresh token cache not configured")
 	}
 
-	user, normalizedUsername, err := s.findOrCreateOAuthUser(ctx, email, username, invitationCode, true)
+	user, normalizedUsername, err := s.findOrCreateOAuthUser(ctx, email, username, invitationCode, true, signupSource)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -113,7 +117,7 @@ func (s *AuthService) VerifyPendingOAuthToken(tokenStr string) (email, username 
 	return claims.Email, claims.Username, nil
 }
 
-func (s *AuthService) findOrCreateOAuthUser(ctx context.Context, email, username, invitationCode string, requireInvitation bool) (*User, string, error) {
+func (s *AuthService) findOrCreateOAuthUser(ctx context.Context, email, username, invitationCode string, requireInvitation bool, signupSource string) (*User, string, error) {
 	normalizedEmail, normalizedUsername, err := normalizeOAuthIdentity(email, username)
 	if err != nil {
 		return nil, "", err
@@ -137,7 +141,10 @@ func (s *AuthService) findOrCreateOAuthUser(ctx context.Context, email, username
 		return nil, "", err
 	}
 
-	user, err = s.createOAuthUser(ctx, normalizedEmail, normalizedUsername, invitationRedeemCode)
+	if strings.TrimSpace(signupSource) == "" {
+		signupSource = inferLegacySignupSource(normalizedEmail)
+	}
+	user, err = s.createOAuthUser(ctx, normalizedEmail, normalizedUsername, invitationRedeemCode, signupSource)
 	if err != nil {
 		return nil, "", err
 	}
@@ -178,21 +185,21 @@ func (s *AuthService) resolveOAuthInvitationCode(ctx context.Context, invitation
 	return redeemCode, nil
 }
 
-func (s *AuthService) createOAuthUser(ctx context.Context, email, username string, invitationRedeemCode *RedeemCode) (*User, error) {
+func (s *AuthService) createOAuthUser(ctx context.Context, email, username string, invitationRedeemCode *RedeemCode, signupSource string) (*User, error) {
 	hashedPassword, err := s.generateOAuthPasswordHash()
 	if err != nil {
 		return nil, err
 	}
 
-	newUser := s.newOAuthUser(ctx, email, username, hashedPassword)
+	newUser, grantPlan := s.newOAuthUser(ctx, email, username, hashedPassword, signupSource)
 	if invitationRedeemCode != nil && s.entClient != nil {
-		return s.createOAuthUserWithInvitationTx(ctx, email, newUser, invitationRedeemCode)
+		return s.createOAuthUserWithInvitationTx(ctx, email, newUser, invitationRedeemCode, grantPlan)
 	}
 	if err := s.userRepo.Create(ctx, newUser); err != nil {
 		return s.resolveOAuthCreateConflict(ctx, email, err)
 	}
 
-	s.assignDefaultSubscriptions(ctx, newUser.ID)
+	s.assignSubscriptions(ctx, newUser.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
 	if invitationRedeemCode != nil {
 		if err := s.redeemRepo.Use(ctx, invitationRedeemCode.ID, newUser.ID); err != nil {
 			return nil, ErrInvitationCodeInvalid
@@ -214,26 +221,21 @@ func (s *AuthService) generateOAuthPasswordHash() (string, error) {
 	return hashedPassword, nil
 }
 
-func (s *AuthService) newOAuthUser(ctx context.Context, email, username, hashedPassword string) *User {
-	defaultBalance := s.cfg.Default.UserBalance
-	defaultConcurrency := s.cfg.Default.UserConcurrency
-	if s.settingService != nil {
-		defaultBalance = s.settingService.GetDefaultBalance(ctx)
-		defaultConcurrency = s.settingService.GetDefaultConcurrency(ctx)
-	}
+func (s *AuthService) newOAuthUser(ctx context.Context, email, username, hashedPassword, signupSource string) (*User, signupGrantPlan) {
+	grantPlan := s.resolveSignupGrantPlan(ctx, signupSource)
 
 	return &User{
 		Email:        email,
 		Username:     username,
 		PasswordHash: hashedPassword,
 		Role:         RoleUser,
-		Balance:      defaultBalance,
-		Concurrency:  defaultConcurrency,
+		Balance:      grantPlan.Balance,
+		Concurrency:  grantPlan.Concurrency,
 		Status:       StatusActive,
-	}
+	}, grantPlan
 }
 
-func (s *AuthService) createOAuthUserWithInvitationTx(ctx context.Context, email string, newUser *User, invitationRedeemCode *RedeemCode) (*User, error) {
+func (s *AuthService) createOAuthUserWithInvitationTx(ctx context.Context, email string, newUser *User, invitationRedeemCode *RedeemCode, grantPlan signupGrantPlan) (*User, error) {
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to begin transaction for oauth registration: %v", err)
@@ -253,7 +255,7 @@ func (s *AuthService) createOAuthUserWithInvitationTx(ctx context.Context, email
 		return nil, ErrServiceUnavailable
 	}
 
-	s.assignDefaultSubscriptions(ctx, newUser.ID)
+	s.assignSubscriptions(ctx, newUser.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
 	return newUser, nil
 }
 

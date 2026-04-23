@@ -233,7 +233,6 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		"temp_token_len", len(req.TempToken),
 		"totp_code_len", len(req.TotpCode))
 
-	// Get the login session
 	session, err := h.totpService.GetLoginSession(c.Request.Context(), req.TempToken)
 	if err != nil || session == nil {
 		tokenPrefix := ""
@@ -251,11 +250,6 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		"user_id", session.UserID,
 		"email", session.Email)
 
-	deleteLoginSession := func() {
-		_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
-	}
-
-	// Verify the TOTP code
 	if err := h.totpService.VerifyCode(c.Request.Context(), session.UserID, req.TotpCode); err != nil {
 		slog.Debug("login_2fa_verify_failed",
 			"user_id", session.UserID,
@@ -264,23 +258,59 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		return
 	}
 
-	// Get the user (before session deletion so we can check backend mode)
 	user, err := h.userService.GetByID(c.Request.Context(), session.UserID)
 	if err != nil {
-		deleteLoginSession()
 		response.ErrorFrom(c, err)
 		return
 	}
-
-	// Rejecting the login must also destroy the one-time 2FA session.
+	if !user.IsActive() {
+		response.ErrorFrom(c, service.ErrUserNotActive)
+		return
+	}
 	if backendModeBlocksLogin(h.settingSvc.IsBackendModeEnabled(c.Request.Context()), user) {
-		deleteLoginSession()
 		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
 		return
 	}
 
-	deleteLoginSession()
+	if session.PendingOAuthBind != nil {
+		pendingSvc, err := h.pendingIdentityService()
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
 
+		pendingSession, err := pendingSvc.GetBrowserSession(
+			c.Request.Context(),
+			session.PendingOAuthBind.PendingSessionToken,
+			session.PendingOAuthBind.BrowserSessionKey,
+		)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+
+		if err := applyPendingOAuthBinding(c.Request.Context(), h.authService, pendingSession, user.ID, pendingOAuthAdoptionDecision{
+			AdoptDisplayName: session.PendingOAuthBind.AdoptDisplayName,
+			AdoptAvatar:      session.PendingOAuthBind.AdoptAvatar,
+		}); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if _, err := pendingSvc.ConsumeBrowserSession(
+			c.Request.Context(),
+			pendingSession.SessionToken,
+			pendingSession.BrowserSessionKey,
+		); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+
+		secureCookie := isRequestHTTPS(c)
+		clearOAuthPendingSessionCookie(c, secureCookie)
+		clearOAuthPendingBrowserCookie(c, secureCookie)
+	}
+
+	_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
 	h.respondWithTokenPair(c, user)
 }
 
@@ -587,6 +617,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 			// 不影响登出流程
 		}
 	}
+
+	clearOAuthPendingSessionCookie(c, isRequestHTTPS(c))
+	clearOAuthPendingBrowserCookie(c, isRequestHTTPS(c))
 
 	response.Success(c, LogoutResponse{
 		Message: "Logged out successfully",

@@ -1,0 +1,6 @@
+DROP INDEX IF EXISTS pending_auth_sessions_completion_code_hash_idx;
+DROP INDEX IF EXISTS pending_auth_sessions_provider_identity_idx;
+DROP INDEX IF EXISTS pending_auth_sessions_expires_at_idx;
+DROP INDEX IF EXISTS pending_auth_sessions_target_user_idx;
+DROP INDEX IF EXISTS pending_auth_sessions_session_token_key;
+DROP TABLE IF EXISTS pending_auth_sessions;

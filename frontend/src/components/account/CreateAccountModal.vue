@@ -1829,6 +1829,66 @@
           @update:weeklyResetHour="editWeeklyResetHour = $event"
           @update:resetTimezone="editResetTimezone = $event"
         />
+
+        <div
+          class="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+        >
+          <div>
+            <h4 class="input-label mb-1">
+              {{ t("admin.accounts.quotaNotify.title") }}
+            </h4>
+            <p class="create-account-modal__choice-description text-xs">
+              {{ t("admin.accounts.quotaNotify.hint") }}
+            </p>
+          </div>
+          <div class="grid gap-3 md:grid-cols-3">
+            <div>
+              <label class="input-label">{{
+                t("admin.accounts.quotaNotify.daily")
+              }}</label>
+              <QuotaNotifyToggle
+                :enabled="editQuotaNotifyDailyEnabled"
+                :threshold="editQuotaNotifyDailyThreshold"
+                :threshold-type="editQuotaNotifyDailyThresholdType"
+                @update:enabled="editQuotaNotifyDailyEnabled = $event"
+                @update:threshold="editQuotaNotifyDailyThreshold = $event"
+                @update:thresholdType="
+                  editQuotaNotifyDailyThresholdType = $event
+                "
+              />
+            </div>
+            <div>
+              <label class="input-label">{{
+                t("admin.accounts.quotaNotify.weekly")
+              }}</label>
+              <QuotaNotifyToggle
+                :enabled="editQuotaNotifyWeeklyEnabled"
+                :threshold="editQuotaNotifyWeeklyThreshold"
+                :threshold-type="editQuotaNotifyWeeklyThresholdType"
+                @update:enabled="editQuotaNotifyWeeklyEnabled = $event"
+                @update:threshold="editQuotaNotifyWeeklyThreshold = $event"
+                @update:thresholdType="
+                  editQuotaNotifyWeeklyThresholdType = $event
+                "
+              />
+            </div>
+            <div>
+              <label class="input-label">{{
+                t("admin.accounts.quotaNotify.total")
+              }}</label>
+              <QuotaNotifyToggle
+                :enabled="editQuotaNotifyTotalEnabled"
+                :threshold="editQuotaNotifyTotalThreshold"
+                :threshold-type="editQuotaNotifyTotalThresholdType"
+                @update:enabled="editQuotaNotifyTotalEnabled = $event"
+                @update:threshold="editQuotaNotifyTotalThreshold = $event"
+                @update:thresholdType="
+                  editQuotaNotifyTotalThresholdType = $event
+                "
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- OpenAI OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
@@ -3595,6 +3655,21 @@ const editWeeklyResetMode = ref<"rolling" | "fixed" | null>(null);
 const editWeeklyResetDay = ref<number | null>(null);
 const editWeeklyResetHour = ref<number | null>(null);
 const editResetTimezone = ref<string | null>(null);
+const editQuotaNotifyDailyEnabled = ref<boolean | null>(null);
+const editQuotaNotifyDailyThreshold = ref<number | null>(null);
+const editQuotaNotifyDailyThresholdType = ref<"fixed" | "percentage" | null>(
+  null,
+);
+const editQuotaNotifyWeeklyEnabled = ref<boolean | null>(null);
+const editQuotaNotifyWeeklyThreshold = ref<number | null>(null);
+const editQuotaNotifyWeeklyThresholdType = ref<"fixed" | "percentage" | null>(
+  null,
+);
+const editQuotaNotifyTotalEnabled = ref<boolean | null>(null);
+const editQuotaNotifyTotalThreshold = ref<number | null>(null);
+const editQuotaNotifyTotalThresholdType = ref<"fixed" | "percentage" | null>(
+  null,
+);
 const modelMappings = ref<ModelMapping[]>([]);
 const modelRestrictionMode = ref<"whitelist" | "mapping">("whitelist");
 const allowedModels = ref<string[]>([]);
@@ -4500,6 +4575,15 @@ const resetQuotaResetState = () => {
   editWeeklyResetDay.value = null;
   editWeeklyResetHour.value = null;
   editResetTimezone.value = null;
+  editQuotaNotifyDailyEnabled.value = null;
+  editQuotaNotifyDailyThreshold.value = null;
+  editQuotaNotifyDailyThresholdType.value = null;
+  editQuotaNotifyWeeklyEnabled.value = null;
+  editQuotaNotifyWeeklyThreshold.value = null;
+  editQuotaNotifyWeeklyThresholdType.value = null;
+  editQuotaNotifyTotalEnabled.value = null;
+  editQuotaNotifyTotalThreshold.value = null;
+  editQuotaNotifyTotalThresholdType.value = null;
 };
 
 async function syncGeminiAIStudioOAuthAvailability(
@@ -5068,7 +5152,7 @@ const handleSubmit = async () => {
       appStore.showError(t("admin.accounts.grok.sessionTokenRequired"));
       return;
     }
-    const normalizedSessionToken = normalizeGrokSessionToken(sessionToken)
+    const normalizedSessionToken = normalizeGrokSessionToken(sessionToken);
     if (!normalizedSessionToken) {
       appStore.showError(t("admin.accounts.grok.sessionTokenInvalidFormat"));
       return;
@@ -5187,6 +5271,18 @@ const createAccountAndFinish = async (
             quotaDailyLimit: editQuotaDailyLimit.value,
             quotaLimit: editQuotaLimit.value,
             quotaWeeklyLimit: editQuotaWeeklyLimit.value,
+            quotaNotifyDailyEnabled: editQuotaNotifyDailyEnabled.value,
+            quotaNotifyDailyThreshold: editQuotaNotifyDailyThreshold.value,
+            quotaNotifyDailyThresholdType:
+              editQuotaNotifyDailyThresholdType.value,
+            quotaNotifyWeeklyEnabled: editQuotaNotifyWeeklyEnabled.value,
+            quotaNotifyWeeklyThreshold: editQuotaNotifyWeeklyThreshold.value,
+            quotaNotifyWeeklyThresholdType:
+              editQuotaNotifyWeeklyThresholdType.value,
+            quotaNotifyTotalEnabled: editQuotaNotifyTotalEnabled.value,
+            quotaNotifyTotalThreshold: editQuotaNotifyTotalThreshold.value,
+            quotaNotifyTotalThresholdType:
+              editQuotaNotifyTotalThresholdType.value,
             resetTimezone: editResetTimezone.value,
             weeklyResetDay: editWeeklyResetDay.value,
             weeklyResetHour: editWeeklyResetHour.value,

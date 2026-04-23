@@ -41,6 +41,23 @@
         />
       </div>
 
+      <div
+        class="settings-registration-card__section flex items-center justify-between pt-4"
+      >
+        <div>
+          <label class="settings-registration-card__label font-medium">
+            {{ t('admin.settings.registration.forceEmailOnThirdPartySignup') }}
+          </label>
+          <p class="settings-registration-card__description text-sm">
+            {{ t('admin.settings.registration.forceEmailOnThirdPartySignupHint') }}
+          </p>
+        </div>
+        <Toggle
+          v-model="form.force_email_on_third_party_signup"
+          :aria-label="t('admin.settings.registration.forceEmailOnThirdPartySignup')"
+        />
+      </div>
+
       <div class="settings-registration-card__section pt-4">
         <label class="settings-registration-card__label font-medium">
           {{ t('admin.settings.registration.emailSuffixWhitelist') }}

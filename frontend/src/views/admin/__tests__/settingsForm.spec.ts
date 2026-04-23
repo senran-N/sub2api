@@ -30,6 +30,26 @@ function createSettingsForm(overrides: Partial<SettingsForm> = {}): SettingsForm
     default_balance: 0,
     default_concurrency: 1,
     default_subscriptions: [],
+    auth_source_default_email_balance: 0,
+    auth_source_default_email_concurrency: 5,
+    auth_source_default_email_subscriptions: [],
+    auth_source_default_email_grant_on_signup: false,
+    auth_source_default_email_grant_on_first_bind: false,
+    auth_source_default_linuxdo_balance: 0,
+    auth_source_default_linuxdo_concurrency: 5,
+    auth_source_default_linuxdo_subscriptions: [],
+    auth_source_default_linuxdo_grant_on_signup: false,
+    auth_source_default_linuxdo_grant_on_first_bind: false,
+    auth_source_default_oidc_balance: 0,
+    auth_source_default_oidc_concurrency: 5,
+    auth_source_default_oidc_subscriptions: [],
+    auth_source_default_oidc_grant_on_signup: false,
+    auth_source_default_oidc_grant_on_first_bind: false,
+    auth_source_default_wechat_balance: 0,
+    auth_source_default_wechat_concurrency: 5,
+    auth_source_default_wechat_subscriptions: [],
+    auth_source_default_wechat_grant_on_signup: false,
+    auth_source_default_wechat_grant_on_first_bind: false,
     site_name: 'Sub2API',
     site_logo: '',
     site_subtitle: 'Subscription to API Conversion Platform',
@@ -211,6 +231,20 @@ describe('hydrateSettingsForm', () => {
     expect(form.turnstile_secret_key).toBe('')
     expect(form.linuxdo_connect_client_secret).toBe('')
   })
+
+
+  it('normalizes null quota notify emails to an empty array', () => {
+    const form = createSettingsForm()
+
+    hydrateSettingsForm(
+      form,
+      createSystemSettings({
+        account_quota_notify_emails: null as unknown as SystemSettings['account_quota_notify_emails']
+      })
+    )
+
+    expect(form.account_quota_notify_emails).toEqual([])
+  })
 })
 
 describe('buildSettingsUpdatePayload', () => {
@@ -346,5 +380,70 @@ describe('smtp request helpers', () => {
       smtp_from_name: 'Sub2API',
       smtp_use_tls: true
     })
+  })
+})
+
+describe('auth source default grants fields', () => {
+  it('hydrates auth source default subscriptions with normalized values', () => {
+    const form = createSettingsForm()
+
+    hydrateSettingsForm(
+      form,
+      createSystemSettings({
+        auth_source_default_email_subscriptions: [
+          { group_id: 11, validity_days: 30.8 },
+          { group_id: 0, validity_days: 15 }
+        ],
+        auth_source_default_linuxdo_subscriptions: [
+          { group_id: 9, validity_days: 36501 }
+        ]
+      } as Partial<SystemSettings>)
+    )
+
+    expect(form.auth_source_default_email_subscriptions).toEqual([
+      { group_id: 11, validity_days: 30 }
+    ])
+    expect(form.auth_source_default_linuxdo_subscriptions).toEqual([
+      { group_id: 9, validity_days: 36500 }
+    ])
+  })
+
+  it('includes auth source default grant fields in update payload', () => {
+    const form = createSettingsForm({
+      auth_source_default_email_balance: 8.5,
+      auth_source_default_email_concurrency: 6,
+      auth_source_default_email_subscriptions: [
+        { group_id: 10, validity_days: 15.2 },
+        { group_id: -1, validity_days: 3 }
+      ],
+      auth_source_default_email_grant_on_signup: true,
+      auth_source_default_email_grant_on_first_bind: false,
+      auth_source_default_oidc_balance: 5,
+      auth_source_default_oidc_concurrency: 2,
+      auth_source_default_oidc_subscriptions: [{ group_id: 12, validity_days: 7 }],
+      auth_source_default_oidc_grant_on_signup: false,
+      auth_source_default_oidc_grant_on_first_bind: true
+    })
+
+    const result = buildSettingsUpdatePayload(form, [])
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    expect(result.payload.auth_source_default_email_balance).toBe(8.5)
+    expect(result.payload.auth_source_default_email_concurrency).toBe(6)
+    expect(result.payload.auth_source_default_email_subscriptions).toEqual([
+      { group_id: 10, validity_days: 15 }
+    ])
+    expect(result.payload.auth_source_default_email_grant_on_signup).toBe(true)
+    expect(result.payload.auth_source_default_email_grant_on_first_bind).toBe(false)
+    expect(result.payload.auth_source_default_oidc_balance).toBe(5)
+    expect(result.payload.auth_source_default_oidc_concurrency).toBe(2)
+    expect(result.payload.auth_source_default_oidc_subscriptions).toEqual([
+      { group_id: 12, validity_days: 7 }
+    ])
+    expect(result.payload.auth_source_default_oidc_grant_on_signup).toBe(false)
+    expect(result.payload.auth_source_default_oidc_grant_on_first_bind).toBe(true)
   })
 })

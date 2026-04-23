@@ -34,6 +34,11 @@ func TestVerifyCodeKey(t *testing.T) {
 			email:    "user.name+tag@sub.domain.com",
 			expected: "verify_code:user.name+tag@sub.domain.com",
 		},
+		{
+			name:     "normalizes_email_case",
+			email:    "User.Name+Tag@Sub.Domain.COM",
+			expected: "verify_code:user.name+tag@sub.domain.com",
+		},
 	}
 
 	for _, tc := range tests {

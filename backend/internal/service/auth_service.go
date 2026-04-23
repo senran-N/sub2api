@@ -178,21 +178,15 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		return "", nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	// 获取默认配置
-	defaultBalance := s.cfg.Default.UserBalance
-	defaultConcurrency := s.cfg.Default.UserConcurrency
-	if s.settingService != nil {
-		defaultBalance = s.settingService.GetDefaultBalance(ctx)
-		defaultConcurrency = s.settingService.GetDefaultConcurrency(ctx)
-	}
+	grantPlan := s.resolveSignupGrantPlan(ctx, "email")
 
 	// 创建用户
 	user := &User{
 		Email:        email,
 		PasswordHash: hashedPassword,
 		Role:         RoleUser,
-		Balance:      defaultBalance,
-		Concurrency:  defaultConcurrency,
+		Balance:      grantPlan.Balance,
+		Concurrency:  grantPlan.Concurrency,
 		Status:       StatusActive,
 	}
 
@@ -204,7 +198,7 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		logger.LegacyPrintf("service.auth", "[Auth] Database error creating user: %v", err)
 		return "", nil, ErrServiceUnavailable
 	}
-	s.assignDefaultSubscriptions(ctx, user.ID)
+	s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
 
 	// 标记邀请码为已使用（如果使用了邀请码）
 	if invitationRedeemCode != nil {
@@ -421,6 +415,8 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 		return "", nil, ErrUserNotActive
 	}
 
+	s.BackfillEmailIdentityOnSuccessfulLogin(ctx, user)
+
 	// 生成JWT token
 	token, err := s.GenerateToken(user)
 	if err != nil {
@@ -431,20 +427,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 }
 
 func (s *AuthService) assignDefaultSubscriptions(ctx context.Context, userID int64) {
-	if s.settingService == nil || s.defaultSubAssigner == nil || userID <= 0 {
-		return
-	}
-	items := s.settingService.GetDefaultSubscriptions(ctx)
-	for _, item := range items {
-		if _, _, err := s.defaultSubAssigner.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{
-			UserID:       userID,
-			GroupID:      item.GroupID,
-			ValidityDays: item.ValidityDays,
-			Notes:        "auto assigned by default user subscriptions setting",
-		}); err != nil {
-			logger.LegacyPrintf("service.auth", "[Auth] Failed to assign default subscription: user_id=%d group_id=%d err=%v", userID, item.GroupID, err)
-		}
-	}
+	s.assignSubscriptions(ctx, userID, s.settingService.GetDefaultSubscriptions(ctx), "auto assigned by default user subscriptions setting")
 }
 
 func (s *AuthService) validateRegistrationEmailPolicy(ctx context.Context, email string) error {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -22,6 +23,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	keys := []string{
 		SettingKeyRegistrationEnabled,
 		SettingKeyEmailVerifyEnabled,
+		SettingKeyForceEmailOnThirdPartySignup,
 		SettingKeyRegistrationEmailSuffixWhitelist,
 		SettingKeyPromoCodeEnabled,
 		SettingKeyPasswordResetEnabled,
@@ -43,8 +45,18 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyCustomMenuItems,
 		SettingKeyCustomEndpoints,
 		SettingKeyLinuxDoConnectEnabled,
+		SettingKeyWeChatConnectEnabled,
+		SettingKeyWeChatConnectOpenEnabled,
+		SettingKeyWeChatConnectMPEnabled,
+		SettingKeyWeChatConnectMobileEnabled,
+		SettingKeyOIDCConnectEnabled,
+		SettingKeyOIDCConnectProviderName,
 		SettingKeyBackendModeEnabled,
 		SettingPaymentEnabled,
+		SettingKeyBalanceLowNotifyEnabled,
+		SettingKeyAccountQuotaNotifyEnabled,
+		SettingKeyBalanceLowNotifyThreshold,
+		SettingKeyBalanceLowNotifyRechargeURL,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -58,6 +70,29 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	} else {
 		linuxDoEnabled = s.cfg != nil && s.cfg.LinuxDo.Enabled
 	}
+	wechatEnabled := false
+	wechatOpenEnabled := false
+	wechatMPEnabled := false
+	wechatMobileEnabled := false
+	if s != nil {
+		effective := s.effectiveWeChatConnectOAuthConfig(settings)
+		wechatEnabled = effective.Enabled
+		wechatOpenEnabled = effective.OpenEnabled
+		wechatMPEnabled = effective.MPEnabled
+		wechatMobileEnabled = effective.MobileEnabled
+	}
+	oidcEnabled := false
+	oidcProviderName := "OIDC"
+	if raw, ok := settings[SettingKeyOIDCConnectEnabled]; ok {
+		oidcEnabled = raw == "true"
+	} else {
+		oidcEnabled = s.cfg != nil && s.cfg.OIDC.Enabled
+	}
+	if raw, ok := settings[SettingKeyOIDCConnectProviderName]; ok && strings.TrimSpace(raw) != "" {
+		oidcProviderName = strings.TrimSpace(raw)
+	} else if s.cfg != nil && strings.TrimSpace(s.cfg.OIDC.ProviderName) != "" {
+		oidcProviderName = strings.TrimSpace(s.cfg.OIDC.ProviderName)
+	}
 
 	emailVerifyEnabled := settings[SettingKeyEmailVerifyEnabled] == "true"
 	passwordResetEnabled := emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true"
@@ -68,6 +103,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	return &PublicSettings{
 		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:               emailVerifyEnabled,
+		ForceEmailOnThirdPartySignup:     settings[SettingKeyForceEmailOnThirdPartySignup] == "true",
 		RegistrationEmailSuffixWhitelist: registrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false",
 		PasswordResetEnabled:             passwordResetEnabled,
@@ -89,8 +125,18 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                  settings[SettingKeyCustomEndpoints],
 		LinuxDoOAuthEnabled:              linuxDoEnabled,
+		WeChatOAuthEnabled:               wechatEnabled,
+		WeChatOAuthOpenEnabled:           wechatOpenEnabled,
+		WeChatOAuthMPEnabled:             wechatMPEnabled,
+		WeChatOAuthMobileEnabled:         wechatMobileEnabled,
+		OIDCOAuthEnabled:                 oidcEnabled,
+		OIDCOAuthProviderName:            oidcProviderName,
 		BackendModeEnabled:               settings[SettingKeyBackendModeEnabled] == "true",
 		PaymentEnabled:                   settings[SettingPaymentEnabled] == "true",
+		BalanceLowNotifyEnabled:          settings[SettingKeyBalanceLowNotifyEnabled] == "true",
+		AccountQuotaNotifyEnabled:        settings[SettingKeyAccountQuotaNotifyEnabled] == "true",
+		BalanceLowNotifyThreshold:        parsePublicFloatSetting(settings[SettingKeyBalanceLowNotifyThreshold]),
+		BalanceLowNotifyRechargeURL:      strings.TrimSpace(settings[SettingKeyBalanceLowNotifyRechargeURL]),
 	}, nil
 }
 
@@ -104,6 +150,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 	return &struct {
 		RegistrationEnabled              bool            `json:"registration_enabled"`
 		EmailVerifyEnabled               bool            `json:"email_verify_enabled"`
+		ForceEmailOnThirdPartySignup     bool            `json:"force_email_on_third_party_signup"`
 		RegistrationEmailSuffixWhitelist []string        `json:"registration_email_suffix_whitelist"`
 		PromoCodeEnabled                 bool            `json:"promo_code_enabled"`
 		PasswordResetEnabled             bool            `json:"password_reset_enabled"`
@@ -125,12 +172,23 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		CustomMenuItems                  json.RawMessage `json:"custom_menu_items"`
 		CustomEndpoints                  json.RawMessage `json:"custom_endpoints"`
 		LinuxDoOAuthEnabled              bool            `json:"linuxdo_oauth_enabled"`
+		WeChatOAuthEnabled               bool            `json:"wechat_oauth_enabled"`
+		WeChatOAuthOpenEnabled           bool            `json:"wechat_oauth_open_enabled"`
+		WeChatOAuthMPEnabled             bool            `json:"wechat_oauth_mp_enabled"`
+		WeChatOAuthMobileEnabled         bool            `json:"wechat_oauth_mobile_enabled"`
+		OIDCOAuthEnabled                 bool            `json:"oidc_oauth_enabled"`
+		OIDCOAuthProviderName            string          `json:"oidc_oauth_provider_name"`
 		BackendModeEnabled               bool            `json:"backend_mode_enabled"`
 		PaymentEnabled                   bool            `json:"payment_enabled"`
+		BalanceLowNotifyEnabled          bool            `json:"balance_low_notify_enabled"`
+		AccountQuotaNotifyEnabled        bool            `json:"account_quota_notify_enabled"`
+		BalanceLowNotifyThreshold        float64         `json:"balance_low_notify_threshold"`
+		BalanceLowNotifyRechargeURL      string          `json:"balance_low_notify_recharge_url"`
 		Version                          string          `json:"version,omitempty"`
 	}{
 		RegistrationEnabled:              settings.RegistrationEnabled,
 		EmailVerifyEnabled:               settings.EmailVerifyEnabled,
+		ForceEmailOnThirdPartySignup:     settings.ForceEmailOnThirdPartySignup,
 		RegistrationEmailSuffixWhitelist: settings.RegistrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                 settings.PromoCodeEnabled,
 		PasswordResetEnabled:             settings.PasswordResetEnabled,
@@ -152,8 +210,18 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		CustomMenuItems:                  filterUserVisibleMenuItems(settings.CustomMenuItems),
 		CustomEndpoints:                  safeRawJSONArray(settings.CustomEndpoints),
 		LinuxDoOAuthEnabled:              settings.LinuxDoOAuthEnabled,
+		WeChatOAuthEnabled:               settings.WeChatOAuthEnabled,
+		WeChatOAuthOpenEnabled:           settings.WeChatOAuthOpenEnabled,
+		WeChatOAuthMPEnabled:             settings.WeChatOAuthMPEnabled,
+		WeChatOAuthMobileEnabled:         settings.WeChatOAuthMobileEnabled,
+		OIDCOAuthEnabled:                 settings.OIDCOAuthEnabled,
+		OIDCOAuthProviderName:            settings.OIDCOAuthProviderName,
 		BackendModeEnabled:               settings.BackendModeEnabled,
 		PaymentEnabled:                   settings.PaymentEnabled,
+		BalanceLowNotifyEnabled:          settings.BalanceLowNotifyEnabled,
+		AccountQuotaNotifyEnabled:        settings.AccountQuotaNotifyEnabled,
+		BalanceLowNotifyThreshold:        settings.BalanceLowNotifyThreshold,
+		BalanceLowNotifyRechargeURL:      settings.BalanceLowNotifyRechargeURL,
 		Version:                          s.version,
 	}, nil
 }
@@ -275,4 +343,16 @@ func parseCustomMenuItemURLs(raw string) []string {
 		}
 	}
 	return urls
+}
+
+func parsePublicFloatSetting(raw string) float64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0
+	}
+	return value
 }

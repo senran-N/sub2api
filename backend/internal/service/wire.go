@@ -418,6 +418,10 @@ func ProvideGrokAccountStateExtraWriter(accountRepo AccountRepository) grokAccou
 	return accountRepo
 }
 
+func ProvideAccountQuotaReader(accountRepo AccountRepository) AccountQuotaReader {
+	return accountRepo
+}
+
 func ProvideGrokQuotaAccountSyncer(syncer *GrokQuotaSyncService) grokQuotaAccountSyncer {
 	return syncer
 }
@@ -426,6 +430,71 @@ func ProvideGrokQuotaAccountSyncer(syncer *GrokQuotaSyncService) grokQuotaAccoun
 // payment.EncryptionKey type instead of raw []byte, avoiding Wire ambiguity.
 func ProvidePaymentConfigService(entClient *dbent.Client, settingRepo SettingRepository, key payment.EncryptionKey) *PaymentConfigService {
 	return NewPaymentConfigService(entClient, settingRepo, []byte(key))
+}
+
+func ProvideUserService(userRepo UserRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache, settingRepo SettingRepository) *UserService {
+	svc := NewUserService(userRepo, authCacheInvalidator, billingCache)
+	svc.SetSettingRepo(settingRepo)
+	return svc
+}
+
+func ProvideGatewayService(
+	accountRepo AccountRepository,
+	groupRepo GroupRepository,
+	usageLogRepo UsageLogRepository,
+	usageBillingRepo UsageBillingRepository,
+	userRepo UserRepository,
+	userSubRepo UserSubscriptionRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	cache GatewayCache,
+	cfg *config.Config,
+	schedulerSnapshot *SchedulerSnapshotService,
+	concurrencyService *ConcurrencyService,
+	billingService *BillingService,
+	rateLimitService *RateLimitService,
+	billingCacheService *BillingCacheService,
+	identityService *IdentityService,
+	httpUpstream HTTPUpstream,
+	deferredService *DeferredService,
+	claudeTokenProvider *ClaudeTokenProvider,
+	sessionLimitCache SessionLimitCache,
+	rpmCache RPMCache,
+	digestStore *DigestSessionStore,
+	settingService *SettingService,
+	tlsFPProfileService *TLSFingerprintProfileService,
+	channelService *ChannelService,
+	resolver *ModelPricingResolver,
+	balanceNotifyService *BalanceNotifyService,
+) *GatewayService {
+	svc := NewGatewayService(accountRepo, groupRepo, usageLogRepo, usageBillingRepo, userRepo, userSubRepo, userGroupRateRepo, cache, cfg, schedulerSnapshot, concurrencyService, billingService, rateLimitService, billingCacheService, identityService, httpUpstream, deferredService, claudeTokenProvider, sessionLimitCache, rpmCache, digestStore, settingService, tlsFPProfileService, channelService, resolver)
+	svc.SetBalanceNotifyService(balanceNotifyService)
+	return svc
+}
+
+func ProvideOpenAIGatewayService(
+	accountRepo AccountRepository,
+	usageLogRepo UsageLogRepository,
+	usageBillingRepo UsageBillingRepository,
+	userRepo UserRepository,
+	userSubRepo UserSubscriptionRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	cache GatewayCache,
+	cfg *config.Config,
+	schedulerSnapshot *SchedulerSnapshotService,
+	concurrencyService *ConcurrencyService,
+	billingService *BillingService,
+	rateLimitService *RateLimitService,
+	billingCacheService *BillingCacheService,
+	httpUpstream HTTPUpstream,
+	deferredService *DeferredService,
+	openAITokenProvider *OpenAITokenProvider,
+	resolver *ModelPricingResolver,
+	channelService *ChannelService,
+	balanceNotifyService *BalanceNotifyService,
+) *OpenAIGatewayService {
+	svc := NewOpenAIGatewayService(accountRepo, usageLogRepo, usageBillingRepo, userRepo, userSubRepo, userGroupRateRepo, cache, cfg, schedulerSnapshot, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider, resolver, channelService)
+	svc.SetBalanceNotifyService(balanceNotifyService)
+	return svc
 }
 
 // ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
@@ -438,7 +507,7 @@ func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lifecycle *Lif
 var ProviderSet = wire.NewSet(
 	// Core services
 	NewAuthService,
-	NewUserService,
+	ProvideUserService,
 	NewAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	NewGroupService,
@@ -456,8 +525,10 @@ var ProviderSet = wire.NewSet(
 	NewAdminService,
 	ProvideGrokAccountStateExtraWriter,
 	NewIPRiskService,
-	NewGatewayService,
-	NewOpenAIGatewayService,
+	ProvideGatewayService,
+	ProvideOpenAIGatewayService,
+	ProvideAccountQuotaReader,
+	NewBalanceNotifyService,
 	NewGrokAccountStateService,
 	ProvideCompatibleGatewayTextRuntime,
 	ProvideGrokCompatibleRuntime,

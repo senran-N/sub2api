@@ -13,6 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	dbent "github.com/senran-N/sub2api/ent"
+	dbuser "github.com/senran-N/sub2api/ent/user"
 	"github.com/senran-N/sub2api/internal/config"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/oauth"
@@ -29,6 +31,7 @@ const (
 	linuxDoOAuthStateCookieName   = "linuxdo_oauth_state"
 	linuxDoOAuthVerifierCookie    = "linuxdo_oauth_verifier"
 	linuxDoOAuthRedirectCookie    = "linuxdo_oauth_redirect"
+	linuxDoOAuthIntentCookie      = "linuxdo_oauth_intent"
 	linuxDoOAuthCookieMaxAgeSec   = 10 * 60 // 10 minutes
 	linuxDoOAuthDefaultRedirectTo = "/dashboard"
 	linuxDoOAuthDefaultFrontendCB = "/auth/linuxdo/callback"
@@ -36,6 +39,9 @@ const (
 	linuxDoOAuthMaxRedirectLen      = 2048
 	linuxDoOAuthMaxFragmentValueLen = 512
 	linuxDoOAuthMaxSubjectLen       = 64 - len("linuxdo-")
+
+	oauthIntentLogin           = "login"
+	oauthIntentBindCurrentUser = "bind_current_user"
 )
 
 type linuxDoTokenResponse struct {
@@ -86,10 +92,23 @@ func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = linuxDoOAuthDefaultRedirectTo
 	}
+	intent := strings.TrimSpace(c.Query("intent"))
+	if intent == "" {
+		intent = oauthIntentLogin
+	}
+
+	browserSessionKey, err := generateOAuthPendingBrowserSession()
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_BROWSER_SESSION_GEN_FAILED", "failed to generate oauth browser session").WithCause(err))
+		return
+	}
 
 	secureCookie := isRequestHTTPS(c)
 	setCookie(c, linuxDoOAuthStateCookieName, encodeCookieValue(state), linuxDoOAuthCookieMaxAgeSec, secureCookie)
 	setCookie(c, linuxDoOAuthRedirectCookie, encodeCookieValue(redirectTo), linuxDoOAuthCookieMaxAgeSec, secureCookie)
+	setCookie(c, linuxDoOAuthIntentCookie, encodeCookieValue(intent), linuxDoOAuthCookieMaxAgeSec, secureCookie)
+	setOAuthPendingBrowserCookie(c, browserSessionKey, secureCookie)
+	clearOAuthPendingSessionCookie(c, secureCookie)
 
 	codeChallenge := ""
 	if cfg.UsePKCE {
@@ -148,6 +167,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 		clearCookie(c, linuxDoOAuthStateCookieName, secureCookie)
 		clearCookie(c, linuxDoOAuthVerifierCookie, secureCookie)
 		clearCookie(c, linuxDoOAuthRedirectCookie, secureCookie)
+		clearCookie(c, linuxDoOAuthIntentCookie, secureCookie)
 	}()
 
 	expectedState, err := readCookieDecoded(c, linuxDoOAuthStateCookieName)
@@ -160,6 +180,11 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 	redirectTo = sanitizeFrontendRedirectPath(redirectTo)
 	if redirectTo == "" {
 		redirectTo = linuxDoOAuthDefaultRedirectTo
+	}
+	intent, _ := readCookieDecoded(c, linuxDoOAuthIntentCookie)
+	intent = strings.TrimSpace(intent)
+	if intent == "" {
+		intent = oauthIntentLogin
 	}
 
 	codeVerifier := ""
@@ -205,30 +230,226 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 		return
 	}
 
+	rawProviderEmail := strings.TrimSpace(email)
+
 	// 安全考虑：不要把第三方返回的 email 直接映射到本地账号（可能与本地邮箱用户冲突导致账号被接管）。
 	// 统一使用基于 subject 的稳定合成邮箱来做账号绑定。
 	if subject != "" {
 		email = linuxDoSyntheticEmail(subject)
 	}
 
-	// 传入空邀请码；如果需要邀请码，服务层返回 ErrOAuthInvitationRequired
-	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, "")
-	if err != nil {
-		if errors.Is(err, service.ErrOAuthInvitationRequired) {
-			pendingToken, tokenErr := h.authService.CreatePendingOAuthToken(email, username)
-			if tokenErr != nil {
-				redirectOAuthError(c, frontendCallback, "login_failed", "service_error", "")
-				return
-			}
-			fragment := url.Values{}
-			fragment.Set("error", "invitation_required")
-			fragment.Set("pending_oauth_token", pendingToken)
-			fragment.Set("redirect", redirectTo)
-			redirectWithFragment(c, frontendCallback, fragment)
+	if intent == oauthIntentBindCurrentUser {
+		rawBindCookie, bindErr := readOAuthBindUserCookie(c)
+		if bindErr != nil {
+			redirectOAuthError(c, frontendCallback, "bind_failed", "missing oauth bind session", "")
 			return
 		}
-		// 避免把内部细节泄露给客户端；给前端保留结构化原因与提示信息即可。
+		userID, bindErr := parseOAuthBindUserCookieValue(rawBindCookie, h.oauthBindCookieSecret(), time.Now())
+		if bindErr != nil {
+			redirectOAuthError(c, frontendCallback, "bind_failed", infraerrors.Message(bindErr), "")
+			return
+		}
+		browserSessionKey, browserErr := readOAuthPendingBrowserCookie(c)
+		if browserErr != nil || strings.TrimSpace(browserSessionKey) == "" {
+			redirectOAuthError(c, frontendCallback, "bind_failed", "missing_browser_session", "")
+			return
+		}
+		if createErr := h.createOAuthPendingSession(c, oauthPendingSessionPayload{
+			Intent:            oauthIntentBindCurrentUser,
+			Identity:          service.PendingAuthIdentityKey{ProviderType: "linuxdo", ProviderKey: "linuxdo", ProviderSubject: subject},
+			TargetUserID:      &userID,
+			ResolvedEmail:     strings.TrimSpace(rawProviderEmail),
+			RedirectTo:        redirectTo,
+			BrowserSessionKey: browserSessionKey,
+			UpstreamIdentityClaims: map[string]any{
+				"provider_email":         strings.ToLower(strings.TrimSpace(rawProviderEmail)),
+				"provider_username":      strings.TrimSpace(username),
+				"suggested_display_name": buildSuggestedOAuthDisplayName(username),
+				"source":                 "linuxdo_oauth_bind_pending",
+			},
+			CompletionResponse: map[string]any{
+				"redirect": redirectTo,
+			},
+		}); createErr != nil {
+			redirectOAuthError(c, frontendCallback, "bind_failed", infraerrors.Reason(createErr), infraerrors.Message(createErr))
+			return
+		}
+		clearOAuthBindUserCookie(c, secureCookie)
+		redirectToFrontendCallback(c, frontendCallback)
+		return
+	}
+
+	identityOwner, identityErr := h.findOAuthIdentityUser(c.Request.Context(), service.PendingAuthIdentityKey{
+		ProviderType:    "linuxdo",
+		ProviderKey:     "linuxdo",
+		ProviderSubject: subject,
+	})
+	if identityErr != nil {
+		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(identityErr), infraerrors.Message(identityErr))
+		return
+	}
+	if identityOwner != nil && identityOwner.ID > 0 {
+		serviceUser, getErr := h.userService.GetByID(c.Request.Context(), identityOwner.ID)
+		if getErr != nil {
+			redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(getErr), infraerrors.Message(getErr))
+			return
+		}
+		if backendModeBlocksLogin(h.settingSvc.IsBackendModeEnabled(c.Request.Context()), serviceUser) {
+			redirectOAuthError(c, frontendCallback, "login_failed", "backend_mode_forbidden", "")
+			return
+		}
+		tokenPair, tokenErr := h.authService.GenerateTokenPair(c.Request.Context(), serviceUser, "")
+		if tokenErr != nil {
+			redirectOAuthError(c, frontendCallback, "login_failed", "token_generation_failed", "")
+			return
+		}
+		_ = h.authService.BindOAuthIdentity(c.Request.Context(), serviceUser.ID, "linuxdo", "linuxdo", subject, map[string]any{
+			"username": username,
+			"email":    email,
+			"source":   "linuxdo_oauth_identity_login",
+		})
+
+		fragment := url.Values{}
+		fragment.Set("access_token", tokenPair.AccessToken)
+		fragment.Set("refresh_token", tokenPair.RefreshToken)
+		fragment.Set("expires_in", fmt.Sprintf("%d", tokenPair.ExpiresIn))
+		fragment.Set("token_type", "Bearer")
+		fragment.Set("redirect", redirectTo)
+		redirectWithFragment(c, frontendCallback, fragment)
+		return
+	}
+
+	compatEmailUser, compatErr := h.findLinuxDoCompatEmailUser(c.Request.Context(), rawProviderEmail)
+	if compatErr != nil {
+		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(compatErr), infraerrors.Message(compatErr))
+		return
+	}
+	if compatEmailUser != nil {
+		browserSessionKey, browserErr := readOAuthPendingBrowserCookie(c)
+		if browserErr != nil || strings.TrimSpace(browserSessionKey) == "" {
+			redirectOAuthError(c, frontendCallback, "login_failed", "missing_browser_session", "")
+			return
+		}
+
+		if createErr := h.createOAuthPendingSession(c, oauthPendingSessionPayload{
+			Intent:            oauthIntentLogin,
+			Identity:          service.PendingAuthIdentityKey{ProviderType: "linuxdo", ProviderKey: "linuxdo", ProviderSubject: subject},
+			TargetUserID:      &compatEmailUser.ID,
+			ResolvedEmail:     strings.TrimSpace(compatEmailUser.Email),
+			RedirectTo:        redirectTo,
+			BrowserSessionKey: browserSessionKey,
+			UpstreamIdentityClaims: map[string]any{
+				"provider_email":         strings.ToLower(strings.TrimSpace(rawProviderEmail)),
+				"provider_username":      strings.TrimSpace(username),
+				"suggested_display_name": buildSuggestedOAuthDisplayName(username),
+				"source":                 "linuxdo_oauth_pending_compat_email",
+			},
+			CompletionResponse: map[string]any{
+				"step":                      oauthPendingChoiceStep,
+				"email":                     strings.TrimSpace(compatEmailUser.Email),
+				"resolved_email":            strings.TrimSpace(compatEmailUser.Email),
+				"existing_account_bindable": true,
+				"create_account_allowed":    false,
+				"error":                     "email_exists",
+			},
+		}); createErr != nil {
+			redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(createErr), infraerrors.Message(createErr))
+			return
+		}
+
+		redirectToFrontendCallback(c, frontendCallback)
+		return
+	}
+
+	if h.isForceEmailOnThirdPartySignup(c.Request.Context()) {
+		browserSessionKey, browserErr := readOAuthPendingBrowserCookie(c)
+		if browserErr != nil || strings.TrimSpace(browserSessionKey) == "" {
+			redirectOAuthError(c, frontendCallback, "login_failed", "missing_browser_session", "")
+			return
+		}
+		completionResponse := map[string]any{
+			"step":                      oauthPendingChoiceStep,
+			"adoption_required":         true,
+			"redirect":                  redirectTo,
+			"email":                     strings.ToLower(strings.TrimSpace(rawProviderEmail)),
+			"resolved_email":            strings.ToLower(strings.TrimSpace(rawProviderEmail)),
+			"existing_account_email":    "",
+			"existing_account_bindable": true,
+			"create_account_allowed":    true,
+			"choice_reason":             "third_party_signup",
+		}
+		if createErr := h.createOAuthPendingSession(c, oauthPendingSessionPayload{
+			Intent:            oauthIntentLogin,
+			Identity:          service.PendingAuthIdentityKey{ProviderType: "linuxdo", ProviderKey: "linuxdo", ProviderSubject: subject},
+			ResolvedEmail:     strings.ToLower(strings.TrimSpace(rawProviderEmail)),
+			RedirectTo:        redirectTo,
+			BrowserSessionKey: browserSessionKey,
+			UpstreamIdentityClaims: map[string]any{
+				"provider_email":         strings.ToLower(strings.TrimSpace(rawProviderEmail)),
+				"provider_username":      strings.TrimSpace(username),
+				"suggested_display_name": buildSuggestedOAuthDisplayName(username),
+				"source":                 "linuxdo_oauth_force_email_signup",
+			},
+			CompletionResponse: completionResponse,
+		}); createErr != nil {
+			redirectOAuthError(c, frontendCallback, "session_error", "failed to continue oauth login", "")
+			return
+		}
+		redirectToFrontendCallback(c, frontendCallback)
+		return
+	}
+
+	// 传入空邀请码；如果需要邀请码，切换到 pending oauth 邮箱/绑定流。
+	tokenPair, user, err := h.authService.LoginOrRegisterOAuthWithTokenPairForSource(c.Request.Context(), email, username, "", "linuxdo")
+	if err != nil {
+		if errors.Is(err, service.ErrOAuthInvitationRequired) {
+			browserSessionKey, browserErr := readOAuthPendingBrowserCookie(c)
+			if browserErr != nil || strings.TrimSpace(browserSessionKey) == "" {
+				redirectOAuthError(c, frontendCallback, "login_failed", "missing_browser_session", "")
+				return
+			}
+
+			completionResponse := map[string]any{
+				"error":                     "invitation_required",
+				"step":                      oauthPendingChoiceStep,
+				"create_account_allowed":    true,
+				"existing_account_bindable": true,
+			}
+			if suggestedName := buildSuggestedOAuthDisplayName(username); suggestedName != "" {
+				completionResponse["adoption_required"] = true
+			}
+
+			if createErr := h.createOAuthPendingSession(c, oauthPendingSessionPayload{
+				Intent:            oauthIntentLogin,
+				Identity:          service.PendingAuthIdentityKey{ProviderType: "linuxdo", ProviderKey: "linuxdo", ProviderSubject: subject},
+				ResolvedEmail:     strings.ToLower(strings.TrimSpace(rawProviderEmail)),
+				RedirectTo:        redirectTo,
+				BrowserSessionKey: browserSessionKey,
+				UpstreamIdentityClaims: map[string]any{
+					"provider_email":         strings.ToLower(strings.TrimSpace(rawProviderEmail)),
+					"provider_username":      strings.TrimSpace(username),
+					"suggested_display_name": buildSuggestedOAuthDisplayName(username),
+					"source":                 "linuxdo_oauth_pending",
+				},
+				CompletionResponse: completionResponse,
+			}); createErr != nil {
+				redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(createErr), infraerrors.Message(createErr))
+				return
+			}
+
+			redirectToFrontendCallback(c, frontendCallback)
+			return
+		}
 		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(err), infraerrors.Message(err))
+		return
+	}
+
+	if bindErr := h.authService.BindOAuthIdentity(c.Request.Context(), user.ID, "linuxdo", "linuxdo", subject, map[string]any{
+		"username": username,
+		"email":    email,
+		"source":   "linuxdo_oauth_login",
+	}); bindErr != nil {
+		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(bindErr), infraerrors.Message(bindErr))
 		return
 	}
 
@@ -241,39 +462,43 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 	redirectWithFragment(c, frontendCallback, fragment)
 }
 
-type completeLinuxDoOAuthRequest struct {
-	PendingOAuthToken string `json:"pending_oauth_token" binding:"required"`
-	InvitationCode    string `json:"invitation_code"     binding:"required"`
+func (h *AuthHandler) findLinuxDoCompatEmailUser(ctx context.Context, email string) (*dbent.User, error) {
+	client := h.authService.EntClient()
+	if client == nil {
+		return nil, infraerrors.ServiceUnavailable("PENDING_AUTH_NOT_READY", "pending auth service is not ready")
+	}
+
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" || strings.HasSuffix(email, service.LinuxDoConnectSyntheticEmailDomain) {
+		return nil, nil
+	}
+
+	userEntity, err := client.User.Query().
+		Where(dbuser.EmailEqualFold(email)).
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, infraerrors.InternalServer("COMPAT_EMAIL_LOOKUP_FAILED", "failed to look up compat email user").WithCause(err)
+	}
+	return userEntity, nil
 }
 
-// CompleteLinuxDoOAuthRegistration completes a pending OAuth registration by validating
-// the invitation code and creating the user account.
+// CompleteLinuxDoOAuthRegistration finalizes a pending LinuxDo onboarding flow.
 // POST /api/v1/auth/oauth/linuxdo/complete-registration
 func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
-	var req completeLinuxDoOAuthRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_REQUEST", "message": err.Error()})
-		return
-	}
+	h.CreateLinuxDoOAuthAccount(c)
+}
 
-	email, username, err := h.authService.VerifyPendingOAuthToken(req.PendingOAuthToken)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_TOKEN", "message": "invalid or expired registration token"})
-		return
+func linuxDoExtractSubjectFromEmail(email string) string {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	prefix := "linuxdo-"
+	suffix := service.LinuxDoConnectSyntheticEmailDomain
+	if strings.HasPrefix(normalized, prefix) && strings.HasSuffix(normalized, suffix) {
+		return strings.TrimSuffix(strings.TrimPrefix(normalized, prefix), suffix)
 	}
-
-	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, req.InvitationCode)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"access_token":  tokenPair.AccessToken,
-		"refresh_token": tokenPair.RefreshToken,
-		"expires_in":    tokenPair.ExpiresIn,
-		"token_type":    "Bearer",
-	})
+	return ""
 }
 
 func (h *AuthHandler) getLinuxDoOAuthConfig(ctx context.Context) (config.LinuxDoConnectConfig, error) {

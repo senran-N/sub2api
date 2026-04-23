@@ -72,6 +72,20 @@ func (User) Fields() []ent.Field {
 		field.Time("totp_enabled_at").
 			Optional().
 			Nillable(),
+		field.Bool("balance_notify_enabled").
+			Default(true),
+		field.String("balance_notify_threshold_type").
+			Default("fixed"),
+		field.Float("balance_notify_threshold").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Optional().
+			Nillable(),
+		field.String("balance_notify_extra_emails").
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Default("[]"),
+		field.Float("total_recharged").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0),
 	}
 }
 
@@ -88,6 +102,8 @@ func (User) Edges() []ent.Edge {
 		edge.To("attribute_values", UserAttributeValue.Type),
 		edge.To("promo_code_usages", PromoCodeUsage.Type),
 		edge.To("payment_orders", PaymentOrder.Type),
+		edge.To("auth_identities", AuthIdentity.Type),
+		edge.To("pending_auth_sessions", PendingAuthSession.Type),
 	}
 }
 

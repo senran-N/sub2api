@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/senran-N/sub2api/ent"
 	"github.com/senran-N/sub2api/ent/apikey"
+	"github.com/senran-N/sub2api/ent/authidentity"
 	dbgroup "github.com/senran-N/sub2api/ent/group"
 	dbuser "github.com/senran-N/sub2api/ent/user"
 	"github.com/senran-N/sub2api/ent/userallowedgroup"
@@ -62,8 +63,16 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetBalanceNotifyEnabled(userIn.BalanceNotifyEnabled).
+		SetBalanceNotifyThresholdType(strings.TrimSpace(firstNonEmpty(userIn.BalanceNotifyThresholdType, "fixed"))).
+		SetBalanceNotifyExtraEmails(service.MarshalNotifyEmails(userIn.BalanceNotifyExtraEmails)).
+		SetTotalRecharged(userIn.TotalRecharged).
 		Save(ctx)
 	if err != nil {
+		return translatePersistenceError(err, nil, service.ErrEmailExists)
+	}
+
+	if err := ensureEmailAuthIdentityWithClient(ctx, txClient, created.ID, userIn.Email, "user_repo_create"); err != nil {
 		return translatePersistenceError(err, nil, service.ErrEmailExists)
 	}
 
@@ -88,6 +97,9 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 	}
 
 	out := userEntityToService(m)
+	if err := r.applyUserIdentityFlags(ctx, out); err != nil {
+		return nil, err
+	}
 	groups, err := r.loadAllowedGroups(ctx, []int64{id})
 	if err != nil {
 		return nil, err
@@ -99,12 +111,23 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 }
 
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service.User, error) {
-	m, err := r.client.User.Query().Where(dbuser.EmailEQ(email)).Only(ctx)
+	lookup := normalizeEmailLookupValue(email)
+	matches, err := r.client.User.Query().Where(dbuser.EmailEqualFold(lookup)).All(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
+	if len(matches) == 0 {
+		return nil, service.ErrUserNotFound
+	}
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("normalized email lookup matched multiple users for %q", strings.TrimSpace(email))
+	}
+	m := matches[0]
 
 	out := userEntityToService(m)
+	if err := r.applyUserIdentityFlags(ctx, out); err != nil {
+		return nil, err
+	}
 	groups, err := r.loadAllowedGroups(ctx, []int64{m.ID})
 	if err != nil {
 		return nil, err
@@ -135,7 +158,12 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		txClient = r.client
 	}
 
-	updated, err := txClient.User.UpdateOneID(userIn.ID).
+	current, err := txClient.User.Get(ctx, userIn.ID)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+
+	update := txClient.User.UpdateOneID(userIn.ID).
 		SetEmail(userIn.Email).
 		SetUsername(userIn.Username).
 		SetNotes(userIn.Notes).
@@ -144,8 +172,21 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
-		Save(ctx)
+		SetBalanceNotifyEnabled(userIn.BalanceNotifyEnabled).
+		SetBalanceNotifyThresholdType(strings.TrimSpace(firstNonEmpty(userIn.BalanceNotifyThresholdType, "fixed"))).
+		SetBalanceNotifyExtraEmails(service.MarshalNotifyEmails(userIn.BalanceNotifyExtraEmails)).
+		SetTotalRecharged(userIn.TotalRecharged)
+	if userIn.BalanceNotifyThreshold != nil {
+		update = update.SetBalanceNotifyThreshold(*userIn.BalanceNotifyThreshold)
+	} else {
+		update = update.ClearBalanceNotifyThreshold()
+	}
+	updated, err := update.Save(ctx)
 	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, service.ErrEmailExists)
+	}
+
+	if err := replaceEmailAuthIdentityWithClient(ctx, txClient, updated.ID, current.Email, userIn.Email, "user_repo_update"); err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, service.ErrEmailExists)
 	}
 
@@ -333,7 +374,11 @@ func (r *userRepository) filterUsersByAttributes(ctx context.Context, attrs map[
 
 func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount float64) error {
 	client := clientFromContext(ctx, r.client)
-	n, err := client.User.Update().Where(dbuser.IDEQ(id)).AddBalance(amount).Save(ctx)
+	update := client.User.Update().Where(dbuser.IDEQ(id)).AddBalance(amount)
+	if amount > 0 {
+		update = update.AddTotalRecharged(amount)
+	}
+	n, err := update.Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
@@ -374,7 +419,7 @@ func (r *userRepository) UpdateConcurrency(ctx context.Context, id int64, amount
 }
 
 func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
-	return r.client.User.Query().Where(dbuser.EmailEQ(email)).Exist(ctx)
+	return r.client.User.Query().Where(dbuser.EmailEqualFold(normalizeEmailLookupValue(email))).Exist(ctx)
 }
 
 func (r *userRepository) AddGroupToAllowedGroups(ctx context.Context, userID int64, groupID int64) error {
@@ -420,6 +465,9 @@ func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, erro
 	}
 
 	out := userEntityToService(m)
+	if err := r.applyUserIdentityFlags(ctx, out); err != nil {
+		return nil, err
+	}
 	groups, err := r.loadAllowedGroups(ctx, []int64{m.ID})
 	if err != nil {
 		return nil, err
@@ -498,6 +546,11 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 	dst.ID = src.ID
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
+	dst.BalanceNotifyEnabled = src.BalanceNotifyEnabled
+	dst.BalanceNotifyThresholdType = src.BalanceNotifyThresholdType
+	dst.BalanceNotifyThreshold = src.BalanceNotifyThreshold
+	dst.BalanceNotifyExtraEmails = service.ParseNotifyEmails(src.BalanceNotifyExtraEmails)
+	dst.TotalRecharged = src.TotalRecharged
 }
 
 // UpdateTotpSecret 更新用户的 TOTP 加密密钥
@@ -541,4 +594,132 @@ func (r *userRepository) DisableTotp(ctx context.Context, userID int64) error {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
 	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func (r *userRepository) ListUserAuthIdentities(ctx context.Context, userID int64) ([]service.UserAuthIdentityRecord, error) {
+	rows, err := r.client.AuthIdentity.Query().
+		Where(authidentity.UserIDEQ(userID)).
+		Order(dbent.Desc(authidentity.FieldVerifiedAt), dbent.Desc(authidentity.FieldUpdatedAt), dbent.Desc(authidentity.FieldCreatedAt)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]service.UserAuthIdentityRecord, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, service.UserAuthIdentityRecord{
+			ProviderType:    row.ProviderType,
+			ProviderKey:     row.ProviderKey,
+			ProviderSubject: row.ProviderSubject,
+			VerifiedAt:      row.VerifiedAt,
+			Issuer:          row.Issuer,
+			Metadata:        row.Metadata,
+			CreatedAt:       row.CreatedAt,
+			UpdatedAt:       row.UpdatedAt,
+		})
+	}
+	return result, nil
+}
+
+func (r *userRepository) UnbindUserAuthProvider(ctx context.Context, userID int64, provider string) error {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" || provider == "email" {
+		return service.ErrInvalidEmail
+	}
+	_, err := r.client.AuthIdentity.Delete().
+		Where(authidentity.UserIDEQ(userID), authidentity.ProviderTypeEQ(provider)).
+		Exec(ctx)
+	return err
+}
+
+func (r *userRepository) applyUserIdentityFlags(ctx context.Context, user *service.User) error {
+	if user == nil || user.ID <= 0 {
+		return nil
+	}
+	identities, err := r.ListUserAuthIdentities(ctx, user.ID)
+	if err != nil {
+		return err
+	}
+	user.EmailBound = hasUserAuthProvider(identities, "email") || normalizeEmailAuthIdentitySubject(user.Email) != ""
+	user.LinuxDoBound = hasUserAuthProvider(identities, "linuxdo")
+	user.OIDCBound = hasUserAuthProvider(identities, "oidc")
+	user.WeChatBound = hasUserAuthProvider(identities, "wechat")
+	return nil
+}
+
+func hasUserAuthProvider(records []service.UserAuthIdentityRecord, provider string) bool {
+	for _, record := range records {
+		if strings.EqualFold(strings.TrimSpace(record.ProviderType), provider) {
+			return true
+		}
+	}
+	return false
+}
+
+func ensureEmailAuthIdentityWithClient(ctx context.Context, client *dbent.Client, userID int64, email string, source string) error {
+	subject := normalizeEmailAuthIdentitySubject(email)
+	if client == nil || userID <= 0 || subject == "" {
+		return nil
+	}
+	metadata := map[string]any{
+		"email":  strings.TrimSpace(email),
+		"source": source,
+	}
+	if err := client.AuthIdentity.Create().
+		SetUserID(userID).
+		SetProviderType("email").
+		SetProviderKey("email").
+		SetProviderSubject(subject).
+		SetVerifiedAt(time.Now().UTC()).
+		SetMetadata(metadata).
+		OnConflictColumns(authidentity.FieldProviderType, authidentity.FieldProviderKey, authidentity.FieldProviderSubject).
+		Ignore().
+		Exec(ctx); err != nil {
+		return err
+	}
+	identity, err := client.AuthIdentity.Query().
+		Where(authidentity.ProviderTypeEQ("email"), authidentity.ProviderKeyEQ("email"), authidentity.ProviderSubjectEQ(subject)).
+		Only(ctx)
+	if err != nil {
+		return err
+	}
+	if identity.UserID != userID {
+		return service.ErrEmailExists
+	}
+	return nil
+}
+
+func replaceEmailAuthIdentityWithClient(ctx context.Context, client *dbent.Client, userID int64, oldEmail, newEmail string, source string) error {
+	newSubject := normalizeEmailAuthIdentitySubject(newEmail)
+	if err := ensureEmailAuthIdentityWithClient(ctx, client, userID, newEmail, source); err != nil {
+		return err
+	}
+	oldSubject := normalizeEmailAuthIdentitySubject(oldEmail)
+	if oldSubject == "" || oldSubject == newSubject {
+		return nil
+	}
+	_, err := client.AuthIdentity.Delete().
+		Where(authidentity.UserIDEQ(userID), authidentity.ProviderTypeEQ("email"), authidentity.ProviderKeyEQ("email"), authidentity.ProviderSubjectEQ(oldSubject)).
+		Exec(ctx)
+	return err
+}
+
+func normalizeEmailAuthIdentitySubject(email string) string {
+	normalized := normalizeEmailLookupValue(email)
+	if normalized == "" || strings.HasSuffix(normalized, service.LinuxDoConnectSyntheticEmailDomain) {
+		return ""
+	}
+	return normalized
+}
+
+func normalizeEmailLookupValue(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }

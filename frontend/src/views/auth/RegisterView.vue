@@ -11,6 +11,12 @@
       </div>
 
       <LinuxDoOAuthSection v-if="settings.linuxdoOAuthEnabled" :disabled="isLoading" />
+      <WechatOAuthSection v-if="settings.wechatOAuthEnabled" :disabled="isLoading" />
+      <OidcOAuthSection
+        v-if="settings.oidcOAuthEnabled"
+        :disabled="isLoading"
+        :provider-name="settings.oidcOAuthProviderName"
+      />
 
       <div
         v-if="!settings.registrationEnabled && settingsLoaded"
@@ -174,6 +180,8 @@ import { useI18n } from 'vue-i18n'
 import { getPublicSettings, validateInvitationCode, validatePromoCode } from '@/api/auth'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
+import WechatOAuthSection from '@/components/auth/WechatOAuthSection.vue'
+import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { AuthLayout } from '@/components/layout'
 import { useAppStore, useAuthStore } from '@/stores'

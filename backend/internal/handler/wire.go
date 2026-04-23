@@ -7,6 +7,13 @@ import (
 	"github.com/google/wire"
 )
 
+func ProvideUserHandler(userService *service.UserService, authService *service.AuthService, emailService *service.EmailService, emailCache service.EmailCache) *UserHandler {
+	handler := NewUserHandler(userService)
+	handler.SetAuthService(authService)
+	handler.SetEmailDeps(emailService, emailCache)
+	return handler
+}
+
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
@@ -123,7 +130,7 @@ func ProvideHandlers(
 var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
-	NewUserHandler,
+	ProvideUserHandler,
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,

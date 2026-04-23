@@ -15,7 +15,10 @@ import {
   buildSmtpTestConnectionRequest,
   buildSettingsUpdatePayload,
   createDefaultSettingsForm,
+  getAuthSourceDefaultSubscriptions,
   getSettingsLinuxdoRedirectUrlSuggestion,
+  getSettingsWeChatRedirectUrlSuggestion,
+  getSettingsOidcRedirectUrlSuggestion,
   hydrateSettingsForm,
   moveCustomMenuItem,
   removeCustomEndpoint,
@@ -93,6 +96,18 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
 
   const linuxdoRedirectUrlSuggestion = computed(() =>
     getSettingsLinuxdoRedirectUrlSuggestion(
+      options.location ?? (typeof window === 'undefined' ? undefined : window.location)
+    )
+  )
+
+  const wechatRedirectUrlSuggestion = computed(() =>
+    getSettingsWeChatRedirectUrlSuggestion(
+      options.location ?? (typeof window === 'undefined' ? undefined : window.location)
+    )
+  )
+
+  const oidcRedirectUrlSuggestion = computed(() =>
+    getSettingsOidcRedirectUrlSuggestion(
       options.location ?? (typeof window === 'undefined' ? undefined : window.location)
     )
   )
@@ -176,6 +191,26 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
     await options.copyToClipboard(url, options.t('admin.settings.linuxdo.redirectUrlSetAndCopied'))
   }
 
+  async function setAndCopyWeChatRedirectUrl() {
+    const url = wechatRedirectUrlSuggestion.value
+    if (!url) {
+      return
+    }
+
+    form.wechat_connect_redirect_url = url
+    await options.copyToClipboard(url, options.t('admin.settings.wechatConnect.redirectUrlSetAndCopied'))
+  }
+
+  async function setAndCopyOidcRedirectUrl() {
+    const url = oidcRedirectUrlSuggestion.value
+    if (!url) {
+      return
+    }
+
+    form.oidc_connect_redirect_url = url
+    await options.copyToClipboard(url, options.t('admin.settings.oidc.redirectUrlSetAndCopied'))
+  }
+
   function addMenuItem() {
     addCustomMenuItem(form.custom_menu_items)
   }
@@ -249,6 +284,14 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
 
   function removeDefaultSubscription(index: number) {
     removeDefaultSubscriptionItem(form.default_subscriptions, index)
+  }
+
+  function addAuthSourceDefaultSubscription(source: import('@/api/admin/settings').AuthSourceType) {
+    addNextDefaultSubscription(getAuthSourceDefaultSubscriptions(form, source), subscriptionGroups.value)
+  }
+
+  function removeAuthSourceDefaultSubscription(source: import('@/api/admin/settings').AuthSourceType, index: number) {
+    removeDefaultSubscriptionItem(getAuthSourceDefaultSubscriptions(form, source), index)
   }
 
   async function saveSettings() {
@@ -370,6 +413,8 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
     form,
     defaultSubscriptionGroupOptions,
     linuxdoRedirectUrlSuggestion,
+    wechatRedirectUrlSuggestion,
+    oidcRedirectUrlSuggestion,
     removeRegistrationEmailSuffixWhitelistTag,
     addRegistrationEmailSuffixWhitelistTag,
     commitRegistrationEmailSuffixWhitelistDraft,
@@ -377,6 +422,8 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
     handleRegistrationEmailSuffixWhitelistDraftKeydown,
     handleRegistrationEmailSuffixWhitelistPaste,
     setAndCopyLinuxdoRedirectUrl,
+    setAndCopyWeChatRedirectUrl,
+    setAndCopyOidcRedirectUrl,
     addMenuItem,
     removeMenuItem,
     moveMenuItem,
@@ -386,6 +433,8 @@ export function useSettingsViewForm(options: SettingsViewFormOptions) {
     loadSubscriptionGroups,
     addDefaultSubscription,
     removeDefaultSubscription,
+    addAuthSourceDefaultSubscription,
+    removeAuthSourceDefaultSubscription,
     saveSettings,
     testSmtpConnection,
     sendTestEmail

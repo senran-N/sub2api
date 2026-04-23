@@ -2,73 +2,88 @@ import type {
   Account,
   AccountPlatform,
   AccountType,
-  CheckMixedChannelResponse
-} from '@/types'
+  CheckMixedChannelResponse,
+} from "@/types";
 import {
   DEFAULT_ANTHROPIC_BASE_URL,
   DEFAULT_ANTIGRAVITY_BASE_URL,
   DEFAULT_GEMINI_BASE_URL,
   DEFAULT_GROK_BASE_URL,
   DEFAULT_OPENAI_BASE_URL,
-  type TempUnschedRuleForm
-} from './credentialsBuilder'
+  type TempUnschedRuleForm,
+} from "./credentialsBuilder";
 import {
   OPENAI_WS_MODE_CTX_POOL,
   OPENAI_WS_MODE_OFF,
   OPENAI_WS_MODE_PASSTHROUGH,
-  type OpenAIWSMode
-} from '@/utils/openaiWsMode'
+  type OpenAIWSMode,
+} from "@/utils/openaiWsMode";
 
-export type Translate = (key: string, values?: Record<string, unknown>) => string
-type QuotaResetMode = 'rolling' | 'fixed' | null
+export type Translate = (
+  key: string,
+  values?: Record<string, unknown>,
+) => string;
+type QuotaResetMode = "rolling" | "fixed" | null;
 
 export interface AccountBaseUrlPreset {
-  label: string
-  value: string
+  label: string;
+  value: string;
 }
 
 interface AccountQuotaExtraOptions {
-  dailyResetHour: number | null
-  dailyResetMode: QuotaResetMode
-  quotaDailyLimit: number | null
-  quotaLimit: number | null
-  quotaWeeklyLimit: number | null
-  resetTimezone: string | null
-  weeklyResetDay: number | null
-  weeklyResetHour: number | null
-  weeklyResetMode: QuotaResetMode
+  dailyResetHour: number | null;
+  dailyResetMode: QuotaResetMode;
+  quotaDailyLimit: number | null;
+  quotaLimit: number | null;
+  quotaWeeklyLimit: number | null;
+  quotaNotifyDailyEnabled?: boolean | null;
+  quotaNotifyDailyThreshold?: number | null;
+  quotaNotifyDailyThresholdType?: "fixed" | "percentage" | null;
+  quotaNotifyWeeklyEnabled?: boolean | null;
+  quotaNotifyWeeklyThreshold?: number | null;
+  quotaNotifyWeeklyThresholdType?: "fixed" | "percentage" | null;
+  quotaNotifyTotalEnabled?: boolean | null;
+  quotaNotifyTotalThreshold?: number | null;
+  quotaNotifyTotalThresholdType?: "fixed" | "percentage" | null;
+  resetTimezone: string | null;
+  weeklyResetDay: number | null;
+  weeklyResetHour: number | null;
+  weeklyResetMode: QuotaResetMode;
 }
 
-type EditableAccountStatus = Extract<Account['status'], 'active' | 'inactive' | 'error'>
+type EditableAccountStatus = Extract<
+  Account["status"],
+  "active" | "inactive" | "error"
+>;
 
 export interface AccountBaseFormFields {
-  name: string
-  notes: string
-  proxy_id: number | null
-  concurrency: number
-  load_factor: number | null
-  priority: number
-  rate_multiplier: number
-  group_ids: number[]
-  expires_at: number | null
+  name: string;
+  notes: string;
+  proxy_id: number | null;
+  concurrency: number;
+  load_factor: number | null;
+  priority: number;
+  rate_multiplier: number;
+  group_ids: number[];
+  expires_at: number | null;
 }
 
 export interface CreateAccountForm extends AccountBaseFormFields {
-  platform: AccountPlatform
-  type: AccountType
-  credentials: Record<string, unknown>
+  platform: AccountPlatform;
+  type: AccountType;
+  credentials: Record<string, unknown>;
 }
 
 export interface EditAccountForm extends AccountBaseFormFields {
-  status: EditableAccountStatus
+  status: EditableAccountStatus;
 }
 
 export function createDefaultCreateAccountForm(): CreateAccountForm {
   return {
-    name: '',
-    notes: '',
-    platform: 'anthropic',
-    type: 'oauth',
+    name: "",
+    notes: "",
+    platform: "anthropic",
+    type: "oauth",
     credentials: {},
     proxy_id: null,
     concurrency: 10,
@@ -76,48 +91,48 @@ export function createDefaultCreateAccountForm(): CreateAccountForm {
     priority: 1,
     rate_multiplier: 1,
     group_ids: [],
-    expires_at: null
-  }
+    expires_at: null,
+  };
 }
 
 export function resetCreateAccountForm(form: CreateAccountForm): void {
-  Object.assign(form, createDefaultCreateAccountForm())
+  Object.assign(form, createDefaultCreateAccountForm());
 }
 
 export function createDefaultEditAccountForm(): EditAccountForm {
   return {
-    name: '',
-    notes: '',
+    name: "",
+    notes: "",
     proxy_id: null,
     concurrency: 1,
     load_factor: null,
     priority: 1,
     rate_multiplier: 1,
-    status: 'active',
+    status: "active",
     group_ids: [],
-    expires_at: null
-  }
+    expires_at: null,
+  };
 }
 
 export function hydrateEditAccountForm(
   form: EditAccountForm,
   account: Pick<
     Account,
-    | 'name'
-    | 'notes'
-    | 'proxy_id'
-    | 'concurrency'
-    | 'load_factor'
-    | 'priority'
-    | 'rate_multiplier'
-    | 'status'
-    | 'group_ids'
-    | 'expires_at'
-  >
+    | "name"
+    | "notes"
+    | "proxy_id"
+    | "concurrency"
+    | "load_factor"
+    | "priority"
+    | "rate_multiplier"
+    | "status"
+    | "group_ids"
+    | "expires_at"
+  >,
 ): void {
   Object.assign(form, createDefaultEditAccountForm(), {
     name: account.name,
-    notes: account.notes || '',
+    notes: account.notes || "",
     proxy_id: account.proxy_id,
     concurrency: account.concurrency,
     load_factor: account.load_factor ?? null,
@@ -125,283 +140,355 @@ export function hydrateEditAccountForm(
     rate_multiplier: account.rate_multiplier ?? 1,
     status: normalizeEditableAccountStatus(account.status),
     group_ids: account.group_ids || [],
-    expires_at: account.expires_at ?? null
-  })
+    expires_at: account.expires_at ?? null,
+  });
 }
 
 export function buildEditAccountBasePayload(
   form: EditAccountForm,
-  autoPauseOnExpired: boolean
+  autoPauseOnExpired: boolean,
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     ...form,
     proxy_id: form.proxy_id ?? 0,
     expires_at: form.expires_at ?? 0,
-    auto_pause_on_expired: autoPauseOnExpired
-  }
+    auto_pause_on_expired: autoPauseOnExpired,
+  };
 
   if (
     form.load_factor == null ||
     Number.isNaN(form.load_factor) ||
     form.load_factor <= 0
   ) {
-    payload.load_factor = 0
+    payload.load_factor = 0;
   }
 
-  return payload
+  return payload;
 }
 
-export function resolveAccountBaseUrlHint(platform: AccountPlatform | null | undefined, t: Translate) {
-  if (platform === 'openai') {
-    return t('admin.accounts.openai.baseUrlHint')
+export function resolveAccountBaseUrlHint(
+  platform: AccountPlatform | null | undefined,
+  t: Translate,
+) {
+  if (platform === "openai") {
+    return t("admin.accounts.openai.baseUrlHint");
   }
-  if (platform === 'gemini') {
-    return t('admin.accounts.gemini.baseUrlHint')
+  if (platform === "gemini") {
+    return t("admin.accounts.gemini.baseUrlHint");
   }
-  if (platform === 'grok') {
-    return t('admin.accounts.grok.baseUrlHint')
+  if (platform === "grok") {
+    return t("admin.accounts.grok.baseUrlHint");
   }
-  return t('admin.accounts.baseUrlHint')
+  return t("admin.accounts.baseUrlHint");
 }
 
 export function resolveAccountBaseUrlPlaceholder(
   platform: AccountPlatform | null | undefined,
-  t: Translate
+  t: Translate,
 ) {
-  if (platform === 'openai') {
-    return t('admin.accounts.openai.baseUrlPlaceholder')
+  if (platform === "openai") {
+    return t("admin.accounts.openai.baseUrlPlaceholder");
   }
-  if (platform === 'gemini') {
-    return DEFAULT_GEMINI_BASE_URL
+  if (platform === "gemini") {
+    return DEFAULT_GEMINI_BASE_URL;
   }
-  if (platform === 'grok') {
-    return DEFAULT_GROK_BASE_URL
+  if (platform === "grok") {
+    return DEFAULT_GROK_BASE_URL;
   }
-  if (platform === 'antigravity') {
-    return DEFAULT_ANTIGRAVITY_BASE_URL
+  if (platform === "antigravity") {
+    return DEFAULT_ANTIGRAVITY_BASE_URL;
   }
-  return DEFAULT_ANTHROPIC_BASE_URL
+  return DEFAULT_ANTHROPIC_BASE_URL;
 }
 
-export function resolveAccountApiKeyHint(platform: AccountPlatform | null | undefined, t: Translate) {
-  if (platform === 'openai') {
-    return t('admin.accounts.openai.apiKeyHint')
+export function resolveAccountApiKeyHint(
+  platform: AccountPlatform | null | undefined,
+  t: Translate,
+) {
+  if (platform === "openai") {
+    return t("admin.accounts.openai.apiKeyHint");
   }
-  if (platform === 'gemini') {
-    return t('admin.accounts.gemini.apiKeyHint')
+  if (platform === "gemini") {
+    return t("admin.accounts.gemini.apiKeyHint");
   }
-  if (platform === 'grok') {
-    return t('admin.accounts.grok.apiKeyHint')
+  if (platform === "grok") {
+    return t("admin.accounts.grok.apiKeyHint");
   }
-  return t('admin.accounts.apiKeyHint')
+  return t("admin.accounts.apiKeyHint");
 }
 
 export function resolveAccountApiKeyPlaceholder(
   platform: AccountPlatform | null | undefined,
-  t: Translate
+  t: Translate,
 ) {
-  if (platform === 'openai') {
-    return t('admin.accounts.openai.apiKeyPlaceholder')
+  if (platform === "openai") {
+    return t("admin.accounts.openai.apiKeyPlaceholder");
   }
-  if (platform === 'gemini') {
-    return 'AIza...'
+  if (platform === "gemini") {
+    return "AIza...";
   }
-  if (platform === 'grok') {
-    return t('admin.accounts.grok.apiKeyPlaceholder')
+  if (platform === "grok") {
+    return t("admin.accounts.grok.apiKeyPlaceholder");
   }
-  if (platform === 'antigravity') {
-    return 'sk-...'
+  if (platform === "antigravity") {
+    return "sk-...";
   }
-  return 'sk-ant-...'
+  return "sk-ant-...";
 }
 
 export function buildCompatibleBaseUrlPresets(
   platform: AccountPlatform | null | undefined,
-  t: Translate
+  t: Translate,
 ): AccountBaseUrlPreset[] {
-  if (platform === 'openai') {
+  if (platform === "openai") {
     return [
       {
-        label: t('admin.accounts.openai.baseUrlPresets.official'),
-        value: DEFAULT_OPENAI_BASE_URL
-      }
-    ]
+        label: t("admin.accounts.openai.baseUrlPresets.official"),
+        value: DEFAULT_OPENAI_BASE_URL,
+      },
+    ];
   }
-  if (platform === 'grok') {
+  if (platform === "grok") {
     return [
       {
-        label: t('admin.accounts.grok.baseUrlPresets.official'),
-        value: DEFAULT_GROK_BASE_URL
-      }
-    ]
+        label: t("admin.accounts.grok.baseUrlPresets.official"),
+        value: DEFAULT_GROK_BASE_URL,
+      },
+    ];
   }
-  return []
+  return [];
 }
 
 export function resolveCreateAccountOAuthStepTitle(
   platform: AccountPlatform,
-  t: Translate
+  t: Translate,
 ) {
-  if (platform === 'openai') {
-    return t('admin.accounts.oauth.openai.title')
+  if (platform === "openai") {
+    return t("admin.accounts.oauth.openai.title");
   }
-  if (platform === 'gemini') {
-    return t('admin.accounts.oauth.gemini.title')
+  if (platform === "gemini") {
+    return t("admin.accounts.oauth.gemini.title");
   }
-  if (platform === 'antigravity') {
-    return t('admin.accounts.oauth.antigravity.title')
+  if (platform === "antigravity") {
+    return t("admin.accounts.oauth.antigravity.title");
   }
-  return t('admin.accounts.oauth.title')
+  return t("admin.accounts.oauth.title");
 }
 
 export function buildAccountUmqModeOptions(t: Translate) {
   return [
-    { value: '', label: t('admin.accounts.quotaControl.rpmLimit.umqModeOff') },
-    { value: 'throttle', label: t('admin.accounts.quotaControl.rpmLimit.umqModeThrottle') },
-    { value: 'serialize', label: t('admin.accounts.quotaControl.rpmLimit.umqModeSerialize') }
-  ]
+    { value: "", label: t("admin.accounts.quotaControl.rpmLimit.umqModeOff") },
+    {
+      value: "throttle",
+      label: t("admin.accounts.quotaControl.rpmLimit.umqModeThrottle"),
+    },
+    {
+      value: "serialize",
+      label: t("admin.accounts.quotaControl.rpmLimit.umqModeSerialize"),
+    },
+  ];
 }
 
-export function buildAccountOpenAIWSModeOptions(t: Translate): Array<{ value: OpenAIWSMode; label: string }> {
+export function buildAccountOpenAIWSModeOptions(
+  t: Translate,
+): Array<{ value: OpenAIWSMode; label: string }> {
   return [
-    { value: OPENAI_WS_MODE_OFF, label: t('admin.accounts.openai.wsModeOff') },
-    { value: OPENAI_WS_MODE_CTX_POOL, label: t('admin.accounts.openai.wsModeCtxPool') },
-    { value: OPENAI_WS_MODE_PASSTHROUGH, label: t('admin.accounts.openai.wsModePassthrough') }
-  ]
+    { value: OPENAI_WS_MODE_OFF, label: t("admin.accounts.openai.wsModeOff") },
+    {
+      value: OPENAI_WS_MODE_CTX_POOL,
+      label: t("admin.accounts.openai.wsModeCtxPool"),
+    },
+    {
+      value: OPENAI_WS_MODE_PASSTHROUGH,
+      label: t("admin.accounts.openai.wsModePassthrough"),
+    },
+  ];
 }
 
 export function buildAccountTempUnschedPresets(
-  t: Translate
+  t: Translate,
 ): Array<{ label: string; rule: TempUnschedRuleForm }> {
   return [
     {
-      label: t('admin.accounts.tempUnschedulable.presets.overloadLabel'),
+      label: t("admin.accounts.tempUnschedulable.presets.overloadLabel"),
       rule: {
         error_code: 529,
-        keywords: 'overloaded, too many',
+        keywords: "overloaded, too many",
         duration_minutes: 60,
-        description: t('admin.accounts.tempUnschedulable.presets.overloadDesc')
-      }
+        description: t("admin.accounts.tempUnschedulable.presets.overloadDesc"),
+      },
     },
     {
-      label: t('admin.accounts.tempUnschedulable.presets.rateLimitLabel'),
+      label: t("admin.accounts.tempUnschedulable.presets.rateLimitLabel"),
       rule: {
         error_code: 429,
-        keywords: 'rate limit, too many requests',
+        keywords: "rate limit, too many requests",
         duration_minutes: 10,
-        description: t('admin.accounts.tempUnschedulable.presets.rateLimitDesc')
-      }
+        description: t(
+          "admin.accounts.tempUnschedulable.presets.rateLimitDesc",
+        ),
+      },
     },
     {
-      label: t('admin.accounts.tempUnschedulable.presets.unavailableLabel'),
+      label: t("admin.accounts.tempUnschedulable.presets.unavailableLabel"),
       rule: {
         error_code: 503,
-        keywords: 'unavailable, maintenance',
+        keywords: "unavailable, maintenance",
         duration_minutes: 30,
-        description: t('admin.accounts.tempUnschedulable.presets.unavailableDesc')
-      }
-    }
-  ]
+        description: t(
+          "admin.accounts.tempUnschedulable.presets.unavailableDesc",
+        ),
+      },
+    },
+  ];
 }
 
 export function buildAccountQuotaExtra(
   baseExtra: Record<string, unknown> | undefined,
-  options: AccountQuotaExtraOptions
+  options: AccountQuotaExtraOptions,
 ) {
-  const nextExtra: Record<string, unknown> = { ...(baseExtra || {}) }
+  const nextExtra: Record<string, unknown> = { ...(baseExtra || {}) };
 
   if (options.quotaLimit != null && options.quotaLimit > 0) {
-    nextExtra.quota_limit = options.quotaLimit
+    nextExtra.quota_limit = options.quotaLimit;
   } else {
-    delete nextExtra.quota_limit
+    delete nextExtra.quota_limit;
   }
 
   if (options.quotaDailyLimit != null && options.quotaDailyLimit > 0) {
-    nextExtra.quota_daily_limit = options.quotaDailyLimit
+    nextExtra.quota_daily_limit = options.quotaDailyLimit;
   } else {
-    delete nextExtra.quota_daily_limit
+    delete nextExtra.quota_daily_limit;
   }
 
   if (options.quotaWeeklyLimit != null && options.quotaWeeklyLimit > 0) {
-    nextExtra.quota_weekly_limit = options.quotaWeeklyLimit
+    nextExtra.quota_weekly_limit = options.quotaWeeklyLimit;
   } else {
-    delete nextExtra.quota_weekly_limit
+    delete nextExtra.quota_weekly_limit;
   }
 
-  if (options.dailyResetMode === 'fixed') {
-    nextExtra.quota_daily_reset_mode = 'fixed'
-    nextExtra.quota_daily_reset_hour = options.dailyResetHour ?? 0
+  if (options.dailyResetMode === "fixed") {
+    nextExtra.quota_daily_reset_mode = "fixed";
+    nextExtra.quota_daily_reset_hour = options.dailyResetHour ?? 0;
   } else {
-    delete nextExtra.quota_daily_reset_mode
-    delete nextExtra.quota_daily_reset_hour
+    delete nextExtra.quota_daily_reset_mode;
+    delete nextExtra.quota_daily_reset_hour;
   }
 
-  if (options.weeklyResetMode === 'fixed') {
-    nextExtra.quota_weekly_reset_mode = 'fixed'
-    nextExtra.quota_weekly_reset_day = options.weeklyResetDay ?? 1
-    nextExtra.quota_weekly_reset_hour = options.weeklyResetHour ?? 0
+  if (options.weeklyResetMode === "fixed") {
+    nextExtra.quota_weekly_reset_mode = "fixed";
+    nextExtra.quota_weekly_reset_day = options.weeklyResetDay ?? 1;
+    nextExtra.quota_weekly_reset_hour = options.weeklyResetHour ?? 0;
   } else {
-    delete nextExtra.quota_weekly_reset_mode
-    delete nextExtra.quota_weekly_reset_day
-    delete nextExtra.quota_weekly_reset_hour
+    delete nextExtra.quota_weekly_reset_mode;
+    delete nextExtra.quota_weekly_reset_day;
+    delete nextExtra.quota_weekly_reset_hour;
   }
 
-  if (options.dailyResetMode === 'fixed' || options.weeklyResetMode === 'fixed') {
-    nextExtra.quota_reset_timezone = options.resetTimezone || 'UTC'
+  if (
+    options.dailyResetMode === "fixed" ||
+    options.weeklyResetMode === "fixed"
+  ) {
+    nextExtra.quota_reset_timezone = options.resetTimezone || "UTC";
   } else {
-    delete nextExtra.quota_reset_timezone
+    delete nextExtra.quota_reset_timezone;
   }
 
-  return nextExtra
+  const notifyEntries = [
+    [
+      "daily",
+      options.quotaNotifyDailyEnabled,
+      options.quotaNotifyDailyThreshold,
+      options.quotaNotifyDailyThresholdType,
+    ],
+    [
+      "weekly",
+      options.quotaNotifyWeeklyEnabled,
+      options.quotaNotifyWeeklyThreshold,
+      options.quotaNotifyWeeklyThresholdType,
+    ],
+    [
+      "total",
+      options.quotaNotifyTotalEnabled,
+      options.quotaNotifyTotalThreshold,
+      options.quotaNotifyTotalThresholdType,
+    ],
+  ] as const;
+
+  for (const [dim, enabled, threshold, thresholdType] of notifyEntries) {
+    const enabledKey = `quota_notify_${dim}_enabled`;
+    const thresholdKey = `quota_notify_${dim}_threshold`;
+    const typeKey = `quota_notify_${dim}_threshold_type`;
+
+    if (enabled) {
+      nextExtra[enabledKey] = true;
+      if (threshold != null && threshold > 0) {
+        nextExtra[thresholdKey] = threshold;
+        nextExtra[typeKey] = thresholdType || "fixed";
+      } else {
+        delete nextExtra[thresholdKey];
+        delete nextExtra[typeKey];
+      }
+    } else {
+      delete nextExtra[enabledKey];
+      delete nextExtra[thresholdKey];
+      delete nextExtra[typeKey];
+    }
+  }
+
+  return nextExtra;
 }
 
 export function needsMixedChannelCheck(platform: AccountPlatform) {
-  return platform === 'antigravity' || platform === 'anthropic'
+  return platform === "antigravity" || platform === "anthropic";
 }
 
 export function buildMixedChannelDetails(resp?: CheckMixedChannelResponse) {
-  const details = resp?.details
+  const details = resp?.details;
   if (!details) {
-    return null
+    return null;
   }
 
   return {
-    groupName: details.group_name || 'Unknown',
-    currentPlatform: details.current_platform || 'Unknown',
-    otherPlatform: details.other_platform || 'Unknown'
-  }
+    groupName: details.group_name || "Unknown",
+    currentPlatform: details.current_platform || "Unknown",
+    otherPlatform: details.other_platform || "Unknown",
+  };
 }
 
 export function resolveMixedChannelWarningMessage(options: {
-  details: ReturnType<typeof buildMixedChannelDetails>
-  rawMessage: string
-  t: Translate
+  details: ReturnType<typeof buildMixedChannelDetails>;
+  rawMessage: string;
+  t: Translate;
 }) {
   if (options.details) {
-    return options.t('admin.accounts.mixedChannelWarning', options.details)
+    return options.t("admin.accounts.mixedChannelWarning", options.details);
   }
-  return options.rawMessage
+  return options.rawMessage;
 }
 
 export const geminiQuotaDocs = {
-  codeAssist: 'https://developers.google.com/gemini-code-assist/resources/quotas',
-  aiStudio: 'https://ai.google.dev/pricing',
-  vertex: 'https://cloud.google.com/vertex-ai/generative-ai/docs/quotas'
-}
+  codeAssist:
+    "https://developers.google.com/gemini-code-assist/resources/quotas",
+  aiStudio: "https://ai.google.dev/pricing",
+  vertex: "https://cloud.google.com/vertex-ai/generative-ai/docs/quotas",
+};
 
 export const geminiHelpLinks = {
-  apiKey: 'https://aistudio.google.com/app/apikey',
-  aiStudioPricing: 'https://ai.google.dev/pricing',
-  gcpProject: 'https://console.cloud.google.com/welcome/new',
-  geminiWebActivation: 'https://gemini.google.com/gems/create?hl=en-US&pli=1',
-  countryCheck: 'https://policies.google.com/terms',
-  countryChange: 'https://policies.google.com/country-association-form'
-}
+  apiKey: "https://aistudio.google.com/app/apikey",
+  aiStudioPricing: "https://ai.google.dev/pricing",
+  gcpProject: "https://console.cloud.google.com/welcome/new",
+  geminiWebActivation: "https://gemini.google.com/gems/create?hl=en-US&pli=1",
+  countryCheck: "https://policies.google.com/terms",
+  countryChange: "https://policies.google.com/country-association-form",
+};
 
-function normalizeEditableAccountStatus(status: Account['status']): EditableAccountStatus {
-  if (status === 'inactive' || status === 'error') {
-    return status
+function normalizeEditableAccountStatus(
+  status: Account["status"],
+): EditableAccountStatus {
+  if (status === "inactive" || status === "error") {
+    return status;
   }
 
-  return 'active'
+  return "active";
 }

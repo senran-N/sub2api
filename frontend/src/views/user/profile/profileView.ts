@@ -8,6 +8,11 @@ interface ProfilePublicSettingsStore {
   fetchPublicSettings: () => Promise<unknown>
   cachedPublicSettings?: {
     contact_info?: string
+    balance_low_notify_enabled?: boolean
+    balance_low_notify_threshold?: number
+    linuxdo_oauth_enabled?: boolean
+    oidc_oauth_enabled?: boolean
+    wechat_oauth_enabled?: boolean
   } | null
 }
 
@@ -62,6 +67,11 @@ export function useProfileViewModel() {
   const appStore = useAppStore()
   const user = computed(() => authStore.user)
   const contactInfo = computed(() => appStore.cachedPublicSettings?.contact_info || '')
+  const balanceLowNotifyEnabled = computed(() => !!appStore.cachedPublicSettings?.balance_low_notify_enabled)
+  const systemDefaultThreshold = computed(() => appStore.cachedPublicSettings?.balance_low_notify_threshold || 0)
+  const linuxdoEnabled = computed(() => !!appStore.cachedPublicSettings?.linuxdo_oauth_enabled)
+  const oidcEnabled = computed(() => !!appStore.cachedPublicSettings?.oidc_oauth_enabled)
+  const wechatEnabled = computed(() => !!appStore.cachedPublicSettings?.wechat_oauth_enabled)
 
   async function loadContactInfo() {
     try {
@@ -71,9 +81,23 @@ export function useProfileViewModel() {
     }
   }
 
+  async function refreshProfile() {
+    try {
+      await authStore.refreshUser()
+    } catch (error) {
+      console.error('Failed to refresh profile:', error)
+    }
+  }
+
   return {
     user,
     contactInfo,
-    loadContactInfo
+    balanceLowNotifyEnabled,
+    systemDefaultThreshold,
+    linuxdoEnabled,
+    oidcEnabled,
+    wechatEnabled,
+    loadContactInfo,
+    refreshProfile
   }
 }

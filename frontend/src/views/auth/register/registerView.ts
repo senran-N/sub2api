@@ -37,6 +37,9 @@ export interface RegisterSettingsState {
   turnstileSiteKey: string
   siteName: string
   linuxdoOAuthEnabled: boolean
+  wechatOAuthEnabled: boolean
+  oidcOAuthEnabled: boolean
+  oidcOAuthProviderName: string
   registrationEmailSuffixWhitelist: string[]
 }
 
@@ -99,6 +102,9 @@ export function createRegisterSettingsState(): RegisterSettingsState {
     turnstileSiteKey: '',
     siteName: DEFAULT_SITE_NAME,
     linuxdoOAuthEnabled: false,
+    wechatOAuthEnabled: false,
+    oidcOAuthEnabled: false,
+    oidcOAuthProviderName: 'OIDC',
     registrationEmailSuffixWhitelist: []
   }
 }
@@ -115,6 +121,9 @@ export function applyRegisterPublicSettings(
   state.turnstileSiteKey = settings.turnstile_site_key || ''
   state.siteName = settings.site_name || DEFAULT_SITE_NAME
   state.linuxdoOAuthEnabled = settings.linuxdo_oauth_enabled
+  state.wechatOAuthEnabled = settings.wechat_oauth_enabled
+  state.oidcOAuthEnabled = settings.oidc_oauth_enabled
+  state.oidcOAuthProviderName = settings.oidc_oauth_provider_name || 'OIDC'
   state.registrationEmailSuffixWhitelist = normalizeRegistrationEmailSuffixWhitelist(
     settings.registration_email_suffix_whitelist || []
   )

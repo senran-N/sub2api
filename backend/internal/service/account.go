@@ -201,6 +201,58 @@ func (a *Account) GetQuotaWeeklyResetHour() int {
 	return a.getExtraInt("quota_weekly_reset_hour")
 }
 
+func (a *Account) QuotaNotifyConfig(dim string) (enabled bool, threshold float64, thresholdType string) {
+	enabled = a.getExtraBool("quota_notify_" + dim + "_enabled")
+	threshold = a.getExtraFloat64("quota_notify_" + dim + "_threshold")
+	thresholdType = a.getExtraStringDefault("quota_notify_"+dim+"_threshold_type", thresholdTypeFixed)
+	return
+}
+
+func (a *Account) GetQuotaNotifyDailyEnabled() bool {
+	enabled, _, _ := a.QuotaNotifyConfig(quotaDimDaily)
+	return enabled
+}
+
+func (a *Account) GetQuotaNotifyDailyThreshold() float64 {
+	_, threshold, _ := a.QuotaNotifyConfig(quotaDimDaily)
+	return threshold
+}
+
+func (a *Account) GetQuotaNotifyDailyThresholdType() string {
+	_, _, thresholdType := a.QuotaNotifyConfig(quotaDimDaily)
+	return thresholdType
+}
+
+func (a *Account) GetQuotaNotifyWeeklyEnabled() bool {
+	enabled, _, _ := a.QuotaNotifyConfig(quotaDimWeekly)
+	return enabled
+}
+
+func (a *Account) GetQuotaNotifyWeeklyThreshold() float64 {
+	_, threshold, _ := a.QuotaNotifyConfig(quotaDimWeekly)
+	return threshold
+}
+
+func (a *Account) GetQuotaNotifyWeeklyThresholdType() string {
+	_, _, thresholdType := a.QuotaNotifyConfig(quotaDimWeekly)
+	return thresholdType
+}
+
+func (a *Account) GetQuotaNotifyTotalEnabled() bool {
+	enabled, _, _ := a.QuotaNotifyConfig(quotaDimTotal)
+	return enabled
+}
+
+func (a *Account) GetQuotaNotifyTotalThreshold() float64 {
+	_, threshold, _ := a.QuotaNotifyConfig(quotaDimTotal)
+	return threshold
+}
+
+func (a *Account) GetQuotaNotifyTotalThresholdType() string {
+	_, _, thresholdType := a.QuotaNotifyConfig(quotaDimTotal)
+	return thresholdType
+}
+
 func (a *Account) GetQuotaResetTimezone() string {
 	if timezone := a.getExtraString("quota_reset_timezone"); timezone != "" {
 		return timezone

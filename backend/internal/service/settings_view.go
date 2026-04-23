@@ -19,6 +19,12 @@ type SystemSettings struct {
 	SMTPFromName           string
 	SMTPUseTLS             bool
 
+	BalanceLowNotifyEnabled     bool
+	BalanceLowNotifyThreshold   float64
+	BalanceLowNotifyRechargeURL string
+	AccountQuotaNotifyEnabled   bool
+	AccountQuotaNotifyEmails    []NotifyEmailEntry
+
 	TurnstileEnabled             bool
 	TurnstileSiteKey             string
 	TurnstileSecretKey           string
@@ -30,6 +36,50 @@ type SystemSettings struct {
 	LinuxDoConnectClientSecret           string
 	LinuxDoConnectClientSecretConfigured bool
 	LinuxDoConnectRedirectURL            string
+
+	// WeChat Connect OAuth 登录
+	WeChatConnectEnabled                   bool
+	WeChatConnectOpenAppID                 string
+	WeChatConnectOpenAppSecret             string
+	WeChatConnectOpenAppSecretConfigured   bool
+	WeChatConnectMPAppID                   string
+	WeChatConnectMPAppSecret               string
+	WeChatConnectMPAppSecretConfigured     bool
+	WeChatConnectMobileAppID               string
+	WeChatConnectMobileAppSecret           string
+	WeChatConnectMobileAppSecretConfigured bool
+	WeChatConnectOpenEnabled               bool
+	WeChatConnectMPEnabled                 bool
+	WeChatConnectMobileEnabled             bool
+	WeChatConnectMode                      string
+	WeChatConnectScopes                    string
+	WeChatConnectRedirectURL               string
+	WeChatConnectFrontendRedirectURL       string
+
+	// Generic OIDC OAuth 登录
+	OIDCConnectEnabled                bool
+	OIDCConnectProviderName           string
+	OIDCConnectClientID               string
+	OIDCConnectClientSecret           string
+	OIDCConnectClientSecretConfigured bool
+	OIDCConnectIssuerURL              string
+	OIDCConnectDiscoveryURL           string
+	OIDCConnectAuthorizeURL           string
+	OIDCConnectTokenURL               string
+	OIDCConnectUserInfoURL            string
+	OIDCConnectJWKSURL                string
+	OIDCConnectScopes                 string
+	OIDCConnectRedirectURL            string
+	OIDCConnectFrontendRedirectURL    string
+	OIDCConnectTokenAuthMethod        string
+	OIDCConnectUsePKCE                bool
+	OIDCConnectValidateIDToken        bool
+	OIDCConnectAllowedSigningAlgs     string
+	OIDCConnectClockSkewSeconds       int
+	OIDCConnectRequireEmailVerified   bool
+	OIDCConnectUserInfoEmailPath      string
+	OIDCConnectUserInfoIDPath         string
+	OIDCConnectUserInfoUsernamePath   string
 
 	SiteName                    string
 	SiteLogo                    string
@@ -105,6 +155,7 @@ type DefaultSubscriptionSetting struct {
 type PublicSettings struct {
 	RegistrationEnabled              bool
 	EmailVerifyEnabled               bool
+	ForceEmailOnThirdPartySignup     bool
 	RegistrationEmailSuffixWhitelist []string
 	PromoCodeEnabled                 bool
 	PasswordResetEnabled             bool
@@ -127,10 +178,20 @@ type PublicSettings struct {
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
 
-	LinuxDoOAuthEnabled bool
-	BackendModeEnabled  bool
-	PaymentEnabled      bool
-	Version             string
+	LinuxDoOAuthEnabled         bool
+	WeChatOAuthEnabled          bool
+	WeChatOAuthOpenEnabled      bool
+	WeChatOAuthMPEnabled        bool
+	WeChatOAuthMobileEnabled    bool
+	OIDCOAuthEnabled            bool
+	OIDCOAuthProviderName       string
+	BackendModeEnabled          bool
+	PaymentEnabled              bool
+	BalanceLowNotifyEnabled     bool
+	AccountQuotaNotifyEnabled   bool
+	BalanceLowNotifyThreshold   float64
+	BalanceLowNotifyRechargeURL string
+	Version                     string
 }
 
 // StreamTimeoutSettings 流超时处理配置（仅控制超时后的处理方式，超时判定由网关配置控制）

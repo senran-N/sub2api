@@ -15,6 +15,17 @@
         :disabled="isLoading"
       />
 
+      <WechatOAuthSection
+        v-if="settings.wechatOAuthEnabled && !settings.backendModeEnabled"
+        :disabled="isLoading"
+      />
+
+      <OidcOAuthSection
+        v-if="settings.oidcOAuthEnabled && !settings.backendModeEnabled"
+        :disabled="isLoading"
+        :provider-name="settings.oidcOAuthProviderName"
+      />
+
       <form class="space-y-5" @submit.prevent="handleLogin">
         <div>
           <label for="email" class="input-label">
@@ -139,6 +150,8 @@ import { useI18n } from 'vue-i18n'
 import { getPublicSettings, isTotp2FARequired } from '@/api/auth'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
+import WechatOAuthSection from '@/components/auth/WechatOAuthSection.vue'
+import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
 import TotpLoginModal from '@/components/auth/TotpLoginModal.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { AuthLayout } from '@/components/layout'

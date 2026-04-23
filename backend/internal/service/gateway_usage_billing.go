@@ -37,8 +37,11 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		}
 	} else {
 		if cost.ActualCost > 0 {
+			oldBalance := p.User.Balance
 			if err := deps.userRepo.DeductBalance(billingCtx, p.User.ID, cost.ActualCost); err != nil {
 				slog.Error("deduct balance failed", "user_id", p.User.ID, "error", err)
+			} else if deps.balanceNotifyService != nil {
+				deps.balanceNotifyService.CheckBalanceAfterDeduction(billingCtx, p.User, oldBalance, cost.ActualCost)
 			}
 		}
 	}
@@ -59,6 +62,8 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		accountCost := cost.TotalCost * p.AccountRateMultiplier
 		if err := deps.accountRepo.IncrementQuotaUsed(billingCtx, p.Account.ID, accountCost); err != nil {
 			slog.Error("increment account quota used failed", "account_id", p.Account.ID, "cost", accountCost, "error", err)
+		} else if deps.balanceNotifyService != nil {
+			deps.balanceNotifyService.CheckAccountQuotaAfterIncrement(billingCtx, p.Account, accountCost)
 		}
 	}
 
@@ -223,19 +228,21 @@ func detachedBillingContext(ctx context.Context) (context.Context, context.Cance
 
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
 type billingDeps struct {
-	accountRepo         AccountRepository
-	userRepo            UserRepository
-	userSubRepo         UserSubscriptionRepository
-	billingCacheService *BillingCacheService
-	deferredService     *DeferredService
+	accountRepo          AccountRepository
+	userRepo             UserRepository
+	userSubRepo          UserSubscriptionRepository
+	billingCacheService  *BillingCacheService
+	deferredService      *DeferredService
+	balanceNotifyService *BalanceNotifyService
 }
 
 func (s *GatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
-		accountRepo:         s.accountRepo,
-		userRepo:            s.userRepo,
-		userSubRepo:         s.userSubRepo,
-		billingCacheService: s.billingCacheService,
-		deferredService:     s.deferredService,
+		accountRepo:          s.accountRepo,
+		userRepo:             s.userRepo,
+		userSubRepo:          s.userSubRepo,
+		billingCacheService:  s.billingCacheService,
+		deferredService:      s.deferredService,
+		balanceNotifyService: s.balanceNotifyService,
 	}
 }

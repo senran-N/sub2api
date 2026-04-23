@@ -253,6 +253,39 @@ func (a *Account) getExtraInt(key string) int {
 	return 0
 }
 
+func (a *Account) getExtraBool(key string) bool {
+	if a.Extra == nil {
+		return false
+	}
+	value, ok := a.Extra[key]
+	if !ok {
+		return false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		switch strings.ToLower(strings.TrimSpace(typed)) {
+		case "1", "true", "yes", "on", "enabled":
+			return true
+		}
+	case int:
+		return typed != 0
+	case int64:
+		return typed != 0
+	case float64:
+		return typed != 0
+	}
+	return false
+}
+
+func (a *Account) getExtraStringDefault(key, defaultValue string) string {
+	if value := strings.TrimSpace(a.getExtraString(key)); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 func parseExtraFloat64(value any) float64 {
 	switch typed := value.(type) {
 	case float64:

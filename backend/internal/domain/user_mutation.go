@@ -28,9 +28,12 @@ type ReplaceUserGroupResult struct {
 
 // UpdateProfileRequest describes a user profile mutation.
 type UpdateProfileRequest struct {
-	Email       *string `json:"email"`
-	Username    *string `json:"username"`
-	Concurrency *int    `json:"concurrency"`
+	Email                      *string  `json:"email"`
+	Username                   *string  `json:"username"`
+	Concurrency                *int     `json:"concurrency"`
+	BalanceNotifyEnabled       *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold     *float64 `json:"balance_notify_threshold"`
+	BalanceNotifyThresholdType *string  `json:"balance_notify_threshold_type"`
 }
 
 // ChangePasswordRequest describes a user password change request.

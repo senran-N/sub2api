@@ -42,13 +42,13 @@ func (s *EmailCacheSuite) TestSetAndGetVerificationCode() {
 }
 
 func (s *EmailCacheSuite) TestVerificationCode_TTL() {
-	email := "ttl@example.com"
+	email := "TTL@Example.COM"
 	emailTTL := 2 * time.Minute
 	data := &service.VerificationCodeData{Code: "654321", Attempts: 0, CreatedAt: time.Now()}
 
 	require.NoError(s.T(), s.cache.SetVerificationCode(s.ctx, email, data, emailTTL), "SetVerificationCode")
 
-	emailKey := verifyCodeKeyPrefix + email
+	emailKey := verifyCodeKeyPrefix + "ttl@example.com"
 	ttl, err := s.rdb.TTL(s.ctx, emailKey).Result()
 	require.NoError(s.T(), err, "TTL emailKey")
 	s.AssertTTLWithin(ttl, 1*time.Second, emailTTL)

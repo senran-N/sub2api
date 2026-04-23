@@ -3,6 +3,8 @@ package dto
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/senran-N/sub2api/internal/service"
 )
 
 // CustomMenuItem represents a user-configured custom menu entry.
@@ -42,14 +44,56 @@ type SystemSettings struct {
 	SMTPFromName           string `json:"smtp_from_name"`
 	SMTPUseTLS             bool   `json:"smtp_use_tls"`
 
+	BalanceLowNotifyEnabled     bool               `json:"balance_low_notify_enabled"`
+	BalanceLowNotifyThreshold   float64            `json:"balance_low_notify_threshold"`
+	BalanceLowNotifyRechargeURL string             `json:"balance_low_notify_recharge_url"`
+	AccountQuotaNotifyEnabled   bool               `json:"account_quota_notify_enabled"`
+	AccountQuotaNotifyEmails    []NotifyEmailEntry `json:"account_quota_notify_emails"`
+
 	TurnstileEnabled             bool   `json:"turnstile_enabled"`
 	TurnstileSiteKey             string `json:"turnstile_site_key"`
 	TurnstileSecretKeyConfigured bool   `json:"turnstile_secret_key_configured"`
 
-	LinuxDoConnectEnabled                bool   `json:"linuxdo_connect_enabled"`
-	LinuxDoConnectClientID               string `json:"linuxdo_connect_client_id"`
-	LinuxDoConnectClientSecretConfigured bool   `json:"linuxdo_connect_client_secret_configured"`
-	LinuxDoConnectRedirectURL            string `json:"linuxdo_connect_redirect_url"`
+	LinuxDoConnectEnabled                  bool   `json:"linuxdo_connect_enabled"`
+	LinuxDoConnectClientID                 string `json:"linuxdo_connect_client_id"`
+	LinuxDoConnectClientSecretConfigured   bool   `json:"linuxdo_connect_client_secret_configured"`
+	LinuxDoConnectRedirectURL              string `json:"linuxdo_connect_redirect_url"`
+	WeChatConnectEnabled                   bool   `json:"wechat_connect_enabled"`
+	WeChatConnectOpenAppID                 string `json:"wechat_connect_open_app_id"`
+	WeChatConnectOpenAppSecretConfigured   bool   `json:"wechat_connect_open_app_secret_configured"`
+	WeChatConnectMPAppID                   string `json:"wechat_connect_mp_app_id"`
+	WeChatConnectMPAppSecretConfigured     bool   `json:"wechat_connect_mp_app_secret_configured"`
+	WeChatConnectMobileAppID               string `json:"wechat_connect_mobile_app_id"`
+	WeChatConnectMobileAppSecretConfigured bool   `json:"wechat_connect_mobile_app_secret_configured"`
+	WeChatConnectOpenEnabled               bool   `json:"wechat_connect_open_enabled"`
+	WeChatConnectMPEnabled                 bool   `json:"wechat_connect_mp_enabled"`
+	WeChatConnectMobileEnabled             bool   `json:"wechat_connect_mobile_enabled"`
+	WeChatConnectMode                      string `json:"wechat_connect_mode"`
+	WeChatConnectScopes                    string `json:"wechat_connect_scopes"`
+	WeChatConnectRedirectURL               string `json:"wechat_connect_redirect_url"`
+	WeChatConnectFrontendRedirectURL       string `json:"wechat_connect_frontend_redirect_url"`
+	OIDCConnectEnabled                     bool   `json:"oidc_connect_enabled"`
+	OIDCConnectProviderName                string `json:"oidc_connect_provider_name"`
+	OIDCConnectClientID                    string `json:"oidc_connect_client_id"`
+	OIDCConnectClientSecretConfigured      bool   `json:"oidc_connect_client_secret_configured"`
+	OIDCConnectIssuerURL                   string `json:"oidc_connect_issuer_url"`
+	OIDCConnectDiscoveryURL                string `json:"oidc_connect_discovery_url"`
+	OIDCConnectAuthorizeURL                string `json:"oidc_connect_authorize_url"`
+	OIDCConnectTokenURL                    string `json:"oidc_connect_token_url"`
+	OIDCConnectUserInfoURL                 string `json:"oidc_connect_userinfo_url"`
+	OIDCConnectJWKSURL                     string `json:"oidc_connect_jwks_url"`
+	OIDCConnectScopes                      string `json:"oidc_connect_scopes"`
+	OIDCConnectRedirectURL                 string `json:"oidc_connect_redirect_url"`
+	OIDCConnectFrontendRedirectURL         string `json:"oidc_connect_frontend_redirect_url"`
+	OIDCConnectTokenAuthMethod             string `json:"oidc_connect_token_auth_method"`
+	OIDCConnectUsePKCE                     bool   `json:"oidc_connect_use_pkce"`
+	OIDCConnectValidateIDToken             bool   `json:"oidc_connect_validate_id_token"`
+	OIDCConnectAllowedSigningAlgs          string `json:"oidc_connect_allowed_signing_algs"`
+	OIDCConnectClockSkewSeconds            int    `json:"oidc_connect_clock_skew_seconds"`
+	OIDCConnectRequireEmailVerified        bool   `json:"oidc_connect_require_email_verified"`
+	OIDCConnectUserInfoEmailPath           string `json:"oidc_connect_userinfo_email_path"`
+	OIDCConnectUserInfoIDPath              string `json:"oidc_connect_userinfo_id_path"`
+	OIDCConnectUserInfoUsernamePath        string `json:"oidc_connect_userinfo_username_path"`
 
 	SiteName                    string           `json:"site_name"`
 	SiteLogo                    string           `json:"site_logo"`
@@ -65,9 +109,30 @@ type SystemSettings struct {
 	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints             []CustomEndpoint `json:"custom_endpoints"`
 
-	DefaultConcurrency   int                          `json:"default_concurrency"`
-	DefaultBalance       float64                      `json:"default_balance"`
-	DefaultSubscriptions []DefaultSubscriptionSetting `json:"default_subscriptions"`
+	DefaultConcurrency                       int                          `json:"default_concurrency"`
+	DefaultBalance                           float64                      `json:"default_balance"`
+	DefaultSubscriptions                     []DefaultSubscriptionSetting `json:"default_subscriptions"`
+	AuthSourceDefaultEmailBalance            float64                      `json:"auth_source_default_email_balance"`
+	AuthSourceDefaultEmailConcurrency        int                          `json:"auth_source_default_email_concurrency"`
+	AuthSourceDefaultEmailSubscriptions      []DefaultSubscriptionSetting `json:"auth_source_default_email_subscriptions"`
+	AuthSourceDefaultEmailGrantOnSignup      bool                         `json:"auth_source_default_email_grant_on_signup"`
+	AuthSourceDefaultEmailGrantOnFirstBind   bool                         `json:"auth_source_default_email_grant_on_first_bind"`
+	AuthSourceDefaultLinuxDoBalance          float64                      `json:"auth_source_default_linuxdo_balance"`
+	AuthSourceDefaultLinuxDoConcurrency      int                          `json:"auth_source_default_linuxdo_concurrency"`
+	AuthSourceDefaultLinuxDoSubscriptions    []DefaultSubscriptionSetting `json:"auth_source_default_linuxdo_subscriptions"`
+	AuthSourceDefaultLinuxDoGrantOnSignup    bool                         `json:"auth_source_default_linuxdo_grant_on_signup"`
+	AuthSourceDefaultLinuxDoGrantOnFirstBind bool                         `json:"auth_source_default_linuxdo_grant_on_first_bind"`
+	AuthSourceDefaultOIDCBalance             float64                      `json:"auth_source_default_oidc_balance"`
+	AuthSourceDefaultOIDCConcurrency         int                          `json:"auth_source_default_oidc_concurrency"`
+	AuthSourceDefaultOIDCSubscriptions       []DefaultSubscriptionSetting `json:"auth_source_default_oidc_subscriptions"`
+	AuthSourceDefaultOIDCGrantOnSignup       bool                         `json:"auth_source_default_oidc_grant_on_signup"`
+	AuthSourceDefaultOIDCGrantOnFirstBind    bool                         `json:"auth_source_default_oidc_grant_on_first_bind"`
+	AuthSourceDefaultWeChatBalance           float64                      `json:"auth_source_default_wechat_balance"`
+	AuthSourceDefaultWeChatConcurrency       int                          `json:"auth_source_default_wechat_concurrency"`
+	AuthSourceDefaultWeChatSubscriptions     []DefaultSubscriptionSetting `json:"auth_source_default_wechat_subscriptions"`
+	AuthSourceDefaultWeChatGrantOnSignup     bool                         `json:"auth_source_default_wechat_grant_on_signup"`
+	AuthSourceDefaultWeChatGrantOnFirstBind  bool                         `json:"auth_source_default_wechat_grant_on_first_bind"`
+	ForceEmailOnThirdPartySignup             bool                         `json:"force_email_on_third_party_signup"`
 
 	// Model fallback configuration
 	EnableModelFallback                     bool   `json:"enable_model_fallback"`
@@ -121,9 +186,24 @@ type DefaultSubscriptionSetting struct {
 	ValidityDays int   `json:"validity_days"`
 }
 
+func DefaultSubscriptionSettingsFromService(items []service.DefaultSubscriptionSetting) []DefaultSubscriptionSetting {
+	if len(items) == 0 {
+		return []DefaultSubscriptionSetting{}
+	}
+	result := make([]DefaultSubscriptionSetting, 0, len(items))
+	for _, item := range items {
+		result = append(result, DefaultSubscriptionSetting{
+			GroupID:      item.GroupID,
+			ValidityDays: item.ValidityDays,
+		})
+	}
+	return result
+}
+
 type PublicSettings struct {
 	RegistrationEnabled              bool             `json:"registration_enabled"`
 	EmailVerifyEnabled               bool             `json:"email_verify_enabled"`
+	ForceEmailOnThirdPartySignup     bool             `json:"force_email_on_third_party_signup"`
 	RegistrationEmailSuffixWhitelist []string         `json:"registration_email_suffix_whitelist"`
 	PromoCodeEnabled                 bool             `json:"promo_code_enabled"`
 	PasswordResetEnabled             bool             `json:"password_reset_enabled"`
@@ -145,8 +225,18 @@ type PublicSettings struct {
 	CustomMenuItems                  []CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints                  []CustomEndpoint `json:"custom_endpoints"`
 	LinuxDoOAuthEnabled              bool             `json:"linuxdo_oauth_enabled"`
+	WeChatOAuthEnabled               bool             `json:"wechat_oauth_enabled"`
+	WeChatOAuthOpenEnabled           bool             `json:"wechat_oauth_open_enabled"`
+	WeChatOAuthMPEnabled             bool             `json:"wechat_oauth_mp_enabled"`
+	WeChatOAuthMobileEnabled         bool             `json:"wechat_oauth_mobile_enabled"`
+	OIDCOAuthEnabled                 bool             `json:"oidc_oauth_enabled"`
+	OIDCOAuthProviderName            string           `json:"oidc_oauth_provider_name"`
 	BackendModeEnabled               bool             `json:"backend_mode_enabled"`
 	PaymentEnabled                   bool             `json:"payment_enabled"`
+	BalanceLowNotifyEnabled          bool             `json:"balance_low_notify_enabled"`
+	AccountQuotaNotifyEnabled        bool             `json:"account_quota_notify_enabled"`
+	BalanceLowNotifyThreshold        float64          `json:"balance_low_notify_threshold"`
+	BalanceLowNotifyRechargeURL      string           `json:"balance_low_notify_recharge_url"`
 	Version                          string           `json:"version"`
 }
 

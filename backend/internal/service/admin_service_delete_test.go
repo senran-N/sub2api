@@ -101,6 +101,14 @@ func (s *userRepoStub) AddGroupToAllowedGroups(ctx context.Context, userID int64
 	panic("unexpected AddGroupToAllowedGroups call")
 }
 
+func (s *userRepoStub) ListUserAuthIdentities(context.Context, int64) ([]UserAuthIdentityRecord, error) {
+	panic("unexpected ListUserAuthIdentities call")
+}
+
+func (s *userRepoStub) UnbindUserAuthProvider(context.Context, int64, string) error {
+	panic("unexpected UnbindUserAuthProvider call")
+}
+
 func (s *userRepoStub) UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error {
 	panic("unexpected UpdateTotpSecret call")
 }

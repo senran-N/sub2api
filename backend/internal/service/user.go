@@ -17,9 +17,21 @@ type User struct {
 	Concurrency   int
 	Status        string
 	AllowedGroups []int64
-	TokenVersion  int64 // Incremented on password change to invalidate existing tokens
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+
+	BalanceNotifyEnabled       bool
+	BalanceNotifyThresholdType string
+	BalanceNotifyThreshold     *float64
+	BalanceNotifyExtraEmails   []NotifyEmailEntry
+	TotalRecharged             float64
+
+	EmailBound   bool
+	LinuxDoBound bool
+	OIDCBound    bool
+	WeChatBound  bool
+
+	TokenVersion int64 // Incremented on password change to invalidate existing tokens
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]rateMultiplier

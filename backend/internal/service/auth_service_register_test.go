@@ -37,7 +37,16 @@ func (s *settingRepoStub) Set(ctx context.Context, key, value string) error {
 }
 
 func (s *settingRepoStub) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
-	panic("unexpected GetMultiple call")
+	if s.err != nil {
+		return nil, s.err
+	}
+	out := make(map[string]string, len(keys))
+	for _, key := range keys {
+		if v, ok := s.values[key]; ok {
+			out[key] = v
+		}
+	}
+	return out, nil
 }
 
 func (s *settingRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {
@@ -87,6 +96,18 @@ func (s *emailCacheStub) DeleteVerificationCode(ctx context.Context, email strin
 	return nil
 }
 
+func (s *emailCacheStub) GetNotifyVerifyCode(ctx context.Context, email string) (*VerificationCodeData, error) {
+	return nil, nil
+}
+
+func (s *emailCacheStub) SetNotifyVerifyCode(ctx context.Context, email string, data *VerificationCodeData, ttl time.Duration) error {
+	return nil
+}
+
+func (s *emailCacheStub) DeleteNotifyVerifyCode(ctx context.Context, email string) error {
+	return nil
+}
+
 func (s *emailCacheStub) GetPasswordResetToken(ctx context.Context, email string) (*PasswordResetTokenData, error) {
 	return nil, nil
 }
@@ -105,6 +126,14 @@ func (s *emailCacheStub) IsPasswordResetEmailInCooldown(ctx context.Context, ema
 
 func (s *emailCacheStub) SetPasswordResetEmailCooldown(ctx context.Context, email string, ttl time.Duration) error {
 	return nil
+}
+
+func (s *emailCacheStub) IncrNotifyCodeUserRate(ctx context.Context, userID int64, window time.Duration) (int64, error) {
+	return 0, nil
+}
+
+func (s *emailCacheStub) GetNotifyCodeUserRate(ctx context.Context, userID int64) (int64, error) {
+	return 0, nil
 }
 
 func newAuthService(repo *userRepoStub, settings map[string]string, emailCache EmailCache) *AuthService {

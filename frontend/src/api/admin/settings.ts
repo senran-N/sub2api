@@ -4,11 +4,21 @@
  */
 
 import { apiClient } from '../client'
-import type { CustomMenuItem, CustomEndpoint } from '@/types'
+import type { CustomMenuItem, CustomEndpoint, NotifyEmailEntry } from '@/types'
 
 export interface DefaultSubscriptionSetting {
   group_id: number
   validity_days: number
+}
+
+export type AuthSourceType = 'email' | 'linuxdo' | 'oidc' | 'wechat'
+
+export interface AuthSourceDefaultsValue {
+  balance: number
+  concurrency: number
+  subscriptions: DefaultSubscriptionSetting[]
+  grant_on_signup: boolean
+  grant_on_first_bind: boolean
 }
 
 /**
@@ -18,6 +28,7 @@ export interface SystemSettings {
   // Registration settings
   registration_enabled: boolean
   email_verify_enabled: boolean
+  force_email_on_third_party_signup: boolean
   registration_email_suffix_whitelist: string[]
   promo_code_enabled: boolean
   password_reset_enabled: boolean
@@ -29,6 +40,26 @@ export interface SystemSettings {
   default_balance: number
   default_concurrency: number
   default_subscriptions: DefaultSubscriptionSetting[]
+  auth_source_default_email_balance: number
+  auth_source_default_email_concurrency: number
+  auth_source_default_email_subscriptions: DefaultSubscriptionSetting[]
+  auth_source_default_email_grant_on_signup: boolean
+  auth_source_default_email_grant_on_first_bind: boolean
+  auth_source_default_linuxdo_balance: number
+  auth_source_default_linuxdo_concurrency: number
+  auth_source_default_linuxdo_subscriptions: DefaultSubscriptionSetting[]
+  auth_source_default_linuxdo_grant_on_signup: boolean
+  auth_source_default_linuxdo_grant_on_first_bind: boolean
+  auth_source_default_oidc_balance: number
+  auth_source_default_oidc_concurrency: number
+  auth_source_default_oidc_subscriptions: DefaultSubscriptionSetting[]
+  auth_source_default_oidc_grant_on_signup: boolean
+  auth_source_default_oidc_grant_on_first_bind: boolean
+  auth_source_default_wechat_balance: number
+  auth_source_default_wechat_concurrency: number
+  auth_source_default_wechat_subscriptions: DefaultSubscriptionSetting[]
+  auth_source_default_wechat_grant_on_signup: boolean
+  auth_source_default_wechat_grant_on_first_bind: boolean
   // OEM settings
   site_name: string
   site_logo: string
@@ -53,6 +84,11 @@ export interface SystemSettings {
   smtp_from_email: string
   smtp_from_name: string
   smtp_use_tls: boolean
+  balance_low_notify_enabled: boolean
+  balance_low_notify_threshold: number
+  balance_low_notify_recharge_url: string
+  account_quota_notify_enabled: boolean
+  account_quota_notify_emails: NotifyEmailEntry[]
   // Cloudflare Turnstile settings
   turnstile_enabled: boolean
   turnstile_site_key: string
@@ -63,6 +99,46 @@ export interface SystemSettings {
   linuxdo_connect_client_id: string
   linuxdo_connect_client_secret_configured: boolean
   linuxdo_connect_redirect_url: string
+
+  // WeChat Connect OAuth settings
+  wechat_connect_enabled: boolean
+  wechat_connect_open_app_id: string
+  wechat_connect_open_app_secret_configured: boolean
+  wechat_connect_mp_app_id: string
+  wechat_connect_mp_app_secret_configured: boolean
+  wechat_connect_mobile_app_id: string
+  wechat_connect_mobile_app_secret_configured: boolean
+  wechat_connect_open_enabled: boolean
+  wechat_connect_mp_enabled: boolean
+  wechat_connect_mobile_enabled: boolean
+  wechat_connect_mode: string
+  wechat_connect_scopes: string
+  wechat_connect_redirect_url: string
+  wechat_connect_frontend_redirect_url: string
+
+  // OIDC Connect OAuth settings
+  oidc_connect_enabled: boolean
+  oidc_connect_provider_name: string
+  oidc_connect_client_id: string
+  oidc_connect_client_secret_configured: boolean
+  oidc_connect_issuer_url: string
+  oidc_connect_discovery_url: string
+  oidc_connect_authorize_url: string
+  oidc_connect_token_url: string
+  oidc_connect_userinfo_url: string
+  oidc_connect_jwks_url: string
+  oidc_connect_scopes: string
+  oidc_connect_redirect_url: string
+  oidc_connect_frontend_redirect_url: string
+  oidc_connect_token_auth_method: string
+  oidc_connect_use_pkce: boolean
+  oidc_connect_validate_id_token: boolean
+  oidc_connect_allowed_signing_algs: string
+  oidc_connect_clock_skew_seconds: number
+  oidc_connect_require_email_verified: boolean
+  oidc_connect_userinfo_email_path: string
+  oidc_connect_userinfo_id_path: string
+  oidc_connect_userinfo_username_path: string
 
   // Model fallback configuration
   enable_model_fallback: boolean
@@ -112,6 +188,7 @@ export interface SystemSettings {
 export interface UpdateSettingsRequest {
   registration_enabled?: boolean
   email_verify_enabled?: boolean
+  force_email_on_third_party_signup?: boolean
   registration_email_suffix_whitelist?: string[]
   promo_code_enabled?: boolean
   password_reset_enabled?: boolean
@@ -121,6 +198,26 @@ export interface UpdateSettingsRequest {
   default_balance?: number
   default_concurrency?: number
   default_subscriptions?: DefaultSubscriptionSetting[]
+  auth_source_default_email_balance?: number
+  auth_source_default_email_concurrency?: number
+  auth_source_default_email_subscriptions?: DefaultSubscriptionSetting[]
+  auth_source_default_email_grant_on_signup?: boolean
+  auth_source_default_email_grant_on_first_bind?: boolean
+  auth_source_default_linuxdo_balance?: number
+  auth_source_default_linuxdo_concurrency?: number
+  auth_source_default_linuxdo_subscriptions?: DefaultSubscriptionSetting[]
+  auth_source_default_linuxdo_grant_on_signup?: boolean
+  auth_source_default_linuxdo_grant_on_first_bind?: boolean
+  auth_source_default_oidc_balance?: number
+  auth_source_default_oidc_concurrency?: number
+  auth_source_default_oidc_subscriptions?: DefaultSubscriptionSetting[]
+  auth_source_default_oidc_grant_on_signup?: boolean
+  auth_source_default_oidc_grant_on_first_bind?: boolean
+  auth_source_default_wechat_balance?: number
+  auth_source_default_wechat_concurrency?: number
+  auth_source_default_wechat_subscriptions?: DefaultSubscriptionSetting[]
+  auth_source_default_wechat_grant_on_signup?: boolean
+  auth_source_default_wechat_grant_on_first_bind?: boolean
   site_name?: string
   site_logo?: string
   site_subtitle?: string
@@ -142,6 +239,11 @@ export interface UpdateSettingsRequest {
   smtp_from_email?: string
   smtp_from_name?: string
   smtp_use_tls?: boolean
+  balance_low_notify_enabled?: boolean
+  balance_low_notify_threshold?: number
+  balance_low_notify_recharge_url?: string
+  account_quota_notify_enabled?: boolean
+  account_quota_notify_emails?: NotifyEmailEntry[]
   turnstile_enabled?: boolean
   turnstile_site_key?: string
   turnstile_secret_key?: string
@@ -149,6 +251,42 @@ export interface UpdateSettingsRequest {
   linuxdo_connect_client_id?: string
   linuxdo_connect_client_secret?: string
   linuxdo_connect_redirect_url?: string
+  wechat_connect_enabled?: boolean
+  wechat_connect_open_app_id?: string
+  wechat_connect_open_app_secret?: string
+  wechat_connect_mp_app_id?: string
+  wechat_connect_mp_app_secret?: string
+  wechat_connect_mobile_app_id?: string
+  wechat_connect_mobile_app_secret?: string
+  wechat_connect_open_enabled?: boolean
+  wechat_connect_mp_enabled?: boolean
+  wechat_connect_mobile_enabled?: boolean
+  wechat_connect_mode?: string
+  wechat_connect_scopes?: string
+  wechat_connect_redirect_url?: string
+  wechat_connect_frontend_redirect_url?: string
+  oidc_connect_enabled?: boolean
+  oidc_connect_provider_name?: string
+  oidc_connect_client_id?: string
+  oidc_connect_client_secret?: string
+  oidc_connect_issuer_url?: string
+  oidc_connect_discovery_url?: string
+  oidc_connect_authorize_url?: string
+  oidc_connect_token_url?: string
+  oidc_connect_userinfo_url?: string
+  oidc_connect_jwks_url?: string
+  oidc_connect_scopes?: string
+  oidc_connect_redirect_url?: string
+  oidc_connect_frontend_redirect_url?: string
+  oidc_connect_token_auth_method?: string
+  oidc_connect_use_pkce?: boolean
+  oidc_connect_validate_id_token?: boolean
+  oidc_connect_allowed_signing_algs?: string
+  oidc_connect_clock_skew_seconds?: number
+  oidc_connect_require_email_verified?: boolean
+  oidc_connect_userinfo_email_path?: string
+  oidc_connect_userinfo_id_path?: string
+  oidc_connect_userinfo_username_path?: string
   enable_model_fallback?: boolean
   fallback_model_anthropic?: string
   fallback_model_openai?: string

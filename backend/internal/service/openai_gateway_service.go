@@ -228,6 +228,7 @@ type OpenAIGatewayService struct {
 	openaiWSResolver      OpenAIWSProtocolResolver
 	resolver              *ModelPricingResolver
 	channelService        *ChannelService
+	balanceNotifyService  *BalanceNotifyService
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
@@ -410,4 +411,8 @@ func OpenAICompactSessionSeedKeyForTest() string {
 
 func NormalizeOpenAICompactRequestBodyForTest(body []byte) ([]byte, bool, error) {
 	return normalizeOpenAICompactRequestBody(body)
+}
+
+func (s *OpenAIGatewayService) SetBalanceNotifyService(balanceNotifyService *BalanceNotifyService) {
+	s.balanceNotifyService = balanceNotifyService
 }

@@ -76,6 +76,18 @@
             :redirect-url-suggestion="linuxdoRedirectUrlSuggestion"
             @quick-set-copy="setAndCopyLinuxdoRedirectUrl"
           />
+
+          <SettingsWechatCard
+            :form="form"
+            :redirect-url-suggestion="wechatRedirectUrlSuggestion"
+            @quick-set-copy="setAndCopyWeChatRedirectUrl"
+          />
+
+          <SettingsOidcCard
+            :form="form"
+            :redirect-url-suggestion="oidcRedirectUrlSuggestion"
+            @quick-set-copy="setAndCopyOidcRedirectUrl"
+          />
         </div>
 
         <div v-if="activeTab === 'users'" class="space-y-6">
@@ -85,6 +97,14 @@
             :to-default-subscription-group-option="toDefaultSubscriptionGroupOption"
             @add-default-subscription="addDefaultSubscription"
             @remove-default-subscription="removeDefaultSubscription"
+          />
+
+          <SettingsAuthSourceDefaultsCard
+            :form="form"
+            :default-subscription-group-options="defaultSubscriptionGroupOptions"
+            :to-default-subscription-group-option="toDefaultSubscriptionGroupOption"
+            @add-auth-source-default-subscription="addAuthSourceDefaultSubscription"
+            @remove-auth-source-default-subscription="removeAuthSourceDefaultSubscription"
           />
         </div>
 
@@ -429,6 +449,8 @@
             :disabled="loadFailed"
             @send="sendTestEmail"
           />
+
+          <SettingsNotifyCard :form="form" />
         </div>
 
         <div v-if="activeTab === 'backup'">
@@ -489,9 +511,12 @@ import SettingsBetaPolicyCard from './settings/SettingsBetaPolicyCard.vue'
 import SettingsClaudeCodeCard from './settings/SettingsClaudeCodeCard.vue'
 import SettingsCustomMenuCard from './settings/SettingsCustomMenuCard.vue'
 import SettingsDefaultsCard from './settings/SettingsDefaultsCard.vue'
+import SettingsAuthSourceDefaultsCard from './settings/SettingsAuthSourceDefaultsCard.vue'
 import SettingsEmailDisabledCard from './settings/SettingsEmailDisabledCard.vue'
 import SettingsGatewayForwardingCard from './settings/SettingsGatewayForwardingCard.vue'
 import SettingsLinuxdoCard from './settings/SettingsLinuxdoCard.vue'
+import SettingsWechatCard from './settings/SettingsWechatCard.vue'
+import SettingsOidcCard from './settings/SettingsOidcCard.vue'
 import SettingsModelRoutingCard from './settings/SettingsModelRoutingCard.vue'
 import SettingsOverloadCooldownCard from './settings/SettingsOverloadCooldownCard.vue'
 import SettingsPurchaseCard from './settings/SettingsPurchaseCard.vue'
@@ -499,6 +524,7 @@ import SettingsRegistrationCard from './settings/SettingsRegistrationCard.vue'
 import SettingsRectifierCard from './settings/SettingsRectifierCard.vue'
 import SettingsSchedulingCard from './settings/SettingsSchedulingCard.vue'
 import SettingsSaveBar from './settings/SettingsSaveBar.vue'
+import SettingsNotifyCard from './settings/SettingsNotifyCard.vue'
 import SettingsSiteCard from './settings/SettingsSiteCard.vue'
 import SettingsSmtpCard from './settings/SettingsSmtpCard.vue'
 import SettingsStreamTimeoutCard from './settings/SettingsStreamTimeoutCard.vue'
@@ -644,12 +670,16 @@ const {
   form,
   defaultSubscriptionGroupOptions,
   linuxdoRedirectUrlSuggestion,
+  wechatRedirectUrlSuggestion,
+  oidcRedirectUrlSuggestion,
   removeRegistrationEmailSuffixWhitelistTag,
   commitRegistrationEmailSuffixWhitelistDraft,
   handleRegistrationEmailSuffixWhitelistDraftInput,
   handleRegistrationEmailSuffixWhitelistDraftKeydown,
   handleRegistrationEmailSuffixWhitelistPaste,
   setAndCopyLinuxdoRedirectUrl,
+  setAndCopyWeChatRedirectUrl,
+  setAndCopyOidcRedirectUrl,
   addMenuItem,
   removeMenuItem,
   moveMenuItem,
@@ -659,6 +689,8 @@ const {
   loadSubscriptionGroups,
   addDefaultSubscription,
   removeDefaultSubscription,
+  addAuthSourceDefaultSubscription,
+  removeAuthSourceDefaultSubscription,
   saveSettings,
   testSmtpConnection,
   sendTestEmail

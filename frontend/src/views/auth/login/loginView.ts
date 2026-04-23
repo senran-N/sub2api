@@ -16,6 +16,9 @@ export interface LoginSettingsState {
   turnstileEnabled: boolean
   turnstileSiteKey: string
   linuxdoOAuthEnabled: boolean
+  wechatOAuthEnabled: boolean
+  oidcOAuthEnabled: boolean
+  oidcOAuthProviderName: string
   backendModeEnabled: boolean
   passwordResetEnabled: boolean
 }
@@ -65,6 +68,9 @@ export function createLoginSettingsState(): LoginSettingsState {
     turnstileEnabled: false,
     turnstileSiteKey: '',
     linuxdoOAuthEnabled: false,
+    wechatOAuthEnabled: false,
+    oidcOAuthEnabled: false,
+    oidcOAuthProviderName: 'OIDC',
     backendModeEnabled: false,
     passwordResetEnabled: false
   }
@@ -85,6 +91,9 @@ export function applyLoginPublicSettings(
   state.turnstileEnabled = settings.turnstile_enabled
   state.turnstileSiteKey = settings.turnstile_site_key || ''
   state.linuxdoOAuthEnabled = settings.linuxdo_oauth_enabled
+  state.wechatOAuthEnabled = settings.wechat_oauth_enabled
+  state.oidcOAuthEnabled = settings.oidc_oauth_enabled
+  state.oidcOAuthProviderName = settings.oidc_oauth_provider_name || 'OIDC'
   state.backendModeEnabled = settings.backend_mode_enabled
   state.passwordResetEnabled = settings.password_reset_enabled
 }

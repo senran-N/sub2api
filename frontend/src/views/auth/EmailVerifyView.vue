@@ -162,7 +162,12 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { getPublicSettings, sendVerifyCode } from '@/api/auth'
+import {
+  completeLinuxDoOAuthRegistration,
+  getPublicSettings,
+  sendPendingOAuthVerifyCode,
+  sendVerifyCode
+} from '@/api/auth'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { AuthLayout } from '@/components/layout'
@@ -201,6 +206,10 @@ const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 const resendTurnstileToken = ref('')
 const showResendTurnstile = ref(false)
 const errors = reactive(createEmailVerifyErrors())
+
+const isPendingOAuthEmailVerify = computed(
+  () => authStore.hasPendingAuthSession && session.pendingProvider === 'linuxdo'
+)
 
 const isResendDisabled = computed(
   () =>
@@ -257,6 +266,7 @@ async function sendCode(): Promise<void> {
 
   try {
     if (
+      !isPendingOAuthEmailVerify.value &&
       !isRegistrationEmailSuffixAllowed(session.email, settings.registrationEmailSuffixWhitelist)
     ) {
       errorMessage.value = buildEmailSuffixNotAllowedMessage()
@@ -264,13 +274,14 @@ async function sendCode(): Promise<void> {
       return
     }
 
-    const response = await sendVerifyCode(
-      buildSendVerifyCodePayload(
-        session.email,
-        resendTurnstileToken.value,
-        session.initialTurnstileToken
-      )
+    const payload = buildSendVerifyCodePayload(
+      session.email,
+      resendTurnstileToken.value,
+      session.initialTurnstileToken
     )
+    const response = isPendingOAuthEmailVerify.value
+      ? await sendPendingOAuthVerifyCode(payload)
+      : await sendVerifyCode(payload)
 
     codeSent.value = true
     startCountdown(response.countdown)
@@ -317,11 +328,52 @@ async function handleVerify(): Promise<void> {
 
   try {
     if (
+      !isPendingOAuthEmailVerify.value &&
       !isRegistrationEmailSuffixAllowed(session.email, settings.registrationEmailSuffixWhitelist)
     ) {
       errorMessage.value = buildEmailSuffixNotAllowedMessage()
       appStore.showError(errorMessage.value)
       return
+    }
+
+    if (isPendingOAuthEmailVerify.value) {
+      const tokenData = await completeLinuxDoOAuthRegistration({
+        email: session.email,
+        password: session.password,
+        verify_code: verifyCode.value.trim(),
+        invitation_code: session.invitationCode || undefined,
+        adoptDisplayName: session.adoptDisplayName,
+      })
+
+      if (tokenData.access_token) {
+        if (tokenData.refresh_token) {
+          localStorage.setItem('refresh_token', tokenData.refresh_token)
+        }
+        if (tokenData.expires_in) {
+          localStorage.setItem('token_expires_at', String(Date.now() + tokenData.expires_in * 1000))
+        }
+        await authStore.setToken(tokenData.access_token)
+        authStore.clearPendingAuthSession()
+        sessionStorage.removeItem('register_data')
+        appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: settings.siteName }))
+        await router.push('/dashboard')
+        return
+      }
+
+      if (tokenData.step === 'choose_account_action_required') {
+        authStore.setPendingAuthSession({
+          token: authStore.pendingAuthSession?.token || '',
+          token_field: authStore.pendingAuthSession?.token_field || 'pending_auth_token',
+          provider: authStore.pendingAuthSession?.provider || session.pendingProvider || 'linuxdo',
+          redirect: authStore.pendingAuthSession?.redirect,
+        })
+        sessionStorage.removeItem('register_data')
+        appStore.showError(t('auth.oauthFlow.accountExistsSwitchToBind'))
+        await router.push('/auth/linuxdo/callback')
+        return
+      }
+
+      throw new Error(t('auth.verifyFailed'))
     }
 
     await authStore.register(buildEmailVerifyRegisterPayload(session, verifyCode.value))
@@ -340,7 +392,7 @@ async function handleVerify(): Promise<void> {
 
 function handleBack(): void {
   sessionStorage.removeItem('register_data')
-  void router.push('/register')
+  void router.push(isPendingOAuthEmailVerify.value ? '/auth/linuxdo/callback' : '/register')
 }
 
 onMounted(async () => {

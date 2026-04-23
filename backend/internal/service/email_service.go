@@ -47,8 +47,15 @@ type smtpClientAdapter struct {
 
 var (
 	smtpDialFunc = func(addr string) (smtpClient, error) {
-		client, err := smtp.Dial(addr)
+		dialer := &net.Dialer{Timeout: smtpDialTimeout}
+		conn, err := dialer.Dial("tcp", addr)
 		if err != nil {
+			return nil, err
+		}
+		_ = conn.SetDeadline(time.Now().Add(smtpIOTimeout))
+		client, err := smtp.NewClient(conn, strings.Split(addr, ":")[0])
+		if err != nil {
+			_ = conn.Close()
 			return nil, err
 		}
 		return smtpClientAdapter{Client: client}, nil
@@ -61,7 +68,13 @@ var (
 		return smtpClientAdapter{Client: client}, nil
 	}
 	smtpTLSDialFunc = func(network, addr string, config *tls.Config) (net.Conn, error) {
-		return tls.Dial(network, addr, config)
+		dialer := &net.Dialer{Timeout: smtpDialTimeout}
+		conn, err := tls.DialWithDialer(dialer, network, addr, config)
+		if err != nil {
+			return nil, err
+		}
+		_ = conn.SetDeadline(time.Now().Add(smtpIOTimeout))
+		return conn, nil
 	}
 )
 
@@ -70,6 +83,10 @@ type EmailCache interface {
 	GetVerificationCode(ctx context.Context, email string) (*VerificationCodeData, error)
 	SetVerificationCode(ctx context.Context, email string, data *VerificationCodeData, ttl time.Duration) error
 	DeleteVerificationCode(ctx context.Context, email string) error
+
+	GetNotifyVerifyCode(ctx context.Context, email string) (*VerificationCodeData, error)
+	SetNotifyVerifyCode(ctx context.Context, email string, data *VerificationCodeData, ttl time.Duration) error
+	DeleteNotifyVerifyCode(ctx context.Context, email string) error
 
 	// Password reset token methods
 	GetPasswordResetToken(ctx context.Context, email string) (*PasswordResetTokenData, error)
@@ -80,6 +97,9 @@ type EmailCache interface {
 	// Returns true if in cooldown period (email was sent recently)
 	IsPasswordResetEmailInCooldown(ctx context.Context, email string) bool
 	SetPasswordResetEmailCooldown(ctx context.Context, email string, ttl time.Duration) error
+
+	IncrNotifyCodeUserRate(ctx context.Context, userID int64, window time.Duration) (int64, error)
+	GetNotifyCodeUserRate(ctx context.Context, userID int64) (int64, error)
 }
 
 // VerificationCodeData represents verification code data
@@ -87,6 +107,7 @@ type VerificationCodeData struct {
 	Code      string
 	Attempts  int
 	CreatedAt time.Time
+	ExpiresAt time.Time
 }
 
 // PasswordResetTokenData represents password reset token data
@@ -96,6 +117,9 @@ type PasswordResetTokenData struct {
 }
 
 const (
+	smtpDialTimeout = 10 * time.Second
+	smtpIOTimeout   = 20 * time.Second
+
 	verifyCodeTTL         = 15 * time.Minute
 	verifyCodeCooldown    = 1 * time.Minute
 	maxVerifyCodeAttempts = 5
@@ -185,9 +209,12 @@ func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) 
 
 // SendEmailWithConfig 使用指定配置发送邮件
 func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body string) error {
-	from := config.From
+	to = sanitizeEmailHeader(to)
+	subject = sanitizeEmailHeader(subject)
+
+	from := sanitizeEmailHeader(config.From)
 	if config.FromName != "" {
-		from = fmt.Sprintf("%s <%s>", config.FromName, config.From)
+		from = fmt.Sprintf("%s <%s>", sanitizeEmailHeader(config.FromName), sanitizeEmailHeader(config.From))
 	}
 
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
@@ -200,7 +227,7 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 		return s.sendMailSecure(config, addr, auth, config.From, to, []byte(msg))
 	}
 
-	return smtp.SendMail(addr, auth, config.From, []string{to}, []byte(msg))
+	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg), config.Host)
 }
 
 func buildSMTPTLSConfig(host string) *tls.Config {
@@ -246,6 +273,36 @@ func (s *EmailService) newSecureSMTPClient(config *SMTPConfig, addr string) (smt
 		return nil, nil, fmt.Errorf("smtp starttls: %w", err)
 	}
 	return client, func() { _ = client.Close() }, nil
+}
+
+func (s *EmailService) sendMailPlain(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
+	client, err := smtpDialFunc(addr)
+	if err != nil {
+		return fmt.Errorf("smtp dial: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	if err = client.Mail(from); err != nil {
+		return fmt.Errorf("smtp mail: %w", err)
+	}
+	if err = client.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp rcpt: %w", err)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
+	if _, err = w.Write(msg); err != nil {
+		return fmt.Errorf("write msg: %w", err)
+	}
+	if err = w.Close(); err != nil {
+		return fmt.Errorf("close writer: %w", err)
+	}
+	_ = client.Quit()
+	return nil
 }
 
 func (s *EmailService) sendMailSecure(config *SMTPConfig, addr string, auth smtp.Auth, from, to string, msg []byte) error {
@@ -298,6 +355,24 @@ func (s *EmailService) GenerateVerifyCode() (string, error) {
 	return string(code), nil
 }
 
+func sanitizeEmailHeader(value string) string {
+	value = strings.ReplaceAll(value, "\r", "")
+	return strings.ReplaceAll(value, "\n", "")
+}
+
+func verificationCodeExpiresAt(data *VerificationCodeData) time.Time {
+	if data == nil {
+		return time.Time{}
+	}
+	if !data.ExpiresAt.IsZero() {
+		return data.ExpiresAt
+	}
+	if data.CreatedAt.IsZero() {
+		return time.Time{}
+	}
+	return data.CreatedAt.Add(verifyCodeTTL)
+}
+
 // SendVerifyCode 发送验证码邮件
 func (s *EmailService) SendVerifyCode(ctx context.Context, email, siteName string) error {
 	// 检查是否在冷却期内
@@ -319,6 +394,7 @@ func (s *EmailService) SendVerifyCode(ctx context.Context, email, siteName strin
 		Code:      code,
 		Attempts:  0,
 		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(verifyCodeTTL),
 	}
 	if err := s.cache.SetVerificationCode(ctx, email, data, verifyCodeTTL); err != nil {
 		return fmt.Errorf("save verify code: %w", err)
@@ -351,7 +427,11 @@ func (s *EmailService) VerifyCode(ctx context.Context, email, code string) error
 	// 验证码不匹配 (constant-time comparison to prevent timing attacks)
 	if subtle.ConstantTimeCompare([]byte(data.Code), []byte(code)) != 1 {
 		data.Attempts++
-		if err := s.cache.SetVerificationCode(ctx, email, data, verifyCodeTTL); err != nil {
+		remaining := time.Until(verificationCodeExpiresAt(data))
+		if remaining <= 0 {
+			return ErrInvalidVerifyCode
+		}
+		if err := s.cache.SetVerificationCode(ctx, email, data, remaining); err != nil {
 			log.Printf("[Email] Failed to update verification attempt count: %v", err)
 		}
 		if data.Attempts >= maxVerifyCodeAttempts {
@@ -427,7 +507,7 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 	}
 
 	// 非TLS连接测试
-	client, err := smtp.Dial(addr)
+	client, err := smtpDialFunc(addr)
 	if err != nil {
 		return fmt.Errorf("smtp connection failed: %w", err)
 	}

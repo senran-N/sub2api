@@ -1,4 +1,5 @@
 import type {
+  AuthSourceType,
   BetaPolicyRule,
   DefaultSubscriptionSetting,
   OverloadCooldownSettings,
@@ -9,22 +10,29 @@ import type {
   TestSmtpRequest,
   UpdateSettingsRequest
 } from '@/api/admin/settings'
-import type { AdminGroup, CustomEndpoint, CustomMenuItem } from '@/types'
+import type { AdminGroup, CustomEndpoint, CustomMenuItem, NotifyEmailEntry } from '@/types'
 import {
   normalizeRegistrationEmailSuffixDomains,
   normalizeRegistrationEmailSuffixWhitelist
 } from '@/utils/registrationEmailPolicy'
 
+const AUTH_SOURCE_TYPES: AuthSourceType[] = ['email', 'linuxdo', 'oidc', 'wechat']
+
 export type SettingsForm = SystemSettings & {
   smtp_password: string
   turnstile_secret_key: string
   linuxdo_connect_client_secret: string
+  wechat_connect_open_app_secret: string
+  wechat_connect_mp_app_secret: string
+  wechat_connect_mobile_app_secret: string
+  oidc_connect_client_secret: string
 }
 
 export type SettingsRegistrationFields = Pick<
   SettingsForm,
   | 'registration_enabled'
   | 'email_verify_enabled'
+  | 'force_email_on_third_party_signup'
   | 'promo_code_enabled'
   | 'invitation_code_enabled'
   | 'password_reset_enabled'
@@ -43,6 +51,11 @@ export type SettingsSmtpFields = Pick<
   | 'smtp_from_email'
   | 'smtp_from_name'
   | 'smtp_use_tls'
+  | 'balance_low_notify_enabled'
+  | 'balance_low_notify_threshold'
+  | 'balance_low_notify_recharge_url'
+  | 'account_quota_notify_enabled'
+  | 'account_quota_notify_emails'
 >
 
 export type SettingsTurnstileFields = Pick<
@@ -70,6 +83,54 @@ export type SettingsLinuxdoFields = Pick<
   | 'linuxdo_connect_client_secret'
   | 'linuxdo_connect_client_secret_configured'
   | 'linuxdo_connect_redirect_url'
+>
+
+export type SettingsWechatFields = Pick<
+  SettingsForm,
+  | 'wechat_connect_enabled'
+  | 'wechat_connect_open_app_id'
+  | 'wechat_connect_open_app_secret'
+  | 'wechat_connect_open_app_secret_configured'
+  | 'wechat_connect_mp_app_id'
+  | 'wechat_connect_mp_app_secret'
+  | 'wechat_connect_mp_app_secret_configured'
+  | 'wechat_connect_mobile_app_id'
+  | 'wechat_connect_mobile_app_secret'
+  | 'wechat_connect_mobile_app_secret_configured'
+  | 'wechat_connect_open_enabled'
+  | 'wechat_connect_mp_enabled'
+  | 'wechat_connect_mobile_enabled'
+  | 'wechat_connect_mode'
+  | 'wechat_connect_scopes'
+  | 'wechat_connect_redirect_url'
+  | 'wechat_connect_frontend_redirect_url'
+>
+
+export type SettingsOidcFields = Pick<
+  SettingsForm,
+  | 'oidc_connect_enabled'
+  | 'oidc_connect_provider_name'
+  | 'oidc_connect_client_id'
+  | 'oidc_connect_client_secret'
+  | 'oidc_connect_client_secret_configured'
+  | 'oidc_connect_issuer_url'
+  | 'oidc_connect_discovery_url'
+  | 'oidc_connect_authorize_url'
+  | 'oidc_connect_token_url'
+  | 'oidc_connect_userinfo_url'
+  | 'oidc_connect_jwks_url'
+  | 'oidc_connect_scopes'
+  | 'oidc_connect_redirect_url'
+  | 'oidc_connect_frontend_redirect_url'
+  | 'oidc_connect_token_auth_method'
+  | 'oidc_connect_use_pkce'
+  | 'oidc_connect_validate_id_token'
+  | 'oidc_connect_allowed_signing_algs'
+  | 'oidc_connect_clock_skew_seconds'
+  | 'oidc_connect_require_email_verified'
+  | 'oidc_connect_userinfo_email_path'
+  | 'oidc_connect_userinfo_id_path'
+  | 'oidc_connect_userinfo_username_path'
 >
 
 export type SettingsClaudeCodeFields = Pick<
@@ -152,7 +213,7 @@ export type SettingsPayloadResult =
 
 type WritableSecretFields = Pick<
   SettingsForm,
-  'smtp_password' | 'turnstile_secret_key' | 'linuxdo_connect_client_secret'
+  'smtp_password' | 'turnstile_secret_key' | 'linuxdo_connect_client_secret' | 'wechat_connect_open_app_secret' | 'wechat_connect_mp_app_secret' | 'wechat_connect_mobile_app_secret' | 'oidc_connect_client_secret'
 >
 
 interface NormalizedSettingsUrls {
@@ -165,6 +226,7 @@ export function createDefaultSettingsForm(): SettingsForm {
   return {
     registration_enabled: true,
     email_verify_enabled: false,
+    force_email_on_third_party_signup: false,
     registration_email_suffix_whitelist: [],
     promo_code_enabled: true,
     invitation_code_enabled: false,
@@ -174,6 +236,26 @@ export function createDefaultSettingsForm(): SettingsForm {
     default_balance: 0,
     default_concurrency: 1,
     default_subscriptions: [],
+    auth_source_default_email_balance: 0,
+    auth_source_default_email_concurrency: 5,
+    auth_source_default_email_subscriptions: [],
+    auth_source_default_email_grant_on_signup: false,
+    auth_source_default_email_grant_on_first_bind: false,
+    auth_source_default_linuxdo_balance: 0,
+    auth_source_default_linuxdo_concurrency: 5,
+    auth_source_default_linuxdo_subscriptions: [],
+    auth_source_default_linuxdo_grant_on_signup: false,
+    auth_source_default_linuxdo_grant_on_first_bind: false,
+    auth_source_default_oidc_balance: 0,
+    auth_source_default_oidc_concurrency: 5,
+    auth_source_default_oidc_subscriptions: [],
+    auth_source_default_oidc_grant_on_signup: false,
+    auth_source_default_oidc_grant_on_first_bind: false,
+    auth_source_default_wechat_balance: 0,
+    auth_source_default_wechat_concurrency: 5,
+    auth_source_default_wechat_subscriptions: [],
+    auth_source_default_wechat_grant_on_signup: false,
+    auth_source_default_wechat_grant_on_first_bind: false,
     site_name: 'Sub2API',
     site_logo: '',
     site_subtitle: 'Subscription to API Conversion Platform',
@@ -197,6 +279,11 @@ export function createDefaultSettingsForm(): SettingsForm {
     smtp_from_email: '',
     smtp_from_name: '',
     smtp_use_tls: true,
+    balance_low_notify_enabled: false,
+    balance_low_notify_threshold: 5,
+    balance_low_notify_recharge_url: '',
+    account_quota_notify_enabled: false,
+    account_quota_notify_emails: [] as NotifyEmailEntry[],
     turnstile_enabled: false,
     turnstile_site_key: '',
     turnstile_secret_key: '',
@@ -206,6 +293,46 @@ export function createDefaultSettingsForm(): SettingsForm {
     linuxdo_connect_client_secret: '',
     linuxdo_connect_client_secret_configured: false,
     linuxdo_connect_redirect_url: '',
+    wechat_connect_enabled: false,
+    wechat_connect_open_app_id: '',
+    wechat_connect_open_app_secret: '',
+    wechat_connect_open_app_secret_configured: false,
+    wechat_connect_mp_app_id: '',
+    wechat_connect_mp_app_secret: '',
+    wechat_connect_mp_app_secret_configured: false,
+    wechat_connect_mobile_app_id: '',
+    wechat_connect_mobile_app_secret: '',
+    wechat_connect_mobile_app_secret_configured: false,
+    wechat_connect_open_enabled: true,
+    wechat_connect_mp_enabled: false,
+    wechat_connect_mobile_enabled: false,
+    wechat_connect_mode: 'open',
+    wechat_connect_scopes: 'snsapi_login',
+    wechat_connect_redirect_url: '',
+    wechat_connect_frontend_redirect_url: '/auth/wechat/callback',
+    oidc_connect_enabled: false,
+    oidc_connect_provider_name: 'OIDC',
+    oidc_connect_client_id: '',
+    oidc_connect_client_secret: '',
+    oidc_connect_client_secret_configured: false,
+    oidc_connect_issuer_url: '',
+    oidc_connect_discovery_url: '',
+    oidc_connect_authorize_url: '',
+    oidc_connect_token_url: '',
+    oidc_connect_userinfo_url: '',
+    oidc_connect_jwks_url: '',
+    oidc_connect_scopes: 'openid email profile',
+    oidc_connect_redirect_url: '',
+    oidc_connect_frontend_redirect_url: '/auth/oidc/callback',
+    oidc_connect_token_auth_method: 'client_secret_post',
+    oidc_connect_use_pkce: true,
+    oidc_connect_validate_id_token: true,
+    oidc_connect_allowed_signing_algs: 'RS256,ES256,PS256',
+    oidc_connect_clock_skew_seconds: 120,
+    oidc_connect_require_email_verified: false,
+    oidc_connect_userinfo_email_path: '',
+    oidc_connect_userinfo_id_path: '',
+    oidc_connect_userinfo_username_path: '',
     enable_model_fallback: false,
     fallback_model_anthropic: 'claude-3-5-sonnet-20241022',
     fallback_model_openai: 'gpt-4o',
@@ -253,6 +380,34 @@ export function getSettingsLinuxdoRedirectUrlSuggestion(
 
   const origin = location.origin || `${location.protocol}//${location.host}`
   return `${origin}/api/v1/auth/oauth/linuxdo/callback`
+}
+
+export function getSettingsWeChatRedirectUrlSuggestion(
+  location:
+    | Pick<Location, 'origin' | 'protocol' | 'host'>
+    | null
+    | undefined
+): string {
+  if (!location) {
+    return ''
+  }
+
+  const origin = location.origin || `${location.protocol}//${location.host}`
+  return `${origin}/api/v1/auth/oauth/wechat/callback`
+}
+
+export function getSettingsOidcRedirectUrlSuggestion(
+  location:
+    | Pick<Location, 'origin' | 'protocol' | 'host'>
+    | null
+    | undefined
+): string {
+  if (!location) {
+    return ''
+  }
+
+  const origin = location.origin || `${location.protocol}//${location.host}`
+  return `${origin}/api/v1/auth/oauth/oidc/callback`
 }
 
 export function addCustomMenuItem(items: CustomMenuItem[]): void {
@@ -326,9 +481,54 @@ export function removeDefaultSubscription(
   items.splice(index, 1)
 }
 
+export function getAuthSourceDefaultSubscriptions(
+  form: SettingsForm,
+  source: AuthSourceType
+): DefaultSubscriptionSetting[] {
+  switch (source) {
+    case 'email':
+      return form.auth_source_default_email_subscriptions
+    case 'linuxdo':
+      return form.auth_source_default_linuxdo_subscriptions
+    case 'oidc':
+      return form.auth_source_default_oidc_subscriptions
+    case 'wechat':
+      return form.auth_source_default_wechat_subscriptions
+  }
+}
+
+export function setAuthSourceDefaultSubscriptions(
+  form: SettingsForm,
+  source: AuthSourceType,
+  subscriptions: DefaultSubscriptionSetting[]
+): void {
+  switch (source) {
+    case 'email':
+      form.auth_source_default_email_subscriptions = subscriptions
+      return
+    case 'linuxdo':
+      form.auth_source_default_linuxdo_subscriptions = subscriptions
+      return
+    case 'oidc':
+      form.auth_source_default_oidc_subscriptions = subscriptions
+      return
+    case 'wechat':
+      form.auth_source_default_wechat_subscriptions = subscriptions
+      return
+  }
+}
+
 export function hydrateSettingsForm(form: SettingsForm, settings: SystemSettings): string[] {
   Object.assign(form, settings)
   form.default_subscriptions = normalizeDefaultSubscriptions(settings.default_subscriptions)
+  for (const source of AUTH_SOURCE_TYPES) {
+    setAuthSourceDefaultSubscriptions(
+      form,
+      source,
+      normalizeDefaultSubscriptions(getAuthSourceDefaultSubscriptions(form, source))
+    )
+  }
+  form.account_quota_notify_emails = normalizeNotifyEmailEntries(settings.account_quota_notify_emails)
   resetTransientSecrets(form)
   return normalizeRegistrationEmailSuffixDomains(settings.registration_email_suffix_whitelist)
 }
@@ -363,6 +563,7 @@ export function buildSettingsUpdatePayload(
     payload: {
       registration_enabled: form.registration_enabled,
       email_verify_enabled: form.email_verify_enabled,
+      force_email_on_third_party_signup: form.force_email_on_third_party_signup,
       registration_email_suffix_whitelist: normalizeRegistrationEmailSuffixWhitelist(
         registrationEmailSuffixWhitelistTags
       ),
@@ -373,6 +574,26 @@ export function buildSettingsUpdatePayload(
       default_balance: form.default_balance,
       default_concurrency: form.default_concurrency,
       default_subscriptions: defaultSubscriptions,
+      auth_source_default_email_balance: form.auth_source_default_email_balance,
+      auth_source_default_email_concurrency: form.auth_source_default_email_concurrency,
+      auth_source_default_email_subscriptions: normalizeDefaultSubscriptions(form.auth_source_default_email_subscriptions),
+      auth_source_default_email_grant_on_signup: form.auth_source_default_email_grant_on_signup,
+      auth_source_default_email_grant_on_first_bind: form.auth_source_default_email_grant_on_first_bind,
+      auth_source_default_linuxdo_balance: form.auth_source_default_linuxdo_balance,
+      auth_source_default_linuxdo_concurrency: form.auth_source_default_linuxdo_concurrency,
+      auth_source_default_linuxdo_subscriptions: normalizeDefaultSubscriptions(form.auth_source_default_linuxdo_subscriptions),
+      auth_source_default_linuxdo_grant_on_signup: form.auth_source_default_linuxdo_grant_on_signup,
+      auth_source_default_linuxdo_grant_on_first_bind: form.auth_source_default_linuxdo_grant_on_first_bind,
+      auth_source_default_oidc_balance: form.auth_source_default_oidc_balance,
+      auth_source_default_oidc_concurrency: form.auth_source_default_oidc_concurrency,
+      auth_source_default_oidc_subscriptions: normalizeDefaultSubscriptions(form.auth_source_default_oidc_subscriptions),
+      auth_source_default_oidc_grant_on_signup: form.auth_source_default_oidc_grant_on_signup,
+      auth_source_default_oidc_grant_on_first_bind: form.auth_source_default_oidc_grant_on_first_bind,
+      auth_source_default_wechat_balance: form.auth_source_default_wechat_balance,
+      auth_source_default_wechat_concurrency: form.auth_source_default_wechat_concurrency,
+      auth_source_default_wechat_subscriptions: normalizeDefaultSubscriptions(form.auth_source_default_wechat_subscriptions),
+      auth_source_default_wechat_grant_on_signup: form.auth_source_default_wechat_grant_on_signup,
+      auth_source_default_wechat_grant_on_first_bind: form.auth_source_default_wechat_grant_on_first_bind,
       site_name: form.site_name,
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
@@ -395,6 +616,11 @@ export function buildSettingsUpdatePayload(
       smtp_from_email: form.smtp_from_email,
       smtp_from_name: form.smtp_from_name,
       smtp_use_tls: form.smtp_use_tls,
+      balance_low_notify_enabled: form.balance_low_notify_enabled,
+      balance_low_notify_threshold: form.balance_low_notify_threshold,
+      balance_low_notify_recharge_url: form.balance_low_notify_recharge_url,
+      account_quota_notify_enabled: form.account_quota_notify_enabled,
+      account_quota_notify_emails: normalizeNotifyEmailEntries(form.account_quota_notify_emails),
       turnstile_enabled: form.turnstile_enabled,
       turnstile_site_key: form.turnstile_site_key,
       turnstile_secret_key: form.turnstile_secret_key || undefined,
@@ -402,6 +628,42 @@ export function buildSettingsUpdatePayload(
       linuxdo_connect_client_id: form.linuxdo_connect_client_id,
       linuxdo_connect_client_secret: form.linuxdo_connect_client_secret || undefined,
       linuxdo_connect_redirect_url: form.linuxdo_connect_redirect_url,
+      wechat_connect_enabled: form.wechat_connect_enabled,
+      wechat_connect_open_app_id: form.wechat_connect_open_app_id,
+      wechat_connect_open_app_secret: form.wechat_connect_open_app_secret || undefined,
+      wechat_connect_mp_app_id: form.wechat_connect_mp_app_id,
+      wechat_connect_mp_app_secret: form.wechat_connect_mp_app_secret || undefined,
+      wechat_connect_mobile_app_id: form.wechat_connect_mobile_app_id,
+      wechat_connect_mobile_app_secret: form.wechat_connect_mobile_app_secret || undefined,
+      wechat_connect_open_enabled: form.wechat_connect_open_enabled,
+      wechat_connect_mp_enabled: form.wechat_connect_mp_enabled,
+      wechat_connect_mobile_enabled: form.wechat_connect_mobile_enabled,
+      wechat_connect_mode: form.wechat_connect_mode,
+      wechat_connect_scopes: form.wechat_connect_scopes,
+      wechat_connect_redirect_url: form.wechat_connect_redirect_url,
+      wechat_connect_frontend_redirect_url: form.wechat_connect_frontend_redirect_url,
+      oidc_connect_enabled: form.oidc_connect_enabled,
+      oidc_connect_provider_name: form.oidc_connect_provider_name,
+      oidc_connect_client_id: form.oidc_connect_client_id,
+      oidc_connect_client_secret: form.oidc_connect_client_secret || undefined,
+      oidc_connect_issuer_url: form.oidc_connect_issuer_url,
+      oidc_connect_discovery_url: form.oidc_connect_discovery_url,
+      oidc_connect_authorize_url: form.oidc_connect_authorize_url,
+      oidc_connect_token_url: form.oidc_connect_token_url,
+      oidc_connect_userinfo_url: form.oidc_connect_userinfo_url,
+      oidc_connect_jwks_url: form.oidc_connect_jwks_url,
+      oidc_connect_scopes: form.oidc_connect_scopes,
+      oidc_connect_redirect_url: form.oidc_connect_redirect_url,
+      oidc_connect_frontend_redirect_url: form.oidc_connect_frontend_redirect_url,
+      oidc_connect_token_auth_method: form.oidc_connect_token_auth_method,
+      oidc_connect_use_pkce: form.oidc_connect_use_pkce,
+      oidc_connect_validate_id_token: form.oidc_connect_validate_id_token,
+      oidc_connect_allowed_signing_algs: form.oidc_connect_allowed_signing_algs,
+      oidc_connect_clock_skew_seconds: form.oidc_connect_clock_skew_seconds,
+      oidc_connect_require_email_verified: form.oidc_connect_require_email_verified,
+      oidc_connect_userinfo_email_path: form.oidc_connect_userinfo_email_path,
+      oidc_connect_userinfo_id_path: form.oidc_connect_userinfo_id_path,
+      oidc_connect_userinfo_username_path: form.oidc_connect_userinfo_username_path,
       enable_model_fallback: form.enable_model_fallback,
       fallback_model_anthropic: form.fallback_model_anthropic,
       fallback_model_openai: form.fallback_model_openai,
@@ -464,6 +726,22 @@ export function buildSendTestEmailRequest(
   }
 }
 
+export function normalizeNotifyEmailEntries(
+  entries: NotifyEmailEntry[] | null | undefined
+): NotifyEmailEntry[] {
+  if (!Array.isArray(entries)) {
+    return []
+  }
+
+  return entries
+    .map((entry) => ({
+      email: typeof entry?.email === 'string' ? entry.email.trim() : '',
+      disabled: Boolean(entry?.disabled),
+      verified: Boolean(entry?.verified)
+    }))
+    .filter((entry) => entry.email.length > 0)
+}
+
 export function normalizeDefaultSubscriptions(
   items: DefaultSubscriptionSetting[] | null | undefined
 ): DefaultSubscriptionSetting[] {
@@ -520,6 +798,10 @@ function resetTransientSecrets(form: WritableSecretFields): void {
   form.smtp_password = ''
   form.turnstile_secret_key = ''
   form.linuxdo_connect_client_secret = ''
+  form.wechat_connect_open_app_secret = ''
+  form.wechat_connect_mp_app_secret = ''
+  form.wechat_connect_mobile_app_secret = ''
+  form.oidc_connect_client_secret = ''
 }
 
 function findDuplicateDefaultSubscription(
