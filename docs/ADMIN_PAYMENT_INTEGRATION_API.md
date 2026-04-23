@@ -15,7 +15,9 @@
 
 ### 基础地址
 - 生产：`https://<your-domain>`
-- Beta：`http://<your-server-ip>:8084`
+- 本地 / 自建默认端口：`http://<your-server-ip>:8080`
+
+说明：项目默认 HTTP 端口是 `8080`。如果你在 Docker、systemd 或反向代理层改过端口，请以你的实际部署地址为准。
 
 ### 认证
 推荐使用：
@@ -100,16 +102,22 @@ curl -X POST "${BASE}/api/v1/admin/users/123/balance" \
 ```
 
 ### 4) 购买页 / 自定义页面 URL Query 透传（iframe / 新窗口一致）
-当 Sub2API 打开 `purchase_subscription_url` 或用户侧自定义页面 iframe URL 时，会统一追加：
+当 Sub2API 打开 `purchase_subscription_url` 或用户侧 `custom_menu_items` 中的页面 URL 时，会统一追加：
 - `user_id`
 - `token`
 - `theme`（`light` / `dark`）
 - `lang`（例如 `zh` / `en`，用于向嵌入页传递当前界面语言）
 - `ui_mode`（固定 `embedded`）
+- `src_host`（当前 Sub2API 站点 origin）
+- `src_url`（当前打开该 iframe 的完整页面 URL）
+
+说明：
+- `purchase_subscription_url` 仍然兼容，但仓库中已经有把旧购买入口迁移到 `custom_menu_items` 的迁移逻辑；新接入建议优先考虑自定义菜单页入口。
+- 嵌入页如果需要来源校验、回跳或埋点，可以使用 `src_host` / `src_url`。
 
 示例：
 ```text
-https://pay.example.com/pay?user_id=123&token=<jwt>&theme=light&lang=zh&ui_mode=embedded
+https://pay.example.com/pay?user_id=123&token=<jwt>&theme=light&lang=zh&ui_mode=embedded&src_host=https%3A%2F%2Fsub2api.example.com&src_url=https%3A%2F%2Fsub2api.example.com%2Fpurchase
 ```
 
 ### 5) 失败处理建议
@@ -119,8 +127,8 @@ https://pay.example.com/pay?user_id=123&token=<jwt>&theme=light&lang=zh&ui_mode=
 - 重试保持相同 `code`，并使用新的 `Idempotency-Key`
 
 ### 6) `doc_url` 配置建议
-- 查看链接：`https://github.com/senran-N/sub2api/blob/main/ADMIN_PAYMENT_INTEGRATION_API.md`
-- 下载链接：`https://raw.githubusercontent.com/senran-N/sub2api/main/ADMIN_PAYMENT_INTEGRATION_API.md`
+- 查看链接：`https://github.com/senran-N/sub2api/blob/main/docs/ADMIN_PAYMENT_INTEGRATION_API.md`
+- 下载链接：`https://raw.githubusercontent.com/senran-N/sub2api/main/docs/ADMIN_PAYMENT_INTEGRATION_API.md`
 
 ---
 
@@ -135,7 +143,9 @@ This document describes the minimal Sub2API Admin API surface for external payme
 
 ### Base URL
 - Production: `https://<your-domain>`
-- Beta: `http://<your-server-ip>:8084`
+- Local / self-hosted default port: `http://<your-server-ip>:8080`
+
+Note: the project defaults to HTTP port `8080`. If your Docker, systemd, or reverse-proxy setup exposes another port, use your actual deployment URL.
 
 ### Authentication
 Recommended headers:
@@ -220,16 +230,22 @@ curl -X POST "${BASE}/api/v1/admin/users/123/balance" \
 ```
 
 ### 4) Purchase / Custom Page URL query forwarding (iframe and new tab)
-When Sub2API opens `purchase_subscription_url` or a user-facing custom page iframe URL, it appends:
+When Sub2API opens `purchase_subscription_url` or a user-facing page URL from `custom_menu_items`, it appends:
 - `user_id`
 - `token`
 - `theme` (`light` / `dark`)
 - `lang` (for example `zh` / `en`, used to pass the current UI language to the embedded page)
 - `ui_mode` (fixed: `embedded`)
+- `src_host` (the current Sub2API site origin)
+- `src_url` (the full page URL that opened the embedded page)
+
+Notes:
+- `purchase_subscription_url` is still supported for compatibility, but the repository now also supports user-facing entries through `custom_menu_items`; new integrations should prefer the newer menu-based entry where appropriate.
+- `src_host` and `src_url` are useful for origin checks, return navigation, and analytics on the embedded side.
 
 Example:
 ```text
-https://pay.example.com/pay?user_id=123&token=<jwt>&theme=light&lang=zh&ui_mode=embedded
+https://pay.example.com/pay?user_id=123&token=<jwt>&theme=light&lang=zh&ui_mode=embedded&src_host=https%3A%2F%2Fsub2api.example.com&src_url=https%3A%2F%2Fsub2api.example.com%2Fpurchase
 ```
 
 ### 5) Failure handling recommendations
@@ -239,5 +255,5 @@ https://pay.example.com/pay?user_id=123&token=<jwt>&theme=light&lang=zh&ui_mode=
 - Keep the same `code` for retry, and use a new `Idempotency-Key`
 
 ### 6) Recommended `doc_url`
-- View URL: `https://github.com/senran-N/sub2api/blob/main/ADMIN_PAYMENT_INTEGRATION_API.md`
-- Download URL: `https://raw.githubusercontent.com/senran-N/sub2api/main/ADMIN_PAYMENT_INTEGRATION_API.md`
+- View URL: `https://github.com/senran-N/sub2api/blob/main/docs/ADMIN_PAYMENT_INTEGRATION_API.md`
+- Download URL: `https://raw.githubusercontent.com/senran-N/sub2api/main/docs/ADMIN_PAYMENT_INTEGRATION_API.md`
