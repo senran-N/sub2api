@@ -18,12 +18,21 @@ import {
 } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
-  it('openai 模型列表包含 GPT-5.4 官方快照', () => {
+  it('openai 模型列表包含 GPT-5.5 与 GPT-5.4 官方快照', () => {
     const models = getModelsByPlatform('openai')
 
+    expect(models).toContain('gpt-5.5')
     expect(models).toContain('gpt-5.4')
     expect(models).toContain('gpt-5.4-mini')
     expect(models).toContain('gpt-5.4-2026-03-05')
+  })
+
+  it('openai 预设映射包含 GPT-5.5 透传项', () => {
+    expect(getPresetMappingsByPlatform('openai')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'gpt-5.5', to: 'gpt-5.5' })
+      ])
+    )
   })
 
   it('antigravity 模型列表包含图片模型兼容项', () => {

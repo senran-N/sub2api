@@ -165,6 +165,12 @@ type OpenCodeModelMap = Record<string, Record<string, unknown>>
 
 function buildOpenAIModels(): OpenCodeModelMap {
   return {
+    'gpt-5.5': {
+      name: 'GPT-5.5',
+      limit: { context: 1050000, output: 128000 },
+      options: { store: false },
+      variants: { low: {}, medium: {}, high: {}, xhigh: {} }
+    },
     'gpt-5.2': {
       name: 'GPT-5.2',
       limit: { context: 400000, output: 128000 },

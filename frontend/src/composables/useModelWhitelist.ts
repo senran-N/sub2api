@@ -23,6 +23,8 @@ const openaiModels = [
   // GPT-5.2 系列
   'gpt-5.2', 'gpt-5.2-2025-12-11', 'gpt-5.2-chat-latest',
   'gpt-5.2-pro', 'gpt-5.2-pro-2025-12-11',
+  // GPT-5.5 系列
+  'gpt-5.5',
   // GPT-5.4 系列
   'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-2026-03-05',
   // GPT-5.3 系列
@@ -430,6 +432,7 @@ const openaiPresetMappings: PresetMapping[] = [
   { label: 'o3', from: 'o3', to: 'o3', tone: 'success' },
   { label: 'GPT-5.3 Codex Spark', from: 'gpt-5.3-codex-spark', to: 'gpt-5.3-codex-spark', tone: 'success' },
   { label: 'GPT-5.2', from: 'gpt-5.2', to: 'gpt-5.2', tone: 'danger' },
+  { label: 'GPT-5.5', from: 'gpt-5.5', to: 'gpt-5.5', tone: 'warning' },
   { label: 'GPT-5.4', from: 'gpt-5.4', to: 'gpt-5.4', tone: 'brand-rose' },
   { label: 'Haiku→5.4', from: 'claude-haiku-4-5-20251001', to: 'gpt-5.4', tone: 'success' },
   { label: 'Opus→5.4', from: 'claude-opus-4-6', to: 'gpt-5.4', tone: 'brand-purple' },

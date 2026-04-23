@@ -128,6 +128,8 @@ func TestNormalizeCodexModel_UpstreamAlignment(t *testing.T) {
 		{name: "normalizes trimmed bare codex spark distinctly", input: "  gpt-5.3-codex-spark  ", want: "gpt-5.3-codex-spark"},
 		{name: "normalizes spaced bare codex spark distinctly", input: "gpt 5.3 codex spark", want: "gpt-5.3-codex-spark"},
 		{name: "normalizes spark high distinctly", input: "gpt-5.3-codex-spark-high", want: "gpt-5.3-codex-spark"},
+		{name: "normalizes gpt 5.5 alias", input: "gpt 5.5", want: "gpt-5.5"},
+		{name: "normalizes gpt 5.5 variant", input: "gpt-5.5-high", want: "gpt-5.5"},
 		{name: "normalizes gpt 5.4 alias", input: "gpt 5.4", want: "gpt-5.4"},
 	}
 
