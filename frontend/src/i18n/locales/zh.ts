@@ -4956,6 +4956,8 @@ export default {
         addDefaultSubscription: "添加默认订阅",
         defaultSubscriptionsEmpty:
           "未配置默认订阅。新用户不会自动获得订阅套餐。",
+        subscriptionGroupsRequired: "暂无可用订阅分组",
+        subscriptionGroupsRequiredHint: "先到订阅管理或分组管理中创建并启用订阅型分组，这里才能配置默认订阅发放。",
         defaultSubscriptionsDuplicate:
           "默认订阅存在重复分组：{groupId}。每个分组只能出现一次。",
         subscriptionGroup: "订阅分组",

@@ -1,6 +1,6 @@
 <template>
   <div class="card">
-    <div class="settings-defaults-card__header">
+    <div class="card-header">
       <h2 class="settings-defaults-card__title text-lg font-semibold">
         {{ t('admin.settings.defaults.title') }}
       </h2>
@@ -8,8 +8,8 @@
         {{ t('admin.settings.defaults.description') }}
       </p>
     </div>
-    <div class="settings-defaults-card__content space-y-6">
-      <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+    <div class="card-body settings-defaults-card__body">
+      <div class="settings-defaults-card__panel settings-defaults-card__metrics-grid">
         <div>
           <label class="settings-defaults-card__field-label mb-2 block text-sm font-medium">
             {{ t('admin.settings.defaults.defaultBalance') }}
@@ -43,8 +43,8 @@
         </div>
       </div>
 
-      <div class="settings-defaults-card__section pt-4">
-        <div class="mb-3 flex items-center justify-between">
+      <div class="settings-defaults-card__section">
+        <div class="settings-defaults-card__section-header">
           <div>
             <label class="settings-defaults-card__label font-medium">
               {{ t('admin.settings.defaults.defaultSubscriptions') }}
@@ -64,6 +64,18 @@
         </div>
 
         <div
+          v-if="defaultSubscriptionGroupOptions.length === 0"
+          class="settings-defaults-card__empty text-sm"
+        >
+          <p class="font-medium">
+            {{ t('admin.settings.defaults.subscriptionGroupsRequired') }}
+          </p>
+          <p class="mt-1">
+            {{ t('admin.settings.defaults.subscriptionGroupsRequiredHint') }}
+          </p>
+        </div>
+
+        <div
           v-if="form.default_subscriptions.length === 0"
           class="settings-defaults-card__empty text-sm"
         >
@@ -74,55 +86,57 @@
           <div
             v-for="(item, index) in form.default_subscriptions"
             :key="`default-sub-${index}`"
-            class="settings-defaults-card__subscription-item grid grid-cols-1 gap-3 md:grid-cols-[1fr_var(--theme-settings-defaults-validity-column-width)_auto]"
+            class="settings-defaults-card__subscription-item"
           >
-            <div>
-              <label class="settings-defaults-card__mini-label mb-1 block text-xs font-medium">
-                {{ t('admin.settings.defaults.subscriptionGroup') }}
-              </label>
-              <Select
-                v-model="item.group_id"
-                class="default-sub-group-select"
-                :options="defaultSubscriptionGroupOptions"
-                :placeholder="t('admin.settings.defaults.subscriptionGroup')"
-              >
-                <template #selected="{ option }">
-                  <GroupBadge
-                    v-if="option"
-                    :name="toDefaultSubscriptionGroupOption(option).label"
-                    :platform="toDefaultSubscriptionGroupOption(option).platform"
-                    :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
-                    :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate"
-                  />
-                  <span v-else class="settings-defaults-card__placeholder">
-                    {{ t('admin.settings.defaults.subscriptionGroup') }}
-                  </span>
-                </template>
-                <template #option="{ option, selected }">
-                  <GroupOptionItem
-                    :name="toDefaultSubscriptionGroupOption(option).label"
-                    :platform="toDefaultSubscriptionGroupOption(option).platform"
-                    :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
-                    :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate"
-                    :description="toDefaultSubscriptionGroupOption(option).description"
-                    :selected="selected"
-                  />
-                </template>
-              </Select>
+            <div class="settings-defaults-card__subscription-grid">
+              <div>
+                <label class="settings-defaults-card__mini-label mb-1 block text-xs font-medium">
+                  {{ t('admin.settings.defaults.subscriptionGroup') }}
+                </label>
+                <Select
+                  v-model="item.group_id"
+                  class="default-sub-group-select"
+                  :options="defaultSubscriptionGroupOptions"
+                  :placeholder="t('admin.settings.defaults.subscriptionGroup')"
+                >
+                  <template #selected="{ option }">
+                    <GroupBadge
+                      v-if="option"
+                      :name="toDefaultSubscriptionGroupOption(option).label"
+                      :platform="toDefaultSubscriptionGroupOption(option).platform"
+                      :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
+                      :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate"
+                    />
+                    <span v-else class="settings-defaults-card__placeholder">
+                      {{ t('admin.settings.defaults.subscriptionGroup') }}
+                    </span>
+                  </template>
+                  <template #option="{ option, selected }">
+                    <GroupOptionItem
+                      :name="toDefaultSubscriptionGroupOption(option).label"
+                      :platform="toDefaultSubscriptionGroupOption(option).platform"
+                      :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
+                      :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate"
+                      :description="toDefaultSubscriptionGroupOption(option).description"
+                      :selected="selected"
+                    />
+                  </template>
+                </Select>
+              </div>
+              <div>
+                <label class="settings-defaults-card__mini-label mb-1 block text-xs font-medium">
+                  {{ t('admin.settings.defaults.subscriptionValidityDays') }}
+                </label>
+                <input
+                  v-model.number="item.validity_days"
+                  type="number"
+                  min="1"
+                  max="36500"
+                  class="input settings-defaults-card__validity-input"
+                />
+              </div>
             </div>
-            <div>
-              <label class="settings-defaults-card__mini-label mb-1 block text-xs font-medium">
-                {{ t('admin.settings.defaults.subscriptionValidityDays') }}
-              </label>
-              <input
-                v-model.number="item.validity_days"
-                type="number"
-                min="1"
-                max="36500"
-                class="input settings-defaults-card__validity-input"
-              />
-            </div>
-            <div class="flex items-end">
+            <div class="settings-defaults-card__subscription-action">
               <button
                 type="button"
                 class="btn btn-secondary settings-defaults-card__delete-button w-full"
@@ -169,16 +183,6 @@ const { t } = useI18n()
 </script>
 
 <style scoped>
-.settings-defaults-card__header,
-.settings-defaults-card__section {
-  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
-}
-
-.settings-defaults-card__header {
-  border-top: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
-}
-
 .settings-defaults-card__title,
 .settings-defaults-card__label,
 .settings-defaults-card__field-label,
@@ -186,12 +190,10 @@ const { t } = useI18n()
   color: var(--theme-page-text);
 }
 
-.settings-defaults-card__header {
-  padding: var(--theme-settings-card-header-padding-y) var(--theme-settings-card-header-padding-x);
-}
-
-.settings-defaults-card__content {
-  padding: var(--theme-settings-card-body-padding);
+.settings-defaults-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-settings-card-body-padding);
 }
 
 .settings-defaults-card__description,
@@ -200,17 +202,57 @@ const { t } = useI18n()
   color: var(--theme-page-muted);
 }
 
+.settings-defaults-card__panel,
+.settings-defaults-card__section {
+  border-radius: var(--theme-settings-card-panel-radius);
+  padding: var(--theme-settings-card-panel-padding);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  background: color-mix(in srgb, var(--theme-surface-soft) 76%, transparent);
+}
+
+.settings-defaults-card__metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--theme-settings-card-panel-padding);
+}
+
+.settings-defaults-card__section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
 .settings-defaults-card__empty {
   border-radius: var(--theme-settings-defaults-empty-radius);
   padding: var(--theme-settings-defaults-empty-padding-y)
     var(--theme-settings-defaults-empty-padding-x);
   border: 1px dashed color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 88%, transparent);
+}
+
+.settings-defaults-card__empty + .settings-defaults-card__empty {
+  margin-top: 0.75rem;
 }
 
 .settings-defaults-card__subscription-item {
   border-radius: var(--theme-settings-defaults-subscription-item-radius);
   padding: var(--theme-settings-defaults-subscription-item-padding);
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 90%, transparent);
+}
+
+.settings-defaults-card__subscription-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.settings-defaults-card__subscription-action {
+  display: flex;
+  align-items: flex-end;
+  margin-top: 0.75rem;
 }
 
 .settings-defaults-card__validity-input {
@@ -223,5 +265,27 @@ const { t } = useI18n()
 
 .settings-defaults-card__delete-button:hover {
   color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 92%, var(--theme-page-text));
+}
+
+@media (min-width: 768px) {
+  .settings-defaults-card__metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-defaults-card__subscription-grid {
+    grid-template-columns: minmax(0, 1fr) var(--theme-settings-defaults-validity-column-width);
+  }
+
+  .settings-defaults-card__subscription-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: end;
+  }
+
+  .settings-defaults-card__subscription-action {
+    margin-top: 0;
+    min-width: 6rem;
+  }
 }
 </style>

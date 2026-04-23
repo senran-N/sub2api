@@ -98,6 +98,13 @@ export function applyLoginPublicSettings(
   state.passwordResetEnabled = settings.password_reset_enabled === true
 }
 
+export function shouldShowLoginOAuthDivider(state: LoginSettingsState): boolean {
+  return (
+    !state.backendModeEnabled &&
+    (state.linuxdoOAuthEnabled || state.wechatOAuthEnabled || state.oidcOAuthEnabled)
+  )
+}
+
 export function isLoginEmailValid(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }

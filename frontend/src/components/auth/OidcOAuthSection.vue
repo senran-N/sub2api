@@ -16,7 +16,7 @@
       {{ buttonLabel }}
     </button>
 
-    <div class="flex items-center gap-3">
+    <div v-if="props.showDivider !== false" class="flex items-center gap-3">
       <div class="oidc-oauth-section__divider h-px flex-1"></div>
       <span class="theme-text-muted text-xs">
         {{ t('auth.oidc.orContinue') }}
@@ -34,6 +34,7 @@ import { useI18n } from 'vue-i18n'
 const props = defineProps<{
   disabled?: boolean
   providerName?: string
+  showDivider?: boolean
 }>()
 
 const route = useRoute()

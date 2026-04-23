@@ -28,7 +28,7 @@
       {{ t('auth.linuxdo.signIn') }}
     </button>
 
-    <div class="flex items-center gap-3">
+    <div v-if="showDivider !== false" class="flex items-center gap-3">
       <div class="linuxdo-oauth-section__divider h-px flex-1"></div>
       <span class="theme-text-muted text-xs">
         {{ t('auth.linuxdo.orContinue') }}
@@ -44,6 +44,7 @@ import { useI18n } from 'vue-i18n'
 
 defineProps<{
   disabled?: boolean
+  showDivider?: boolean
 }>()
 
 const route = useRoute()

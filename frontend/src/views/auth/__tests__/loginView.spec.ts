@@ -11,6 +11,7 @@ import {
   resolveLoginErrorMessage,
   resolveLoginRedirectTarget,
   resolveTotpLoginErrorMessage,
+  shouldShowLoginOAuthDivider,
   validateLoginForm
 } from '../login/loginView'
 
@@ -57,6 +58,21 @@ describe('loginView', () => {
       backendModeEnabled: true,
       passwordResetEnabled: true
     })
+  })
+
+  it('shows a single oauth divider only when oauth login is available outside backend mode', () => {
+    const state = createLoginSettingsState()
+
+    expect(shouldShowLoginOAuthDivider(state)).toBe(false)
+
+    state.wechatOAuthEnabled = true
+    expect(shouldShowLoginOAuthDivider(state)).toBe(true)
+
+    state.oidcOAuthEnabled = true
+    expect(shouldShowLoginOAuthDivider(state)).toBe(true)
+
+    state.backendModeEnabled = true
+    expect(shouldShowLoginOAuthDivider(state)).toBe(false)
   })
 
   it('validates login form fields and turnstile state', () => {

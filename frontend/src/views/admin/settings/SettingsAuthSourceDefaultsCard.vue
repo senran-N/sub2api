@@ -1,6 +1,6 @@
 <template>
   <div class="card">
-    <div class="settings-auth-source-defaults-card__header">
+    <div class="card-header">
       <h2 class="settings-auth-source-defaults-card__title text-lg font-semibold">
         {{ t('admin.settings.defaults.authSourceDefaultsTitle') }}
       </h2>
@@ -9,13 +9,26 @@
       </p>
     </div>
 
-    <div class="settings-auth-source-defaults-card__content space-y-6">
+    <div class="card-body settings-auth-source-defaults-card__body">
+      <div
+        v-if="defaultSubscriptionGroupOptions.length === 0"
+        class="settings-auth-source-defaults-card__empty text-sm"
+      >
+        <p class="font-medium">
+          {{ t('admin.settings.defaults.subscriptionGroupsRequired') }}
+        </p>
+        <p class="mt-1">
+          {{ t('admin.settings.defaults.subscriptionGroupsRequiredHint') }}
+        </p>
+      </div>
+
+      <div class="settings-auth-source-defaults-card__grid">
       <div
         v-for="section in sections"
         :key="section.source"
-        class="settings-auth-source-defaults-card__section"
+        class="settings-auth-source-defaults-card__source-panel"
       >
-        <div class="mb-4 flex items-center justify-between gap-3">
+        <div class="settings-auth-source-defaults-card__source-header">
           <div>
             <h3 class="settings-auth-source-defaults-card__section-title text-base font-semibold">
               {{ t(section.titleKey) }}
@@ -26,7 +39,8 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="settings-auth-source-defaults-card__source-body">
+        <div class="settings-auth-source-defaults-card__metrics-grid">
           <div>
             <label class="settings-auth-source-defaults-card__field-label mb-2 block text-sm font-medium">
               {{ t('admin.settings.defaults.defaultBalance') }}
@@ -56,8 +70,8 @@
           </div>
         </div>
 
-        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div class="flex items-center justify-between rounded-lg border px-4 py-3">
+        <div class="settings-auth-source-defaults-card__toggle-grid">
+          <div class="settings-auth-source-defaults-card__toggle-panel">
             <div>
               <label class="settings-auth-source-defaults-card__field-label font-medium">
                 {{ t('admin.settings.defaults.grantOnSignup') }}
@@ -73,7 +87,7 @@
             />
           </div>
 
-          <div class="flex items-center justify-between rounded-lg border px-4 py-3">
+          <div class="settings-auth-source-defaults-card__toggle-panel">
             <div>
               <label class="settings-auth-source-defaults-card__field-label font-medium">
                 {{ t('admin.settings.defaults.grantOnFirstBind') }}
@@ -90,8 +104,8 @@
           </div>
         </div>
 
-        <div class="mt-4">
-          <div class="mb-3 flex items-center justify-between">
+        <div class="settings-auth-source-defaults-card__subscriptions-panel">
+          <div class="settings-auth-source-defaults-card__subscriptions-header">
             <div>
               <label class="settings-auth-source-defaults-card__field-label font-medium">
                 {{ t('admin.settings.defaults.defaultSubscriptions') }}
@@ -114,64 +128,66 @@
             v-if="getSubscriptions(section.source).length === 0"
             class="settings-auth-source-defaults-card__empty text-sm"
           >
-            {{ t('admin.settings.defaults.defaultSubscriptionsEmpty') }}
-          </div>
+              {{ t('admin.settings.defaults.defaultSubscriptionsEmpty') }}
+            </div>
 
           <div v-else class="space-y-3">
             <div
               v-for="(item, index) in getSubscriptions(section.source)"
               :key="`${section.source}-${index}`"
-              class="settings-auth-source-defaults-card__subscription-item grid grid-cols-1 gap-3 md:grid-cols-[1fr_var(--theme-settings-defaults-validity-column-width)_auto]"
+              class="settings-auth-source-defaults-card__subscription-item"
             >
-              <div>
-                <label class="settings-auth-source-defaults-card__mini-label mb-1 block text-xs font-medium">
-                  {{ t('admin.settings.defaults.subscriptionGroup') }}
-                </label>
-                <Select
-                  v-model="item.group_id"
-                  class="default-sub-group-select"
-                  :options="defaultSubscriptionGroupOptions"
-                  :placeholder="t('admin.settings.defaults.subscriptionGroup')"
-                >
-                  <template #selected="{ option }">
-                    <GroupBadge
-                      v-if="option"
-                      :name="toDefaultSubscriptionGroupOption(option).label"
-                      :platform="toDefaultSubscriptionGroupOption(option).platform"
-                      :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
-                      :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate || undefined"
-                    />
-                    <span v-else class="settings-auth-source-defaults-card__placeholder">
-                      {{ t('admin.settings.defaults.subscriptionGroup') }}
-                    </span>
-                  </template>
-                  <template #option="{ option, selected }">
-                    <GroupOptionItem
-                      :name="toDefaultSubscriptionGroupOption(option).label"
-                      :platform="toDefaultSubscriptionGroupOption(option).platform"
-                      :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
-                      :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate || undefined"
-                      :description="toDefaultSubscriptionGroupOption(option).description"
-                      :selected="selected"
-                    />
-                  </template>
-                </Select>
+              <div class="settings-auth-source-defaults-card__subscription-grid">
+                <div>
+                  <label class="settings-auth-source-defaults-card__mini-label mb-1 block text-xs font-medium">
+                    {{ t('admin.settings.defaults.subscriptionGroup') }}
+                  </label>
+                  <Select
+                    v-model="item.group_id"
+                    class="default-sub-group-select"
+                    :options="defaultSubscriptionGroupOptions"
+                    :placeholder="t('admin.settings.defaults.subscriptionGroup')"
+                  >
+                    <template #selected="{ option }">
+                      <GroupBadge
+                        v-if="option"
+                        :name="toDefaultSubscriptionGroupOption(option).label"
+                        :platform="toDefaultSubscriptionGroupOption(option).platform"
+                        :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
+                        :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate || undefined"
+                      />
+                      <span v-else class="settings-auth-source-defaults-card__placeholder">
+                        {{ t('admin.settings.defaults.subscriptionGroup') }}
+                      </span>
+                    </template>
+                    <template #option="{ option, selected }">
+                      <GroupOptionItem
+                        :name="toDefaultSubscriptionGroupOption(option).label"
+                        :platform="toDefaultSubscriptionGroupOption(option).platform"
+                        :subscription-type="toDefaultSubscriptionGroupOption(option).subscriptionType"
+                        :rate-multiplier="toDefaultSubscriptionGroupOption(option).rate || undefined"
+                        :description="toDefaultSubscriptionGroupOption(option).description"
+                        :selected="selected"
+                      />
+                    </template>
+                  </Select>
+                </div>
+
+                <div>
+                  <label class="settings-auth-source-defaults-card__mini-label mb-1 block text-xs font-medium">
+                    {{ t('admin.settings.defaults.subscriptionValidityDays') }}
+                  </label>
+                  <input
+                    v-model.number="item.validity_days"
+                    type="number"
+                    min="1"
+                    max="36500"
+                    class="input settings-auth-source-defaults-card__validity-input"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label class="settings-auth-source-defaults-card__mini-label mb-1 block text-xs font-medium">
-                  {{ t('admin.settings.defaults.subscriptionValidityDays') }}
-                </label>
-                <input
-                  v-model.number="item.validity_days"
-                  type="number"
-                  min="1"
-                  max="36500"
-                  class="input settings-auth-source-defaults-card__validity-input"
-                />
-              </div>
-
-              <div class="flex items-end">
+              <div class="settings-auth-source-defaults-card__subscription-action">
                 <button
                   type="button"
                   class="btn btn-secondary w-full"
@@ -183,6 +199,8 @@
             </div>
           </div>
         </div>
+        </div>
+      </div>
       </div>
     </div>
   </div>
@@ -301,25 +319,6 @@ function setGrantOnFirstBind(source: AuthSourceType, value: boolean) {
 </script>
 
 <style scoped>
-.settings-auth-source-defaults-card__header,
-.settings-auth-source-defaults-card__section {
-  border-top: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
-}
-
-.settings-auth-source-defaults-card__header {
-  border-top: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
-  padding: var(--theme-settings-card-header-padding-y) var(--theme-settings-card-header-padding-x);
-}
-
-.settings-auth-source-defaults-card__content {
-  padding: var(--theme-settings-card-content-padding-y) var(--theme-settings-card-content-padding-x);
-}
-
-.settings-auth-source-defaults-card__section {
-  padding-top: 1.25rem;
-}
-
 .settings-auth-source-defaults-card__title,
 .settings-auth-source-defaults-card__section-title,
 .settings-auth-source-defaults-card__field-label,
@@ -333,9 +332,104 @@ function setGrantOnFirstBind(source: AuthSourceType, value: boolean) {
   color: var(--theme-page-text-secondary);
 }
 
+.settings-auth-source-defaults-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-settings-card-body-padding);
+}
+
+.settings-auth-source-defaults-card__grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--theme-settings-card-body-padding);
+}
+
+.settings-auth-source-defaults-card__source-panel {
+  border: 1px solid color-mix(in srgb, var(--theme-card-border) 72%, transparent);
+  border-radius: var(--theme-settings-card-panel-radius);
+  background: color-mix(in srgb, var(--theme-surface-soft) 72%, transparent);
+}
+
+.settings-auth-source-defaults-card__source-header {
+  padding: var(--theme-settings-card-panel-padding);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
+}
+
+.settings-auth-source-defaults-card__source-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: var(--theme-settings-card-panel-padding);
+}
+
+.settings-auth-source-defaults-card__metrics-grid,
+.settings-auth-source-defaults-card__toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.settings-auth-source-defaults-card__toggle-panel,
+.settings-auth-source-defaults-card__subscriptions-panel,
 .settings-auth-source-defaults-card__subscription-item {
   border: 1px solid color-mix(in srgb, var(--theme-card-border) 68%, transparent);
-  border-radius: 0.75rem;
-  padding: 0.9rem;
+  border-radius: var(--theme-settings-defaults-subscription-item-radius);
+  padding: var(--theme-settings-defaults-subscription-item-padding);
+  background: color-mix(in srgb, var(--theme-surface) 90%, transparent);
+}
+
+.settings-auth-source-defaults-card__subscriptions-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.settings-auth-source-defaults-card__subscription-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.settings-auth-source-defaults-card__subscription-action {
+  display: flex;
+  align-items: flex-end;
+  margin-top: 0.75rem;
+}
+
+.settings-auth-source-defaults-card__empty {
+  border-radius: var(--theme-settings-defaults-empty-radius);
+  padding: var(--theme-settings-defaults-empty-padding-y)
+    var(--theme-settings-defaults-empty-padding-x);
+  border: 1px dashed color-mix(in srgb, var(--theme-card-border) 76%, transparent);
+  background: color-mix(in srgb, var(--theme-surface) 88%, transparent);
+}
+
+@media (min-width: 768px) {
+  .settings-auth-source-defaults-card__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-auth-source-defaults-card__metrics-grid,
+  .settings-auth-source-defaults-card__toggle-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-auth-source-defaults-card__subscription-grid {
+    grid-template-columns: minmax(0, 1fr) var(--theme-settings-defaults-validity-column-width);
+  }
+
+  .settings-auth-source-defaults-card__subscription-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: end;
+  }
+
+  .settings-auth-source-defaults-card__subscription-action {
+    margin-top: 0;
+    min-width: 6rem;
+  }
 }
 </style>

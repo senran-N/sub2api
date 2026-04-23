@@ -205,6 +205,7 @@ import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } 
 import type { CustomMenuItem } from '@/types'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import { getFrontendThemeDefinition } from '@/themes'
+import { isSidebarItemActive } from './sidebarActive'
 
 interface NavItem {
   path: string
@@ -806,7 +807,7 @@ function handleMenuItemClick(itemPath: string) {
 }
 
 function isActive(path: string): boolean {
-  return route.path === path || route.path.startsWith(path + '/')
+  return isSidebarItemActive(route.path, path)
 }
 
 // Initialize theme

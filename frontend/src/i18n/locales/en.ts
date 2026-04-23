@@ -4975,6 +4975,9 @@ export default {
           "Auto-assign these subscriptions when a new user is created or registered",
         addDefaultSubscription: "Add Default Subscription",
         defaultSubscriptionsEmpty: "No default subscriptions configured.",
+        subscriptionGroupsRequired: "No subscription groups available",
+        subscriptionGroupsRequiredHint:
+          "Create and enable subscription groups in subscriptions or group management before configuring default subscription grants here.",
         defaultSubscriptionsDuplicate:
           "Duplicate subscription group: {groupId}. Each group can only appear once.",
         subscriptionGroup: "Subscription Group",

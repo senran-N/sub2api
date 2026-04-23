@@ -13,18 +13,32 @@
       <LinuxDoOAuthSection
         v-if="settings.linuxdoOAuthEnabled && !settings.backendModeEnabled"
         :disabled="isLoading"
+        :show-divider="false"
       />
 
       <WechatOAuthSection
         v-if="settings.wechatOAuthEnabled && !settings.backendModeEnabled"
         :disabled="isLoading"
+        :show-divider="false"
       />
 
       <OidcOAuthSection
         v-if="settings.oidcOAuthEnabled && !settings.backendModeEnabled"
         :disabled="isLoading"
         :provider-name="settings.oidcOAuthProviderName"
+        :show-divider="false"
       />
+
+      <div
+        v-if="showOAuthDivider"
+        class="flex items-center gap-3"
+      >
+        <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+        <span class="text-xs text-gray-500 dark:text-dark-400">
+          {{ t('auth.oauthFlow.orContinue') }}
+        </span>
+        <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+      </div>
 
       <form class="space-y-5" @submit.prevent="handleLogin">
         <div>
@@ -171,6 +185,7 @@ import {
   resolveLoginErrorMessage,
   resolveLoginRedirectTarget,
   resolveTotpLoginErrorMessage,
+  shouldShowLoginOAuthDivider,
   validateLoginForm
 } from './login/loginView'
 
@@ -197,6 +212,10 @@ const isSubmitDisabled = computed(
 
 const showForgotPassword = computed(
   () => settings.passwordResetEnabled && !settings.backendModeEnabled
+)
+
+const showOAuthDivider = computed(
+  () => shouldShowLoginOAuthDivider(settings)
 )
 
 const submitLabel = computed(() =>
