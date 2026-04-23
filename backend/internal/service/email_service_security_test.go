@@ -198,7 +198,7 @@ func TestEmailServiceSendEmailWithConfigSanitizesHeaders(t *testing.T) {
 		Password: "secret",
 		From:     "from@example.com\r\nBcc:bad@example.com",
 		FromName: "Sender\r\nCc:bad@example.com",
-		UseTLS:   true,
+		UseTLS:   false,
 	}, "to@example.com\r\nBcc:bad@example.com", "subject\r\nX-Injected: yes", "<p>body</p>")
 	if err != nil {
 		t.Fatalf("SendEmailWithConfig returned error: %v", err)

@@ -6,7 +6,6 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -29,9 +28,6 @@ var (
 
 	// Password reset errors
 	ErrInvalidResetToken = infraerrors.BadRequest("INVALID_RESET_TOKEN", "invalid or expired password reset token")
-
-	errSMTPAuthRequiresTLS          = errors.New("smtp authentication requires TLS or STARTTLS; enable SMTP TLS")
-	errSMTPAuthIncompleteCredential = errors.New("smtp authentication requires both username and password")
 )
 
 type smtpClient interface {
@@ -225,16 +221,13 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 		from, to, subject, body)
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	auth, err := buildSMTPAuth(config)
-	if err != nil {
-		return err
-	}
+	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
 
 	if config.UseTLS {
-		return s.sendMailSecure(config, addr, auth, config.From, to, []byte(msg))
+		return s.sendMailTLS(addr, auth, config.From, to, []byte(msg), config.Host)
 	}
 
-	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg))
+	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg), config.Host)
 }
 
 func buildSMTPTLSConfig(host string) *tls.Config {
@@ -245,75 +238,26 @@ func buildSMTPTLSConfig(host string) *tls.Config {
 	}
 }
 
-func buildSMTPAuth(config *SMTPConfig) (smtp.Auth, error) {
-	username := strings.TrimSpace(config.Username)
-	password := strings.TrimSpace(config.Password)
-
-	if username == "" && password == "" {
-		return nil, nil
-	}
-	if username == "" || password == "" {
-		return nil, errSMTPAuthIncompleteCredential
-	}
-	if !config.UseTLS {
-		return nil, errSMTPAuthRequiresTLS
-	}
-	return smtp.PlainAuth("", username, password, config.Host), nil
-}
-
 func authenticateSMTPClient(client smtpClient, auth smtp.Auth) error {
-	if auth == nil {
-		return nil
-	}
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
 	return nil
 }
 
-func shouldUseImplicitSMTPTLS(port int) bool {
-	return port == 465
-}
-
-func (s *EmailService) newSecureSMTPClient(config *SMTPConfig, addr string) (smtpClient, func(), error) {
-	if shouldUseImplicitSMTPTLS(config.Port) {
-		conn, err := smtpTLSDialFunc("tcp", addr, buildSMTPTLSConfig(config.Host))
-		if err != nil {
-			return nil, nil, fmt.Errorf("tls dial: %w", err)
-		}
-
-		client, err := smtpNewClientFunc(conn, config.Host)
-		if err != nil {
-			_ = conn.Close()
-			return nil, nil, fmt.Errorf("new smtp client: %w", err)
-		}
-		return client, func() {
-			_ = client.Close()
-			_ = conn.Close()
-		}, nil
-	}
-
-	client, err := smtpDialFunc(addr)
-	if err != nil {
-		return nil, nil, fmt.Errorf("smtp dial: %w", err)
-	}
-	if ok, _ := client.Extension("STARTTLS"); !ok {
-		_ = client.Close()
-		return nil, nil, fmt.Errorf("smtp starttls: server does not advertise STARTTLS")
-	}
-	if err := client.StartTLS(buildSMTPTLSConfig(config.Host)); err != nil {
-		_ = client.Close()
-		return nil, nil, fmt.Errorf("smtp starttls: %w", err)
-	}
-	return client, func() { _ = client.Close() }, nil
-}
-
-func (s *EmailService) sendMailPlain(addr string, auth smtp.Auth, from, to string, msg []byte) error {
+func (s *EmailService) sendMailPlain(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
 	client, err := smtpDialFunc(addr)
 	if err != nil {
 		return fmt.Errorf("smtp dial: %w", err)
 	}
 	defer func() { _ = client.Close() }()
+
+	// Opportunistic STARTTLS: upgrade when the server advertises support.
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err = client.StartTLS(buildSMTPTLSConfig(host)); err != nil {
+			return fmt.Errorf("starttls: %w", err)
+		}
+	}
 
 	if err = authenticateSMTPClient(client, auth); err != nil {
 		return err
@@ -338,12 +282,19 @@ func (s *EmailService) sendMailPlain(addr string, auth smtp.Auth, from, to strin
 	return nil
 }
 
-func (s *EmailService) sendMailSecure(config *SMTPConfig, addr string, auth smtp.Auth, from, to string, msg []byte) error {
-	client, cleanup, err := s.newSecureSMTPClient(config, addr)
+func (s *EmailService) sendMailTLS(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
+	conn, err := smtpTLSDialFunc("tcp", addr, buildSMTPTLSConfig(host))
 	if err != nil {
-		return err
+		return fmt.Errorf("tls dial: %w", err)
 	}
-	defer cleanup()
+
+	client, err := smtpNewClientFunc(conn, host)
+	if err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("new smtp client: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+	defer func() { _ = conn.Close() }()
 
 	if err = authenticateSMTPClient(client, auth); err != nil {
 		return err
@@ -523,17 +474,20 @@ func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
 // TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接
 func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	auth, err := buildSMTPAuth(config)
-	if err != nil {
-		return err
-	}
+	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
 
 	if config.UseTLS {
-		client, cleanup, err := s.newSecureSMTPClient(config, addr)
+		conn, err := smtpTLSDialFunc("tcp", addr, buildSMTPTLSConfig(config.Host))
 		if err != nil {
-			return fmt.Errorf("secure smtp connection failed: %w", err)
+			return fmt.Errorf("tls connection failed: %w", err)
 		}
-		defer cleanup()
+		defer func() { _ = conn.Close() }()
+
+		client, err := smtpNewClientFunc(conn, config.Host)
+		if err != nil {
+			return fmt.Errorf("smtp client creation failed: %w", err)
+		}
+		defer func() { _ = client.Close() }()
 
 		if err = authenticateSMTPClient(client, auth); err != nil {
 			return fmt.Errorf("smtp authentication failed: %w", err)
