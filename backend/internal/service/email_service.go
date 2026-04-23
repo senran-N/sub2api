@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -28,6 +29,9 @@ var (
 
 	// Password reset errors
 	ErrInvalidResetToken = infraerrors.BadRequest("INVALID_RESET_TOKEN", "invalid or expired password reset token")
+
+	errSMTPAuthRequiresTLS          = errors.New("smtp authentication requires TLS or STARTTLS; enable SMTP TLS")
+	errSMTPAuthIncompleteCredential = errors.New("smtp authentication requires both username and password")
 )
 
 type smtpClient interface {
@@ -221,13 +225,16 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 		from, to, subject, body)
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
+	auth, err := buildSMTPAuth(config)
+	if err != nil {
+		return err
+	}
 
 	if config.UseTLS {
 		return s.sendMailSecure(config, addr, auth, config.From, to, []byte(msg))
 	}
 
-	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg), config.Host)
+	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg))
 }
 
 func buildSMTPTLSConfig(host string) *tls.Config {
@@ -236,6 +243,32 @@ func buildSMTPTLSConfig(host string) *tls.Config {
 		// 强制 TLS 1.2+，避免协议降级导致的弱加密风险。
 		MinVersion: tls.VersionTLS12,
 	}
+}
+
+func buildSMTPAuth(config *SMTPConfig) (smtp.Auth, error) {
+	username := strings.TrimSpace(config.Username)
+	password := strings.TrimSpace(config.Password)
+
+	if username == "" && password == "" {
+		return nil, nil
+	}
+	if username == "" || password == "" {
+		return nil, errSMTPAuthIncompleteCredential
+	}
+	if !config.UseTLS {
+		return nil, errSMTPAuthRequiresTLS
+	}
+	return smtp.PlainAuth("", username, password, config.Host), nil
+}
+
+func authenticateSMTPClient(client smtpClient, auth smtp.Auth) error {
+	if auth == nil {
+		return nil
+	}
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	return nil
 }
 
 func shouldUseImplicitSMTPTLS(port int) bool {
@@ -275,15 +308,15 @@ func (s *EmailService) newSecureSMTPClient(config *SMTPConfig, addr string) (smt
 	return client, func() { _ = client.Close() }, nil
 }
 
-func (s *EmailService) sendMailPlain(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
+func (s *EmailService) sendMailPlain(addr string, auth smtp.Auth, from, to string, msg []byte) error {
 	client, err := smtpDialFunc(addr)
 	if err != nil {
 		return fmt.Errorf("smtp dial: %w", err)
 	}
 	defer func() { _ = client.Close() }()
 
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
+	if err = authenticateSMTPClient(client, auth); err != nil {
+		return err
 	}
 	if err = client.Mail(from); err != nil {
 		return fmt.Errorf("smtp mail: %w", err)
@@ -312,8 +345,8 @@ func (s *EmailService) sendMailSecure(config *SMTPConfig, addr string, auth smtp
 	}
 	defer cleanup()
 
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
+	if err = authenticateSMTPClient(client, auth); err != nil {
+		return err
 	}
 
 	if err = client.Mail(from); err != nil {
@@ -490,6 +523,10 @@ func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
 // TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接
 func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	auth, err := buildSMTPAuth(config)
+	if err != nil {
+		return err
+	}
 
 	if config.UseTLS {
 		client, cleanup, err := s.newSecureSMTPClient(config, addr)
@@ -498,8 +535,7 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 		}
 		defer cleanup()
 
-		auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-		if err = client.Auth(auth); err != nil {
+		if err = authenticateSMTPClient(client, auth); err != nil {
 			return fmt.Errorf("smtp authentication failed: %w", err)
 		}
 
@@ -513,8 +549,7 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 	}
 	defer func() { _ = client.Close() }()
 
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	if err = client.Auth(auth); err != nil {
+	if err = authenticateSMTPClient(client, auth); err != nil {
 		return fmt.Errorf("smtp authentication failed: %w", err)
 	}
 

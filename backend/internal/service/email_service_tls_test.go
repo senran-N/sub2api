@@ -130,6 +130,96 @@ func TestEmailServiceSendEmailWithConfigUsesSTARTTLSOnSubmissionPort(t *testing.
 	}
 }
 
+func TestEmailServiceSendEmailWithConfigRejectsPlainAuthWithoutTLS(t *testing.T) {
+	originalSMTPDial := smtpDialFunc
+	originalSMTPTLSDial := smtpTLSDialFunc
+	originalSMTPNewClient := smtpNewClientFunc
+	defer func() {
+		smtpDialFunc = originalSMTPDial
+		smtpTLSDialFunc = originalSMTPTLSDial
+		smtpNewClientFunc = originalSMTPNewClient
+	}()
+
+	smtpDialFunc = func(addr string) (smtpClient, error) {
+		t.Fatalf("unexpected plain smtp.Dial call: %s", addr)
+		return nil, nil
+	}
+	smtpTLSDialFunc = func(network, addr string, config *tls.Config) (net.Conn, error) {
+		t.Fatalf("unexpected implicit TLS dial: %s %s", network, addr)
+		return nil, nil
+	}
+	smtpNewClientFunc = func(conn net.Conn, host string) (smtpClient, error) {
+		t.Fatalf("unexpected smtp.NewClient call: %s", host)
+		return nil, nil
+	}
+
+	svc := &EmailService{}
+	err := svc.SendEmailWithConfig(&SMTPConfig{
+		Host:     "smtp.example.com",
+		Port:     25,
+		Username: "demo",
+		Password: "secret",
+		From:     "from@example.com",
+		UseTLS:   false,
+	}, "to@example.com", "subject", "<p>body</p>")
+	if err == nil {
+		t.Fatal("expected error when plaintext SMTP authentication is requested")
+	}
+	if !strings.Contains(err.Error(), "requires TLS or STARTTLS") {
+		t.Fatalf("expected TLS requirement error, got: %v", err)
+	}
+}
+
+func TestEmailServiceSendEmailWithConfigAllowsPlainSendWithoutCredentials(t *testing.T) {
+	originalSMTPDial := smtpDialFunc
+	originalSMTPTLSDial := smtpTLSDialFunc
+	originalSMTPNewClient := smtpNewClientFunc
+	defer func() {
+		smtpDialFunc = originalSMTPDial
+		smtpTLSDialFunc = originalSMTPTLSDial
+		smtpNewClientFunc = originalSMTPNewClient
+	}()
+
+	client := &smtpClientStub{}
+	smtpDialFunc = func(addr string) (smtpClient, error) {
+		if addr != "smtp.example.com:25" {
+			t.Fatalf("unexpected SMTP addr: %s", addr)
+		}
+		return client, nil
+	}
+	smtpTLSDialFunc = func(network, addr string, config *tls.Config) (net.Conn, error) {
+		t.Fatalf("unexpected implicit TLS dial: %s %s", network, addr)
+		return nil, nil
+	}
+	smtpNewClientFunc = func(conn net.Conn, host string) (smtpClient, error) {
+		t.Fatalf("unexpected smtp.NewClient call: %s", host)
+		return nil, nil
+	}
+
+	svc := &EmailService{}
+	err := svc.SendEmailWithConfig(&SMTPConfig{
+		Host:   "smtp.example.com",
+		Port:   25,
+		From:   "from@example.com",
+		UseTLS: false,
+	}, "to@example.com", "subject", "<p>body</p>")
+	if err != nil {
+		t.Fatalf("SendEmailWithConfig returned error: %v", err)
+	}
+	if client.authCalled {
+		t.Fatal("did not expect smtp auth to be called without credentials")
+	}
+	if client.mailFrom != "from@example.com" {
+		t.Fatalf("unexpected MAIL FROM: %s", client.mailFrom)
+	}
+	if client.rcptTo != "to@example.com" {
+		t.Fatalf("unexpected RCPT TO: %s", client.rcptTo)
+	}
+	if !client.quitCalled {
+		t.Fatal("expected Quit to be called after send")
+	}
+}
+
 func TestEmailServiceTestSMTPConnectionWithConfigUsesImplicitTLSOnPort465(t *testing.T) {
 	originalSMTPDial := smtpDialFunc
 	originalSMTPTLSDial := smtpTLSDialFunc
@@ -231,5 +321,87 @@ func TestEmailServiceTestSMTPConnectionWithConfigRejectsSecureSMTPWithoutSTARTTL
 	}
 	if !client.closeCalled {
 		t.Fatal("expected client to be closed after STARTTLS capability check fails")
+	}
+}
+
+func TestEmailServiceTestSMTPConnectionWithConfigRejectsPlainAuthWithoutTLS(t *testing.T) {
+	originalSMTPDial := smtpDialFunc
+	originalSMTPTLSDial := smtpTLSDialFunc
+	originalSMTPNewClient := smtpNewClientFunc
+	defer func() {
+		smtpDialFunc = originalSMTPDial
+		smtpTLSDialFunc = originalSMTPTLSDial
+		smtpNewClientFunc = originalSMTPNewClient
+	}()
+
+	smtpDialFunc = func(addr string) (smtpClient, error) {
+		t.Fatalf("unexpected plain smtp.Dial call: %s", addr)
+		return nil, nil
+	}
+	smtpTLSDialFunc = func(network, addr string, config *tls.Config) (net.Conn, error) {
+		t.Fatalf("unexpected implicit TLS dial: %s %s", network, addr)
+		return nil, nil
+	}
+	smtpNewClientFunc = func(conn net.Conn, host string) (smtpClient, error) {
+		t.Fatalf("unexpected smtp.NewClient call: %s", host)
+		return nil, nil
+	}
+
+	svc := &EmailService{}
+	err := svc.TestSMTPConnectionWithConfig(&SMTPConfig{
+		Host:     "smtp.example.com",
+		Port:     25,
+		Username: "demo",
+		Password: "secret",
+		UseTLS:   false,
+	})
+	if err == nil {
+		t.Fatal("expected error when plaintext SMTP authentication is requested")
+	}
+	if !strings.Contains(err.Error(), "requires TLS or STARTTLS") {
+		t.Fatalf("expected TLS requirement error, got: %v", err)
+	}
+}
+
+func TestEmailServiceTestSMTPConnectionWithConfigAllowsPlainConnectionWithoutCredentials(t *testing.T) {
+	originalSMTPDial := smtpDialFunc
+	originalSMTPTLSDial := smtpTLSDialFunc
+	originalSMTPNewClient := smtpNewClientFunc
+	defer func() {
+		smtpDialFunc = originalSMTPDial
+		smtpTLSDialFunc = originalSMTPTLSDial
+		smtpNewClientFunc = originalSMTPNewClient
+	}()
+
+	client := &smtpClientStub{}
+	smtpDialFunc = func(addr string) (smtpClient, error) {
+		if addr != "smtp.example.com:25" {
+			t.Fatalf("unexpected SMTP addr: %s", addr)
+		}
+		return client, nil
+	}
+	smtpTLSDialFunc = func(network, addr string, config *tls.Config) (net.Conn, error) {
+		t.Fatalf("unexpected implicit TLS dial: %s %s", network, addr)
+		return nil, nil
+	}
+	smtpNewClientFunc = func(conn net.Conn, host string) (smtpClient, error) {
+		t.Fatalf("unexpected smtp.NewClient call: %s", host)
+		return nil, nil
+	}
+
+	svc := &EmailService{}
+	err := svc.TestSMTPConnectionWithConfig(&SMTPConfig{
+		Host:   "smtp.example.com",
+		Port:   25,
+		UseTLS: false,
+	})
+	if err != nil {
+		t.Fatalf("TestSMTPConnectionWithConfig returned error: %v", err)
+	}
+	if client.authCalled {
+		t.Fatal("did not expect smtp auth to be called without credentials")
+	}
+	if !client.quitCalled {
+		t.Fatal("expected Quit to be called")
 	}
 }

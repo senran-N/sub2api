@@ -106,6 +106,10 @@ backend/internal/web/dist/*
 # 后端运行时缓存数据
 backend/data/
 
+# 本地开发服务运行目录
+# 保留在本机用于 Postgres / Redis 等开发服务数据，但永远不要提交到仓库。
+.local-dev-services/
+
 # ===================
 # 本地配置文件（包含敏感信息）
 # ===================
