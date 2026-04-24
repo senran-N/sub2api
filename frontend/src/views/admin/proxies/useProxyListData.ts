@@ -1,12 +1,10 @@
-import type { Ref } from 'vue'
+import { watch, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { Proxy } from '@/types'
-import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
+import { useTableLoader } from '@/composables/useTableLoader'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import {
-  applyProxyPageChange,
-  applyProxyPageSizeChange,
   buildProxyListFilters,
-  resetProxyListPage,
   type ProxyListFiltersState,
   type ProxyPaginationState
 } from './proxyList'
@@ -22,85 +20,45 @@ interface ProxyListDataOptions {
 }
 
 export function useProxyListData(options: ProxyListDataOptions) {
-  let abortController: AbortController | null = null
-  let searchTimeout: ReturnType<typeof setTimeout> | null = null
-
-  const loadProxies = async () => {
-    abortController?.abort()
-
-    const currentAbortController = new AbortController()
-    abortController = currentAbortController
-    options.loading.value = true
-
-    try {
-      const response = await adminAPI.proxies.list(
-        options.pagination.page,
-        options.pagination.page_size,
+  const {
+    debouncedReload,
+    dispose,
+    handlePageChange,
+    handlePageSizeChange,
+    load: loadProxies,
+    loading
+  } = useTableLoader<Proxy, Record<string, never>>({
+    pagination: options.pagination,
+    clampPageChange: false,
+    fetchFn: (page, pageSize, _params, fetchOptions) =>
+      adminAPI.proxies.list(
+        page,
+        pageSize,
         buildProxyListFilters(options.filters, options.searchQuery.value),
-        { signal: currentAbortController.signal }
-      )
-
-      if (currentAbortController.signal.aborted || abortController !== currentAbortController) {
-        return
-      }
-
+        fetchOptions
+      ),
+    onLoaded: (response) => {
       options.proxies.value = response.items
-      options.pagination.total = response.total
-      options.pagination.pages = response.pages
-    } catch (error) {
-      if (abortController !== currentAbortController || currentAbortController.signal.aborted) {
-        return
-      }
-
-      if (isAbortError(error)) {
-        return
-      }
-
+    },
+    onError: (error) => {
       options.showError(resolveRequestErrorMessage(error, options.t('admin.proxies.failedToLoad')))
       console.error('Error loading proxies:', error)
-    } finally {
-      if (abortController === currentAbortController) {
-        options.loading.value = false
-        abortController = null
-      }
     }
-  }
+  })
 
-  const handleSearch = () => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout)
-    }
-
-    searchTimeout = setTimeout(() => {
-      resetProxyListPage(options.pagination)
-      loadProxies()
-    }, 300)
-  }
-
-  const handlePageChange = (page: number) => {
-    applyProxyPageChange(options.pagination, page)
-    loadProxies()
-  }
-
-  const handlePageSizeChange = (pageSize: number) => {
-    applyProxyPageSizeChange(options.pagination, pageSize)
-    loadProxies()
-  }
+  watch(loading, (value) => {
+    options.loading.value = value
+  }, { immediate: true })
 
   const cleanup = () => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout)
-      searchTimeout = null
-    }
-
-    abortController?.abort()
+    dispose()
   }
 
   return {
     cleanup,
     handlePageChange,
     handlePageSizeChange,
-    handleSearch,
+    handleSearch: debouncedReload,
     loadProxies
   }
 }

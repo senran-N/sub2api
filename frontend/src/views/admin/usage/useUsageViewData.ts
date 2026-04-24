@@ -1,6 +1,7 @@
-import { reactive, ref, type Ref } from 'vue'
+import { reactive, ref, watch, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
 import { adminUsageAPI, type AdminUsageQueryParams, type AdminUsageStatsResponse } from '@/api/admin/usage'
+import { useTableLoader } from '@/composables/useTableLoader'
 import { formatReasoningEffort } from '@/utils/format'
 import { isAbortError } from '@/utils/requestError'
 import { requestTypeToLegacyStream } from '@/utils/usageRequestType'
@@ -12,8 +13,6 @@ import type {
   TrendDataPoint
 } from '@/types'
 import {
-  applyUsagePageChange,
-  applyUsagePageSizeChange,
   resetUsagePaginationPage,
   type UsageGranularity,
   type UsagePaginationState
@@ -167,7 +166,6 @@ export function useUsageViewData(options: UsageViewDataOptions) {
     mapping: false
   })
 
-  let usageAbortController: AbortController | null = null
   let exportAbortController: AbortController | null = null
   let initialChartTimer: number | null = null
   let chartRequestSequence = 0
@@ -233,44 +231,37 @@ export function useUsageViewData(options: UsageViewDataOptions) {
     loadedModelSources.mapping = false
   }
 
-  const loadLogs = async () => {
-    usageAbortController?.abort()
-
-    const controller = new AbortController()
-    usageAbortController = controller
-    loading.value = true
-
-    try {
-      const response = await adminAPI.usage.list(
+  const {
+    dispose: disposeUsageLogs,
+    handlePageChange: handleUsageLogPageChange,
+    handlePageSizeChange: handleUsageLogPageSizeChange,
+    load: loadLogs,
+    loading: logsLoading
+  } = useTableLoader<AdminUsageLog, Record<string, never>>({
+    pagination: options.pagination,
+    clampPageChange: false,
+    fetchFn: (page, pageSize, _params, fetchOptions) =>
+      adminAPI.usage.list(
         {
-          page: options.pagination.page,
-          page_size: options.pagination.page_size,
+          page,
+          page_size: pageSize,
           exact_total: false,
           ...buildUsageFilters()
         },
-        { signal: controller.signal }
-      )
-
-      if (usageAbortController !== controller || controller.signal.aborted) {
-        return
-      }
-
+        fetchOptions
+      ),
+    onLoaded: (response) => {
       usageLogs.value = response.items
       options.pagination.total = response.total
-    } catch (error: unknown) {
-      if (usageAbortController !== controller || controller.signal.aborted) {
-        return
-      }
-
-      if (!isAbortError(error)) {
-        console.error('Failed to load usage logs:', error)
-      }
-    } finally {
-      if (usageAbortController === controller) {
-        loading.value = false
-      }
+    },
+    onError: (error) => {
+      console.error('Failed to load usage logs:', error)
     }
-  }
+  })
+
+  watch(logsLoading, (value) => {
+    loading.value = value
+  }, { immediate: true })
 
   const loadStats = async () => {
     const requestSequence = ++statsRequestSequence
@@ -389,13 +380,11 @@ export function useUsageViewData(options: UsageViewDataOptions) {
   }
 
   const handlePageChange = (page: number) => {
-    applyUsagePageChange(options.pagination, page)
-    void loadLogs()
+    void handleUsageLogPageChange(page)
   }
 
   const handlePageSizeChange = (pageSize: number) => {
-    applyUsagePageSizeChange(options.pagination, pageSize)
-    void loadLogs()
+    void handleUsageLogPageSizeChange(pageSize)
   }
 
   const cancelExport = () => {
@@ -502,7 +491,7 @@ export function useUsageViewData(options: UsageViewDataOptions) {
   }
 
   const dispose = () => {
-    usageAbortController?.abort()
+    disposeUsageLogs()
     exportAbortController?.abort()
 
     if (initialChartTimer !== null) {

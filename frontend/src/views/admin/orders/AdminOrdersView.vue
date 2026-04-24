@@ -116,6 +116,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
+import { useTableLoader } from '@/composables/useTableLoader'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { formatOrderDateTime } from '@/components/payment/orderUtils'
 import type { PaymentOrder } from '@/types/payment'
@@ -139,40 +140,44 @@ interface AuditLog {
 const { t } = useI18n()
 const appStore = useAppStore()
 
-const ordersLoading = ref(false)
-const orders = ref<PaymentOrder[]>([])
 const orderSearch = ref('')
 const orderFilters = reactive({ status: '', payment_type: '', order_type: '' })
-const orderPagination = reactive({ page: 1, page_size: 20, total: 0 })
 const selectedOrder = ref<PaymentOrder | null>(null)
 const showDetailDialog = ref(false)
 const showRefundDialog = ref(false)
 const refundSubmitting = ref(false)
 const orderAuditLogs = ref<AuditLog[]>([])
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
-function debounceLoadOrders() {
-  if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => loadOrders(), 300)
-}
-
-async function loadOrders() {
-  ordersLoading.value = true
-  try {
-    const res = await adminPaymentAPI.getOrders({
-      page: orderPagination.page, page_size: orderPagination.page_size,
-      keyword: orderSearch.value || undefined, status: orderFilters.status || undefined,
-      payment_type: orderFilters.payment_type || undefined, order_type: orderFilters.order_type || undefined,
+const {
+  debouncedReload,
+  handlePageChange: handleOrderPageChange,
+  handlePageSizeChange: handleOrderPageSizeChange,
+  items: orders,
+  load: loadOrders,
+  loading: ordersLoading,
+  pagination: orderPagination
+} = useTableLoader<PaymentOrder, Record<string, never>>({
+  pagination: reactive({ page: 1, page_size: 20, total: 0, pages: 0 }),
+  clampPageChange: false,
+  fetchFn: async (page, pageSize) => {
+    const response = await adminPaymentAPI.getOrders({
+      page,
+      page_size: pageSize,
+      keyword: orderSearch.value || undefined,
+      status: orderFilters.status || undefined,
+      payment_type: orderFilters.payment_type || undefined,
+      order_type: orderFilters.order_type || undefined
     })
-    orders.value = res.data.items || []
-    orderPagination.total = res.data.total || 0
-  } catch (err: unknown) {
+    return response.data
+  },
+  onError: (err) => {
     appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
-  } finally { ordersLoading.value = false }
-}
+  }
+})
 
-function handleOrderPageChange(page: number) { orderPagination.page = page; loadOrders() }
-function handleOrderPageSizeChange(size: number) { orderPagination.page_size = size; orderPagination.page = 1; loadOrders() }
+function debounceLoadOrders() {
+  void debouncedReload()
+}
 
 const statusFilterOptions = computed(() => [
   { value: '', label: t('payment.admin.allStatuses') },
