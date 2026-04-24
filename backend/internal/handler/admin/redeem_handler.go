@@ -19,12 +19,12 @@ import (
 
 // RedeemHandler handles admin redeem code management
 type RedeemHandler struct {
-	adminService  service.AdminService
+	adminService  redeemAdminService
 	redeemService *service.RedeemService
 }
 
 // NewRedeemHandler creates a new admin redeem handler
-func NewRedeemHandler(adminService service.AdminService, redeemService *service.RedeemService) *RedeemHandler {
+func NewRedeemHandler(adminService redeemAdminService, redeemService *service.RedeemService) *RedeemHandler {
 	return &RedeemHandler{
 		adminService:  adminService,
 		redeemService: redeemService,
