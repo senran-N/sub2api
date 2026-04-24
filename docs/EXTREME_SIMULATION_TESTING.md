@@ -49,10 +49,11 @@ docker compose -f deploy/docker-compose.dev.yml up -d --build
 - 路径：`tools/http_extreme_probe.py`
 - 依赖：仅 Python 3 标准库
 - 能力：
-  - 并发压测公开接口、登录接口、管理端 realtime 接口、OpenAI 兼容网关
+  - 并发压测公开接口、登录接口、管理端 realtime/列表/统计接口、OpenAI 兼容网关
+  - 可选压测真实网关成功流量，覆盖 Responses、Chat Completions、非流式与流式转发
   - 输出每个采样周期的吞吐、状态码速率、平均延迟
   - 输出最终 `avg/p50/p95/max latency` 与 `effective_rps`
-  - 支持默认场景套件和单场景重放
+  - 支持内置套件和单场景重放
 
 默认场景套件：
 
@@ -60,6 +61,11 @@ docker compose -f deploy/docker-compose.dev.yml up -d --build
 - `auth-invalid-password`
 - `admin-realtime`
 - `gateway-auth-reject`
+
+额外内置套件：
+
+- `admin-read-suite`：`admin-realtime`、`admin-dashboard-stats`、`admin-accounts-list`、`admin-usage-list`
+- `gateway-success-suite`：`gateway-responses-success`、`gateway-chat-success`、`gateway-responses-stream`、`gateway-chat-stream`
 
 默认套件示例：
 
@@ -86,6 +92,33 @@ python3 tools/http_extreme_probe.py \
   --scenario admin-realtime \
   --qps 25 \
   --concurrency 8 \
+  --measure-seconds 20
+```
+
+后台读接口组合：
+
+```bash
+python3 tools/http_extreme_probe.py \
+  --base-url http://127.0.0.1:8080 \
+  --admin-email admin@sub2api.local \
+  --admin-password sub2api-admin-pass \
+  --scenario admin-read-suite \
+  --qps 30 \
+  --concurrency 12 \
+  --measure-seconds 30
+```
+
+真实网关成功流量组合（会消耗真实上游额度，只在预发或专用测试 key 上运行）：
+
+```bash
+python3 tools/http_extreme_probe.py \
+  --base-url http://127.0.0.1:8080 \
+  --gateway-api-key sk_live_xxx \
+  --gateway-model gpt-5 \
+  --gateway-max-output-tokens 128 \
+  --scenario gateway-success-suite \
+  --qps 2 \
+  --concurrency 2 \
   --measure-seconds 20
 ```
 
@@ -165,7 +198,25 @@ python3 tools/http_extreme_probe.py \
   --large-body-bytes 9437184
 ```
 
-### 3. OpenAI scheduler 专项容量
+### 3. 网关成功与流式转发
+
+```bash
+eval "$(python3 tools/extreme_env_matrix.py env --profile connection-pressure --format shell)"
+docker compose -f deploy/docker-compose.dev.yml up -d --build
+
+python3 tools/http_extreme_probe.py \
+  --base-url http://127.0.0.1:8080 \
+  --gateway-api-key sk_live_xxx \
+  --gateway-model gpt-5 \
+  --scenario gateway-success-suite \
+  --qps 2 \
+  --concurrency 2 \
+  --gateway-max-output-tokens 128
+```
+
+这组场景会走真实上游，目标是覆盖成功路径、兼容适配和 SSE 完整读完的链路；不要用生产高价值 key 直接打高 QPS。
+
+### 4. OpenAI scheduler 专项容量
 
 如果要看 sticky / non-sticky miss-path 压力，不要重复造轮子，直接复用：
 

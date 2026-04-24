@@ -21,6 +21,7 @@
 - 适合作为仓库级基线的命令：
   - `make build`
   - `make test`
+  - `make test-tools`
   - `make lint`
   - `make migrate-validate`
   - `make secret-scan`
@@ -90,6 +91,11 @@
 - 涉及前后端联动、设置项、接口契约时，优先运行：
   - `make test`
 - 如果因为环境或耗时无法完整执行，至少运行受影响层的验证命令，并在变更说明中明确写出未执行项。
+
+### 4.4 工具脚本改动
+
+- 修改 `tools/http_extreme_probe.py` 等 Python 工具脚本时，至少运行：
+  - `make test-tools`
 
 ## 5. 提交前检查
 

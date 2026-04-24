@@ -25,6 +25,26 @@ DEFAULT_SUITE = [
     "gateway-auth-reject",
 ]
 
+ADMIN_READ_SUITE = [
+    "admin-realtime",
+    "admin-dashboard-stats",
+    "admin-accounts-list",
+    "admin-usage-list",
+]
+
+GATEWAY_SUCCESS_SUITE = [
+    "gateway-responses-success",
+    "gateway-chat-success",
+    "gateway-responses-stream",
+    "gateway-chat-stream",
+]
+
+SCENARIO_SUITES = {
+    "default-suite": DEFAULT_SUITE,
+    "admin-read-suite": ADMIN_READ_SUITE,
+    "gateway-success-suite": GATEWAY_SUCCESS_SUITE,
+}
+
 
 class ProbeError(RuntimeError):
     pass
@@ -206,6 +226,17 @@ class ScenarioDefinition:
     name: str
     description: str
     requires_admin_token: bool = False
+    requires_gateway_api_key: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class ScenarioRequestContext:
+    run_id: str
+    admin_token: str | None
+    gateway_api_key: str | None
+    gateway_model: str
+    gateway_max_output_tokens: int
+    large_body_bytes: int
 
 
 SCENARIOS: dict[str, ScenarioDefinition] = {
@@ -222,6 +253,21 @@ SCENARIOS: dict[str, ScenarioDefinition] = {
         description="Reload the admin realtime metrics endpoint to stress authenticated monitoring reads.",
         requires_admin_token=True,
     ),
+    "admin-dashboard-stats": ScenarioDefinition(
+        name="admin-dashboard-stats",
+        description="Reload the admin dashboard stats endpoint to exercise aggregate dashboard reads.",
+        requires_admin_token=True,
+    ),
+    "admin-accounts-list": ScenarioDefinition(
+        name="admin-accounts-list",
+        description="Page through the admin account list to exercise DB pagination plus Redis runtime overlays.",
+        requires_admin_token=True,
+    ),
+    "admin-usage-list": ScenarioDefinition(
+        name="admin-usage-list",
+        description="Page through recent admin usage logs without exact totals to exercise hot usage-log reads.",
+        requires_admin_token=True,
+    ),
     "gateway-auth-reject": ScenarioDefinition(
         name="gateway-auth-reject",
         description="Hammer the OpenAI-compatible gateway with rejected credentials to observe auth-path saturation.",
@@ -230,16 +276,110 @@ SCENARIOS: dict[str, ScenarioDefinition] = {
         name="gateway-large-body-reject",
         description="Send oversized OpenAI-compatible payloads to validate early body-limit rejection under pressure.",
     ),
+    "gateway-responses-success": ScenarioDefinition(
+        name="gateway-responses-success",
+        description="Send successful non-streaming Responses API traffic through the OpenAI-compatible gateway.",
+        requires_gateway_api_key=True,
+    ),
+    "gateway-responses-stream": ScenarioDefinition(
+        name="gateway-responses-stream",
+        description="Send successful streaming Responses API traffic to exercise SSE forwarding and completion.",
+        requires_gateway_api_key=True,
+    ),
+    "gateway-chat-success": ScenarioDefinition(
+        name="gateway-chat-success",
+        description="Send successful non-streaming Chat Completions traffic through the compatibility adapter.",
+        requires_gateway_api_key=True,
+    ),
+    "gateway-chat-stream": ScenarioDefinition(
+        name="gateway-chat-stream",
+        description="Send successful streaming Chat Completions traffic through the compatibility adapter.",
+        requires_gateway_api_key=True,
+    ),
 }
+
+
+def gateway_headers(context: ScenarioRequestContext, scenario_name: str, seq: int) -> dict[str, str]:
+    return {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {context.gateway_api_key or 'sk-extreme-invalid'}",
+        "session_id": f"sess-{context.run_id}-{seq}",
+        "conversation_id": f"conv-{context.run_id}-{seq}",
+        "x-client-request-id": f"{context.run_id}-{scenario_name}-{seq}",
+    }
+
+
+def require_admin_token(context: ScenarioRequestContext, scenario_name: str) -> str:
+    if not context.admin_token:
+        raise ProbeError(f"admin token required for {scenario_name} scenario")
+    return context.admin_token
+
+
+def admin_get_request(context: ScenarioRequestContext, scenario_name: str, path: str) -> RequestSpec:
+    return RequestSpec(
+        method="GET",
+        path=path,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {require_admin_token(context, scenario_name)}",
+        },
+    )
+
+
+def gateway_prompt(scenario_name: str, seq: int) -> str:
+    return f"Reply with exactly: ok. extreme scenario={scenario_name} seq={seq}"
+
+
+def gateway_responses_payload(
+    context: ScenarioRequestContext,
+    scenario_name: str,
+    seq: int,
+    stream: bool,
+) -> bytes:
+    payload = {
+        "model": context.gateway_model,
+        "stream": stream,
+        "max_output_tokens": context.gateway_max_output_tokens,
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": gateway_prompt(scenario_name, seq),
+                    }
+                ],
+            }
+        ],
+    }
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def gateway_chat_payload(
+    context: ScenarioRequestContext,
+    scenario_name: str,
+    seq: int,
+    stream: bool,
+) -> bytes:
+    payload = {
+        "model": context.gateway_model,
+        "stream": stream,
+        "max_tokens": context.gateway_max_output_tokens,
+        "messages": [
+            {
+                "role": "user",
+                "content": gateway_prompt(scenario_name, seq),
+            }
+        ],
+    }
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
 
 def build_scenario_request(
     scenario_name: str,
     seq: int,
-    run_id: str,
-    admin_token: str | None,
-    gateway_api_key: str | None,
-    large_body_bytes: int,
+    context: ScenarioRequestContext,
 ) -> RequestSpec:
     if scenario_name == "public-settings":
         return RequestSpec(
@@ -251,7 +391,7 @@ def build_scenario_request(
     if scenario_name == "auth-invalid-password":
         body = json.dumps(
             {
-                "email": f"extreme-{run_id}-{seq}@example.invalid",
+                "email": f"extreme-{context.run_id}-{seq}@example.invalid",
                 "password": "definitely-invalid-password",
             },
             separators=(",", ":"),
@@ -267,29 +407,38 @@ def build_scenario_request(
         )
 
     if scenario_name == "admin-realtime":
-        if not admin_token:
-            raise ProbeError("admin token required for admin-realtime scenario")
-        return RequestSpec(
-            method="GET",
-            path="/api/v1/admin/ops/realtime-traffic?window=1min",
-            headers={
-                "Accept": "application/json",
-                "Authorization": f"Bearer {admin_token}",
-            },
+        return admin_get_request(
+            context,
+            scenario_name,
+            "/api/v1/admin/ops/realtime-traffic?window=1min",
         )
 
-    base_headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {gateway_api_key or 'sk-extreme-invalid'}",
-        "session_id": f"sess-{run_id}-{seq}",
-        "conversation_id": f"conv-{run_id}-{seq}",
-        "x-client-request-id": f"{run_id}-{scenario_name}-{seq}",
-    }
+    if scenario_name == "admin-dashboard-stats":
+        return admin_get_request(
+            context,
+            scenario_name,
+            "/api/v1/admin/dashboard/stats",
+        )
+
+    if scenario_name == "admin-accounts-list":
+        return admin_get_request(
+            context,
+            scenario_name,
+            "/api/v1/admin/accounts?page=1&page_size=50&lite=true&sort_by=name&sort_order=asc",
+        )
+
+    if scenario_name == "admin-usage-list":
+        return admin_get_request(
+            context,
+            scenario_name,
+            "/api/v1/admin/usage?page=1&page_size=50&exact_total=false&sort_by=created_at&sort_order=desc",
+        )
+
+    base_headers = gateway_headers(context, scenario_name, seq)
     if scenario_name == "gateway-auth-reject":
         body = json.dumps(
             {
-                "model": "gpt-5",
+                "model": context.gateway_model,
                 "stream": False,
                 "input": [
                     {
@@ -308,10 +457,10 @@ def build_scenario_request(
         )
 
     if scenario_name == "gateway-large-body-reject":
-        body_bytes = max(256, large_body_bytes)
+        body_bytes = max(256, context.large_body_bytes)
         payload = json.dumps(
             {
-                "model": "gpt-5",
+                "model": context.gateway_model,
                 "stream": False,
                 "input": [
                     {
@@ -332,6 +481,38 @@ def build_scenario_request(
             path="/v1/responses",
             headers=base_headers,
             body=payload,
+        )
+
+    if scenario_name == "gateway-responses-success":
+        return RequestSpec(
+            method="POST",
+            path="/v1/responses",
+            headers=base_headers,
+            body=gateway_responses_payload(context, scenario_name, seq, stream=False),
+        )
+
+    if scenario_name == "gateway-responses-stream":
+        return RequestSpec(
+            method="POST",
+            path="/v1/responses",
+            headers=base_headers,
+            body=gateway_responses_payload(context, scenario_name, seq, stream=True),
+        )
+
+    if scenario_name == "gateway-chat-success":
+        return RequestSpec(
+            method="POST",
+            path="/v1/chat/completions",
+            headers=base_headers,
+            body=gateway_chat_payload(context, scenario_name, seq, stream=False),
+        )
+
+    if scenario_name == "gateway-chat-stream":
+        return RequestSpec(
+            method="POST",
+            path="/v1/chat/completions",
+            headers=base_headers,
+            body=gateway_chat_payload(context, scenario_name, seq, stream=True),
         )
 
     raise ProbeError(f"unknown scenario: {scenario_name}")
@@ -399,10 +580,7 @@ def worker_loop(
     stats: SharedProbeStats,
     base_url: str,
     scenario_name: str,
-    run_id: str,
-    admin_token: str | None,
-    gateway_api_key: str | None,
-    large_body_bytes: int,
+    request_context: ScenarioRequestContext,
     timeout_seconds: float,
 ) -> None:
     client = PersistentHTTPClient(base_url, timeout_seconds)
@@ -419,10 +597,7 @@ def worker_loop(
                 request = build_scenario_request(
                     scenario_name,
                     seq,
-                    run_id,
-                    admin_token,
-                    gateway_api_key,
-                    large_body_bytes,
+                    request_context,
                 )
                 status, _ = client.request(
                     request.method,
@@ -509,6 +684,14 @@ def run_scenario(
     total_seconds = args.warmup_seconds + args.measure_seconds
     tasks: queue.Queue[int | None] = queue.Queue(maxsize=max(args.concurrency * 4, 64))
     stats = SharedProbeStats()
+    request_context = ScenarioRequestContext(
+        run_id=run_id,
+        admin_token=admin_token,
+        gateway_api_key=args.gateway_api_key,
+        gateway_model=args.gateway_model,
+        gateway_max_output_tokens=args.gateway_max_output_tokens,
+        large_body_bytes=args.large_body_bytes,
+    )
     producer = threading.Thread(
         target=producer_loop,
         args=(stop_event, tasks, stats, args.qps, total_seconds),
@@ -523,10 +706,7 @@ def run_scenario(
                 stats,
                 args.base_url,
                 definition.name,
-                run_id,
-                admin_token,
-                args.gateway_api_key,
-                args.large_body_bytes,
+                request_context,
                 args.timeout_seconds,
             ),
             daemon=True,
@@ -625,7 +805,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--scenario",
         action="append",
-        choices=["default-suite", *sorted(SCENARIOS)],
+        choices=[*sorted(SCENARIO_SUITES), *sorted(SCENARIOS)],
         help="Scenario to run. Repeat the flag to run multiple scenarios. Defaults to default-suite.",
     )
     parser.add_argument("--admin-token", help="Existing admin bearer token")
@@ -634,6 +814,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--gateway-api-key",
         help="Gateway API key. Omit to intentionally exercise rejected-key scenarios.",
+    )
+    parser.add_argument(
+        "--gateway-model",
+        default="gpt-5",
+        help="Model name used for gateway scenarios.",
+    )
+    parser.add_argument(
+        "--gateway-max-output-tokens",
+        type=int,
+        default=128,
+        help="Small output cap used by successful gateway scenarios.",
     )
     parser.add_argument("--qps", type=float, default=20.0, help="Target requests per second")
     parser.add_argument("--concurrency", type=int, default=8, help="Worker count")
@@ -656,8 +847,8 @@ def resolve_scenarios(raw_scenarios: list[str] | None) -> list[ScenarioDefinitio
     scenario_names = raw_scenarios or ["default-suite"]
     expanded: list[str] = []
     for name in scenario_names:
-        if name == "default-suite":
-            expanded.extend(DEFAULT_SUITE)
+        if name in SCENARIO_SUITES:
+            expanded.extend(SCENARIO_SUITES[name])
         else:
             expanded.append(name)
 
@@ -683,15 +874,28 @@ def main() -> int:
         parser.error("--sample-interval-seconds must be > 0")
     if args.large_body_bytes <= 0:
         parser.error("--large-body-bytes must be > 0")
+    if args.gateway_max_output_tokens <= 0:
+        parser.error("--gateway-max-output-tokens must be > 0")
+    args.gateway_model = args.gateway_model.strip()
+    if not args.gateway_model:
+        parser.error("--gateway-model must not be empty")
+    if args.gateway_api_key is not None:
+        args.gateway_api_key = args.gateway_api_key.strip()
+    if args.admin_token is not None:
+        args.admin_token = args.admin_token.strip()
 
     scenarios = resolve_scenarios(args.scenario)
     requires_admin = any(item.requires_admin_token for item in scenarios)
+    requires_gateway_api_key = any(item.requires_gateway_api_key for item in scenarios)
+    if requires_gateway_api_key and not args.gateway_api_key:
+        parser.error("--gateway-api-key is required when running successful gateway scenarios")
+
     admin_token = args.admin_token
     if requires_admin and not admin_token:
         if not args.admin_email or not args.admin_password:
             parser.error(
                 "--admin-token or both --admin-email and --admin-password are required "
-                "when running admin-realtime",
+                "when running admin scenarios",
             )
         admin_token = login_admin(
             args.base_url,

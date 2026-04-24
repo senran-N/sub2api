@@ -1,4 +1,7 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-datamanagementd lint lint-backend lint-frontend coverage coverage-backend fmt fmt-backend clean clean-backend migrate-validate release-smoke-test secret-scan
+.PHONY: build build-backend build-frontend build-datamanagementd
+.PHONY: test test-backend test-frontend test-tools test-datamanagementd
+.PHONY: lint lint-backend lint-frontend coverage coverage-backend
+.PHONY: fmt fmt-backend clean clean-backend migrate-validate release-smoke-test secret-scan
 
 # 一键编译前后端
 build: build-backend build-frontend
@@ -16,8 +19,8 @@ build-datamanagementd:
 	@test -d datamanagement || { echo "datamanagement/ not found in this checkout"; exit 1; }
 	@cd datamanagement && go build -o datamanagementd ./cmd/datamanagementd
 
-# 运行测试（后端 + 前端）
-test: test-backend test-frontend
+# 运行测试（后端 + 前端 + 工具脚本）
+test: test-backend test-frontend test-tools
 
 test-backend:
 	@$(MAKE) -C backend test
@@ -25,6 +28,9 @@ test-backend:
 test-frontend:
 	@pnpm --dir frontend run lint:check
 	@pnpm --dir frontend run typecheck
+
+test-tools:
+	@PYTHONDONTWRITEBYTECODE=1 python3 tools/test_http_extreme_probe.py
 
 test-datamanagementd:
 	@test -d datamanagement || { echo "datamanagement/ not found in this checkout"; exit 1; }
