@@ -2,11 +2,14 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	dbent "github.com/senran-N/sub2api/ent"
 	"github.com/senran-N/sub2api/ent/userattributedefinition"
 	"github.com/senran-N/sub2api/ent/userattributevalue"
 	"github.com/senran-N/sub2api/internal/service"
+
+	"github.com/lib/pq"
 )
 
 // UserAttributeDefinitionRepository implementation
@@ -122,21 +125,66 @@ func (r *userAttributeDefinitionRepository) List(ctx context.Context, enabledOnl
 }
 
 func (r *userAttributeDefinitionRepository) UpdateDisplayOrders(ctx context.Context, orders map[int64]int) error {
-	tx, err := r.client.Tx(ctx)
+	if len(orders) == 0 {
+		return nil
+	}
+
+	client := clientFromContext(ctx, r.client)
+	ids := make([]int64, 0, len(orders))
+	caseClauses := make([]string, 0, len(orders))
+	args := make([]any, 0, len(orders)*2+1)
+	argPos := 1
+
+	for id, order := range orders {
+		if id <= 0 {
+			continue
+		}
+		ids = append(ids, id)
+		caseClauses = append(caseClauses, fmt.Sprintf("WHEN $%d THEN $%d", argPos, argPos+1))
+		args = append(args, id, order)
+		argPos += 2
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	var existingCount int
+	if err := scanSingleRow(
+		ctx,
+		client,
+		`SELECT COUNT(*) FROM user_attribute_definitions WHERE id = ANY($1)`,
+		[]any{pq.Array(ids)},
+		&existingCount,
+	); err != nil {
+		return err
+	}
+	if existingCount != len(ids) {
+		return service.ErrAttributeDefinitionNotFound
+	}
+
+	args = append(args, pq.Array(ids))
+	query := fmt.Sprintf(`
+		UPDATE user_attribute_definitions
+		SET display_order = CASE id
+			%s
+			ELSE display_order
+		END,
+		updated_at = NOW()
+		WHERE id = ANY($%d)
+	`, joinClauses(caseClauses, "\n\t\t\t"), argPos)
+
+	result, err := client.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
-
-	for id, order := range orders {
-		if _, err := tx.UserAttributeDefinition.UpdateOneID(id).
-			SetDisplayOrder(order).
-			Save(ctx); err != nil {
-			return translatePersistenceError(err, service.ErrAttributeDefinitionNotFound, nil)
-		}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
 	}
-
-	return tx.Commit()
+	if affected != int64(len(ids)) {
+		return service.ErrAttributeDefinitionNotFound
+	}
+	return nil
 }
 
 func (r *userAttributeDefinitionRepository) ExistsByKey(ctx context.Context, key string) (bool, error) {
@@ -213,28 +261,33 @@ func (r *userAttributeValueRepository) UpsertBatch(ctx context.Context, userID i
 		return nil
 	}
 
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
+	client := clientFromContext(ctx, r.client)
+	lastValueByAttributeID := make(map[int64]string, len(inputs))
+	orderedAttributeIDs := make([]int64, 0, len(inputs))
 	for _, input := range inputs {
-		// Use upsert (ON CONFLICT DO UPDATE)
-		err := tx.UserAttributeValue.Create().
-			SetUserID(userID).
-			SetAttributeID(input.AttributeID).
-			SetValue(input.Value).
-			OnConflictColumns(userattributevalue.FieldUserID, userattributevalue.FieldAttributeID).
-			UpdateValue().
-			UpdateUpdatedAt().
-			Exec(ctx)
-		if err != nil {
-			return err
+		if _, exists := lastValueByAttributeID[input.AttributeID]; !exists {
+			orderedAttributeIDs = append(orderedAttributeIDs, input.AttributeID)
 		}
+		lastValueByAttributeID[input.AttributeID] = input.Value
+	}
+	if len(orderedAttributeIDs) == 0 {
+		return nil
 	}
 
-	return tx.Commit()
+	builders := make([]*dbent.UserAttributeValueCreate, 0, len(orderedAttributeIDs))
+	for _, attributeID := range orderedAttributeIDs {
+		builders = append(builders, client.UserAttributeValue.Create().
+			SetUserID(userID).
+			SetAttributeID(attributeID).
+			SetValue(lastValueByAttributeID[attributeID]),
+		)
+	}
+
+	return client.UserAttributeValue.CreateBulk(builders...).
+		OnConflictColumns(userattributevalue.FieldUserID, userattributevalue.FieldAttributeID).
+		UpdateValue().
+		UpdateUpdatedAt().
+		Exec(ctx)
 }
 
 func (r *userAttributeValueRepository) DeleteByAttributeID(ctx context.Context, attributeID int64) error {

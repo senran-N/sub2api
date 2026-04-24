@@ -109,6 +109,10 @@ func (s *userRepoStub) UnbindUserAuthProvider(context.Context, int64, string) er
 	panic("unexpected UnbindUserAuthProvider call")
 }
 
+func (s *userRepoStub) UpdateUserLastActiveAt(context.Context, int64, time.Time) error {
+	panic("unexpected UpdateUserLastActiveAt call")
+}
+
 func (s *userRepoStub) UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error {
 	panic("unexpected UpdateTotpSecret call")
 }

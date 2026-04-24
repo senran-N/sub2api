@@ -74,6 +74,9 @@ func (s *userRepoStubForGroupUpdate) ListUserAuthIdentities(context.Context, int
 func (s *userRepoStubForGroupUpdate) UnbindUserAuthProvider(context.Context, int64, string) error {
 	panic("unexpected")
 }
+func (s *userRepoStubForGroupUpdate) UpdateUserLastActiveAt(context.Context, int64, time.Time) error {
+	panic("unexpected")
+}
 func (s *userRepoStubForGroupUpdate) UpdateTotpSecret(context.Context, int64, *string) error {
 	panic("unexpected")
 }

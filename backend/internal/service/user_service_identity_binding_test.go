@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
@@ -75,6 +76,9 @@ func (s *identityBindingUserRepoStub) UnbindUserAuthProvider(_ context.Context, 
 		filtered = append(filtered, record)
 	}
 	s.identities = filtered
+	return nil
+}
+func (s *identityBindingUserRepoStub) UpdateUserLastActiveAt(context.Context, int64, time.Time) error {
 	return nil
 }
 func (s *identityBindingUserRepoStub) UpdateTotpSecret(context.Context, int64, *string) error {

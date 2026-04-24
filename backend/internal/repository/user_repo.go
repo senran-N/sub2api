@@ -388,6 +388,63 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 	return nil
 }
 
+func (r *userRepository) ApplyBalanceMutation(ctx context.Context, input service.UserBalanceMutationInput) (*service.UserBalanceMutationResult, error) {
+	operation := strings.TrimSpace(input.Operation)
+	switch operation {
+	case "set", "add", "subtract":
+	default:
+		return nil, fmt.Errorf("unsupported balance operation: %q", input.Operation)
+	}
+
+	client := clientFromContext(ctx, r.client)
+	var oldBalance sql.NullFloat64
+	var newBalance sql.NullFloat64
+	if err := scanSingleRow(ctx, client, `
+		WITH locked AS (
+			SELECT id, balance
+			FROM users
+			WHERE id = $1 AND deleted_at IS NULL
+			FOR UPDATE
+		), updated AS (
+			UPDATE users AS u
+			SET balance = CASE $2
+				WHEN 'set' THEN $3
+				WHEN 'add' THEN locked.balance + $3
+				WHEN 'subtract' THEN locked.balance - $3
+			END,
+			updated_at = NOW()
+			FROM locked
+			WHERE u.id = locked.id
+				AND ($2 <> 'subtract' OR locked.balance >= $3)
+			RETURNING locked.balance AS old_balance, u.balance AS new_balance
+		)
+		SELECT
+			(SELECT balance FROM locked) AS old_balance,
+			(SELECT new_balance FROM updated) AS new_balance
+	`, []any{input.UserID, operation, input.Amount}, &oldBalance, &newBalance); err != nil {
+		return nil, err
+	}
+	if !oldBalance.Valid {
+		return nil, service.ErrUserNotFound
+	}
+	if !newBalance.Valid {
+		return nil, fmt.Errorf(
+			"balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f",
+			oldBalance.Float64,
+			oldBalance.Float64-input.Amount,
+		)
+	}
+
+	user, err := r.GetByID(ctx, input.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &service.UserBalanceMutationResult{
+		User:        user,
+		BalanceDiff: newBalance.Float64 - oldBalance.Float64,
+	}, nil
+}
+
 // DeductBalance 扣除用户余额
 // 透支策略：允许余额变为负数，确保当前请求能够完成
 // 中间件会阻止余额 <= 0 的用户发起后续请求

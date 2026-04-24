@@ -276,6 +276,41 @@ func (s *UserRepoSuite) TestUpdateBalance_Negative() {
 	s.Require().InDelta(7.0, got.Balance, 1e-6)
 }
 
+func (s *UserRepoSuite) TestApplyBalanceMutation_AddDoesNotTouchTotalRecharged() {
+	user := s.mustCreateUser(&service.User{
+		Email:          "atomic-add@test.com",
+		Balance:        10,
+		TotalRecharged: 50,
+	})
+
+	result, err := s.repo.ApplyBalanceMutation(s.ctx, service.UserBalanceMutationInput{
+		UserID:    user.ID,
+		Amount:    2.5,
+		Operation: "add",
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(result)
+	s.Require().InDelta(2.5, result.BalanceDiff, 1e-6)
+	s.Require().InDelta(12.5, result.User.Balance, 1e-6)
+	s.Require().InDelta(50.0, result.User.TotalRecharged, 1e-6)
+}
+
+func (s *UserRepoSuite) TestApplyBalanceMutation_SubtractRejectsNegativeBalance() {
+	user := s.mustCreateUser(&service.User{Email: "atomic-sub@test.com", Balance: 5})
+
+	_, err := s.repo.ApplyBalanceMutation(s.ctx, service.UserBalanceMutationInput{
+		UserID:    user.ID,
+		Amount:    10,
+		Operation: "subtract",
+	})
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "balance cannot be negative")
+
+	got, getErr := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(getErr)
+	s.Require().InDelta(5.0, got.Balance, 1e-6)
+}
+
 func (s *UserRepoSuite) TestDeductBalance() {
 	user := s.mustCreateUser(&service.User{Email: "deduct@test.com", Balance: 10})
 

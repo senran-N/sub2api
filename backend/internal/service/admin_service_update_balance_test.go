@@ -30,6 +30,21 @@ func (s *balanceUserRepoStub) Update(ctx context.Context, user *User) error {
 	return nil
 }
 
+type atomicBalanceUserRepoStub struct {
+	*userRepoStub
+	result *UserBalanceMutationResult
+	err    error
+	inputs []UserBalanceMutationInput
+}
+
+func (s *atomicBalanceUserRepoStub) ApplyBalanceMutation(ctx context.Context, input UserBalanceMutationInput) (*UserBalanceMutationResult, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	s.inputs = append(s.inputs, input)
+	return s.result, nil
+}
+
 type balanceRedeemRepoStub struct {
 	*redeemRepoStub
 	created []*RedeemCode
@@ -94,4 +109,36 @@ func TestAdminService_UpdateUserBalance_NoChangeNoInvalidate(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, invalidator.userIDs)
 	require.Empty(t, redeemRepo.created)
+}
+
+func TestAdminService_UpdateUserBalance_PrefersAtomicMutationPath(t *testing.T) {
+	updatedUser := &User{ID: 9, Balance: 14}
+	repo := &atomicBalanceUserRepoStub{
+		userRepoStub: &userRepoStub{user: &User{ID: 9, Balance: 10}},
+		result: &UserBalanceMutationResult{
+			User:        updatedUser,
+			BalanceDiff: 4,
+		},
+	}
+	redeemRepo := &balanceRedeemRepoStub{redeemRepoStub: &redeemRepoStub{}}
+	invalidator := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{
+		userRepo:             repo,
+		redeemCodeRepo:       redeemRepo,
+		authCacheInvalidator: invalidator,
+	}
+
+	user, err := svc.UpdateUserBalance(context.Background(), 9, 4, "add", "manual top up")
+
+	require.NoError(t, err)
+	require.Same(t, updatedUser, user)
+	require.Equal(t, []UserBalanceMutationInput{{
+		UserID:    9,
+		Amount:    4,
+		Operation: "add",
+	}}, repo.inputs)
+	require.Equal(t, []int64{9}, invalidator.userIDs)
+	require.Len(t, redeemRepo.created, 1)
+	require.Equal(t, 4.0, redeemRepo.created[0].Value)
+	require.Equal(t, "manual top up", redeemRepo.created[0].Notes)
 }

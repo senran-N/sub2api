@@ -14,6 +14,10 @@ type userGroupRateBatchReader interface {
 	GetByUserIDs(ctx context.Context, userIDs []int64) (map[int64]map[int64]float64, error)
 }
 
+type userBalanceMutationApplier interface {
+	ApplyBalanceMutation(ctx context.Context, input UserBalanceMutationInput) (*UserBalanceMutationResult, error)
+}
+
 func (s *adminServiceImpl) ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters) ([]User, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
 	users, result, err := s.userRepo.ListWithFilters(ctx, params, filters)
@@ -213,30 +217,53 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 }
 
 func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error) {
-	user, err := s.userRepo.GetByID(ctx, userID)
-	if err != nil {
-		return nil, err
+	var (
+		user        *User
+		balanceDiff float64
+	)
+
+	if mutationRepo, ok := s.userRepo.(userBalanceMutationApplier); ok {
+		result, err := mutationRepo.ApplyBalanceMutation(ctx, UserBalanceMutationInput{
+			UserID:    userID,
+			Amount:    balance,
+			Operation: operation,
+		})
+		if err != nil {
+			return nil, err
+		}
+		user = result.User
+		balanceDiff = result.BalanceDiff
+	} else {
+		var err error
+		user, err = s.userRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		oldBalance := user.Balance
+		switch operation {
+		case "set":
+			user.Balance = balance
+		case "add":
+			user.Balance += balance
+		case "subtract":
+			user.Balance -= balance
+		default:
+			return nil, fmt.Errorf("unsupported balance operation: %q", operation)
+		}
+		if user.Balance < 0 {
+			return nil, fmt.Errorf(
+				"balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f",
+				oldBalance,
+				user.Balance,
+			)
+		}
+		if err := s.userRepo.Update(ctx, user); err != nil {
+			return nil, err
+		}
+		balanceDiff = user.Balance - oldBalance
 	}
 
-	oldBalance := user.Balance
-
-	switch operation {
-	case "set":
-		user.Balance = balance
-	case "add":
-		user.Balance += balance
-	case "subtract":
-		user.Balance -= balance
-	}
-
-	if user.Balance < 0 {
-		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, user.Balance)
-	}
-
-	if err := s.userRepo.Update(ctx, user); err != nil {
-		return nil, err
-	}
-	balanceDiff := user.Balance - oldBalance
 	if s.authCacheInvalidator != nil && balanceDiff != 0 {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
