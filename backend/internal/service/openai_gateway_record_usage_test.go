@@ -164,6 +164,14 @@ func newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo UsageLogReposit
 	return svc
 }
 
+func newOpenAIRecordUsageBillingServiceForTest(prices map[string]*ModelPricing) *BillingService {
+	cfg := &config.Config{}
+	return &BillingService{
+		cfg:            cfg,
+		fallbackPrices: prices,
+	}
+}
+
 func expectedOpenAICost(t *testing.T, svc *OpenAIGatewayService, model string, usage OpenAIUsage, multiplier float64) *CostBreakdown {
 	t.Helper()
 
@@ -172,6 +180,7 @@ func expectedOpenAICost(t *testing.T, svc *OpenAIGatewayService, model string, u
 		OutputTokens:        usage.OutputTokens,
 		CacheCreationTokens: usage.CacheCreationInputTokens,
 		CacheReadTokens:     usage.CacheReadInputTokens,
+		ImageOutputTokens:   usage.ImageOutputTokens,
 	}, multiplier)
 	require.NoError(t, err)
 	return cost
@@ -261,6 +270,91 @@ func TestOpenAIGatewayServiceRecordUsage_IncludesEndpointMetadata(t *testing.T) 
 	require.Equal(t, "/v1/chat/completions", *usageRepo.lastLog.InboundEndpoint)
 	require.NotNil(t, usageRepo.lastLog.UpstreamEndpoint)
 	require.Equal(t, "/v1/responses", *usageRepo.lastLog.UpstreamEndpoint)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_ImageOnlyUsageStillRecordsUsageLog(t *testing.T) {
+	usage := OpenAIUsage{ImageOutputTokens: 12}
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, subRepo, nil)
+	svc.billingService = newOpenAIRecordUsageBillingServiceForTest(map[string]*ModelPricing{
+		"gpt-image-only": {
+			ImageOutputPricePerToken: 0.01,
+		},
+	})
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_image_only",
+			Usage:     usage,
+			Model:     "gpt-image-only",
+			Duration:  time.Second,
+		},
+		APIKey:  &APIKey{ID: 10102},
+		User:    &User{ID: 20102},
+		Account: &Account{ID: 30102},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, usageRepo.calls)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, 12, usageRepo.lastLog.ImageOutputTokens)
+	require.Zero(t, userRepo.deductCalls)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_ZeroMutationSkipsBillingRepoButWritesUsageLog(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, subRepo, nil)
+	svc.billingService = newOpenAIRecordUsageBillingServiceForTest(map[string]*ModelPricing{})
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_zero_mutation",
+			Usage: OpenAIUsage{
+				InputTokens:  8,
+				OutputTokens: 4,
+			},
+			Model:    "unknown-zero-mutation",
+			Duration: time.Second,
+		},
+		APIKey:  &APIKey{ID: 10103},
+		User:    &User{ID: 20103},
+		Account: &Account{ID: 30103},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, billingRepo.calls)
+	require.Equal(t, 1, usageRepo.calls)
+	require.Zero(t, userRepo.deductCalls)
+	_, ok := svc.deferredService.lastUsedUpdates.Load(int64(30103))
+	require.True(t, ok)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_AllZeroUsageReturnsFast(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_zero_usage",
+			Usage:     OpenAIUsage{},
+			Model:     "gpt-5.1",
+			Duration:  time.Second,
+		},
+		APIKey:  &APIKey{ID: 10104},
+		User:    &User{ID: 20104},
+		Account: &Account{ID: 30104},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, billingRepo.calls)
+	require.Equal(t, 0, usageRepo.calls)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_FallsBackToGroupDefaultRateOnResolverError(t *testing.T) {

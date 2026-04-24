@@ -51,6 +51,17 @@ func (c *UsageBillingCommand) Normalize() {
 	}
 }
 
+func (c *UsageBillingCommand) HasMutations() bool {
+	if c == nil {
+		return false
+	}
+	return c.BalanceCost > 0 ||
+		c.SubscriptionCost > 0 ||
+		c.APIKeyQuotaCost > 0 ||
+		c.APIKeyRateLimitCost > 0 ||
+		c.AccountQuotaCost > 0
+}
+
 func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	if c == nil {
 		return ""

@@ -166,6 +166,10 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		postUsageBilling(ctx, p, deps)
 		return true, nil
 	}
+	if !cmd.HasMutations() {
+		finalizePostUsageBilling(p, deps)
+		return true, nil
+	}
 
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
@@ -179,6 +183,8 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 		return false, nil
 	}
+
+	applyUsageBillingPostApplyState(billingCtx, p, deps, cmd, result)
 
 	if result.APIKeyQuotaExhausted {
 		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok && p.APIKey != nil && p.APIKey.Key != "" {
@@ -215,6 +221,30 @@ func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps) {
 
 	if p.Account != nil && deps.deferredService != nil {
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+	}
+}
+
+func applyUsageBillingPostApplyState(
+	ctx context.Context,
+	p *postUsageBillingParams,
+	deps *billingDeps,
+	cmd *UsageBillingCommand,
+	result *UsageBillingApplyResult,
+) {
+	if p == nil || deps == nil || result == nil {
+		return
+	}
+
+	if result.NewBalance != nil && p.User != nil {
+		oldBalance := p.User.Balance
+		p.User.Balance = *result.NewBalance
+		if deps.balanceNotifyService != nil && cmd != nil && cmd.BalanceCost > 0 && !p.IsSubscriptionBill {
+			deps.balanceNotifyService.CheckBalanceAfterDeduction(ctx, p.User, oldBalance, cmd.BalanceCost)
+		}
+	}
+
+	if result.QuotaState != nil && p.Account != nil && deps.balanceNotifyService != nil && cmd != nil && cmd.AccountQuotaCost > 0 {
+		deps.balanceNotifyService.CheckAccountQuotaAfterIncrement(ctx, p.Account, cmd.AccountQuotaCost)
 	}
 }
 

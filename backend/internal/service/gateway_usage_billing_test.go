@@ -366,3 +366,30 @@ func TestPostUsageBilling_QueuesSubscriptionCacheExactlyOnce(t *testing.T) {
 	_, ok := deferred.lastUsedUpdates.Load(int64(303))
 	require.True(t, ok)
 }
+
+func TestApplyUsageBillingPostApplyState_UpdatesInMemoryBalance(t *testing.T) {
+	user := &User{ID: 12, Balance: 20}
+	newBalance := 16.5
+
+	applyUsageBillingPostApplyState(context.Background(), &postUsageBillingParams{
+		User: user,
+	}, &billingDeps{}, &UsageBillingCommand{
+		BalanceCost: 3.5,
+	}, &UsageBillingApplyResult{
+		NewBalance: &newBalance,
+	})
+
+	require.InDelta(t, 16.5, user.Balance, 1e-12)
+}
+
+func TestApplyUsageBillingPostApplyState_AllowsNilInputs(t *testing.T) {
+	applyUsageBillingPostApplyState(context.Background(), nil, &billingDeps{}, nil, &UsageBillingApplyResult{})
+	applyUsageBillingPostApplyState(context.Background(), &postUsageBillingParams{}, nil, nil, &UsageBillingApplyResult{})
+	applyUsageBillingPostApplyState(context.Background(), &postUsageBillingParams{}, &billingDeps{}, nil, nil)
+}
+
+func TestUsageBillingCommandHasMutations(t *testing.T) {
+	require.False(t, (&UsageBillingCommand{}).HasMutations())
+	require.True(t, (&UsageBillingCommand{BalanceCost: 1}).HasMutations())
+	require.True(t, (&UsageBillingCommand{AccountQuotaCost: 1}).HasMutations())
+}
