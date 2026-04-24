@@ -55,6 +55,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardResponses(
 	defer func() {
 		r.persistRuntimeFeedback(
 			ctx,
+			c,
 			account,
 			requestedModel,
 			upstreamModelForFeedback,
@@ -192,6 +193,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 	defer func() {
 		r.persistRuntimeFeedback(
 			ctx,
+			c,
 			account,
 			originalModel,
 			upstreamModelForFeedback,
@@ -441,6 +443,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 	defer func() {
 		r.persistRuntimeFeedback(
 			ctx,
+			c,
 			account,
 			originalModel,
 			upstreamModelForFeedback,
@@ -639,6 +642,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 
 func (r *CompatibleGatewayTextRuntime) persistRuntimeFeedback(
 	ctx context.Context,
+	c *gin.Context,
 	account *Account,
 	requestedModel string,
 	upstreamModel string,
@@ -655,8 +659,18 @@ func (r *CompatibleGatewayTextRuntime) persistRuntimeFeedback(
 		RequestedModel: strings.TrimSpace(requestedModel),
 		UpstreamModel:  strings.TrimSpace(upstreamModel),
 		Result:         result,
-		StatusCode:     statusCode,
+		StatusCode:     resolveCompatibleGatewayRuntimeStatusCode(c, statusCode),
 		ProtocolFamily: protocolFamily,
 		Err:            runtimeErr,
 	})
+}
+
+func resolveCompatibleGatewayRuntimeStatusCode(c *gin.Context, statusCode int) int {
+	if statusCode > 0 {
+		return statusCode
+	}
+	if c == nil || c.Writer == nil || !c.Writer.Written() {
+		return 0
+	}
+	return c.Writer.Status()
 }

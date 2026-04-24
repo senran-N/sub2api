@@ -44,10 +44,3 @@ func (h *OpenAIGatewayHandler) persistCompatibleGatewayRuntimeFeedback(ctx conte
 	}
 	persistCompatibleGatewayRuntimeFeedback(ctx, h.gatewayService, input)
 }
-
-func (h *CompatibleGatewayTextHandler) persistCompatibleGatewayRuntimeFeedback(ctx context.Context, input compatibleGatewayRuntimeFeedbackInput) {
-	if h == nil {
-		return
-	}
-	persistCompatibleGatewayRuntimeFeedback(ctx, h.gatewayService, input)
-}

@@ -331,10 +331,6 @@ func (h *CompatibleGatewayTextHandler) Responses(c *gin.Context) {
 			fallbackModel = channelUsage.ChannelMappedModel
 		}
 		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
-		forwardModelHint := defaultMappedModel
-		if forwardModelHint == "" {
-			forwardModelHint = schedulingModel
-		}
 		result, err := h.gatewayService.Forward(c.Request.Context(), c, account, body, defaultMappedModel)
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
 		if accountReleaseFunc != nil {
@@ -353,14 +349,6 @@ func (h *CompatibleGatewayTextHandler) Responses(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
-				h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-					Account:        account,
-					RequestedModel: reqModel,
-					UpstreamModel:  forwardModelHint,
-					StatusCode:     failoverErr.StatusCode,
-					ProtocolFamily: service.CompatibleGatewayProtocolFamilyResponses,
-					Err:            failoverErr,
-				})
 				lastFailoverErr = failoverErr
 				codexFailoverDecision := service.CodexRecoveryDecision{}
 				if profile.NativeClient {
@@ -411,14 +399,6 @@ func (h *CompatibleGatewayTextHandler) Responses(c *gin.Context) {
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyResponses,
-				Err:            err,
-			})
 			fields := []zap.Field{
 				zap.Int64("account_id", account.ID),
 				zap.Bool("fallback_error_response_written", wroteFallback),
@@ -436,23 +416,8 @@ func (h *CompatibleGatewayTextHandler) Responses(c *gin.Context) {
 				h.gatewayService.UpdateCodexUsageSnapshotFromHeaders(c.Request.Context(), account.ID, result.ResponseHeaders)
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				Result:         result,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyResponses,
-			})
 		} else {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, nil)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyResponses,
-			})
 		}
 
 		userAgent := c.GetHeader("User-Agent")
@@ -679,10 +644,6 @@ func (h *CompatibleGatewayTextHandler) ChatCompletions(c *gin.Context) {
 			fallbackModel = channelUsage.ChannelMappedModel
 		}
 		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
-		forwardModelHint := defaultMappedModel
-		if forwardModelHint == "" {
-			forwardModelHint = schedulingModel
-		}
 		result, err := h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, body, promptCacheKey, defaultMappedModel)
 
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
@@ -702,14 +663,6 @@ func (h *CompatibleGatewayTextHandler) ChatCompletions(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
-				h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-					Account:        account,
-					RequestedModel: reqModel,
-					UpstreamModel:  forwardModelHint,
-					StatusCode:     failoverErr.StatusCode,
-					ProtocolFamily: service.CompatibleGatewayProtocolFamilyChatCompletions,
-					Err:            failoverErr,
-				})
 				lastFailoverErr = failoverErr
 				decision := applyOpenAIPoolFailoverPolicy(
 					account,
@@ -754,14 +707,6 @@ func (h *CompatibleGatewayTextHandler) ChatCompletions(c *gin.Context) {
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyChatCompletions,
-				Err:            err,
-			})
 			reqLog.Warn("openai_chat_completions.forward_failed",
 				zap.Int64("account_id", account.ID),
 				zap.Bool("fallback_error_response_written", wroteFallback),
@@ -771,23 +716,8 @@ func (h *CompatibleGatewayTextHandler) ChatCompletions(c *gin.Context) {
 		}
 		if result != nil {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				Result:         result,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyChatCompletions,
-			})
 		} else {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, nil)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyChatCompletions,
-			})
 		}
 
 		userAgent := c.GetHeader("User-Agent")
@@ -1003,10 +933,6 @@ func (h *CompatibleGatewayTextHandler) Messages(c *gin.Context) {
 		forwardStart := time.Now()
 
 		defaultMappedModel := strings.TrimSpace(effectiveMappedModel)
-		forwardModelHint := defaultMappedModel
-		if forwardModelHint == "" {
-			forwardModelHint = currentRoutingModel
-		}
 		forwardBody := body
 		if channelMapping.Mapped {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
@@ -1030,14 +956,6 @@ func (h *CompatibleGatewayTextHandler) Messages(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
-				h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-					Account:        account,
-					RequestedModel: reqModel,
-					UpstreamModel:  forwardModelHint,
-					StatusCode:     failoverErr.StatusCode,
-					ProtocolFamily: service.CompatibleGatewayProtocolFamilyMessages,
-					Err:            failoverErr,
-				})
 				lastFailoverErr = failoverErr
 				decision := applyOpenAIPoolFailoverPolicy(
 					account,
@@ -1082,14 +1000,6 @@ func (h *CompatibleGatewayTextHandler) Messages(c *gin.Context) {
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureAnthropicErrorResponse(c, streamStarted)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyMessages,
-				Err:            err,
-			})
 			reqLog.Warn("openai_messages.forward_failed",
 				zap.Int64("account_id", account.ID),
 				zap.Bool("fallback_error_response_written", wroteFallback),
@@ -1099,23 +1009,8 @@ func (h *CompatibleGatewayTextHandler) Messages(c *gin.Context) {
 		}
 		if result != nil {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				Result:         result,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyMessages,
-			})
 		} else {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, nil)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				StatusCode:     c.Writer.Status(),
-				ProtocolFamily: service.CompatibleGatewayProtocolFamilyMessages,
-			})
 		}
 
 		userAgent := c.GetHeader("User-Agent")
