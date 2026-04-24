@@ -2310,6 +2310,13 @@ import {
   type EditAccountForm,
 } from "@/components/account/accountModalShared";
 import {
+  getAccountModalModeToggleClasses,
+  getAccountModalStatusChipClasses,
+  getAccountModalSwitchThumbClasses,
+  getAccountModalSwitchTrackClasses,
+  getEditToneNoticeClasses,
+} from "@/components/account/accountModalClasses";
+import {
   buildUpdatedAnthropicAPIKeyExtra,
   buildUpdatedAnthropicQuotaControlExtra,
   buildUpdatedAntigravityExtra,
@@ -2674,21 +2681,8 @@ const mixedChannelWarningMessageText = computed(() => {
   });
 });
 
-type EditAccountTone = "purple" | "amber" | "blue" | "danger";
-type EditAccountModeTone = "accent" | "purple" | "danger";
-
-function joinClassNames(classNames: Array<string | false | null | undefined>) {
-  return classNames.filter(Boolean).join(" ");
-}
-
-function getModeToggleClasses(isSelected: boolean, tone: EditAccountModeTone) {
-  return joinClassNames([
-    "edit-account-modal__mode-toggle edit-account-modal__mode-toggle-control flex-1 text-sm font-medium transition-all",
-    isSelected
-      ? `edit-account-modal__mode-toggle--${tone}`
-      : "edit-account-modal__mode-toggle--idle",
-  ]);
-}
+const getModeToggleClasses = (isSelected: boolean, tone: "accent" | "purple" | "danger") =>
+  getAccountModalModeToggleClasses("edit-account-modal", isSelected, tone);
 
 function formatRuntimeValue(value: string | null | undefined) {
   if (!value) {
@@ -2698,40 +2692,15 @@ function formatRuntimeValue(value: string | null | undefined) {
   return formatted || value;
 }
 
-function getSwitchTrackClasses(isEnabled: boolean) {
-  return joinClassNames([
-    "edit-account-modal__switch relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-    isEnabled
-      ? "edit-account-modal__switch--enabled"
-      : "edit-account-modal__switch--disabled",
-  ]);
-}
-
-function getSwitchThumbClasses(isEnabled: boolean) {
-  return joinClassNames([
-    "edit-account-modal__switch-thumb pointer-events-none inline-block h-5 w-5 transform rounded-full shadow ring-0 transition duration-200 ease-in-out",
-    isEnabled ? "translate-x-5" : "translate-x-0",
-  ]);
-}
-
-function getStatusChipClasses(
+const getSwitchTrackClasses = (isEnabled: boolean) =>
+  getAccountModalSwitchTrackClasses("edit-account-modal", isEnabled);
+const getSwitchThumbClasses = (isEnabled: boolean) =>
+  getAccountModalSwitchThumbClasses("edit-account-modal", isEnabled);
+const getStatusChipClasses = (
   isSelected: boolean,
-  tone: EditAccountModeTone = "danger",
-) {
-  return joinClassNames([
-    "edit-account-modal__status-chip edit-account-modal__status-chip-control text-sm font-medium transition-colors",
-    isSelected
-      ? `edit-account-modal__status-chip--${tone}`
-      : "edit-account-modal__status-chip--idle",
-  ]);
-}
-
-function getToneNoticeClasses(tone: EditAccountTone) {
-  return joinClassNames([
-    "edit-account-modal__notice edit-account-modal__notice-card border",
-    `edit-account-modal__notice--${tone}`,
-  ]);
-}
+  tone: "accent" | "purple" | "danger" = "danger",
+) => getAccountModalStatusChipClasses("edit-account-modal", isSelected, tone);
+const getToneNoticeClasses = getEditToneNoticeClasses;
 
 const resetMixedChannelDialogState = () => {
   showMixedChannelWarning.value = false;

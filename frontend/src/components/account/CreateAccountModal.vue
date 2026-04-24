@@ -3411,6 +3411,23 @@ import {
   type CreateAccountForm,
 } from "@/components/account/accountModalShared";
 import {
+  getAccountModalModeToggleClasses,
+  getAccountModalStatusChipClasses,
+  getAccountModalSwitchThumbClasses,
+  getAccountModalSwitchTrackClasses,
+  getCreateChoiceCardClasses,
+  getCreateChoiceIconClasses,
+  getCreateRadioOptionClasses,
+  getCreateSegmentOptionClasses,
+  getCreateToneTagClasses,
+  getCreateValidationInputClasses,
+} from "@/components/account/accountModalClasses";
+import {
+  createPlatformRequestGuard,
+  createSequenceRequestGuard,
+  type AccountModalPlatformRequestContext,
+} from "@/components/account/accountModalRequestGuard";
+import {
   type CreateAccountCategory,
   buildCreateAccountRequest,
   buildCreateAccountSharedPayload,
@@ -3565,10 +3582,8 @@ const emit = defineEmits<{
   created: [];
 }>();
 
-interface CreateRequestContext {
-  platform: AccountPlatform;
-  requestSequence: number;
-}
+type CreateRequestContext =
+  AccountModalPlatformRequestContext<AccountPlatform>;
 
 type GrokSessionInputMode = "single" | "batch";
 
@@ -3841,109 +3856,22 @@ const mixedChannelWarningMessageText = computed(() => {
   });
 });
 
-type CreateAccountTone =
-  | "rose"
-  | "orange"
-  | "purple"
-  | "amber"
-  | "green"
-  | "blue"
-  | "emerald";
-type CreateAccountModeTone = "accent" | "purple" | "danger";
-
-function joinClassNames(classNames: Array<string | false | null | undefined>) {
-  return classNames.filter(Boolean).join(" ");
-}
-
-function getChoiceCardClasses(
+const getChoiceCardClasses = getCreateChoiceCardClasses;
+const getChoiceIconClasses = getCreateChoiceIconClasses;
+const getToneTagClasses = getCreateToneTagClasses;
+const getValidationInputClasses = getCreateValidationInputClasses;
+const getRadioOptionClasses = getCreateRadioOptionClasses;
+const getSegmentOptionClasses = getCreateSegmentOptionClasses;
+const getModeToggleClasses = (isSelected: boolean, tone: "accent" | "purple" | "danger") =>
+  getAccountModalModeToggleClasses("create-account-modal", isSelected, tone);
+const getSwitchTrackClasses = (isEnabled: boolean) =>
+  getAccountModalSwitchTrackClasses("create-account-modal", isEnabled);
+const getSwitchThumbClasses = (isEnabled: boolean) =>
+  getAccountModalSwitchThumbClasses("create-account-modal", isEnabled);
+const getStatusChipClasses = (
   isSelected: boolean,
-  tone: CreateAccountTone,
-  isDisabled = false,
-) {
-  return joinClassNames([
-    "create-account-modal__choice-card create-account-modal__choice-card-control flex items-center gap-3 border-2 text-left transition-all",
-    isSelected
-      ? `create-account-modal__choice-card--${tone}`
-      : "create-account-modal__choice-card--idle",
-    isDisabled && "create-account-modal__choice-card--disabled",
-  ]);
-}
-
-function getChoiceIconClasses(isSelected: boolean, tone: CreateAccountTone) {
-  return joinClassNames([
-    "create-account-modal__choice-icon create-account-modal__choice-icon-control flex h-8 w-8 shrink-0 items-center justify-center",
-    isSelected
-      ? `create-account-modal__choice-icon--${tone}`
-      : "create-account-modal__choice-icon--idle",
-  ]);
-}
-
-function getToneTagClasses(tone: CreateAccountTone) {
-  return joinClassNames([
-    "create-account-modal__tone-tag create-account-modal__tone-tag-control text-[10px] font-semibold",
-    `create-account-modal__tone-tag--${tone}`,
-  ]);
-}
-
-function getModeToggleClasses(
-  isSelected: boolean,
-  tone: CreateAccountModeTone,
-) {
-  return joinClassNames([
-    "create-account-modal__mode-toggle create-account-modal__mode-toggle-control flex-1 text-sm font-medium transition-all",
-    isSelected
-      ? `create-account-modal__mode-toggle--${tone}`
-      : "create-account-modal__mode-toggle--idle",
-  ]);
-}
-
-function getSwitchTrackClasses(isEnabled: boolean) {
-  return joinClassNames([
-    "create-account-modal__switch relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-    isEnabled
-      ? "create-account-modal__switch--enabled"
-      : "create-account-modal__switch--disabled",
-  ]);
-}
-
-function getSwitchThumbClasses(isEnabled: boolean) {
-  return joinClassNames([
-    "create-account-modal__switch-thumb pointer-events-none inline-block h-5 w-5 transform rounded-full shadow ring-0 transition duration-200 ease-in-out",
-    isEnabled ? "translate-x-5" : "translate-x-0",
-  ]);
-}
-
-function getStatusChipClasses(
-  isSelected: boolean,
-  tone: CreateAccountModeTone = "danger",
-) {
-  return joinClassNames([
-    "create-account-modal__status-chip create-account-modal__status-chip-control text-sm font-medium transition-colors",
-    isSelected
-      ? `create-account-modal__status-chip--${tone}`
-      : "create-account-modal__status-chip--idle",
-  ]);
-}
-
-function getValidationInputClasses(hasError: boolean, extraClassName = "") {
-  return joinClassNames(["input", extraClassName, hasError && "input-error"]);
-}
-
-function getRadioOptionClasses(isSelected: boolean) {
-  return joinClassNames([
-    "create-account-modal__radio-option",
-    isSelected && "create-account-modal__radio-option--active",
-  ]);
-}
-
-function getSegmentOptionClasses(isSelected: boolean) {
-  return joinClassNames([
-    "create-account-modal__segment-option",
-    isSelected
-      ? "create-account-modal__segment-option--active"
-      : "create-account-modal__segment-option--idle",
-  ]);
-}
+  tone: "accent" | "purple" | "danger" = "danger",
+) => getAccountModalStatusChipClasses("create-account-modal", isSelected, tone);
 
 // Computed: current preset mappings based on platform
 const presetMappings = computed(() =>
@@ -3952,63 +3880,71 @@ const presetMappings = computed(() =>
 const tempUnschedPresets = computed(() => buildAccountTempUnschedPresets(t));
 
 const form = reactive<CreateAccountForm>(createDefaultCreateAccountForm());
-let createRequestSequence = 0;
-let tlsFingerprintProfilesRequestSequence = 0;
-let antigravityDefaultMappingsRequestSequence = 0;
-let geminiCapabilitiesRequestSequence = 0;
 let allowedModelsSyncSequence = 0;
+
+const createRequestGuard = createPlatformRequestGuard<AccountPlatform>(
+  (platform) => props.show && form.platform === platform,
+);
+const tlsFingerprintProfilesRequestGuard = createSequenceRequestGuard(
+  () => props.show,
+);
+const antigravityDefaultMappingsRequestGuard = createSequenceRequestGuard(
+  () => props.show && form.platform === "antigravity",
+);
+const geminiCapabilitiesRequestGuard = createSequenceRequestGuard(
+  () =>
+    props.show &&
+    form.platform === "gemini" &&
+    accountCategory.value === "oauth-based",
+);
 
 const beginCreateRequestContext = (
   platform: AccountPlatform = form.platform,
-): CreateRequestContext => ({
-  platform,
-  requestSequence: ++createRequestSequence,
-});
+): CreateRequestContext => createRequestGuard.begin(platform);
 
 const invalidateCreateRequests = () => {
-  createRequestSequence += 1;
+  createRequestGuard.invalidate();
   submitting.value = false;
 };
 
 const isActiveCreateRequest = (requestContext: CreateRequestContext) =>
-  requestContext.requestSequence === createRequestSequence &&
-  props.show &&
-  form.platform === requestContext.platform;
+  createRequestGuard.isActive(requestContext);
+
+const isCurrentCreateRequestSequence = (requestContext: CreateRequestContext) =>
+  createRequestGuard.isCurrentSequence(requestContext);
+
+const getCurrentCreateRequestSequence = () =>
+  createRequestGuard.currentSequence();
 
 const beginTlsFingerprintProfilesRequest = () =>
-  ++tlsFingerprintProfilesRequestSequence;
+  tlsFingerprintProfilesRequestGuard.begin();
 
 const invalidateTlsFingerprintProfilesRequests = () => {
-  tlsFingerprintProfilesRequestSequence += 1;
+  tlsFingerprintProfilesRequestGuard.invalidate();
 };
 
 const isActiveTlsFingerprintProfilesRequest = (requestSequence: number) =>
-  requestSequence === tlsFingerprintProfilesRequestSequence && props.show;
+  tlsFingerprintProfilesRequestGuard.isActive(requestSequence);
 
 const beginAntigravityDefaultMappingsRequest = () =>
-  ++antigravityDefaultMappingsRequestSequence;
+  antigravityDefaultMappingsRequestGuard.begin();
 
 const invalidateAntigravityDefaultMappingsRequests = () => {
-  antigravityDefaultMappingsRequestSequence += 1;
+  antigravityDefaultMappingsRequestGuard.invalidate();
 };
 
 const isActiveAntigravityDefaultMappingsRequest = (requestSequence: number) =>
-  requestSequence === antigravityDefaultMappingsRequestSequence &&
-  props.show &&
-  form.platform === "antigravity";
+  antigravityDefaultMappingsRequestGuard.isActive(requestSequence);
 
 const beginGeminiCapabilitiesRequest = () =>
-  ++geminiCapabilitiesRequestSequence;
+  geminiCapabilitiesRequestGuard.begin();
 
 const invalidateGeminiCapabilitiesRequests = () => {
-  geminiCapabilitiesRequestSequence += 1;
+  geminiCapabilitiesRequestGuard.invalidate();
 };
 
 const isActiveGeminiCapabilitiesRequest = (requestSequence: number) =>
-  requestSequence === geminiCapabilitiesRequestSequence &&
-  props.show &&
-  form.platform === "gemini" &&
-  accountCategory.value === "oauth-based";
+  geminiCapabilitiesRequestGuard.isActive(requestSequence);
 
 const invalidateCreateModalAsyncLoads = () => {
   invalidateTlsFingerprintProfilesRequests();
@@ -4500,7 +4436,7 @@ const submitCreateAccount = async (
     }
     appStore.showError(resolveCreateAccountErrorMessage(error));
   } finally {
-    if (requestContext.requestSequence === createRequestSequence) {
+    if (isCurrentCreateRequestSequence(requestContext)) {
       submitting.value = false;
     }
   }
@@ -4673,12 +4609,12 @@ const handleMixedChannelConfirm = async () => {
     return;
   }
   clearMixedChannelDialog();
-  const confirmRequestSequence = createRequestSequence;
+  const confirmRequestSequence = getCurrentCreateRequestSequence();
   submitting.value = true;
   try {
     await action();
   } finally {
-    if (confirmRequestSequence === createRequestSequence) {
+    if (confirmRequestSequence === getCurrentCreateRequestSequence()) {
       submitting.value = false;
     }
   }
@@ -4920,7 +4856,7 @@ const submitGrokSessionBatchImport = async (
     }
     appStore.showError(resolveBatchCreateUnexpectedError(error));
   } finally {
-    if (requestContext.requestSequence === createRequestSequence) {
+    if (isCurrentCreateRequestSequence(requestContext)) {
       submitting.value = false;
     }
   }
