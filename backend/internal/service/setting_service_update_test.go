@@ -203,6 +203,15 @@ func TestSettingService_UpdateSettings_DefaultsFrontendTheme(t *testing.T) {
 	require.Equal(t, "factory", repo.updates[SettingKeyFrontendTheme])
 }
 
+func TestSettingService_UpdateSettings_PersistsFrontendTheme(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{FrontendTheme: " claude "})
+	require.NoError(t, err)
+	require.Equal(t, "claude", repo.updates[SettingKeyFrontendTheme])
+}
+
 func TestSettingService_UpdateSettings_NormalizesGrokMediaSettings(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	svc := NewSettingService(repo, &config.Config{})
