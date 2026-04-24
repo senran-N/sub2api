@@ -22,6 +22,7 @@
 | [docs/GROK_BACKEND_CONTROL_PLANE.md](/home/senran/Desktop/sub2api/docs/GROK_BACKEND_CONTROL_PLANE.md) | Grok provider 专属控制面与后台契约 | Grok 账户、媒体、运行时设置、后台展示契约变化时 |
 | [docs/ADMIN_PAYMENT_INTEGRATION_API.md](/home/senran/Desktop/sub2api/docs/ADMIN_PAYMENT_INTEGRATION_API.md) | 外部支付/充值系统对接 Sub2API Admin API 的约束 | Admin 支付接口、幂等行为、嵌入页 query 参数变化时 |
 | [docs/OPENAI_SCHEDULER_CAPACITY_TEST.md](/home/senran/Desktop/sub2api/docs/OPENAI_SCHEDULER_CAPACITY_TEST.md) | OpenAI 调度容量压测脚本和指标解释 | 压测脚本参数、实时监控指标、调度计数口径变化时 |
+| [docs/EXTREME_SIMULATION_TESTING.md](/home/senran/Desktop/sub2api/docs/EXTREME_SIMULATION_TESTING.md) | 本地/预发极端环境矩阵、HTTP 压测脚本和 DevTools 退化检查 | 新增或修改极端测试脚本、profile、浏览器退化验证流程时 |
 | [docs/CHANNEL_MONITOR_AND_AVAILABLE_CHANNELS.md](/home/senran/Desktop/sub2api/docs/CHANNEL_MONITOR_AND_AVAILABLE_CHANNELS.md) | 渠道监控、可用渠道、分组 RPM 覆盖和表格偏好契约 | 相关接口、设置键、前端入口或聚合口径变化时 |
 
 ## 目录边界

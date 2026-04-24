@@ -64,6 +64,7 @@
 | Grok 控制面、账户状态、后台展示契约、运行时设置 | [docs/GROK_BACKEND_CONTROL_PLANE.md](/home/senran/Desktop/sub2api/docs/GROK_BACKEND_CONTROL_PLANE.md) |
 | 外部支付接入、管理员充值接口、嵌入页参数 | [docs/ADMIN_PAYMENT_INTEGRATION_API.md](/home/senran/Desktop/sub2api/docs/ADMIN_PAYMENT_INTEGRATION_API.md) |
 | OpenAI 调度压测脚本、指标口径、观测链路 | [docs/OPENAI_SCHEDULER_CAPACITY_TEST.md](/home/senran/Desktop/sub2api/docs/OPENAI_SCHEDULER_CAPACITY_TEST.md) |
+| 本地极端环境矩阵、HTTP 压测入口、DevTools 退化验证流程 | [docs/EXTREME_SIMULATION_TESTING.md](/home/senran/Desktop/sub2api/docs/EXTREME_SIMULATION_TESTING.md)、[docs/README.md](/home/senran/Desktop/sub2api/docs/README.md) |
 
 如果现有文档都不合适，就新增文档，并在 [docs/README.md](/home/senran/Desktop/sub2api/docs/README.md) 登记入口。
 
