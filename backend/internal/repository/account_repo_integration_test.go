@@ -914,6 +914,79 @@ func (s *AccountRepoSuite) TestUpdateGrokRuntimeState_PreservesNestedGrokStateAn
 	s.Require().Equal("success", cacheRecorder.accounts[account.ID].Extra["grok"].(map[string]any)["runtime_state"].(map[string]any)["last_outcome"])
 }
 
+func (s *AccountRepoSuite) TestIncrementQuotaUsed_DailyCrossingSyncsSchedulerCache() {
+	account := mustCreateAccount(s.T(), s.client, &service.Account{
+		Name:     "acc-quota-daily-crossing",
+		Platform: service.PlatformOpenAI,
+		Type:     service.AccountTypeAPIKey,
+		Extra: map[string]any{
+			"quota_daily_limit": 10.0,
+			"quota_daily_used":  9.0,
+			"quota_daily_start": time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339),
+		},
+	})
+	cacheRecorder := &schedulerCacheRecorder{
+		accounts: map[int64]*service.Account{
+			account.ID: {
+				ID:       account.ID,
+				Platform: account.Platform,
+				Status:   service.StatusDisabled,
+				Extra:    map[string]any{},
+			},
+		},
+	}
+	s.repo.schedulerCache = cacheRecorder
+	_, err := s.repo.sql.ExecContext(s.ctx, "TRUNCATE scheduler_outbox")
+	s.Require().NoError(err)
+
+	s.Require().NoError(s.repo.IncrementQuotaUsed(s.ctx, account.ID, 2))
+
+	var outboxCount int
+	s.Require().NoError(scanSingleRow(s.ctx, s.repo.sql, "SELECT COUNT(*) FROM scheduler_outbox", nil, &outboxCount))
+	s.Require().Equal(1, outboxCount)
+	s.Require().Len(cacheRecorder.setAccounts, 1)
+	s.Require().InDelta(11.0, cacheRecorder.accounts[account.ID].GetQuotaDailyUsed(), 1e-6)
+}
+
+func (s *AccountRepoSuite) TestResetQuotaUsed_SyncsSchedulerCache() {
+	account := mustCreateAccount(s.T(), s.client, &service.Account{
+		Name:     "acc-quota-reset",
+		Platform: service.PlatformOpenAI,
+		Type:     service.AccountTypeAPIKey,
+		Extra: map[string]any{
+			"quota_used":        15.0,
+			"quota_daily_used":  7.0,
+			"quota_weekly_used": 12.0,
+			"quota_daily_start": time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339),
+		},
+	})
+	cacheRecorder := &schedulerCacheRecorder{
+		accounts: map[int64]*service.Account{
+			account.ID: {
+				ID:       account.ID,
+				Platform: account.Platform,
+				Status:   service.StatusDisabled,
+				Extra: map[string]any{
+					"quota_used": 15.0,
+				},
+			},
+		},
+	}
+	s.repo.schedulerCache = cacheRecorder
+	_, err := s.repo.sql.ExecContext(s.ctx, "TRUNCATE scheduler_outbox")
+	s.Require().NoError(err)
+
+	s.Require().NoError(s.repo.ResetQuotaUsed(s.ctx, account.ID))
+
+	var outboxCount int
+	s.Require().NoError(scanSingleRow(s.ctx, s.repo.sql, "SELECT COUNT(*) FROM scheduler_outbox", nil, &outboxCount))
+	s.Require().Equal(1, outboxCount)
+	s.Require().Len(cacheRecorder.setAccounts, 1)
+	s.Require().InDelta(0.0, cacheRecorder.accounts[account.ID].GetQuotaUsed(), 1e-6)
+	s.Require().InDelta(0.0, cacheRecorder.accounts[account.ID].GetQuotaDailyUsed(), 1e-6)
+	s.Require().InDelta(0.0, cacheRecorder.accounts[account.ID].GetQuotaWeeklyUsed(), 1e-6)
+}
+
 // --- GetByCRSAccountID ---
 
 func (s *AccountRepoSuite) TestGetByCRSAccountID() {
