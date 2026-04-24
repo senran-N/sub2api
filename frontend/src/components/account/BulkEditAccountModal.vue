@@ -895,15 +895,14 @@ import {
   buildAccountUmqModeOptions,
   needsMixedChannelCheck
 } from '@/components/account/accountModalShared'
+import { buildBulkAccountMutationPayload } from '@/components/account/accountMutationPayload'
 import {
-  buildModelMappingObject as buildModelMappingPayload,
   ensureModelCatalogLoaded,
   getPresetMappingChipClasses,
   getPresetMappingsByPlatform
 } from '@/composables/useModelWhitelist'
 import {
   OPENAI_WS_MODE_OFF,
-  isOpenAIWSModeEnabled,
   resolveOpenAIWSModeConcurrencyHintKey
 } from '@/utils/openaiWsMode'
 import type { OpenAIWSMode } from '@/utils/openaiWsMode'
@@ -1268,148 +1267,64 @@ const removeErrorCode = (code: number) => {
   }
 }
 
-const buildModelMappingObject = (): Record<string, string> | null => {
-  return buildModelMappingPayload(
-    modelRestrictionMode.value,
-    allowedModels.value,
-    modelMappings.value
-  )
-}
-
-const applyBulkModelRestriction = (credentials: Record<string, unknown>) => {
-  if (modelRestrictionMode.value === 'whitelist') {
-    const whitelistMapping: Record<string, string> = {}
-    for (const model of allowedModels.value) {
-      whitelistMapping[model] = model
-    }
-    credentials.model_mapping = whitelistMapping
-    return
-  }
-
-  credentials.model_mapping = buildModelMappingObject() ?? {}
-}
-
-const applyBulkOpenAIExtra = (extra: Record<string, unknown>) => {
-  if (enableOpenAIPassthrough.value) {
-    extra.openai_passthrough = openaiPassthroughEnabled.value
-    if (!openaiPassthroughEnabled.value) {
-      extra.openai_oauth_passthrough = false
-    }
-  }
-
-  if (enableOpenAIWSMode.value) {
-    extra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
-    extra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
-      openaiOAuthResponsesWebSocketV2Mode.value
-    )
-    extra.responses_websockets_v2_enabled = false
-    extra.openai_ws_enabled = false
-  }
-}
-
 const buildUpdatePayload = (): Record<string, unknown> | null => {
-  const updates: Record<string, unknown> = {}
-  const credentials: Record<string, unknown> = {}
-  let credentialsChanged = false
-  const ensureExtra = (): Record<string, unknown> => {
-    if (!updates.extra) {
-      updates.extra = {}
-    }
-    return updates.extra as Record<string, unknown>
-  }
-
-  if (enableProxy.value) {
-    // 后端期望 proxy_id: 0 表示清除代理，而不是 null
-    updates.proxy_id = proxyId.value === null ? 0 : proxyId.value
-  }
-
-  if (enableConcurrency.value) {
-    updates.concurrency = concurrency.value
-  }
-
-  if (enableLoadFactor.value) {
-    // 空值/NaN/0 时发送 0（后端约定 <= 0 表示清除）
-    const lf = loadFactor.value
-    updates.load_factor = (lf != null && !Number.isNaN(lf) && lf > 0) ? lf : 0
-  }
-
-  if (enablePriority.value) {
-    updates.priority = priority.value
-  }
-
-  if (enableRateMultiplier.value) {
-    updates.rate_multiplier = rateMultiplier.value
-  }
-
-  if (enableStatus.value) {
-    updates.status = status.value
-  }
-
-  if (enableGroups.value) {
-    updates.group_ids = groupIds.value
-  }
-
-  if (enableBaseUrl.value) {
-    const baseUrlValue = baseUrl.value.trim()
-    if (baseUrlValue) {
-      credentials.base_url = baseUrlValue
-      credentialsChanged = true
-    }
-  }
-
-  if (enableModelRestriction.value && !isOpenAIModelRestrictionDisabled.value) {
-    applyBulkModelRestriction(credentials)
-    credentialsChanged = true
-  }
-
-  if (enableCustomErrorCodes.value) {
-    credentials.custom_error_codes_enabled = true
-    credentials.custom_error_codes = [...selectedErrorCodes.value]
-    credentialsChanged = true
-  }
-
-  if (enableInterceptWarmup.value) {
-    credentials.intercept_warmup_requests = interceptWarmupRequests.value
-    credentialsChanged = true
-  }
-
-  if (credentialsChanged) {
-    updates.credentials = credentials
-  }
-
-  if (enableOpenAIPassthrough.value || enableOpenAIWSMode.value) {
-    const extra = ensureExtra()
-    applyBulkOpenAIExtra(extra)
-  }
-
-  // RPM limit settings (写入 extra 字段)
-  if (enableRpmLimit.value) {
-    const extra = ensureExtra()
-    if (rpmLimitEnabled.value && bulkBaseRpm.value != null && bulkBaseRpm.value > 0) {
-      extra.base_rpm = bulkBaseRpm.value
-      extra.rpm_strategy = bulkRpmStrategy.value
-      if (bulkRpmStickyBuffer.value != null && bulkRpmStickyBuffer.value > 0) {
-        extra.rpm_sticky_buffer = bulkRpmStickyBuffer.value
-      }
-    } else {
-      // 关闭 RPM 限制 - 设置 base_rpm 为 0，并用空值覆盖关联字段
-      // 后端使用 JSONB || merge 语义，不会删除已有 key，
-      // 所以必须显式发送空值来重置（后端读取时会 fallback 到默认值）
-      extra.base_rpm = 0
-      extra.rpm_strategy = ''
-      extra.rpm_sticky_buffer = 0
-    }
-    updates.extra = extra
-  }
-
-  // UMQ mode（独立于 RPM 保存）
-  if (userMsgQueueMode.value !== null) {
-    const umqExtra = ensureExtra()
-    umqExtra.user_msg_queue_mode = userMsgQueueMode.value  // '' = 清除账号级覆盖
-    umqExtra.user_msg_queue_enabled = false  // 清理旧字段（JSONB merge）
-  }
-
-  return Object.keys(updates).length > 0 ? updates : null
+  return buildBulkAccountMutationPayload({
+    baseUrl: {
+      enabled: enableBaseUrl.value,
+      value: baseUrl.value
+    },
+    customErrorCodes: {
+      enabled: enableCustomErrorCodes.value,
+      selectedErrorCodes: selectedErrorCodes.value
+    },
+    groups: {
+      enabled: enableGroups.value,
+      groupIds: groupIds.value
+    },
+    interceptWarmup: {
+      enabled: enableInterceptWarmup.value,
+      value: interceptWarmupRequests.value
+    },
+    loadFactor: {
+      enabled: enableLoadFactor.value,
+      value: loadFactor.value
+    },
+    modelRestriction: {
+      allowedModels: allowedModels.value,
+      disabledByOpenAIPassthrough: isOpenAIModelRestrictionDisabled.value,
+      enabled: enableModelRestriction.value,
+      mode: modelRestrictionMode.value,
+      modelMappings: modelMappings.value
+    },
+    openAI: {
+      passthroughEnabled: enableOpenAIPassthrough.value,
+      passthroughValue: openaiPassthroughEnabled.value,
+      wsModeEnabled: enableOpenAIWSMode.value,
+      wsModeValue: openaiOAuthResponsesWebSocketV2Mode.value
+    },
+    proxy: {
+      enabled: enableProxy.value,
+      proxyId: proxyId.value
+    },
+    rpmLimit: {
+      baseRpm: bulkBaseRpm.value,
+      enabled: enableRpmLimit.value,
+      rpmEnabled: rpmLimitEnabled.value,
+      stickyBuffer: bulkRpmStickyBuffer.value,
+      strategy: bulkRpmStrategy.value
+    },
+    scalars: {
+      concurrency: concurrency.value,
+      enableConcurrency: enableConcurrency.value,
+      enablePriority: enablePriority.value,
+      enableRateMultiplier: enableRateMultiplier.value,
+      enableStatus: enableStatus.value,
+      priority: priority.value,
+      rateMultiplier: rateMultiplier.value,
+      status: status.value
+    },
+    userMsgQueueMode: userMsgQueueMode.value
+  })
 }
 
 const mixedChannelConfirmed = ref(false)

@@ -3,6 +3,7 @@ import type {
   AccountPlatform,
   AccountType,
   CheckMixedChannelResponse,
+  UpdateAccountRequest,
 } from "@/types";
 import {
   DEFAULT_ANTHROPIC_BASE_URL,
@@ -30,7 +31,7 @@ export interface AccountBaseUrlPreset {
   value: string;
 }
 
-interface AccountQuotaExtraOptions {
+export interface AccountQuotaExtraOptions {
   dailyResetHour: number | null;
   dailyResetMode: QuotaResetMode;
   quotaDailyLimit: number | null;
@@ -147,8 +148,8 @@ export function hydrateEditAccountForm(
 export function buildEditAccountBasePayload(
   form: EditAccountForm,
   autoPauseOnExpired: boolean,
-): Record<string, unknown> {
-  const payload: Record<string, unknown> = {
+): UpdateAccountRequest {
+  const payload: UpdateAccountRequest = {
     ...form,
     proxy_id: form.proxy_id ?? 0,
     expires_at: form.expires_at ?? 0,

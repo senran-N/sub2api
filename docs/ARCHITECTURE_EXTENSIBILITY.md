@@ -46,7 +46,8 @@ Current rule:
 - shared modal class assembly lives in `frontend/src/components/account/accountModalClasses.ts`;
 - stale async request guards live in `frontend/src/components/account/accountModalRequestGuard.ts`;
 - account mutation section visibility lives in `frontend/src/components/account/accountMutationProfiles.ts`; create/edit UI should resolve a profile instead of re-stating platform/type matrices inline;
-- payload/credential construction remains in `accountModalShared.ts`, `createAccountModalHelpers.ts`, `editAccountModalHelpers.ts`, and `credentialsBuilder.ts`;
+- create/edit/bulk account mutation payload assembly lives in `frontend/src/components/account/accountMutationPayload.ts`; modal files should call that helper for final request payloads instead of rebuilding JSONB merge sentinels, quota overlays, OpenAI runtime fields, or provider-specific credential mutations locally;
+- lower-level credential and form helpers remain in `accountModalShared.ts`, `createAccountModalHelpers.ts`, `editAccountModalHelpers.ts`, and `credentialsBuilder.ts`;
 - modal `.vue` files should own rendering and orchestration only, not new reusable state machines or class-building helpers.
 
 ### Ops dashboard data flow
@@ -198,4 +199,4 @@ The next structural cleanup should focus on:
 
 1. Continuing account modal section extraction so provider-specific form blocks move out of the top-level modal files.
 2. Reducing overlap between legacy service entry points and newer admin-specific service flows on the backend.
-3. Moving bulk account edit payload construction behind the same helper/profile layer used by create/edit modals.
+3. Extracting account modal state hydration/reset helpers now that create/edit/bulk payload construction shares the same helper/profile layer.

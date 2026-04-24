@@ -2276,6 +2276,7 @@ import type {
   Proxy,
   AdminGroup,
   CheckMixedChannelResponse,
+  UpdateAccountRequest,
 } from "@/types";
 import BaseDialog from "@/components/common/BaseDialog.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
@@ -2289,7 +2290,6 @@ import QuotaNotifyToggle from "@/components/account/QuotaNotifyToggle.vue";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
-  buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
   buildAccountUmqModeOptions,
   buildEditAccountBasePayload,
@@ -2311,17 +2311,15 @@ import {
   getEditToneNoticeClasses,
 } from "@/components/account/accountModalClasses";
 import {
-  buildEditableBedrockCredentials,
-  buildEditableCompatibleCredentials,
-  buildUpdatedAnthropicAPIKeyExtra,
-  buildUpdatedAnthropicQuotaControlExtra,
-  buildUpdatedAntigravityExtra,
-  buildUpdatedOpenAIExtra,
   createEmptyModelRestrictionState,
   deriveAntigravityModelMappings,
   deriveModelRestrictionStateFromMapping,
   deriveOpenAIExtraState,
 } from "@/components/account/editAccountModalHelpers";
+import {
+  buildEditAccountMutationPayload,
+  resolveAccountMutationPayloadErrorKey,
+} from "@/components/account/accountMutationPayload";
 import {
   accountMutationProfileHasSection,
   resolveAccountMutationProfile,
@@ -2334,15 +2332,12 @@ import {
   MAX_POOL_MODE_RETRY_COUNT,
   moveItemInPlace,
   normalizePoolModeRetryCount,
-  replaceAntigravityModelMapping,
-  replaceBuiltModelMapping,
   type ModelMapping,
   type TempUnschedRuleForm,
 } from "@/components/account/credentialsBuilder";
 import {
   appendEmptyModelMapping,
   appendPresetModelMapping,
-  applySharedAccountCredentialsState,
   confirmCustomErrorCodeSelection,
   removeModelMappingAt,
 } from "@/components/account/accountModalInteractions";
@@ -2351,7 +2346,6 @@ import {
   formatDateTimeLocalInput,
   parseDateTimeLocalInput,
 } from "@/utils/format";
-import { normalizeGrokSessionToken } from "@/utils/grokSessionToken";
 import {
   getGrokAccountRuntime,
   getGrokProbeOutcome,
@@ -2708,30 +2702,11 @@ const resetMixedChannelDialogState = () => {
   mixedChannelWarningAction.value = null;
 };
 
-const applySharedEditCredentialsState = (
-  credentials: Record<string, unknown>,
-) => {
-  return applySharedAccountCredentialsState(credentials, {
-    interceptWarmupRequests: interceptWarmupRequests.value,
-    tempUnschedEnabled: tempUnschedEnabled.value,
-    tempUnschedRules: tempUnschedRules.value,
-    showError: appStore.showError,
-    t,
-  });
-};
-
 const getAccountCredentials = () =>
   (props.account?.credentials as Record<string, unknown>) || {};
 
 const getAccountExtra = () =>
   (props.account?.extra as Record<string, unknown>) || {};
-
-const getPendingCredentials = (updatePayload: Record<string, unknown>) =>
-  (updatePayload.credentials as Record<string, unknown>) ||
-  getAccountCredentials();
-
-const getPendingExtra = (updatePayload: Record<string, unknown>) =>
-  (updatePayload.extra as Record<string, unknown>) || getAccountExtra();
 
 const applyModelRestrictionState = (rawMapping: unknown) => {
   const nextState = deriveModelRestrictionStateFromMapping(rawMapping);
@@ -3245,7 +3220,7 @@ const openMixedChannelDialog = (opts: {
   showMixedChannelWarning.value = true;
 };
 
-const withAntigravityConfirmFlag = (payload: Record<string, unknown>) => {
+const withAntigravityConfirmFlag = (payload: UpdateAccountRequest) => {
   if (
     props.account?.platform &&
     needsMixedChannelCheck(props.account.platform) &&
@@ -3314,7 +3289,7 @@ const handleClose = () => {
 
 const submitUpdateAccount = async (
   accountID: number,
-  updatePayload: Record<string, unknown>,
+  updatePayload: UpdateAccountRequest,
 ) => {
   submitting.value = true;
   try {
@@ -3362,107 +3337,46 @@ const handleSubmit = async () => {
     return;
   }
 
-  const updatePayload = buildEditAccountBasePayload(
+  const basePayload = buildEditAccountBasePayload(
     form,
     autoPauseOnExpired.value,
   );
   try {
-    // For apikey type, handle credentials update
-    if (props.account.type === "apikey") {
-      const currentCredentials = getAccountCredentials();
-      const shouldApplyModelMapping = !(
-        props.account.platform === "openai" && openaiPassthroughEnabled.value
-      );
-      const result = buildEditableCompatibleCredentials({
-        allowedModels: allowedModels.value,
-        apiKeyInput: editApiKey.value,
-        baseUrlInput: editBaseUrl.value,
-        currentCredentials,
-        customErrorCodesEnabled: customErrorCodesEnabled.value,
-        defaultBaseUrl: defaultBaseUrl.value,
-        mode: modelRestrictionMode.value,
-        modelMappings: modelMappings.value,
-        poolModeEnabled: poolModeEnabled.value,
-        poolModeRetryCount: poolModeRetryCount.value,
-        preserveModelMappingWhenDisabled: true,
-        selectedErrorCodes: selectedErrorCodes.value,
-        shouldApplyModelMapping,
-      });
-      if (result.error === "api_key_required" || !result.credentials) {
-        appStore.showError(t("admin.accounts.apiKeyIsRequired"));
-        return;
-      }
-      const newCredentials = result.credentials;
-
-      // Add intercept warmup requests setting
-      if (!applySharedEditCredentialsState(newCredentials)) {
-        return;
-      }
-
-      updatePayload.credentials = newCredentials;
-    } else if (props.account.type === "upstream") {
-      const currentCredentials = getAccountCredentials();
-      const result = buildEditableCompatibleCredentials({
-        allowedModels: allowedModels.value,
-        apiKeyInput: editApiKey.value,
-        baseUrlInput: editBaseUrl.value,
-        currentCredentials,
-        customErrorCodesEnabled: customErrorCodesEnabled.value,
-        defaultBaseUrl: defaultBaseUrl.value,
-        mode: modelRestrictionMode.value,
-        modelMappings: modelMappings.value,
-        poolModeEnabled: poolModeEnabled.value,
-        poolModeRetryCount: poolModeRetryCount.value,
-        preserveModelMappingWhenDisabled: false,
-        selectedErrorCodes: selectedErrorCodes.value,
-        shouldApplyModelMapping: true,
-      });
-      if (result.error === "api_key_required" || !result.credentials) {
-        appStore.showError(t("admin.accounts.apiKeyIsRequired"));
-        return;
-      }
-      const newCredentials = result.credentials;
-
-      // Add intercept warmup requests setting
-      if (!applySharedEditCredentialsState(newCredentials)) {
-        return;
-      }
-
-      updatePayload.credentials = newCredentials;
-    } else if (props.account.type === "session") {
-      const currentCredentials = getAccountCredentials();
-      const newCredentials: Record<string, unknown> = { ...currentCredentials };
-
-      if (editSessionToken.value.trim()) {
-        const normalizedSessionToken = normalizeGrokSessionToken(
-          editSessionToken.value,
-        );
-        if (!normalizedSessionToken) {
-          appStore.showError(
-            t("admin.accounts.grok.sessionTokenInvalidFormat"),
-          );
-          return;
-        }
-        newCredentials.session_token = normalizedSessionToken;
-      } else if (currentCredentials.session_token) {
-        newCredentials.session_token = currentCredentials.session_token;
-      } else {
-        appStore.showError(t("admin.accounts.grok.sessionTokenRequired"));
-        return;
-      }
-
-      if (!applySharedEditCredentialsState(newCredentials)) {
-        return;
-      }
-
-      updatePayload.credentials = newCredentials;
-    } else if (props.account.type === "bedrock") {
-      const currentCredentials = getAccountCredentials();
-      const newCredentials = buildEditableBedrockCredentials({
+    const payloadResult = buildEditAccountMutationPayload({
+      account: props.account,
+      anthropicAPIKeyExtra: {
+        anthropicPassthroughEnabled: anthropicPassthroughEnabled.value,
+      },
+      anthropicQuotaExtra: {
+        baseRpm: baseRpm.value,
+        cacheTTLOverrideEnabled: cacheTTLOverrideEnabled.value,
+        cacheTTLOverrideTarget: cacheTTLOverrideTarget.value,
+        customBaseUrl: customBaseUrl.value,
+        customBaseUrlEnabled: customBaseUrlEnabled.value,
+        maxSessions: maxSessions.value,
+        rpmLimitEnabled: rpmLimitEnabled.value,
+        rpmStickyBuffer: rpmStickyBuffer.value,
+        rpmStrategy: rpmStrategy.value,
+        sessionIdMaskingEnabled: sessionIdMaskingEnabled.value,
+        sessionIdleTimeout: sessionIdleTimeout.value,
+        sessionLimitEnabled: sessionLimitEnabled.value,
+        tlsFingerprintEnabled: tlsFingerprintEnabled.value,
+        tlsFingerprintProfileId: tlsFingerprintProfileId.value,
+        userMsgQueueMode: userMsgQueueMode.value,
+        windowCostEnabled: windowCostEnabled.value,
+        windowCostLimit: windowCostLimit.value,
+        windowCostStickyReserve: windowCostStickyReserve.value,
+      },
+      antigravity: {
+        allowOverages: allowOverages.value,
+        mixedScheduling: mixedScheduling.value,
+        modelMappings: antigravityModelMappings.value,
+      },
+      basePayload,
+      bedrock: {
         accessKeyId: editBedrockAccessKeyId.value,
         allowedModels: allowedModels.value,
         apiKeyInput: editBedrockApiKeyValue.value,
-        currentCredentials,
         forceGlobal: editBedrockForceGlobal.value,
         isApiKeyMode: isBedrockAPIKeyMode.value,
         mode: modelRestrictionMode.value,
@@ -3472,118 +3386,24 @@ const handleSubmit = async () => {
         region: editBedrockRegion.value,
         secretAccessKey: editBedrockSecretAccessKey.value,
         sessionToken: editBedrockSessionToken.value,
-      });
-
-      if (!applySharedEditCredentialsState(newCredentials)) {
-        return;
-      }
-
-      updatePayload.credentials = newCredentials;
-    } else {
-      // For oauth/setup-token types, only update intercept_warmup_requests if changed
-      const currentCredentials = getAccountCredentials();
-      const newCredentials: Record<string, unknown> = { ...currentCredentials };
-
-      if (!applySharedEditCredentialsState(newCredentials)) {
-        return;
-      }
-
-      updatePayload.credentials = newCredentials;
-    }
-
-    // OpenAI OAuth: persist model mapping to credentials
-    if (props.account.platform === "openai" && props.account.type === "oauth") {
-      const currentCredentials = getPendingCredentials(updatePayload);
-      const newCredentials: Record<string, unknown> = { ...currentCredentials };
-      const shouldApplyModelMapping = !openaiPassthroughEnabled.value;
-
-      if (shouldApplyModelMapping) {
-        replaceBuiltModelMapping(
-          newCredentials,
-          modelRestrictionMode.value,
-          allowedModels.value,
-          modelMappings.value,
-        );
-      } else if (currentCredentials.model_mapping) {
-        // 透传模式保留现有映射
-        newCredentials.model_mapping = currentCredentials.model_mapping;
-      }
-
-      updatePayload.credentials = newCredentials;
-    }
-
-    // Antigravity: persist model mapping to credentials (applies to all antigravity types)
-    // Antigravity 只支持映射模式
-    if (props.account.platform === "antigravity") {
-      const currentCredentials = getPendingCredentials(updatePayload);
-      const newCredentials: Record<string, unknown> = { ...currentCredentials };
-
-      replaceAntigravityModelMapping(
-        newCredentials,
-        antigravityModelMappings.value,
-      );
-
-      updatePayload.credentials = newCredentials;
-    }
-
-    // For antigravity accounts, handle mixed_scheduling and allow_overages in extra
-    if (props.account.platform === "antigravity") {
-      const currentExtra = getAccountExtra();
-      updatePayload.extra = buildUpdatedAntigravityExtra(currentExtra, {
-        mixedScheduling: mixedScheduling.value,
-        allowOverages: allowOverages.value,
-      });
-    }
-
-    // For Anthropic OAuth/SetupToken accounts, handle quota control settings in extra
-    if (
-      props.account.platform === "anthropic" &&
-      (props.account.type === "oauth" || props.account.type === "setup-token")
-    ) {
-      const currentExtra = getAccountExtra();
-      updatePayload.extra = buildUpdatedAnthropicQuotaControlExtra(
-        currentExtra,
-        {
-          baseRpm: baseRpm.value,
-          cacheTTLOverrideEnabled: cacheTTLOverrideEnabled.value,
-          cacheTTLOverrideTarget: cacheTTLOverrideTarget.value,
-          customBaseUrl: customBaseUrl.value,
-          customBaseUrlEnabled: customBaseUrlEnabled.value,
-          maxSessions: maxSessions.value,
-          rpmLimitEnabled: rpmLimitEnabled.value,
-          rpmStickyBuffer: rpmStickyBuffer.value,
-          rpmStrategy: rpmStrategy.value,
-          sessionIdMaskingEnabled: sessionIdMaskingEnabled.value,
-          sessionIdleTimeout: sessionIdleTimeout.value,
-          sessionLimitEnabled: sessionLimitEnabled.value,
-          tlsFingerprintEnabled: tlsFingerprintEnabled.value,
-          tlsFingerprintProfileId: tlsFingerprintProfileId.value,
-          userMsgQueueMode: userMsgQueueMode.value,
-          windowCostEnabled: windowCostEnabled.value,
-          windowCostLimit: windowCostLimit.value,
-          windowCostStickyReserve: windowCostStickyReserve.value,
-        },
-      );
-    }
-
-    // For Anthropic API Key accounts, handle passthrough mode in extra
-    if (
-      props.account.platform === "anthropic" &&
-      props.account.type === "apikey"
-    ) {
-      const currentExtra = getAccountExtra();
-      updatePayload.extra = buildUpdatedAnthropicAPIKeyExtra(currentExtra, {
-        anthropicPassthroughEnabled: anthropicPassthroughEnabled.value,
-      });
-    }
-
-    // For OpenAI OAuth/API Key accounts, handle passthrough mode in extra
-    if (
-      props.account.platform === "openai" &&
-      (props.account.type === "oauth" || props.account.type === "apikey")
-    ) {
-      const currentExtra = getAccountExtra();
-      updatePayload.extra = buildUpdatedOpenAIExtra(currentExtra, {
+      },
+      compatible: {
+        allowedModels: allowedModels.value,
+        apiKeyInput: editApiKey.value,
+        baseUrlInput: editBaseUrl.value,
+        customErrorCodesEnabled: customErrorCodesEnabled.value,
+        defaultBaseUrl: defaultBaseUrl.value,
+        isOpenAIModelRestrictionDisabled:
+          isOpenAIModelRestrictionDisabled.value,
+        mode: modelRestrictionMode.value,
+        modelMappings: modelMappings.value,
+        poolModeEnabled: poolModeEnabled.value,
+        poolModeRetryCount: poolModeRetryCount.value,
+        selectedErrorCodes: selectedErrorCodes.value,
+      },
+      currentCredentials: getAccountCredentials(),
+      currentExtra: getAccountExtra(),
+      openAIExtra: {
         accountType: props.account.type,
         codexCLIOnlyEnabled: codexCLIOnlyEnabled.value,
         openaiAPIKeyResponsesWebSocketV2Mode:
@@ -3591,17 +3411,8 @@ const handleSubmit = async () => {
         openaiOAuthResponsesWebSocketV2Mode:
           openaiOAuthResponsesWebSocketV2Mode.value,
         openaiPassthroughEnabled: openaiPassthroughEnabled.value,
-      });
-    }
-
-    // For compatible key/upstream and bedrock accounts, handle quota_limit in extra.
-    if (
-      props.account.type === "apikey" ||
-      props.account.type === "upstream" ||
-      props.account.type === "bedrock"
-    ) {
-      const currentExtra = getPendingExtra(updatePayload);
-      updatePayload.extra = buildAccountQuotaExtra(currentExtra, {
+      },
+      quota: {
         dailyResetHour: editDailyResetHour.value,
         dailyResetMode: editDailyResetMode.value,
         quotaDailyLimit: editQuotaDailyLimit.value,
@@ -3621,8 +3432,25 @@ const handleSubmit = async () => {
         weeklyResetDay: editWeeklyResetDay.value,
         weeklyResetHour: editWeeklyResetHour.value,
         weeklyResetMode: editWeeklyResetMode.value,
-      });
+      },
+      sessionTokenInput: editSessionToken.value,
+      sharedCredentials: {
+        interceptWarmupRequests: interceptWarmupRequests.value,
+        tempUnschedEnabled: tempUnschedEnabled.value,
+        tempUnschedRules: tempUnschedRules.value,
+      },
+    });
+    if (payloadResult.error) {
+      appStore.showError(
+        t(resolveAccountMutationPayloadErrorKey(payloadResult.error)),
+      );
+      return;
     }
+    if (!payloadResult.payload) {
+      appStore.showError(t("admin.accounts.failedToUpdate"));
+      return;
+    }
+    const updatePayload = payloadResult.payload;
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(
       async () => {

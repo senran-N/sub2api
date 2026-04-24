@@ -3390,7 +3390,6 @@ import GrokSessionBatchImportPanel from "@/components/account/GrokSessionBatchIm
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
-  buildAccountQuotaExtra,
   buildAccountTempUnschedPresets,
   buildAccountUmqModeOptions,
   buildMixedChannelDetails,
@@ -3419,6 +3418,7 @@ import {
   getCreateToneTagClasses,
   getCreateValidationInputClasses,
 } from "@/components/account/accountModalClasses";
+import { buildCreateAccountMutationPayload } from "@/components/account/accountMutationPayload";
 import {
   createPlatformRequestGuard,
   createSequenceRequestGuard,
@@ -3426,7 +3426,6 @@ import {
 } from "@/components/account/accountModalRequestGuard";
 import {
   type CreateAccountCategory,
-  buildCreateAccountRequest,
   buildCreateAccountSharedPayload,
   buildCreateApiKeyCredentials,
   buildCreateAnthropicOAuthAccountPayload,
@@ -4873,7 +4872,7 @@ const createOAuthAccount = async (
   }
 
   await adminAPI.accounts.create(
-    buildCreateAccountRequest({
+    buildCreateAccountMutationPayload({
       common: options.commonPayload,
       name: options.name,
       platform: options.platform,
@@ -5172,6 +5171,27 @@ const handleValidateRefreshToken = (rt: string) => {
 const formatDateTimeLocal = formatDateTimeLocalInput;
 const parseDateTimeLocal = parseDateTimeLocalInput;
 
+const buildCurrentQuotaMutationOptions = () => ({
+  dailyResetHour: editDailyResetHour.value,
+  dailyResetMode: editDailyResetMode.value,
+  quotaDailyLimit: editQuotaDailyLimit.value,
+  quotaLimit: editQuotaLimit.value,
+  quotaWeeklyLimit: editQuotaWeeklyLimit.value,
+  quotaNotifyDailyEnabled: editQuotaNotifyDailyEnabled.value,
+  quotaNotifyDailyThreshold: editQuotaNotifyDailyThreshold.value,
+  quotaNotifyDailyThresholdType: editQuotaNotifyDailyThresholdType.value,
+  quotaNotifyWeeklyEnabled: editQuotaNotifyWeeklyEnabled.value,
+  quotaNotifyWeeklyThreshold: editQuotaNotifyWeeklyThreshold.value,
+  quotaNotifyWeeklyThresholdType: editQuotaNotifyWeeklyThresholdType.value,
+  quotaNotifyTotalEnabled: editQuotaNotifyTotalEnabled.value,
+  quotaNotifyTotalThreshold: editQuotaNotifyTotalThreshold.value,
+  quotaNotifyTotalThresholdType: editQuotaNotifyTotalThresholdType.value,
+  resetTimezone: editResetTimezone.value,
+  weeklyResetDay: editWeeklyResetDay.value,
+  weeklyResetHour: editWeeklyResetHour.value,
+  weeklyResetMode: editWeeklyResetMode.value,
+});
+
 // Create account and handle success/failure
 const createAccountAndFinish = async (
   platform: AccountPlatform,
@@ -5193,44 +5213,16 @@ const createAccountAndFinish = async (
   ) {
     return;
   }
-  const finalExtra =
-    type === "apikey" || type === "upstream" || type === "bedrock"
-      ? (() => {
-          const quotaExtra = buildAccountQuotaExtra(extra, {
-            dailyResetHour: editDailyResetHour.value,
-            dailyResetMode: editDailyResetMode.value,
-            quotaDailyLimit: editQuotaDailyLimit.value,
-            quotaLimit: editQuotaLimit.value,
-            quotaWeeklyLimit: editQuotaWeeklyLimit.value,
-            quotaNotifyDailyEnabled: editQuotaNotifyDailyEnabled.value,
-            quotaNotifyDailyThreshold: editQuotaNotifyDailyThreshold.value,
-            quotaNotifyDailyThresholdType:
-              editQuotaNotifyDailyThresholdType.value,
-            quotaNotifyWeeklyEnabled: editQuotaNotifyWeeklyEnabled.value,
-            quotaNotifyWeeklyThreshold: editQuotaNotifyWeeklyThreshold.value,
-            quotaNotifyWeeklyThresholdType:
-              editQuotaNotifyWeeklyThresholdType.value,
-            quotaNotifyTotalEnabled: editQuotaNotifyTotalEnabled.value,
-            quotaNotifyTotalThreshold: editQuotaNotifyTotalThreshold.value,
-            quotaNotifyTotalThresholdType:
-              editQuotaNotifyTotalThresholdType.value,
-            resetTimezone: editResetTimezone.value,
-            weeklyResetDay: editWeeklyResetDay.value,
-            weeklyResetHour: editWeeklyResetHour.value,
-            weeklyResetMode: editWeeklyResetMode.value,
-          });
-          return Object.keys(quotaExtra).length > 0 ? quotaExtra : undefined;
-        })()
-      : extra;
 
   await doCreateAccount(
-    buildCreateAccountRequest({
+    buildCreateAccountMutationPayload({
       common: buildCurrentCreateSharedPayload(),
       name: form.name,
       platform,
       type,
       credentials,
-      extra: finalExtra,
+      extra,
+      quota: buildCurrentQuotaMutationOptions(),
     }),
     requestContext,
   );
@@ -5465,7 +5457,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
 
       const credentials = antigravityOAuth.buildCredentials(tokenInfo);
       const createPayload = withAntigravityConfirmFlag(
-        buildCreateAccountRequest({
+        buildCreateAccountMutationPayload({
           common: commonPayload,
           name: buildCreateBatchAccountName(
             form.name,
