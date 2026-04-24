@@ -20,8 +20,6 @@ const (
 
 	opsCleanupLeaderLockKeyDefault = "ops:cleanup:leader"
 	opsCleanupLeaderLockTTLDefault = 30 * time.Minute
-	opsCleanupLockReleaseTimeout   = 2 * time.Second
-	opsCleanupHeartbeatTimeout     = 2 * time.Second
 )
 
 var opsCleanupCronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
@@ -38,11 +36,15 @@ return 0
 // - Scheduling: 5-field cron spec (minute hour dom month dow).
 // - Multi-instance: best-effort Redis leader lock so only one node runs cleanup.
 // - Safety: deletes in batches to avoid long transactions.
+//
+// 附带：在 runCleanupOnce 末尾调用 ChannelMonitorService.RunDailyMaintenance，
+// 统一共享 cron schedule + leader lock + heartbeat，避免再引一套调度。
 type OpsCleanupService struct {
-	opsRepo     OpsRepository
-	db          *sql.DB
-	redisClient *redis.Client
-	cfg         *config.Config
+	opsRepo           OpsRepository
+	db                *sql.DB
+	redisClient       *redis.Client
+	cfg               *config.Config
+	channelMonitorSvc *ChannelMonitorService
 
 	instanceID string
 
@@ -59,13 +61,15 @@ func NewOpsCleanupService(
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	channelMonitorSvc *ChannelMonitorService,
 ) *OpsCleanupService {
 	return &OpsCleanupService{
-		opsRepo:     opsRepo,
-		db:          db,
-		redisClient: redisClient,
-		cfg:         cfg,
-		instanceID:  uuid.NewString(),
+		opsRepo:           opsRepo,
+		db:                db,
+		redisClient:       redisClient,
+		cfg:               cfg,
+		channelMonitorSvc: channelMonitorSvc,
+		instanceID:        uuid.NewString(),
 	}
 }
 
@@ -166,19 +170,6 @@ type opsCleanupDeletedCounts struct {
 	dailyPreagg   int64
 }
 
-type opsCleanupDeleteTarget int
-
-const (
-	opsCleanupDeleteErrorLogs opsCleanupDeleteTarget = iota
-	opsCleanupDeleteRetryAttempts
-	opsCleanupDeleteAlertEvents
-	opsCleanupDeleteSystemLogs
-	opsCleanupDeleteSystemLogAudits
-	opsCleanupDeleteSystemMetrics
-	opsCleanupDeleteMetricsHourly
-	opsCleanupDeleteMetricsDaily
-)
-
 func (c opsCleanupDeletedCounts) String() string {
 	return fmt.Sprintf(
 		"error_logs=%d retry_attempts=%d alert_events=%d system_logs=%d log_audits=%d system_metrics=%d hourly_preagg=%d daily_preagg=%d",
@@ -206,31 +197,31 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 	// Error-like tables: error logs / retry attempts / alert events.
 	if days := s.cfg.Ops.Cleanup.ErrorLogRetentionDays; days > 0 {
 		cutoff := now.AddDate(0, 0, -days)
-		n, err := deleteOldRowsByID(ctx, s.db, opsCleanupDeleteErrorLogs, cutoff, batchSize)
+		n, err := deleteOldRowsByID(ctx, s.db, "ops_error_logs", "created_at", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
 		}
 		out.errorLogs = n
 
-		n, err = deleteOldRowsByID(ctx, s.db, opsCleanupDeleteRetryAttempts, cutoff, batchSize)
+		n, err = deleteOldRowsByID(ctx, s.db, "ops_retry_attempts", "created_at", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
 		}
 		out.retryAttempts = n
 
-		n, err = deleteOldRowsByID(ctx, s.db, opsCleanupDeleteAlertEvents, cutoff, batchSize)
+		n, err = deleteOldRowsByID(ctx, s.db, "ops_alert_events", "created_at", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
 		}
 		out.alertEvents = n
 
-		n, err = deleteOldRowsByID(ctx, s.db, opsCleanupDeleteSystemLogs, cutoff, batchSize)
+		n, err = deleteOldRowsByID(ctx, s.db, "ops_system_logs", "created_at", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
 		}
 		out.systemLogs = n
 
-		n, err = deleteOldRowsByID(ctx, s.db, opsCleanupDeleteSystemLogAudits, cutoff, batchSize)
+		n, err = deleteOldRowsByID(ctx, s.db, "ops_system_log_cleanup_audits", "created_at", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
 		}
@@ -240,7 +231,7 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 	// Minute-level metrics snapshots.
 	if days := s.cfg.Ops.Cleanup.MinuteMetricsRetentionDays; days > 0 {
 		cutoff := now.AddDate(0, 0, -days)
-		n, err := deleteOldRowsByID(ctx, s.db, opsCleanupDeleteSystemMetrics, cutoff, batchSize)
+		n, err := deleteOldRowsByID(ctx, s.db, "ops_system_metrics", "created_at", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
 		}
@@ -250,17 +241,26 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 	// Pre-aggregation tables (hourly/daily).
 	if days := s.cfg.Ops.Cleanup.HourlyMetricsRetentionDays; days > 0 {
 		cutoff := now.AddDate(0, 0, -days)
-		n, err := deleteOldRowsByID(ctx, s.db, opsCleanupDeleteMetricsHourly, cutoff, batchSize)
+		n, err := deleteOldRowsByID(ctx, s.db, "ops_metrics_hourly", "bucket_start", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
 		}
 		out.hourlyPreagg = n
 
-		n, err = deleteOldRowsByID(ctx, s.db, opsCleanupDeleteMetricsDaily, cutoff, batchSize)
+		n, err = deleteOldRowsByID(ctx, s.db, "ops_metrics_daily", "bucket_date", cutoff, batchSize, true)
 		if err != nil {
 			return out, err
 		}
 		out.dailyPreagg = n
+	}
+
+	// Channel monitor 每日维护（聚合昨日明细 + 软删过期明细/聚合）。
+	// 失败只记日志，不影响 ops 清理的成功状态（与 ops 各步骤风格一致）；
+	// 维护本身已经把每步错误打到 slog，heartbeat result 不再分项记录。
+	if s.channelMonitorSvc != nil {
+		if err := s.channelMonitorSvc.RunDailyMaintenance(ctx); err != nil {
+			logger.LegacyPrintf("service.ops_cleanup", "[OpsCleanup] channel monitor maintenance failed: %v", err)
+		}
 	}
 
 	return out, nil
@@ -269,9 +269,11 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 func deleteOldRowsByID(
 	ctx context.Context,
 	db *sql.DB,
-	target opsCleanupDeleteTarget,
+	table string,
+	timeColumn string,
 	cutoff time.Time,
 	batchSize int,
+	castCutoffToDate bool,
 ) (int64, error) {
 	if db == nil {
 		return 0, nil
@@ -280,10 +282,21 @@ func deleteOldRowsByID(
 		batchSize = 5000
 	}
 
-	q, err := target.deleteQuery()
-	if err != nil {
-		return 0, err
+	where := fmt.Sprintf("%s < $1", timeColumn)
+	if castCutoffToDate {
+		where = fmt.Sprintf("%s < $1::date", timeColumn)
 	}
+
+	q := fmt.Sprintf(`
+WITH batch AS (
+  SELECT id FROM %s
+  WHERE %s
+  ORDER BY id
+  LIMIT $2
+)
+DELETE FROM %s
+WHERE id IN (SELECT id FROM batch)
+`, table, where, table)
 
 	var total int64
 	for {
@@ -307,101 +320,6 @@ func deleteOldRowsByID(
 	return total, nil
 }
 
-func (t opsCleanupDeleteTarget) deleteQuery() (string, error) {
-	switch t {
-	case opsCleanupDeleteErrorLogs:
-		return `
-WITH batch AS (
-  SELECT id FROM ops_error_logs
-  WHERE created_at < $1
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM ops_error_logs
-WHERE id IN (SELECT id FROM batch)
-`, nil
-	case opsCleanupDeleteRetryAttempts:
-		return `
-WITH batch AS (
-  SELECT id FROM ops_retry_attempts
-  WHERE created_at < $1
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM ops_retry_attempts
-WHERE id IN (SELECT id FROM batch)
-`, nil
-	case opsCleanupDeleteAlertEvents:
-		return `
-WITH batch AS (
-  SELECT id FROM ops_alert_events
-  WHERE created_at < $1
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM ops_alert_events
-WHERE id IN (SELECT id FROM batch)
-`, nil
-	case opsCleanupDeleteSystemLogs:
-		return `
-WITH batch AS (
-  SELECT id FROM ops_system_logs
-  WHERE created_at < $1
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM ops_system_logs
-WHERE id IN (SELECT id FROM batch)
-`, nil
-	case opsCleanupDeleteSystemLogAudits:
-		return `
-WITH batch AS (
-  SELECT id FROM ops_system_log_cleanup_audits
-  WHERE created_at < $1
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM ops_system_log_cleanup_audits
-WHERE id IN (SELECT id FROM batch)
-`, nil
-	case opsCleanupDeleteSystemMetrics:
-		return `
-WITH batch AS (
-  SELECT id FROM ops_system_metrics
-  WHERE created_at < $1
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM ops_system_metrics
-WHERE id IN (SELECT id FROM batch)
-`, nil
-	case opsCleanupDeleteMetricsHourly:
-		return `
-WITH batch AS (
-  SELECT id FROM ops_metrics_hourly
-  WHERE bucket_start < $1
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM ops_metrics_hourly
-WHERE id IN (SELECT id FROM batch)
-`, nil
-	case opsCleanupDeleteMetricsDaily:
-		return `
-WITH batch AS (
-  SELECT id FROM ops_metrics_daily
-  WHERE bucket_date < $1::date
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM ops_metrics_daily
-WHERE id IN (SELECT id FROM batch)
-`, nil
-	default:
-		return "", fmt.Errorf("unknown ops cleanup delete target: %d", t)
-	}
-}
-
 func (s *OpsCleanupService) tryAcquireLeaderLock(ctx context.Context) (func(), bool) {
 	if s == nil {
 		return nil, false
@@ -423,7 +341,7 @@ func (s *OpsCleanupService) tryAcquireLeaderLock(ctx context.Context) (func(), b
 				return nil, false
 			}
 			return func() {
-				runRedisLeaderLockRelease(opsCleanupReleaseScript, s.redisClient, key, s.instanceID, opsCleanupLockReleaseTimeout)
+				_, _ = opsCleanupReleaseScript.Run(ctx, s.redisClient, []string{key}, s.instanceID).Result()
 			}, true
 		}
 		// Redis error: fall back to DB advisory lock.
@@ -450,7 +368,7 @@ func (s *OpsCleanupService) recordHeartbeatSuccess(runAt time.Time, duration tim
 	now := time.Now().UTC()
 	durMs := duration.Milliseconds()
 	result := truncateString(counts.String(), 2048)
-	ctx, cancel := context.WithTimeout(context.Background(), opsCleanupHeartbeatTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = s.opsRepo.UpsertJobHeartbeat(ctx, &OpsUpsertJobHeartbeatInput{
 		JobName:        opsCleanupJobName,
@@ -468,7 +386,7 @@ func (s *OpsCleanupService) recordHeartbeatError(runAt time.Time, duration time.
 	now := time.Now().UTC()
 	durMs := duration.Milliseconds()
 	msg := truncateString(err.Error(), 2048)
-	ctx, cancel := context.WithTimeout(context.Background(), opsCleanupHeartbeatTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = s.opsRepo.UpsertJobHeartbeat(ctx, &OpsUpsertJobHeartbeatInput{
 		JobName:        opsCleanupJobName,

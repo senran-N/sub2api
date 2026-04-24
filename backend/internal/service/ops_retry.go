@@ -288,7 +288,7 @@ func (s *OpsService) retryWithErrorLog(ctx context.Context, requestedByUserID in
 		result.ErrorMessage = execRes.errorMessage
 	}
 
-	updateCtx, updateCancel := newDetachedTimeoutContext(ctx, 3*time.Second)
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer updateCancel()
 
 	var updateErrMsg *string
@@ -388,7 +388,7 @@ func (s *OpsService) executeRetry(ctx context.Context, errorLog *OpsErrorLogDeta
 func detectOpsRetryType(path string) opsRetryRequestType {
 	p := strings.ToLower(strings.TrimSpace(path))
 	switch {
-	case strings.Contains(p, "/responses"):
+	case strings.Contains(p, "/responses"), strings.Contains(p, "/images/"):
 		return opsRetryTypeOpenAI
 	case strings.Contains(p, "/v1beta/"):
 		return opsRetryTypeGeminiV1B
@@ -519,7 +519,7 @@ func (s *OpsService) selectAccountForRetry(ctx context.Context, reqType opsRetry
 		if s.gatewayService == nil {
 			return nil, fmt.Errorf("gateway service not available")
 		}
-		return s.gatewayService.SelectAccountWithLoadAwareness(ctx, groupID, "", model, excludedIDs, "") // 重试不使用会话限制
+		return s.gatewayService.SelectAccountWithLoadAwareness(ctx, groupID, "", model, excludedIDs, "")
 	default:
 		return nil, fmt.Errorf("unsupported retry type: %s", reqType)
 	}

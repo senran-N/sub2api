@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/senran-N/sub2api/ent/identityadoptiondecision"
 	"github.com/senran-N/sub2api/ent/pendingauthsession"
 	"github.com/senran-N/sub2api/ent/predicate"
 	"github.com/senran-N/sub2api/ent/user"
@@ -227,6 +228,66 @@ func (_u *PendingAuthSessionUpdate) ClearCompletionCodeExpiresAt() *PendingAuthS
 	return _u
 }
 
+// SetEmailVerifiedAt sets the "email_verified_at" field.
+func (_u *PendingAuthSessionUpdate) SetEmailVerifiedAt(v time.Time) *PendingAuthSessionUpdate {
+	_u.mutation.SetEmailVerifiedAt(v)
+	return _u
+}
+
+// SetNillableEmailVerifiedAt sets the "email_verified_at" field if the given value is not nil.
+func (_u *PendingAuthSessionUpdate) SetNillableEmailVerifiedAt(v *time.Time) *PendingAuthSessionUpdate {
+	if v != nil {
+		_u.SetEmailVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearEmailVerifiedAt clears the value of the "email_verified_at" field.
+func (_u *PendingAuthSessionUpdate) ClearEmailVerifiedAt() *PendingAuthSessionUpdate {
+	_u.mutation.ClearEmailVerifiedAt()
+	return _u
+}
+
+// SetPasswordVerifiedAt sets the "password_verified_at" field.
+func (_u *PendingAuthSessionUpdate) SetPasswordVerifiedAt(v time.Time) *PendingAuthSessionUpdate {
+	_u.mutation.SetPasswordVerifiedAt(v)
+	return _u
+}
+
+// SetNillablePasswordVerifiedAt sets the "password_verified_at" field if the given value is not nil.
+func (_u *PendingAuthSessionUpdate) SetNillablePasswordVerifiedAt(v *time.Time) *PendingAuthSessionUpdate {
+	if v != nil {
+		_u.SetPasswordVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearPasswordVerifiedAt clears the value of the "password_verified_at" field.
+func (_u *PendingAuthSessionUpdate) ClearPasswordVerifiedAt() *PendingAuthSessionUpdate {
+	_u.mutation.ClearPasswordVerifiedAt()
+	return _u
+}
+
+// SetTotpVerifiedAt sets the "totp_verified_at" field.
+func (_u *PendingAuthSessionUpdate) SetTotpVerifiedAt(v time.Time) *PendingAuthSessionUpdate {
+	_u.mutation.SetTotpVerifiedAt(v)
+	return _u
+}
+
+// SetNillableTotpVerifiedAt sets the "totp_verified_at" field if the given value is not nil.
+func (_u *PendingAuthSessionUpdate) SetNillableTotpVerifiedAt(v *time.Time) *PendingAuthSessionUpdate {
+	if v != nil {
+		_u.SetTotpVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearTotpVerifiedAt clears the value of the "totp_verified_at" field.
+func (_u *PendingAuthSessionUpdate) ClearTotpVerifiedAt() *PendingAuthSessionUpdate {
+	_u.mutation.ClearTotpVerifiedAt()
+	return _u
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (_u *PendingAuthSessionUpdate) SetExpiresAt(v time.Time) *PendingAuthSessionUpdate {
 	_u.mutation.SetExpiresAt(v)
@@ -266,6 +327,25 @@ func (_u *PendingAuthSessionUpdate) SetTargetUser(v *User) *PendingAuthSessionUp
 	return _u.SetTargetUserID(v.ID)
 }
 
+// SetAdoptionDecisionID sets the "adoption_decision" edge to the IdentityAdoptionDecision entity by ID.
+func (_u *PendingAuthSessionUpdate) SetAdoptionDecisionID(id int64) *PendingAuthSessionUpdate {
+	_u.mutation.SetAdoptionDecisionID(id)
+	return _u
+}
+
+// SetNillableAdoptionDecisionID sets the "adoption_decision" edge to the IdentityAdoptionDecision entity by ID if the given value is not nil.
+func (_u *PendingAuthSessionUpdate) SetNillableAdoptionDecisionID(id *int64) *PendingAuthSessionUpdate {
+	if id != nil {
+		_u = _u.SetAdoptionDecisionID(*id)
+	}
+	return _u
+}
+
+// SetAdoptionDecision sets the "adoption_decision" edge to the IdentityAdoptionDecision entity.
+func (_u *PendingAuthSessionUpdate) SetAdoptionDecision(v *IdentityAdoptionDecision) *PendingAuthSessionUpdate {
+	return _u.SetAdoptionDecisionID(v.ID)
+}
+
 // Mutation returns the PendingAuthSessionMutation object of the builder.
 func (_u *PendingAuthSessionUpdate) Mutation() *PendingAuthSessionMutation {
 	return _u.mutation
@@ -274,6 +354,12 @@ func (_u *PendingAuthSessionUpdate) Mutation() *PendingAuthSessionMutation {
 // ClearTargetUser clears the "target_user" edge to the User entity.
 func (_u *PendingAuthSessionUpdate) ClearTargetUser() *PendingAuthSessionUpdate {
 	_u.mutation.ClearTargetUser()
+	return _u
+}
+
+// ClearAdoptionDecision clears the "adoption_decision" edge to the IdentityAdoptionDecision entity.
+func (_u *PendingAuthSessionUpdate) ClearAdoptionDecision() *PendingAuthSessionUpdate {
+	_u.mutation.ClearAdoptionDecision()
 	return _u
 }
 
@@ -400,6 +486,24 @@ func (_u *PendingAuthSessionUpdate) sqlSave(ctx context.Context) (_node int, err
 	if _u.mutation.CompletionCodeExpiresAtCleared() {
 		_spec.ClearField(pendingauthsession.FieldCompletionCodeExpiresAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.EmailVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldEmailVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.EmailVerifiedAtCleared() {
+		_spec.ClearField(pendingauthsession.FieldEmailVerifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PasswordVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldPasswordVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.PasswordVerifiedAtCleared() {
+		_spec.ClearField(pendingauthsession.FieldPasswordVerifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TotpVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldTotpVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.TotpVerifiedAtCleared() {
+		_spec.ClearField(pendingauthsession.FieldTotpVerifiedAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(pendingauthsession.FieldExpiresAt, field.TypeTime, value)
 	}
@@ -431,6 +535,35 @@ func (_u *PendingAuthSessionUpdate) sqlSave(ctx context.Context) (_node int, err
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.AdoptionDecisionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   pendingauthsession.AdoptionDecisionTable,
+			Columns: []string{pendingauthsession.AdoptionDecisionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityadoptiondecision.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AdoptionDecisionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   pendingauthsession.AdoptionDecisionTable,
+			Columns: []string{pendingauthsession.AdoptionDecisionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityadoptiondecision.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -656,6 +789,66 @@ func (_u *PendingAuthSessionUpdateOne) ClearCompletionCodeExpiresAt() *PendingAu
 	return _u
 }
 
+// SetEmailVerifiedAt sets the "email_verified_at" field.
+func (_u *PendingAuthSessionUpdateOne) SetEmailVerifiedAt(v time.Time) *PendingAuthSessionUpdateOne {
+	_u.mutation.SetEmailVerifiedAt(v)
+	return _u
+}
+
+// SetNillableEmailVerifiedAt sets the "email_verified_at" field if the given value is not nil.
+func (_u *PendingAuthSessionUpdateOne) SetNillableEmailVerifiedAt(v *time.Time) *PendingAuthSessionUpdateOne {
+	if v != nil {
+		_u.SetEmailVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearEmailVerifiedAt clears the value of the "email_verified_at" field.
+func (_u *PendingAuthSessionUpdateOne) ClearEmailVerifiedAt() *PendingAuthSessionUpdateOne {
+	_u.mutation.ClearEmailVerifiedAt()
+	return _u
+}
+
+// SetPasswordVerifiedAt sets the "password_verified_at" field.
+func (_u *PendingAuthSessionUpdateOne) SetPasswordVerifiedAt(v time.Time) *PendingAuthSessionUpdateOne {
+	_u.mutation.SetPasswordVerifiedAt(v)
+	return _u
+}
+
+// SetNillablePasswordVerifiedAt sets the "password_verified_at" field if the given value is not nil.
+func (_u *PendingAuthSessionUpdateOne) SetNillablePasswordVerifiedAt(v *time.Time) *PendingAuthSessionUpdateOne {
+	if v != nil {
+		_u.SetPasswordVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearPasswordVerifiedAt clears the value of the "password_verified_at" field.
+func (_u *PendingAuthSessionUpdateOne) ClearPasswordVerifiedAt() *PendingAuthSessionUpdateOne {
+	_u.mutation.ClearPasswordVerifiedAt()
+	return _u
+}
+
+// SetTotpVerifiedAt sets the "totp_verified_at" field.
+func (_u *PendingAuthSessionUpdateOne) SetTotpVerifiedAt(v time.Time) *PendingAuthSessionUpdateOne {
+	_u.mutation.SetTotpVerifiedAt(v)
+	return _u
+}
+
+// SetNillableTotpVerifiedAt sets the "totp_verified_at" field if the given value is not nil.
+func (_u *PendingAuthSessionUpdateOne) SetNillableTotpVerifiedAt(v *time.Time) *PendingAuthSessionUpdateOne {
+	if v != nil {
+		_u.SetTotpVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearTotpVerifiedAt clears the value of the "totp_verified_at" field.
+func (_u *PendingAuthSessionUpdateOne) ClearTotpVerifiedAt() *PendingAuthSessionUpdateOne {
+	_u.mutation.ClearTotpVerifiedAt()
+	return _u
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (_u *PendingAuthSessionUpdateOne) SetExpiresAt(v time.Time) *PendingAuthSessionUpdateOne {
 	_u.mutation.SetExpiresAt(v)
@@ -695,6 +888,25 @@ func (_u *PendingAuthSessionUpdateOne) SetTargetUser(v *User) *PendingAuthSessio
 	return _u.SetTargetUserID(v.ID)
 }
 
+// SetAdoptionDecisionID sets the "adoption_decision" edge to the IdentityAdoptionDecision entity by ID.
+func (_u *PendingAuthSessionUpdateOne) SetAdoptionDecisionID(id int64) *PendingAuthSessionUpdateOne {
+	_u.mutation.SetAdoptionDecisionID(id)
+	return _u
+}
+
+// SetNillableAdoptionDecisionID sets the "adoption_decision" edge to the IdentityAdoptionDecision entity by ID if the given value is not nil.
+func (_u *PendingAuthSessionUpdateOne) SetNillableAdoptionDecisionID(id *int64) *PendingAuthSessionUpdateOne {
+	if id != nil {
+		_u = _u.SetAdoptionDecisionID(*id)
+	}
+	return _u
+}
+
+// SetAdoptionDecision sets the "adoption_decision" edge to the IdentityAdoptionDecision entity.
+func (_u *PendingAuthSessionUpdateOne) SetAdoptionDecision(v *IdentityAdoptionDecision) *PendingAuthSessionUpdateOne {
+	return _u.SetAdoptionDecisionID(v.ID)
+}
+
 // Mutation returns the PendingAuthSessionMutation object of the builder.
 func (_u *PendingAuthSessionUpdateOne) Mutation() *PendingAuthSessionMutation {
 	return _u.mutation
@@ -703,6 +915,12 @@ func (_u *PendingAuthSessionUpdateOne) Mutation() *PendingAuthSessionMutation {
 // ClearTargetUser clears the "target_user" edge to the User entity.
 func (_u *PendingAuthSessionUpdateOne) ClearTargetUser() *PendingAuthSessionUpdateOne {
 	_u.mutation.ClearTargetUser()
+	return _u
+}
+
+// ClearAdoptionDecision clears the "adoption_decision" edge to the IdentityAdoptionDecision entity.
+func (_u *PendingAuthSessionUpdateOne) ClearAdoptionDecision() *PendingAuthSessionUpdateOne {
+	_u.mutation.ClearAdoptionDecision()
 	return _u
 }
 
@@ -859,6 +1077,24 @@ func (_u *PendingAuthSessionUpdateOne) sqlSave(ctx context.Context) (_node *Pend
 	if _u.mutation.CompletionCodeExpiresAtCleared() {
 		_spec.ClearField(pendingauthsession.FieldCompletionCodeExpiresAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.EmailVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldEmailVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.EmailVerifiedAtCleared() {
+		_spec.ClearField(pendingauthsession.FieldEmailVerifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PasswordVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldPasswordVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.PasswordVerifiedAtCleared() {
+		_spec.ClearField(pendingauthsession.FieldPasswordVerifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TotpVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldTotpVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.TotpVerifiedAtCleared() {
+		_spec.ClearField(pendingauthsession.FieldTotpVerifiedAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(pendingauthsession.FieldExpiresAt, field.TypeTime, value)
 	}
@@ -890,6 +1126,35 @@ func (_u *PendingAuthSessionUpdateOne) sqlSave(ctx context.Context) (_node *Pend
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.AdoptionDecisionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   pendingauthsession.AdoptionDecisionTable,
+			Columns: []string{pendingauthsession.AdoptionDecisionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityadoptiondecision.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AdoptionDecisionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   pendingauthsession.AdoptionDecisionTable,
+			Columns: []string{pendingauthsession.AdoptionDecisionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityadoptiondecision.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

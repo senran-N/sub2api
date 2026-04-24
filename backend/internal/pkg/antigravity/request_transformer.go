@@ -749,7 +749,19 @@ func buildTools(tools []ClaudeTool) []GeminiToolDeclaration {
 		}}
 	}
 
-	return []GeminiToolDeclaration{{
+	declarations := []GeminiToolDeclaration{{
 		FunctionDeclarations: funcDecls,
 	}}
+	if hasWebSearch {
+		declarations = append(declarations, GeminiToolDeclaration{
+			GoogleSearch: &GeminiGoogleSearch{
+				EnhancedContent: &GeminiEnhancedContent{
+					ImageSearch: &GeminiImageSearch{
+						MaxResultCount: 5,
+					},
+				},
+			},
+		})
+	}
+	return declarations
 }

@@ -173,13 +173,16 @@ const (
 	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
 	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
 	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
+	SettingKeyTableDefaultPageSize        = "table_default_page_size"       // 表格默认每页条数
+	SettingKeyTablePageSizeOptions        = "table_page_size_options"       // 表格可选每页条数（JSON 数组）
 	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
 	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
 
 	// 默认配置
-	SettingKeyDefaultConcurrency   = "default_concurrency"   // 新用户默认并发量
-	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
-	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量
+	SettingKeyDefaultBalance       = "default_balance"        // 新用户默认余额
+	SettingKeyDefaultSubscriptions = "default_subscriptions"  // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultUserRPMLimit  = "default_user_rpm_limit" // 新用户默认 RPM 限制（0 = 不限制）
 
 	// 按登录来源发放的默认权益配置
 	SettingKeyAuthSourceDefaultEmailBalance            = "auth_source_default_email_balance"
@@ -232,6 +235,8 @@ const (
 	SettingKeyGrokSessionValidityCheckInterval   = "grok_session_validity_check_interval"
 	SettingKeyGrokVideoTimeout                   = "grok_video_timeout"
 
+	SettingKeyWebSearchEmulationConfig = "web_search_emulation_config"
+
 	// Request identity patch (Claude -> Gemini systemInstruction injection)
 	SettingKeyEnableIdentityPatch = "enable_identity_patch"
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"
@@ -263,6 +268,13 @@ const (
 
 	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
 	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"
+
+	// =========================
+	// Channel Monitor (渠道监控)
+	// =========================
+	SettingKeyChannelMonitorEnabled                = "channel_monitor_enabled"
+	SettingKeyChannelMonitorDefaultIntervalSeconds = "channel_monitor_default_interval_seconds"
+	SettingKeyAvailableChannelsEnabled             = "available_channels_enabled"
 
 	// =========================
 	// Overload Cooldown (529)

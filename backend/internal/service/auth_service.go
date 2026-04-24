@@ -426,10 +426,6 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 	return token, user, nil
 }
 
-func (s *AuthService) assignDefaultSubscriptions(ctx context.Context, userID int64) {
-	s.assignSubscriptions(ctx, userID, s.settingService.GetDefaultSubscriptions(ctx), "auto assigned by default user subscriptions setting")
-}
-
 func (s *AuthService) validateRegistrationEmailPolicy(ctx context.Context, email string) error {
 	if s.settingService == nil {
 		return nil

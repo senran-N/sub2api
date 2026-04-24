@@ -249,7 +249,7 @@ func (s *GrokCapabilityProbeService) probeAccount(ctx context.Context, account *
 	)
 	for _, modelID := range candidates {
 		lastModel = modelID
-		resp, probeErr := s.executeProbeAttempt(reqCtx, account, target, modelID)
+		resp, probeErr := s.executeProbeAttempt(reqCtx, account, target, modelID) //nolint:bodyclose // executeProbeAttempt returns a body-less response summary.
 		if probeErr == nil {
 			s.stateSvc.PersistProbeResult(ctx, account, modelID, resp, nil)
 			return nil

@@ -23,20 +23,14 @@ func ProvideLifecycleRegistry() *LifecycleRegistry {
 	return NewLifecycleRegistry()
 }
 
-func ProvideOAuthRefreshAPI(accountRepo AccountRepository, tokenCache GeminiTokenCache) *OAuthRefreshAPI {
-	return NewOAuthRefreshAPI(accountRepo, tokenCache)
-}
-
 // ProvidePricingService creates and initializes PricingService
-func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient, lifecycle *LifecycleRegistry) (*PricingService, error) {
+func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
 	if err := svc.Initialize(); err != nil {
-		// Fall back to BillingService's built-in static pricing instead of wiring a
-		// half-initialized PricingService that may later fail model lookups at runtime.
-		logger.LegacyPrintf("service.pricing", "[Pricing] initialization failed, using billing fallback only: %v", err)
+		// Pricing service initialization failure should not block startup; callers fall back to built-in pricing.
+		println("[Service] Warning: Pricing service initialization failed:", err.Error())
 		return nil, nil
 	}
-	lifecycle.Register("PricingService", svc.Stop)
 	return svc, nil
 }
 
@@ -54,6 +48,11 @@ func ProvideEmailQueueService(emailService *EmailService) *EmailQueueService {
 	return NewEmailQueueService(emailService, 3)
 }
 
+// ProvideOAuthRefreshAPI creates OAuthRefreshAPI with the default lock TTL.
+func ProvideOAuthRefreshAPI(accountRepo AccountRepository, tokenCache GeminiTokenCache) *OAuthRefreshAPI {
+	return NewOAuthRefreshAPI(accountRepo, tokenCache)
+}
+
 // ProvideTokenRefreshService creates and starts TokenRefreshService
 func ProvideTokenRefreshService(
 	accountRepo AccountRepository,
@@ -68,7 +67,6 @@ func ProvideTokenRefreshService(
 	privacyClientFactory PrivacyClientFactory,
 	proxyRepo ProxyRepository,
 	refreshAPI *OAuthRefreshAPI,
-	lifecycle *LifecycleRegistry,
 ) *TokenRefreshService {
 	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cacheInvalidator, schedulerCache, cfg, tempUnschedCache)
 	// 注入 OpenAI privacy opt-out 依赖
@@ -77,7 +75,8 @@ func ProvideTokenRefreshService(
 	svc.SetRefreshAPI(refreshAPI)
 	// 调用侧显式注入后台刷新策略，避免策略漂移
 	svc.SetRefreshPolicy(DefaultBackgroundRefreshPolicy())
-	return manageStartStopLifecycle(lifecycle, "TokenRefreshService", svc)
+	svc.Start()
+	return svc
 }
 
 // ProvideClaudeTokenProvider creates ClaudeTokenProvider with OAuthRefreshAPI injection
@@ -114,13 +113,11 @@ func ProvideGeminiTokenProvider(
 	tokenCache GeminiTokenCache,
 	geminiOAuthService *GeminiOAuthService,
 	refreshAPI *OAuthRefreshAPI,
-	tempUnschedCache TempUnschedCache,
 ) *GeminiTokenProvider {
 	p := NewGeminiTokenProvider(accountRepo, tokenCache, geminiOAuthService)
 	executor := NewGeminiTokenRefresher(geminiOAuthService)
 	p.SetRefreshAPI(refreshAPI, executor)
 	p.SetRefreshPolicy(GeminiProviderRefreshPolicy())
-	p.SetTempUnschedCache(tempUnschedCache)
 	return p
 }
 
@@ -141,23 +138,12 @@ func ProvideAntigravityTokenProvider(
 }
 
 // ProvideDashboardAggregationService 创建并启动仪表盘聚合服务
-func ProvideDashboardAggregationService(
-	repo DashboardAggregationRepository,
-	timingWheel *TimingWheelService,
-	cfg *config.Config,
-	lifecycle *LifecycleRegistry,
-) *DashboardAggregationService {
+func ProvideDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, cfg *config.Config, lifecycle *LifecycleRegistry) *DashboardAggregationService {
 	return manageStartStopLifecycle(lifecycle, "DashboardAggregationService", newDashboardAggregationServiceForLifecycle(repo, timingWheel, cfg))
 }
 
 // ProvideUsageCleanupService 创建并启动使用记录清理任务服务
-func ProvideUsageCleanupService(
-	repo UsageCleanupRepository,
-	timingWheel *TimingWheelService,
-	dashboardAgg *DashboardAggregationService,
-	cfg *config.Config,
-	lifecycle *LifecycleRegistry,
-) *UsageCleanupService {
+func ProvideUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config, lifecycle *LifecycleRegistry) *UsageCleanupService {
 	return manageStartStopLifecycle(lifecycle, "UsageCleanupService", newUsageCleanupServiceForLifecycle(repo, timingWheel, dashboardAgg, cfg))
 }
 
@@ -203,13 +189,7 @@ func ProvideUserMessageQueueService(cache UserMsgQueueCache, rpmCache RPMCache, 
 	svc := NewUserMessageQueueService(cache, rpmCache, &cfg.Gateway.UserMessageQueue)
 	if cfg.Gateway.UserMessageQueue.CleanupIntervalSeconds > 0 {
 		interval := time.Duration(cfg.Gateway.UserMessageQueue.CleanupIntervalSeconds) * time.Second
-		manageLifecycle(
-			lifecycle,
-			"UserMessageQueueCleanupWorker",
-			svc,
-			func(service *UserMessageQueueService) { service.StartCleanupWorker(interval) },
-			func(service *UserMessageQueueService) { service.Stop() },
-		)
+		manageLifecycle(lifecycle, "UserMessageQueueCleanupWorker", svc, func(service *UserMessageQueueService) { service.StartCleanupWorker(interval) }, func(service *UserMessageQueueService) { service.Stop() })
 	}
 	return svc
 }
@@ -235,11 +215,13 @@ func ProvideRateLimitService(
 	geminiQuotaService *GeminiQuotaService,
 	tempUnschedCache TempUnschedCache,
 	timeoutCounterCache TimeoutCounterCache,
+	openAI403CounterCache OpenAI403CounterCache,
 	settingService *SettingService,
 	tokenCacheInvalidator TokenCacheInvalidator,
 ) *RateLimitService {
 	svc := NewRateLimitService(accountRepo, usageRepo, cfg, geminiQuotaService, tempUnschedCache)
 	svc.SetTimeoutCounterCache(timeoutCounterCache)
+	svc.SetOpenAI403CounterCache(openAI403CounterCache)
 	svc.SetSettingService(settingService)
 	svc.SetTokenCacheInvalidator(tokenCacheInvalidator)
 	return svc
@@ -254,10 +236,10 @@ func ProvideOpsMetricsCollector(
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
-	lifecycle *LifecycleRegistry,
 ) *OpsMetricsCollector {
 	collector := NewOpsMetricsCollector(opsRepo, settingRepo, accountRepo, concurrencyService, db, redisClient, cfg)
-	return manageStartStopLifecycle(lifecycle, "OpsMetricsCollector", collector)
+	collector.Start()
+	return collector
 }
 
 // ProvideOpsAggregationService creates and starts OpsAggregationService (hourly/daily pre-aggregation).
@@ -267,10 +249,10 @@ func ProvideOpsAggregationService(
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
-	lifecycle *LifecycleRegistry,
 ) *OpsAggregationService {
 	svc := NewOpsAggregationService(opsRepo, settingRepo, db, redisClient, cfg)
-	return manageStartStopLifecycle(lifecycle, "OpsAggregationService", svc)
+	svc.Start()
+	return svc
 }
 
 // ProvideOpsAlertEvaluatorService creates and starts OpsAlertEvaluatorService.
@@ -280,32 +262,31 @@ func ProvideOpsAlertEvaluatorService(
 	emailService *EmailService,
 	redisClient *redis.Client,
 	cfg *config.Config,
-	lifecycle *LifecycleRegistry,
 ) *OpsAlertEvaluatorService {
 	svc := NewOpsAlertEvaluatorService(opsService, opsRepo, emailService, redisClient, cfg)
-	return manageStartStopLifecycle(lifecycle, "OpsAlertEvaluatorService", svc)
+	svc.Start()
+	return svc
 }
 
 // ProvideOpsCleanupService creates and starts OpsCleanupService (cron scheduled).
+// channelMonitorSvc 让维护任务（聚合 + 历史/聚合软删）跟随 ops 清理 cron 一起跑，
+// 共享 leader lock + heartbeat。
 func ProvideOpsCleanupService(
 	opsRepo OpsRepository,
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
-	lifecycle *LifecycleRegistry,
+	channelMonitorSvc *ChannelMonitorService,
 ) *OpsCleanupService {
-	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg)
-	return manageStartStopLifecycle(lifecycle, "OpsCleanupService", svc)
+	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg, channelMonitorSvc)
+	svc.Start()
+	return svc
 }
 
-func ProvideOpsSystemLogSink(opsRepo OpsRepository, cfg *config.Config, lifecycle *LifecycleRegistry) *OpsSystemLogSink {
-	sink := NewOpsSystemLogSink(opsRepo, cfg)
+func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
+	sink := NewOpsSystemLogSink(opsRepo)
 	sink.Start()
 	logger.SetSink(sink)
-	lifecycle.Register("OpsSystemLogSink", func() {
-		logger.SetSink(nil)
-		sink.Stop()
-	})
 	return sink
 }
 
@@ -342,9 +323,10 @@ func ProvideSystemOperationLockService(repo IdempotencyRepository, cfg *config.C
 	return NewSystemOperationLockService(repo, buildIdempotencyConfig(cfg))
 }
 
-func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config, lifecycle *LifecycleRegistry) *IdempotencyCleanupService {
+func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
 	svc := NewIdempotencyCleanupService(repo, cfg)
-	return manageStartStopLifecycle(lifecycle, "IdempotencyCleanupService", svc)
+	svc.Start()
+	return svc
 }
 
 // ProvideScheduledTestService creates ScheduledTestService.
@@ -362,10 +344,10 @@ func ProvideScheduledTestRunnerService(
 	accountTestSvc *AccountTestService,
 	rateLimitSvc *RateLimitService,
 	cfg *config.Config,
-	lifecycle *LifecycleRegistry,
 ) *ScheduledTestRunnerService {
 	svc := NewScheduledTestRunnerService(planRepo, scheduledSvc, accountTestSvc, rateLimitSvc, cfg)
-	return manageStartStopLifecycle(lifecycle, "ScheduledTestRunnerService", svc)
+	svc.Start()
+	return svc
 }
 
 // ProvideOpsScheduledReportService creates and starts OpsScheduledReportService.
@@ -375,10 +357,10 @@ func ProvideOpsScheduledReportService(
 	emailService *EmailService,
 	redisClient *redis.Client,
 	cfg *config.Config,
-	lifecycle *LifecycleRegistry,
 ) *OpsScheduledReportService {
 	svc := NewOpsScheduledReportService(opsService, userService, emailService, redisClient, cfg)
-	return manageStartStopLifecycle(lifecycle, "OpsScheduledReportService", svc)
+	svc.Start()
+	return svc
 }
 
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
@@ -386,11 +368,9 @@ func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService, lifecycle *
 	if apiKeyService == nil {
 		return nil
 	}
-	if apiKeyService.cache != nil && apiKeyService.authCacheL1 != nil {
-		subscriberCtx, cancel := context.WithCancel(context.Background())
-		apiKeyService.StartAuthCacheInvalidationSubscriber(subscriberCtx)
-		lifecycle.Register("APIKeyAuthCacheInvalidationSubscriber", cancel)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	apiKeyService.StartAuthCacheInvalidationSubscriber(ctx)
+	lifecycle.Register("APIKeyAuthCacheInvalidationSubscriber", cancel)
 	return apiKeyService
 }
 
@@ -401,16 +381,17 @@ func ProvideBackupService(
 	encryptor SecretEncryptor,
 	storeFactory BackupObjectStoreFactory,
 	dumper DBDumper,
-	lifecycle *LifecycleRegistry,
 ) *BackupService {
 	svc := NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
-	return manageStartStopLifecycle(lifecycle, "BackupService", svc)
+	svc.Start()
+	return svc
 }
 
-// ProvideSettingService wires SettingService with group reader for default subscription validation.
-func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, cfg *config.Config) *SettingService {
+// ProvideSettingService wires SettingService with group reader and proxy repo.
+func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, proxyRepo ProxyRepository, cfg *config.Config) *SettingService {
 	svc := NewSettingService(settingRepo, cfg)
 	svc.SetDefaultSubscriptionGroupReader(groupRepo)
+	svc.SetProxyRepository(proxyRepo)
 	return svc
 }
 
@@ -424,12 +405,6 @@ func ProvideAccountQuotaReader(accountRepo AccountRepository) AccountQuotaReader
 
 func ProvideGrokQuotaAccountSyncer(syncer *GrokQuotaSyncService) grokQuotaAccountSyncer {
 	return syncer
-}
-
-// ProvidePaymentConfigService wraps NewPaymentConfigService to accept the named
-// payment.EncryptionKey type instead of raw []byte, avoiding Wire ambiguity.
-func ProvidePaymentConfigService(entClient *dbent.Client, settingRepo SettingRepository, key payment.EncryptionKey) *PaymentConfigService {
-	return NewPaymentConfigService(entClient, settingRepo, []byte(key))
 }
 
 func ProvideUserService(userRepo UserRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache, settingRepo SettingRepository) *UserService {
@@ -497,10 +472,17 @@ func ProvideOpenAIGatewayService(
 	return svc
 }
 
-// ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
-func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lifecycle *LifecycleRegistry) *PaymentOrderExpiryService {
-	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
-	return manageStartStopLifecycle(lifecycle, "PaymentOrderExpiryService", svc)
+// ProvideBillingCacheService wires BillingCacheService with its RPM dependencies.
+func ProvideBillingCacheService(
+	cache BillingCache,
+	userRepo UserRepository,
+	subRepo UserSubscriptionRepository,
+	apiKeyRepo APIKeyRepository,
+	rpmCache UserRPMCache,
+	rateRepo UserGroupRateRepository,
+	cfg *config.Config,
+) *BillingCacheService {
+	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg)
 }
 
 // ProviderSet is the Wire provider set for all services
@@ -520,7 +502,7 @@ var ProviderSet = wire.NewSet(
 	ProvidePricingService,
 	ProvideClaudeCodeProfileSyncStarter,
 	NewBillingService,
-	NewBillingCacheService,
+	ProvideBillingCacheService,
 	NewAnnouncementService,
 	NewAdminService,
 	ProvideGrokAccountStateExtraWriter,
@@ -528,7 +510,6 @@ var ProviderSet = wire.NewSet(
 	ProvideGatewayService,
 	ProvideOpenAIGatewayService,
 	ProvideAccountQuotaReader,
-	NewBalanceNotifyService,
 	NewGrokAccountStateService,
 	ProvideCompatibleGatewayTextRuntime,
 	ProvideGrokCompatibleRuntime,
@@ -605,4 +586,46 @@ var ProviderSet = wire.NewSet(
 	ProvidePaymentConfigService,
 	NewPaymentService,
 	ProvidePaymentOrderExpiryService,
+	ProvideBalanceNotifyService,
+	ProvideChannelMonitorService,
+	ProvideChannelMonitorRunner,
+	NewChannelMonitorRequestTemplateService,
 )
+
+// ProvidePaymentConfigService wraps NewPaymentConfigService to accept the named
+// payment.EncryptionKey type instead of raw []byte, avoiding Wire ambiguity.
+func ProvidePaymentConfigService(entClient *dbent.Client, settingRepo SettingRepository, key payment.EncryptionKey) *PaymentConfigService {
+	return NewPaymentConfigService(entClient, settingRepo, []byte(key))
+}
+
+// ProvideBalanceNotifyService creates BalanceNotifyService
+func ProvideBalanceNotifyService(emailService *EmailService, settingRepo SettingRepository, accountRepo AccountRepository) *BalanceNotifyService {
+	return NewBalanceNotifyService(emailService, settingRepo, accountRepo)
+}
+
+// ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
+func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService) *PaymentOrderExpiryService {
+	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
+	svc.Start()
+	return svc
+}
+
+// ProvideChannelMonitorService 创建渠道监控服务（CRUD + RunCheck + 用户视图聚合）。
+// 加密器复用 wire 中已注入的 SecretEncryptor（AES-256-GCM）。
+func ProvideChannelMonitorService(
+	repo ChannelMonitorRepository,
+	encryptor SecretEncryptor,
+) *ChannelMonitorService {
+	return NewChannelMonitorService(repo, encryptor)
+}
+
+// ProvideChannelMonitorRunner 创建并启动渠道监控调度器。
+// 通过 SetScheduler 注入回 service 后再 Start，确保启动时加载所有 enabled monitor，
+// 后续 CRUD 也能即时同步任务表。Runner.Stop 由 cleanup function 调用。
+// settingService 用于 runner 每次 fire 读取功能开关。
+func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *SettingService) *ChannelMonitorRunner {
+	r := NewChannelMonitorRunner(svc, settingService)
+	svc.SetScheduler(r)
+	r.Start()
+	return r
+}

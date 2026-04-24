@@ -15,8 +15,9 @@ import (
 )
 
 var pendingAuthIntents = map[string]struct{}{
-	"login":             {},
-	"bind_current_user": {},
+	"login":                        {},
+	"bind_current_user":            {},
+	"adopt_existing_user_by_email": {},
 }
 
 func validatePendingAuthIntent(value string) error {
@@ -26,7 +27,7 @@ func validatePendingAuthIntent(value string) error {
 	return fmt.Errorf("invalid pending auth intent %q", value)
 }
 
-// PendingAuthSession stores a short-lived post-oauth decision session.
+// PendingAuthSession stores a short-lived post-auth decision session.
 type PendingAuthSession struct {
 	ent.Schema
 }
@@ -90,6 +91,18 @@ func (PendingAuthSession) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Time("email_verified_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Time("password_verified_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Time("totp_verified_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Time("expires_at").
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Time("consumed_at").
@@ -104,6 +117,9 @@ func (PendingAuthSession) Edges() []ent.Edge {
 		edge.From("target_user", User.Type).
 			Ref("pending_auth_sessions").
 			Field("target_user_id").
+			Unique(),
+		edge.To("adoption_decision", IdentityAdoptionDecision.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)).
 			Unique(),
 	}
 }

@@ -21,6 +21,7 @@ func UserFromServiceShallow(u *service.User) *User {
 		Concurrency:                u.Concurrency,
 		Status:                     u.Status,
 		AllowedGroups:              u.AllowedGroups,
+		LastActiveAt:               u.LastActiveAt,
 		CreatedAt:                  u.CreatedAt,
 		UpdatedAt:                  u.UpdatedAt,
 		BalanceNotifyEnabled:       u.BalanceNotifyEnabled,
@@ -28,10 +29,7 @@ func UserFromServiceShallow(u *service.User) *User {
 		BalanceNotifyThreshold:     u.BalanceNotifyThreshold,
 		BalanceNotifyExtraEmails:   NotifyEmailEntriesFromService(u.BalanceNotifyExtraEmails),
 		TotalRecharged:             u.TotalRecharged,
-		EmailBound:                 u.EmailBound,
-		LinuxDoBound:               u.LinuxDoBound,
-		OIDCBound:                  u.OIDCBound,
-		WeChatBound:                u.WeChatBound,
+		RPMLimit:                   u.RPMLimit,
 	}
 }
 
@@ -70,6 +68,7 @@ func UserFromServiceAdmin(u *service.User) *AdminUser {
 	return &AdminUser{
 		User:       *base,
 		Notes:      u.Notes,
+		LastUsedAt: u.LastUsedAt,
 		GroupRates: u.GroupRates,
 	}
 }
@@ -142,22 +141,17 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		return nil
 	}
 	out := &AdminGroup{
-		Group:               groupFromServiceBase(g),
-		ModelRouting:        g.ModelRouting,
-		ModelRoutingEnabled: g.ModelRoutingEnabled,
-		MCPXMLInject:        g.MCPXMLInject,
-		DefaultMappedModel:  g.DefaultMappedModel,
-		MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
-			OpusMappedModel:    g.MessagesDispatchModelConfig.OpusMappedModel,
-			SonnetMappedModel:  g.MessagesDispatchModelConfig.SonnetMappedModel,
-			HaikuMappedModel:   g.MessagesDispatchModelConfig.HaikuMappedModel,
-			ExactModelMappings: g.MessagesDispatchModelConfig.ExactModelMappings,
-		},
-		SupportedModelScopes:    g.SupportedModelScopes,
-		AccountCount:            g.AccountCount,
-		ActiveAccountCount:      g.ActiveAccountCount,
-		RateLimitedAccountCount: g.RateLimitedAccountCount,
-		SortOrder:               g.SortOrder,
+		Group:                       groupFromServiceBase(g),
+		ModelRouting:                g.ModelRouting,
+		ModelRoutingEnabled:         g.ModelRoutingEnabled,
+		MCPXMLInject:                g.MCPXMLInject,
+		DefaultMappedModel:          g.DefaultMappedModel,
+		MessagesDispatchModelConfig: g.MessagesDispatchModelConfig,
+		SupportedModelScopes:        g.SupportedModelScopes,
+		AccountCount:                g.AccountCount,
+		ActiveAccountCount:          g.ActiveAccountCount,
+		RateLimitedAccountCount:     g.RateLimitedAccountCount,
+		SortOrder:                   g.SortOrder,
 	}
 	if len(g.AccountGroups) > 0 {
 		out.AccountGroups = make([]AccountGroup, 0, len(g.AccountGroups))
@@ -191,6 +185,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		AllowMessagesDispatch:           g.AllowMessagesDispatch,
 		RequireOAuthOnly:                g.RequireOAuthOnly,
 		RequirePrivacySet:               g.RequirePrivacySet,
+		RPMLimit:                        g.RPMLimit,
 		CreatedAt:                       g.CreatedAt,
 		UpdatedAt:                       g.UpdatedAt,
 	}
@@ -336,6 +331,26 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 				out.QuotaWeeklyResetAt = &v
 			}
 		}
+
+		// 配额通知配置
+		if enabled := a.GetQuotaNotifyDailyEnabled(); enabled {
+			out.QuotaNotifyDailyEnabled = &enabled
+		}
+		if threshold := a.GetQuotaNotifyDailyThreshold(); threshold > 0 {
+			out.QuotaNotifyDailyThreshold = &threshold
+		}
+		if enabled := a.GetQuotaNotifyWeeklyEnabled(); enabled {
+			out.QuotaNotifyWeeklyEnabled = &enabled
+		}
+		if threshold := a.GetQuotaNotifyWeeklyThreshold(); threshold > 0 {
+			out.QuotaNotifyWeeklyThreshold = &threshold
+		}
+		if enabled := a.GetQuotaNotifyTotalEnabled(); enabled {
+			out.QuotaNotifyTotalEnabled = &enabled
+		}
+		if threshold := a.GetQuotaNotifyTotalThreshold(); threshold > 0 {
+			out.QuotaNotifyTotalThreshold = &threshold
+		}
 	}
 
 	return out
@@ -422,9 +437,6 @@ func ProxyWithAccountCountFromService(p *service.ProxyWithAccountCount) *ProxyWi
 		QualityGrade:   p.QualityGrade,
 		QualitySummary: p.QualitySummary,
 		QualityChecked: p.QualityChecked,
-		IPType:         p.IPType,
-		IPRiskScore:    p.IPRiskScore,
-		ISP:            p.ISP,
 	}
 }
 
@@ -470,9 +482,6 @@ func ProxyWithAccountCountFromServiceAdmin(p *service.ProxyWithAccountCount) *Ad
 		QualityGrade:   p.QualityGrade,
 		QualitySummary: p.QualitySummary,
 		QualityChecked: p.QualityChecked,
-		IPType:         p.IPType,
-		IPRiskScore:    p.IPRiskScore,
-		ISP:            p.ISP,
 	}
 }
 
@@ -623,6 +632,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 		ModelMappingChain:     l.ModelMappingChain,
 		BillingTier:           l.BillingTier,
 		AccountRateMultiplier: l.AccountRateMultiplier,
+		AccountStatsCost:      l.AccountStatsCost,
 		IPAddress:             l.IPAddress,
 		Account:               AccountSummaryFromService(l.Account),
 	}

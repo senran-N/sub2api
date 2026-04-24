@@ -28,6 +28,8 @@ import tlsFingerprintProfileAPI from './tlsFingerprintProfile'
 import channelsAPI from './channels'
 import modelCatalogAPI from './modelCatalog'
 import paymentAPI from './payment'
+import channelMonitorAPI from './channelMonitor'
+import channelMonitorTemplateAPI from './channelMonitorTemplate'
 
 /**
  * Unified admin API object for convenient access
@@ -57,7 +59,9 @@ export const adminAPI = {
   tlsFingerprintProfiles: tlsFingerprintProfileAPI,
   channels: channelsAPI,
   modelCatalog: modelCatalogAPI,
-  payment: paymentAPI
+  payment: paymentAPI,
+  channelMonitor: channelMonitorAPI,
+  channelMonitorTemplate: channelMonitorTemplateAPI
 }
 
 export {
@@ -85,7 +89,9 @@ export {
   tlsFingerprintProfileAPI,
   channelsAPI,
   modelCatalogAPI,
-  paymentAPI
+  paymentAPI,
+  channelMonitorAPI,
+  channelMonitorTemplateAPI
 }
 
 export default adminAPI

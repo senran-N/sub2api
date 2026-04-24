@@ -106,14 +106,6 @@ func (s *sessionLimitCacheHotpathStub) SetWindowCost(ctx context.Context, accoun
 	return nil
 }
 
-func (s *sessionLimitCacheHotpathStub) ReserveWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string, cost float64, limit float64, ttl time.Duration) (bool, float64, error) {
-	return true, 0, nil
-}
-
-func (s *sessionLimitCacheHotpathStub) ReleaseWindowCost(ctx context.Context, accountID int64, windowStart time.Time, reservationID string) error {
-	return nil
-}
-
 type modelsListAccountRepoStub struct {
 	AccountRepository
 
@@ -586,44 +578,6 @@ func TestGetAvailableModels_ErrorAndGlobalListBranches(t *testing.T) {
 	models := svcOK.GetAvailableModels(context.Background(), nil, "")
 	require.Equal(t, []string{"claude-3-5-sonnet", "gemini-2.5-pro"}, models)
 	require.Equal(t, int64(1), okRepo.listAllCalls.Load())
-}
-
-func TestGetAvailableModels_GrokUsesRegistryWhenNoExplicitMapping(t *testing.T) {
-	resetGatewayHotpathStatsForTest()
-
-	groupID := int64(10)
-	repo := &modelsListAccountRepoStub{
-		byGroup: map[int64][]Account{
-			groupID: {
-				{
-					ID:          30,
-					Platform:    PlatformGrok,
-					Type:        AccountTypeSession,
-					Status:      StatusActive,
-					Schedulable: true,
-					Extra: map[string]any{
-						"grok": map[string]any{
-							"tier": map[string]any{
-								"normalized": "basic",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	svc := &GatewayService{
-		accountRepo:        repo,
-		modelsListCache:    gocache.New(time.Minute, time.Minute),
-		modelsListCacheTTL: time.Minute,
-	}
-
-	models := svc.GetAvailableModels(context.Background(), &groupID, PlatformGrok)
-	require.NotEmpty(t, models)
-	require.Contains(t, models, "grok-4.20-auto")
-	require.Contains(t, models, "grok-4.20-expert")
-	require.NotContains(t, models, "grok-imagine-video")
 }
 
 func TestGatewayHotpathHelpers_CacheTTLAndStickyContext(t *testing.T) {

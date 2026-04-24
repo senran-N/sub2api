@@ -52,6 +52,7 @@ type UserRepository interface {
 	RemoveGroupFromUserAllowedGroups(ctx context.Context, userID int64, groupID int64) error
 	ListUserAuthIdentities(ctx context.Context, userID int64) ([]UserAuthIdentityRecord, error)
 	UnbindUserAuthProvider(ctx context.Context, userID int64, provider string) error
+	UpdateUserLastActiveAt(ctx context.Context, userID int64, activeAt time.Time) error
 
 	// TOTP 双因素认证
 	UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error
@@ -517,4 +518,37 @@ func canUnbindIdentityProvider(user *User, records []UserAuthIdentityRecord, pro
 		}
 	}
 	return false
+}
+
+const userLastActiveMinTouch = time.Minute
+
+func userLastActiveFresh(lastActiveAt *time.Time, now time.Time) bool {
+	return lastActiveAt != nil && now.Sub(*lastActiveAt) < userLastActiveMinTouch
+}
+
+// TouchLastActive updates users.last_active_at with request-path debouncing.
+func (s *UserService) TouchLastActive(ctx context.Context, userID int64) {
+	if s == nil || s.userRepo == nil || userID <= 0 {
+		return
+	}
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		slog.Debug("skip touch user last active after load failure", "user_id", userID, "error", err)
+		return
+	}
+	s.TouchLastActiveForUser(ctx, user)
+}
+
+// TouchLastActiveForUser updates last_active_at using already-loaded user data.
+func (s *UserService) TouchLastActiveForUser(ctx context.Context, user *User) {
+	if s == nil || s.userRepo == nil || user == nil || user.ID <= 0 {
+		return
+	}
+	now := time.Now()
+	if userLastActiveFresh(user.LastActiveAt, now) {
+		return
+	}
+	if err := s.userRepo.UpdateUserLastActiveAt(ctx, user.ID, now); err != nil {
+		slog.Debug("skip touch user last active after update failure", "user_id", user.ID, "error", err)
+	}
 }

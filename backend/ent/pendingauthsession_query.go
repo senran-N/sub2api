@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -12,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/senran-N/sub2api/ent/identityadoptiondecision"
 	"github.com/senran-N/sub2api/ent/pendingauthsession"
 	"github.com/senran-N/sub2api/ent/predicate"
 	"github.com/senran-N/sub2api/ent/user"
@@ -20,12 +22,13 @@ import (
 // PendingAuthSessionQuery is the builder for querying PendingAuthSession entities.
 type PendingAuthSessionQuery struct {
 	config
-	ctx            *QueryContext
-	order          []pendingauthsession.OrderOption
-	inters         []Interceptor
-	predicates     []predicate.PendingAuthSession
-	withTargetUser *UserQuery
-	modifiers      []func(*sql.Selector)
+	ctx                  *QueryContext
+	order                []pendingauthsession.OrderOption
+	inters               []Interceptor
+	predicates           []predicate.PendingAuthSession
+	withTargetUser       *UserQuery
+	withAdoptionDecision *IdentityAdoptionDecisionQuery
+	modifiers            []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -77,6 +80,28 @@ func (_q *PendingAuthSessionQuery) QueryTargetUser() *UserQuery {
 			sqlgraph.From(pendingauthsession.Table, pendingauthsession.FieldID, selector),
 			sqlgraph.To(user.Table, user.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, pendingauthsession.TargetUserTable, pendingauthsession.TargetUserColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryAdoptionDecision chains the current query on the "adoption_decision" edge.
+func (_q *PendingAuthSessionQuery) QueryAdoptionDecision() *IdentityAdoptionDecisionQuery {
+	query := (&IdentityAdoptionDecisionClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(pendingauthsession.Table, pendingauthsession.FieldID, selector),
+			sqlgraph.To(identityadoptiondecision.Table, identityadoptiondecision.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, pendingauthsession.AdoptionDecisionTable, pendingauthsession.AdoptionDecisionColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -271,12 +296,13 @@ func (_q *PendingAuthSessionQuery) Clone() *PendingAuthSessionQuery {
 		return nil
 	}
 	return &PendingAuthSessionQuery{
-		config:         _q.config,
-		ctx:            _q.ctx.Clone(),
-		order:          append([]pendingauthsession.OrderOption{}, _q.order...),
-		inters:         append([]Interceptor{}, _q.inters...),
-		predicates:     append([]predicate.PendingAuthSession{}, _q.predicates...),
-		withTargetUser: _q.withTargetUser.Clone(),
+		config:               _q.config,
+		ctx:                  _q.ctx.Clone(),
+		order:                append([]pendingauthsession.OrderOption{}, _q.order...),
+		inters:               append([]Interceptor{}, _q.inters...),
+		predicates:           append([]predicate.PendingAuthSession{}, _q.predicates...),
+		withTargetUser:       _q.withTargetUser.Clone(),
+		withAdoptionDecision: _q.withAdoptionDecision.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -291,6 +317,17 @@ func (_q *PendingAuthSessionQuery) WithTargetUser(opts ...func(*UserQuery)) *Pen
 		opt(query)
 	}
 	_q.withTargetUser = query
+	return _q
+}
+
+// WithAdoptionDecision tells the query-builder to eager-load the nodes that are connected to
+// the "adoption_decision" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *PendingAuthSessionQuery) WithAdoptionDecision(opts ...func(*IdentityAdoptionDecisionQuery)) *PendingAuthSessionQuery {
+	query := (&IdentityAdoptionDecisionClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withAdoptionDecision = query
 	return _q
 }
 
@@ -372,8 +409,9 @@ func (_q *PendingAuthSessionQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	var (
 		nodes       = []*PendingAuthSession{}
 		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			_q.withTargetUser != nil,
+			_q.withAdoptionDecision != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -400,6 +438,12 @@ func (_q *PendingAuthSessionQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	if query := _q.withTargetUser; query != nil {
 		if err := _q.loadTargetUser(ctx, query, nodes, nil,
 			func(n *PendingAuthSession, e *User) { n.Edges.TargetUser = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withAdoptionDecision; query != nil {
+		if err := _q.loadAdoptionDecision(ctx, query, nodes, nil,
+			func(n *PendingAuthSession, e *IdentityAdoptionDecision) { n.Edges.AdoptionDecision = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -435,6 +479,33 @@ func (_q *PendingAuthSessionQuery) loadTargetUser(ctx context.Context, query *Us
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (_q *PendingAuthSessionQuery) loadAdoptionDecision(ctx context.Context, query *IdentityAdoptionDecisionQuery, nodes []*PendingAuthSession, init func(*PendingAuthSession), assign func(*PendingAuthSession, *IdentityAdoptionDecision)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*PendingAuthSession)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(identityadoptiondecision.FieldPendingAuthSessionID)
+	}
+	query.Where(predicate.IdentityAdoptionDecision(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(pendingauthsession.AdoptionDecisionColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.PendingAuthSessionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "pending_auth_session_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }

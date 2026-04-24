@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	defaultGrokOfficialBaseURL                 = "https://api.x.ai"
-	defaultGrokSessionBaseURL                  = "https://grok.com"
+	defaultGrokOfficialBaseURL                = "https://api.x.ai"
+	defaultGrokSessionBaseURL                 = "https://grok.com"
 	defaultGrokQuotaSyncIntervalSeconds       = int((15 * time.Minute) / time.Second)
 	defaultGrokUsageSyncConcurrency           = 50
 	defaultGrokCapabilityProbeIntervalSeconds = int((6 * time.Hour) / time.Second)
@@ -25,20 +25,20 @@ const (
 )
 
 type GrokRuntimeSettings struct {
-	OfficialBaseURL               string `json:"grok_official_base_url"`
-	SessionBaseURL                string `json:"grok_session_base_url"`
-	QuotaSyncIntervalSeconds       int `json:"grok_quota_sync_interval_seconds"`
-	UsageSyncConcurrency           int `json:"grok_usage_sync_concurrency"`
-	CapabilityProbeIntervalSeconds int `json:"grok_capability_probe_interval_seconds"`
-	CapabilityProbeConcurrency     int `json:"grok_capability_probe_concurrency"`
-	SessionValidityCheckSeconds    int `json:"grok_session_validity_check_interval"`
-	VideoTimeoutSeconds            int `json:"grok_video_timeout"`
+	OfficialBaseURL                string `json:"grok_official_base_url"`
+	SessionBaseURL                 string `json:"grok_session_base_url"`
+	QuotaSyncIntervalSeconds       int    `json:"grok_quota_sync_interval_seconds"`
+	UsageSyncConcurrency           int    `json:"grok_usage_sync_concurrency"`
+	CapabilityProbeIntervalSeconds int    `json:"grok_capability_probe_interval_seconds"`
+	CapabilityProbeConcurrency     int    `json:"grok_capability_probe_concurrency"`
+	SessionValidityCheckSeconds    int    `json:"grok_session_validity_check_interval"`
+	VideoTimeoutSeconds            int    `json:"grok_video_timeout"`
 }
 
 func DefaultGrokRuntimeSettings() GrokRuntimeSettings {
 	return GrokRuntimeSettings{
-		OfficialBaseURL:               defaultGrokOfficialBaseURL,
-		SessionBaseURL:                defaultGrokSessionBaseURL,
+		OfficialBaseURL:                defaultGrokOfficialBaseURL,
+		SessionBaseURL:                 defaultGrokSessionBaseURL,
 		QuotaSyncIntervalSeconds:       defaultGrokQuotaSyncIntervalSeconds,
 		UsageSyncConcurrency:           defaultGrokUsageSyncConcurrency,
 		CapabilityProbeIntervalSeconds: defaultGrokCapabilityProbeIntervalSeconds,

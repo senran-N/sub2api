@@ -172,3 +172,14 @@ export function getPlatformTagClass(platform: string): string {
     default: return 'theme-chip theme-chip--compact theme-chip--neutral'
   }
 }
+
+export function getPlatformTextClass(platform: string): string {
+  switch (platform) {
+    case 'anthropic': return 'text-orange-600 dark:text-orange-400'
+    case 'openai': return 'text-emerald-600 dark:text-emerald-400'
+    case 'gemini': return 'text-blue-600 dark:text-blue-400'
+    case 'grok': return 'text-rose-600 dark:text-rose-400'
+    case 'antigravity': return 'text-purple-600 dark:text-purple-400'
+    default: return 'text-gray-600 dark:text-gray-400'
+  }
+}

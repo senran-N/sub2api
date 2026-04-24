@@ -229,8 +229,8 @@ func (w *Wxpay) prepayNative(ctx context.Context, c *core.Client, req payment.Cr
 	svc := native.NativeApiService{Client: c}
 	cur := wxpayCurrency
 	resp, _, err := wxpayNativePrepay(ctx, svc, native.PrepayRequest{
-		Appid: core.String(w.config["appId"]),
-		Mchid: core.String(w.config["mchId"]),
+		Appid:       core.String(w.config["appId"]),
+		Mchid:       core.String(w.config["mchId"]),
 		Description: core.String(req.Subject),
 		OutTradeNo:  core.String(req.OrderID),
 		NotifyUrl:   core.String(notifyURL),
@@ -250,8 +250,8 @@ func (w *Wxpay) prepayH5(ctx context.Context, c *core.Client, req payment.Create
 	svc := h5.H5ApiService{Client: c}
 	cur := wxpayCurrency
 	resp, _, err := wxpayH5Prepay(ctx, svc, h5.PrepayRequest{
-		Appid: core.String(w.config["appId"]),
-		Mchid: core.String(w.config["mchId"]),
+		Appid:       core.String(w.config["appId"]),
+		Mchid:       core.String(w.config["mchId"]),
 		Description: core.String(req.Subject),
 		OutTradeNo:  core.String(req.OrderID),
 		NotifyUrl:   core.String(notifyURL),

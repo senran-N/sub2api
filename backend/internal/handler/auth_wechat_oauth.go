@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/senran-N/sub2api/internal/config"
 	"github.com/senran-N/sub2api/internal/payment"
 	infraerrors "github.com/senran-N/sub2api/internal/pkg/errors"
 	"github.com/senran-N/sub2api/internal/pkg/oauth"
@@ -471,12 +470,29 @@ func (h *AuthHandler) WeChatPaymentOAuthCallback(c *gin.Context) {
 }
 
 func (h *AuthHandler) getWeChatOAuthConfig(ctx context.Context, requestedMode string) (*wechatOAuthRuntimeConfig, error) {
-	var base config.WeChatConnectConfig
+	var base service.WeChatConnectOAuthConfig
 	var err error
 	if h != nil && h.settingSvc != nil {
 		base, err = h.settingSvc.GetWeChatConnectOAuthConfig(ctx)
 	} else if h != nil && h.cfg != nil {
-		base = h.cfg.WeChat
+		base = service.WeChatConnectOAuthConfig{
+			Enabled:             h.cfg.WeChat.Enabled,
+			LegacyAppID:         h.cfg.WeChat.AppID,
+			LegacyAppSecret:     h.cfg.WeChat.AppSecret,
+			OpenAppID:           h.cfg.WeChat.OpenAppID,
+			OpenAppSecret:       h.cfg.WeChat.OpenAppSecret,
+			MPAppID:             h.cfg.WeChat.MPAppID,
+			MPAppSecret:         h.cfg.WeChat.MPAppSecret,
+			MobileAppID:         h.cfg.WeChat.MobileAppID,
+			MobileAppSecret:     h.cfg.WeChat.MobileAppSecret,
+			OpenEnabled:         h.cfg.WeChat.OpenEnabled,
+			MPEnabled:           h.cfg.WeChat.MPEnabled,
+			MobileEnabled:       h.cfg.WeChat.MobileEnabled,
+			Mode:                h.cfg.WeChat.Mode,
+			Scopes:              h.cfg.WeChat.Scopes,
+			RedirectURL:         h.cfg.WeChat.RedirectURL,
+			FrontendRedirectURL: h.cfg.WeChat.FrontendRedirectURL,
+		}
 	} else {
 		return nil, infraerrors.ServiceUnavailable("CONFIG_NOT_READY", "config not loaded")
 	}
@@ -581,14 +597,14 @@ func normalizeWeChatOAuthScope(raw, mode string) string {
 	}
 }
 
-func wechatConfigCredentialsForMode(cfg config.WeChatConnectConfig, mode string) (string, string) {
+func wechatConfigCredentialsForMode(cfg service.WeChatConnectOAuthConfig, mode string) (string, string) {
 	switch normalizeWeChatOAuthMode(mode) {
 	case "mp":
-		return strings.TrimSpace(firstNonEmpty(cfg.MPAppID, cfg.AppID)), strings.TrimSpace(firstNonEmpty(cfg.MPAppSecret, cfg.AppSecret))
+		return strings.TrimSpace(firstNonEmpty(cfg.MPAppID, cfg.LegacyAppID)), strings.TrimSpace(firstNonEmpty(cfg.MPAppSecret, cfg.LegacyAppSecret))
 	case "mobile":
-		return strings.TrimSpace(firstNonEmpty(cfg.MobileAppID, cfg.AppID)), strings.TrimSpace(firstNonEmpty(cfg.MobileAppSecret, cfg.AppSecret))
+		return strings.TrimSpace(firstNonEmpty(cfg.MobileAppID, cfg.LegacyAppID)), strings.TrimSpace(firstNonEmpty(cfg.MobileAppSecret, cfg.LegacyAppSecret))
 	default:
-		return strings.TrimSpace(firstNonEmpty(cfg.OpenAppID, cfg.AppID)), strings.TrimSpace(firstNonEmpty(cfg.OpenAppSecret, cfg.AppSecret))
+		return strings.TrimSpace(firstNonEmpty(cfg.OpenAppID, cfg.LegacyAppID)), strings.TrimSpace(firstNonEmpty(cfg.OpenAppSecret, cfg.LegacyAppSecret))
 	}
 }
 

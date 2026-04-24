@@ -19,14 +19,12 @@ import (
 
 // RedeemHandler handles admin redeem code management
 type RedeemHandler struct {
-	adminService  redeemCodeAdminService
+	adminService  service.AdminService
 	redeemService *service.RedeemService
 }
 
-const redeemStatsPageSize = 1000
-
 // NewRedeemHandler creates a new admin redeem handler
-func NewRedeemHandler(adminService redeemCodeAdminService, redeemService *service.RedeemService) *RedeemHandler {
+func NewRedeemHandler(adminService service.AdminService, redeemService *service.RedeemService) *RedeemHandler {
 	return &RedeemHandler{
 		adminService:  adminService,
 		redeemService: redeemService,
@@ -37,9 +35,9 @@ func NewRedeemHandler(adminService redeemCodeAdminService, redeemService *servic
 type GenerateRedeemCodesRequest struct {
 	Count        int     `json:"count" binding:"required,min=1,max=100"`
 	Type         string  `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
-	Value        float64 `json:"value" binding:"min=0"`
-	GroupID      *int64  `json:"group_id"`                                    // 订阅类型必填
-	ValidityDays int     `json:"validity_days" binding:"omitempty,max=36500"` // 订阅类型使用，默认30天，最大100年
+	Value        float64 `json:"value"`
+	GroupID      *int64  `json:"group_id"`      // 订阅类型必填
+	ValidityDays int     `json:"validity_days"` // 订阅类型使用，正数增加/负数退款扣减
 }
 
 // CreateAndRedeemCodeRequest represents creating a fixed code and redeeming it for a target user.
@@ -47,10 +45,10 @@ type GenerateRedeemCodesRequest struct {
 type CreateAndRedeemCodeRequest struct {
 	Code         string  `json:"code" binding:"required,min=3,max=128"`
 	Type         string  `json:"type" binding:"omitempty,oneof=balance concurrency subscription invitation"` // 不传时默认 balance（向后兼容）
-	Value        float64 `json:"value" binding:"required,gt=0"`
+	Value        float64 `json:"value" binding:"required"`
 	UserID       int64   `json:"user_id" binding:"required,gt=0"`
-	GroupID      *int64  `json:"group_id"`                                    // subscription 类型必填
-	ValidityDays int     `json:"validity_days" binding:"omitempty,max=36500"` // subscription 类型必填，>0
+	GroupID      *int64  `json:"group_id"`      // subscription 类型必填
+	ValidityDays int     `json:"validity_days"` // subscription 类型：正数增加，负数退款扣减
 	Notes        string  `json:"notes"`
 }
 
@@ -61,13 +59,15 @@ func (h *RedeemHandler) List(c *gin.Context) {
 	codeType := c.Query("type")
 	status := c.Query("status")
 	search := c.Query("search")
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := c.DefaultQuery("sort_order", "desc")
 	// 标准化和验证 search 参数
 	search = strings.TrimSpace(search)
 	if len(search) > 100 {
 		search = search[:100]
 	}
 
-	codes, total, err := h.adminService.ListRedeemCodes(c.Request.Context(), page, pageSize, codeType, status, search)
+	codes, total, err := h.adminService.ListRedeemCodes(c.Request.Context(), page, pageSize, codeType, status, search, sortBy, sortOrder)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -153,7 +153,7 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 			return
 		}
 		if req.ValidityDays <= 0 {
-			response.BadRequest(c, "validity_days must be greater than 0 for subscription type")
+			response.BadRequest(c, "validity_days must be positive for subscription type")
 			return
 		}
 	}
@@ -282,13 +282,45 @@ func (h *RedeemHandler) Expire(c *gin.Context) {
 // GetStats handles getting redeem code statistics
 // GET /api/v1/admin/redeem-codes/stats
 func (h *RedeemHandler) GetStats(c *gin.Context) {
-	codes, err := h.listAllRedeemCodes(c.Request.Context())
+	codes, _, err := h.adminService.ListRedeemCodes(c.Request.Context(), 1, 10000, "", "", "", "id", "desc")
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 
-	response.Success(c, buildRedeemCodeStats(codes))
+	byType := gin.H{
+		service.RedeemTypeBalance:      0,
+		service.RedeemTypeConcurrency:  0,
+		service.RedeemTypeSubscription: 0,
+		service.RedeemTypeInvitation:   0,
+	}
+	var activeCodes, usedCodes, expiredCodes int
+	var totalValueDistributed float64
+	for _, code := range codes {
+		if _, ok := byType[code.Type]; !ok {
+			byType[code.Type] = 0
+		}
+		currentCount, _ := byType[code.Type].(int)
+		byType[code.Type] = currentCount + 1
+		switch code.Status {
+		case service.StatusUnused:
+			activeCodes++
+		case service.StatusUsed:
+			usedCodes++
+			totalValueDistributed += code.Value
+		case service.StatusExpired:
+			expiredCodes++
+		}
+	}
+
+	response.Success(c, gin.H{
+		"total_codes":             len(codes),
+		"active_codes":            activeCodes,
+		"used_codes":              usedCodes,
+		"expired_codes":           expiredCodes,
+		"total_value_distributed": totalValueDistributed,
+		"by_type":                 byType,
+	})
 }
 
 // Export handles exporting redeem codes to CSV
@@ -296,9 +328,15 @@ func (h *RedeemHandler) GetStats(c *gin.Context) {
 func (h *RedeemHandler) Export(c *gin.Context) {
 	codeType := c.Query("type")
 	status := c.Query("status")
+	search := strings.TrimSpace(c.Query("search"))
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := c.DefaultQuery("sort_order", "desc")
+	if len(search) > 100 {
+		search = search[:100]
+	}
 
 	// Get all codes without pagination (use large page size)
-	codes, _, err := h.adminService.ListRedeemCodes(c.Request.Context(), 1, 10000, codeType, status, "")
+	codes, _, err := h.adminService.ListRedeemCodes(c.Request.Context(), 1, 10000, codeType, status, search, sortBy, sortOrder)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -353,78 +391,4 @@ func (h *RedeemHandler) Export(c *gin.Context) {
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", "attachment; filename=redeem_codes.csv")
 	c.Data(200, "text/csv", buf.Bytes())
-}
-
-func (h *RedeemHandler) listAllRedeemCodes(ctx context.Context) ([]service.RedeemCode, error) {
-	page := 1
-	totalLoaded := int64(0)
-	totalExpected := int64(-1)
-	codes := make([]service.RedeemCode, 0, redeemStatsPageSize)
-
-	for totalExpected == -1 || totalLoaded < totalExpected {
-		batch, total, err := h.adminService.ListRedeemCodes(ctx, page, redeemStatsPageSize, "", "", "")
-		if err != nil {
-			return nil, err
-		}
-		if totalExpected == -1 {
-			totalExpected = total
-			if totalExpected == 0 {
-				return []service.RedeemCode{}, nil
-			}
-			if totalExpected > int64(cap(codes)) {
-				codes = make([]service.RedeemCode, 0, totalExpected)
-			}
-		}
-
-		codes = append(codes, batch...)
-		totalLoaded += int64(len(batch))
-		if len(batch) == 0 {
-			break
-		}
-		page++
-	}
-
-	return codes, nil
-}
-
-func buildRedeemCodeStats(codes []service.RedeemCode) gin.H {
-	byType := gin.H{
-		service.RedeemTypeBalance:      0,
-		service.RedeemTypeConcurrency:  0,
-		service.RedeemTypeSubscription: 0,
-		service.RedeemTypeInvitation:   0,
-	}
-
-	activeCodes := 0
-	usedCodes := 0
-	expiredCodes := 0
-	totalValueDistributed := 0.0
-
-	for _, code := range codes {
-		if _, exists := byType[code.Type]; exists {
-			count, ok := byType[code.Type].(int)
-			if ok {
-				byType[code.Type] = count + 1
-			}
-		}
-
-		switch code.Status {
-		case service.StatusUsed:
-			usedCodes++
-			totalValueDistributed += code.Value
-		case service.StatusExpired:
-			expiredCodes++
-		default:
-			activeCodes++
-		}
-	}
-
-	return gin.H{
-		"total_codes":             len(codes),
-		"active_codes":            activeCodes,
-		"used_codes":              usedCodes,
-		"expired_codes":           expiredCodes,
-		"total_value_distributed": totalValueDistributed,
-		"by_type":                 byType,
-	}
 }

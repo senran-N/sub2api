@@ -187,6 +187,16 @@ export interface GroupRateMultiplierEntry {
   user_notes: string
   user_status: string
   rate_multiplier: number
+  rpm_override?: number | null
+}
+
+export interface GroupRPMOverrideEntry {
+  user_id: number
+  user_name: string
+  user_email: string
+  user_notes: string
+  user_status: string
+  rpm_override: number
 }
 
 /**
@@ -242,6 +252,38 @@ export async function batchSetGroupRateMultipliers(
   return data
 }
 
+export async function getGroupRPMOverrides(id: number): Promise<GroupRPMOverrideEntry[]> {
+  const { data } = await apiClient.get<GroupRateMultiplierEntry[]>(
+    `/admin/groups/${id}/rate-multipliers`
+  )
+  return data
+    .filter(entry => entry.rpm_override != null)
+    .map(entry => ({
+      user_id: entry.user_id,
+      user_name: entry.user_name,
+      user_email: entry.user_email,
+      user_notes: entry.user_notes,
+      user_status: entry.user_status,
+      rpm_override: entry.rpm_override as number
+    }))
+}
+
+export async function batchSetGroupRPMOverrides(
+  id: number,
+  entries: Array<{ user_id: number; rpm_override: number }>
+): Promise<{ message: string }> {
+  const { data } = await apiClient.put<{ message: string }>(
+    `/admin/groups/${id}/rpm-overrides`,
+    { entries }
+  )
+  return data
+}
+
+export async function clearGroupRPMOverrides(id: number): Promise<{ message: string }> {
+  const { data } = await apiClient.delete<{ message: string }>(`/admin/groups/${id}/rpm-overrides`)
+  return data
+}
+
 /**
  * Get usage summary (today + cumulative cost) for all groups
  * @param timezone - IANA timezone string (e.g. "Asia/Shanghai")
@@ -278,6 +320,9 @@ export const groupsAPI = {
   getGroupRateMultipliers,
   clearGroupRateMultipliers,
   batchSetGroupRateMultipliers,
+  getGroupRPMOverrides,
+  clearGroupRPMOverrides,
+  batchSetGroupRPMOverrides,
   updateSortOrder,
   getUsageSummary,
   getCapacitySummary

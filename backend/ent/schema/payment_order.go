@@ -94,9 +94,10 @@ func (PaymentOrder) Fields() []ent.Field {
 		field.String("provider_key").
 			Optional().
 			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "text"}),
+			MaxLen(30),
 		field.JSON("provider_snapshot", map[string]any{}).
-			Optional(),
+			Optional().
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 
 		// 状态
 		field.String("status").
@@ -184,7 +185,9 @@ func (PaymentOrder) Edges() []ent.Edge {
 
 func (PaymentOrder) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("out_trade_no"),
+		index.Fields("out_trade_no").
+			Unique().
+			Annotations(entsql.IndexWhere("out_trade_no <> ''")),
 		index.Fields("user_id"),
 		index.Fields("status"),
 		index.Fields("expires_at"),

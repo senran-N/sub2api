@@ -365,8 +365,8 @@
                       {{ t('admin.settings.payment.enabledPaymentTypesHint') }}
                       <a
                         :href="locale === 'zh'
-                          ? 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md#%E6%94%AF%E6%8C%81%E7%9A%84%E6%94%AF%E4%BB%98%E6%96%B9%E5%BC%8F'
-                          : 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT.md#supported-payment-methods'"
+                          ? 'https://github.com/senran-N/sub2api/blob/main/docs/PAYMENT_CN.md#%E6%94%AF%E6%8C%81%E7%9A%84%E6%94%AF%E4%BB%98%E6%96%B9%E5%BC%8F'
+                          : 'https://github.com/senran-N/sub2api/blob/main/docs/PAYMENT.md#supported-payment-methods'"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="ml-1 text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300"

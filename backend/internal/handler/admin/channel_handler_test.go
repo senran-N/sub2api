@@ -186,7 +186,7 @@ func (*channelHandlerRepoStub) ReplaceModelPricing(context.Context, int64, []ser
 func newChannelHandlerTestRouter(repo *channelHandlerRepoStub) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handler := NewChannelHandler(service.NewChannelService(repo, nil), nil)
+	handler := NewChannelHandler(service.NewChannelService(repo, nil, nil, nil), nil)
 	router.GET("/admin/channels", handler.List)
 	router.GET("/admin/channels/:id", handler.GetByID)
 	router.POST("/admin/channels", handler.Create)
@@ -198,7 +198,7 @@ func newChannelHandlerTestRouter(repo *channelHandlerRepoStub) *gin.Engine {
 func newChannelHandlerWithBillingTestRouter(repo *channelHandlerRepoStub, billing *service.BillingService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handler := NewChannelHandler(service.NewChannelService(repo, nil), billing)
+	handler := NewChannelHandler(service.NewChannelService(repo, nil, nil, nil), billing)
 	router.GET("/admin/channels/model-pricing", handler.GetModelDefaultPricing)
 	return router
 }

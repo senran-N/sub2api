@@ -109,9 +109,7 @@ func (e *grokSessionReasoningEmitter) Finalize() []grokSessionReasoningEmission 
 
 func (e *grokSessionReasoningEmitter) handleDetailedThinking(token string, rollout string) []grokSessionReasoningEmission {
 	raw := token
-	if strings.HasPrefix(raw, "- ") {
-		raw = raw[2:]
-	}
+	raw = strings.TrimPrefix(raw, "- ")
 	if raw == "" {
 		return nil
 	}
@@ -184,7 +182,7 @@ func (f *grokSessionReasoningFormatter) OnThinking(token string, tag string, ste
 		return nil
 	}
 
-	section := "scope"
+	var section string
 	switch strings.TrimSpace(tag) {
 	case "header":
 		if strings.EqualFold(text, "thinking about your request") {
@@ -460,12 +458,12 @@ func grokSessionCamelToSnake(value string) string {
 	for idx, r := range value {
 		if unicode.IsUpper(r) {
 			if idx > 0 {
-				builder.WriteByte('_')
+				_ = builder.WriteByte('_')
 			}
-			builder.WriteRune(unicode.ToLower(r))
+			_, _ = builder.WriteRune(unicode.ToLower(r))
 			continue
 		}
-		builder.WriteRune(r)
+		_, _ = builder.WriteRune(r)
 	}
 	return builder.String()
 }

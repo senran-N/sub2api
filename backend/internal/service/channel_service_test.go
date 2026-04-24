@@ -169,11 +169,11 @@ func (m *channelAuthCacheInvalidatorStub) InvalidateAuthCacheByGroupID(_ context
 }
 
 func newTestChannelService(repo *channelServiceRepoStub) *ChannelService {
-	return NewChannelService(repo, nil)
+	return NewChannelService(repo, nil, nil, nil)
 }
 
 func newTestChannelServiceWithAuth(repo *channelServiceRepoStub, auth *channelAuthCacheInvalidatorStub) *ChannelService {
-	return NewChannelService(repo, auth)
+	return NewChannelService(repo, nil, auth, nil)
 }
 
 func makeStandardChannelRepo(ch Channel, groupPlatforms map[int64]string) *channelServiceRepoStub {

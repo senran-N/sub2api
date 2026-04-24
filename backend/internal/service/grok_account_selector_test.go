@@ -63,7 +63,9 @@ func TestGrokAccountSelectorRequestedModelAvailable_IgnoresAccountCooldownButHon
 	require.True(t, selector.RequestedModelAvailable(accounts, "grok-4-fast-reasoning"))
 	require.Empty(t, selector.FilterSchedulableCandidates(accounts, "grok-4-fast-reasoning", nil))
 
-	accounts[0].Extra["grok"].(map[string]any)["runtime_state"] = map[string]any{
+	grokExtra, ok := accounts[0].Extra["grok"].(map[string]any)
+	require.True(t, ok)
+	grokExtra["runtime_state"] = map[string]any{
 		"selection_cooldown_until": now.Add(10 * time.Minute).Format(time.RFC3339),
 		"selection_cooldown_scope": "model",
 		"selection_cooldown_model": "grok-4-fast-reasoning",

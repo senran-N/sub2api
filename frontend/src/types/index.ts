@@ -52,6 +52,11 @@ export interface User {
   linuxdo_bound: boolean
   oidc_bound: boolean
   wechat_bound: boolean
+  avatar_url?: string
+  avatar_source?: string
+  avatar_mime?: string
+  avatar_byte_size?: number
+  avatar_sha256?: string
   created_at: string
   updated_at: string
 }
@@ -153,6 +158,11 @@ export interface PublicSettings {
   account_quota_notify_enabled: boolean
   balance_low_notify_threshold: number
   balance_low_notify_recharge_url: string
+  table_default_page_size?: number
+  table_page_size_options?: number[]
+  channel_monitor_enabled?: boolean
+  channel_monitor_default_interval_seconds?: number
+  available_channels_enabled?: boolean
   version: string
 }
 
@@ -440,6 +450,7 @@ export interface Group {
   allow_messages_dispatch?: boolean
   require_oauth_only: boolean
   require_privacy_set: boolean
+  rpm_limit: number
   created_at: string
   updated_at: string
 }

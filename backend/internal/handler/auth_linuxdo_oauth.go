@@ -491,16 +491,6 @@ func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 	h.CreateLinuxDoOAuthAccount(c)
 }
 
-func linuxDoExtractSubjectFromEmail(email string) string {
-	normalized := strings.ToLower(strings.TrimSpace(email))
-	prefix := "linuxdo-"
-	suffix := service.LinuxDoConnectSyntheticEmailDomain
-	if strings.HasPrefix(normalized, prefix) && strings.HasSuffix(normalized, suffix) {
-		return strings.TrimSuffix(strings.TrimPrefix(normalized, prefix), suffix)
-	}
-	return ""
-}
-
 func (h *AuthHandler) getLinuxDoOAuthConfig(ctx context.Context) (config.LinuxDoConnectConfig, error) {
 	if h != nil && h.settingSvc != nil {
 		return h.settingSvc.GetLinuxDoConnectOAuthConfig(ctx)

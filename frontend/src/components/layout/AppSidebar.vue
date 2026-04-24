@@ -603,6 +603,12 @@ const userNavItems = computed((): NavItem[] => {
     { path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
+    ...(appStore.cachedPublicSettings?.available_channels_enabled
+      ? [{ path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true }]
+      : []),
+    ...(appStore.cachedPublicSettings?.channel_monitor_enabled !== false
+      ? [{ path: '/monitor', label: t('nav.channelStatus'), icon: ChartIcon, hideInSimpleMode: true }]
+      : []),
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     ...(appStore.cachedPublicSettings?.payment_enabled
       ? [
@@ -641,6 +647,12 @@ const personalNavItems = computed((): NavItem[] => {
   const items: NavItem[] = [
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
+    ...(appStore.cachedPublicSettings?.available_channels_enabled
+      ? [{ path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true }]
+      : []),
+    ...(appStore.cachedPublicSettings?.channel_monitor_enabled !== false
+      ? [{ path: '/monitor', label: t('nav.channelStatus'), icon: ChartIcon, hideInSimpleMode: true }]
+      : []),
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     ...(appStore.cachedPublicSettings?.payment_enabled
       ? [
@@ -697,7 +709,10 @@ const adminNavItems = computed((): NavItem[] => {
       : []),
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
-    { path: '/admin/channels', label: t('nav.channels'), icon: ChannelIcon, hideInSimpleMode: true },
+    { path: '/admin/channels/pricing', label: t('nav.channelPricing'), icon: ChannelIcon, hideInSimpleMode: true },
+    ...(appStore.cachedPublicSettings?.channel_monitor_enabled !== false
+      ? [{ path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: ChartIcon, hideInSimpleMode: true }]
+      : []),
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },

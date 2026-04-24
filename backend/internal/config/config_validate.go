@@ -150,9 +150,6 @@ func (c *Config) Validate() error {
 		default:
 			return fmt.Errorf("linuxdo_connect.token_auth_method must be one of: client_secret_post/client_secret_basic/none")
 		}
-		if method == "none" && !c.LinuxDo.UsePKCE {
-			return fmt.Errorf("linuxdo_connect.use_pkce must be true when linuxdo_connect.token_auth_method=none")
-		}
 		if (method == "" || method == "client_secret_post" || method == "client_secret_basic") &&
 			strings.TrimSpace(c.LinuxDo.ClientSecret) == "" {
 			return fmt.Errorf("linuxdo_connect.client_secret is required when linuxdo_connect.enabled=true and token_auth_method is client_secret_post/client_secret_basic")
@@ -183,6 +180,58 @@ func (c *Config) Validate() error {
 		warnIfInsecureURL("linuxdo_connect.redirect_url", c.LinuxDo.RedirectURL)
 		warnIfInsecureURL("linuxdo_connect.frontend_redirect_url", c.LinuxDo.FrontendRedirectURL)
 	}
+
+	if c.OIDC.Enabled {
+		if strings.TrimSpace(c.OIDC.ClientID) == "" {
+			return fmt.Errorf("oidc_connect.client_id is required when oidc_connect.enabled=true")
+		}
+		if strings.TrimSpace(c.OIDC.IssuerURL) == "" && (strings.TrimSpace(c.OIDC.AuthorizeURL) == "" || strings.TrimSpace(c.OIDC.TokenURL) == "") {
+			return fmt.Errorf("oidc_connect.issuer_url or oidc_connect authorize/token endpoints are required when oidc_connect.enabled=true")
+		}
+		if strings.TrimSpace(c.OIDC.RedirectURL) == "" {
+			return fmt.Errorf("oidc_connect.redirect_url is required when oidc_connect.enabled=true")
+		}
+		if strings.TrimSpace(c.OIDC.FrontendRedirectURL) == "" {
+			return fmt.Errorf("oidc_connect.frontend_redirect_url is required when oidc_connect.enabled=true")
+		}
+		if !containsScope(c.OIDC.Scopes, "openid") {
+			return fmt.Errorf("oidc_connect.scopes must include openid")
+		}
+		method := strings.ToLower(strings.TrimSpace(c.OIDC.TokenAuthMethod))
+		switch method {
+		case "", "client_secret_post", "client_secret_basic", "none":
+		default:
+			return fmt.Errorf("oidc_connect.token_auth_method must be one of: client_secret_post/client_secret_basic/none")
+		}
+		if (method == "" || method == "client_secret_post" || method == "client_secret_basic") && strings.TrimSpace(c.OIDC.ClientSecret) == "" {
+			return fmt.Errorf("oidc_connect.client_secret is required when oidc_connect.enabled=true and token_auth_method is client_secret_post/client_secret_basic")
+		}
+		if err := ValidateAbsoluteHTTPURL(c.OIDC.RedirectURL); err != nil {
+			return fmt.Errorf("oidc_connect.redirect_url invalid: %w", err)
+		}
+		if err := ValidateFrontendRedirectURL(c.OIDC.FrontendRedirectURL); err != nil {
+			return fmt.Errorf("oidc_connect.frontend_redirect_url invalid: %w", err)
+		}
+		for field, value := range map[string]string{
+			"oidc_connect.issuer_url":    c.OIDC.IssuerURL,
+			"oidc_connect.discovery_url": c.OIDC.DiscoveryURL,
+			"oidc_connect.authorize_url": c.OIDC.AuthorizeURL,
+			"oidc_connect.token_url":     c.OIDC.TokenURL,
+			"oidc_connect.userinfo_url":  c.OIDC.UserInfoURL,
+			"oidc_connect.jwks_url":      c.OIDC.JWKSURL,
+		} {
+			if strings.TrimSpace(value) == "" {
+				continue
+			}
+			if err := ValidateAbsoluteHTTPURL(value); err != nil {
+				return fmt.Errorf("%s invalid: %w", field, err)
+			}
+			warnIfInsecureURL(field, value)
+		}
+		warnIfInsecureURL("oidc_connect.redirect_url", c.OIDC.RedirectURL)
+		warnIfInsecureURL("oidc_connect.frontend_redirect_url", c.OIDC.FrontendRedirectURL)
+	}
+
 	if c.Billing.CircuitBreaker.Enabled {
 		if c.Billing.CircuitBreaker.FailureThreshold <= 0 {
 			return fmt.Errorf("billing.circuit_breaker.failure_threshold must be positive")
@@ -755,4 +804,13 @@ func warnIfInsecureURL(field, raw string) {
 	if strings.EqualFold(u.Scheme, "http") {
 		slog.Warn("url uses http scheme; use https in production to avoid token leakage", "field", field)
 	}
+}
+
+func containsScope(scopes string, target string) bool {
+	for _, scope := range strings.Fields(scopes) {
+		if scope == target {
+			return true
+		}
+	}
+	return false
 }

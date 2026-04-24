@@ -89,6 +89,63 @@ var migrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibil
 			"222b4a09c797c22e5922b6b172327c824f5463aaa8760e4f621bc5c22e2be0f3": {},
 		},
 	},
+	"109_auth_identity_compat_backfill.sql": {
+		fileChecksum: "0580b4602d85435edf9aca1633db580bb3932f26517f75134106f80275ec2ace",
+		acceptedDBChecksum: map[string]struct{}{
+			"551e498aa5616d2d91096e9d72cf9fb36e418ee22eacc557f8811cadbc9e20ee": {},
+		},
+	},
+	"110_pending_auth_and_provider_default_grants.sql": {
+		fileChecksum: "32cf87ee787b1bb36b5c691367c96eee37518fa3eed6f3322cf68795e3745279",
+		acceptedDBChecksum: map[string]struct{}{
+			"e3d1f433be2b564cfbdc549adf98fce13c5c7b363ebc20fd05b765d0563b0925": {},
+		},
+	},
+	"112_add_payment_order_provider_key_snapshot.sql": {
+		fileChecksum: "b75f8f56d39455682787696a3d92ad25b055444ca328fb7fca9a460a15d68d99",
+		acceptedDBChecksum: map[string]struct{}{
+			"ffd3e8a2c9295fa9cbefefd629a78268877e5b51bc970a82d9b3f46ec4ebd15e": {},
+		},
+	},
+	"115_auth_identity_legacy_external_backfill.sql": {
+		fileChecksum: "022aadd97bb53e755f0cf7a3a957e0cb1a1353b0c39ec4de3234acd2871fd04f",
+		acceptedDBChecksum: map[string]struct{}{
+			"4cf39e508be9fd1a5aa41610cbbebeb80385c9adda45bf78a706de9db4f1385f": {},
+		},
+	},
+	"116_auth_identity_legacy_external_safety_reports.sql": {
+		fileChecksum: "07edb09fa8d04ffb172b0621e3c22f4d1757d20a24ae267b3b36b087ab72d488",
+		acceptedDBChecksum: map[string]struct{}{
+			"f7757bd929ac67ffb08ce69fa4cf20fad39dbff9d5a5085fb2adabb7607e5877": {},
+		},
+	},
+	"118_wechat_dual_mode_and_auth_source_defaults.sql": {
+		fileChecksum: "b54194d7a3e4fbf710e0a3590d22a2fe7966804c487052a356e0b55f53ef96b0",
+		acceptedDBChecksum: map[string]struct{}{
+			"a38243ca0a72c3a01c0a92b7986423054d6133c0399441f853b99802852720fb": {},
+			"e0cdf835d6c688d64100f483d31bc02ac9ebad414bf1837af239a84bf75b8227": {},
+		},
+	},
+	"119_enforce_payment_orders_out_trade_no_unique.sql": {
+		fileChecksum: "0bbe809ae48a9d811dabda1ba1c74955bd71c4a9cc610f9128816818dfa6c11e",
+		acceptedDBChecksum: map[string]struct{}{
+			"ebd2c67cce0116393fb4f1b5d5116a67c6aceb73820dfb5133d1ff6f36d72d34": {},
+		},
+	},
+	"120_enforce_payment_orders_out_trade_no_unique_notx.sql": {
+		fileChecksum: "34aadc0db59a4e390f92a12b73bd74642d9724f33124f73638ae00089ea5e074",
+		acceptedDBChecksum: map[string]struct{}{
+			"e77921f79d539bc24575cb9c16cbe566d2b23ce816190343d0a7568f6a3fcf61": {},
+			"707431450603e70a43ce9fbd61e0c12fa67da4875158ccefabacea069587ab22": {},
+			"04b082b5a239c525154fe9185d324ee2b05ff90da9297e10dba19f9be79aa59a": {},
+		},
+	},
+	"123_fix_legacy_auth_source_grant_on_signup_defaults.sql": {
+		fileChecksum: "dea22b2899ae6530daf44419e7f44e40ccdcdc96d2bea7584af0c6c4c0ee461b",
+		acceptedDBChecksum: map[string]struct{}{
+			"dea22b2899ae6530daf44419e7f44e40ccdcdc96d2bea7584af0c6c4c0ee461b": {},
+		},
+	},
 }
 
 // ApplyMigrations 将嵌入的 SQL 迁移文件应用到指定的数据库。
@@ -282,6 +339,10 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 		if nonTx {
 			// *_notx.sql：用于 CREATE/DROP INDEX CONCURRENTLY 场景，必须非事务执行。
 			// 逐条语句执行，避免将多条 CONCURRENTLY 语句放入同一个隐式事务块。
+			if err := prepareNonTransactionalMigration(ctx, db, name); err != nil {
+				return fmt.Errorf("prepare migration %s (non-tx): %w", name, err)
+			}
+
 			statements := splitSQLStatements(content)
 			for i, stmt := range statements {
 				trimmed := strings.TrimSpace(stmt)
@@ -572,11 +633,92 @@ func isMigrationChecksumCompatible(name, dbChecksum, fileChecksum string) bool {
 	if !ok {
 		return false
 	}
-	if rule.fileChecksum != fileChecksum {
-		return false
+	if rule.fileChecksum == fileChecksum {
+		_, ok = rule.acceptedDBChecksum[dbChecksum]
+		return ok
 	}
-	_, ok = rule.acceptedDBChecksum[dbChecksum]
-	return ok
+	if rule.fileChecksum == dbChecksum {
+		_, ok = rule.acceptedDBChecksum[fileChecksum]
+		return ok
+	}
+	return false
+}
+
+func prepareNonTransactionalMigration(ctx context.Context, db *sql.DB, name string) error {
+	switch name {
+	case "120_enforce_payment_orders_out_trade_no_unique_notx.sql":
+		return preparePaymentOrdersOutTradeNoUniqueMigration(ctx, db)
+	default:
+		return nil
+	}
+}
+
+func preparePaymentOrdersOutTradeNoUniqueMigration(ctx context.Context, db *sql.DB) error {
+	duplicates, err := findDuplicatePaymentOrderOutTradeNos(ctx, db)
+	if err != nil {
+		return err
+	}
+	if len(duplicates) > 0 {
+		return fmt.Errorf("duplicate out_trade_no values found before creating unique index: %s", strings.Join(duplicates, ", "))
+	}
+
+	invalid, err := hasInvalidPaymentOrderOutTradeNoUniqueIndex(ctx, db)
+	if err != nil {
+		return err
+	}
+	if !invalid {
+		return nil
+	}
+
+	if _, err := db.ExecContext(ctx, "DROP INDEX CONCURRENTLY IF EXISTS paymentorder_out_trade_no_unique"); err != nil {
+		return fmt.Errorf("drop invalid paymentorder_out_trade_no_unique index: %w", err)
+	}
+	return nil
+}
+
+func findDuplicatePaymentOrderOutTradeNos(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT out_trade_no, COUNT(*) AS duplicate_count FROM payment_orders
+		WHERE out_trade_no <> ''
+		GROUP BY out_trade_no
+		HAVING COUNT(*) > 1
+		ORDER BY duplicate_count DESC, out_trade_no
+		LIMIT 10
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("check duplicate payment order out_trade_no: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	duplicates := make([]string, 0)
+	for rows.Next() {
+		var outTradeNo string
+		var duplicateCount int
+		if err := rows.Scan(&outTradeNo, &duplicateCount); err != nil {
+			return nil, fmt.Errorf("scan duplicate payment order out_trade_no: %w", err)
+		}
+		duplicates = append(duplicates, fmt.Sprintf("%s (%d)", outTradeNo, duplicateCount))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate duplicate payment order out_trade_no: %w", err)
+	}
+	return duplicates, nil
+}
+
+func hasInvalidPaymentOrderOutTradeNoUniqueIndex(ctx context.Context, db *sql.DB) (bool, error) {
+	var exists bool
+	err := db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM pg_class idx
+			JOIN pg_index index_meta ON index_meta.indexrelid = idx.oid
+			WHERE idx.relname = $1 AND NOT index_meta.indisvalid
+		)
+	`, "paymentorder_out_trade_no_unique").Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check invalid paymentorder_out_trade_no_unique index: %w", err)
+	}
+	return exists, nil
 }
 
 func validateMigrationExecutionMode(name, content string) (bool, error) {

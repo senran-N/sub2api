@@ -26,6 +26,7 @@ export async function updateProfile(profile: {
   balance_notify_threshold?: number | null
   balance_notify_threshold_type?: string
   balance_notify_extra_emails?: NotifyEmailEntry[]
+  avatar_url?: string
 }): Promise<User> {
   const { data } = await apiClient.put<User>('/user', profile)
   return data

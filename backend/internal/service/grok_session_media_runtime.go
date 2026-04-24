@@ -1,3 +1,4 @@
+//nolint:unused
 package service
 
 import (
@@ -472,7 +473,7 @@ func (r *GrokSessionMediaRuntime) buildSessionImageGenerationResponseWithPath(
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, "", errors.New("Failed to build Grok image generation request")
+		return nil, "", errors.New("failed to build Grok image generation request")
 	}
 
 	resp, target, err := r.doSessionJSONRequest(
@@ -502,7 +503,7 @@ func (r *GrokSessionMediaRuntime) buildSessionImageGenerationResponseWithPath(
 
 	responseBody, err := marshalGrokSessionImageResponse(imageURLs, r.now())
 	if err != nil {
-		return nil, "", errors.New("Failed to build Grok image response")
+		return nil, "", errors.New("failed to build Grok image response")
 	}
 	if r.mediaAssets != nil {
 		responseBody, _, _ = r.mediaAssets.RewriteResponse(c, account, responseBody, "image", req.ResponseFormat, requestedModel, canonicalModel, "")
@@ -538,7 +539,7 @@ func (r *GrokSessionMediaRuntime) buildSessionImageEditResponseWithPath(
 		return nil, "", err
 	}
 	if req.HasMask {
-		return nil, "", errors.New("Grok session image edit does not support mask uploads")
+		return nil, "", errors.New("grok session image edit does not support mask uploads")
 	}
 
 	uploaded, err := r.uploadSessionMediaInputs(c.Request.Context(), account, req.InputImages)
@@ -597,7 +598,7 @@ func (r *GrokSessionMediaRuntime) buildSessionImageEditResponseWithPath(
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, "", errors.New("Failed to build Grok image edit request")
+		return nil, "", errors.New("failed to build Grok image edit request")
 	}
 
 	imageURLs, reasoning, err := r.collectSessionImageEditURLsWithReasoning(
@@ -619,7 +620,7 @@ func (r *GrokSessionMediaRuntime) buildSessionImageEditResponseWithPath(
 
 	responseBody, err := marshalGrokSessionImageResponse(imageURLs, r.now())
 	if err != nil {
-		return nil, "", errors.New("Failed to build Grok image response")
+		return nil, "", errors.New("failed to build Grok image response")
 	}
 	if r.mediaAssets != nil {
 		responseBody, _, _ = r.mediaAssets.RewriteResponse(c, account, responseBody, "image", req.ResponseFormat, requestedModel, canonicalModel, "")

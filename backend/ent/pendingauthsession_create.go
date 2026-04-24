@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/senran-N/sub2api/ent/identityadoptiondecision"
 	"github.com/senran-N/sub2api/ent/pendingauthsession"
 	"github.com/senran-N/sub2api/ent/user"
 )
@@ -191,6 +192,48 @@ func (_c *PendingAuthSessionCreate) SetNillableCompletionCodeExpiresAt(v *time.T
 	return _c
 }
 
+// SetEmailVerifiedAt sets the "email_verified_at" field.
+func (_c *PendingAuthSessionCreate) SetEmailVerifiedAt(v time.Time) *PendingAuthSessionCreate {
+	_c.mutation.SetEmailVerifiedAt(v)
+	return _c
+}
+
+// SetNillableEmailVerifiedAt sets the "email_verified_at" field if the given value is not nil.
+func (_c *PendingAuthSessionCreate) SetNillableEmailVerifiedAt(v *time.Time) *PendingAuthSessionCreate {
+	if v != nil {
+		_c.SetEmailVerifiedAt(*v)
+	}
+	return _c
+}
+
+// SetPasswordVerifiedAt sets the "password_verified_at" field.
+func (_c *PendingAuthSessionCreate) SetPasswordVerifiedAt(v time.Time) *PendingAuthSessionCreate {
+	_c.mutation.SetPasswordVerifiedAt(v)
+	return _c
+}
+
+// SetNillablePasswordVerifiedAt sets the "password_verified_at" field if the given value is not nil.
+func (_c *PendingAuthSessionCreate) SetNillablePasswordVerifiedAt(v *time.Time) *PendingAuthSessionCreate {
+	if v != nil {
+		_c.SetPasswordVerifiedAt(*v)
+	}
+	return _c
+}
+
+// SetTotpVerifiedAt sets the "totp_verified_at" field.
+func (_c *PendingAuthSessionCreate) SetTotpVerifiedAt(v time.Time) *PendingAuthSessionCreate {
+	_c.mutation.SetTotpVerifiedAt(v)
+	return _c
+}
+
+// SetNillableTotpVerifiedAt sets the "totp_verified_at" field if the given value is not nil.
+func (_c *PendingAuthSessionCreate) SetNillableTotpVerifiedAt(v *time.Time) *PendingAuthSessionCreate {
+	if v != nil {
+		_c.SetTotpVerifiedAt(*v)
+	}
+	return _c
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (_c *PendingAuthSessionCreate) SetExpiresAt(v time.Time) *PendingAuthSessionCreate {
 	_c.mutation.SetExpiresAt(v)
@@ -214,6 +257,25 @@ func (_c *PendingAuthSessionCreate) SetNillableConsumedAt(v *time.Time) *Pending
 // SetTargetUser sets the "target_user" edge to the User entity.
 func (_c *PendingAuthSessionCreate) SetTargetUser(v *User) *PendingAuthSessionCreate {
 	return _c.SetTargetUserID(v.ID)
+}
+
+// SetAdoptionDecisionID sets the "adoption_decision" edge to the IdentityAdoptionDecision entity by ID.
+func (_c *PendingAuthSessionCreate) SetAdoptionDecisionID(id int64) *PendingAuthSessionCreate {
+	_c.mutation.SetAdoptionDecisionID(id)
+	return _c
+}
+
+// SetNillableAdoptionDecisionID sets the "adoption_decision" edge to the IdentityAdoptionDecision entity by ID if the given value is not nil.
+func (_c *PendingAuthSessionCreate) SetNillableAdoptionDecisionID(id *int64) *PendingAuthSessionCreate {
+	if id != nil {
+		_c = _c.SetAdoptionDecisionID(*id)
+	}
+	return _c
+}
+
+// SetAdoptionDecision sets the "adoption_decision" edge to the IdentityAdoptionDecision entity.
+func (_c *PendingAuthSessionCreate) SetAdoptionDecision(v *IdentityAdoptionDecision) *PendingAuthSessionCreate {
+	return _c.SetAdoptionDecisionID(v.ID)
 }
 
 // Mutation returns the PendingAuthSessionMutation object of the builder.
@@ -448,6 +510,18 @@ func (_c *PendingAuthSessionCreate) createSpec() (*PendingAuthSession, *sqlgraph
 		_spec.SetField(pendingauthsession.FieldCompletionCodeExpiresAt, field.TypeTime, value)
 		_node.CompletionCodeExpiresAt = &value
 	}
+	if value, ok := _c.mutation.EmailVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldEmailVerifiedAt, field.TypeTime, value)
+		_node.EmailVerifiedAt = &value
+	}
+	if value, ok := _c.mutation.PasswordVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldPasswordVerifiedAt, field.TypeTime, value)
+		_node.PasswordVerifiedAt = &value
+	}
+	if value, ok := _c.mutation.TotpVerifiedAt(); ok {
+		_spec.SetField(pendingauthsession.FieldTotpVerifiedAt, field.TypeTime, value)
+		_node.TotpVerifiedAt = &value
+	}
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(pendingauthsession.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = value
@@ -471,6 +545,22 @@ func (_c *PendingAuthSessionCreate) createSpec() (*PendingAuthSession, *sqlgraph
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.TargetUserID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.AdoptionDecisionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   pendingauthsession.AdoptionDecisionTable,
+			Columns: []string{pendingauthsession.AdoptionDecisionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityadoptiondecision.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
@@ -714,6 +804,60 @@ func (u *PendingAuthSessionUpsert) UpdateCompletionCodeExpiresAt() *PendingAuthS
 // ClearCompletionCodeExpiresAt clears the value of the "completion_code_expires_at" field.
 func (u *PendingAuthSessionUpsert) ClearCompletionCodeExpiresAt() *PendingAuthSessionUpsert {
 	u.SetNull(pendingauthsession.FieldCompletionCodeExpiresAt)
+	return u
+}
+
+// SetEmailVerifiedAt sets the "email_verified_at" field.
+func (u *PendingAuthSessionUpsert) SetEmailVerifiedAt(v time.Time) *PendingAuthSessionUpsert {
+	u.Set(pendingauthsession.FieldEmailVerifiedAt, v)
+	return u
+}
+
+// UpdateEmailVerifiedAt sets the "email_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsert) UpdateEmailVerifiedAt() *PendingAuthSessionUpsert {
+	u.SetExcluded(pendingauthsession.FieldEmailVerifiedAt)
+	return u
+}
+
+// ClearEmailVerifiedAt clears the value of the "email_verified_at" field.
+func (u *PendingAuthSessionUpsert) ClearEmailVerifiedAt() *PendingAuthSessionUpsert {
+	u.SetNull(pendingauthsession.FieldEmailVerifiedAt)
+	return u
+}
+
+// SetPasswordVerifiedAt sets the "password_verified_at" field.
+func (u *PendingAuthSessionUpsert) SetPasswordVerifiedAt(v time.Time) *PendingAuthSessionUpsert {
+	u.Set(pendingauthsession.FieldPasswordVerifiedAt, v)
+	return u
+}
+
+// UpdatePasswordVerifiedAt sets the "password_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsert) UpdatePasswordVerifiedAt() *PendingAuthSessionUpsert {
+	u.SetExcluded(pendingauthsession.FieldPasswordVerifiedAt)
+	return u
+}
+
+// ClearPasswordVerifiedAt clears the value of the "password_verified_at" field.
+func (u *PendingAuthSessionUpsert) ClearPasswordVerifiedAt() *PendingAuthSessionUpsert {
+	u.SetNull(pendingauthsession.FieldPasswordVerifiedAt)
+	return u
+}
+
+// SetTotpVerifiedAt sets the "totp_verified_at" field.
+func (u *PendingAuthSessionUpsert) SetTotpVerifiedAt(v time.Time) *PendingAuthSessionUpsert {
+	u.Set(pendingauthsession.FieldTotpVerifiedAt, v)
+	return u
+}
+
+// UpdateTotpVerifiedAt sets the "totp_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsert) UpdateTotpVerifiedAt() *PendingAuthSessionUpsert {
+	u.SetExcluded(pendingauthsession.FieldTotpVerifiedAt)
+	return u
+}
+
+// ClearTotpVerifiedAt clears the value of the "totp_verified_at" field.
+func (u *PendingAuthSessionUpsert) ClearTotpVerifiedAt() *PendingAuthSessionUpsert {
+	u.SetNull(pendingauthsession.FieldTotpVerifiedAt)
 	return u
 }
 
@@ -1013,6 +1157,69 @@ func (u *PendingAuthSessionUpsertOne) UpdateCompletionCodeExpiresAt() *PendingAu
 func (u *PendingAuthSessionUpsertOne) ClearCompletionCodeExpiresAt() *PendingAuthSessionUpsertOne {
 	return u.Update(func(s *PendingAuthSessionUpsert) {
 		s.ClearCompletionCodeExpiresAt()
+	})
+}
+
+// SetEmailVerifiedAt sets the "email_verified_at" field.
+func (u *PendingAuthSessionUpsertOne) SetEmailVerifiedAt(v time.Time) *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.SetEmailVerifiedAt(v)
+	})
+}
+
+// UpdateEmailVerifiedAt sets the "email_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsertOne) UpdateEmailVerifiedAt() *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.UpdateEmailVerifiedAt()
+	})
+}
+
+// ClearEmailVerifiedAt clears the value of the "email_verified_at" field.
+func (u *PendingAuthSessionUpsertOne) ClearEmailVerifiedAt() *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.ClearEmailVerifiedAt()
+	})
+}
+
+// SetPasswordVerifiedAt sets the "password_verified_at" field.
+func (u *PendingAuthSessionUpsertOne) SetPasswordVerifiedAt(v time.Time) *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.SetPasswordVerifiedAt(v)
+	})
+}
+
+// UpdatePasswordVerifiedAt sets the "password_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsertOne) UpdatePasswordVerifiedAt() *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.UpdatePasswordVerifiedAt()
+	})
+}
+
+// ClearPasswordVerifiedAt clears the value of the "password_verified_at" field.
+func (u *PendingAuthSessionUpsertOne) ClearPasswordVerifiedAt() *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.ClearPasswordVerifiedAt()
+	})
+}
+
+// SetTotpVerifiedAt sets the "totp_verified_at" field.
+func (u *PendingAuthSessionUpsertOne) SetTotpVerifiedAt(v time.Time) *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.SetTotpVerifiedAt(v)
+	})
+}
+
+// UpdateTotpVerifiedAt sets the "totp_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsertOne) UpdateTotpVerifiedAt() *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.UpdateTotpVerifiedAt()
+	})
+}
+
+// ClearTotpVerifiedAt clears the value of the "totp_verified_at" field.
+func (u *PendingAuthSessionUpsertOne) ClearTotpVerifiedAt() *PendingAuthSessionUpsertOne {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.ClearTotpVerifiedAt()
 	})
 }
 
@@ -1483,6 +1690,69 @@ func (u *PendingAuthSessionUpsertBulk) UpdateCompletionCodeExpiresAt() *PendingA
 func (u *PendingAuthSessionUpsertBulk) ClearCompletionCodeExpiresAt() *PendingAuthSessionUpsertBulk {
 	return u.Update(func(s *PendingAuthSessionUpsert) {
 		s.ClearCompletionCodeExpiresAt()
+	})
+}
+
+// SetEmailVerifiedAt sets the "email_verified_at" field.
+func (u *PendingAuthSessionUpsertBulk) SetEmailVerifiedAt(v time.Time) *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.SetEmailVerifiedAt(v)
+	})
+}
+
+// UpdateEmailVerifiedAt sets the "email_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsertBulk) UpdateEmailVerifiedAt() *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.UpdateEmailVerifiedAt()
+	})
+}
+
+// ClearEmailVerifiedAt clears the value of the "email_verified_at" field.
+func (u *PendingAuthSessionUpsertBulk) ClearEmailVerifiedAt() *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.ClearEmailVerifiedAt()
+	})
+}
+
+// SetPasswordVerifiedAt sets the "password_verified_at" field.
+func (u *PendingAuthSessionUpsertBulk) SetPasswordVerifiedAt(v time.Time) *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.SetPasswordVerifiedAt(v)
+	})
+}
+
+// UpdatePasswordVerifiedAt sets the "password_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsertBulk) UpdatePasswordVerifiedAt() *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.UpdatePasswordVerifiedAt()
+	})
+}
+
+// ClearPasswordVerifiedAt clears the value of the "password_verified_at" field.
+func (u *PendingAuthSessionUpsertBulk) ClearPasswordVerifiedAt() *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.ClearPasswordVerifiedAt()
+	})
+}
+
+// SetTotpVerifiedAt sets the "totp_verified_at" field.
+func (u *PendingAuthSessionUpsertBulk) SetTotpVerifiedAt(v time.Time) *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.SetTotpVerifiedAt(v)
+	})
+}
+
+// UpdateTotpVerifiedAt sets the "totp_verified_at" field to the value that was provided on create.
+func (u *PendingAuthSessionUpsertBulk) UpdateTotpVerifiedAt() *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.UpdateTotpVerifiedAt()
+	})
+}
+
+// ClearTotpVerifiedAt clears the value of the "totp_verified_at" field.
+func (u *PendingAuthSessionUpsertBulk) ClearTotpVerifiedAt() *PendingAuthSessionUpsertBulk {
+	return u.Update(func(s *PendingAuthSessionUpsert) {
+		s.ClearTotpVerifiedAt()
 	})
 }
 

@@ -351,7 +351,11 @@ func TestOpenAIRequestedModelAvailableForPlatform_GrokAccountCooldownStillCounts
 		t.Fatal("expected account-scoped grok cooldown to remain model-configured for scheduler errors")
 	}
 
-	accounts[0].Extra["grok"].(map[string]any)["runtime_state"] = map[string]any{
+	grokExtra, ok := accounts[0].Extra["grok"].(map[string]any)
+	if !ok {
+		t.Fatal("expected grok extra state")
+	}
+	grokExtra["runtime_state"] = map[string]any{
 		"selection_cooldown_until": now.Add(10 * time.Minute).Format(time.RFC3339),
 		"selection_cooldown_scope": "model",
 		"selection_cooldown_model": "grok-4-fast-reasoning",

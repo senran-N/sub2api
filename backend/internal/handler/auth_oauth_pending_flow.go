@@ -41,11 +41,6 @@ type oauthPendingSessionPayload struct {
 	CompletionResponse     map[string]any
 }
 
-type oauthAdoptionDecisionRequest struct {
-	AdoptDisplayName *bool `json:"adopt_display_name,omitempty"`
-	AdoptAvatar      *bool `json:"adopt_avatar,omitempty"`
-}
-
 type bindPendingOAuthLoginRequest struct {
 	Email            string `json:"email" binding:"required,email"`
 	Password         string `json:"password" binding:"required"`
@@ -401,16 +396,6 @@ func (h *AuthHandler) isForceEmailOnThirdPartySignup(ctx context.Context) bool {
 		return false
 	}
 	return defaults.ForceEmailOnThirdPartySignup
-}
-
-func ensureOAuthCompletionUserActive(user *service.User) error {
-	if user == nil {
-		return service.ErrUserNotFound
-	}
-	if !user.IsActive() {
-		return service.ErrUserNotActive
-	}
-	return nil
 }
 
 func (h *AuthHandler) SendPendingOAuthVerifyCode(c *gin.Context) {

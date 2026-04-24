@@ -14,6 +14,15 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+func storeGatewayForwardingCache(fingerprintUnification, metadataPassthrough, cchSigning bool, ttl time.Duration) {
+	gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{
+		fingerprintUnification: fingerprintUnification,
+		metadataPassthrough:    metadataPassthrough,
+		cchSigning:             cchSigning,
+		expiresAt:              time.Now().Add(ttl).UnixNano(),
+	})
+}
+
 func TestGatewayService_ApplyForwardModelMapping_APIKeyUsesAccountMapping(t *testing.T) {
 	svc := &GatewayService{}
 	account := &Account{

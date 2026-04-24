@@ -288,14 +288,14 @@ func extractResponsesOutputText(resp *apicompat.ResponsesResponse) string {
 				if content.Type != "output_text" {
 					continue
 				}
-				builder.WriteString(content.Text)
+				_, _ = builder.WriteString(content.Text)
 			}
 		case "reasoning":
 			for _, summary := range output.Summary {
 				if summary.Type != "summary_text" {
 					continue
 				}
-				builder.WriteString(summary.Text)
+				_, _ = builder.WriteString(summary.Text)
 			}
 		}
 	}

@@ -17,6 +17,8 @@ import (
 var authProviderTypes = map[string]struct{}{
 	"email":   {},
 	"linuxdo": {},
+	"oidc":    {},
+	"wechat":  {},
 }
 
 func validateAuthProviderType(value string) error {
@@ -26,7 +28,7 @@ func validateAuthProviderType(value string) error {
 	return fmt.Errorf("invalid auth provider type %q", value)
 }
 
-// AuthIdentity stores a canonical sign-in identity bound to a user.
+// AuthIdentity stores the canonical login identity for an account.
 type AuthIdentity struct {
 	ent.Schema
 }
@@ -77,6 +79,9 @@ func (AuthIdentity) Edges() []ent.Edge {
 			Field("user_id").
 			Required().
 			Unique(),
+		edge.To("channels", AuthIdentityChannel.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
+		edge.To("adoption_decisions", IdentityAdoptionDecision.Type),
 	}
 }
 

@@ -723,3 +723,7 @@ func normalizeEmailAuthIdentitySubject(email string) string {
 func normalizeEmailLookupValue(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
+
+func (r *userRepository) UpdateUserLastActiveAt(ctx context.Context, userID int64, activeAt time.Time) error {
+	return r.client.User.UpdateOneID(userID).SetLastActiveAt(activeAt).Exec(ctx)
+}

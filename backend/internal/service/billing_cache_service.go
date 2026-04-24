@@ -84,7 +84,16 @@ type BillingCacheService struct {
 }
 
 // NewBillingCacheService 创建计费缓存服务
-func NewBillingCacheService(cache BillingCache, userRepo UserRepository, subRepo UserSubscriptionRepository, apiKeyRepo APIKeyRepository, cfg *config.Config) *BillingCacheService {
+func NewBillingCacheService(cache BillingCache, userRepo UserRepository, subRepo UserSubscriptionRepository, apiKeyRepo APIKeyRepository, extra ...any) *BillingCacheService {
+	cfg := (*config.Config)(nil)
+	if len(extra) == 1 {
+		cfg, _ = extra[0].(*config.Config)
+	} else if len(extra) >= 3 {
+		cfg, _ = extra[2].(*config.Config)
+	}
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
 	svc := &BillingCacheService{
 		cache:                 cache,
 		userRepo:              userRepo,

@@ -46,12 +46,20 @@ const (
 	FieldCompletionCodeHash = "completion_code_hash"
 	// FieldCompletionCodeExpiresAt holds the string denoting the completion_code_expires_at field in the database.
 	FieldCompletionCodeExpiresAt = "completion_code_expires_at"
+	// FieldEmailVerifiedAt holds the string denoting the email_verified_at field in the database.
+	FieldEmailVerifiedAt = "email_verified_at"
+	// FieldPasswordVerifiedAt holds the string denoting the password_verified_at field in the database.
+	FieldPasswordVerifiedAt = "password_verified_at"
+	// FieldTotpVerifiedAt holds the string denoting the totp_verified_at field in the database.
+	FieldTotpVerifiedAt = "totp_verified_at"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
 	// FieldConsumedAt holds the string denoting the consumed_at field in the database.
 	FieldConsumedAt = "consumed_at"
 	// EdgeTargetUser holds the string denoting the target_user edge name in mutations.
 	EdgeTargetUser = "target_user"
+	// EdgeAdoptionDecision holds the string denoting the adoption_decision edge name in mutations.
+	EdgeAdoptionDecision = "adoption_decision"
 	// Table holds the table name of the pendingauthsession in the database.
 	Table = "pending_auth_sessions"
 	// TargetUserTable is the table that holds the target_user relation/edge.
@@ -61,6 +69,13 @@ const (
 	TargetUserInverseTable = "users"
 	// TargetUserColumn is the table column denoting the target_user relation/edge.
 	TargetUserColumn = "target_user_id"
+	// AdoptionDecisionTable is the table that holds the adoption_decision relation/edge.
+	AdoptionDecisionTable = "identity_adoption_decisions"
+	// AdoptionDecisionInverseTable is the table name for the IdentityAdoptionDecision entity.
+	// It exists in this package in order to avoid circular dependency with the "identityadoptiondecision" package.
+	AdoptionDecisionInverseTable = "identity_adoption_decisions"
+	// AdoptionDecisionColumn is the table column denoting the adoption_decision relation/edge.
+	AdoptionDecisionColumn = "pending_auth_session_id"
 )
 
 // Columns holds all SQL columns for pendingauthsession fields.
@@ -82,6 +97,9 @@ var Columns = []string{
 	FieldBrowserSessionKey,
 	FieldCompletionCodeHash,
 	FieldCompletionCodeExpiresAt,
+	FieldEmailVerifiedAt,
+	FieldPasswordVerifiedAt,
+	FieldTotpVerifiedAt,
 	FieldExpiresAt,
 	FieldConsumedAt,
 }
@@ -207,6 +225,21 @@ func ByCompletionCodeExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCompletionCodeExpiresAt, opts...).ToFunc()
 }
 
+// ByEmailVerifiedAt orders the results by the email_verified_at field.
+func ByEmailVerifiedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEmailVerifiedAt, opts...).ToFunc()
+}
+
+// ByPasswordVerifiedAt orders the results by the password_verified_at field.
+func ByPasswordVerifiedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPasswordVerifiedAt, opts...).ToFunc()
+}
+
+// ByTotpVerifiedAt orders the results by the totp_verified_at field.
+func ByTotpVerifiedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotpVerifiedAt, opts...).ToFunc()
+}
+
 // ByExpiresAt orders the results by the expires_at field.
 func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
@@ -223,10 +256,24 @@ func ByTargetUserField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newTargetUserStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByAdoptionDecisionField orders the results by adoption_decision field.
+func ByAdoptionDecisionField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAdoptionDecisionStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newTargetUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(TargetUserInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, TargetUserTable, TargetUserColumn),
+	)
+}
+func newAdoptionDecisionStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AdoptionDecisionInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, AdoptionDecisionTable, AdoptionDecisionColumn),
 	)
 }

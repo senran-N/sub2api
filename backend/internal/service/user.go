@@ -7,16 +7,21 @@ import (
 )
 
 type User struct {
-	ID            int64
-	Email         string
-	Username      string
-	Notes         string
-	PasswordHash  string
-	Role          string
-	Balance       float64
-	Concurrency   int
-	Status        string
-	AllowedGroups []int64
+	ID             int64
+	Email          string
+	Username       string
+	Notes          string
+	AvatarURL      string
+	AvatarSource   string
+	AvatarMIME     string
+	AvatarByteSize int
+	AvatarSHA256   string
+	PasswordHash   string
+	Role           string
+	Balance        float64
+	Concurrency    int
+	Status         string
+	AllowedGroups  []int64
 
 	BalanceNotifyEnabled       bool
 	BalanceNotifyThresholdType string
@@ -31,11 +36,17 @@ type User struct {
 
 	TokenVersion int64 // Incremented on password change to invalidate existing tokens
 	CreatedAt    time.Time
+	SignupSource string
+	LastLoginAt  *time.Time
+	LastActiveAt *time.Time
+	LastUsedAt   *time.Time
 	UpdatedAt    time.Time
 
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]rateMultiplier
-	GroupRates map[int64]float64
+	GroupRates           map[int64]float64
+	RPMLimit             int
+	UserGroupRPMOverride *int
 
 	// TOTP 双因素认证字段
 	TotpSecretEncrypted *string    // AES-256-GCM 加密的 TOTP 密钥

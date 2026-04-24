@@ -16,6 +16,7 @@ type CreateGroupInput struct {
 	DailyLimitUSD                   *float64
 	WeeklyLimitUSD                  *float64
 	MonthlyLimitUSD                 *float64
+	RPMLimit                        int
 	ImagePrice1K                    *float64
 	ImagePrice2K                    *float64
 	ImagePrice4K                    *float64
@@ -52,6 +53,7 @@ type UpdateGroupInput struct {
 	DailyLimitUSD                   *float64
 	WeeklyLimitUSD                  *float64
 	MonthlyLimitUSD                 *float64
+	RPMLimit                        *int
 	ImagePrice1K                    *float64
 	ImagePrice2K                    *float64
 	ImagePrice4K                    *float64

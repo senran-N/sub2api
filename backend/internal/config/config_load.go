@@ -90,6 +90,10 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.LinuxDo.UserInfoEmailPath = strings.TrimSpace(cfg.LinuxDo.UserInfoEmailPath)
 	cfg.LinuxDo.UserInfoIDPath = strings.TrimSpace(cfg.LinuxDo.UserInfoIDPath)
 	cfg.LinuxDo.UserInfoUsernamePath = strings.TrimSpace(cfg.LinuxDo.UserInfoUsernamePath)
+	applyLegacyWeChatOAuthEnv(&cfg)
+	cfg.OIDC.UsePKCEExplicit = envOrConfigSet("OIDC_CONNECT_USE_PKCE", "oidc_connect.use_pkce")
+	cfg.OIDC.ValidateIDTokenExplicit = envOrConfigSet("OIDC_CONNECT_VALIDATE_ID_TOKEN", "oidc_connect.validate_id_token")
+
 	cfg.WeChat.AppID = strings.TrimSpace(cfg.WeChat.AppID)
 	cfg.WeChat.AppSecret = strings.TrimSpace(cfg.WeChat.AppSecret)
 	cfg.WeChat.OpenAppID = strings.TrimSpace(cfg.WeChat.OpenAppID)
@@ -622,6 +626,58 @@ func setDefaults() {
 	viper.SetDefault("ip_risk.enable_ip_type_check", true)
 	viper.SetDefault("ip_risk.enable_abuse_check", false)
 	viper.SetDefault("ip_risk.enable_dns_leak_check", true)
+}
+
+func envOrConfigSet(envKey, configKey string) bool {
+	if _, ok := os.LookupEnv(envKey); ok {
+		return true
+	}
+	return viper.InConfig(configKey)
+}
+
+func applyLegacyWeChatOAuthEnv(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	openAppID := strings.TrimSpace(os.Getenv("WECHAT_OAUTH_OPEN_APP_ID"))
+	openSecret := strings.TrimSpace(os.Getenv("WECHAT_OAUTH_OPEN_APP_SECRET"))
+	mpAppID := strings.TrimSpace(os.Getenv("WECHAT_OAUTH_MP_APP_ID"))
+	mpSecret := strings.TrimSpace(os.Getenv("WECHAT_OAUTH_MP_APP_SECRET"))
+	mobileAppID := strings.TrimSpace(os.Getenv("WECHAT_OAUTH_MOBILE_APP_ID"))
+	mobileSecret := strings.TrimSpace(os.Getenv("WECHAT_OAUTH_MOBILE_APP_SECRET"))
+	frontendRedirectURL := strings.TrimSpace(os.Getenv("WECHAT_OAUTH_FRONTEND_REDIRECT_URL"))
+
+	if openAppID != "" {
+		cfg.WeChat.OpenAppID = openAppID
+	}
+	if openSecret != "" {
+		cfg.WeChat.OpenAppSecret = openSecret
+	}
+	if mpAppID != "" {
+		cfg.WeChat.MPAppID = mpAppID
+	}
+	if mpSecret != "" {
+		cfg.WeChat.MPAppSecret = mpSecret
+	}
+	if mobileAppID != "" {
+		cfg.WeChat.MobileAppID = mobileAppID
+	}
+	if mobileSecret != "" {
+		cfg.WeChat.MobileAppSecret = mobileSecret
+	}
+	if frontendRedirectURL != "" {
+		cfg.WeChat.FrontendRedirectURL = frontendRedirectURL
+	}
+
+	cfg.WeChat.OpenEnabled = cfg.WeChat.OpenEnabled || (cfg.WeChat.OpenAppID != "" && cfg.WeChat.OpenAppSecret != "")
+	cfg.WeChat.MPEnabled = cfg.WeChat.MPEnabled || (cfg.WeChat.MPAppID != "" && cfg.WeChat.MPAppSecret != "")
+	cfg.WeChat.MobileEnabled = cfg.WeChat.MobileEnabled || (cfg.WeChat.MobileAppID != "" && cfg.WeChat.MobileAppSecret != "")
+	if cfg.WeChat.OpenEnabled || cfg.WeChat.MPEnabled || cfg.WeChat.MobileEnabled {
+		cfg.WeChat.Enabled = true
+	}
+	if cfg.WeChat.Mode == "" {
+		cfg.WeChat.Mode = "open"
+	}
 }
 
 func normalizeStringSlice(values []string) []string {

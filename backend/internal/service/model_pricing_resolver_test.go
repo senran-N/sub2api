@@ -78,7 +78,7 @@ func newResolverWithChannelPricing(pricing []ChannelModelPricing) *ModelPricingR
 		}},
 		groupPlatforms: map[int64]string{groupID: PlatformAnthropic},
 	}
-	return NewModelPricingResolver(NewChannelService(repo, nil), newTestBillingServiceForResolver())
+	return NewModelPricingResolver(NewChannelService(repo, nil, nil, nil), newTestBillingServiceForResolver())
 }
 
 func testResolverGroupIDPtr() *int64 {

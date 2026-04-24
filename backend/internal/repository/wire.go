@@ -90,6 +90,8 @@ var ProviderSet = wire.NewSet(
 	NewErrorPassthroughRepository,
 	NewTLSFingerprintProfileRepository,
 	NewChannelRepository,
+	NewChannelMonitorRepository,
+	NewChannelMonitorRequestTemplateRepository,
 	NewGrokVideoJobRepository,
 	NewGrokMediaAssetRepository,
 
@@ -103,6 +105,8 @@ var ProviderSet = wire.NewSet(
 	ProvideConcurrencyCache,
 	ProvideSessionLimitCache,
 	NewRPMCache,
+	NewUserRPMCache,
+	NewOpenAI403CounterCache,
 	NewUserMsgQueueCache,
 	NewDashboardCache,
 	NewEmailCache,
