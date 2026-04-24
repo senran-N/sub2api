@@ -1,8 +1,9 @@
 import { ref, type ComputedRef, type Ref } from 'vue'
 import { adminAPI } from '@/api/admin'
+import { useTableLoader } from '@/composables/useTableLoader'
 import type { AdminGroup, AdminUser, UserAttributeDefinition } from '@/types'
 import type { BatchUserUsageStats } from '@/api/admin/dashboard'
-import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import { buildUserListFilters, type UsersFilterState, type UsersPaginationState } from './usersTable'
 
 interface UsersViewDataOptions {
@@ -25,10 +26,8 @@ export function useUsersViewData(options: UsersViewDataOptions) {
   const usageStats = ref<Record<string, BatchUserUsageStats>>({})
   const attributeDefinitions = ref<UserAttributeDefinition[]>([])
   const userAttributeValues = ref<Record<number, Record<number, string>>>({})
-  const users = ref<AdminUser[]>([])
-  const loading = ref(false)
   const allGroups = ref<AdminGroup[]>([])
-  let abortController: AbortController | null = null
+  let activeLoadSignal: AbortSignal | undefined
 
   const resetSecondaryData = () => {
     usageStats.value = {}
@@ -101,58 +100,41 @@ export function useUsersViewData(options: UsersViewDataOptions) {
       await Promise.allSettled(tasks)
     }
   }
-
-  async function loadUsers() {
-    abortController?.abort()
-    const currentAbortController = new AbortController()
-    abortController = currentAbortController
-    const { signal } = currentAbortController
-    loading.value = true
-
-    try {
-      const response = await adminAPI.users.list(
-        options.pagination.page,
-        options.pagination.page_size,
+  const {
+    items: users,
+    loading,
+    load: loadUsers,
+    dispose
+  } = useTableLoader<AdminUser, Record<string, never>>({
+    fetchFn: (page, pageSize, _params, requestOptions) => {
+      activeLoadSignal = requestOptions?.signal
+      return adminAPI.users.list(
+        page,
+        pageSize,
         buildUserListFilters(
           options.filters,
           options.searchQuery.value,
           options.activeAttributeFilters,
           options.hasVisibleSubscriptionsColumn.value
         ),
-        { signal }
+        requestOptions
       )
-      if (signal.aborted) {
-        return
-      }
-
-      users.value = response.items
-      options.setCurrentUserIds(response.items.map((user) => user.id))
-      options.pagination.total = response.total
-      options.pagination.pages = response.pages
-      options.resetSecondaryDataState()
-      resetSecondaryData()
-
-      if (response.items.length > 0) {
-        options.scheduleUsersSecondaryDataLoad(signal)
-      }
-    } catch (error) {
-      if (isAbortError(error)) {
-        return
-      }
+    },
+    pagination: options.pagination,
+    onError: (error) => {
       const message = resolveRequestErrorMessage(error, options.t('admin.users.failedToLoad'))
       options.showError(message)
-      console.error('Error loading users:', error)
-    } finally {
-      if (abortController === currentAbortController) {
-        loading.value = false
+    },
+    onLoaded: (response) => {
+      options.setCurrentUserIds(response.items.map((user) => user.id))
+      options.resetSecondaryDataState()
+      resetSecondaryData()
+      if (response.items.length > 0) {
+        options.scheduleUsersSecondaryDataLoad(activeLoadSignal)
       }
     }
-  }
+  })
 
-  const dispose = () => {
-    abortController?.abort()
-    abortController = null
-  }
 
   return {
     usageStats,

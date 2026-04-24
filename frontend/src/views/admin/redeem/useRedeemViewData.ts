@@ -1,8 +1,8 @@
 import { reactive, ref } from 'vue'
 import { adminAPI } from '@/api/admin'
-import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { useTableLoader } from '@/composables/useTableLoader'
 import type { RedeemCode } from '@/types'
-import { isAbortError, resolveRequestErrorMessage } from '@/utils/requestError'
+import { resolveRequestErrorMessage } from '@/utils/requestError'
 import { buildRedeemExportFilters, buildRedeemListFilters, createDefaultRedeemFilters } from './redeemForm'
 
 interface RedeemViewDataOptions {
@@ -25,15 +25,30 @@ function downloadBlob(blob: Blob, filename: string): void {
 }
 
 export function useRedeemViewData(options: RedeemViewDataOptions) {
-  const codes = ref<RedeemCode[]>([])
-  const loading = ref(false)
   const searchQuery = ref('')
   const filters = reactive(createDefaultRedeemFilters())
-  const pagination = reactive({
-    page: 1,
-    page_size: getPersistedPageSize(),
-    total: 0,
-    pages: 0
+  const {
+    items: codes,
+    loading,
+    pagination,
+    load: loadCodes,
+    debouncedReload,
+    handlePageChange,
+    handlePageSizeChange,
+    dispose: disposeTableLoader
+  } = useTableLoader<RedeemCode, Record<string, never>>({
+    fetchFn: (page, pageSize, _params, requestOptions) =>
+      adminAPI.redeem.list(
+        page,
+        pageSize,
+        buildRedeemListFilters(filters, searchQuery.value),
+        requestOptions
+      ),
+    onError: (error) => {
+      options.showError(resolveRequestErrorMessage(error, options.t('admin.redeem.failedToLoad')))
+    },
+    syncPaginationFromResponse: true,
+    clampPageChange: false
   })
 
   const showDeleteDialog = ref(false)
@@ -41,71 +56,10 @@ export function useRedeemViewData(options: RedeemViewDataOptions) {
   const deletingCode = ref<RedeemCode | null>(null)
   const copiedCode = ref<string | null>(null)
 
-  let abortController: AbortController | null = null
-  let searchTimeout: ReturnType<typeof setTimeout> | null = null
   let copiedCodeTimeout: ReturnType<typeof setTimeout> | null = null
 
-  const loadCodes = async () => {
-    abortController?.abort()
-
-    const requestController = new AbortController()
-    abortController = requestController
-    loading.value = true
-
-    try {
-      const response = await adminAPI.redeem.list(
-        pagination.page,
-        pagination.page_size,
-        buildRedeemListFilters(filters, searchQuery.value),
-        {
-          signal: requestController.signal
-        }
-      )
-
-      if (requestController.signal.aborted || abortController !== requestController) {
-        return
-      }
-
-      codes.value = response.items
-      pagination.total = response.total
-      pagination.pages = response.pages
-      pagination.page = response.page
-      pagination.page_size = response.page_size
-    } catch (error) {
-      if (requestController.signal.aborted || isAbortError(error)) {
-        return
-      }
-
-      options.showError(resolveRequestErrorMessage(error, options.t('admin.redeem.failedToLoad')))
-      console.error('Error loading redeem codes:', error)
-    } finally {
-      if (abortController === requestController) {
-        loading.value = false
-        abortController = null
-      }
-    }
-  }
-
   const handleSearch = () => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout)
-    }
-
-    searchTimeout = setTimeout(() => {
-      pagination.page = 1
-      void loadCodes()
-    }, 300)
-  }
-
-  const handlePageChange = (page: number) => {
-    pagination.page = page
-    void loadCodes()
-  }
-
-  const handlePageSizeChange = (pageSize: number) => {
-    pagination.page_size = pageSize
-    pagination.page = 1
-    void loadCodes()
+    void debouncedReload()
   }
 
   const handleExportCodes = async () => {
@@ -181,10 +135,7 @@ export function useRedeemViewData(options: RedeemViewDataOptions) {
   }
 
   const dispose = () => {
-    abortController?.abort()
-    if (searchTimeout) {
-      clearTimeout(searchTimeout)
-    }
+    disposeTableLoader()
     if (copiedCodeTimeout) {
       clearTimeout(copiedCodeTimeout)
     }

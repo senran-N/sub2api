@@ -58,6 +58,40 @@ describe('useTableLoader', () => {
       expect(loading.value).toBe(false)
     })
 
+    it('支持复用外部分页状态并在加载后回调', async () => {
+      const fetchFn = createMockFetchFn([{ id: 9 }], 9, 3)
+      const onLoaded = vi.fn()
+      const externalPagination = {
+        page: 2,
+        page_size: 30,
+        total: 0,
+        pages: 0,
+      }
+
+      const { load, pagination } = useTableLoader({
+        fetchFn,
+        pagination: externalPagination,
+        onLoaded,
+      })
+
+      await load()
+
+      expect(fetchFn).toHaveBeenCalledWith(
+        2,
+        30,
+        expect.anything(),
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      )
+      expect(pagination).toBe(externalPagination)
+      expect(externalPagination.total).toBe(9)
+      expect(externalPagination.pages).toBe(3)
+      expect(onLoaded).toHaveBeenCalledWith({
+        items: [{ id: 9 }],
+        total: 9,
+        pages: 3,
+      })
+    })
+
     it('load 期间 loading 为 true', async () => {
       let resolveLoad: (v: any) => void
       const fetchFn = vi.fn(

@@ -11,12 +11,21 @@ interface PaginationState {
   pages: number
 }
 
+interface PaginationBinding {
+  page: number
+  page_size: number
+  total: number
+  pages?: number
+}
+
 interface TableLoaderOptions<T, P> {
   fetchFn: (page: number, pageSize: number, params: P, options?: FetchOptions) => Promise<BasePaginationResponse<T>>
   initialParams?: P
+  pagination?: PaginationBinding
   pageSize?: number
   debounceMs?: number
   onError?: (error: unknown) => void
+  onLoaded?: (response: BasePaginationResponse<T>) => void
   syncPaginationFromResponse?: boolean
   clampPageChange?: boolean
 }
@@ -34,12 +43,15 @@ export function useTableLoader<T, P extends Record<string, unknown>>(
   const items = ref<T[]>([])
   const loading = ref(false)
   const params = reactive<P>({ ...(initialParams || {}) } as P)
-  const pagination = reactive<PaginationState>({
+  const pagination = (options.pagination ?? reactive<PaginationState>({
     page: 1,
     page_size: pageSize ?? getPersistedPageSize(),
     total: 0,
     pages: 0
-  })
+  })) as PaginationState
+  if (typeof pagination.pages !== 'number') {
+    pagination.pages = 0
+  }
 
   let abortController: AbortController | null = null
 
@@ -70,6 +82,7 @@ export function useTableLoader<T, P extends Record<string, unknown>>(
         pagination.page = response.page || pagination.page
         pagination.page_size = response.page_size || pagination.page_size
       }
+      options.onLoaded?.(response)
     } catch (error) {
       if (abortController !== currentController || currentController.signal.aborted) {
         return
