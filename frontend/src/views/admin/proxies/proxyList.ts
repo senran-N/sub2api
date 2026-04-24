@@ -6,7 +6,7 @@ export interface ProxyListFiltersState {
 export interface ProxyPaginationState {
   page: number
   page_size: number
-  total?: number
+  total: number
   pages?: number
 }
 
