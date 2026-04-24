@@ -5259,13 +5259,13 @@ export default {
           "Configure fallback models and Grok-owned media/runtime control-plane settings.",
         enableFallback: "Enable Model Fallback",
         enableFallbackHint:
-          "Route failed requests to the platform-specific fallback model when available.",
+          "When the requested model cannot be routed, retry routing with the configured fallback model.",
         fallbackAnthropic: "Anthropic Fallback Model",
         fallbackAnthropicHint:
-          "Used when Anthropic routing falls back to a default model.",
+          "Used when Anthropic model routing explicitly falls back.",
         fallbackOpenai: "OpenAI Fallback Model",
         fallbackOpenaiHint:
-          "Used when OpenAI routing falls back to a default model.",
+          "Used when OpenAI model routing explicitly falls back.",
         fallbackGrok: "Grok Fallback Model",
         fallbackGrokHint:
           "Used when Grok routing falls back to a default model.",

@@ -2,7 +2,7 @@ package openai
 
 import "testing"
 
-func TestDefaultModels_ContainsGPT55(t *testing.T) {
+func TestDefaultModels_ContainsCurrentOpenAICatalog(t *testing.T) {
 	t.Parallel()
 
 	byID := make(map[string]Model, len(DefaultModels))
@@ -10,23 +10,31 @@ func TestDefaultModels_ContainsGPT55(t *testing.T) {
 		byID[model.ID] = model
 	}
 
-	model, ok := byID["gpt-5.5"]
-	if !ok {
-		t.Fatal("expected default OpenAI models to expose gpt-5.5")
-	}
-	if model.DisplayName != "GPT-5.5" {
-		t.Fatalf("expected gpt-5.5 display name %q, got %q", "GPT-5.5", model.DisplayName)
+	expected := map[string]string{
+		"gpt-5.5":             "GPT-5.5",
+		"gpt-5.4":             "GPT-5.4",
+		"gpt-5.4-mini":        "GPT-5.4 Mini",
+		"gpt-5.3-codex":       "GPT-5.3 Codex",
+		"gpt-5.3-codex-spark": "GPT-5.3 Codex Spark",
+		"gpt-5.2":             "GPT-5.2",
 	}
 
 	ids := DefaultModelIDs()
-	found := false
-	for _, id := range ids {
-		if id == "gpt-5.5" {
-			found = true
-			break
-		}
+	idsByValue := make(map[string]struct{}, len(ids))
+	for _, modelID := range ids {
+		idsByValue[modelID] = struct{}{}
 	}
-	if !found {
-		t.Fatal("expected DefaultModelIDs to include gpt-5.5")
+
+	for modelID, displayName := range expected {
+		model, ok := byID[modelID]
+		if !ok {
+			t.Fatalf("expected default OpenAI models to expose %s", modelID)
+		}
+		if model.DisplayName != displayName {
+			t.Fatalf("expected %s display name %q, got %q", modelID, displayName, model.DisplayName)
+		}
+		if _, ok := idsByValue[modelID]; !ok {
+			t.Fatalf("expected DefaultModelIDs to include %s", modelID)
+		}
 	}
 }

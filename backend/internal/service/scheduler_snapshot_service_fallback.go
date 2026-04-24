@@ -236,29 +236,38 @@ func matchesCapabilityIndex(account *Account, index SchedulerCapabilityIndex) bo
 	case SchedulerCapabilityIndexOpenAIWS:
 		return isPotentialOpenAIWSCandidate(account)
 	case SchedulerCapabilityIndexModelAny:
-		return len(account.GetModelMapping()) == 0
+		_, unrestricted := account.SchedulerModelCapabilityValues()
+		return unrestricted
 	case SchedulerCapabilityIndexModelExact:
 		model := strings.TrimSpace(index.Value)
 		if model == "" {
 			return false
 		}
-		mapping := account.GetModelMapping()
-		if len(mapping) == 0 {
+		values, unrestricted := account.SchedulerModelCapabilityValues()
+		if unrestricted || len(values) == 0 {
 			return false
 		}
-		_, ok := mapping[model]
-		return ok
+		for _, value := range values {
+			if value == model {
+				return true
+			}
+		}
+		return false
 	case SchedulerCapabilityIndexModelPattern:
 		pattern := strings.TrimSpace(index.Value)
 		if pattern == "" || !strings.Contains(pattern, "*") {
 			return false
 		}
-		mapping := account.GetModelMapping()
-		if len(mapping) == 0 {
+		values, unrestricted := account.SchedulerModelCapabilityValues()
+		if unrestricted || len(values) == 0 {
 			return false
 		}
-		_, ok := mapping[pattern]
-		return ok
+		for _, value := range values {
+			if value == pattern {
+				return true
+			}
+		}
+		return false
 	default:
 		return false
 	}
@@ -270,7 +279,11 @@ func collectCapabilityIndexValues(accounts []Account, kind SchedulerCapabilityIn
 		account := &accounts[i]
 		switch kind {
 		case SchedulerCapabilityIndexModelPattern:
-			for pattern := range account.GetModelMapping() {
+			values, unrestricted := account.SchedulerModelCapabilityValues()
+			if unrestricted {
+				continue
+			}
+			for _, pattern := range values {
 				pattern = strings.TrimSpace(pattern)
 				if strings.Contains(pattern, "*") {
 					valueSet[pattern] = struct{}{}

@@ -10,12 +10,41 @@ import (
 	"github.com/senran-N/sub2api/internal/pkg/claude"
 	"github.com/senran-N/sub2api/internal/pkg/ctxkey"
 	"github.com/senran-N/sub2api/internal/pkg/grok"
+	"github.com/senran-N/sub2api/internal/pkg/openai"
 	servermiddleware "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCompatibleGatewayHandlerModels_DefaultsOpenAIModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+
+	h := NewCompatibleGatewayHandler(NewCompatibleGatewayRuntimeHandler(&CompatibleGatewayTextHandler{}, &OpenAIGatewayHandler{}), nil, nil, nil)
+	h.Models(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var response struct {
+		Object string         `json:"object"`
+		Data   []openai.Model `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, "list", response.Object)
+	ids := make([]string, 0, len(response.Data))
+	for _, model := range response.Data {
+		ids = append(ids, model.ID)
+	}
+	require.Contains(t, ids, "gpt-5.5")
+	require.Contains(t, ids, "gpt-5.4")
+	require.Contains(t, ids, "gpt-5.3-codex")
+	require.Contains(t, ids, "gpt-5.3-codex-spark")
+}
 
 func TestCompatibleGatewayHandlerModels_DefaultsGrokModels(t *testing.T) {
 	gin.SetMode(gin.TestMode)

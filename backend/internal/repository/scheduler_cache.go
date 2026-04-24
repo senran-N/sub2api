@@ -706,15 +706,15 @@ func buildSchedulerCapabilityIndices(
 			appendMember(service.SchedulerCapabilityIndex{Kind: service.SchedulerCapabilityIndexOpenAIWS}, score, account.ID)
 		}
 
-		modelMapping := account.GetModelMapping()
-		if len(modelMapping) == 0 {
+		modelValues, unrestrictedModels := account.SchedulerModelCapabilityValues()
+		if unrestrictedModels {
 			appendMember(service.SchedulerCapabilityIndex{Kind: service.SchedulerCapabilityIndexModelAny}, score, account.ID)
 			continue
 		}
 
 		patternValuesKey := schedulerIndexValuesKey(bucket, version, service.SchedulerCapabilityIndexModelPattern)
-		for pattern := range modelMapping {
-			trimmed := strings.TrimSpace(pattern)
+		for _, modelValue := range modelValues {
+			trimmed := strings.TrimSpace(modelValue)
 			if trimmed == "" {
 				continue
 			}

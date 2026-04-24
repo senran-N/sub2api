@@ -61,6 +61,9 @@ func TestLoadDefaultSchedulingConfig(t *testing.T) {
 	if cfg.Gateway.Scheduling.StickySessionMaxWaiting != 3 {
 		t.Fatalf("StickySessionMaxWaiting = %d, want 3", cfg.Gateway.Scheduling.StickySessionMaxWaiting)
 	}
+	if cfg.Gateway.Scheduling.PriorityMode != GatewaySchedulingPriorityModeStrict {
+		t.Fatalf("PriorityMode = %q, want %q", cfg.Gateway.Scheduling.PriorityMode, GatewaySchedulingPriorityModeStrict)
+	}
 	if cfg.Gateway.Scheduling.StickySessionWaitTimeout != 120*time.Second {
 		t.Fatalf("StickySessionWaitTimeout = %v, want 120s", cfg.Gateway.Scheduling.StickySessionWaitTimeout)
 	}
@@ -1423,6 +1426,11 @@ func TestValidateConfigErrors(t *testing.T) {
 			name:    "gateway scheduling sticky waiting",
 			mutate:  func(c *Config) { c.Gateway.Scheduling.StickySessionMaxWaiting = 0 },
 			wantErr: "gateway.scheduling.sticky_session_max_waiting",
+		},
+		{
+			name:    "gateway scheduling priority mode",
+			mutate:  func(c *Config) { c.Gateway.Scheduling.PriorityMode = "mixed" },
+			wantErr: "gateway.scheduling.priority_mode",
 		},
 		{
 			name:    "gateway scheduling outbox poll",

@@ -1,15 +1,40 @@
 package service
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
 
 func ResolveOpenAIForwardDefaultMappedModel(apiKey *APIKey, fallbackModel string) string {
 	if fallbackModel = strings.TrimSpace(fallbackModel); fallbackModel != "" {
 		return fallbackModel
 	}
+	return ""
+}
+
+func (s *OpenAIGatewayService) ResolveOpenAISelectionFallbackModel(ctx context.Context, apiKey *APIKey, requestedModel string) (string, bool) {
+	if apiKey == nil || apiKey.Group == nil {
+		return "", false
+	}
+	fallbackModel := strings.TrimSpace(apiKey.Group.DefaultMappedModel)
+	if fallbackModel == "" || fallbackModel == strings.TrimSpace(requestedModel) {
+		return "", false
+	}
+	if s == nil || s.settingService == nil || !s.settingService.IsModelFallbackEnabled(ctx) {
+		return "", false
+	}
+	return fallbackModel, true
+}
+
+func OpenAISelectionFallbackCandidate(apiKey *APIKey, requestedModel string) string {
 	if apiKey == nil || apiKey.Group == nil {
 		return ""
 	}
-	return strings.TrimSpace(apiKey.Group.DefaultMappedModel)
+	fallbackModel := strings.TrimSpace(apiKey.Group.DefaultMappedModel)
+	if fallbackModel == "" || fallbackModel == strings.TrimSpace(requestedModel) {
+		return ""
+	}
+	return fallbackModel
 }
 
 func resolveMappedModelWithOpenAIReasoningFallback(account *Account, requestedModel string) (mappedModel string, matched bool) {
@@ -61,6 +86,9 @@ func resolveOpenAIForwardModel(account *Account, requestedModel, defaultMappedMo
 	mappedModel, matched := resolveMappedModelWithOpenAIReasoningFallback(account, requestedModel)
 	if !matched && defaultMappedModel != "" {
 		return applyReasoningVariant(defaultMappedModel)
+	}
+	if !matched {
+		return strings.TrimSpace(mappedModel)
 	}
 	return applyReasoningVariant(mappedModel)
 }

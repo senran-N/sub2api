@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"hash/fnv"
 	"reflect"
 	"sort"
@@ -143,6 +144,147 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	}
 	for pattern := range mapping {
 		if matchWildcard(pattern, requestedModel) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *Account) GetExplicitSupportedModels() []string {
+	if a == nil || len(a.Extra) == 0 {
+		return nil
+	}
+	return normalizeSupportedModelList(a.Extra["supported_models"])
+}
+
+func (a *Account) IsExplicitSupportedModel(requestedModel string) bool {
+	return supportedModelListMatches(a.GetExplicitSupportedModels(), requestedModel)
+}
+
+// SchedulerModelCapabilityValues returns the model capability values used by
+// the scheduler index. OpenAI accounts only opt into model-specific indexing
+// when they explicitly declare supported_models; an empty declaration means the
+// capability is unknown and must not restrict routing.
+func (a *Account) SchedulerModelCapabilityValues() (values []string, unrestricted bool) {
+	if a == nil {
+		return nil, false
+	}
+	if a.Platform == PlatformOpenAI {
+		supportedModels := a.GetExplicitSupportedModels()
+		if len(supportedModels) == 0 {
+			return nil, true
+		}
+		return supportedModels, false
+	}
+
+	mapping := a.GetModelMapping()
+	if len(mapping) == 0 {
+		return nil, true
+	}
+	values = make([]string, 0, len(mapping))
+	for model := range mapping {
+		model = strings.TrimSpace(model)
+		if model != "" {
+			values = append(values, model)
+		}
+	}
+	sort.Strings(values)
+	return values, false
+}
+
+func normalizeSupportedModelList(raw any) []string {
+	switch typed := raw.(type) {
+	case nil:
+		return nil
+	case []string:
+		return normalizeSupportedModelStrings(typed)
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if value, ok := item.(string); ok {
+				values = append(values, value)
+			}
+		}
+		return normalizeSupportedModelStrings(values)
+	case string:
+		return normalizeSupportedModelString(typed)
+	default:
+		return nil
+	}
+}
+
+func normalizeSupportedModelString(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var values []string
+	if err := json.Unmarshal([]byte(raw), &values); err == nil {
+		return normalizeSupportedModelStrings(values)
+	}
+
+	var anyValues []any
+	if err := json.Unmarshal([]byte(raw), &anyValues); err == nil {
+		values = values[:0]
+		for _, item := range anyValues {
+			if value, ok := item.(string); ok {
+				values = append(values, value)
+			}
+		}
+		return normalizeSupportedModelStrings(values)
+	}
+
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r'
+	})
+	return normalizeSupportedModelStrings(parts)
+}
+
+func normalizeSupportedModelStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func supportedModelListMatches(values []string, requestedModel string) bool {
+	requestedModel = strings.TrimSpace(requestedModel)
+	if requestedModel == "" {
+		return true
+	}
+	if supportedModelListContains(values, requestedModel) {
+		return true
+	}
+
+	_, baseModel, _, ok := splitOpenAICompatReasoningModel(requestedModel)
+	if !ok || baseModel == "" || baseModel == requestedModel {
+		return false
+	}
+	return supportedModelListContains(values, baseModel)
+}
+
+func supportedModelListContains(values []string, requestedModel string) bool {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if value == requestedModel || matchWildcard(value, requestedModel) {
 			return true
 		}
 	}

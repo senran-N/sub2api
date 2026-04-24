@@ -135,10 +135,14 @@ func (h *OpenAIGatewayHandler) Passthrough(c *gin.Context) {
 			)
 			if len(failedAccountIDs) == 0 && schedulingModel != "" {
 				initialSelectionErr := err
-				defaultModel := ""
-				if apiKey.Group != nil {
-					defaultModel = apiKey.Group.DefaultMappedModel
-				}
+				defaultModel := resolveOpenAISelectionFallbackModel(
+					c,
+					h.gatewayService,
+					apiKey,
+					schedulingModel,
+					reqLog,
+					"openai_passthrough.fallback_to_default_model_skipped",
+				)
 				if defaultModel != "" && defaultModel != schedulingModel {
 					reqLog.Info("openai_passthrough.fallback_to_default_model", zap.String("default_mapped_model", defaultModel))
 					selection, scheduleDecision, err = h.gatewayService.SelectAccountWithScheduler(

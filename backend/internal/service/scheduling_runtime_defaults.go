@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/senran-N/sub2api/internal/config"
@@ -9,6 +10,7 @@ import (
 
 func defaultGatewaySchedulingConfig() config.GatewaySchedulingConfig {
 	return config.GatewaySchedulingConfig{
+		PriorityMode:             config.GatewaySchedulingPriorityModeStrict,
 		StickySessionMaxWaiting:  3,
 		StickySessionWaitTimeout: 45 * time.Second,
 		FallbackWaitTimeout:      30 * time.Second,
@@ -24,6 +26,9 @@ func gatewaySchedulingConfigOrDefault(cfg *config.Config) config.GatewayScheduli
 		return result
 	}
 
+	if priorityMode := normalizeGatewaySchedulingPriorityMode(cfg.Gateway.Scheduling.PriorityMode); priorityMode != "" {
+		result.PriorityMode = priorityMode
+	}
 	if cfg.Gateway.Scheduling.StickySessionMaxWaiting > 0 {
 		result.StickySessionMaxWaiting = cfg.Gateway.Scheduling.StickySessionMaxWaiting
 	}
@@ -47,6 +52,17 @@ func gatewaySchedulingConfigOrDefault(cfg *config.Config) config.GatewayScheduli
 		result.SnapshotPageSize = cfg.Gateway.Scheduling.SnapshotPageSize
 	}
 	return result
+}
+
+func normalizeGatewaySchedulingPriorityMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case config.GatewaySchedulingPriorityModeWeighted:
+		return config.GatewaySchedulingPriorityModeWeighted
+	case config.GatewaySchedulingPriorityModeStrict, "":
+		return config.GatewaySchedulingPriorityModeStrict
+	default:
+		return ""
+	}
 }
 
 func snapshotPageSizeOrDefault(cfg *config.Config) int {

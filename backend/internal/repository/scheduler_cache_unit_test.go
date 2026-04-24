@@ -99,6 +99,7 @@ func TestBuildSchedulerCapabilityIndices_BuildsModelPrivacyAndWSIndexes(t *testi
 			Extra: map[string]any{
 				"privacy_mode":                    service.PrivacyModeTrainingOff,
 				"responses_websockets_v2_enabled": true,
+				"supported_models":                []any{"gpt-5.1", "gpt-*"},
 			},
 		},
 		{
@@ -121,4 +122,34 @@ func TestBuildSchedulerCapabilityIndices_BuildsModelPrivacyAndWSIndexes(t *testi
 	require.Contains(t, build.zsets, schedulerCapabilityIndexKey(bucket, "9", service.SchedulerCapabilityIndex{Kind: service.SchedulerCapabilityIndexModelExact, Value: "gpt-5.1"}))
 	require.Contains(t, build.zsets, schedulerCapabilityIndexKey(bucket, "9", service.SchedulerCapabilityIndex{Kind: service.SchedulerCapabilityIndexModelPattern, Value: "gpt-*"}))
 	require.Contains(t, build.values[schedulerIndexValuesKey(bucket, "9", service.SchedulerCapabilityIndexModelPattern)], "gpt-*")
+}
+
+func TestBuildSchedulerCapabilityIndices_OpenAIEmptySupportedModelsUsesModelAny(t *testing.T) {
+	bucket := service.SchedulerBucket{
+		GroupID:  7,
+		Platform: service.PlatformOpenAI,
+		Mode:     service.SchedulerModeSingle,
+	}
+	accounts := []service.Account{
+		{
+			ID:          203,
+			Platform:    service.PlatformOpenAI,
+			Type:        service.AccountTypeOAuth,
+			Status:      service.StatusActive,
+			Schedulable: true,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gpt-5.4": "gpt-5.4",
+				},
+			},
+			Extra: map[string]any{
+				"supported_models": []any{},
+			},
+		},
+	}
+
+	build := buildSchedulerCapabilityIndices(bucket, "10", accounts)
+
+	require.Contains(t, build.zsets, schedulerCapabilityIndexKey(bucket, "10", service.SchedulerCapabilityIndex{Kind: service.SchedulerCapabilityIndexModelAny}))
+	require.NotContains(t, build.zsets, schedulerCapabilityIndexKey(bucket, "10", service.SchedulerCapabilityIndex{Kind: service.SchedulerCapabilityIndexModelExact, Value: "gpt-5.4"}))
 }

@@ -138,6 +138,16 @@ Grok-specific follow-on rule:
 - Grok text-route ownership is now request-scoped: `backend/internal/handler/grok_gateway_handler.go` sets a Grok-only session-runtime context flag for `/responses`, `/chat/completions`, and `/messages`, and `backend/internal/service/grok_account_selector.go` only admits `AccountTypeSession` when that flag is present. Non-text compatible routes, passthrough, and websocket flows must leave that flag unset so sticky/session reuse cannot leak Grok Web accounts back into shared compatible runtime paths.
 - This keeps `openai` as a protocol sibling instead of the place where Grok capability/tier logic accumulates.
 
+### OpenAI scheduler capability index
+
+OpenAI scheduler model capability indexing must distinguish capability
+declarations from model mapping rules:
+
+- `account.extra.supported_models` is the OpenAI model capability source.
+- Missing, empty-array, or empty-string `supported_models` means unknown capability and must place the account in `model_any`; it must not make the account unavailable for newly added models.
+- Non-empty `supported_models` may be indexed as `model_exact` / `model_pattern` and may restrict scheduling.
+- `credentials.model_mapping` remains a mapping or alias rule; it must not be treated as an OpenAI capability declaration when building scheduler indexes.
+
 ### Detached service tasks
 
 Use `backend/internal/service/async_task.go` for fire-and-forget service work that should not block the request path.

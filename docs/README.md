@@ -19,6 +19,7 @@
 | [docs/GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md) | fork 分支模型、上游同步、选择性移植和冲突处理流程 | 变更分支策略、远端角色、同步流程、移植规则时 |
 | [docs/ARCHITECTURE_EXTENSIBILITY.md](/home/senran/Desktop/sub2api/docs/ARCHITECTURE_EXTENSIBILITY.md) | 复用型扩展点和当前推荐架构边界 | 新增/替换共享扩展 seam、抽象层归属变更时 |
 | [docs/OPENAI_DEFAULT_MODEL_CATALOG.md](/home/senran/Desktop/sub2api/docs/OPENAI_DEFAULT_MODEL_CATALOG.md) | OpenAI 内建默认模型目录及其后台/兼容网关影响范围 | 修改 `backend/internal/pkg/openai/constants.go`、默认模型暴露范围或相关回归测试时 |
+| [docs/GATEWAY_ROUTING_AND_FALLBACK.md](/home/senran/Desktop/sub2api/docs/GATEWAY_ROUTING_AND_FALLBACK.md) | 兼容网关优先级调度、OpenAI strict/weighted 策略和模型回退语义 | 修改 `gateway.scheduling` 配置、账号选择优先级、`default_mapped_model` 或模型回退行为时 |
 | [docs/FRONTEND_TOKENIZATION_GUIDE.md](/home/senran/Desktop/sub2api/docs/FRONTEND_TOKENIZATION_GUIDE.md) | 前端 Token / Primitive / 样式收口规范 | 改主题 Token、共享样式入口、视觉复用规则时 |
 | [docs/GROK_BACKEND_CONTROL_PLANE.md](/home/senran/Desktop/sub2api/docs/GROK_BACKEND_CONTROL_PLANE.md) | Grok provider 专属控制面与后台契约 | Grok 账户、媒体、运行时设置、后台展示契约变化时 |
 | [docs/ADMIN_PAYMENT_INTEGRATION_API.md](/home/senran/Desktop/sub2api/docs/ADMIN_PAYMENT_INTEGRATION_API.md) | 外部支付/充值系统对接 Sub2API Admin API 的约束 | Admin 支付接口、幂等行为、嵌入页 query 参数变化时 |

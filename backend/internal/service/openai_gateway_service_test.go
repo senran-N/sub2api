@@ -723,6 +723,42 @@ func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_UsesCapability
 	}, snapshotCache.indexPageCalls)
 }
 
+func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_EmptySupportedModelsUsesModelAnyIndex(t *testing.T) {
+	ctx := context.Background()
+	account := &Account{
+		ID:          35011,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Extra: map[string]any{
+			"supported_models": []any{},
+		},
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		snapshotAccounts: []*Account{account},
+		accountsByID:     map[int64]*Account{account.ID: account},
+	}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.SnapshotPageSize = 1
+	svc := &OpenAIGatewayService{
+		accountRepo:       stubOpenAIAccountRepo{accounts: []Account{*account}},
+		cache:             &stubGatewayCache{},
+		schedulerSnapshot: &SchedulerSnapshotService{cache: snapshotCache},
+		cfg:               cfg,
+	}
+
+	selected, err := svc.SelectAccountForModelWithExclusions(ctx, nil, "", "gpt-5.5", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	require.Equal(t, account.ID, selected.ID)
+	require.Equal(t, []snapshotIndexPageCall{
+		{kind: SchedulerCapabilityIndexModelAny, value: "", offset: 0, limit: 1},
+		{kind: SchedulerCapabilityIndexModelExact, value: "gpt-5.5", offset: 0, limit: 1},
+	}, snapshotCache.indexPageCalls)
+}
+
 func TestOpenAIGatewayService_SelectAccountWithLoadAwareness_UsesCapabilityIndexPaging(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(1)

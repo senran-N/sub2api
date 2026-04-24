@@ -86,6 +86,52 @@ func TestFilterSchedulableOpenAICandidates_OpenAIReasoningVariantBaseMapping(t *
 	}
 }
 
+func TestOpenAIModelEligibility_ExplicitSupportedModels(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Extra: map[string]any{
+			"supported_models": []any{"gpt-5.4", "gpt-5.3-codex-*"},
+		},
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.5": "gpt-5.5",
+			},
+		},
+	}
+
+	if !isOpenAIAccountModelEligible(account, "gpt-5.4-xhigh") {
+		t.Fatal("expected reasoning variant to match explicit supported_models base model")
+	}
+	if !isOpenAIAccountModelEligible(account, "gpt-5.3-codex-spark") {
+		t.Fatal("expected wildcard supported_models entry to match")
+	}
+	if isOpenAIAccountModelEligible(account, "gpt-5.5") {
+		t.Fatal("expected explicit supported_models to restrict model eligibility")
+	}
+}
+
+func TestOpenAISchedulerModelCapabilityValues_EmptySupportedModelsIsUnrestricted(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Extra: map[string]any{
+			"supported_models": []any{},
+		},
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.4": "gpt-5.4",
+			},
+		},
+	}
+
+	values, unrestricted := account.SchedulerModelCapabilityValues()
+	if !unrestricted {
+		t.Fatalf("expected empty OpenAI supported_models to be unrestricted, values=%v", values)
+	}
+	if len(values) != 0 {
+		t.Fatalf("expected no model-specific index values, got %v", values)
+	}
+}
+
 func TestFilterSchedulableOpenAICandidates_DoesNotPromoteCodexExtraToRateLimit(t *testing.T) {
 	resetAt := time.Now().Add(6 * 24 * time.Hour).UTC().Format(time.RFC3339)
 	accounts := []Account{

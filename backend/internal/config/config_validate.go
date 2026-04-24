@@ -649,6 +649,11 @@ func (c *Config) Validate() error {
 	if c.Gateway.ModelsListCacheTTLSeconds < 10 || c.Gateway.ModelsListCacheTTLSeconds > 30 {
 		return fmt.Errorf("gateway.models_list_cache_ttl_seconds must be between 10-30")
 	}
+	switch strings.ToLower(strings.TrimSpace(c.Gateway.Scheduling.PriorityMode)) {
+	case "", GatewaySchedulingPriorityModeStrict, GatewaySchedulingPriorityModeWeighted:
+	default:
+		return fmt.Errorf("gateway.scheduling.priority_mode must be one of: strict/weighted")
+	}
 	if c.Gateway.Scheduling.StickySessionMaxWaiting <= 0 {
 		return fmt.Errorf("gateway.scheduling.sticky_session_max_waiting must be positive")
 	}

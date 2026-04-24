@@ -11,6 +11,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1881,7 +1882,7 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 
 		// Return mapped models
 		var models []openai.Model
-		for requestedModel := range mapping {
+		for _, requestedModel := range sortedModelMappingKeys(mapping) {
 			var found bool
 			for _, dm := range openai.DefaultModels {
 				if dm.ID == requestedModel {
@@ -1919,7 +1920,7 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		}
 
 		var models []geminicli.Model
-		for requestedModel := range mapping {
+		for _, requestedModel := range sortedModelMappingKeys(mapping) {
 			var found bool
 			for _, dm := range geminicli.DefaultModels {
 				if dm.ID == requestedModel {
@@ -1976,7 +1977,7 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 
 	// Return mapped models (keys of the mapping are the available model IDs)
 	var models []claude.Model
-	for requestedModel := range mapping {
+	for _, requestedModel := range sortedModelMappingKeys(mapping) {
 		// Try to find display info from default models
 		var found bool
 		for _, dm := range claude.DefaultModels {
@@ -1998,6 +1999,15 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 	}
 
 	response.Success(c, models)
+}
+
+func sortedModelMappingKeys(mapping map[string]string) []string {
+	keys := make([]string, 0, len(mapping))
+	for key := range mapping {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // SetPrivacy handles setting privacy for a single OpenAI/Antigravity OAuth account

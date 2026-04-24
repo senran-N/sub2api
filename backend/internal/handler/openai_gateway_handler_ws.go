@@ -187,10 +187,14 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	if err != nil {
 		reqLog.Warn("openai.websocket_account_select_failed", zap.Error(err))
 		initialSelectionErr := err
-		defaultModel := ""
-		if apiKey.Group != nil {
-			defaultModel = apiKey.Group.DefaultMappedModel
-		}
+		defaultModel := resolveOpenAISelectionFallbackModel(
+			c,
+			h.gatewayService,
+			apiKey,
+			schedulingModel,
+			reqLog,
+			"openai.websocket_fallback_to_default_model_skipped",
+		)
 		if defaultModel != "" && defaultModel != schedulingModel {
 			reqLog.Info("openai.websocket_fallback_to_default_model",
 				zap.String("default_mapped_model", defaultModel),
@@ -206,6 +210,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			)
 			if err == nil && selection != nil {
 				schedulingModel = defaultModel
+				service.AttachOpenAIWSSelectionFallbackModel(c, defaultModel)
 			}
 		}
 		if err != nil {

@@ -256,10 +256,14 @@ func (h *CompatibleGatewayTextHandler) Responses(c *gin.Context) {
 			)
 			if len(failedAccountIDs) == 0 {
 				initialSelectionErr := err
-				defaultModel := ""
-				if apiKey.Group != nil {
-					defaultModel = apiKey.Group.DefaultMappedModel
-				}
+				defaultModel := resolveOpenAISelectionFallbackModel(
+					c,
+					h.gatewayService,
+					apiKey,
+					schedulingModel,
+					reqLog,
+					"openai.fallback_to_default_model_skipped",
+				)
 				if defaultModel != "" && defaultModel != schedulingModel {
 					reqLog.Info("openai.fallback_to_default_model",
 						zap.String("default_mapped_model", defaultModel),
@@ -613,10 +617,14 @@ func (h *CompatibleGatewayTextHandler) ChatCompletions(c *gin.Context) {
 			)
 			if len(failedAccountIDs) == 0 {
 				initialSelectionErr := err
-				defaultModel := ""
-				if apiKey.Group != nil {
-					defaultModel = apiKey.Group.DefaultMappedModel
-				}
+				defaultModel := resolveOpenAISelectionFallbackModel(
+					c,
+					h.gatewayService,
+					apiKey,
+					schedulingModel,
+					reqLog,
+					"openai_chat_completions.fallback_to_default_model_skipped",
+				)
 				if defaultModel != "" && defaultModel != schedulingModel {
 					reqLog.Info("openai_chat_completions.fallback_to_default_model",
 						zap.String("default_mapped_model", defaultModel),

@@ -29,6 +29,36 @@ func resolveOpenAIForwardDefaultMappedModel(apiKey *service.APIKey, fallbackMode
 	return service.ResolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
 }
 
+func resolveOpenAISelectionFallbackModel(
+	c *gin.Context,
+	gatewayService *service.OpenAIGatewayService,
+	apiKey *service.APIKey,
+	schedulingModel string,
+	reqLog *zap.Logger,
+	logEvent string,
+) string {
+	candidate := service.OpenAISelectionFallbackCandidate(apiKey, schedulingModel)
+	if candidate == "" {
+		return ""
+	}
+
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	if fallbackModel, ok := gatewayService.ResolveOpenAISelectionFallbackModel(ctx, apiKey, schedulingModel); ok {
+		return fallbackModel
+	}
+	if reqLog != nil {
+		reqLog.Info(logEvent,
+			zap.String("default_mapped_model", candidate),
+			zap.String("requested_model", schedulingModel),
+			zap.String("reason", "model_fallback_disabled"),
+		)
+	}
+	return ""
+}
+
 func compatibleGatewayMessagesDispatchPlatform(ctx context.Context, apiKey *service.APIKey) string {
 	fallbackPlatform := service.PlatformOpenAI
 	if apiKey != nil && apiKey.Group != nil {

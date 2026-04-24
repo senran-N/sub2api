@@ -248,7 +248,7 @@ func TestOpenAIGatewayService_BuildOpenAIWSIngressSessionContext_UsesFallbackSes
 	require.Equal(t, "turn_state_restored", session.turnState)
 }
 
-func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_RewritesDefaultFallbackModelOnResponse(t *testing.T) {
+func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_DoesNotApplyGroupDefaultWithoutSelectionFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	cfg := &config.Config{}
@@ -268,8 +268,8 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_RewritesDefaultF
 
 	captureConn := &openAIWSCaptureConn{
 		events: [][]byte{
-			[]byte(`{"type":"response.created","response":{"id":"resp_ingress_default_map_1","model":"gpt-5.2-xhigh"}}`),
-			[]byte(`{"type":"response.completed","response":{"id":"resp_ingress_default_map_1","model":"gpt-5.2-xhigh","usage":{"input_tokens":1,"output_tokens":1}}}`),
+			[]byte(`{"type":"response.created","response":{"id":"resp_ingress_default_map_1","model":"gpt-5.4-xhigh"}}`),
+			[]byte(`{"type":"response.completed","response":{"id":"resp_ingress_default_map_1","model":"gpt-5.4-xhigh","usage":{"input_tokens":1,"output_tokens":1}}}`),
 		},
 	}
 	captureDialer := &openAIWSCaptureDialer{conn: captureConn}
@@ -385,7 +385,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_RewritesDefaultF
 	}
 
 	require.Len(t, captureConn.writes, 1)
-	require.Equal(t, "gpt-5.2-xhigh", strings.TrimSpace(openAIWSPayloadString(captureConn.writes[0], "model")))
+	require.Equal(t, "gpt-5.4-xhigh", strings.TrimSpace(openAIWSPayloadString(captureConn.writes[0], "model")))
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_DedicatedModeDoesNotReuseConnAcrossSessions(t *testing.T) {

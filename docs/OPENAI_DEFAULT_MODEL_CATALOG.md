@@ -33,7 +33,8 @@
 2. `backend/internal/pkg/openai/constants_test.go`
 3. `backend/internal/handler/admin/account_handler.go`
 4. `backend/internal/handler/admin/account_handler_available_models_test.go`
-5. `backend/internal/service/compatible_gateway_model_view.go`
+5. `backend/internal/handler/gateway_handler_models_test.go`
+6. `backend/internal/service/compatible_gateway_model_view.go`
 
 如果是新增 OpenAI 模型族，而不是单纯调整展示列表，还要继续检查：
 
@@ -47,3 +48,5 @@
 
 - 默认模型列表确实暴露了目标模型。
 - OpenAI passthrough / 无映射账户的后台模型接口仍返回该模型。
+- 兼容 `/v1/models` 的 OpenAI 默认响应仍返回该模型。
+- 显式 `model_mapping` 生成的后台模型列表顺序稳定，不依赖 Go map 遍历顺序。

@@ -342,6 +342,9 @@ gateway:
   # Scheduling configuration
   # 调度配置
   scheduling:
+    # Priority mode: strict keeps priority as a hard tier boundary; weighted keeps legacy mixed scoring.
+    # 优先级策略：strict 将 priority 作为硬分层；weighted 保留旧混合评分。
+    priority_mode: strict
     # Sticky session max waiting queue size
     # 粘性会话最大排队长度
     sticky_session_max_waiting: 3

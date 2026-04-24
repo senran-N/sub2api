@@ -211,6 +211,58 @@ func TestResponsesToAnthropic_ToolUse(t *testing.T) {
 	assert.Equal(t, "get_weather", anth.Content[1].Name)
 }
 
+func TestResponsesToAnthropicRequest_PreservesToolCallingPayload(t *testing.T) {
+	strict := true
+	req := &ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: json.RawMessage(`[
+			{"role":"user","content":"Check the weather"},
+			{"type":"function_call","call_id":"fc_call_weather","name":"get_weather","arguments":"{\"city\":\"NYC\"}"},
+			{"type":"function_call_output","call_id":"fc_call_weather","output":"Sunny"}
+		]`),
+		Tools: []ResponsesTool{
+			{
+				Type:        "function",
+				Name:        "get_weather",
+				Description: "Get weather",
+				Parameters:  json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`),
+				Strict:      &strict,
+			},
+		},
+		ToolChoice: json.RawMessage(`{"type":"function","function":{"name":"get_weather"}}`),
+	}
+
+	anth, err := ResponsesToAnthropicRequest(req)
+	require.NoError(t, err)
+
+	require.Len(t, anth.Tools, 1)
+	assert.Equal(t, "get_weather", anth.Tools[0].Name)
+	assert.Equal(t, "Get weather", anth.Tools[0].Description)
+	var schema map[string]any
+	require.NoError(t, json.Unmarshal(anth.Tools[0].InputSchema, &schema))
+	assert.Equal(t, "object", schema["type"])
+	require.Contains(t, schema["properties"], "city")
+
+	var toolChoice map[string]string
+	require.NoError(t, json.Unmarshal(anth.ToolChoice, &toolChoice))
+	assert.Equal(t, "tool", toolChoice["type"])
+	assert.Equal(t, "get_weather", toolChoice["name"])
+
+	require.Len(t, anth.Messages, 3)
+	var toolUse []AnthropicContentBlock
+	require.NoError(t, json.Unmarshal(anth.Messages[1].Content, &toolUse))
+	require.Len(t, toolUse, 1)
+	assert.Equal(t, "tool_use", toolUse[0].Type)
+	assert.Equal(t, "call_weather", toolUse[0].ID)
+	assert.Equal(t, "get_weather", toolUse[0].Name)
+
+	var toolResult []AnthropicContentBlock
+	require.NoError(t, json.Unmarshal(anth.Messages[2].Content, &toolResult))
+	require.Len(t, toolResult, 1)
+	assert.Equal(t, "tool_result", toolResult[0].Type)
+	assert.Equal(t, "call_weather", toolResult[0].ToolUseID)
+}
+
 func TestResponsesToAnthropic_Reasoning(t *testing.T) {
 	resp := &ResponsesResponse{
 		ID:     "resp_789",

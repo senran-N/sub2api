@@ -36,6 +36,9 @@ func isOpenAIAccountModelEligible(account *Account, requestedModel string) bool 
 	if account == nil {
 		return false
 	}
+	if supportedModels := account.GetExplicitSupportedModels(); len(supportedModels) > 0 {
+		return supportedModelListMatches(supportedModels, requestedModel)
+	}
 	if account.IsModelSupported(requestedModel) {
 		return true
 	}

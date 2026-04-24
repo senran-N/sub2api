@@ -25,10 +25,30 @@ type openAIWSClientPayload struct {
 	payloadMeta        openAIWSIngressPayloadMeta
 }
 
+const openAIWSSelectionFallbackModelContextKey = "openai_ws_selection_fallback_model"
+
+func AttachOpenAIWSSelectionFallbackModel(c *gin.Context, model string) {
+	if c == nil {
+		return
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return
+	}
+	c.Set(openAIWSSelectionFallbackModelContextKey, model)
+}
+
+func getOpenAIWSSelectionFallbackModel(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	return strings.TrimSpace(c.GetString(openAIWSSelectionFallbackModelContextKey))
+}
+
 func (s *OpenAIGatewayService) resolveOpenAIWSForwardDefaultMappedModel(c *gin.Context, requestedModel string) string {
-	fallbackModel := ""
+	fallbackModel := getOpenAIWSSelectionFallbackModel(c)
 	groupID := getOpenAIGroupIDFromContext(c)
-	if s != nil && s.channelService != nil && groupID > 0 {
+	if fallbackModel == "" && s != nil && s.channelService != nil && groupID > 0 {
 		requestCtx := context.Background()
 		if c != nil && c.Request != nil {
 			requestCtx = c.Request.Context()

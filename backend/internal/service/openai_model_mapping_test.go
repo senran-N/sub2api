@@ -1,6 +1,57 @@
 package service
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/senran-N/sub2api/internal/config"
+	"github.com/stretchr/testify/require"
+)
+
+type openAIModelFallbackSettingRepo struct {
+	values map[string]string
+}
+
+func (r openAIModelFallbackSettingRepo) Get(ctx context.Context, key string) (*Setting, error) {
+	return nil, ErrSettingNotFound
+}
+
+func (r openAIModelFallbackSettingRepo) GetValue(ctx context.Context, key string) (string, error) {
+	if value, ok := r.values[key]; ok {
+		return value, nil
+	}
+	return "", ErrSettingNotFound
+}
+
+func (r openAIModelFallbackSettingRepo) Set(ctx context.Context, key, value string) error {
+	return nil
+}
+
+func (r openAIModelFallbackSettingRepo) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
+	result := make(map[string]string, len(keys))
+	for _, key := range keys {
+		if value, ok := r.values[key]; ok {
+			result[key] = value
+		}
+	}
+	return result, nil
+}
+
+func (r openAIModelFallbackSettingRepo) SetMultiple(ctx context.Context, settings map[string]string) error {
+	return nil
+}
+
+func (r openAIModelFallbackSettingRepo) GetAll(ctx context.Context) (map[string]string, error) {
+	result := make(map[string]string, len(r.values))
+	for key, value := range r.values {
+		result[key] = value
+	}
+	return result, nil
+}
+
+func (r openAIModelFallbackSettingRepo) Delete(ctx context.Context, key string) error {
+	return nil
+}
 
 func TestResolveOpenAIForwardModel(t *testing.T) {
 	tests := []struct {
@@ -11,7 +62,7 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 		expectedModel      string
 	}{
 		{
-			name: "falls back to group default when account has no mapping",
+			name: "uses explicit fallback when account has no mapping",
 			account: &Account{
 				Credentials: map[string]any{},
 			},
@@ -20,7 +71,7 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 			expectedModel:      "gpt-4o-mini",
 		},
 		{
-			name: "preserves exact passthrough mapping instead of group default",
+			name: "preserves exact passthrough mapping instead of explicit fallback",
 			account: &Account{
 				Credentials: map[string]any{
 					"model_mapping": map[string]any{
@@ -33,7 +84,7 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 			expectedModel:      "gpt-5.4",
 		},
 		{
-			name: "preserves wildcard passthrough mapping instead of group default",
+			name: "preserves wildcard passthrough mapping instead of explicit fallback",
 			account: &Account{
 				Credentials: map[string]any{
 					"model_mapping": map[string]any{
@@ -85,19 +136,24 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 			expectedModel:      "gpt-5.3-codex-spark-xhigh",
 		},
 		{
-			name:               "inherits explicit reasoning suffix from group default fallback",
+			name:               "inherits explicit reasoning suffix from selected fallback",
 			account:            &Account{Credentials: map[string]any{}},
 			requestedModel:     "gpt-5.4-xhigh",
 			defaultMappedModel: "gpt-5.2",
 			expectedModel:      "gpt-5.2-xhigh",
 		},
+		{
+			name:               "does not duplicate reasoning suffix without mapping or fallback",
+			account:            &Account{Credentials: map[string]any{}},
+			requestedModel:     "gpt-5.4-xhigh",
+			defaultMappedModel: "",
+			expectedModel:      "gpt-5.4-xhigh",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := resolveOpenAIForwardModel(tt.account, tt.requestedModel, tt.defaultMappedModel); got != tt.expectedModel {
-				t.Fatalf("resolveOpenAIForwardModel(...) = %q, want %q", got, tt.expectedModel)
-			}
+			require.Equal(t, tt.expectedModel, resolveOpenAIForwardModel(tt.account, tt.requestedModel, tt.defaultMappedModel))
 		})
 	}
 }
@@ -108,14 +164,10 @@ func TestResolveOpenAIForwardModel_PreventsClaudeModelFromFallingBackToLegacyDef
 	}
 
 	withoutDefault := resolveOpenAIForwardModel(account, "claude-opus-4-6", "")
-	if got := normalizeCodexModel(withoutDefault); got != "gpt-5.4" {
-		t.Fatalf("normalizeCodexModel(%q) = %q, want %q", withoutDefault, got, "gpt-5.4")
-	}
+	require.Equal(t, "gpt-5.4", normalizeCodexModel(withoutDefault))
 
 	withDefault := resolveOpenAIForwardModel(account, "claude-opus-4-6", "gpt-5.4")
-	if got := normalizeCodexModel(withDefault); got != "gpt-5.4" {
-		t.Fatalf("normalizeCodexModel(%q) = %q, want %q", withDefault, got, "gpt-5.4")
-	}
+	require.Equal(t, "gpt-5.4", normalizeCodexModel(withDefault))
 }
 
 func TestNormalizeCodexModel_UpstreamAlignment(t *testing.T) {
@@ -135,9 +187,7 @@ func TestNormalizeCodexModel_UpstreamAlignment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := normalizeCodexModel(tt.input); got != tt.want {
-				t.Fatalf("normalizeCodexModel(%q) = %q, want %q", tt.input, got, tt.want)
-			}
+			require.Equal(t, tt.want, normalizeCodexModel(tt.input))
 		})
 	}
 }
@@ -145,39 +195,58 @@ func TestNormalizeCodexModel_UpstreamAlignment(t *testing.T) {
 func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 	t.Run("oauth accounts normalize codex aliases", func(t *testing.T) {
 		account := &Account{Type: AccountTypeOAuth}
-		if got := normalizeOpenAIModelForUpstream(account, "gpt 5.4"); got != "gpt-5.4" {
-			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gpt-5.4")
-		}
+		require.Equal(t, "gpt-5.4", normalizeOpenAIModelForUpstream(account, "gpt 5.4"))
 	})
 
 	t.Run("oauth accounts preserve explicit upstream variants", func(t *testing.T) {
 		account := &Account{Type: AccountTypeOAuth}
-		if got := normalizeOpenAIModelForUpstream(account, "gpt-5.4-xhigh"); got != "gpt-5.4-xhigh" {
-			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gpt-5.4-xhigh")
-		}
-		if got := normalizeOpenAIModelForUpstream(account, "gpt-5.3-codex-spark"); got != "gpt-5.3-codex-spark" {
-			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gpt-5.3-codex-spark")
-		}
+		require.Equal(t, "gpt-5.4-xhigh", normalizeOpenAIModelForUpstream(account, "gpt-5.4-xhigh"))
+		require.Equal(t, "gpt-5.3-codex-spark", normalizeOpenAIModelForUpstream(account, "gpt-5.3-codex-spark"))
 	})
 
 	t.Run("api key accounts preserve mapped custom model", func(t *testing.T) {
 		account := &Account{Type: AccountTypeAPIKey}
-		if got := normalizeOpenAIModelForUpstream(account, " custom/upstream-model "); got != "custom/upstream-model" {
-			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "custom/upstream-model")
-		}
+		require.Equal(t, "custom/upstream-model", normalizeOpenAIModelForUpstream(account, " custom/upstream-model "))
 	})
 
 	t.Run("api key accounts preserve official non-codex models", func(t *testing.T) {
 		account := &Account{Type: AccountTypeAPIKey}
-		if got := normalizeOpenAIModelForUpstream(account, "gpt-4.1"); got != "gpt-4.1" {
-			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gpt-4.1")
-		}
+		require.Equal(t, "gpt-4.1", normalizeOpenAIModelForUpstream(account, "gpt-4.1"))
 	})
 
 	t.Run("api key accounts preserve arbitrary compatible upstream models", func(t *testing.T) {
 		account := &Account{Type: AccountTypeAPIKey}
-		if got := normalizeOpenAIModelForUpstream(account, "gemini-3-flash-preview"); got != "gemini-3-flash-preview" {
-			t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, "gemini-3-flash-preview")
-		}
+		require.Equal(t, "gemini-3-flash-preview", normalizeOpenAIModelForUpstream(account, "gemini-3-flash-preview"))
 	})
+}
+
+func TestResolveOpenAISelectionFallbackModelRequiresSetting(t *testing.T) {
+	apiKey := &APIKey{
+		Group: &Group{DefaultMappedModel: "gpt-5.4"},
+	}
+
+	disabledSvc := &OpenAIGatewayService{
+		settingService: NewSettingService(openAIModelFallbackSettingRepo{values: map[string]string{
+			SettingKeyEnableModelFallback: "false",
+		}}, &config.Config{}),
+	}
+	model, ok := disabledSvc.ResolveOpenAISelectionFallbackModel(context.Background(), apiKey, "kimi-2.6")
+	require.False(t, ok)
+	require.Empty(t, model)
+
+	enabledSvc := &OpenAIGatewayService{
+		settingService: NewSettingService(openAIModelFallbackSettingRepo{values: map[string]string{
+			SettingKeyEnableModelFallback: "true",
+		}}, &config.Config{}),
+	}
+	model, ok = enabledSvc.ResolveOpenAISelectionFallbackModel(context.Background(), apiKey, "kimi-2.6")
+	require.True(t, ok)
+	require.Equal(t, "gpt-5.4", model)
+}
+
+func TestResolveOpenAIForwardDefaultMappedModelOnlyUsesExplicitFallback(t *testing.T) {
+	apiKey := &APIKey{Group: &Group{DefaultMappedModel: "gpt-5.4"}}
+
+	require.Empty(t, ResolveOpenAIForwardDefaultMappedModel(apiKey, ""))
+	require.Equal(t, "gpt-5.2", ResolveOpenAIForwardDefaultMappedModel(apiKey, " gpt-5.2 "))
 }

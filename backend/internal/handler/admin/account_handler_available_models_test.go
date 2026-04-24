@@ -45,7 +45,8 @@ func TestAccountHandlerGetAvailableModels_OpenAIOAuthUsesExplicitModelMapping(t 
 			Status:   service.StatusActive,
 			Credentials: map[string]any{
 				"model_mapping": map[string]any{
-					"gpt-5": "gpt-5.1",
+					"z-custom": "z-upstream",
+					"gpt-5":    "gpt-5.1",
 				},
 			},
 		},
@@ -64,8 +65,9 @@ func TestAccountHandlerGetAvailableModels_OpenAIOAuthUsesExplicitModelMapping(t 
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Len(t, resp.Data, 1)
+	require.Len(t, resp.Data, 2)
 	require.Equal(t, "gpt-5", resp.Data[0].ID)
+	require.Equal(t, "z-custom", resp.Data[1].ID)
 }
 
 func TestAccountHandlerGetAvailableModels_OpenAIOAuthPassthroughFallsBackToDefaults(t *testing.T) {
@@ -108,6 +110,9 @@ func TestAccountHandlerGetAvailableModels_OpenAIOAuthPassthroughFallsBackToDefau
 		ids = append(ids, model.ID)
 	}
 	require.True(t, slices.Contains(ids, "gpt-5.5"), "expected passthrough defaults to expose gpt-5.5")
+	require.True(t, slices.Contains(ids, "gpt-5.4"), "expected passthrough defaults to expose gpt-5.4")
+	require.True(t, slices.Contains(ids, "gpt-5.3-codex"), "expected passthrough defaults to expose gpt-5.3-codex")
+	require.True(t, slices.Contains(ids, "gpt-5.3-codex-spark"), "expected passthrough defaults to expose gpt-5.3-codex-spark")
 }
 
 func TestAccountHandlerGetAvailableModels_GrokUsesOpenAIModelShape(t *testing.T) {

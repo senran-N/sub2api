@@ -418,7 +418,7 @@ func TestParseOpenAIWSIngressClientPayload_PreservesReasoningVariantFallbackMapp
 	require.Equal(t, "gpt-5.3-codex-spark-xhigh", gjson.GetBytes(parsed.payloadRaw, "model").String())
 }
 
-func TestParseOpenAIWSIngressClientPayload_AppliesGroupDefaultMappedModelFallback(t *testing.T) {
+func TestParseOpenAIWSIngressClientPayload_DoesNotApplyGroupDefaultWithoutSelectionFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -429,6 +429,23 @@ func TestParseOpenAIWSIngressClientPayload_AppliesGroupDefaultMappedModelFallbac
 		GroupID: &groupID,
 		Group:   &Group{ID: groupID, DefaultMappedModel: "gpt-5.2"},
 	})
+
+	account := &Account{
+		Type: AccountTypeAPIKey,
+	}
+
+	svc := &OpenAIGatewayService{}
+	parsed, err := svc.parseOpenAIWSIngressClientPayload(c, account, []byte(`{"type":"response.create","model":"gpt-5.4-xhigh","stream":false}`))
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.4-xhigh", gjson.GetBytes(parsed.payloadRaw, "model").String())
+}
+
+func TestParseOpenAIWSIngressClientPayload_AppliesExplicitSelectionFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	AttachOpenAIWSSelectionFallbackModel(c, "gpt-5.2")
 
 	account := &Account{
 		Type: AccountTypeAPIKey,
