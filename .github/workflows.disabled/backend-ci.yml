@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.26.2'
+      - name: Unit tests
+        working-directory: backend
+        run: make test-unit
+      - name: Integration tests
+        working-directory: backend
+        run: make test-integration
+
+  migration-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.26.2'
+      - name: Validate migrations and rollback companions
+        working-directory: backend
+        run: make migrate-validate
+
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_COVERAGE_MIN: "20"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.26.2'
+      - name: Collect unit test coverage
+        id: coverage
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          make coverage
+          total=$(go tool cover -func=coverage-unit.out | awk '/^total:/ {gsub("%","",$3); print $3}')
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          printf 'Backend unit coverage: %s%%\n' "$total" >> "$GITHUB_STEP_SUMMARY"
+          awk "BEGIN {exit !($total >= ${BACKEND_COVERAGE_MIN})}" || {
+            echo "coverage ${total}% is below required ${BACKEND_COVERAGE_MIN}%"
+            exit 1
+          }
+      - name: Upload backend coverage artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-unit-coverage
+          path: backend/coverage-unit.out
+
+  golangci-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.26.2'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.9
+          args: --timeout=30m
+          working-directory: backend
