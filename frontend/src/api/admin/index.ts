@@ -97,7 +97,11 @@ export {
 export default adminAPI
 
 // Re-export types used by components
-export type { BalanceHistoryItem } from './users'
+export type {
+  AdminBindAuthIdentityRequest,
+  AdminBoundAuthIdentity,
+  BalanceHistoryItem
+} from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'

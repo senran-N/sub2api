@@ -316,9 +316,7 @@ export function isAuthenticated(): boolean {
  * Get public settings (no auth required)
  * @returns Public settings including registration and Turnstile config
  */
-export async function getPublicSettings(): Promise<PublicSettings> {
-  return requestPublicSettings()
-}
+export const getPublicSettings: () => Promise<PublicSettings> = requestPublicSettings
 
 /**
  * Send verification code to email

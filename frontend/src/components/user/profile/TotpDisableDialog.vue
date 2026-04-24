@@ -71,9 +71,6 @@
           />
         </div>
 
-        <div v-if="error" class="totp-disable-dialog__error text-sm">
-          {{ error }}
-        </div>
       </form>
     </div>
 
@@ -114,7 +111,6 @@ const appStore = useAppStore()
 const methodLoading = ref(true)
 const verificationMethod = ref<'email' | 'password'>('password')
 const loading = ref(false)
-const error = ref('')
 const sendingCode = ref(false)
 const codeCooldown = ref(0)
 const cooldownTimer = ref<ReturnType<typeof setInterval> | null>(null)
@@ -174,7 +170,6 @@ const handleDisable = async () => {
   if (!canSubmit.value) return
 
   loading.value = true
-  error.value = ''
 
   try {
     const request = verificationMethod.value === 'email'
@@ -185,7 +180,7 @@ const handleDisable = async () => {
     appStore.showSuccess(t('profile.totp.disableSuccess'))
     emit('success')
   } catch (disableError) {
-    error.value = resolveErrorMessage(disableError, t('profile.totp.disableFailed'))
+    appStore.showError(resolveErrorMessage(disableError, t('profile.totp.disableFailed')))
   } finally {
     loading.value = false
   }
@@ -225,11 +220,4 @@ onUnmounted(() => {
   border-bottom-color: var(--theme-accent);
 }
 
-.totp-disable-dialog__error {
-  border-radius: var(--theme-button-radius);
-  padding: var(--theme-profile-totp-status-padding-y);
-  border: 1px solid color-mix(in srgb, rgb(var(--theme-danger-rgb)) 26%, var(--theme-card-border));
-  background: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 10%, var(--theme-surface));
-  color: color-mix(in srgb, rgb(var(--theme-danger-rgb)) 84%, var(--theme-page-text));
-}
 </style>

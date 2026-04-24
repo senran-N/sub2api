@@ -151,8 +151,15 @@ describe('TOTP 弹窗定时器清理', () => {
     const wrapper = mount(TotpDisableDialog)
     await flushPromises()
 
-    await wrapper.get('input[type="password"]').setValue('correct horse battery staple')
-    await wrapper.get('form').trigger('submit.prevent')
+    const passwordInput = document.body.querySelector<HTMLInputElement>('input[type="password"]')
+    const form = document.body.querySelector<HTMLFormElement>('form')
+    expect(passwordInput).toBeTruthy()
+    expect(form).toBeTruthy()
+
+    passwordInput!.value = 'correct horse battery staple'
+    passwordInput!.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+    form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await flushPromises()
 
     expect(mocks.showError).toHaveBeenCalledWith('disable failed')

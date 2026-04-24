@@ -107,13 +107,20 @@ function buildUsageQueryParams(
   options: UserUsageViewDataOptions,
   page: number,
   pageSize: number
-): UsageQueryParams & { page: number; page_size: number } {
+): UsageQueryParams & {
+  page: number
+  page_size: number
+  sort_by: string
+  sort_order: 'asc' | 'desc'
+} {
   const range = resolveUsageDateRange(options)
 
   return {
     page,
     page_size: pageSize,
     ...options.filters.value,
+    sort_by: 'created_at',
+    sort_order: 'desc',
     start_date: range.startDate,
     end_date: range.endDate
   }

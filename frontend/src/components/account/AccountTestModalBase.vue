@@ -123,7 +123,7 @@
             rel="noopener noreferrer"
             class="account-test-modal__preview-card"
           >
-            <img :src="image.url" :alt="`gemini-test-image-${index + 1}`" class="h-48 w-full object-cover" />
+            <img :src="image.url" :alt="`test-image-${index + 1}`" class="h-48 w-full object-cover" />
             <div class="account-test-modal__preview-meta">
               {{ image.mimeType || 'image/*' }}
             </div>

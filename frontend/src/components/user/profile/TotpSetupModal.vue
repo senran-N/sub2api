@@ -61,10 +61,6 @@
               </div>
             </div>
 
-            <div v-if="verifyError" class="totp-setup-modal__error text-sm">
-              {{ verifyError }}
-            </div>
-
             <div class="flex justify-end gap-3 pt-4">
               <button type="button" class="btn btn-secondary" @click="$emit('close')">
                 {{ t('common.cancel') }}
@@ -203,7 +199,6 @@ const step = ref(0)
 const methodLoading = ref(true)
 const verificationMethod = ref<'email' | 'password'>('password')
 const verifyForm = ref({ emailCode: '', password: '' })
-const verifyError = ref('')
 const sendingCode = ref(false)
 const codeCooldown = ref(0)
 const cooldownTimer = ref<ReturnType<typeof setInterval> | null>(null)
@@ -415,7 +410,6 @@ const handleSendCode = async () => {
 
 const handleVerifyAndSetup = async () => {
   setupLoading.value = true
-  verifyError.value = ''
 
   try {
     const request = verificationMethod.value === 'email'
@@ -425,7 +419,7 @@ const handleVerifyAndSetup = async () => {
     setupData.value = await totpAPI.initiateSetup(request)
     step.value = 1
   } catch (errorLike) {
-    verifyError.value = getErrorMessage(errorLike, t('profile.totp.setupFailed'))
+    appStore.showError(getErrorMessage(errorLike, t('profile.totp.setupFailed')))
   } finally {
     setupLoading.value = false
   }
