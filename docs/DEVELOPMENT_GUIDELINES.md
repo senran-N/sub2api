@@ -7,6 +7,7 @@
 每次改动默认按下面顺序执行：
 
 1. 先读 [AGENT.md](/home/senran/Desktop/sub2api/AGENT.md)、本文件，以及与你改动直接相关的专项文档。
+   - 如果改动涉及分支管理、fork 同步或上游移植，同时阅读 [docs/GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md)。
 2. 先看真实实现，再决定改法，不要只根据旧文档或文件名猜测结构。
 3. 优先在已有模块和扩展 seam 上演进，避免再造并行实现。
 4. 改完后做最小但足够的验证。
@@ -57,6 +58,7 @@
 | 改动类型 | 必须检查/更新的文档 |
 | --- | --- |
 | 开发流程、验证命令、代码生成方式、仓库协作规则 | [docs/DEVELOPMENT_GUIDELINES.md](/home/senran/Desktop/sub2api/docs/DEVELOPMENT_GUIDELINES.md)、[docs/README.md](/home/senran/Desktop/sub2api/docs/README.md) |
+| 分支模型、fork 同步、上游选择性移植、冲突处理流程 | [docs/GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md)、[docs/README.md](/home/senran/Desktop/sub2api/docs/README.md) |
 | 共享架构边界、兼容网关扩展 seam、后台可复用抽象 | [docs/ARCHITECTURE_EXTENSIBILITY.md](/home/senran/Desktop/sub2api/docs/ARCHITECTURE_EXTENSIBILITY.md) |
 | 前端 Token、主题、共享样式入口、视觉复用规则 | [docs/FRONTEND_TOKENIZATION_GUIDE.md](/home/senran/Desktop/sub2api/docs/FRONTEND_TOKENIZATION_GUIDE.md) |
 | Grok 控制面、账户状态、后台展示契约、运行时设置 | [docs/GROK_BACKEND_CONTROL_PLANE.md](/home/senran/Desktop/sub2api/docs/GROK_BACKEND_CONTROL_PLANE.md) |

@@ -8,13 +8,15 @@
 
 1. [AGENT.md](/home/senran/Desktop/sub2api/AGENT.md)
 2. [DEVELOPMENT_GUIDELINES.md](/home/senran/Desktop/sub2api/docs/DEVELOPMENT_GUIDELINES.md)
-3. 再阅读与你当前改动直接相关的专项文档
+3. 如果涉及分支管理、fork 同步或上游移植，阅读 [GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md)
+4. 再阅读与你当前改动直接相关的专项文档
 
 ## 文档地图
 
 | 文档 | 作用 | 什么时候必须更新 |
 | --- | --- | --- |
 | [docs/DEVELOPMENT_GUIDELINES.md](/home/senran/Desktop/sub2api/docs/DEVELOPMENT_GUIDELINES.md) | 仓库级开发规范、验证方式、文档维护规则 | 变更开发流程、测试入口、代码生成方式、文档维护规则时 |
+| [docs/GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md) | fork 分支模型、上游同步、选择性移植和冲突处理流程 | 变更分支策略、远端角色、同步流程、移植规则时 |
 | [docs/ARCHITECTURE_EXTENSIBILITY.md](/home/senran/Desktop/sub2api/docs/ARCHITECTURE_EXTENSIBILITY.md) | 复用型扩展点和当前推荐架构边界 | 新增/替换共享扩展 seam、抽象层归属变更时 |
 | [docs/FRONTEND_TOKENIZATION_GUIDE.md](/home/senran/Desktop/sub2api/docs/FRONTEND_TOKENIZATION_GUIDE.md) | 前端 Token / Primitive / 样式收口规范 | 改主题 Token、共享样式入口、视觉复用规则时 |
 | [docs/GROK_BACKEND_CONTROL_PLANE.md](/home/senran/Desktop/sub2api/docs/GROK_BACKEND_CONTROL_PLANE.md) | Grok provider 专属控制面与后台契约 | Grok 账户、媒体、运行时设置、后台展示契约变化时 |

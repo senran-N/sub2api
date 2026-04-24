@@ -70,6 +70,7 @@ func TestSettingService_GetPublicSettingsForInjection_FiltersAdminMenuItems(t *t
 		values: map[string]string{
 			SettingKeyCustomMenuItems: `[{"title":"Docs","url":"https://docs.example.com","visibility":"public"},{"title":"Admin","url":"https://admin.example.com","visibility":"admin"},{"title":"Default","url":"https://default.example.com"}]`,
 			SettingKeyCustomEndpoints: `invalid-json`,
+			SettingKeyFrontendTheme:   `claude`,
 		},
 	}
 	svc := NewSettingService(repo, &config.Config{})
@@ -86,12 +87,14 @@ func TestSettingService_GetPublicSettingsForInjection_FiltersAdminMenuItems(t *t
 			Title string `json:"title"`
 		} `json:"custom_menu_items"`
 		CustomEndpoints []any  `json:"custom_endpoints"`
+		FrontendTheme   string `json:"frontend_theme"`
 		Version         string `json:"version"`
 	}
 	require.NoError(t, json.Unmarshal(payload, &decoded))
 	require.Len(t, decoded.CustomMenuItems, 2)
 	require.Equal(t, "Docs", decoded.CustomMenuItems[0].Title)
 	require.Equal(t, "Default", decoded.CustomMenuItems[1].Title)
+	require.Equal(t, "claude", decoded.FrontendTheme)
 	require.Equal(t, "1.2.3", decoded.Version)
 	require.Empty(t, decoded.CustomEndpoints)
 }

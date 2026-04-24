@@ -669,6 +669,7 @@ type PublicSettingsInjectionPayload struct {
 	SiteName                         string          `json:"site_name"`
 	SiteLogo                         string          `json:"site_logo"`
 	SiteSubtitle                     string          `json:"site_subtitle"`
+	FrontendTheme                    string          `json:"frontend_theme"`
 	APIBaseURL                       string          `json:"api_base_url"`
 	ContactInfo                      string          `json:"contact_info"`
 	DocURL                           string          `json:"doc_url"`
@@ -724,6 +725,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SiteName:                         settings.SiteName,
 		SiteLogo:                         settings.SiteLogo,
 		SiteSubtitle:                     settings.SiteSubtitle,
+		FrontendTheme:                    settings.FrontendTheme,
 		APIBaseURL:                       settings.APIBaseURL,
 		ContactInfo:                      settings.ContactInfo,
 		DocURL:                           settings.DocURL,
