@@ -261,6 +261,7 @@ func (r *apiKeyRepository) Delete(ctx context.Context, id int64) error {
 	affected, err := r.client.APIKey.Update().
 		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
 		SetKey(tombstoneKey).
+		SetStatus(service.StatusDisabled).
 		SetDeletedAt(time.Now()).
 		Save(ctx)
 	if err != nil {

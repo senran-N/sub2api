@@ -81,6 +81,7 @@ func provideCleanup(
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
+	_ *service.OpsMetricsCollector,
 	_ *service.GrokQuotaSyncService,
 	_ *service.GrokCapabilityProbeService,
 ) func() {

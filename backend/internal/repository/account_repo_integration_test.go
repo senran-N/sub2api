@@ -8,7 +8,9 @@ import (
 	"time"
 
 	dbent "github.com/senran-N/sub2api/ent"
+	dbaccount "github.com/senran-N/sub2api/ent/account"
 	"github.com/senran-N/sub2api/ent/accountgroup"
+	"github.com/senran-N/sub2api/ent/schema/mixins"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/suite"
@@ -190,6 +192,13 @@ func (s *AccountRepoSuite) TestDelete() {
 
 	_, err = s.repo.GetByID(s.ctx, account.ID)
 	s.Require().Error(err, "expected error after delete")
+	deleted, err := s.client.Account.Query().
+		Where(dbaccount.IDEQ(account.ID)).
+		Only(mixins.SkipSoftDelete(s.ctx))
+	s.Require().NoError(err, "soft-deleted row should remain for usage-log FK history")
+	s.Require().Equal(service.StatusDisabled, deleted.Status)
+	s.Require().False(deleted.Schedulable)
+	s.Require().NotNil(deleted.DeletedAt)
 	s.Require().Equal([]int64{account.ID}, cacheRecorder.deletedAccountIDs)
 	s.Require().Nil(cacheRecorder.accounts[account.ID], "expected scheduler cache entry to be removed")
 }

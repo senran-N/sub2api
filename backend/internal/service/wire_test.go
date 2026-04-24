@@ -71,6 +71,22 @@ func TestProvideDashboardAggregationService_RegistersLifecycleStop(t *testing.T)
 	entries[0].Stop()
 }
 
+func TestProvideOpsMetricsCollector_RegistersLifecycleStop(t *testing.T) {
+	registry := NewLifecycleRegistry()
+
+	svc := ProvideOpsMetricsCollector(nil, nil, nil, nil, nil, nil, nil, registry)
+	if svc == nil {
+		t.Fatalf("expected ops metrics collector")
+	}
+
+	entries := registry.Entries()
+	if len(entries) != 1 || entries[0].Name != "OpsMetricsCollector" {
+		t.Fatalf("unexpected lifecycle entries: %+v", entries)
+	}
+
+	entries[0].Stop()
+}
+
 type apiKeyAuthLifecycleCacheStub struct {
 	subscribeCtx context.Context
 }

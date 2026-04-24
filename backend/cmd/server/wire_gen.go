@@ -269,7 +269,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	engine := server.ProvideRouter(configConfig, routeDependencies)
 	httpServer := server.ProvideHTTPServer(configConfig, engine)
 	claudeCodeProfileSyncService := service.ProvideClaudeCodeProfileSyncStarter(configConfig)
-	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, grokQuotaSyncService, grokCapabilityProbeService)
+	opsMetricsCollector := service.ProvideOpsMetricsCollector(opsRepository, settingRepository, accountRepository, concurrencyService, db, redisClient, configConfig, lifecycleRegistry)
+	v20 := provideCleanup(configConfig, client, redisClient, lifecycleRegistry, claudeCodeProfileSyncService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, opsMetricsCollector, grokQuotaSyncService, grokCapabilityProbeService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v20,
@@ -310,6 +311,7 @@ func provideCleanup(
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
+	_ *service.OpsMetricsCollector,
 	_ *service.GrokQuotaSyncService,
 	_ *service.GrokCapabilityProbeService,
 ) func() {

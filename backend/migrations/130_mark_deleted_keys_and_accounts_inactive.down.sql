@@ -1,0 +1,1 @@
+-- No-op: deleted rows should remain inactive.

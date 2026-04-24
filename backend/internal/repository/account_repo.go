@@ -26,6 +26,7 @@ import (
 	dbgroup "github.com/senran-N/sub2api/ent/group"
 	dbpredicate "github.com/senran-N/sub2api/ent/predicate"
 	dbproxy "github.com/senran-N/sub2api/ent/proxy"
+	"github.com/senran-N/sub2api/ent/schema/mixins"
 	"github.com/senran-N/sub2api/internal/pkg/logger"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/senran-N/sub2api/internal/service"
@@ -441,8 +442,26 @@ func (r *accountRepository) Delete(ctx context.Context, id int64) error {
 	if _, err := txClient.ExecContext(ctx, "DELETE FROM scheduled_test_plans WHERE account_id = $1", id); err != nil {
 		return err
 	}
-	if _, err := txClient.Account.Delete().Where(dbaccount.IDEQ(id)).Exec(ctx); err != nil {
+	now := time.Now()
+	affected, err := txClient.Account.Update().
+		Where(dbaccount.IDEQ(id), dbaccount.DeletedAtIsNil()).
+		SetStatus(service.StatusDisabled).
+		SetSchedulable(false).
+		SetDeletedAt(now).
+		Save(ctx)
+	if err != nil {
 		return err
+	}
+	if affected == 0 {
+		exists, err := txClient.Account.Query().
+			Where(dbaccount.IDEQ(id)).
+			Exist(mixins.SkipSoftDelete(ctx))
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return service.ErrAccountNotFound
+		}
 	}
 
 	if tx != nil {

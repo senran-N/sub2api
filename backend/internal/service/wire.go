@@ -236,10 +236,10 @@ func ProvideOpsMetricsCollector(
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsMetricsCollector {
 	collector := NewOpsMetricsCollector(opsRepo, settingRepo, accountRepo, concurrencyService, db, redisClient, cfg)
-	collector.Start()
-	return collector
+	return manageStartStopLifecycle(lifecycle, "OpsMetricsCollector", collector)
 }
 
 // ProvideOpsAggregationService creates and starts OpsAggregationService (hourly/daily pre-aggregation).

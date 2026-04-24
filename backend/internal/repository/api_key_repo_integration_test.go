@@ -9,6 +9,8 @@ import (
 	"time"
 
 	dbent "github.com/senran-N/sub2api/ent"
+	"github.com/senran-N/sub2api/ent/apikey"
+	"github.com/senran-N/sub2api/ent/schema/mixins"
 	"github.com/senran-N/sub2api/internal/pkg/pagination"
 	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
@@ -188,6 +190,14 @@ func (s *APIKeyRepoSuite) TestDelete() {
 
 	_, err = s.repo.GetByID(s.ctx, key.ID)
 	s.Require().Error(err, "expected error after delete")
+
+	deleted, err := s.client.APIKey.Query().
+		Where(apikey.IDEQ(key.ID)).
+		Only(mixins.SkipSoftDelete(s.ctx))
+	s.Require().NoError(err, "soft-deleted row should remain for usage-log FK history")
+	s.Require().Equal(service.StatusDisabled, deleted.Status)
+	s.Require().NotNil(deleted.DeletedAt)
+	s.Require().NotEqual("sk-delete", deleted.Key, "deleted key material should be tombstoned")
 }
 
 func (s *APIKeyRepoSuite) TestCreate_AfterSoftDelete_AllowsSameKey() {
