@@ -5,7 +5,11 @@ import {
   resolveOpenAIWSModeFromExtra,
   type OpenAIWSMode
 } from '@/utils/openaiWsMode'
-import type { ModelMapping } from './credentialsBuilder'
+import {
+  normalizePoolModeRetryCount,
+  replaceBuiltModelMapping,
+  type ModelMapping
+} from './credentialsBuilder'
 
 export interface ModelRestrictionState {
   mode: 'whitelist' | 'mapping'
@@ -56,6 +60,48 @@ export interface OpenAIExtraOptions {
   openaiAPIKeyResponsesWebSocketV2Mode: OpenAIWSMode
   openaiOAuthResponsesWebSocketV2Mode: OpenAIWSMode
   openaiPassthroughEnabled: boolean
+}
+
+export interface EditModelRestrictionOptions {
+  allowedModels: string[]
+  mode: 'whitelist' | 'mapping'
+  modelMappings: ModelMapping[]
+}
+
+export interface EditCredentialToggles {
+  customErrorCodesEnabled: boolean
+  poolModeEnabled: boolean
+  poolModeRetryCount: number
+  selectedErrorCodes: number[]
+}
+
+export interface BuildEditableCompatibleCredentialsOptions extends EditModelRestrictionOptions, EditCredentialToggles {
+  apiKeyInput: string
+  baseUrlInput: string
+  currentCredentials: Record<string, unknown>
+  defaultBaseUrl: string
+  preserveModelMappingWhenDisabled: boolean
+  shouldApplyModelMapping: boolean
+}
+
+export interface BuildEditableBedrockCredentialsOptions extends EditModelRestrictionOptions {
+  accessKeyId: string
+  apiKeyInput: string
+  currentCredentials: Record<string, unknown>
+  forceGlobal: boolean
+  isApiKeyMode: boolean
+  poolModeEnabled: boolean
+  poolModeRetryCount: number
+  region: string
+  secretAccessKey: string
+  sessionToken: string
+}
+
+export type EditCredentialBuildError = 'api_key_required'
+
+export interface EditCredentialBuildResult {
+  credentials?: Record<string, unknown>
+  error?: EditCredentialBuildError
 }
 
 export function createEmptyModelRestrictionState(): ModelRestrictionState {
@@ -179,6 +225,108 @@ export function buildUpdatedOpenAIExtra(
   }
 
   return nextExtra
+}
+
+export function buildEditableCompatibleCredentials(
+  options: BuildEditableCompatibleCredentialsOptions
+): EditCredentialBuildResult {
+  const newCredentials: Record<string, unknown> = {
+    ...options.currentCredentials,
+    base_url: options.baseUrlInput.trim() || options.defaultBaseUrl
+  }
+
+  if (options.apiKeyInput.trim()) {
+    newCredentials.api_key = options.apiKeyInput.trim()
+  } else if (options.currentCredentials.api_key) {
+    newCredentials.api_key = options.currentCredentials.api_key
+  } else {
+    return { error: 'api_key_required' }
+  }
+
+  if (options.shouldApplyModelMapping) {
+    replaceBuiltModelMapping(
+      newCredentials,
+      options.mode,
+      options.allowedModels,
+      options.modelMappings
+    )
+  } else if (options.preserveModelMappingWhenDisabled && options.currentCredentials.model_mapping) {
+    newCredentials.model_mapping = options.currentCredentials.model_mapping
+  } else if (!options.preserveModelMappingWhenDisabled) {
+    delete newCredentials.model_mapping
+  }
+
+  applyEditableCredentialToggles(newCredentials, options)
+  return { credentials: newCredentials }
+}
+
+export function buildEditableBedrockCredentials(
+  options: BuildEditableBedrockCredentialsOptions
+): Record<string, unknown> {
+  const newCredentials: Record<string, unknown> = { ...options.currentCredentials }
+
+  newCredentials.aws_region = options.region.trim()
+  if (options.forceGlobal) {
+    newCredentials.aws_force_global = 'true'
+  } else {
+    delete newCredentials.aws_force_global
+  }
+
+  if (options.isApiKeyMode) {
+    if (options.apiKeyInput.trim()) {
+      newCredentials.api_key = options.apiKeyInput.trim()
+    }
+  } else {
+    newCredentials.aws_access_key_id = options.accessKeyId.trim()
+    if (options.secretAccessKey.trim()) {
+      newCredentials.aws_secret_access_key = options.secretAccessKey.trim()
+    }
+    if (options.sessionToken.trim()) {
+      newCredentials.aws_session_token = options.sessionToken.trim()
+    }
+  }
+
+  if (options.poolModeEnabled) {
+    newCredentials.pool_mode = true
+    newCredentials.pool_mode_retry_count = normalizePoolModeRetryCount(
+      options.poolModeRetryCount
+    )
+  } else {
+    delete newCredentials.pool_mode
+    delete newCredentials.pool_mode_retry_count
+  }
+
+  replaceBuiltModelMapping(
+    newCredentials,
+    options.mode,
+    options.allowedModels,
+    options.modelMappings
+  )
+
+  return newCredentials
+}
+
+function applyEditableCredentialToggles(
+  credentials: Record<string, unknown>,
+  options: EditCredentialToggles
+): void {
+  if (options.poolModeEnabled) {
+    credentials.pool_mode = true
+    credentials.pool_mode_retry_count = normalizePoolModeRetryCount(
+      options.poolModeRetryCount
+    )
+  } else {
+    delete credentials.pool_mode
+    delete credentials.pool_mode_retry_count
+  }
+
+  if (options.customErrorCodesEnabled) {
+    credentials.custom_error_codes_enabled = true
+    credentials.custom_error_codes = [...options.selectedErrorCodes]
+  } else {
+    delete credentials.custom_error_codes_enabled
+    delete credentials.custom_error_codes
+  }
 }
 
 export function buildUpdatedAntigravityExtra(

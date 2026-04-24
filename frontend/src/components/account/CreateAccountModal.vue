@@ -2234,10 +2234,7 @@
       </div>
 
       <!-- Intercept Warmup Requests (Anthropic/Antigravity) -->
-      <div
-        v-if="form.platform === 'anthropic' || form.platform === 'antigravity'"
-        class="form-section"
-      >
+      <div v-if="showWarmupSection" class="form-section">
         <div class="flex items-center justify-between">
           <div>
             <label class="input-label mb-0">{{
@@ -3447,6 +3444,10 @@ import {
   resolveCreateAccountOAuthFlow,
 } from "@/components/account/createAccountModalHelpers";
 import {
+  accountMutationProfileHasSection,
+  resolveAccountMutationProfile,
+} from "@/components/account/accountMutationProfiles";
+import {
   appendEmptyModelMapping,
   appendPresetModelMapping,
   applyTempUnschedCredentialsState,
@@ -3823,29 +3824,23 @@ const isOpenAIModelRestrictionDisabled = computed(
   () => form.platform === "openai" && openaiPassthroughEnabled.value,
 );
 
+const mutationProfile = computed(() =>
+  resolveAccountMutationProfile(form.platform, form.type),
+);
+
 const showCompatibleCredentialsForm = computed(() => {
-  if (form.platform === "anthropic") {
-    return accountCategory.value === "apikey";
-  }
-  if (form.platform === "openai") {
-    return accountCategory.value === "apikey";
-  }
-  if (form.platform === "gemini") {
-    return accountCategory.value === "apikey";
-  }
-  if (form.platform === "grok") {
-    return (
-      accountCategory.value === "apikey" || accountCategory.value === "upstream"
-    );
-  }
-  return false;
+  return accountMutationProfileHasSection(
+    mutationProfile.value,
+    "compatible-credentials",
+  );
 });
 
 const showQuotaLimitSection = computed(() => {
-  if (form.platform === "anthropic" && accountCategory.value === "bedrock") {
-    return true;
-  }
-  return showCompatibleCredentialsForm.value;
+  return accountMutationProfileHasSection(mutationProfile.value, "quota-limits");
+});
+
+const showWarmupSection = computed(() => {
+  return accountMutationProfileHasSection(mutationProfile.value, "warmup");
 });
 
 const mixedChannelWarningMessageText = computed(() => {

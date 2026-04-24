@@ -34,7 +34,8 @@ func (s *adminServiceImpl) GetAccountsByIDs(ctx context.Context, ids []int64) ([
 }
 
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
-	groupIDs, err := s.resolveCreateAccountGroupIDs(ctx, input)
+	builder := newAdminAccountMutationBuilder(s)
+	groupIDs, err := builder.resolveCreateAccountGroupIDs(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +50,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	normalizedInput := *input
 	normalizedInput.ProxyID = proxyID
 
-	account, err := s.buildAccountForCreate(&normalizedInput)
+	account, err := builder.buildAccountForCreate(&normalizedInput)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,8 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	wasOveragesEnabled := account.IsOveragesEnabled()
 
-	if err := s.applyAccountUpdateInput(ctx, account, id, input, wasOveragesEnabled); err != nil {
+	builder := newAdminAccountMutationBuilder(s)
+	if err := builder.applyAccountUpdateInput(ctx, account, input, wasOveragesEnabled); err != nil {
 		return nil, err
 	}
 
@@ -125,8 +127,12 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	if _, err := validateAccountProxyID(ctx, s.proxyRepo, input.ProxyID); err != nil {
 		return nil, err
 	}
-	if err := s.validateBulkAccountGroupChange(ctx, input); err != nil {
+	builder := newAdminAccountMutationBuilder(s)
+	if err := builder.validateBulkAccountGroupChange(ctx, s.accountRepo, input); err != nil {
 		return nil, err
+	}
+	if len(input.Credentials) > 0 || len(input.Extra) > 0 {
+		return s.updateAccountsIndividually(ctx, builder, input, result)
 	}
 
 	repoUpdates, err := buildAccountBulkUpdate(input)
@@ -144,6 +150,72 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		if input.GroupIDs != nil {
 			if err := s.accountRepo.BindGroups(ctx, accountID, *input.GroupIDs); err != nil {
 				entry.Success = false
+				entry.Error = err.Error()
+				result.Failed++
+				result.FailedIDs = append(result.FailedIDs, accountID)
+				result.Results = append(result.Results, entry)
+				continue
+			}
+		}
+
+		entry.Success = true
+		result.Success++
+		result.SuccessIDs = append(result.SuccessIDs, accountID)
+		result.Results = append(result.Results, entry)
+	}
+
+	return result, nil
+}
+
+func (s *adminServiceImpl) updateAccountsIndividually(ctx context.Context, builder accountMutationBuilder, input *BulkUpdateAccountsInput, result *BulkUpdateAccountsResult) (*BulkUpdateAccountsResult, error) {
+	updateInput := &UpdateAccountInput{
+		Name:                  input.Name,
+		Credentials:           input.Credentials,
+		Extra:                 input.Extra,
+		ProxyID:               input.ProxyID,
+		Concurrency:           input.Concurrency,
+		Priority:              input.Priority,
+		RateMultiplier:        input.RateMultiplier,
+		LoadFactor:            input.LoadFactor,
+		Status:                input.Status,
+		GroupIDs:              input.GroupIDs,
+		SkipMixedChannelCheck: true,
+	}
+
+	for _, accountID := range input.AccountIDs {
+		entry := BulkUpdateAccountResult{AccountID: accountID}
+		account, err := s.accountRepo.GetByID(ctx, accountID)
+		if err != nil {
+			entry.Error = err.Error()
+			result.Failed++
+			result.FailedIDs = append(result.FailedIDs, accountID)
+			result.Results = append(result.Results, entry)
+			continue
+		}
+
+		accountUpdateInput := *updateInput
+		if len(input.Credentials) > 0 {
+			accountUpdateInput.Credentials = mergeBulkAccountCredentials(account.Credentials, input.Credentials)
+		}
+		if err := builder.applyAccountUpdateInput(ctx, account, &accountUpdateInput, account.IsOveragesEnabled()); err != nil {
+			entry.Error = err.Error()
+			result.Failed++
+			result.FailedIDs = append(result.FailedIDs, accountID)
+			result.Results = append(result.Results, entry)
+			continue
+		}
+		if input.Schedulable != nil {
+			account.Schedulable = *input.Schedulable
+		}
+		if err := s.accountRepo.Update(ctx, account); err != nil {
+			entry.Error = err.Error()
+			result.Failed++
+			result.FailedIDs = append(result.FailedIDs, accountID)
+			result.Results = append(result.Results, entry)
+			continue
+		}
+		if input.GroupIDs != nil {
+			if err := s.accountRepo.BindGroups(ctx, accountID, *input.GroupIDs); err != nil {
 				entry.Error = err.Error()
 				result.Failed++
 				result.FailedIDs = append(result.FailedIDs, accountID)

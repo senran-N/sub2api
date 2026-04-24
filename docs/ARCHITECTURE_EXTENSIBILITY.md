@@ -45,6 +45,7 @@ Current rule:
 
 - shared modal class assembly lives in `frontend/src/components/account/accountModalClasses.ts`;
 - stale async request guards live in `frontend/src/components/account/accountModalRequestGuard.ts`;
+- account mutation section visibility lives in `frontend/src/components/account/accountMutationProfiles.ts`; create/edit UI should resolve a profile instead of re-stating platform/type matrices inline;
 - payload/credential construction remains in `accountModalShared.ts`, `createAccountModalHelpers.ts`, `editAccountModalHelpers.ts`, and `credentialsBuilder.ts`;
 - modal `.vue` files should own rendering and orchestration only, not new reusable state machines or class-building helpers.
 
@@ -70,6 +71,19 @@ Use `frontend/src/utils/requestError.ts` for:
 This keeps request cancellation and API error extraction consistent across composables.
 
 ## Backend
+
+### Account mutation normalization
+
+Admin account create/update/bulk paths and legacy account service mutations should reuse
+the normalization helpers in `backend/internal/service/admin_service_account_config.go`.
+
+Current rule:
+
+- `accountMutationBuilder` owns admin create/update group, proxy, load-factor, rate-multiplier, mixed-channel, credentials, and mutable `extra` normalization;
+- `normalizeAccountMutationPayload` is the shared create-time payload normalizer for credentials and platform `extra`;
+- `applyMutableAccountExtra` is the update-time `extra` entry point and must preserve quota usage plus provider-owned nested state such as `extra.grok.sync_state` and `extra.grok.runtime_state`;
+- admin bulk updates that contain `credentials` or `extra` must hydrate and save each account individually, because repository-level JSONB top-level merge is only safe for scalar-only bulk changes;
+- bulk `credentials` updates are top-level merges over the existing credentials so partial bulk edits do not drop secrets such as `api_key`, while `extra` updates still flow through provider-aware deep normalization.
 
 ### Account snapshot sync after writes
 
@@ -182,6 +196,6 @@ Current rule:
 
 The next structural cleanup should focus on:
 
-1. Normalizing admin form data flow so section components stop defining their own mutation conventions.
-2. Continuing account modal section extraction so provider-specific form blocks move out of the top-level modal files.
-3. Reducing overlap between legacy service entry points and newer admin-specific service flows on the backend.
+1. Continuing account modal section extraction so provider-specific form blocks move out of the top-level modal files.
+2. Reducing overlap between legacy service entry points and newer admin-specific service flows on the backend.
+3. Moving bulk account edit payload construction behind the same helper/profile layer used by create/edit modals.

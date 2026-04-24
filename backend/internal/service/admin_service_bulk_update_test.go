@@ -23,6 +23,8 @@ type accountRepoStubForBulkUpdate struct {
 	getByIDAccounts  map[int64]*Account
 	getByIDErrByID   map[int64]error
 	getByIDCalled    []int64
+	updateErrByID    map[int64]error
+	updatedAccounts  []*Account
 	listByGroupData  map[int64][]Account
 	listByGroupErr   map[int64]error
 }
@@ -61,6 +63,14 @@ func (s *accountRepoStubForBulkUpdate) GetByID(_ context.Context, id int64) (*Ac
 		return account, nil
 	}
 	return nil, errors.New("account not found")
+}
+
+func (s *accountRepoStubForBulkUpdate) Update(_ context.Context, account *Account) error {
+	if err, ok := s.updateErrByID[account.ID]; ok {
+		return err
+	}
+	s.updatedAccounts = append(s.updatedAccounts, account)
+	return nil
 }
 
 func (s *accountRepoStubForBulkUpdate) ListByGroup(_ context.Context, groupID int64) ([]Account, error) {
@@ -187,4 +197,84 @@ func TestAdminService_BulkUpdateAccounts_RejectsMissingProxyBeforeBulkUpdate(t *
 	require.Nil(t, result)
 	require.ErrorIs(t, err, ErrProxyNotFound)
 	require.Empty(t, repo.bulkUpdateIDs)
+}
+
+func TestAdminService_BulkUpdateAccounts_ExtraUsesPerAccountDeepMerge(t *testing.T) {
+	repo := &accountRepoStubForBulkUpdate{
+		getByIDAccounts: map[int64]*Account{
+			1: {
+				ID:       1,
+				Platform: PlatformGrok,
+				Type:     AccountTypeSession,
+				Extra: map[string]any{
+					"grok": map[string]any{
+						"sync_state": map[string]any{
+							"last_sync_at": "2026-04-19T00:00:00Z",
+						},
+						"runtime_state": map[string]any{
+							"last_success_at": "2026-04-20T00:00:00Z",
+						},
+					},
+				},
+			},
+		},
+	}
+	svc := &adminServiceImpl{accountRepo: repo}
+
+	result, err := svc.BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs: []int64{1},
+		Extra: map[string]any{
+			"grok": map[string]any{
+				"tier": map[string]any{
+					"normalized": "heavy",
+					"source":     "manual",
+				},
+			},
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Success)
+	require.Empty(t, repo.bulkUpdateIDs)
+	require.Len(t, repo.updatedAccounts, 1)
+	grokExtra := grokExtraMap(repo.updatedAccounts[0].Extra)
+	require.Equal(t, "heavy", getNestedGrokValue(grokExtra, "tier", "normalized"))
+	require.Equal(t, "2026-04-19T00:00:00Z", getNestedGrokValue(grokExtra, "sync_state", "last_sync_at"))
+	require.Equal(t, "2026-04-20T00:00:00Z", getNestedGrokValue(grokExtra, "runtime_state", "last_success_at"))
+}
+
+func TestAdminService_BulkUpdateAccounts_CredentialsPreserveExistingFields(t *testing.T) {
+	repo := &accountRepoStubForBulkUpdate{
+		getByIDAccounts: map[int64]*Account{
+			1: {
+				ID:       1,
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"api_key":  "sk-existing",
+					"base_url": "https://api.openai.com",
+					"model_mapping": map[string]any{
+						"gpt-4": "gpt-4",
+					},
+				},
+			},
+		},
+	}
+	svc := &adminServiceImpl{accountRepo: repo}
+
+	result, err := svc.BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs: []int64{1},
+		Credentials: map[string]any{
+			"base_url":      "https://relay.example.com",
+			"model_mapping": map[string]any{},
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Success)
+	require.Empty(t, repo.bulkUpdateIDs)
+	require.Len(t, repo.updatedAccounts, 1)
+	require.Equal(t, "sk-existing", repo.updatedAccounts[0].Credentials["api_key"])
+	require.Equal(t, "https://relay.example.com", repo.updatedAccounts[0].Credentials["base_url"])
+	require.Empty(t, repo.updatedAccounts[0].Credentials["model_mapping"])
 }

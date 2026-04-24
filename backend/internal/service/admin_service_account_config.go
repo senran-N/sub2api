@@ -10,11 +10,29 @@ import (
 
 const maxAccountLoadFactor = 10000
 
-func (s *adminServiceImpl) resolveCreateAccountGroupIDs(ctx context.Context, input *CreateAccountInput) ([]int64, error) {
+type accountMixedChannelChecker func(ctx context.Context, currentAccountID int64, currentAccountPlatform string, groupIDs []int64) error
+
+type accountMutationBuilder struct {
+	groupRepo           GroupRepository
+	proxyRepo           ProxyRepository
+	mixedChannelChecker accountMixedChannelChecker
+	validateProxy       bool
+}
+
+func newAdminAccountMutationBuilder(s *adminServiceImpl) accountMutationBuilder {
+	return accountMutationBuilder{
+		groupRepo:           s.groupRepo,
+		proxyRepo:           s.proxyRepo,
+		mixedChannelChecker: s.checkMixedChannelRisk,
+		validateProxy:       true,
+	}
+}
+
+func (b accountMutationBuilder) resolveCreateAccountGroupIDs(ctx context.Context, input *CreateAccountInput) ([]int64, error) {
 	groupIDs := input.GroupIDs
 	if len(groupIDs) == 0 && !input.SkipDefaultGroupBind {
 		defaultGroupName := input.Platform + "-default"
-		groups, err := s.groupRepo.ListActiveByPlatform(ctx, input.Platform)
+		groups, err := b.groupRepo.ListActiveByPlatform(ctx, input.Platform)
 		if err == nil {
 			for _, group := range groups {
 				if group.Name == defaultGroupName {
@@ -25,8 +43,8 @@ func (s *adminServiceImpl) resolveCreateAccountGroupIDs(ctx context.Context, inp
 		}
 	}
 
-	if len(groupIDs) > 0 && !input.SkipMixedChannelCheck {
-		if err := s.checkMixedChannelRisk(ctx, 0, input.Platform, groupIDs); err != nil {
+	if len(groupIDs) > 0 && !input.SkipMixedChannelCheck && b.mixedChannelChecker != nil {
+		if err := b.mixedChannelChecker(ctx, 0, input.Platform, groupIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -99,7 +117,7 @@ func normalizeGrokSessionCredentialsForMutation(platform string, accountType str
 	return normalized, nil
 }
 
-func (s *adminServiceImpl) buildAccountForCreate(input *CreateAccountInput) (*Account, error) {
+func (b accountMutationBuilder) buildAccountForCreate(input *CreateAccountInput) (*Account, error) {
 	if err := validateAccountRateMultiplier(input.RateMultiplier); err != nil {
 		return nil, err
 	}
@@ -109,17 +127,12 @@ func (s *adminServiceImpl) buildAccountForCreate(input *CreateAccountInput) (*Ac
 		return nil, err
 	}
 
-	credentials, err := normalizeGrokSessionCredentialsForMutation(input.Platform, input.Type, input.Credentials)
-	if err != nil {
-		return nil, err
-	}
-
 	account := &Account{
 		Name:               input.Name,
 		Notes:              normalizeAccountNotes(input.Notes),
 		Platform:           input.Platform,
 		Type:               input.Type,
-		Credentials:        credentials,
+		Credentials:        input.Credentials,
 		Extra:              input.Extra,
 		ProxyID:            input.ProxyID,
 		Concurrency:        input.Concurrency,
@@ -131,17 +144,44 @@ func (s *adminServiceImpl) buildAccountForCreate(input *CreateAccountInput) (*Ac
 		LoadFactor:         loadFactor,
 	}
 
-	account.Extra = normalizePlatformAccountExtra(nil, account.Extra, account.Platform, account.Type)
-
-	if account.Extra != nil {
-		if err := ValidateQuotaResetConfig(account.Extra); err != nil {
-			return nil, err
-		}
-		ComputeQuotaResetAt(account.Extra)
+	if err := normalizeAccountMutationPayload(account, nil); err != nil {
+		return nil, err
 	}
 	account.ExpiresAt = normalizeAccountExpiresAt(input.ExpiresAt)
 
 	return account, nil
+}
+
+func normalizeAccountMutationPayload(account *Account, existingExtra map[string]any) error {
+	if account == nil {
+		return errors.New("account cannot be nil")
+	}
+
+	credentials, err := normalizeGrokSessionCredentialsForMutation(account.Platform, account.Type, account.Credentials)
+	if err != nil {
+		return err
+	}
+	account.Credentials = credentials
+	account.Extra = normalizePlatformAccountExtra(existingExtra, account.Extra, account.Platform, account.Type)
+
+	if account.Extra != nil {
+		if err := ValidateQuotaResetConfig(account.Extra); err != nil {
+			return err
+		}
+		ComputeQuotaResetAt(account.Extra)
+	}
+	return nil
+}
+
+func mergeBulkAccountCredentials(existing map[string]any, incoming map[string]any) map[string]any {
+	if len(incoming) == 0 {
+		return existing
+	}
+	merged := cloneAnyMap(existing)
+	for key, value := range incoming {
+		merged[key] = cloneAnyValue(value)
+	}
+	return merged
 }
 
 func applyAccountProxyID(account *Account, proxyID *int64) {
@@ -186,7 +226,7 @@ func applyMutableAccountExtra(account *Account, inputExtra map[string]any, wasOv
 	return nil
 }
 
-func (s *adminServiceImpl) applyAccountUpdateInput(ctx context.Context, account *Account, id int64, input *UpdateAccountInput, wasOveragesEnabled bool) error {
+func (b accountMutationBuilder) applyAccountUpdateInput(ctx context.Context, account *Account, input *UpdateAccountInput, wasOveragesEnabled bool) error {
 	if input.Name != "" {
 		account.Name = input.Name
 	}
@@ -207,9 +247,15 @@ func (s *adminServiceImpl) applyAccountUpdateInput(ctx context.Context, account 
 		return err
 	}
 	if input.ProxyID != nil {
-		proxyID, err := validateAccountProxyID(ctx, s.proxyRepo, input.ProxyID)
-		if err != nil {
-			return err
+		var proxyID *int64
+		if b.validateProxy {
+			validatedProxyID, err := validateAccountProxyID(ctx, b.proxyRepo, input.ProxyID)
+			if err != nil {
+				return err
+			}
+			proxyID = validatedProxyID
+		} else if *input.ProxyID != 0 {
+			proxyID = input.ProxyID
 		}
 		if proxyID == nil {
 			clearProxyID := int64(0)
@@ -248,11 +294,11 @@ func (s *adminServiceImpl) applyAccountUpdateInput(ctx context.Context, account 
 	}
 
 	if input.GroupIDs != nil {
-		if err := validateAccountGroupBindings(ctx, s.groupRepo, account.Type, *input.GroupIDs); err != nil {
+		if err := validateAccountGroupBindings(ctx, b.groupRepo, account.Type, *input.GroupIDs); err != nil {
 			return err
 		}
-		if !input.SkipMixedChannelCheck {
-			if err := s.checkMixedChannelRisk(ctx, account.ID, account.Platform, *input.GroupIDs); err != nil {
+		if !input.SkipMixedChannelCheck && b.mixedChannelChecker != nil {
+			if err := b.mixedChannelChecker(ctx, account.ID, account.Platform, *input.GroupIDs); err != nil {
 				return err
 			}
 		}
@@ -301,9 +347,9 @@ func buildAccountBulkUpdate(input *BulkUpdateAccountsInput) (AccountBulkUpdate, 
 	return repoUpdates, nil
 }
 
-func (s *adminServiceImpl) validateBulkAccountGroupChange(ctx context.Context, input *BulkUpdateAccountsInput) error {
+func (b accountMutationBuilder) validateBulkAccountGroupChange(ctx context.Context, accountRepo AccountRepository, input *BulkUpdateAccountsInput) error {
 	if input.GroupIDs != nil {
-		if err := validateGroupIDsExist(ctx, s.groupRepo, *input.GroupIDs); err != nil {
+		if err := validateGroupIDsExist(ctx, b.groupRepo, *input.GroupIDs); err != nil {
 			return err
 		}
 	}
@@ -315,7 +361,7 @@ func (s *adminServiceImpl) validateBulkAccountGroupChange(ctx context.Context, i
 	}
 
 	platformByID := map[int64]string{}
-	accounts, err := s.accountRepo.GetByIDs(ctx, input.AccountIDs)
+	accounts, err := accountRepo.GetByIDs(ctx, input.AccountIDs)
 	if err != nil {
 		return err
 	}
@@ -326,7 +372,7 @@ func (s *adminServiceImpl) validateBulkAccountGroupChange(ctx context.Context, i
 	}
 	for _, account := range accounts {
 		if account != nil && account.Type == AccountTypeAPIKey {
-			if err := validateAPIKeyGroupCompatibility(ctx, s.groupRepo, account.Type, *input.GroupIDs); err != nil {
+			if err := validateAPIKeyGroupCompatibility(ctx, b.groupRepo, account.Type, *input.GroupIDs); err != nil {
 				return err
 			}
 			break
@@ -341,8 +387,10 @@ func (s *adminServiceImpl) validateBulkAccountGroupChange(ctx context.Context, i
 		if platform == "" {
 			continue
 		}
-		if err := s.checkMixedChannelRisk(ctx, accountID, platform, *input.GroupIDs); err != nil {
-			return err
+		if b.mixedChannelChecker != nil {
+			if err := b.mixedChannelChecker(ctx, accountID, platform, *input.GroupIDs); err != nil {
+				return err
+			}
 		}
 	}
 

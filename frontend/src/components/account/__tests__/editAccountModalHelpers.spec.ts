@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildEditableBedrockCredentials,
+  buildEditableCompatibleCredentials,
   buildUpdatedAnthropicAPIKeyExtra,
   buildUpdatedAnthropicQuotaControlExtra,
   buildUpdatedAntigravityExtra,
@@ -158,6 +160,104 @@ describe('editAccountModalHelpers', () => {
       cache_ttl_override_target: '10m',
       custom_base_url_enabled: true,
       custom_base_url: 'https://relay.example.com'
+    })
+  })
+
+  it('builds editable compatible credentials without dropping the existing API key', () => {
+    const result = buildEditableCompatibleCredentials({
+      allowedModels: [],
+      apiKeyInput: '',
+      baseUrlInput: ' https://relay.example.com ',
+      currentCredentials: {
+        api_key: 'sk-existing',
+        base_url: 'https://api.openai.com',
+        model_mapping: { stale: 'stale' },
+        pool_mode_retry_count: 1
+      },
+      customErrorCodesEnabled: true,
+      defaultBaseUrl: 'https://api.openai.com',
+      mode: 'mapping',
+      modelMappings: [{ from: 'gpt-alias', to: 'gpt-5.4' }],
+      poolModeEnabled: true,
+      poolModeRetryCount: 99,
+      preserveModelMappingWhenDisabled: true,
+      selectedErrorCodes: [429, 503],
+      shouldApplyModelMapping: true
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.credentials).toEqual({
+      api_key: 'sk-existing',
+      base_url: 'https://relay.example.com',
+      model_mapping: {
+        'gpt-alias': 'gpt-5.4'
+      },
+      pool_mode: true,
+      pool_mode_retry_count: 10,
+      custom_error_codes_enabled: true,
+      custom_error_codes: [429, 503]
+    })
+  })
+
+  it('preserves OpenAI model mapping while passthrough disables mapping edits', () => {
+    const result = buildEditableCompatibleCredentials({
+      allowedModels: ['gpt-5.4'],
+      apiKeyInput: '',
+      baseUrlInput: '',
+      currentCredentials: {
+        api_key: 'sk-existing',
+        model_mapping: { kept: 'kept' }
+      },
+      customErrorCodesEnabled: false,
+      defaultBaseUrl: 'https://api.openai.com',
+      mode: 'whitelist',
+      modelMappings: [],
+      poolModeEnabled: false,
+      poolModeRetryCount: 3,
+      preserveModelMappingWhenDisabled: true,
+      selectedErrorCodes: [],
+      shouldApplyModelMapping: false
+    })
+
+    expect(result.credentials).toMatchObject({
+      api_key: 'sk-existing',
+      base_url: 'https://api.openai.com',
+      model_mapping: { kept: 'kept' }
+    })
+  })
+
+  it('builds editable Bedrock credentials while preserving blank secret fields', () => {
+    expect(
+      buildEditableBedrockCredentials({
+        accessKeyId: ' AKIA-NEW ',
+        allowedModels: ['anthropic.claude-3-sonnet'],
+        apiKeyInput: '',
+        currentCredentials: {
+          auth_mode: 'sigv4',
+          aws_secret_access_key: 'old-secret',
+          aws_session_token: 'old-session',
+          aws_force_global: 'true',
+          pool_mode: true
+        },
+        forceGlobal: false,
+        isApiKeyMode: false,
+        mode: 'whitelist',
+        modelMappings: [],
+        poolModeEnabled: false,
+        poolModeRetryCount: 3,
+        region: ' us-west-2 ',
+        secretAccessKey: '',
+        sessionToken: ' new-session '
+      })
+    ).toEqual({
+      auth_mode: 'sigv4',
+      aws_region: 'us-west-2',
+      aws_access_key_id: 'AKIA-NEW',
+      aws_secret_access_key: 'old-secret',
+      aws_session_token: 'new-session',
+      model_mapping: {
+        'anthropic.claude-3-sonnet': 'anthropic.claude-3-sonnet'
+      }
     })
   })
 })

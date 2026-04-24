@@ -1376,13 +1376,7 @@
       </div>
 
       <!-- Intercept Warmup Requests (Anthropic/Antigravity) -->
-      <div
-        v-if="
-          account?.platform === 'anthropic' ||
-          account?.platform === 'antigravity'
-        "
-        class="form-section"
-      >
+      <div v-if="showWarmupSection" class="form-section">
         <div class="flex items-center justify-between">
           <div>
             <label class="input-label mb-0">{{
@@ -2317,6 +2311,8 @@ import {
   getEditToneNoticeClasses,
 } from "@/components/account/accountModalClasses";
 import {
+  buildEditableBedrockCredentials,
+  buildEditableCompatibleCredentials,
   buildUpdatedAnthropicAPIKeyExtra,
   buildUpdatedAnthropicQuotaControlExtra,
   buildUpdatedAntigravityExtra,
@@ -2326,6 +2322,10 @@ import {
   deriveModelRestrictionStateFromMapping,
   deriveOpenAIExtraState,
 } from "@/components/account/editAccountModalHelpers";
+import {
+  accountMutationProfileHasSection,
+  resolveAccountMutationProfile,
+} from "@/components/account/accountMutationProfiles";
 import {
   createTempUnschedRule,
   DEFAULT_POOL_MODE_RETRY_COUNT,
@@ -2544,15 +2544,18 @@ const isOpenAIModelRestrictionDisabled = computed(
   () => props.account?.platform === "openai" && openaiPassthroughEnabled.value,
 );
 
-const showCompatibleCredentialsForm = computed(() => {
+const mutationProfile = computed(() => {
   const account = props.account;
-  if (!account) {
-    return false;
-  }
-  if (account.platform === "antigravity") {
-    return false;
-  }
-  return account.type === "apikey" || account.type === "upstream";
+  return account
+    ? resolveAccountMutationProfile(account.platform, account.type)
+    : null;
+});
+
+const showCompatibleCredentialsForm = computed(() => {
+  return accountMutationProfileHasSection(
+    mutationProfile.value,
+    "compatible-credentials",
+  );
 });
 
 const grokTierLabel = computed(() => {
@@ -2641,15 +2644,11 @@ const grokRuntimeErrorDisplay = computed(
 );
 
 const showQuotaLimitSection = computed(() => {
-  const account = props.account;
-  if (!account) {
-    return false;
-  }
-  return (
-    account.type === "apikey" ||
-    account.type === "upstream" ||
-    account.type === "bedrock"
-  );
+  return accountMutationProfileHasSection(mutationProfile.value, "quota-limits");
+});
+
+const showWarmupSection = computed(() => {
+  return accountMutationProfileHasSection(mutationProfile.value, "warmup");
 });
 
 watch(
@@ -3371,60 +3370,29 @@ const handleSubmit = async () => {
     // For apikey type, handle credentials update
     if (props.account.type === "apikey") {
       const currentCredentials = getAccountCredentials();
-      const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value;
       const shouldApplyModelMapping = !(
         props.account.platform === "openai" && openaiPassthroughEnabled.value
       );
-
-      // Always update credentials for apikey type to handle model mapping changes
-      const newCredentials: Record<string, unknown> = {
-        ...currentCredentials,
-        base_url: newBaseUrl,
-      };
-
-      // Handle API key
-      if (editApiKey.value.trim()) {
-        // User provided a new API key
-        newCredentials.api_key = editApiKey.value.trim();
-      } else if (currentCredentials.api_key) {
-        // Preserve existing api_key
-        newCredentials.api_key = currentCredentials.api_key;
-      } else {
+      const result = buildEditableCompatibleCredentials({
+        allowedModels: allowedModels.value,
+        apiKeyInput: editApiKey.value,
+        baseUrlInput: editBaseUrl.value,
+        currentCredentials,
+        customErrorCodesEnabled: customErrorCodesEnabled.value,
+        defaultBaseUrl: defaultBaseUrl.value,
+        mode: modelRestrictionMode.value,
+        modelMappings: modelMappings.value,
+        poolModeEnabled: poolModeEnabled.value,
+        poolModeRetryCount: poolModeRetryCount.value,
+        preserveModelMappingWhenDisabled: true,
+        selectedErrorCodes: selectedErrorCodes.value,
+        shouldApplyModelMapping,
+      });
+      if (result.error === "api_key_required" || !result.credentials) {
         appStore.showError(t("admin.accounts.apiKeyIsRequired"));
         return;
       }
-
-      // Add model mapping if configured（OpenAI 开启自动透传时保留现有映射，不再编辑）
-      if (shouldApplyModelMapping) {
-        replaceBuiltModelMapping(
-          newCredentials,
-          modelRestrictionMode.value,
-          allowedModels.value,
-          modelMappings.value,
-        );
-      } else if (currentCredentials.model_mapping) {
-        newCredentials.model_mapping = currentCredentials.model_mapping;
-      }
-
-      // Add pool mode if enabled
-      if (poolModeEnabled.value) {
-        newCredentials.pool_mode = true;
-        newCredentials.pool_mode_retry_count = normalizePoolModeRetryCount(
-          poolModeRetryCount.value,
-        );
-      } else {
-        delete newCredentials.pool_mode;
-        delete newCredentials.pool_mode_retry_count;
-      }
-
-      // Add custom error codes if enabled
-      if (customErrorCodesEnabled.value) {
-        newCredentials.custom_error_codes_enabled = true;
-        newCredentials.custom_error_codes = [...selectedErrorCodes.value];
-      } else {
-        delete newCredentials.custom_error_codes_enabled;
-        delete newCredentials.custom_error_codes;
-      }
+      const newCredentials = result.credentials;
 
       // Add intercept warmup requests setting
       if (!applySharedEditCredentialsState(newCredentials)) {
@@ -3434,45 +3402,26 @@ const handleSubmit = async () => {
       updatePayload.credentials = newCredentials;
     } else if (props.account.type === "upstream") {
       const currentCredentials = getAccountCredentials();
-      const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value;
-      const newCredentials: Record<string, unknown> = {
-        ...currentCredentials,
-        base_url: newBaseUrl,
-      };
-
-      if (editApiKey.value.trim()) {
-        newCredentials.api_key = editApiKey.value.trim();
-      } else if (currentCredentials.api_key) {
-        newCredentials.api_key = currentCredentials.api_key;
-      } else {
+      const result = buildEditableCompatibleCredentials({
+        allowedModels: allowedModels.value,
+        apiKeyInput: editApiKey.value,
+        baseUrlInput: editBaseUrl.value,
+        currentCredentials,
+        customErrorCodesEnabled: customErrorCodesEnabled.value,
+        defaultBaseUrl: defaultBaseUrl.value,
+        mode: modelRestrictionMode.value,
+        modelMappings: modelMappings.value,
+        poolModeEnabled: poolModeEnabled.value,
+        poolModeRetryCount: poolModeRetryCount.value,
+        preserveModelMappingWhenDisabled: false,
+        selectedErrorCodes: selectedErrorCodes.value,
+        shouldApplyModelMapping: true,
+      });
+      if (result.error === "api_key_required" || !result.credentials) {
         appStore.showError(t("admin.accounts.apiKeyIsRequired"));
         return;
       }
-
-      replaceBuiltModelMapping(
-        newCredentials,
-        modelRestrictionMode.value,
-        allowedModels.value,
-        modelMappings.value,
-      );
-
-      if (poolModeEnabled.value) {
-        newCredentials.pool_mode = true;
-        newCredentials.pool_mode_retry_count = normalizePoolModeRetryCount(
-          poolModeRetryCount.value,
-        );
-      } else {
-        delete newCredentials.pool_mode;
-        delete newCredentials.pool_mode_retry_count;
-      }
-
-      if (customErrorCodesEnabled.value) {
-        newCredentials.custom_error_codes_enabled = true;
-        newCredentials.custom_error_codes = [...selectedErrorCodes.value];
-      } else {
-        delete newCredentials.custom_error_codes_enabled;
-        delete newCredentials.custom_error_codes;
-      }
+      const newCredentials = result.credentials;
 
       // Add intercept warmup requests setting
       if (!applySharedEditCredentialsState(newCredentials)) {
@@ -3509,51 +3458,21 @@ const handleSubmit = async () => {
       updatePayload.credentials = newCredentials;
     } else if (props.account.type === "bedrock") {
       const currentCredentials = getAccountCredentials();
-      const newCredentials: Record<string, unknown> = { ...currentCredentials };
-
-      newCredentials.aws_region = editBedrockRegion.value.trim();
-      if (editBedrockForceGlobal.value) {
-        newCredentials.aws_force_global = "true";
-      } else {
-        delete newCredentials.aws_force_global;
-      }
-
-      if (isBedrockAPIKeyMode.value) {
-        // API Key mode: only update api_key if user provided new value
-        if (editBedrockApiKeyValue.value.trim()) {
-          newCredentials.api_key = editBedrockApiKeyValue.value.trim();
-        }
-      } else {
-        // SigV4 mode
-        newCredentials.aws_access_key_id = editBedrockAccessKeyId.value.trim();
-        if (editBedrockSecretAccessKey.value.trim()) {
-          newCredentials.aws_secret_access_key =
-            editBedrockSecretAccessKey.value.trim();
-        }
-        if (editBedrockSessionToken.value.trim()) {
-          newCredentials.aws_session_token =
-            editBedrockSessionToken.value.trim();
-        }
-      }
-
-      // Pool mode
-      if (poolModeEnabled.value) {
-        newCredentials.pool_mode = true;
-        newCredentials.pool_mode_retry_count = normalizePoolModeRetryCount(
-          poolModeRetryCount.value,
-        );
-      } else {
-        delete newCredentials.pool_mode;
-        delete newCredentials.pool_mode_retry_count;
-      }
-
-      // Model mapping
-      replaceBuiltModelMapping(
-        newCredentials,
-        modelRestrictionMode.value,
-        allowedModels.value,
-        modelMappings.value,
-      );
+      const newCredentials = buildEditableBedrockCredentials({
+        accessKeyId: editBedrockAccessKeyId.value,
+        allowedModels: allowedModels.value,
+        apiKeyInput: editBedrockApiKeyValue.value,
+        currentCredentials,
+        forceGlobal: editBedrockForceGlobal.value,
+        isApiKeyMode: isBedrockAPIKeyMode.value,
+        mode: modelRestrictionMode.value,
+        modelMappings: modelMappings.value,
+        poolModeEnabled: poolModeEnabled.value,
+        poolModeRetryCount: poolModeRetryCount.value,
+        region: editBedrockRegion.value,
+        secretAccessKey: editBedrockSecretAccessKey.value,
+        sessionToken: editBedrockSessionToken.value,
+      });
 
       if (!applySharedEditCredentialsState(newCredentials)) {
         return;
