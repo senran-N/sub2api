@@ -290,6 +290,7 @@ import QuotaLimitSection from "@/components/account/QuotaLimitSection.vue";
 import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSection.vue";
 import WarmupSection from "@/components/account/WarmupSection.vue";
 import GrokRuntimeSummary from "@/components/account/GrokRuntimeSummary.vue";
+import { useEditAccountQuotaControls } from "@/components/account/useEditAccountQuotaControls";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
@@ -452,27 +453,30 @@ const mixedChannelWarningRawMessage = ref("");
 const mixedChannelWarningAction = ref<(() => Promise<void>) | null>(null);
 const antigravityMixedChannelConfirmed = ref(false);
 
-// Quota control state (Anthropic OAuth/SetupToken only)
-const windowCostEnabled = ref(false);
-const windowCostLimit = ref<number | null>(null);
-const windowCostStickyReserve = ref<number | null>(null);
-const sessionLimitEnabled = ref(false);
-const maxSessions = ref<number | null>(null);
-const sessionIdleTimeout = ref<number | null>(null);
-const rpmLimitEnabled = ref(false);
-const baseRpm = ref<number | null>(null);
-const rpmStrategy = ref<"tiered" | "sticky_exempt">("tiered");
-const rpmStickyBuffer = ref<number | null>(null);
-const userMsgQueueMode = ref("");
+const {
+  baseRpm,
+  cacheTTLOverrideEnabled,
+  cacheTTLOverrideTarget,
+  customBaseUrl,
+  customBaseUrlEnabled,
+  hydrateQuotaControlsFromAccount,
+  maxSessions,
+  rpmLimitEnabled,
+  rpmStickyBuffer,
+  rpmStrategy,
+  sessionIdMaskingEnabled,
+  sessionIdleTimeout,
+  sessionLimitEnabled,
+  setTlsFingerprintProfiles,
+  tlsFingerprintEnabled,
+  tlsFingerprintProfileId,
+  tlsFingerprintProfiles,
+  userMsgQueueMode,
+  windowCostEnabled,
+  windowCostLimit,
+  windowCostStickyReserve,
+} = useEditAccountQuotaControls();
 const umqModeOptions = computed(() => buildAccountUmqModeOptions(t));
-const tlsFingerprintEnabled = ref(false);
-const tlsFingerprintProfileId = ref<number | null>(null);
-const tlsFingerprintProfiles = ref<{ id: number; name: string }[]>([]);
-const sessionIdMaskingEnabled = ref(false);
-const cacheTTLOverrideEnabled = ref(false);
-const cacheTTLOverrideTarget = ref<string>("5m");
-const customBaseUrlEnabled = ref(false);
-const customBaseUrl = ref("");
 
 // OpenAI 自动透传开关（OAuth/API Key）
 const openaiPassthroughEnabled = ref(false);
@@ -798,8 +802,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     antigravityModelMappings.value = [];
   }
 
-  // Load quota control settings (Anthropic OAuth/SetupToken only)
-  loadQuotaControlSettings(newAccount);
+  hydrateQuotaControlsFromAccount(newAccount);
 
   const tempUnschedState = loadTempUnschedRuleState(credentials);
   tempUnschedEnabled.value = tempUnschedState.enabled;
@@ -937,12 +940,14 @@ watch(
 async function loadTLSProfiles() {
   try {
     const profiles = await adminAPI.tlsFingerprintProfiles.list();
-    tlsFingerprintProfiles.value = profiles.map((p) => ({
-      id: p.id,
-      name: p.name,
-    }));
+    setTlsFingerprintProfiles(
+      profiles.map((p) => ({
+        id: p.id,
+        name: p.name,
+      })),
+    );
   } catch {
-    tlsFingerprintProfiles.value = [];
+    setTlsFingerprintProfiles([]);
   }
 }
 
@@ -1079,85 +1084,6 @@ const updateTempUnschedRule = (
   }
   tempUnschedRules.value[index] = nextRule;
 };
-
-// Load quota control settings from account (Anthropic OAuth/SetupToken only)
-function loadQuotaControlSettings(account: Account) {
-  // Reset all quota control state first
-  windowCostEnabled.value = false;
-  windowCostLimit.value = null;
-  windowCostStickyReserve.value = null;
-  sessionLimitEnabled.value = false;
-  maxSessions.value = null;
-  sessionIdleTimeout.value = null;
-  rpmLimitEnabled.value = false;
-  baseRpm.value = null;
-  rpmStrategy.value = "tiered";
-  rpmStickyBuffer.value = null;
-  userMsgQueueMode.value = "";
-  tlsFingerprintEnabled.value = false;
-  tlsFingerprintProfileId.value = null;
-  sessionIdMaskingEnabled.value = false;
-  cacheTTLOverrideEnabled.value = false;
-  cacheTTLOverrideTarget.value = "5m";
-  customBaseUrlEnabled.value = false;
-  customBaseUrl.value = "";
-
-  // Only applies to Anthropic OAuth/SetupToken accounts
-  if (
-    account.platform !== "anthropic" ||
-    (account.type !== "oauth" && account.type !== "setup-token")
-  ) {
-    return;
-  }
-
-  // Load from extra field (via backend DTO fields)
-  if (account.window_cost_limit != null && account.window_cost_limit > 0) {
-    windowCostEnabled.value = true;
-    windowCostLimit.value = account.window_cost_limit;
-    windowCostStickyReserve.value = account.window_cost_sticky_reserve ?? 10;
-  }
-
-  if (account.max_sessions != null && account.max_sessions > 0) {
-    sessionLimitEnabled.value = true;
-    maxSessions.value = account.max_sessions;
-    sessionIdleTimeout.value = account.session_idle_timeout_minutes ?? 5;
-  }
-
-  // RPM limit
-  if (account.base_rpm != null && account.base_rpm > 0) {
-    rpmLimitEnabled.value = true;
-    baseRpm.value = account.base_rpm;
-    rpmStrategy.value =
-      (account.rpm_strategy as "tiered" | "sticky_exempt") || "tiered";
-    rpmStickyBuffer.value = account.rpm_sticky_buffer ?? null;
-  }
-
-  // UMQ mode（独立于 RPM 加载，防止编辑无 RPM 账号时丢失已有配置）
-  userMsgQueueMode.value = account.user_msg_queue_mode ?? "";
-
-  // Load TLS fingerprint setting
-  if (account.enable_tls_fingerprint === true) {
-    tlsFingerprintEnabled.value = true;
-  }
-  tlsFingerprintProfileId.value = account.tls_fingerprint_profile_id ?? null;
-
-  // Load session ID masking setting
-  if (account.session_id_masking_enabled === true) {
-    sessionIdMaskingEnabled.value = true;
-  }
-
-  // Load cache TTL override setting
-  if (account.cache_ttl_override_enabled === true) {
-    cacheTTLOverrideEnabled.value = true;
-    cacheTTLOverrideTarget.value = account.cache_ttl_override_target || "5m";
-  }
-
-  // Load custom base URL setting
-  if (account.custom_base_url_enabled === true) {
-    customBaseUrlEnabled.value = true;
-    customBaseUrl.value = account.custom_base_url || "";
-  }
-}
 
 const clearMixedChannelDialog = () => {
   resetMixedChannelDialogState();
