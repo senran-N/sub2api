@@ -74,116 +74,7 @@
         <p class="input-hint">{{ t("admin.accounts.notesHint") }}</p>
       </div>
 
-      <!-- Platform Selection - Segmented Control Style -->
-      <div>
-        <label class="input-label">{{ t("admin.accounts.platform") }}</label>
-        <div
-          class="segmented-control mt-2 flex"
-          data-tour="account-form-platform"
-        >
-          <button
-            type="button"
-            @click="form.platform = 'anthropic'"
-            :class="[
-              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
-              form.platform === 'anthropic'
-                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--anthropic'
-                : 'create-account-modal__platform-button--idle',
-            ]"
-          >
-            <Icon name="sparkles" size="sm" />
-            Anthropic
-          </button>
-          <button
-            type="button"
-            @click="form.platform = 'openai'"
-            :class="[
-              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
-              form.platform === 'openai'
-                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--openai'
-                : 'create-account-modal__platform-button--idle',
-            ]"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
-              />
-            </svg>
-            OpenAI
-          </button>
-          <button
-            type="button"
-            @click="form.platform = 'gemini'"
-            :class="[
-              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
-              form.platform === 'gemini'
-                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--gemini'
-                : 'create-account-modal__platform-button--idle',
-            ]"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M12 2l1.5 6.5L20 10l-6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5L12 2z"
-              />
-            </svg>
-            Gemini
-          </button>
-          <button
-            type="button"
-            @click="form.platform = 'grok'"
-            :class="[
-              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
-              form.platform === 'grok'
-                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--grok'
-                : 'create-account-modal__platform-button--idle',
-            ]"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="1.75"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"
-              />
-            </svg>
-            Grok
-          </button>
-          <button
-            type="button"
-            @click="form.platform = 'antigravity'"
-            :class="[
-              'create-account-modal__platform-button create-account-modal__platform-button-control flex flex-1 items-center justify-center gap-2 text-sm font-medium transition-all',
-              form.platform === 'antigravity'
-                ? 'create-account-modal__platform-button--active create-account-modal__platform-button--antigravity'
-                : 'create-account-modal__platform-button--idle',
-            ]"
-          >
-            <Icon name="cloud" size="sm" />
-            Antigravity
-          </button>
-        </div>
-      </div>
+      <CreateAccountPlatformSelector v-model="form.platform" />
 
       <!-- Account Type Selection (Anthropic) -->
       <div v-if="form.platform === 'anthropic'">
@@ -3386,6 +3277,7 @@ import ProxySelector from "@/components/common/ProxySelector.vue";
 import GroupSelector from "@/components/common/GroupSelector.vue";
 import ModelWhitelistSelector from "@/components/account/ModelWhitelistSelector.vue";
 import QuotaLimitCard from "@/components/account/QuotaLimitCard.vue";
+import CreateAccountPlatformSelector from "@/components/account/CreateAccountPlatformSelector.vue";
 import GrokSessionBatchImportPanel from "@/components/account/GrokSessionBatchImportPanel.vue";
 import {
   buildCompatibleBaseUrlPresets,
@@ -5753,56 +5645,6 @@ const handleCookieAuth = async (sessionKey: string) => {
 
 .create-account-modal__step-connector {
   background: color-mix(in srgb, var(--theme-page-border) 78%, transparent);
-}
-
-.create-account-modal__platform-button {
-  color: var(--theme-page-muted);
-}
-
-.create-account-modal__platform-button-control {
-  border-radius: calc(var(--theme-button-radius) - 2px);
-  padding: 0.625rem 1rem;
-}
-
-.create-account-modal__platform-button--idle:hover {
-  color: var(--theme-page-text);
-}
-
-.create-account-modal__platform-button--active {
-  background: var(--theme-surface);
-  box-shadow: var(--theme-card-shadow);
-}
-
-.create-account-modal__platform-button--anthropic {
-  color: color-mix(
-    in srgb,
-    rgb(var(--theme-brand-orange-rgb)) 84%,
-    var(--theme-page-text)
-  );
-}
-
-.create-account-modal__platform-button--openai {
-  color: color-mix(
-    in srgb,
-    rgb(var(--theme-success-rgb)) 84%,
-    var(--theme-page-text)
-  );
-}
-
-.create-account-modal__platform-button--gemini {
-  color: color-mix(
-    in srgb,
-    rgb(var(--theme-info-rgb)) 84%,
-    var(--theme-page-text)
-  );
-}
-
-.create-account-modal__platform-button--antigravity {
-  color: color-mix(
-    in srgb,
-    rgb(var(--theme-brand-purple-rgb)) 84%,
-    var(--theme-page-text)
-  );
 }
 
 .create-account-modal__choice-card {
