@@ -268,7 +268,6 @@ import { useAuthStore } from "@/stores/auth";
 import { adminAPI } from "@/api/admin";
 import type {
   Account,
-  AccountType,
   Proxy,
   AdminGroup,
   CheckMixedChannelResponse,
@@ -292,6 +291,7 @@ import WarmupSection from "@/components/account/WarmupSection.vue";
 import GrokRuntimeSummary from "@/components/account/GrokRuntimeSummary.vue";
 import { useEditAccountQuotaLimits } from "@/components/account/useEditAccountQuotaLimits";
 import { useEditAccountQuotaControls } from "@/components/account/useEditAccountQuotaControls";
+import { useEditAccountRuntimeOptions } from "@/components/account/useEditAccountRuntimeOptions";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
@@ -312,7 +312,6 @@ import {
   createEmptyModelRestrictionState,
   deriveAntigravityModelMappings,
   deriveModelRestrictionStateFromMapping,
-  deriveOpenAIExtraState,
 } from "@/components/account/editAccountModalHelpers";
 import type {
   BedrockAuthMode,
@@ -347,11 +346,6 @@ import {
   parseDateTimeLocalInput,
 } from "@/utils/format";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
-import {
-  OPENAI_WS_MODE_OFF,
-  resolveOpenAIWSModeConcurrencyHintKey,
-  type OpenAIWSMode,
-} from "@/utils/openaiWsMode";
 import { resolveRequestErrorMessage } from "@/utils/requestError";
 import {
   ensureModelCatalogLoaded,
@@ -479,14 +473,17 @@ const {
 } = useEditAccountQuotaControls();
 const umqModeOptions = computed(() => buildAccountUmqModeOptions(t));
 
-// OpenAI 自动透传开关（OAuth/API Key）
-const openaiPassthroughEnabled = ref(false);
-const openaiOAuthResponsesWebSocketV2Mode =
-  ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF);
-const openaiAPIKeyResponsesWebSocketV2Mode =
-  ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF);
-const codexCLIOnlyEnabled = ref(false);
-const anthropicPassthroughEnabled = ref(false);
+const {
+  anthropicPassthroughEnabled,
+  codexCLIOnlyEnabled,
+  hydrateRuntimeOptionsFromAccount,
+  isOpenAIModelRestrictionDisabled,
+  openAIWSModeConcurrencyHintKey,
+  openaiAPIKeyResponsesWebSocketV2Mode,
+  openaiOAuthResponsesWebSocketV2Mode,
+  openaiPassthroughEnabled,
+  openaiResponsesWebSocketV2Mode,
+} = useEditAccountRuntimeOptions(() => props.account);
 const {
   editDailyResetHour,
   editDailyResetMode,
@@ -509,27 +506,6 @@ const {
   hydrateQuotaLimitsFromAccount,
 } = useEditAccountQuotaLimits();
 const openAIWSModeOptions = computed(() => buildAccountOpenAIWSModeOptions(t));
-const openaiResponsesWebSocketV2Mode = computed({
-  get: () => {
-    if (props.account?.type === "apikey") {
-      return openaiAPIKeyResponsesWebSocketV2Mode.value;
-    }
-    return openaiOAuthResponsesWebSocketV2Mode.value;
-  },
-  set: (mode: OpenAIWSMode) => {
-    if (props.account?.type === "apikey") {
-      openaiAPIKeyResponsesWebSocketV2Mode.value = mode;
-      return;
-    }
-    openaiOAuthResponsesWebSocketV2Mode.value = mode;
-  },
-});
-const openAIWSModeConcurrencyHintKey = computed(() =>
-  resolveOpenAIWSModeConcurrencyHintKey(openaiResponsesWebSocketV2Mode.value),
-);
-const isOpenAIModelRestrictionDisabled = computed(
-  () => props.account?.platform === "openai" && openaiPassthroughEnabled.value,
-);
 
 const mutationProfile = computed(() => {
   const account = props.account;
@@ -640,19 +616,6 @@ const syncAntigravityModelRestrictionState = (
   antigravityModelMappings.value = deriveAntigravityModelMappings(credentials);
 };
 
-const syncOpenAIExtraState = (
-  accountType: AccountType,
-  extra: Record<string, unknown> | undefined,
-) => {
-  const nextState = deriveOpenAIExtraState(accountType, extra);
-  openaiPassthroughEnabled.value = nextState.openaiPassthroughEnabled;
-  openaiOAuthResponsesWebSocketV2Mode.value =
-    nextState.openaiOAuthResponsesWebSocketV2Mode;
-  openaiAPIKeyResponsesWebSocketV2Mode.value =
-    nextState.openaiAPIKeyResponsesWebSocketV2Mode;
-  codexCLIOnlyEnabled.value = nextState.codexCLIOnlyEnabled;
-};
-
 const form = reactive<EditAccountForm>(createDefaultEditAccountForm());
 
 const statusOptions = computed<Array<{ value: EditAccountForm["status"]; label: string }>>(() => {
@@ -707,22 +670,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedScheduling.value = extra?.mixed_scheduling === true;
   allowOverages.value = extra?.allow_overages === true;
 
-  // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)
-  openaiPassthroughEnabled.value = false;
-  openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF;
-  openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF;
-  codexCLIOnlyEnabled.value = false;
-  anthropicPassthroughEnabled.value = false;
-  if (
-    newAccount.platform === "openai" &&
-    (newAccount.type === "oauth" || newAccount.type === "apikey")
-  ) {
-    syncOpenAIExtraState(newAccount.type, extra);
-  }
-  if (newAccount.platform === "anthropic" && newAccount.type === "apikey") {
-    anthropicPassthroughEnabled.value = extra?.anthropic_passthrough === true;
-  }
-
+  hydrateRuntimeOptionsFromAccount(newAccount);
   hydrateQuotaLimitsFromAccount(newAccount);
 
   // Load antigravity model mapping (Antigravity 只支持映射模式)
