@@ -290,6 +290,7 @@ import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSectio
 import WarmupSection from "@/components/account/WarmupSection.vue";
 import GrokRuntimeSummary from "@/components/account/GrokRuntimeSummary.vue";
 import { useEditBedrockCredentials } from "@/components/account/useEditBedrockCredentials";
+import { useEditAccountModelRestrictions } from "@/components/account/useEditAccountModelRestrictions";
 import { useEditAccountQuotaLimits } from "@/components/account/useEditAccountQuotaLimits";
 import { useEditAccountQuotaControls } from "@/components/account/useEditAccountQuotaControls";
 import { useEditAccountRuntimeOptions } from "@/components/account/useEditAccountRuntimeOptions";
@@ -309,11 +310,6 @@ import {
   resolveMixedChannelWarningMessage,
   type EditAccountForm,
 } from "@/components/account/accountModalShared";
-import {
-  createEmptyModelRestrictionState,
-  deriveAntigravityModelMappings,
-  deriveModelRestrictionStateFromMapping,
-} from "@/components/account/editAccountModalHelpers";
 import type { CreateAccountCategory } from "@/components/account/createAccountModalHelpers";
 import {
   buildEditAccountMutationPayload,
@@ -330,15 +326,9 @@ import {
   loadTempUnschedRuleState,
   moveItemInPlace,
   normalizePoolModeRetryCount,
-  type ModelMapping,
   type TempUnschedRuleForm,
 } from "@/components/account/credentialsBuilder";
-import {
-  appendEmptyModelMapping,
-  appendPresetModelMapping,
-  confirmCustomErrorCodeSelection,
-  removeModelMappingAt,
-} from "@/components/account/accountModalInteractions";
+import { confirmCustomErrorCodeSelection } from "@/components/account/accountModalInteractions";
 import {
   formatDateTimeLocalInput,
   parseDateTimeLocalInput,
@@ -405,9 +395,30 @@ const {
   hydrateBedrockCredentialsFromAccount,
   isBedrockAPIKeyMode,
 } = useEditBedrockCredentials(() => props.account);
-const modelMappings = ref<ModelMapping[]>([]);
-const modelRestrictionMode = ref<"whitelist" | "mapping">("whitelist");
-const allowedModels = ref<string[]>([]);
+const {
+  addAntigravityModelMapping,
+  addAntigravityPresetMapping,
+  addModelMapping,
+  addPresetMapping,
+  allowedModels,
+  antigravityModelMappings,
+  applyModelRestrictionState,
+  getAntigravityModelMappingKey,
+  getModelMappingKey,
+  modelMappings,
+  modelRestrictionMode,
+  removeAntigravityModelMapping,
+  removeModelMapping,
+  resetAntigravityModelRestrictionState,
+  resetModelRestrictionState,
+  syncAntigravityModelRestrictionState,
+  updateAntigravityModelMapping,
+  updateModelMapping,
+} = useEditAccountModelRestrictions({
+  onMappingExists: (model) => {
+    appStore.showInfo(t("admin.accounts.mappingExists", { model }));
+  },
+});
 const poolModeEnabled = ref(false);
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT);
 const customErrorCodesEnabled = ref(false);
@@ -417,17 +428,8 @@ const interceptWarmupRequests = ref(false);
 const autoPauseOnExpired = ref(false);
 const mixedScheduling = ref(false); // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false); // For antigravity accounts: enable AI Credits overages
-const antigravityModelRestrictionMode = ref<"whitelist" | "mapping">(
-  "whitelist",
-);
-const antigravityWhitelistModels = ref<string[]>([]);
-const antigravityModelMappings = ref<ModelMapping[]>([]);
 const tempUnschedEnabled = ref(false);
 const tempUnschedRules = ref<TempUnschedRuleForm[]>([]);
-const getModelMappingKey =
-  createStableObjectKeyResolver<ModelMapping>("edit-model-mapping");
-const getAntigravityModelMappingKey =
-  createStableObjectKeyResolver<ModelMapping>("edit-antigravity-model-mapping");
 const getTempUnschedRuleKey =
   createStableObjectKeyResolver<TempUnschedRuleForm>("edit-temp-unsched-rule");
 
@@ -587,28 +589,6 @@ const getAccountCredentials = () =>
 const getAccountExtra = () =>
   (props.account?.extra as Record<string, unknown>) || {};
 
-const applyModelRestrictionState = (rawMapping: unknown) => {
-  const nextState = deriveModelRestrictionStateFromMapping(rawMapping);
-  modelRestrictionMode.value = nextState.mode;
-  allowedModels.value = nextState.allowedModels;
-  modelMappings.value = nextState.modelMappings;
-};
-
-const resetModelRestrictionState = () => {
-  const nextState = createEmptyModelRestrictionState();
-  modelRestrictionMode.value = nextState.mode;
-  allowedModels.value = nextState.allowedModels;
-  modelMappings.value = nextState.modelMappings;
-};
-
-const syncAntigravityModelRestrictionState = (
-  credentials: Record<string, unknown> | undefined,
-) => {
-  antigravityModelRestrictionMode.value = "mapping";
-  antigravityWhitelistModels.value = [];
-  antigravityModelMappings.value = deriveAntigravityModelMappings(credentials);
-};
-
 const form = reactive<EditAccountForm>(createDefaultEditAccountForm());
 
 const statusOptions = computed<Array<{ value: EditAccountForm["status"]; label: string }>>(() => {
@@ -673,9 +653,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       newAccount.credentials as Record<string, unknown> | undefined,
     );
   } else {
-    antigravityModelRestrictionMode.value = "mapping";
-    antigravityWhitelistModels.value = [];
-    antigravityModelMappings.value = [];
+    resetAntigravityModelRestrictionState();
   }
 
   hydrateQuotaControlsFromAccount(newAccount);
@@ -772,70 +750,6 @@ async function loadTLSProfiles() {
     setTlsFingerprintProfiles([]);
   }
 }
-
-// Model mapping helpers
-const addModelMapping = () => {
-  appendEmptyModelMapping(modelMappings.value);
-};
-
-const removeModelMapping = (index: number) => {
-  removeModelMappingAt(modelMappings.value, index);
-};
-
-const updateModelMapping = (
-  index: number,
-  field: keyof ModelMapping,
-  value: string,
-) => {
-  const mapping = modelMappings.value[index];
-  if (!mapping) {
-    return;
-  }
-  modelMappings.value[index] = {
-    ...mapping,
-    [field]: value,
-  };
-};
-
-const addPresetMapping = (from: string, to: string) => {
-  appendPresetModelMapping(modelMappings.value, from, to, (model) => {
-    appStore.showInfo(t("admin.accounts.mappingExists", { model }));
-  });
-};
-
-const addAntigravityModelMapping = () => {
-  appendEmptyModelMapping(antigravityModelMappings.value);
-};
-
-const removeAntigravityModelMapping = (index: number) => {
-  removeModelMappingAt(antigravityModelMappings.value, index);
-};
-
-const updateAntigravityModelMapping = (
-  index: number,
-  field: keyof ModelMapping,
-  value: string,
-) => {
-  const mapping = antigravityModelMappings.value[index];
-  if (!mapping) {
-    return;
-  }
-  antigravityModelMappings.value[index] = {
-    ...mapping,
-    [field]: value,
-  };
-};
-
-const addAntigravityPresetMapping = (from: string, to: string) => {
-  appendPresetModelMapping(
-    antigravityModelMappings.value,
-    from,
-    to,
-    (model) => {
-      appStore.showInfo(t("admin.accounts.mappingExists", { model }));
-    },
-  );
-};
 
 // Error code toggle helper
 const toggleErrorCode = (code: number) => {
