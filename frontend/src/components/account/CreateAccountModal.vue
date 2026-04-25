@@ -480,7 +480,6 @@ import type {
   AdminGroup,
   AccountPlatform,
   AccountType,
-  CheckMixedChannelResponse,
   CreateAccountRequest,
 } from "@/types";
 import type { GrokSessionBatchImportResult } from "@/api/admin/accounts";
@@ -511,23 +510,21 @@ import OpenAIAccountTypeSection from "@/components/account/OpenAIAccountTypeSect
 import OpenAIOptionsSection from "@/components/account/OpenAIOptionsSection.vue";
 import PoolModeSection from "@/components/account/PoolModeSection.vue";
 import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSection.vue";
+import { useCreateMixedChannelWarning } from "@/components/account/useCreateMixedChannelWarning";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
   buildAccountTempUnschedPresets,
   buildAccountUmqModeOptions,
-  buildMixedChannelDetails,
   createDefaultCreateAccountForm,
   geminiHelpLinks,
   geminiQuotaDocs,
-  needsMixedChannelCheck,
   resetCreateAccountForm,
   resolveAccountApiKeyHint,
   resolveAccountApiKeyPlaceholder,
   resolveAccountBaseUrlHint,
   resolveAccountBaseUrlPlaceholder,
   resolveCreateAccountOAuthStepTitle,
-  resolveMixedChannelWarningMessage,
   type CreateAccountForm,
 } from "@/components/account/accountModalShared";
 import { buildCreateAccountMutationPayload } from "@/components/account/accountMutationPayload";
@@ -857,16 +854,24 @@ const getTempUnschedRuleKey =
 const geminiOAuthType = ref<GeminiOAuthType>("google_one");
 const geminiAIStudioOAuthEnabled = ref(false);
 
-const showMixedChannelWarning = ref(false);
-const mixedChannelWarningDetails = ref<{
-  groupName: string;
-  currentPlatform: string;
-  otherPlatform: string;
-} | null>(null);
-const mixedChannelWarningRawMessage = ref("");
-const mixedChannelWarningAction = ref<(() => Promise<void>) | null>(null);
-const antigravityMixedChannelConfirmed = ref(false);
 const showGeminiHelpDialog = ref(false);
+const {
+  ensureMixedChannelConfirmed,
+  mixedChannelWarningMessageText,
+  openMixedChannelConflictDialog,
+  resetMixedChannelDialog,
+  resetMixedChannelState,
+  showMixedChannelWarning,
+  takeMixedChannelWarningAction,
+  withMixedChannelConfirmFlag,
+} = useCreateMixedChannelWarning<CreateRequestContext>({
+  getGroupIds: () => form.group_ids,
+  getPlatform: () => form.platform,
+  isActiveRequest: (requestContext) => isActiveCreateRequest(requestContext),
+  resolveErrorMessage: (error) => resolveCreateAccountErrorMessage(error),
+  showError: (message) => appStore.showError(message),
+  t,
+});
 
 // Quota control state (Anthropic OAuth/SetupToken only)
 const windowCostEnabled = ref(false);
@@ -949,14 +954,6 @@ const showQuotaLimitSection = computed(() => {
 
 const showWarmupSection = computed(() => {
   return accountMutationProfileHasSection(mutationProfile.value, "warmup");
-});
-
-const mixedChannelWarningMessageText = computed(() => {
-  return resolveMixedChannelWarningMessage({
-    details: mixedChannelWarningDetails.value,
-    rawMessage: mixedChannelWarningRawMessage.value,
-    t,
-  });
 });
 
 // Computed: current preset mappings based on platform
@@ -1413,18 +1410,6 @@ const updateTempUnschedRule = (
   tempUnschedRules.value[index] = nextRule;
 };
 
-const clearMixedChannelDialog = () => {
-  showMixedChannelWarning.value = false;
-  mixedChannelWarningDetails.value = null;
-  mixedChannelWarningRawMessage.value = "";
-  mixedChannelWarningAction.value = null;
-};
-
-const resetMixedChannelState = () => {
-  antigravityMixedChannelConfirmed.value = false;
-  clearMixedChannelDialog();
-};
-
 const resolveCreateAccountErrorMessage = (error: any) =>
   error.response?.data?.message ||
   error.response?.data?.detail ||
@@ -1450,79 +1435,6 @@ const buildValidatedTempUnschedPayload = () => {
   return null;
 };
 
-const openMixedChannelDialog = (opts: {
-  response?: CheckMixedChannelResponse;
-  message?: string;
-  onConfirm: () => Promise<void>;
-}) => {
-  mixedChannelWarningDetails.value = buildMixedChannelDetails(opts.response);
-  mixedChannelWarningRawMessage.value =
-    opts.message ||
-    opts.response?.message ||
-    t("admin.accounts.failedToCreate");
-  mixedChannelWarningAction.value = opts.onConfirm;
-  showMixedChannelWarning.value = true;
-};
-
-const withAntigravityConfirmFlag = (
-  payload: CreateAccountRequest,
-): CreateAccountRequest => {
-  if (
-    needsMixedChannelCheck(payload.platform) &&
-    antigravityMixedChannelConfirmed.value
-  ) {
-    return {
-      ...payload,
-      confirm_mixed_channel_risk: true,
-    };
-  }
-  const cloned = { ...payload };
-  delete cloned.confirm_mixed_channel_risk;
-  return cloned;
-};
-
-const ensureAntigravityMixedChannelConfirmed = async (
-  onConfirm: () => Promise<void>,
-  requestContext: CreateRequestContext,
-): Promise<boolean> => {
-  if (!needsMixedChannelCheck(form.platform)) {
-    return true;
-  }
-  if (antigravityMixedChannelConfirmed.value) {
-    return true;
-  }
-
-  try {
-    const result = await adminAPI.accounts.checkMixedChannelRisk({
-      platform: form.platform,
-      group_ids: form.group_ids,
-    });
-    if (!isActiveCreateRequest(requestContext)) {
-      return false;
-    }
-    if (!result.has_risk) {
-      return true;
-    }
-    openMixedChannelDialog({
-      response: result,
-      onConfirm: async () => {
-        if (!isActiveCreateRequest(requestContext)) {
-          return;
-        }
-        antigravityMixedChannelConfirmed.value = true;
-        await onConfirm();
-      },
-    });
-    return false;
-  } catch (error: any) {
-    if (!isActiveCreateRequest(requestContext)) {
-      return false;
-    }
-    appStore.showError(resolveCreateAccountErrorMessage(error));
-    return false;
-  }
-};
-
 const submitCreateAccount = async (
   payload: CreateAccountRequest,
   requestContext: CreateRequestContext,
@@ -1532,7 +1444,7 @@ const submitCreateAccount = async (
   }
   submitting.value = true;
   try {
-    await adminAPI.accounts.create(withAntigravityConfirmFlag(payload));
+    await adminAPI.accounts.create(withMixedChannelConfirmFlag(payload));
     if (!isActiveCreateRequest(requestContext)) {
       return;
     }
@@ -1543,20 +1455,10 @@ const submitCreateAccount = async (
       return;
     }
     if (
-      error.response?.status === 409 &&
-      error.response?.data?.error === "mixed_channel_warning" &&
-      needsMixedChannelCheck(form.platform)
+      openMixedChannelConflictDialog(error, requestContext, async () => {
+        await submitCreateAccount(payload, requestContext);
+      })
     ) {
-      openMixedChannelDialog({
-        message: error.response?.data?.message,
-        onConfirm: async () => {
-          if (!isActiveCreateRequest(requestContext)) {
-            return;
-          }
-          antigravityMixedChannelConfirmed.value = true;
-          await submitCreateAccount(payload, requestContext);
-        },
-      });
       return;
     }
     appStore.showError(resolveCreateAccountErrorMessage(error));
@@ -1717,7 +1619,7 @@ const doCreateAccount = async (
   if (!isActiveCreateRequest(requestContext)) {
     return;
   }
-  const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
+  const canContinue = await ensureMixedChannelConfirmed(async () => {
     await submitCreateAccount(payload, requestContext);
   }, requestContext);
   if (!canContinue || !isActiveCreateRequest(requestContext)) {
@@ -1728,12 +1630,10 @@ const doCreateAccount = async (
 
 // Handle mixed channel warning confirmation
 const handleMixedChannelConfirm = async () => {
-  const action = mixedChannelWarningAction.value;
+  const action = takeMixedChannelWarningAction();
   if (!action) {
-    clearMixedChannelDialog();
     return;
   }
-  clearMixedChannelDialog();
   const confirmRequestSequence = getCurrentCreateRequestSequence();
   submitting.value = true;
   try {
@@ -1746,7 +1646,7 @@ const handleMixedChannelConfirm = async () => {
 };
 
 const handleMixedChannelCancel = () => {
-  clearMixedChannelDialog();
+  resetMixedChannelDialog();
 };
 
 const finalizeCreatedAndClose = () => {
@@ -2144,7 +2044,7 @@ const handleSubmit = async () => {
       return;
     }
     const requestContext = beginCreateRequestContext();
-    const canContinue = await ensureAntigravityMixedChannelConfirmed(
+    const canContinue = await ensureMixedChannelConfirmed(
       async () => {
         if (!isActiveCreateRequest(requestContext)) {
           return;
@@ -2587,7 +2487,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
       }
 
       const credentials = antigravityOAuth.buildCredentials(tokenInfo);
-      const createPayload = withAntigravityConfirmFlag(
+      const createPayload = withMixedChannelConfirmFlag(
         buildCreateAccountMutationPayload({
           common: commonPayload,
           name: buildCreateBatchAccountName(
