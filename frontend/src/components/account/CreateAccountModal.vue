@@ -511,6 +511,7 @@ import OpenAIOptionsSection from "@/components/account/OpenAIOptionsSection.vue"
 import PoolModeSection from "@/components/account/PoolModeSection.vue";
 import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSection.vue";
 import { useCreateMixedChannelWarning } from "@/components/account/useCreateMixedChannelWarning";
+import { useAccountMutationSections } from "@/components/account/useAccountMutationSections";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
@@ -556,10 +557,6 @@ import {
   resolveCreateAccountGeminiSelectedTier,
   resolveCreateAccountOAuthFlow,
 } from "@/components/account/createAccountModalHelpers";
-import {
-  accountMutationProfileHasSection,
-  resolveAccountMutationProfile,
-} from "@/components/account/accountMutationProfiles";
 import {
   appendEmptyModelMapping,
   appendPresetModelMapping,
@@ -937,24 +934,14 @@ const isOpenAIModelRestrictionDisabled = computed(
   () => form.platform === "openai" && openaiPassthroughEnabled.value,
 );
 
-const mutationProfile = computed(() =>
-  resolveAccountMutationProfile(form.platform, form.type),
-);
-
-const showCompatibleCredentialsForm = computed(() => {
-  return accountMutationProfileHasSection(
-    mutationProfile.value,
-    "compatible-credentials",
-  );
-});
-
-const showQuotaLimitSection = computed(() => {
-  return accountMutationProfileHasSection(mutationProfile.value, "quota-limits");
-});
-
-const showWarmupSection = computed(() => {
-  return accountMutationProfileHasSection(mutationProfile.value, "warmup");
-});
+const {
+  showCompatibleCredentialsForm,
+  showQuotaLimitSection,
+  showWarmupSection,
+} = useAccountMutationSections(() => ({
+  platform: form.platform,
+  type: form.type,
+}));
 
 // Computed: current preset mappings based on platform
 const presetMappings = computed(() =>
