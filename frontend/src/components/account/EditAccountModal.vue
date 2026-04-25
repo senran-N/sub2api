@@ -261,7 +261,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
@@ -295,6 +295,7 @@ import { useEditAccountQuotaLimits } from "@/components/account/useEditAccountQu
 import { useEditAccountQuotaControls } from "@/components/account/useEditAccountQuotaControls";
 import { useEditAccountRuntimeOptions } from "@/components/account/useEditAccountRuntimeOptions";
 import { useEditAccountTempUnschedRules } from "@/components/account/useEditAccountTempUnschedRules";
+import { useEditAccountFormState } from "@/components/account/useEditAccountFormState";
 import { useEditCustomErrorCodes } from "@/components/account/useEditCustomErrorCodes";
 import {
   buildCompatibleBaseUrlPresets,
@@ -303,14 +304,11 @@ import {
   buildAccountUmqModeOptions,
   buildEditAccountBasePayload,
   buildMixedChannelDetails,
-  createDefaultEditAccountForm,
-  hydrateEditAccountForm,
   needsMixedChannelCheck,
   resolveAccountApiKeyPlaceholder,
   resolveAccountBaseUrlHint,
   resolveAccountBaseUrlPlaceholder,
   resolveMixedChannelWarningMessage,
-  type EditAccountForm,
 } from "@/components/account/accountModalShared";
 import type { CreateAccountCategory } from "@/components/account/createAccountModalHelpers";
 import {
@@ -327,10 +325,6 @@ import {
   normalizePoolModeRetryCount,
 } from "@/components/account/credentialsBuilder";
 import { confirmCustomErrorCodeSelection } from "@/components/account/accountModalInteractions";
-import {
-  formatDateTimeLocalInput,
-  parseDateTimeLocalInput,
-} from "@/utils/format";
 import { resolveRequestErrorMessage } from "@/utils/requestError";
 import {
   ensureModelCatalogLoaded,
@@ -433,9 +427,15 @@ const {
   showInvalid: () => appStore.showError(t("admin.accounts.invalidErrorCode")),
 });
 const interceptWarmupRequests = ref(false);
-const autoPauseOnExpired = ref(false);
-const mixedScheduling = ref(false); // For antigravity accounts: enable mixed scheduling
-const allowOverages = ref(false); // For antigravity accounts: enable AI Credits overages
+const {
+  allowOverages,
+  autoPauseOnExpired,
+  expiresAtInput,
+  form,
+  hydrateFormStateFromAccount,
+  mixedScheduling,
+  statusOptions,
+} = useEditAccountFormState(t);
 const {
   addTempUnschedRule,
   getTempUnschedRuleKey,
@@ -603,26 +603,6 @@ const getAccountCredentials = () =>
 const getAccountExtra = () =>
   (props.account?.extra as Record<string, unknown>) || {};
 
-const form = reactive<EditAccountForm>(createDefaultEditAccountForm());
-
-const statusOptions = computed<Array<{ value: EditAccountForm["status"]; label: string }>>(() => {
-  const options: Array<{ value: EditAccountForm["status"]; label: string }> = [
-    { value: "active", label: t("common.active") },
-    { value: "inactive", label: t("common.inactive") },
-  ];
-  if (form.status === "error") {
-    options.push({ value: "error", label: t("admin.accounts.status.error") });
-  }
-  return options;
-});
-
-const expiresAtInput = computed({
-  get: () => formatDateTimeLocal(form.expires_at),
-  set: (value: string) => {
-    form.expires_at = parseDateTimeLocal(value);
-  },
-});
-
 // Watchers
 const syncFormFromAccount = (newAccount: Account | null) => {
   if (!newAccount) {
@@ -630,7 +610,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   }
   antigravityMixedChannelConfirmed.value = false;
   resetMixedChannelDialogState();
-  hydrateEditAccountForm(form, newAccount);
+  hydrateFormStateFromAccount(newAccount);
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as
@@ -639,7 +619,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   const platformDefaultUrl = getDefaultBaseURL(newAccount.platform);
   interceptWarmupRequests.value =
     credentials?.intercept_warmup_requests === true;
-  autoPauseOnExpired.value = newAccount.auto_pause_on_expired === true;
   editBaseUrl.value = platformDefaultUrl;
   editApiKey.value = "";
   editSessionToken.value = "";
@@ -647,13 +626,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   poolModeEnabled.value = false;
   poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT;
   resetCustomErrorCodes();
-
-  // Load mixed scheduling setting (only for antigravity accounts)
-  mixedScheduling.value = false;
-  allowOverages.value = false;
-  const extra = newAccount.extra as Record<string, unknown> | undefined;
-  mixedScheduling.value = extra?.mixed_scheduling === true;
-  allowOverages.value = extra?.allow_overages === true;
 
   hydrateRuntimeOptionsFromAccount(newAccount);
   hydrateBedrockCredentialsFromAccount(newAccount);
@@ -824,9 +796,6 @@ const ensureAntigravityMixedChannelConfirmed = async (
     return false;
   }
 };
-
-const formatDateTimeLocal = formatDateTimeLocalInput;
-const parseDateTimeLocal = parseDateTimeLocalInput;
 
 // Methods
 const handleClose = () => {
