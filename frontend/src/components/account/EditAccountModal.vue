@@ -89,46 +89,27 @@
         v-model:session-token="editSessionToken"
       />
 
-      <div v-if="account.type === 'bedrock'" class="space-y-4">
-        <BedrockCredentialsSection
-          :auth-mode="editBedrockAuthMode"
-          v-model:access-key-id="editBedrockAccessKeyId"
-          v-model:secret-access-key="editBedrockSecretAccessKey"
-          v-model:session-token="editBedrockSessionToken"
-          v-model:api-key-value="editBedrockApiKeyValue"
-          v-model:region="editBedrockRegion"
-          v-model:force-global="editBedrockForceGlobal"
-          :allow-auth-mode-change="false"
-          :credentials-required="false"
-          region-control="input"
-          secret-access-key-placeholder-key="admin.accounts.bedrockSecretKeyLeaveEmpty"
-          secret-access-key-hint-key="admin.accounts.bedrockSecretKeyLeaveEmpty"
-          session-token-placeholder-key="admin.accounts.bedrockSecretKeyLeaveEmpty"
-          api-key-placeholder-key="admin.accounts.bedrockApiKeyLeaveEmpty"
-          api-key-hint-key="admin.accounts.bedrockApiKeyLeaveEmpty"
-        />
-
-        <ModelRestrictionSection
-          v-model:mode="modelRestrictionMode"
-          v-model:allowed-models="allowedModels"
-          platform="anthropic"
-          :mappings="modelMappings"
-          :preset-mappings="bedrockPresets"
-          :mapping-key="getModelMappingKey"
-          from-placeholder-key="admin.accounts.fromModel"
-          to-placeholder-key="admin.accounts.toModel"
-          :show-mapping-notice="false"
-          @add-mapping="addModelMapping"
-          @remove-mapping="removeModelMapping"
-          @add-preset="addPresetMapping"
-          @update-mapping="updateModelMapping"
-        />
-
-        <PoolModeSection
-          v-model:enabled="poolModeEnabled"
-          v-model:retry-count="poolModeRetryCount"
-        />
-      </div>
+      <EditBedrockCredentialsSection
+        v-if="account.type === 'bedrock'"
+        :auth-mode="editBedrockAuthMode"
+        v-model:access-key-id="editBedrockAccessKeyId"
+        v-model:secret-access-key="editBedrockSecretAccessKey"
+        v-model:session-token="editBedrockSessionToken"
+        v-model:api-key-value="editBedrockApiKeyValue"
+        v-model:region="editBedrockRegion"
+        v-model:force-global="editBedrockForceGlobal"
+        v-model:model-restriction-mode="modelRestrictionMode"
+        v-model:allowed-models="allowedModels"
+        v-model:pool-mode-enabled="poolModeEnabled"
+        v-model:pool-mode-retry-count="poolModeRetryCount"
+        :mappings="modelMappings"
+        :preset-mappings="bedrockPresets"
+        :mapping-key="getModelMappingKey"
+        @add-mapping="addModelMapping"
+        @remove-mapping="removeModelMapping"
+        @add-preset="addPresetMapping"
+        @update-mapping="updateModelMapping"
+      />
 
       <AntigravityModelMappingSection
         v-if="account.platform === 'antigravity'"
@@ -450,12 +431,11 @@ import AntigravityModelMappingSection from "@/components/account/AntigravityMode
 import AnthropicOptionsSection from "@/components/account/AnthropicOptionsSection.vue";
 import AnthropicQuotaControlsSection from "@/components/account/AnthropicQuotaControlsSection.vue";
 import AutoPauseOnExpiredSection from "@/components/account/AutoPauseOnExpiredSection.vue";
-import BedrockCredentialsSection from "@/components/account/BedrockCredentialsSection.vue";
 import CompatibleCredentialsSection from "@/components/account/CompatibleCredentialsSection.vue";
+import EditBedrockCredentialsSection from "@/components/account/EditBedrockCredentialsSection.vue";
 import EditGrokSessionCredentialsSection from "@/components/account/EditGrokSessionCredentialsSection.vue";
 import ModelRestrictionSection from "@/components/account/ModelRestrictionSection.vue";
 import OpenAIOptionsSection from "@/components/account/OpenAIOptionsSection.vue";
-import PoolModeSection from "@/components/account/PoolModeSection.vue";
 import QuotaLimitSection from "@/components/account/QuotaLimitSection.vue";
 import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSection.vue";
 import WarmupSection from "@/components/account/WarmupSection.vue";
