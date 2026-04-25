@@ -270,7 +270,6 @@ import type {
   Account,
   Proxy,
   AdminGroup,
-  CheckMixedChannelResponse,
   UpdateAccountRequest,
 } from "@/types";
 import BaseDialog from "@/components/common/BaseDialog.vue";
@@ -299,18 +298,16 @@ import { useEditAccountFormState } from "@/components/account/useEditAccountForm
 import { useEditCustomErrorCodes } from "@/components/account/useEditCustomErrorCodes";
 import { useEditCredentialFields } from "@/components/account/useEditCredentialFields";
 import { useAccountMutationSections } from "@/components/account/useAccountMutationSections";
+import { useEditMixedChannelWarning } from "@/components/account/useEditMixedChannelWarning";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
   buildAccountTempUnschedPresets,
   buildAccountUmqModeOptions,
   buildEditAccountBasePayload,
-  buildMixedChannelDetails,
-  needsMixedChannelCheck,
   resolveAccountApiKeyPlaceholder,
   resolveAccountBaseUrlHint,
   resolveAccountBaseUrlPlaceholder,
-  resolveMixedChannelWarningMessage,
 } from "@/components/account/accountModalShared";
 import {
   buildEditAccountMutationPayload,
@@ -445,16 +442,6 @@ const {
   updateTempUnschedRule,
 } = useEditAccountTempUnschedRules();
 
-const showMixedChannelWarning = ref(false);
-const mixedChannelWarningDetails = ref<{
-  groupName: string;
-  currentPlatform: string;
-  otherPlatform: string;
-} | null>(null);
-const mixedChannelWarningRawMessage = ref("");
-const mixedChannelWarningAction = ref<(() => Promise<void>) | null>(null);
-const antigravityMixedChannelConfirmed = ref(false);
-
 const {
   baseRpm,
   cacheTTLOverrideEnabled,
@@ -544,20 +531,21 @@ const defaultBaseUrl = computed(() => {
   return getDefaultBaseURL(props.account?.platform || "anthropic");
 });
 
-const mixedChannelWarningMessageText = computed(() => {
-  return resolveMixedChannelWarningMessage({
-    details: mixedChannelWarningDetails.value,
-    rawMessage: mixedChannelWarningRawMessage.value,
-    t,
-  });
+const {
+  ensureMixedChannelConfirmed,
+  mixedChannelWarningMessageText,
+  openMixedChannelConflictDialog,
+  resetMixedChannelDialog,
+  resetMixedChannelState,
+  showMixedChannelWarning,
+  takeMixedChannelWarningAction,
+  withMixedChannelConfirmFlag,
+} = useEditMixedChannelWarning({
+  getAccount: () => props.account,
+  getGroupIds: () => form.group_ids,
+  showError: (message) => appStore.showError(message),
+  t,
 });
-
-const resetMixedChannelDialogState = () => {
-  showMixedChannelWarning.value = false;
-  mixedChannelWarningDetails.value = null;
-  mixedChannelWarningRawMessage.value = "";
-  mixedChannelWarningAction.value = null;
-};
 
 const getAccountCredentials = () =>
   (props.account?.credentials as Record<string, unknown>) || {};
@@ -570,8 +558,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   if (!newAccount) {
     return;
   }
-  antigravityMixedChannelConfirmed.value = false;
-  resetMixedChannelDialogState();
+  resetMixedChannelState();
   hydrateFormStateFromAccount(newAccount);
 
   // Load intercept warmup requests setting (applies to all account types)
@@ -658,85 +645,9 @@ async function loadTLSProfiles() {
   }
 }
 
-const clearMixedChannelDialog = () => {
-  resetMixedChannelDialogState();
-};
-
-const openMixedChannelDialog = (opts: {
-  response?: CheckMixedChannelResponse;
-  message?: string;
-  onConfirm: () => Promise<void>;
-}) => {
-  mixedChannelWarningDetails.value = buildMixedChannelDetails(opts.response);
-  mixedChannelWarningRawMessage.value =
-    opts.message ||
-    opts.response?.message ||
-    t("admin.accounts.failedToUpdate");
-  mixedChannelWarningAction.value = opts.onConfirm;
-  showMixedChannelWarning.value = true;
-};
-
-const withAntigravityConfirmFlag = (payload: UpdateAccountRequest) => {
-  if (
-    props.account?.platform &&
-    needsMixedChannelCheck(props.account.platform) &&
-    antigravityMixedChannelConfirmed.value
-  ) {
-    return {
-      ...payload,
-      confirm_mixed_channel_risk: true,
-    };
-  }
-  const cloned = { ...payload };
-  delete cloned.confirm_mixed_channel_risk;
-  return cloned;
-};
-
-const ensureAntigravityMixedChannelConfirmed = async (
-  onConfirm: () => Promise<void>,
-): Promise<boolean> => {
-  if (
-    !props.account?.platform ||
-    !needsMixedChannelCheck(props.account.platform)
-  ) {
-    return true;
-  }
-  if (antigravityMixedChannelConfirmed.value) {
-    return true;
-  }
-  if (!props.account) {
-    return false;
-  }
-
-  try {
-    const result = await adminAPI.accounts.checkMixedChannelRisk({
-      platform: props.account.platform,
-      group_ids: form.group_ids,
-      account_id: props.account.id,
-    });
-    if (!result.has_risk) {
-      return true;
-    }
-    openMixedChannelDialog({
-      response: result,
-      onConfirm: async () => {
-        antigravityMixedChannelConfirmed.value = true;
-        await onConfirm();
-      },
-    });
-    return false;
-  } catch (error: any) {
-    appStore.showError(
-      resolveRequestErrorMessage(error, t("admin.accounts.failedToUpdate")),
-    );
-    return false;
-  }
-};
-
 // Methods
 const handleClose = () => {
-  antigravityMixedChannelConfirmed.value = false;
-  clearMixedChannelDialog();
+  resetMixedChannelState();
   emit("close");
 };
 
@@ -748,25 +659,17 @@ const submitUpdateAccount = async (
   try {
     const updatedAccount = await adminAPI.accounts.update(
       accountID,
-      withAntigravityConfirmFlag(updatePayload),
+      withMixedChannelConfirmFlag(updatePayload),
     );
     appStore.showSuccess(t("admin.accounts.accountUpdated"));
     emit("updated", updatedAccount);
     handleClose();
   } catch (error: any) {
     if (
-      error.status === 409 &&
-      error.error === "mixed_channel_warning" &&
-      props.account?.platform &&
-      needsMixedChannelCheck(props.account.platform)
+      openMixedChannelConflictDialog(error, async () => {
+        await submitUpdateAccount(accountID, updatePayload);
+      })
     ) {
-      openMixedChannelDialog({
-        message: error.message,
-        onConfirm: async () => {
-          antigravityMixedChannelConfirmed.value = true;
-          await submitUpdateAccount(accountID, updatePayload);
-        },
-      });
       return;
     }
     appStore.showError(
@@ -905,11 +808,9 @@ const handleSubmit = async () => {
     }
     const updatePayload = payloadResult.payload;
 
-    const canContinue = await ensureAntigravityMixedChannelConfirmed(
-      async () => {
-        await submitUpdateAccount(accountID, updatePayload);
-      },
-    );
+    const canContinue = await ensureMixedChannelConfirmed(async () => {
+      await submitUpdateAccount(accountID, updatePayload);
+    });
     if (!canContinue) {
       return;
     }
@@ -924,12 +825,10 @@ const handleSubmit = async () => {
 
 // Handle mixed channel warning confirmation
 const handleMixedChannelConfirm = async () => {
-  const action = mixedChannelWarningAction.value;
+  const action = takeMixedChannelWarningAction();
   if (!action) {
-    clearMixedChannelDialog();
     return;
   }
-  clearMixedChannelDialog();
   submitting.value = true;
   try {
     await action();
@@ -939,6 +838,6 @@ const handleMixedChannelConfirm = async () => {
 };
 
 const handleMixedChannelCancel = () => {
-  clearMixedChannelDialog();
+  resetMixedChannelDialog();
 };
 </script>
