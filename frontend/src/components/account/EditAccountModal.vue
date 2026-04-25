@@ -297,6 +297,7 @@ import { useEditAccountRuntimeOptions } from "@/components/account/useEditAccoun
 import { useEditAccountTempUnschedRules } from "@/components/account/useEditAccountTempUnschedRules";
 import { useEditAccountFormState } from "@/components/account/useEditAccountFormState";
 import { useEditCustomErrorCodes } from "@/components/account/useEditCustomErrorCodes";
+import { useEditCredentialFields } from "@/components/account/useEditCredentialFields";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
@@ -319,11 +320,7 @@ import {
   accountMutationProfileHasSection,
   resolveAccountMutationProfile,
 } from "@/components/account/accountMutationProfiles";
-import {
-  DEFAULT_POOL_MODE_RETRY_COUNT,
-  getDefaultBaseURL,
-  normalizePoolModeRetryCount,
-} from "@/components/account/credentialsBuilder";
+import { getDefaultBaseURL } from "@/components/account/credentialsBuilder";
 import { confirmCustomErrorCodeSelection } from "@/components/account/accountModalInteractions";
 import { resolveRequestErrorMessage } from "@/utils/requestError";
 import {
@@ -372,9 +369,16 @@ const bedrockPresets = computed(() => getPresetMappingsByPlatform("bedrock"));
 
 // State
 const submitting = ref(false);
-const editBaseUrl = ref(getDefaultBaseURL("anthropic"));
-const editApiKey = ref("");
-const editSessionToken = ref("");
+const {
+  editApiKey,
+  editBaseUrl,
+  editSessionToken,
+  hydrateBedrockPoolMode,
+  hydrateCompatibleCredentialFields,
+  poolModeEnabled,
+  poolModeRetryCount,
+  resetCredentialFields,
+} = useEditCredentialFields();
 const {
   editBedrockAccessKeyId,
   editBedrockApiKeyValue,
@@ -410,8 +414,6 @@ const {
     appStore.showInfo(t("admin.accounts.mappingExists", { model }));
   },
 });
-const poolModeEnabled = ref(false);
-const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT);
 const {
   addCustomErrorCode,
   customErrorCodeInput,
@@ -619,12 +621,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   const platformDefaultUrl = getDefaultBaseURL(newAccount.platform);
   interceptWarmupRequests.value =
     credentials?.intercept_warmup_requests === true;
-  editBaseUrl.value = platformDefaultUrl;
-  editApiKey.value = "";
-  editSessionToken.value = "";
+  resetCredentialFields(platformDefaultUrl);
   resetModelRestrictionState();
-  poolModeEnabled.value = false;
-  poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT;
   resetCustomErrorCodes();
 
   hydrateRuntimeOptionsFromAccount(newAccount);
@@ -650,34 +648,14 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     newAccount.credentials
   ) {
     const credentials = newAccount.credentials as Record<string, unknown>;
-    editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl;
-
+    hydrateCompatibleCredentialFields(credentials, platformDefaultUrl);
     applyModelRestrictionState(credentials.model_mapping);
-
-    // Load pool mode
-    poolModeEnabled.value = credentials.pool_mode === true;
-    poolModeRetryCount.value = normalizePoolModeRetryCount(
-      Number(
-        credentials.pool_mode_retry_count ?? DEFAULT_POOL_MODE_RETRY_COUNT,
-      ),
-    );
-
     hydrateCustomErrorCodesFromCredentials(credentials);
   } else if (newAccount.type === "bedrock" && newAccount.credentials) {
     const bedrockCreds = newAccount.credentials as Record<string, unknown>;
-    poolModeEnabled.value = bedrockCreds.pool_mode === true;
-    const retryCount = bedrockCreds.pool_mode_retry_count;
-    poolModeRetryCount.value =
-      typeof retryCount === "number" && retryCount >= 0
-        ? retryCount
-        : DEFAULT_POOL_MODE_RETRY_COUNT;
-
+    hydrateBedrockPoolMode(bedrockCreds);
     applyModelRestrictionState(bedrockCreds.model_mapping);
-  } else if (newAccount.type === "session") {
-    editSessionToken.value = "";
   } else {
-    editBaseUrl.value = platformDefaultUrl;
-
     // Load model mappings for OpenAI OAuth accounts
     if (newAccount.platform === "openai" && newAccount.credentials) {
       const oauthCredentials = newAccount.credentials as Record<
@@ -688,8 +666,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     } else {
       resetModelRestrictionState();
     }
-    poolModeEnabled.value = false;
-    poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT;
     resetCustomErrorCodes();
   }
 };
