@@ -193,7 +193,7 @@ import {
   buildAccountUmqModeOptions,
   needsMixedChannelCheck
 } from '@/components/account/accountModalShared'
-import { buildBulkAccountMutationPayload } from '@/components/account/accountMutationPayload'
+import { useBulkAccountMutationPayload } from '@/components/account/useBulkAccountMutationPayload'
 import {
   ensureModelCatalogLoaded,
   getPresetMappingsByPlatform
@@ -350,6 +350,67 @@ const openAIWSModeConcurrencyHintKey = computed(() =>
   resolveOpenAIWSModeConcurrencyHintKey(openaiOAuthResponsesWebSocketV2Mode.value)
 )
 
+const {
+  buildBulkEditPayload,
+  hasAnyBulkEditFieldEnabled
+} = useBulkAccountMutationPayload({
+  baseUrl: {
+    enabled: enableBaseUrl,
+    value: baseUrl
+  },
+  customErrorCodes: {
+    enabled: enableCustomErrorCodes,
+    selectedErrorCodes
+  },
+  groups: {
+    enabled: enableGroups,
+    groupIds
+  },
+  interceptWarmup: {
+    enabled: enableInterceptWarmup,
+    value: interceptWarmupRequests
+  },
+  loadFactor: {
+    enabled: enableLoadFactor,
+    value: loadFactor
+  },
+  modelRestriction: {
+    allowedModels,
+    disabledByOpenAIPassthrough: isOpenAIModelRestrictionDisabled,
+    enabled: enableModelRestriction,
+    mode: modelRestrictionMode,
+    modelMappings
+  },
+  openAI: {
+    passthroughEnabled: enableOpenAIPassthrough,
+    passthroughValue: openaiPassthroughEnabled,
+    wsModeEnabled: enableOpenAIWSMode,
+    wsModeValue: openaiOAuthResponsesWebSocketV2Mode
+  },
+  proxy: {
+    enabled: enableProxy,
+    proxyId
+  },
+  rpmLimit: {
+    baseRpm: bulkBaseRpm,
+    enabled: enableRpmLimit,
+    rpmEnabled: rpmLimitEnabled,
+    stickyBuffer: bulkRpmStickyBuffer,
+    strategy: bulkRpmStrategy
+  },
+  scalars: {
+    concurrency,
+    enableConcurrency,
+    enablePriority,
+    enableRateMultiplier,
+    enableStatus,
+    priority,
+    rateMultiplier,
+    status
+  },
+  userMsgQueueMode
+})
+
 const appendEmptyModelMapping = (target: ModelMapping[]) => {
   target.push({ from: '', to: '' })
 }
@@ -437,23 +498,6 @@ const resetBulkEditFormState = () => {
   clearMixedChannelState()
 }
 
-const hasAnyBulkEditFieldEnabled = () =>
-  enableBaseUrl.value ||
-  enableOpenAIPassthrough.value ||
-  enableModelRestriction.value ||
-  enableCustomErrorCodes.value ||
-  enableInterceptWarmup.value ||
-  enableProxy.value ||
-  enableConcurrency.value ||
-  enableLoadFactor.value ||
-  enablePriority.value ||
-  enableRateMultiplier.value ||
-  enableStatus.value ||
-  enableGroups.value ||
-  enableOpenAIWSMode.value ||
-  enableRpmLimit.value ||
-  userMsgQueueMode.value !== null
-
 // Model mapping helpers
 const addModelMapping = () => {
   appendEmptyModelMapping(modelMappings.value)
@@ -523,66 +567,6 @@ const removeErrorCode = (code: number) => {
   }
 }
 
-const buildUpdatePayload = (): Record<string, unknown> | null => {
-  return buildBulkAccountMutationPayload({
-    baseUrl: {
-      enabled: enableBaseUrl.value,
-      value: baseUrl.value
-    },
-    customErrorCodes: {
-      enabled: enableCustomErrorCodes.value,
-      selectedErrorCodes: selectedErrorCodes.value
-    },
-    groups: {
-      enabled: enableGroups.value,
-      groupIds: groupIds.value
-    },
-    interceptWarmup: {
-      enabled: enableInterceptWarmup.value,
-      value: interceptWarmupRequests.value
-    },
-    loadFactor: {
-      enabled: enableLoadFactor.value,
-      value: loadFactor.value
-    },
-    modelRestriction: {
-      allowedModels: allowedModels.value,
-      disabledByOpenAIPassthrough: isOpenAIModelRestrictionDisabled.value,
-      enabled: enableModelRestriction.value,
-      mode: modelRestrictionMode.value,
-      modelMappings: modelMappings.value
-    },
-    openAI: {
-      passthroughEnabled: enableOpenAIPassthrough.value,
-      passthroughValue: openaiPassthroughEnabled.value,
-      wsModeEnabled: enableOpenAIWSMode.value,
-      wsModeValue: openaiOAuthResponsesWebSocketV2Mode.value
-    },
-    proxy: {
-      enabled: enableProxy.value,
-      proxyId: proxyId.value
-    },
-    rpmLimit: {
-      baseRpm: bulkBaseRpm.value,
-      enabled: enableRpmLimit.value,
-      rpmEnabled: rpmLimitEnabled.value,
-      stickyBuffer: bulkRpmStickyBuffer.value,
-      strategy: bulkRpmStrategy.value
-    },
-    scalars: {
-      concurrency: concurrency.value,
-      enableConcurrency: enableConcurrency.value,
-      enablePriority: enablePriority.value,
-      enableRateMultiplier: enableRateMultiplier.value,
-      enableStatus: enableStatus.value,
-      priority: priority.value,
-      rateMultiplier: rateMultiplier.value,
-      status: status.value
-    },
-    userMsgQueueMode: userMsgQueueMode.value
-  })
-}
-
 const mixedChannelConfirmed = ref(false)
 
 // 是否需要预检查：改了分组 + 全是单一的 antigravity 或 anthropic 平台
@@ -642,7 +626,7 @@ const handleSubmit = async () => {
     return
   }
 
-  const built = buildUpdatePayload()
+  const built = buildBulkEditPayload()
   if (!built) {
     appStore.showError(t('admin.accounts.bulkEdit.noFieldsSelected'))
     return
