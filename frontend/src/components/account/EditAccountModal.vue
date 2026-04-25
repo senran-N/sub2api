@@ -270,61 +270,29 @@
 
       <AutoPauseOnExpiredSection v-model:enabled="autoPauseOnExpired" />
 
-      <!-- Quota Control Section (Anthropic OAuth/SetupToken only) -->
-      <div
+      <AnthropicQuotaControlsSection
         v-if="showAnthropicQuotaControls"
-        class="form-section space-y-4"
-      >
-        <div class="mb-3">
-          <h3 class="input-label mb-0 text-base font-semibold">
-            {{ t("admin.accounts.quotaControl.title") }}
-          </h3>
-          <p class="edit-account-modal__muted mt-1 text-xs">
-            {{ t("admin.accounts.quotaControl.hint") }}
-          </p>
-        </div>
-
-        <WindowCostControlSection
-          v-model:enabled="windowCostEnabled"
-          v-model:limit="windowCostLimit"
-          v-model:sticky-reserve="windowCostStickyReserve"
-        />
-
-        <SessionLimitControlSection
-          v-model:enabled="sessionLimitEnabled"
-          v-model:max-sessions="maxSessions"
-          v-model:idle-timeout="sessionIdleTimeout"
-        />
-
-        <RpmLimitControlSection
-          v-model:enabled="rpmLimitEnabled"
-          v-model:base-rpm="baseRpm"
-          v-model:strategy="rpmStrategy"
-          v-model:sticky-buffer="rpmStickyBuffer"
-          v-model:user-msg-queue-mode="userMsgQueueMode"
-          :user-msg-queue-mode-options="umqModeOptions"
-        />
-
-        <TlsFingerprintControlSection
-          v-model:enabled="tlsFingerprintEnabled"
-          v-model:profile-id="tlsFingerprintProfileId"
-          :profiles="tlsFingerprintProfiles"
-        />
-
-        <SessionIdMaskingControlSection
-          v-model:enabled="sessionIdMaskingEnabled"
-        />
-
-        <CacheTtlOverrideSection
-          v-model:enabled="cacheTTLOverrideEnabled"
-          v-model:target="cacheTTLOverrideTarget"
-        />
-
-        <CustomBaseUrlControlSection
-          v-model:enabled="customBaseUrlEnabled"
-          v-model:base-url="customBaseUrl"
-        />
-      </div>
+        v-model:window-cost-enabled="windowCostEnabled"
+        v-model:window-cost-limit="windowCostLimit"
+        v-model:window-cost-sticky-reserve="windowCostStickyReserve"
+        v-model:session-limit-enabled="sessionLimitEnabled"
+        v-model:max-sessions="maxSessions"
+        v-model:session-idle-timeout="sessionIdleTimeout"
+        v-model:rpm-limit-enabled="rpmLimitEnabled"
+        v-model:base-rpm="baseRpm"
+        v-model:rpm-strategy="rpmStrategy"
+        v-model:rpm-sticky-buffer="rpmStickyBuffer"
+        v-model:user-msg-queue-mode="userMsgQueueMode"
+        v-model:tls-fingerprint-enabled="tlsFingerprintEnabled"
+        v-model:tls-fingerprint-profile-id="tlsFingerprintProfileId"
+        v-model:session-id-masking-enabled="sessionIdMaskingEnabled"
+        v-model:cache-ttl-override-enabled="cacheTTLOverrideEnabled"
+        v-model:cache-ttl-override-target="cacheTTLOverrideTarget"
+        v-model:custom-base-url-enabled="customBaseUrlEnabled"
+        v-model:custom-base-url="customBaseUrl"
+        :user-msg-queue-mode-options="umqModeOptions"
+        :tls-fingerprint-profiles="tlsFingerprintProfiles"
+      />
 
       <div class="form-section">
         <div>
@@ -478,25 +446,19 @@ import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import Select from "@/components/common/Select.vue";
 import ProxySelector from "@/components/common/ProxySelector.vue";
 import GroupSelector from "@/components/common/GroupSelector.vue";
-import AnthropicOptionsSection from "@/components/account/AnthropicOptionsSection.vue";
 import AntigravityModelMappingSection from "@/components/account/AntigravityModelMappingSection.vue";
+import AnthropicOptionsSection from "@/components/account/AnthropicOptionsSection.vue";
+import AnthropicQuotaControlsSection from "@/components/account/AnthropicQuotaControlsSection.vue";
 import AutoPauseOnExpiredSection from "@/components/account/AutoPauseOnExpiredSection.vue";
 import BedrockCredentialsSection from "@/components/account/BedrockCredentialsSection.vue";
-import CacheTtlOverrideSection from "@/components/account/CacheTtlOverrideSection.vue";
 import CompatibleCredentialsSection from "@/components/account/CompatibleCredentialsSection.vue";
-import CustomBaseUrlControlSection from "@/components/account/CustomBaseUrlControlSection.vue";
 import EditGrokSessionCredentialsSection from "@/components/account/EditGrokSessionCredentialsSection.vue";
 import ModelRestrictionSection from "@/components/account/ModelRestrictionSection.vue";
 import OpenAIOptionsSection from "@/components/account/OpenAIOptionsSection.vue";
 import PoolModeSection from "@/components/account/PoolModeSection.vue";
 import QuotaLimitSection from "@/components/account/QuotaLimitSection.vue";
-import RpmLimitControlSection from "@/components/account/RpmLimitControlSection.vue";
-import SessionLimitControlSection from "@/components/account/SessionLimitControlSection.vue";
-import SessionIdMaskingControlSection from "@/components/account/SessionIdMaskingControlSection.vue";
 import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSection.vue";
-import TlsFingerprintControlSection from "@/components/account/TlsFingerprintControlSection.vue";
 import WarmupSection from "@/components/account/WarmupSection.vue";
-import WindowCostControlSection from "@/components/account/WindowCostControlSection.vue";
 import GrokRuntimeSummary from "@/components/account/GrokRuntimeSummary.vue";
 import {
   buildCompatibleBaseUrlPresets,
