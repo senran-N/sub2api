@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -109,231 +108,123 @@ func (h *OpenAIGatewayHandler) Passthrough(c *gin.Context) {
 		}
 	}
 
-	maxAccountSwitches := h.maxAccountSwitches
-	switchCount := 0
-	failedAccountIDs := make(map[int64]struct{})
-	sameAccountRetryCount := make(map[int64]int)
-	var lastFailoverErr *service.UpstreamFailoverError
-
-	for {
-		c.Set("openai_passthrough_fallback_model", "")
-		reqLog.Debug("openai_passthrough.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
-
-		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-			c.Request.Context(),
-			apiKey.GroupID,
-			"",
-			sessionHash,
-			schedulingModel,
-			failedAccountIDs,
-			service.OpenAIUpstreamTransportAny,
-		)
-		if err != nil {
-			reqLog.Warn("openai_passthrough.account_select_failed",
-				zap.Error(err),
-				zap.Int("excluded_account_count", len(failedAccountIDs)),
-			)
-			if len(failedAccountIDs) == 0 && schedulingModel != "" {
-				initialSelectionErr := err
-				defaultModel := resolveOpenAISelectionFallbackModel(
+	result := service.NewCompatiblePassthroughExecutionKernel(h.gatewayService).Execute(c.Request.Context(), service.CompatiblePassthroughExecutionRequest{
+		APIKey:               apiKey,
+		ReqModel:             reqModel,
+		ReqStream:            reqStream,
+		SchedulingModel:      schedulingModel,
+		SessionHash:          sessionHash,
+		ChannelUsage:         channelUsage,
+		RoutingStart:         routingStart,
+		SchedulerContext:     c.Request.Context(),
+		UseSelectionFallback: schedulingModel != "",
+		MaxAccountSwitches:   h.maxAccountSwitches,
+		RequiredTransport:    service.OpenAIUpstreamTransportAny,
+		ValidateAccount:      (*service.Account).SupportsOpenAIPassthroughHTTP,
+		AcquireAccountSlot: func(_ context.Context, sessionHash string, selection *service.AccountSelectionResult) (func(), bool) {
+			return h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
+		},
+		Forward: func(ctx context.Context, account *service.Account, defaultMappedModel string) (*service.OpenAIForwardResult, error) {
+			return h.gatewayService.ForwardCompatiblePassthrough(ctx, c, account, body, reqMeta, defaultMappedModel)
+		},
+		Hooks: service.CompatiblePassthroughExecutionHooks{
+			ResetFallbackModel: func() {
+				c.Set("openai_passthrough_fallback_model", "")
+			},
+			ResolveSelectionFallback: func(_ context.Context, selectionModel string, _ error) string {
+				return resolveOpenAISelectionFallbackModel(
 					c,
 					h.gatewayService,
 					apiKey,
-					schedulingModel,
+					selectionModel,
 					reqLog,
 					"openai_passthrough.fallback_to_default_model_skipped",
 				)
-				if defaultModel != "" && defaultModel != schedulingModel {
-					reqLog.Info("openai_passthrough.fallback_to_default_model", zap.String("default_mapped_model", defaultModel))
-					selection, scheduleDecision, err = h.gatewayService.SelectAccountWithScheduler(
-						c.Request.Context(),
-						apiKey.GroupID,
-						"",
-						sessionHash,
-						defaultModel,
-						failedAccountIDs,
-						service.OpenAIUpstreamTransportAny,
-					)
-					if err == nil && selection != nil {
-						c.Set("openai_passthrough_fallback_model", defaultModel)
-					}
-				}
-				if err != nil {
-					status, code, message := openAISelectionErrorResponseAfterDefaultFallback(initialSelectionErr, err)
-					h.handleStreamingAwareError(c, status, code, message, streamStarted)
-					return
-				}
-			} else {
-				if lastFailoverErr != nil {
-					h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
-				} else {
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No passthrough-capable accounts available", streamStarted)
-				}
-				return
-			}
-		}
-		if selection == nil || selection.Account == nil {
-			h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
-			return
-		}
-
-		account := selection.Account
-		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
-		_ = scheduleDecision
-		setOpsSelectedAccount(c, account.ID, account.Platform)
-
-		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
-		if !acquired {
-			return
-		}
-
-		if !account.SupportsOpenAIPassthroughHTTP() {
-			if accountReleaseFunc != nil {
-				accountReleaseFunc()
-			}
-			failedAccountIDs[account.ID] = struct{}{}
-			reqLog.Warn("openai_passthrough.account_not_compatible",
-				zap.Int64("account_id", account.ID),
-				zap.String("account_name", account.Name),
-				zap.String("account_type", account.Type),
-			)
-			continue
-		}
-
-		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
-		forwardStart := time.Now()
-
-		fallbackModel := c.GetString("openai_passthrough_fallback_model")
-		if fallbackModel == "" && channelUsage.ChannelMappedModel != "" {
-			fallbackModel = channelUsage.ChannelMappedModel
-		}
-		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, fallbackModel)
-		forwardModelHint := defaultMappedModel
-		if forwardModelHint == "" {
-			forwardModelHint = schedulingModel
-		}
-		result, err := h.gatewayService.ForwardCompatiblePassthrough(
-			c.Request.Context(),
-			c,
-			account,
-			body,
-			reqMeta,
-			defaultMappedModel,
-		)
-
-		forwardDurationMs := time.Since(forwardStart).Milliseconds()
-		if accountReleaseFunc != nil {
-			accountReleaseFunc()
-		}
-		upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
-		responseLatencyMs := forwardDurationMs
-		if upstreamLatencyMs > 0 && forwardDurationMs > upstreamLatencyMs {
-			responseLatencyMs = forwardDurationMs - upstreamLatencyMs
-		}
-		service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseLatencyMs)
-		if err == nil && result != nil && result.FirstTokenMs != nil {
-			service.SetOpsLatencyMs(c, service.OpsTimeToFirstTokenMsKey, int64(*result.FirstTokenMs))
-		}
-		if err != nil {
-			var failoverErr *service.UpstreamFailoverError
-			if errors.As(err, &failoverErr) {
-				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
-				h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-					Account:        account,
-					RequestedModel: reqModel,
-					UpstreamModel:  forwardModelHint,
-					StatusCode:     failoverErr.StatusCode,
-					Endpoint:       inboundEndpoint,
-					Err:            failoverErr,
-				})
-				lastFailoverErr = failoverErr
-				decision := applyOpenAIPoolFailoverPolicy(
-					account,
-					failoverErr,
-					service.CodexRecoveryDecision{},
-					sessionHash != "",
-					sameAccountRetryCount,
-					failedAccountIDs,
-					&switchCount,
-					maxAccountSwitches,
-					func() {
-						h.gatewayService.TempUnscheduleRetryableError(c.Request.Context(), account.ID, failoverErr)
-					},
-					func() {
-						h.gatewayService.RecordOpenAIAccountSwitch()
-						h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, false)
-					},
+			},
+			OnFallbackSelected: func(defaultModel string) {
+				c.Set("openai_passthrough_fallback_model", defaultModel)
+				reqLog.Info("openai_passthrough.fallback_to_default_model", zap.String("default_mapped_model", defaultModel))
+			},
+			OnAccountSelecting: func(_ string, excludedCount int) {
+				reqLog.Debug("openai_passthrough.account_selecting", zap.Int("excluded_account_count", excludedCount))
+			},
+			OnAccountSelectFailed: func(err error, excludedCount int) {
+				reqLog.Warn("openai_passthrough.account_select_failed",
+					zap.Error(err),
+					zap.Int("excluded_account_count", excludedCount),
 				)
-				if decision.SameAccountRetry {
-					reqLog.Warn("openai_passthrough.pool_mode_same_account_retry",
-						zap.Int64("account_id", account.ID),
-						zap.Int("upstream_status", failoverErr.StatusCode),
-						zap.Int("retry_limit", decision.RetryLimit),
-						zap.Int("retry_count", decision.RetryCount),
-					)
-					if !sleepWithContext(c.Request.Context(), sameAccountRetryDelay) {
-						return
-					}
-					continue
-				}
-				if decision.Action == FailoverExhausted {
-					h.handleFailoverExhausted(c, failoverErr, streamStarted)
+			},
+			OnAccountSelected: func(account *service.Account) {
+				setOpsSelectedAccount(c, account.ID, account.Platform)
+			},
+			OnAccountRejected: func(account *service.Account) {
+				reqLog.Warn("openai_passthrough.account_not_compatible",
+					zap.Int64("account_id", account.ID),
+					zap.String("account_name", account.Name),
+					zap.String("account_type", account.Type),
+				)
+			},
+			OnRoutingLatency: func(d time.Duration) {
+				service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, d.Milliseconds())
+			},
+			OnForwardLatency: func(d time.Duration, result *service.OpenAIForwardResult) {
+				setCompatibleGatewayTextResponseLatency(c, d.Milliseconds(), result)
+			},
+			OnFailoverAttemptFailed: func(attempt service.CompatibleTextExecutionAttemptFeedback) {
+				if attempt.FailoverErr == nil {
 					return
 				}
+				h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
+					Account:        attempt.Account,
+					RequestedModel: reqModel,
+					UpstreamModel:  attempt.ForwardModelHint,
+					StatusCode:     attempt.FailoverErr.StatusCode,
+					Endpoint:       inboundEndpoint,
+					Err:            attempt.FailoverErr,
+				})
+			},
+			RecordCodexRecoverySwitch: func(account *service.Account, failoverErr *service.UpstreamFailoverError, trackMetrics bool) {
+				h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, trackMetrics)
+			},
+			OnSameAccountRetry: func(account *service.Account, failoverErr *service.UpstreamFailoverError, decision service.OpenAIPoolFailoverDecision) {
+				reqLog.Warn("openai_passthrough.pool_mode_same_account_retry",
+					zap.Int64("account_id", account.ID),
+					zap.Int("upstream_status", failoverErr.StatusCode),
+					zap.Int("retry_limit", decision.RetryLimit),
+					zap.Int("retry_count", decision.RetryCount),
+				)
+			},
+			OnFailoverSwitch: func(account *service.Account, failoverErr *service.UpstreamFailoverError, decision service.OpenAIPoolFailoverDecision) {
 				reqLog.Warn("openai_passthrough.upstream_failover_switching",
 					zap.Int64("account_id", account.ID),
 					zap.Int("upstream_status", failoverErr.StatusCode),
 					zap.Int("switch_count", decision.SwitchCount),
-					zap.Int("max_switches", maxAccountSwitches),
+					zap.Int("max_switches", h.maxAccountSwitches),
 				)
-				continue
-			}
+			},
+		},
+	})
 
-			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
-			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				StatusCode:     c.Writer.Status(),
-				Endpoint:       inboundEndpoint,
-				Err:            err,
-			})
-			reqLog.Warn("openai_passthrough.forward_failed",
-				zap.Int64("account_id", account.ID),
-				zap.Bool("fallback_error_response_written", wroteFallback),
-				zap.Error(err),
-			)
+	switch result.Outcome {
+	case service.CompatibleTextExecutionSucceeded:
+		account := result.Account
+		if account == nil {
+			h.handleStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", streamStarted)
 			return
 		}
-
-		if result != nil {
-			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				Result:         result,
-				StatusCode:     c.Writer.Status(),
-				Endpoint:       inboundEndpoint,
-			})
-		} else {
-			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, nil)
-			h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
-				Account:        account,
-				RequestedModel: reqModel,
-				UpstreamModel:  forwardModelHint,
-				StatusCode:     c.Writer.Status(),
-				Endpoint:       inboundEndpoint,
-			})
-		}
-
+		h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
+			Account:        account,
+			RequestedModel: reqModel,
+			UpstreamModel:  result.ForwardModelHint,
+			Result:         result.ForwardResult,
+			StatusCode:     c.Writer.Status(),
+			Endpoint:       inboundEndpoint,
+		})
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
-
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-				Result:             result,
+				Result:             result.ForwardResult,
 				APIKey:             apiKey,
 				User:               apiKey.User,
 				Account:            account,
@@ -356,11 +247,51 @@ func (h *OpenAIGatewayHandler) Passthrough(c *gin.Context) {
 				).Error("openai_passthrough.record_usage_failed", zap.Error(err))
 			}
 		})
-
 		reqLog.Debug("openai_passthrough.request_completed",
 			zap.Int64("account_id", account.ID),
-			zap.Int("switch_count", switchCount),
+			zap.Int("switch_count", result.SwitchCount),
 		)
+	case service.CompatibleTextExecutionSelectionError:
+		if len(result.FailedAccountIDs) == 0 {
+			status, code, message := openAISelectionErrorResponseAfterDefaultFallback(result.InitialSelectionErr, result.Err)
+			h.handleStreamingAwareError(c, status, code, message, streamStarted)
+			return
+		}
+		if result.LastFailoverErr != nil {
+			h.handleFailoverExhausted(c, result.LastFailoverErr, streamStarted)
+			return
+		}
+		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No passthrough-capable accounts available", streamStarted)
+	case service.CompatibleTextExecutionNoAvailable:
+		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
+	case service.CompatibleTextExecutionAcquireBlocked, service.CompatibleTextExecutionCanceled:
+		return
+	case service.CompatibleTextExecutionFailoverExhausted:
+		if result.FailoverErr == nil {
+			h.handleStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", streamStarted)
+			return
+		}
+		h.handleFailoverExhausted(c, result.FailoverErr, streamStarted)
+	case service.CompatibleTextExecutionForwardError:
+		wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
+		h.persistCompatibleGatewayRuntimeFeedback(c.Request.Context(), compatibleGatewayRuntimeFeedbackInput{
+			Account:        result.Account,
+			RequestedModel: reqModel,
+			UpstreamModel:  result.ForwardModelHint,
+			StatusCode:     c.Writer.Status(),
+			Endpoint:       inboundEndpoint,
+			Err:            result.Err,
+		})
+		fields := []zap.Field{
+			zap.Bool("fallback_error_response_written", wroteFallback),
+			zap.Error(result.Err),
+		}
+		if result.Account != nil {
+			fields = append([]zap.Field{zap.Int64("account_id", result.Account.ID)}, fields...)
+		}
+		reqLog.Warn("openai_passthrough.forward_failed", fields...)
+	default:
+		h.handleStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", streamStarted)
 		return
 	}
 }

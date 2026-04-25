@@ -113,365 +113,48 @@
         </p>
       </div>
 
-      <!-- Model restriction -->
-      <div class="form-section">
-        <div class="mb-3 flex items-center justify-between">
-          <label
-            id="bulk-edit-model-restriction-label"
-            class="input-label mb-0"
-            for="bulk-edit-model-restriction-enabled"
-          >
-            {{ t('admin.accounts.modelRestriction') }}
-          </label>
-          <input
-            v-model="enableModelRestriction"
-            id="bulk-edit-model-restriction-enabled"
-            type="checkbox"
-            aria-controls="bulk-edit-model-restriction-body"
-            class="bulk-edit-account-modal__checkbox rounded"
-          />
-        </div>
+      <BulkEditApplySection
+        id="bulk-edit-model-restriction"
+        v-model:enabled="enableModelRestriction"
+        label-key="admin.accounts.modelRestriction"
+      >
+        <ModelRestrictionSection
+          v-model:mode="modelRestrictionMode"
+          v-model:allowed-models="allowedModels"
+          :platform="bulkModelRestrictionPlatform"
+          :platforms="selectedPlatforms"
+          :mappings="modelMappings"
+          :preset-mappings="filteredPresets"
+          :mapping-key="getModelMappingKey"
+          :disabled="isOpenAIModelRestrictionDisabled"
+          :framed="false"
+          @add-mapping="addModelMapping"
+          @remove-mapping="removeModelMapping"
+          @add-preset="addPresetMapping"
+          @update-mapping="updateModelMapping"
+        />
+      </BulkEditApplySection>
 
-        <div
-          id="bulk-edit-model-restriction-body"
-          :class="!enableModelRestriction && 'pointer-events-none opacity-50'"
-          role="group"
-          aria-labelledby="bulk-edit-model-restriction-label"
-        >
-          <div
-            v-if="isOpenAIModelRestrictionDisabled"
-            :class="getNoticeClasses('amber')"
-          >
-            <p class="text-xs">
-              {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
-            </p>
-          </div>
+      <CustomErrorCodesSection
+        v-model:enabled="enableCustomErrorCodes"
+        v-model:input-value="customErrorCodeInput"
+        :selected-codes="selectedErrorCodes"
+        @toggle-code="toggleErrorCode"
+        @add-code="addCustomErrorCode"
+        @remove-code="removeErrorCode"
+      />
 
-          <template v-else>
-            <!-- Mode Toggle -->
-            <div class="mb-4 flex gap-2">
-              <button
-                type="button"
-                :class="[
-                  getModeToggleClasses(modelRestrictionMode === 'whitelist', 'accent')
-                ]"
-                @click="modelRestrictionMode = 'whitelist'"
-              >
-                <svg
-                  class="mr-1.5 inline h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                {{ t('admin.accounts.modelWhitelist') }}
-              </button>
-              <button
-                type="button"
-                :class="[
-                  getModeToggleClasses(modelRestrictionMode === 'mapping', 'purple')
-                ]"
-                @click="modelRestrictionMode = 'mapping'"
-              >
-                <svg
-                  class="mr-1.5 inline h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                  />
-                </svg>
-                {{ t('admin.accounts.modelMapping') }}
-              </button>
-            </div>
-
-            <!-- Whitelist Mode -->
-            <div v-if="modelRestrictionMode === 'whitelist'">
-              <div :class="['mb-3', getNoticeClasses('blue')]">
-                <p class="text-xs">
-                  <svg
-                    class="mr-1 inline h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {{ t('admin.accounts.selectAllowedModels') }}
-                </p>
-              </div>
-
-              <ModelWhitelistSelector
-                v-model="allowedModels"
-                :platforms="selectedPlatforms"
-              />
-
-              <p class="bulk-edit-account-modal__muted text-xs">
-                {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
-                <span v-if="allowedModels.length === 0">{{
-                  t('admin.accounts.supportsAllModels')
-                }}</span>
-              </p>
-            </div>
-
-            <!-- Mapping Mode -->
-            <div v-else>
-              <div :class="['mb-3', getNoticeClasses('purple')]">
-                <p class="text-xs">
-                  <svg
-                    class="mr-1 inline h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {{ t('admin.accounts.mapRequestModels') }}
-                </p>
-              </div>
-
-              <!-- Model Mapping List -->
-              <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
-                <div
-                  v-for="(mapping, index) in modelMappings"
-                  :key="index"
-                  class="flex items-center gap-2"
-                >
-                  <input
-                    v-model="mapping.from"
-                    type="text"
-                    class="input flex-1"
-                    :placeholder="t('admin.accounts.requestModel')"
-                  />
-                  <svg
-                    class="bulk-edit-account-modal__mapping-arrow h-4 w-4 flex-shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M14 5l7 7m0 0l-7 7m7-7H3"
-                    />
-                  </svg>
-                  <input
-                    v-model="mapping.to"
-                    type="text"
-                    class="input flex-1"
-                    :placeholder="t('admin.accounts.actualModel')"
-                  />
-                  <button
-                    type="button"
-                    class="bulk-edit-account-modal__mapping-remove transition-colors"
-                    @click="removeModelMapping(index)"
-                  >
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                class="bulk-edit-account-modal__mapping-add mb-3 w-full border-2 border-dashed transition-colors"
-                @click="addModelMapping"
-              >
-                <svg
-                  class="mr-1 inline h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                {{ t('admin.accounts.addMapping') }}
-              </button>
-
-              <!-- Quick Add Buttons -->
-              <div class="flex flex-wrap gap-2">
-                <button
-                  v-for="preset in filteredPresets"
-                  :key="preset.label"
-                  type="button"
-                  :class="getPresetMappingChipClasses(preset.tone)"
-                  @click="addPresetMapping(preset.from, preset.to)"
-                >
-                  + {{ preset.label }}
-                </button>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-
-      <!-- Custom error codes -->
-      <div class="form-section">
-        <div class="mb-3 flex items-center justify-between">
-          <div>
-            <label
-              id="bulk-edit-custom-error-codes-label"
-              class="input-label mb-0"
-              for="bulk-edit-custom-error-codes-enabled"
-            >
-              {{ t('admin.accounts.customErrorCodes') }}
-            </label>
-            <p class="bulk-edit-account-modal__muted mt-1 text-xs">
-              {{ t('admin.accounts.customErrorCodesHint') }}
-            </p>
-          </div>
-          <input
-            v-model="enableCustomErrorCodes"
-            id="bulk-edit-custom-error-codes-enabled"
-            type="checkbox"
-            aria-controls="bulk-edit-custom-error-codes-body"
-            class="bulk-edit-account-modal__checkbox rounded"
-          />
-        </div>
-
-        <div v-if="enableCustomErrorCodes" id="bulk-edit-custom-error-codes-body" class="space-y-3">
-          <div :class="getNoticeClasses('amber')">
-            <p class="text-xs">
-              <Icon name="exclamationTriangle" size="sm" class="mr-1 inline" :stroke-width="2" />
-              {{ t('admin.accounts.customErrorCodesWarning') }}
-            </p>
-          </div>
-
-          <!-- Error Code Buttons -->
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="code in commonErrorCodes"
-              :key="code.value"
-              type="button"
-              :class="[
-                getStatusChipClasses(selectedErrorCodes.includes(code.value), 'danger')
-              ]"
-              @click="toggleErrorCode(code.value)"
-            >
-              {{ code.value }} {{ code.label }}
-            </button>
-          </div>
-
-          <!-- Manual input -->
-          <div class="flex items-center gap-2">
-            <input
-              v-model="customErrorCodeInput"
-              id="bulk-edit-custom-error-code-input"
-              type="number"
-              min="100"
-              max="599"
-              class="input flex-1"
-              :placeholder="t('admin.accounts.enterErrorCode')"
-              aria-labelledby="bulk-edit-custom-error-codes-label"
-              @keyup.enter="addCustomErrorCode"
-            />
-            <button type="button" class="btn btn-secondary btn-sm" @click="addCustomErrorCode">
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <!-- Selected codes summary -->
-          <div class="flex flex-wrap gap-1.5">
-            <span
-              v-for="code in selectedErrorCodes.sort((a, b) => a - b)"
-              :key="code"
-              class="theme-chip theme-chip--danger theme-chip--regular bulk-edit-account-modal__selected-chip"
-            >
-              {{ code }}
-              <button
-                type="button"
-                class="bulk-edit-account-modal__chip-remove"
-                @click="removeErrorCode(code)"
-              >
-                <Icon name="x" size="xs" class="h-3.5 w-3.5" :stroke-width="2" />
-              </button>
-            </span>
-            <span v-if="selectedErrorCodes.length === 0" class="bulk-edit-account-modal__empty-hint text-xs">
-              {{ t('admin.accounts.noneSelectedUsesDefault') }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Intercept warmup requests (Anthropic only) -->
-      <div class="form-section">
-        <div class="flex items-center justify-between">
-          <div class="flex-1 pr-4">
-            <label
-              id="bulk-edit-intercept-warmup-label"
-              class="input-label mb-0"
-              for="bulk-edit-intercept-warmup-enabled"
-            >
-              {{ t('admin.accounts.interceptWarmupRequests') }}
-            </label>
-            <p class="bulk-edit-account-modal__muted mt-1 text-xs">
-              {{ t('admin.accounts.interceptWarmupRequestsDesc') }}
-            </p>
-          </div>
-          <input
-            v-model="enableInterceptWarmup"
-            id="bulk-edit-intercept-warmup-enabled"
-            type="checkbox"
-            aria-controls="bulk-edit-intercept-warmup-body"
-            class="bulk-edit-account-modal__checkbox rounded"
-          />
-        </div>
-        <div v-if="enableInterceptWarmup" id="bulk-edit-intercept-warmup-body" class="mt-3">
-          <button
-            type="button"
-            :class="[
-              getSwitchTrackClasses(interceptWarmupRequests)
-            ]"
-            @click="interceptWarmupRequests = !interceptWarmupRequests"
-          >
-            <span
-              :class="[
-                getSwitchThumbClasses(interceptWarmupRequests)
-              ]"
-            />
-          </button>
-        </div>
-      </div>
+      <BulkEditApplySection
+        id="bulk-edit-intercept-warmup"
+        v-model:enabled="enableInterceptWarmup"
+        label-key="admin.accounts.interceptWarmupRequests"
+        hint-key="admin.accounts.interceptWarmupRequestsDesc"
+      >
+        <WarmupSection
+          v-model:enabled="interceptWarmupRequests"
+          :framed="false"
+        />
+      </BulkEditApplySection>
 
       <!-- Proxy -->
       <div class="form-section">
@@ -685,118 +368,22 @@
         </div>
       </div>
 
-      <!-- RPM Limit (仅全部为 Anthropic OAuth/SetupToken 时显示) -->
-      <div v-if="allAnthropicOAuthOrSetupToken" class="form-section">
-        <div class="mb-3 flex items-center justify-between">
-          <label
-            id="bulk-edit-rpm-limit-label"
-            class="input-label mb-0"
-            for="bulk-edit-rpm-limit-enabled"
-          >
-            {{ t('admin.accounts.quotaControl.rpmLimit.label') }}
-          </label>
-          <input
-            v-model="enableRpmLimit"
-            id="bulk-edit-rpm-limit-enabled"
-            type="checkbox"
-            aria-controls="bulk-edit-rpm-limit-body"
-            class="bulk-edit-account-modal__checkbox rounded"
-          />
-        </div>
-
-        <div
-          id="bulk-edit-rpm-limit-body"
-          :class="!enableRpmLimit && 'pointer-events-none opacity-50'"
-          role="group"
-          aria-labelledby="bulk-edit-rpm-limit-label"
-        >
-          <div class="mb-3 flex items-center justify-between">
-            <span class="text-sm">{{ t('admin.accounts.quotaControl.rpmLimit.hint') }}</span>
-            <button
-              type="button"
-              @click="rpmLimitEnabled = !rpmLimitEnabled"
-              :class="[
-                getSwitchTrackClasses(rpmLimitEnabled)
-              ]"
-            >
-              <span
-                :class="[
-                  getSwitchThumbClasses(rpmLimitEnabled)
-                ]"
-              />
-            </button>
-          </div>
-
-          <div v-if="rpmLimitEnabled" class="space-y-3">
-            <div>
-              <label class="input-label text-xs">{{ t('admin.accounts.quotaControl.rpmLimit.baseRpm') }}</label>
-              <input
-                v-model.number="bulkBaseRpm"
-                type="number"
-                min="1"
-                max="1000"
-                step="1"
-                class="input"
-                :placeholder="t('admin.accounts.quotaControl.rpmLimit.baseRpmPlaceholder')"
-              />
-              <p class="input-hint">{{ t('admin.accounts.quotaControl.rpmLimit.baseRpmHint') }}</p>
-            </div>
-
-            <div>
-              <label class="input-label text-xs">{{ t('admin.accounts.quotaControl.rpmLimit.strategy') }}</label>
-              <div class="flex gap-2">
-                <button
-                  type="button"
-                  @click="bulkRpmStrategy = 'tiered'"
-                  :class="[
-                    getModeToggleClasses(bulkRpmStrategy === 'tiered', 'accent')
-                  ]"
-                >
-                  {{ t('admin.accounts.quotaControl.rpmLimit.strategyTiered') }}
-                </button>
-                <button
-                  type="button"
-                  @click="bulkRpmStrategy = 'sticky_exempt'"
-                  :class="[
-                    getModeToggleClasses(bulkRpmStrategy === 'sticky_exempt', 'accent')
-                  ]"
-                >
-                  {{ t('admin.accounts.quotaControl.rpmLimit.strategyStickyExempt') }}
-                </button>
-              </div>
-            </div>
-
-            <div v-if="bulkRpmStrategy === 'tiered'">
-              <label class="input-label text-xs">{{ t('admin.accounts.quotaControl.rpmLimit.stickyBuffer') }}</label>
-              <input
-                v-model.number="bulkRpmStickyBuffer"
-                type="number"
-                min="1"
-                step="1"
-                class="input"
-                :placeholder="t('admin.accounts.quotaControl.rpmLimit.stickyBufferPlaceholder')"
-              />
-              <p class="input-hint">{{ t('admin.accounts.quotaControl.rpmLimit.stickyBufferHint') }}</p>
-            </div>
-
-            </div>
-          </div>
-
-        <!-- 用户消息限速模式（独立于 RPM 开关，始终可见） -->
-        <div class="mt-4">
-          <label class="input-label">{{ t('admin.accounts.quotaControl.rpmLimit.userMsgQueue') }}</label>
-          <p class="bulk-edit-account-modal__umq-hint mt-1 mb-2 text-xs">
-            {{ t('admin.accounts.quotaControl.rpmLimit.userMsgQueueHint') }}
-          </p>
-          <div class="flex space-x-2">
-            <button type="button" v-for="opt in umqModeOptions" :key="opt.value"
-              @click="userMsgQueueMode = userMsgQueueMode === opt.value ? null : opt.value"
-              :class="getUserMsgQueueOptionClasses(userMsgQueueMode === opt.value)">
-              {{ opt.label }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <BulkEditApplySection
+        v-if="allAnthropicOAuthOrSetupToken"
+        id="bulk-edit-rpm-limit"
+        v-model:enabled="enableRpmLimit"
+        label-key="admin.accounts.quotaControl.rpmLimit.label"
+      >
+        <RpmLimitControlSection
+          v-model:enabled="rpmLimitEnabled"
+          v-model:base-rpm="bulkBaseRpm"
+          v-model:strategy="bulkRpmStrategy"
+          v-model:sticky-buffer="bulkRpmStickyBuffer"
+          :user-msg-queue-mode="userMsgQueueMode || ''"
+          :user-msg-queue-mode-options="umqModeOptions"
+          @update:user-msg-queue-mode="toggleUserMsgQueueMode"
+        />
+      </BulkEditApplySection>
 
       <!-- Groups -->
       <div class="form-section">
@@ -888,8 +475,11 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
-import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
-import Icon from '@/components/icons/Icon.vue'
+import BulkEditApplySection from '@/components/account/BulkEditApplySection.vue'
+import CustomErrorCodesSection from '@/components/account/CustomErrorCodesSection.vue'
+import ModelRestrictionSection from '@/components/account/ModelRestrictionSection.vue'
+import RpmLimitControlSection from '@/components/account/RpmLimitControlSection.vue'
+import WarmupSection from '@/components/account/WarmupSection.vue'
 import {
   buildAccountOpenAIWSModeOptions,
   buildAccountUmqModeOptions,
@@ -898,7 +488,6 @@ import {
 import { buildBulkAccountMutationPayload } from '@/components/account/accountMutationPayload'
 import {
   ensureModelCatalogLoaded,
-  getPresetMappingChipClasses,
   getPresetMappingsByPlatform
 } from '@/composables/useModelWhitelist'
 import {
@@ -907,6 +496,7 @@ import {
 } from '@/utils/openaiWsMode'
 import type { OpenAIWSMode } from '@/utils/openaiWsMode'
 import { resolveRequestErrorMessage } from '@/utils/requestError'
+import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 interface Props {
   show: boolean
   accountIds: number[]
@@ -1034,17 +624,6 @@ const userMsgQueueMode = ref<string | null>(null)
 const umqModeOptions = computed(() => buildAccountUmqModeOptions(t))
 let bulkEditRequestSequence = 0
 
-// Common HTTP error codes
-const commonErrorCodes = [
-  { value: 401, label: 'Unauthorized' },
-  { value: 403, label: 'Forbidden' },
-  { value: 429, label: 'Rate Limit' },
-  { value: 500, label: 'Server Error' },
-  { value: 502, label: 'Bad Gateway' },
-  { value: 503, label: 'Unavailable' },
-  { value: 529, label: 'Overloaded' }
-]
-
 const statusOptions = computed(() => [
   { value: 'active', label: t('common.active') },
   { value: 'inactive', label: t('common.inactive') }
@@ -1055,6 +634,9 @@ const isOpenAIModelRestrictionDisabled = computed(
     enableOpenAIPassthrough.value &&
     openaiPassthroughEnabled.value
 )
+const bulkModelRestrictionPlatform = computed(
+  () => props.selectedPlatforms[0] || 'openai'
+)
 
 const openAIWSModeOptions = computed(() => buildAccountOpenAIWSModeOptions(t))
 const openAIWSModeConcurrencyHintKey = computed(() =>
@@ -1062,7 +644,6 @@ const openAIWSModeConcurrencyHintKey = computed(() =>
 )
 
 type BulkEditNoticeTone = 'amber' | 'blue' | 'danger' | 'purple'
-type BulkEditModeTone = 'accent' | 'danger' | 'purple'
 
 function joinClassNames(classNames: Array<string | false | null | undefined>) {
   return classNames.filter(Boolean).join(' ')
@@ -1072,15 +653,6 @@ function getNoticeClasses(tone: BulkEditNoticeTone) {
   return joinClassNames([
     'bulk-edit-account-modal__notice bulk-edit-account-modal__notice-card border',
     `bulk-edit-account-modal__notice--${tone}`
-  ])
-}
-
-function getModeToggleClasses(isSelected: boolean, tone: BulkEditModeTone) {
-  return joinClassNames([
-    'bulk-edit-account-modal__mode-toggle bulk-edit-account-modal__mode-toggle-control flex-1 text-sm font-medium transition-all',
-    isSelected
-      ? `bulk-edit-account-modal__mode-toggle--${tone}`
-      : 'bulk-edit-account-modal__mode-toggle--idle'
   ])
 }
 
@@ -1095,24 +667,6 @@ function getSwitchThumbClasses(isEnabled: boolean) {
   return joinClassNames([
     'bulk-edit-account-modal__switch-thumb pointer-events-none inline-block h-5 w-5 transform rounded-full shadow ring-0 transition duration-200 ease-in-out',
     isEnabled ? 'translate-x-5' : 'translate-x-0'
-  ])
-}
-
-function getStatusChipClasses(isSelected: boolean, tone: BulkEditModeTone = 'danger') {
-  return joinClassNames([
-    'bulk-edit-account-modal__status-chip bulk-edit-account-modal__status-chip-control text-sm font-medium transition-colors',
-    isSelected
-      ? `bulk-edit-account-modal__status-chip--${tone}`
-      : 'bulk-edit-account-modal__status-chip--idle'
-  ])
-}
-
-function getUserMsgQueueOptionClasses(isSelected: boolean) {
-  return joinClassNames([
-    'bulk-edit-account-modal__umq-option bulk-edit-account-modal__umq-option-control text-sm transition-colors',
-    isSelected
-      ? 'bulk-edit-account-modal__umq-option--selected'
-      : 'bulk-edit-account-modal__umq-option--idle'
   ])
 }
 
@@ -1131,6 +685,9 @@ const appendPresetModelMapping = (target: ModelMapping[], from: string, to: stri
   }
   target.push({ from, to })
 }
+
+const getModelMappingKey =
+  createStableObjectKeyResolver<ModelMapping>('bulk-edit-model-mapping')
 
 const confirmCustomErrorCodeSelection = (code: number) => {
   if (code === 429) {
@@ -1226,8 +783,27 @@ const removeModelMapping = (index: number) => {
   removeModelMappingAt(modelMappings.value, index)
 }
 
+const updateModelMapping = (
+  index: number,
+  field: keyof ModelMapping,
+  value: string
+) => {
+  const mapping = modelMappings.value[index]
+  if (!mapping) {
+    return
+  }
+  modelMappings.value[index] = {
+    ...mapping,
+    [field]: value
+  }
+}
+
 const addPresetMapping = (from: string, to: string) => {
   appendPresetModelMapping(modelMappings.value, from, to)
+}
+
+const toggleUserMsgQueueMode = (mode: string) => {
+  userMsgQueueMode.value = userMsgQueueMode.value === mode ? null : mode
 }
 
 // Error code helpers

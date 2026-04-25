@@ -1,14 +1,11 @@
 package handler
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	pkghttputil "github.com/senran-N/sub2api/internal/pkg/httputil"
-	"github.com/senran-N/sub2api/internal/pkg/ip"
 	middleware2 "github.com/senran-N/sub2api/internal/server/middleware"
 	"github.com/senran-N/sub2api/internal/service"
 	"github.com/tidwall/gjson"
@@ -151,204 +148,23 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
-	// Parse request for session hash
-	parsedReq, _ := service.ParseGatewayRequest(body, "responses")
-	if parsedReq == nil {
-		parsedReq = &service.ParsedRequest{Model: reqModel, Stream: reqStream, Body: body}
-	}
-	parsedReq.SessionContext = &service.SessionContext{
-		ClientIP:  ip.GetClientIP(c),
-		UserAgent: c.GetHeader("User-Agent"),
-		APIKeyID:  apiKey.ID,
-	}
-	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
-	sessionBoundAccountID := h.prefetchStickySessionBinding(c, apiKey.GroupID, sessionHash)
-
-	// 3. Account selection + failover loop
-	fs := NewFailoverState(h.maxAccountSwitches, false)
-
-	for {
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionHash, reqModel, fs.FailedAccountIDs, "")
-		if err != nil {
-			if len(fs.FailedAccountIDs) == 0 {
-				h.responsesErrorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error())
-				return
-			}
-			action := fs.HandleSelectionExhausted(c.Request.Context())
-			switch action {
-			case FailoverContinue:
-				continue
-			case FailoverCanceled:
-				return
-			default:
-				if fs.LastFailoverErr != nil {
-					h.handleResponsesFailoverExhausted(c, fs.LastFailoverErr, streamStarted)
-				} else {
-					h.responsesErrorResponse(c, http.StatusBadGateway, "server_error", "All available accounts exhausted")
-				}
-				return
-			}
-		}
-		account := selection.Account
-		setOpsSelectedAccount(c, account.ID, account.Platform)
-
-		// 4. Acquire account concurrency slot
-		accountReleaseFunc := selection.ReleaseFunc
-		if !selection.Acquired {
-			if selection.WaitPlan == nil {
-				h.responsesErrorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts")
-				return
-			}
-			queueResult, err := h.concurrencyHelper.AcquireAccountSlotOrQueue(
-				c.Request.Context(),
-				account.ID,
-				selection.WaitPlan.MaxConcurrency,
-				selection.WaitPlan.MaxWaiting,
-			)
-			if err != nil {
-				reqLog.Warn("gateway.responses.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-				h.handleConcurrencyError(c, err, "account", streamStarted)
-				return
-			}
-			if queueResult.Acquired {
-				accountReleaseFunc = queueResult.ReleaseFunc
-			} else if !queueResult.QueueAllowed {
-				reqLog.Info("gateway.responses.account_wait_queue_full",
-					zap.Int64("account_id", account.ID),
-					zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
-				)
-				h.responsesErrorResponse(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later")
-				return
-			} else {
-				accountWaitCounted := queueResult.WaitCounted
-				defer func() {
-					if accountWaitCounted {
-						h.concurrencyHelper.DecrementAccountWaitCount(c.Request.Context(), account.ID)
-					}
-				}()
-
-				accountReleaseFunc, err = h.concurrencyHelper.AcquireAccountSlotAfterQueueingWithWaitTimeout(
-					c,
-					account.ID,
-					selection.WaitPlan.MaxConcurrency,
-					selection.WaitPlan.Timeout,
-					reqStream,
-					&streamStarted,
-				)
-				if err != nil {
-					reqLog.Warn("gateway.responses.account_slot_acquire_failed_after_wait", zap.Int64("account_id", account.ID), zap.Error(err))
-					h.handleConcurrencyError(c, err, "account", streamStarted)
-					return
-				}
-				if accountWaitCounted {
-					h.concurrencyHelper.DecrementAccountWaitCount(c.Request.Context(), account.ID)
-					accountWaitCounted = false
-				}
-			}
-		}
-		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
-		if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, apiKey.GroupID, sessionHash) {
-			if accountReleaseFunc != nil {
-				accountReleaseFunc()
-			}
-			fs.FailedAccountIDs[account.ID] = struct{}{}
-			continue
-		}
-		billingModel := parsedReq.Model
-		if channelMapping.Mapped {
-			billingModel = channelMapping.MappedModel
-		}
-		windowCostReservation, windowCostAllowed := h.tryReserveAccountWindowCostForForward(
-			c.Request.Context(),
-			reqLog,
-			account,
-			apiKey,
-			parsedReq,
-			billingModel,
-			sessionBoundAccountID,
-			apiKey.GroupID,
-			sessionHash,
-		)
-		if !windowCostAllowed {
-			if accountReleaseFunc != nil {
-				accountReleaseFunc()
-			}
-			fs.FailedAccountIDs[account.ID] = struct{}{}
-			continue
-		}
-
-		// 5. Forward request
-		writerSizeBeforeForward := c.Writer.Size()
-		forwardBody := body
-		if channelMapping.Mapped {
-			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
-		}
-		result, err := h.gatewayService.ForwardAsResponses(c.Request.Context(), c, account, forwardBody, parsedReq)
-
-		if accountReleaseFunc != nil {
-			accountReleaseFunc()
-		}
-
-		if err != nil {
-			if c.Writer.Size() == writerSizeBeforeForward {
-				h.releaseWindowCostReservation(c.Request.Context(), reqLog, windowCostReservation)
-			}
-			var failoverErr *service.UpstreamFailoverError
-			if errors.As(err, &failoverErr) {
-				// Can't failover if streaming content already sent
-				if c.Writer.Size() != writerSizeBeforeForward {
-					h.handleResponsesFailoverExhausted(c, failoverErr, true)
-					return
-				}
-				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
-				switch action {
-				case FailoverContinue:
-					continue
-				case FailoverExhausted:
-					h.handleResponsesFailoverExhausted(c, fs.LastFailoverErr, streamStarted)
-					return
-				case FailoverCanceled:
-					return
-				}
-			}
-			h.ensureForwardErrorResponse(c, streamStarted)
-			reqLog.Error("gateway.responses.forward_failed",
-				zap.Int64("account_id", account.ID),
-				zap.Error(err),
-			)
-			return
-		}
-
-		// 6. Record usage
-		userAgent := c.GetHeader("User-Agent")
-		clientIP := ip.GetClientIP(c)
-		requestPayloadHash := service.HashUsageRequestPayload(body)
-		inboundEndpoint := GetInboundEndpoint(c)
-		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
-
-		h.submitUsageRecordTask(func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-				Result:             result,
-				APIKey:             apiKey,
-				User:               apiKey.User,
-				Account:            account,
-				Subscription:       subscription,
-				InboundEndpoint:    inboundEndpoint,
-				UpstreamEndpoint:   upstreamEndpoint,
-				UserAgent:          userAgent,
-				IPAddress:          clientIP,
-				RequestPayloadHash: requestPayloadHash,
-				APIKeyService:      h.apiKeyService,
-				ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
-			}); err != nil {
-				reqLog.Error("gateway.responses.record_usage_failed",
-					zap.Int64("account_id", account.ID),
-					zap.Error(err),
-				)
-			}
-		})
-		return
-	}
+	h.runAnthropicCompatibleTextFlow(c, reqLog, anthropicCompatibleTextFlowRequest{
+		Protocol:       service.GatewayProtocolResponses,
+		LogPrefix:      "gateway.responses",
+		Body:           body,
+		RequestedModel: reqModel,
+		Stream:         reqStream,
+		APIKey:         apiKey,
+		Subscription:   subscription,
+		ChannelMapping: channelMapping,
+		StreamStarted:  &streamStarted,
+		WriteError: func(status int, codeOrType, message string) {
+			h.responsesErrorResponse(c, status, codeOrType, message)
+		},
+		HandleExhausted: func(lastErr *service.UpstreamFailoverError, exhaustedStreamStarted bool) {
+			h.handleResponsesFailoverExhausted(c, lastErr, exhaustedStreamStarted)
+		},
+	})
 }
 
 // responsesErrorResponse writes an error in OpenAI Responses API format.

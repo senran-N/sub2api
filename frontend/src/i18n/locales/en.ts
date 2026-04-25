@@ -268,6 +268,8 @@ export default {
     create: "Create",
     update: "Update",
     confirm: "Confirm",
+    moveUp: "Move Up",
+    moveDown: "Move Down",
     reset: "Reset",
     search: "Search",
     filter: "Filter",
@@ -3368,6 +3370,14 @@ export default {
           quotaLink: "Quota guide",
         },
         oauthType: {
+          googleOneTitle: "Google One",
+          googleOneDesc: "Personal account quota from Google One subscriptions.",
+          codeAssistTitle: "GCP Code Assist",
+          codeAssistDesc: "Enterprise-grade OAuth. Requires a GCP project.",
+          codeAssistRequirement:
+            "Activate a GCP project and attach billing before using Code Assist.",
+          showAdvanced: "Show advanced options (custom OAuth Client)",
+          hideAdvanced: "Hide advanced options (custom OAuth Client)",
           builtInTitle: "Built-in OAuth (Gemini CLI / Code Assist)",
           builtInDesc:
             "Uses Google built-in client ID. No admin configuration required.",
@@ -3379,7 +3389,10 @@ export default {
             "Admin must configure Client ID and add you as a test user.",
           badges: {
             recommended: "Recommended",
+            personal: "Personal users",
+            enterprise: "Enterprise users",
             highConcurrency: "High concurrency",
+            noGcp: "No GCP required",
             noAdmin: "No admin setup",
             orgManaged: "Org managed",
             adminRequired: "Admin required",

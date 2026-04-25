@@ -254,14 +254,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 
-	// 计算粘性会话hash
-	parsedReq.SessionContext = &service.SessionContext{
-		ClientIP:  ip.GetClientIP(c),
-		UserAgent: c.GetHeader("User-Agent"),
-		APIKeyID:  apiKey.ID,
-	}
-	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
-
 	// 获取平台：优先使用强制平台（/antigravity 路由，中间件已设置 request.Context），否则使用分组平台
 	platform := ""
 	if forcePlatform, ok := middleware2.GetForcePlatformFromContext(c); ok {
@@ -269,16 +261,28 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	} else if apiKey.Group != nil {
 		platform = apiKey.Group.Platform
 	}
-	sessionKey := sessionHash
-	if platform == service.PlatformGemini && sessionHash != "" {
-		sessionKey = "gemini:" + sessionHash
-	}
 
-	// 查询粘性会话绑定的账号 ID
-	var sessionBoundAccountID int64
-	if sessionKey != "" {
-		sessionBoundAccountID = h.prefetchStickySessionBinding(c, apiKey.GroupID, sessionKey)
+	sessionKeyPrefix := ""
+	if platform == service.PlatformGemini {
+		sessionKeyPrefix = "gemini:"
 	}
+	session := h.gatewayService.PrepareRuntimeSession(c.Request.Context(), service.RuntimeSessionPrepareRequest{
+		Parsed:               parsedReq,
+		Body:                 body,
+		ParseProtocol:        domain.PlatformAnthropic,
+		Model:                reqModel,
+		Stream:               reqStream,
+		ClientIP:             ip.GetClientIP(c),
+		UserAgent:            c.GetHeader("User-Agent"),
+		APIKeyID:             apiKey.ID,
+		GroupID:              apiKey.GroupID,
+		SessionKeyPrefix:     sessionKeyPrefix,
+		BridgeLegacyMetadata: h.metadataBridgeEnabled(),
+	})
+	c.Request = c.Request.WithContext(session.Context)
+	parsedReq = session.Parsed
+	sessionKey := session.SessionKey
+	sessionBoundAccountID := session.BoundAccountID
 	// 判断是否真的绑定了粘性会话：有 sessionKey 且已经绑定到某个账号
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 
@@ -293,23 +297,29 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		}
 
 		for {
-			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, "") // Gemini 不使用会话限制
+			selection, _, err := h.selectRuntimeAccount(c.Request.Context(), service.SelectionRequest{
+				Provider:    service.PlatformGemini,
+				Protocol:    service.GatewayProtocolMessages,
+				Model:       reqModel,
+				GroupID:     apiKey.GroupID,
+				SessionHash: sessionKey,
+				ExcludedIDs: fs.FailedAccountIDs,
+			})
 			if err != nil {
-				if len(fs.FailedAccountIDs) == 0 {
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
+				selectionFailure := fs.HandleSelectionError(c.Request.Context(), err)
+				switch selectionFailure.Outcome {
+				case service.RuntimeSelectionFailureInitialUnavailable:
+					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+selectionFailure.Err.Error(), streamStarted)
 					return
-				}
-				action := fs.HandleSelectionExhausted(c.Request.Context())
-				switch action {
-				case FailoverContinue:
+				case service.RuntimeSelectionFailureRetry:
 					ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
 					c.Request = c.Request.WithContext(ctx)
 					continue
-				case FailoverCanceled:
+				case service.RuntimeSelectionFailureCanceled:
 					return
 				default: // FailoverExhausted
-					if fs.LastFailoverErr != nil {
-						h.handleFailoverExhausted(c, fs.LastFailoverErr, service.PlatformGemini, streamStarted)
+					if selectionFailure.FailoverErr != nil {
+						h.handleFailoverExhausted(c, selectionFailure.FailoverErr, service.PlatformGemini, streamStarted)
 					} else {
 						h.handleFailoverExhaustedSimple(c, 502, streamStarted)
 					}
@@ -335,103 +345,70 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 
-			// 3. 获取账号并发槽位
-			accountReleaseFunc := selection.ReleaseFunc
-			if !selection.Acquired {
-				if selection.WaitPlan == nil {
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
-					return
+			slot := h.acquireRuntimeAccountSlot(c.Request.Context(), c, selection, apiKey.GroupID, sessionKey, reqStream, &streamStarted, true)
+			switch slot.Outcome {
+			case service.RuntimeAccountSlotSucceeded:
+				if slot.BindErr != nil {
+					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(slot.BindErr))
 				}
-				queueResult, err := h.concurrencyHelper.AcquireAccountSlotOrQueue(
-					c.Request.Context(),
-					account.ID,
-					selection.WaitPlan.MaxConcurrency,
-					selection.WaitPlan.MaxWaiting,
+			case service.RuntimeAccountSlotQueueFull:
+				reqLog.Info("gateway.account_wait_queue_full",
+					zap.Int64("account_id", account.ID),
+					zap.Int("max_waiting", runtimeSlotMaxWaiting(slot)),
 				)
-				if err != nil {
-					reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-					h.handleConcurrencyError(c, err, "account", streamStarted)
-					return
-				}
-				if queueResult.Acquired {
-					accountReleaseFunc = queueResult.ReleaseFunc
-				} else if !queueResult.QueueAllowed {
-					reqLog.Info("gateway.account_wait_queue_full",
-						zap.Int64("account_id", account.ID),
-						zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
-					)
-					h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
-					return
-				} else {
-					accountWaitCounted := queueResult.WaitCounted
-					releaseWait := func() {
-						if accountWaitCounted {
-							h.concurrencyHelper.DecrementAccountWaitCount(c.Request.Context(), account.ID)
-							accountWaitCounted = false
-						}
-					}
-
-					accountReleaseFunc, err = h.concurrencyHelper.AcquireAccountSlotAfterQueueingWithWaitTimeout(
-						c,
-						account.ID,
-						selection.WaitPlan.MaxConcurrency,
-						selection.WaitPlan.Timeout,
-						reqStream,
-						&streamStarted,
-					)
-					if err != nil {
-						reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-						releaseWait()
-						h.handleConcurrencyError(c, err, "account", streamStarted)
-						return
-					}
-					// Slot acquired: no longer waiting in queue.
-					releaseWait()
-				}
-				if err := h.gatewayService.BindStickySession(c.Request.Context(), apiKey.GroupID, sessionKey, account.ID); err != nil {
-					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-				}
+				h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
+				return
+			case service.RuntimeAccountSlotAcquireError, service.RuntimeAccountSlotWaitAcquireError:
+				reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(slot.Err))
+				h.handleConcurrencyError(c, slot.Err, "account", streamStarted)
+				return
+			default:
+				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
+				return
 			}
 			// 账号槽位/等待计数需要在超时或断开时安全回收
-			accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+			accountReleaseFunc := wrapReleaseOnDone(c.Request.Context(), slot.ReleaseFunc)
 			if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, apiKey.GroupID, sessionKey) {
-				if accountReleaseFunc != nil {
-					accountReleaseFunc()
-				}
-				fs.FailedAccountIDs[account.ID] = struct{}{}
+				service.CleanupRuntimeAdmissionDenied(service.RuntimeAdmissionCleanupRequest{
+					Account:          account,
+					FailedAccountIDs: fs.FailedAccountIDs,
+					AccountRelease:   accountReleaseFunc,
+				})
 				continue
 			}
 
-			// 转发请求 - 根据账号平台分流
+			// 转发请求 - 具体 provider forward 分发由 service runtime 负责
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
-			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
-			writerSizeBeforeForward := c.Writer.Size()
-			if account.Platform == service.PlatformAntigravity {
-				result, err = h.antigravityGatewayService.ForwardGemini(requestCtx, c, account, reqModel, "generateContent", reqStream, body, hasBoundSession)
-			} else {
-				result, err = h.geminiCompatService.Forward(requestCtx, c, account, body)
-			}
-			if accountReleaseFunc != nil {
-				accountReleaseFunc()
-			}
+			attempt := h.executeRuntimeForwardAttempt(requestCtx, reqLog, service.RuntimeForwardAttemptRequest{
+				Account: account,
+				Forward: func(ctx context.Context) (*service.ForwardResult, error) {
+					return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
+						Provider:        service.PlatformGemini,
+						Protocol:        service.GatewayProtocolMessages,
+						Account:         account,
+						GinContext:      c,
+						Model:           reqModel,
+						Action:          "generateContent",
+						Stream:          reqStream,
+						Body:            body,
+						HasBoundSession: hasBoundSession,
+					})
+				},
+				WriterSize:     c.Writer.Size,
+				AccountRelease: accountReleaseFunc,
+			})
+			result, err = attempt.Result, attempt.Err
 			if err != nil {
-				var failoverErr *service.UpstreamFailoverError
-				if errors.As(err, &failoverErr) {
-					// 流式内容已写入客户端，无法撤销，禁止 failover 以防止流拼接腐化
-					if c.Writer.Size() != writerSizeBeforeForward {
-						h.handleFailoverExhausted(c, failoverErr, service.PlatformGemini, true)
-						return
-					}
-					action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
-					switch action {
+				if failover := fs.HandleForwardError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, err, attempt.ResponseStarted); failover.Handled {
+					switch failover.Action {
 					case FailoverContinue:
 						continue
 					case FailoverExhausted:
-						h.handleFailoverExhausted(c, fs.LastFailoverErr, service.PlatformGemini, streamStarted)
+						h.handleFailoverExhausted(c, failover.FailoverErr, service.PlatformGemini, streamStarted || failover.ResponseStarted)
 						return
 					case FailoverCanceled:
 						return
@@ -522,23 +499,29 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 		for {
 			// 选择支持该模型的账号
-			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, parsedReq.MetadataUserID)
+			selection, _, err := h.selectRuntimeAccount(c.Request.Context(), service.SelectionRequest{
+				Provider:    platform,
+				Protocol:    service.GatewayProtocolMessages,
+				Model:       reqModel,
+				GroupID:     currentAPIKey.GroupID,
+				SessionHash: sessionKey,
+				ExcludedIDs: fs.FailedAccountIDs,
+			})
 			if err != nil {
-				if len(fs.FailedAccountIDs) == 0 {
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
+				selectionFailure := fs.HandleSelectionError(c.Request.Context(), err)
+				switch selectionFailure.Outcome {
+				case service.RuntimeSelectionFailureInitialUnavailable:
+					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+selectionFailure.Err.Error(), streamStarted)
 					return
-				}
-				action := fs.HandleSelectionExhausted(c.Request.Context())
-				switch action {
-				case FailoverContinue:
+				case service.RuntimeSelectionFailureRetry:
 					ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
 					c.Request = c.Request.WithContext(ctx)
 					continue
-				case FailoverCanceled:
+				case service.RuntimeSelectionFailureCanceled:
 					return
 				default: // FailoverExhausted
-					if fs.LastFailoverErr != nil {
-						h.handleFailoverExhausted(c, fs.LastFailoverErr, platform, streamStarted)
+					if selectionFailure.FailoverErr != nil {
+						h.handleFailoverExhausted(c, selectionFailure.FailoverErr, platform, streamStarted)
 					} else {
 						h.handleFailoverExhaustedSimple(c, 502, streamStarted)
 					}
@@ -564,65 +547,29 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 
-			// 3. 获取账号并发槽位
-			accountReleaseFunc := selection.ReleaseFunc
-			if !selection.Acquired {
-				if selection.WaitPlan == nil {
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
-					return
+			slot := h.acquireRuntimeAccountSlot(c.Request.Context(), c, selection, currentAPIKey.GroupID, sessionKey, reqStream, &streamStarted, true)
+			switch slot.Outcome {
+			case service.RuntimeAccountSlotSucceeded:
+				if slot.BindErr != nil {
+					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(slot.BindErr))
 				}
-				queueResult, err := h.concurrencyHelper.AcquireAccountSlotOrQueue(
-					c.Request.Context(),
-					account.ID,
-					selection.WaitPlan.MaxConcurrency,
-					selection.WaitPlan.MaxWaiting,
+			case service.RuntimeAccountSlotQueueFull:
+				reqLog.Info("gateway.account_wait_queue_full",
+					zap.Int64("account_id", account.ID),
+					zap.Int("max_waiting", runtimeSlotMaxWaiting(slot)),
 				)
-				if err != nil {
-					reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-					h.handleConcurrencyError(c, err, "account", streamStarted)
-					return
-				}
-				if queueResult.Acquired {
-					accountReleaseFunc = queueResult.ReleaseFunc
-				} else if !queueResult.QueueAllowed {
-					reqLog.Info("gateway.account_wait_queue_full",
-						zap.Int64("account_id", account.ID),
-						zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
-					)
-					h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
-					return
-				} else {
-					accountWaitCounted := queueResult.WaitCounted
-					releaseWait := func() {
-						if accountWaitCounted {
-							h.concurrencyHelper.DecrementAccountWaitCount(c.Request.Context(), account.ID)
-							accountWaitCounted = false
-						}
-					}
-
-					accountReleaseFunc, err = h.concurrencyHelper.AcquireAccountSlotAfterQueueingWithWaitTimeout(
-						c,
-						account.ID,
-						selection.WaitPlan.MaxConcurrency,
-						selection.WaitPlan.Timeout,
-						reqStream,
-						&streamStarted,
-					)
-					if err != nil {
-						reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-						releaseWait()
-						h.handleConcurrencyError(c, err, "account", streamStarted)
-						return
-					}
-					// Slot acquired: no longer waiting in queue.
-					releaseWait()
-				}
-				if err := h.gatewayService.BindStickySession(c.Request.Context(), currentAPIKey.GroupID, sessionKey, account.ID); err != nil {
-					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-				}
+				h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
+				return
+			case service.RuntimeAccountSlotAcquireError, service.RuntimeAccountSlotWaitAcquireError:
+				reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(slot.Err))
+				h.handleConcurrencyError(c, slot.Err, "account", streamStarted)
+				return
+			default:
+				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
+				return
 			}
 			// 账号槽位/等待计数需要在超时或断开时安全回收
-			accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+			accountReleaseFunc := wrapReleaseOnDone(c.Request.Context(), slot.ReleaseFunc)
 
 			// ===== 用户消息串行队列 START =====
 			var queueRelease func()
@@ -682,14 +629,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				body = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
 			}
 			if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, currentAPIKey.GroupID, sessionKey) {
-				if queueRelease != nil {
-					queueRelease()
-				}
-				parsedReq.OnUpstreamAccepted = nil
-				if accountReleaseFunc != nil {
-					accountReleaseFunc()
-				}
-				fs.FailedAccountIDs[account.ID] = struct{}{}
+				service.CleanupRuntimeAdmissionDenied(service.RuntimeAdmissionCleanupRequest{
+					Account:               account,
+					FailedAccountIDs:      fs.FailedAccountIDs,
+					AccountRelease:        accountReleaseFunc,
+					QueueRelease:          queueRelease,
+					ClearUpstreamAccepted: func() { parsedReq.OnUpstreamAccepted = nil },
+				})
 				continue
 			}
 			windowCostReservation, windowCostAllowed := h.tryReserveAccountWindowCostForForward(
@@ -704,45 +650,43 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				sessionKey,
 			)
 			if !windowCostAllowed {
-				if queueRelease != nil {
-					queueRelease()
-				}
-				parsedReq.OnUpstreamAccepted = nil
-				if accountReleaseFunc != nil {
-					accountReleaseFunc()
-				}
-				fs.FailedAccountIDs[account.ID] = struct{}{}
+				service.CleanupRuntimeAdmissionDenied(service.RuntimeAdmissionCleanupRequest{
+					Account:               account,
+					FailedAccountIDs:      fs.FailedAccountIDs,
+					AccountRelease:        accountReleaseFunc,
+					QueueRelease:          queueRelease,
+					ClearUpstreamAccepted: func() { parsedReq.OnUpstreamAccepted = nil },
+				})
 				continue
 			}
 
-			// 转发请求 - 根据账号平台分流
+			// 转发请求 - 具体 provider forward 分发由 service runtime 负责
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
-			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
-			writerSizeBeforeForward := c.Writer.Size()
-			if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
-				result, err = h.antigravityGatewayService.Forward(requestCtx, c, account, body, hasBoundSession)
-			} else {
-				result, err = h.gatewayService.Forward(requestCtx, c, account, parsedReq)
-			}
-
-			// 兜底释放串行锁（正常情况已通过回调提前释放）
-			if queueRelease != nil {
-				queueRelease()
-			}
-			// 清理回调引用，防止 failover 重试时旧回调被错误调用
-			parsedReq.OnUpstreamAccepted = nil
-
-			if accountReleaseFunc != nil {
-				accountReleaseFunc()
-			}
+			attempt := h.executeRuntimeForwardAttempt(requestCtx, reqLog, service.RuntimeForwardAttemptRequest{
+				Account: account,
+				Forward: func(ctx context.Context) (*service.ForwardResult, error) {
+					return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
+						Provider:        platform,
+						Protocol:        service.GatewayProtocolMessages,
+						Account:         account,
+						GinContext:      c,
+						Body:            body,
+						Parsed:          parsedReq,
+						HasBoundSession: hasBoundSession,
+					})
+				},
+				WriterSize:            c.Writer.Size,
+				AccountRelease:        accountReleaseFunc,
+				QueueRelease:          queueRelease,
+				ClearUpstreamAccepted: func() { parsedReq.OnUpstreamAccepted = nil },
+				WindowCostReservation: windowCostReservation,
+			})
+			result, err = attempt.Result, attempt.Err
 			if err != nil {
-				if c.Writer.Size() == writerSizeBeforeForward {
-					h.releaseWindowCostReservation(c.Request.Context(), reqLog, windowCostReservation)
-				}
 				// Beta policy block: return 400 immediately, no failover
 				var betaBlockedErr *service.BetaBlockedError
 				if errors.As(err, &betaBlockedErr) {
@@ -805,19 +749,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					}
 					return
 				}
-				var failoverErr *service.UpstreamFailoverError
-				if errors.As(err, &failoverErr) {
-					// 流式内容已写入客户端，无法撤销，禁止 failover 以防止流拼接腐化
-					if c.Writer.Size() != writerSizeBeforeForward {
-						h.handleFailoverExhausted(c, failoverErr, account.Platform, true)
-						return
-					}
-					action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
-					switch action {
+				if failover := fs.HandleForwardError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, err, attempt.ResponseStarted); failover.Handled {
+					switch failover.Action {
 					case FailoverContinue:
 						continue
 					case FailoverExhausted:
-						h.handleFailoverExhausted(c, fs.LastFailoverErr, account.Platform, streamStarted)
+						h.handleFailoverExhausted(c, failover.FailoverErr, account.Platform, streamStarted || failover.ResponseStarted)
 						return
 					case FailoverCanceled:
 						return
@@ -1500,33 +1437,46 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		return
 	}
 
-	// 计算粘性会话 hash
-	parsedReq.SessionContext = &service.SessionContext{
-		ClientIP:  ip.GetClientIP(c),
-		UserAgent: c.GetHeader("User-Agent"),
-		APIKeyID:  apiKey.ID,
-	}
-	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
-	sessionBoundAccountID := h.prefetchStickySessionBinding(c, apiKey.GroupID, sessionHash)
+	session := h.gatewayService.PrepareRuntimeSession(c.Request.Context(), service.RuntimeSessionPrepareRequest{
+		Parsed:               parsedReq,
+		Body:                 body,
+		ParseProtocol:        domain.PlatformAnthropic,
+		Model:                parsedReq.Model,
+		Stream:               parsedReq.Stream,
+		ClientIP:             ip.GetClientIP(c),
+		UserAgent:            c.GetHeader("User-Agent"),
+		APIKeyID:             apiKey.ID,
+		GroupID:              apiKey.GroupID,
+		BridgeLegacyMetadata: h.metadataBridgeEnabled(),
+	})
+	c.Request = c.Request.WithContext(session.Context)
+	parsedReq = session.Parsed
+	sessionHash := session.SessionHash
+	sessionBoundAccountID := session.BoundAccountID
 
-	excludedIDs := make(map[int64]struct{})
-	var account *service.Account
-	for {
-		account, err = h.gatewayService.SelectAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, sessionHash, parsedReq.Model, excludedIDs)
-		if err != nil {
-			reqLog.Warn("gateway.count_tokens_select_account_failed", zap.Error(err))
-			h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable")
-			return
-		}
-		setOpsSelectedAccount(c, account.ID, account.Platform)
-		if h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, apiKey.GroupID, sessionHash) {
-			break
-		}
-		excludedIDs[account.ID] = struct{}{}
+	selection := h.gatewayService.SelectRuntimeCountTokensAccount(c.Request.Context(), service.RuntimeCountTokensSelectionRequest{
+		GroupID:              apiKey.GroupID,
+		SessionHash:          sessionHash,
+		Model:                parsedReq.Model,
+		StickyBoundAccountID: sessionBoundAccountID,
+	})
+	for _, event := range selection.AdmissionEvents {
+		logRuntimeRPMAdmissionResult(reqLog, event.Account, event.Admission)
 	}
+	if selection.Err != nil {
+		reqLog.Warn("gateway.count_tokens_select_account_failed", zap.Error(selection.Err))
+		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable")
+		return
+	}
+	account := selection.Account
+	setOpsSelectedAccount(c, account.ID, account.Platform)
 
 	// 转发请求（不记录使用量）
-	if err := h.gatewayService.ForwardCountTokens(c.Request.Context(), c, account, parsedReq); err != nil {
+	if err := h.nativeGatewayRuntime().ForwardCountTokens(c.Request.Context(), service.NativeGatewayCountTokensForwardRequest{
+		Account:    account,
+		GinContext: c,
+		Parsed:     parsedReq,
+	}); err != nil {
 		reqLog.Error("gateway.count_tokens_forward_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		// 错误响应已在 ForwardCountTokens 中处理
 		return

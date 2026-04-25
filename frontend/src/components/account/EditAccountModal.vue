@@ -34,1173 +34,128 @@
 
       <GrokRuntimeSummary :account="account" />
 
-      <!-- Compatible API credentials (API Key / Upstream) -->
-      <div v-if="showCompatibleCredentialsForm" class="space-y-4">
-        <div>
-          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <label class="input-label mb-0">{{
-              t("admin.accounts.baseUrl")
-            }}</label>
-            <div
-              v-if="compatibleBaseUrlPresets.length > 0"
-              class="flex flex-wrap gap-2"
-            >
-              <button
-                v-for="preset in compatibleBaseUrlPresets"
-                :key="preset.value"
-                type="button"
-                :class="getPresetMappingChipClasses('success')"
-                @click="editBaseUrl = preset.value"
-              >
-                {{ preset.label }}
-              </button>
-            </div>
-          </div>
-          <input
-            v-model="editBaseUrl"
-            type="text"
-            class="input"
-            :placeholder="baseUrlPlaceholder"
-          />
-          <p class="input-hint">{{ baseUrlHint }}</p>
-        </div>
-        <div>
-          <label class="input-label">{{ t("admin.accounts.apiKey") }}</label>
-          <input
-            v-model="editApiKey"
-            type="password"
-            class="input font-mono"
-            autocomplete="new-password"
-            data-1p-ignore
-            data-lpignore="true"
-            data-bwignore="true"
-            :placeholder="apiKeyPlaceholder"
-          />
-          <p class="input-hint">{{ t("admin.accounts.leaveEmptyToKeep") }}</p>
-        </div>
+      <CompatibleCredentialsSection
+        v-if="showCompatibleCredentialsForm"
+        v-model:base-url="editBaseUrl"
+        v-model:api-key-value="editApiKey"
+        v-model:model-restriction-mode="modelRestrictionMode"
+        v-model:allowed-models="allowedModels"
+        v-model:pool-mode-enabled="poolModeEnabled"
+        v-model:pool-mode-retry-count="poolModeRetryCount"
+        v-model:custom-error-codes-enabled="customErrorCodesEnabled"
+        v-model:custom-error-code-input="customErrorCodeInput"
+        :platform="account.platform"
+        :base-url-presets="compatibleBaseUrlPresets"
+        :base-url-placeholder="baseUrlPlaceholder"
+        :base-url-hint="baseUrlHint"
+        :api-key-label="t('admin.accounts.apiKey')"
+        :api-key-placeholder="apiKeyPlaceholder"
+        :api-key-hint="t('admin.accounts.leaveEmptyToKeep')"
+        api-key-autocomplete="new-password"
+        :ignore-password-managers="true"
+        :show-gemini-api-key-tier="false"
+        :show-model-restriction="account.platform !== 'antigravity'"
+        :mappings="modelMappings"
+        :preset-mappings="presetMappings"
+        :mapping-key="getModelMappingKey"
+        :model-restriction-disabled="isOpenAIModelRestrictionDisabled"
+        :selected-error-codes="selectedErrorCodes"
+        @add-mapping="addModelMapping"
+        @remove-mapping="removeModelMapping"
+        @add-preset="addPresetMapping"
+        @update-mapping="updateModelMapping"
+        @toggle-code="toggleErrorCode"
+        @add-code="addCustomErrorCode"
+        @remove-code="removeErrorCode"
+      />
 
-        <!-- Model Restriction Section (不适用于 Antigravity) -->
-        <div v-if="account.platform !== 'antigravity'" class="form-section">
-          <label class="input-label">{{
-            t("admin.accounts.modelRestriction")
-          }}</label>
-
-          <div
-            v-if="isOpenAIModelRestrictionDisabled"
-            :class="['mb-3', getToneNoticeClasses('amber')]"
-          >
-            <p class="text-xs">
-              {{
-                t("admin.accounts.openai.modelRestrictionDisabledByPassthrough")
-              }}
-            </p>
-          </div>
-
-          <template v-else>
-            <!-- Mode Toggle -->
-            <div class="mb-4 flex gap-2">
-              <button
-                type="button"
-                @click="modelRestrictionMode = 'whitelist'"
-                :class="
-                  getModeToggleClasses(
-                    modelRestrictionMode === 'whitelist',
-                    'accent',
-                  )
-                "
-              >
-                <svg
-                  class="mr-1.5 inline h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                {{ t("admin.accounts.modelWhitelist") }}
-              </button>
-              <button
-                type="button"
-                @click="modelRestrictionMode = 'mapping'"
-                :class="
-                  getModeToggleClasses(
-                    modelRestrictionMode === 'mapping',
-                    'purple',
-                  )
-                "
-              >
-                <svg
-                  class="mr-1.5 inline h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                  />
-                </svg>
-                {{ t("admin.accounts.modelMapping") }}
-              </button>
-            </div>
-
-            <!-- Whitelist Mode -->
-            <div v-if="modelRestrictionMode === 'whitelist'">
-              <ModelWhitelistSelector
-                v-model="allowedModels"
-                :platform="account?.platform || 'anthropic'"
-              />
-              <p class="edit-account-modal__muted text-xs">
-                {{
-                  t("admin.accounts.selectedModels", {
-                    count: allowedModels.length,
-                  })
-                }}
-                <span v-if="allowedModels.length === 0">{{
-                  t("admin.accounts.supportsAllModels")
-                }}</span>
-              </p>
-            </div>
-
-            <!-- Mapping Mode -->
-            <div v-else>
-              <div :class="['mb-3', getToneNoticeClasses('purple')]">
-                <p class="text-xs">
-                  <svg
-                    class="mr-1 inline h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {{ t("admin.accounts.mapRequestModels") }}
-                </p>
-              </div>
-
-              <!-- Model Mapping List -->
-              <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
-                <div
-                  v-for="(mapping, index) in modelMappings"
-                  :key="getModelMappingKey(mapping)"
-                  class="flex items-center gap-2"
-                >
-                  <input
-                    v-model="mapping.from"
-                    type="text"
-                    class="input flex-1"
-                    :placeholder="t('admin.accounts.requestModel')"
-                  />
-                  <svg
-                    class="edit-account-modal__muted h-4 w-4 flex-shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M14 5l7 7m0 0l-7 7m7-7H3"
-                    />
-                  </svg>
-                  <input
-                    v-model="mapping.to"
-                    type="text"
-                    class="input flex-1"
-                    :placeholder="t('admin.accounts.actualModel')"
-                  />
-                  <button
-                    type="button"
-                    @click="removeModelMapping(index)"
-                    :class="getStatusChipClasses(true, 'danger')"
-                  >
-                    <svg
-                      class="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                @click="addModelMapping"
-                class="btn btn-secondary mb-3 w-full border-2 border-dashed"
-              >
-                <svg
-                  class="mr-1 inline h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                {{ t("admin.accounts.addMapping") }}
-              </button>
-
-              <!-- Quick Add Buttons -->
-              <div class="flex flex-wrap gap-2">
-                <button
-                  v-for="preset in presetMappings"
-                  :key="preset.label"
-                  type="button"
-                  @click="addPresetMapping(preset.from, preset.to)"
-                  :class="getPresetMappingChipClasses(preset.tone)"
-                >
-                  + {{ preset.label }}
-                </button>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- Pool Mode Section -->
-        <div class="form-section">
-          <div class="mb-3 flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.poolMode")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.poolModeHint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="poolModeEnabled = !poolModeEnabled"
-              :class="getSwitchTrackClasses(poolModeEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(poolModeEnabled)" />
-            </button>
-          </div>
-          <div v-if="poolModeEnabled" :class="getToneNoticeClasses('blue')">
-            <p class="text-xs">
-              <Icon
-                name="exclamationCircle"
-                size="sm"
-                class="mr-1 inline"
-                :stroke-width="2"
-              />
-              {{ t("admin.accounts.poolModeInfo") }}
-            </p>
-          </div>
-          <div v-if="poolModeEnabled" class="mt-3">
-            <label class="input-label">{{
-              t("admin.accounts.poolModeRetryCount")
-            }}</label>
-            <input
-              v-model.number="poolModeRetryCount"
-              type="number"
-              min="0"
-              :max="MAX_POOL_MODE_RETRY_COUNT"
-              step="1"
-              class="input"
-            />
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{
-                t("admin.accounts.poolModeRetryCountHint", {
-                  default: DEFAULT_POOL_MODE_RETRY_COUNT,
-                  max: MAX_POOL_MODE_RETRY_COUNT,
-                })
-              }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Custom Error Codes Section -->
-        <div class="form-section">
-          <div class="mb-3 flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.customErrorCodes")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.customErrorCodesHint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="customErrorCodesEnabled = !customErrorCodesEnabled"
-              :class="getSwitchTrackClasses(customErrorCodesEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(customErrorCodesEnabled)" />
-            </button>
-          </div>
-
-          <div v-if="customErrorCodesEnabled" class="space-y-3">
-            <div :class="getToneNoticeClasses('amber')">
-              <p class="text-xs">
-                <Icon
-                  name="exclamationTriangle"
-                  size="sm"
-                  class="mr-1 inline"
-                  :stroke-width="2"
-                />
-                {{ t("admin.accounts.customErrorCodesWarning") }}
-              </p>
-            </div>
-
-            <!-- Error Code Buttons -->
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="code in commonErrorCodes"
-                :key="code.value"
-                type="button"
-                @click="toggleErrorCode(code.value)"
-                :class="
-                  getStatusChipClasses(
-                    selectedErrorCodes.includes(code.value),
-                    'danger',
-                  )
-                "
-              >
-                {{ code.value }} {{ code.label }}
-              </button>
-            </div>
-
-            <!-- Manual input -->
-            <div class="flex items-center gap-2">
-              <input
-                v-model.number="customErrorCodeInput"
-                type="number"
-                min="100"
-                max="599"
-                class="input flex-1"
-                :placeholder="t('admin.accounts.enterErrorCode')"
-                @keyup.enter="addCustomErrorCode"
-              />
-              <button
-                type="button"
-                @click="addCustomErrorCode"
-                class="edit-account-modal__compact-action btn btn-secondary"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Selected codes summary -->
-            <div class="flex flex-wrap gap-1.5">
-              <span
-                v-for="code in selectedErrorCodes.sort((a, b) => a - b)"
-                :key="code"
-                :class="[
-                  'edit-account-modal__summary-chip inline-flex items-center gap-1',
-                  getStatusChipClasses(true, 'danger'),
-                ]"
-              >
-                {{ code }}
-                <button
-                  type="button"
-                  @click="removeErrorCode(code)"
-                  class="edit-account-modal__choice-text"
-                >
-                  <Icon name="x" size="sm" :stroke-width="2" />
-                </button>
-              </span>
-              <span
-                v-if="selectedErrorCodes.length === 0"
-                class="edit-account-modal__muted text-xs"
-              >
-                {{ t("admin.accounts.noneSelectedUsesDefault") }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- OpenAI OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
-      <div
+      <ModelRestrictionSection
         v-if="account.platform === 'openai' && account.type === 'oauth'"
-        class="form-section"
-      >
-        <label class="input-label">{{
-          t("admin.accounts.modelRestriction")
-        }}</label>
+        v-model:mode="modelRestrictionMode"
+        v-model:allowed-models="allowedModels"
+        platform="openai"
+        :mappings="modelMappings"
+        :preset-mappings="presetMappings"
+        :mapping-key="getModelMappingKey"
+        :disabled="isOpenAIModelRestrictionDisabled"
+        @add-mapping="addModelMapping"
+        @remove-mapping="removeModelMapping"
+        @add-preset="addPresetMapping"
+        @update-mapping="updateModelMapping"
+      />
 
-        <div
-          v-if="isOpenAIModelRestrictionDisabled"
-          :class="['mb-3', getToneNoticeClasses('amber')]"
-        >
-          <p class="text-xs">
-            {{
-              t("admin.accounts.openai.modelRestrictionDisabledByPassthrough")
-            }}
-          </p>
-        </div>
+      <EditGrokSessionCredentialsSection
+        v-if="account.type === 'session'"
+        v-model:session-token="editSessionToken"
+      />
 
-        <template v-else>
-          <!-- Mode Toggle -->
-          <div class="mb-4 flex gap-2">
-            <button
-              type="button"
-              @click="modelRestrictionMode = 'whitelist'"
-              :class="
-                getModeToggleClasses(
-                  modelRestrictionMode === 'whitelist',
-                  'accent',
-                )
-              "
-            >
-              {{ t("admin.accounts.modelWhitelist") }}
-            </button>
-            <button
-              type="button"
-              @click="modelRestrictionMode = 'mapping'"
-              :class="
-                getModeToggleClasses(
-                  modelRestrictionMode === 'mapping',
-                  'purple',
-                )
-              "
-            >
-              {{ t("admin.accounts.modelMapping") }}
-            </button>
-          </div>
-
-          <!-- Whitelist Mode -->
-          <div v-if="modelRestrictionMode === 'whitelist'">
-            <ModelWhitelistSelector
-              v-model="allowedModels"
-              :platform="account?.platform || 'anthropic'"
-            />
-            <p class="edit-account-modal__muted text-xs">
-              {{
-                t("admin.accounts.selectedModels", {
-                  count: allowedModels.length,
-                })
-              }}
-              <span v-if="allowedModels.length === 0">{{
-                t("admin.accounts.supportsAllModels")
-              }}</span>
-            </p>
-          </div>
-
-          <!-- Mapping Mode -->
-          <div v-else>
-            <div :class="['mb-3', getToneNoticeClasses('purple')]">
-              <p class="text-xs">
-                {{ t("admin.accounts.mapRequestModels") }}
-              </p>
-            </div>
-
-            <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
-              <div
-                v-for="(mapping, index) in modelMappings"
-                :key="'oauth-' + getModelMappingKey(mapping)"
-                class="flex items-center gap-2"
-              >
-                <input
-                  v-model="mapping.from"
-                  type="text"
-                  class="input flex-1"
-                  :placeholder="t('admin.accounts.requestModel')"
-                />
-                <svg
-                  class="edit-account-modal__muted h-4 w-4 flex-shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                  />
-                </svg>
-                <input
-                  v-model="mapping.to"
-                  type="text"
-                  class="input flex-1"
-                  :placeholder="t('admin.accounts.actualModel')"
-                />
-                <button
-                  type="button"
-                  @click="removeModelMapping(index)"
-                  :class="getStatusChipClasses(true, 'danger')"
-                >
-                  <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              @click="addModelMapping"
-              class="btn btn-secondary mb-3 w-full border-2 border-dashed"
-            >
-              + {{ t("admin.accounts.addMapping") }}
-            </button>
-
-            <!-- Quick Add Buttons -->
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="preset in presetMappings"
-                :key="'oauth-' + preset.label"
-                type="button"
-                @click="addPresetMapping(preset.from, preset.to)"
-                :class="getPresetMappingChipClasses(preset.tone)"
-              >
-                + {{ preset.label }}
-              </button>
-            </div>
-          </div>
-        </template>
-      </div>
-
-      <!-- Grok session credentials -->
-      <div v-if="account.type === 'session'" class="space-y-4">
-        <div>
-          <label class="input-label">{{
-            t("admin.accounts.grok.sessionToken")
-          }}</label>
-          <input
-            v-model="editSessionToken"
-            type="password"
-            class="input font-mono"
-            :placeholder="t('admin.accounts.grok.sessionTokenPlaceholder')"
-          />
-          <p class="input-hint">{{ t("admin.accounts.leaveEmptyToKeep") }}</p>
-        </div>
-      </div>
-
-      <!-- Bedrock fields (for bedrock type, both SigV4 and API Key modes) -->
       <div v-if="account.type === 'bedrock'" class="space-y-4">
-        <!-- SigV4 fields -->
-        <template v-if="!isBedrockAPIKeyMode">
-          <div>
-            <label class="input-label">{{
-              t("admin.accounts.bedrockAccessKeyId")
-            }}</label>
-            <input
-              v-model="editBedrockAccessKeyId"
-              type="text"
-              class="input font-mono"
-              placeholder="AKIA..."
-            />
-          </div>
-          <div>
-            <label class="input-label">{{
-              t("admin.accounts.bedrockSecretAccessKey")
-            }}</label>
-            <input
-              v-model="editBedrockSecretAccessKey"
-              type="password"
-              class="input font-mono"
-              :placeholder="t('admin.accounts.bedrockSecretKeyLeaveEmpty')"
-            />
-            <p class="input-hint">
-              {{ t("admin.accounts.bedrockSecretKeyLeaveEmpty") }}
-            </p>
-          </div>
-          <div>
-            <label class="input-label">{{
-              t("admin.accounts.bedrockSessionToken")
-            }}</label>
-            <input
-              v-model="editBedrockSessionToken"
-              type="password"
-              class="input font-mono"
-              :placeholder="t('admin.accounts.bedrockSecretKeyLeaveEmpty')"
-            />
-            <p class="input-hint">
-              {{ t("admin.accounts.bedrockSessionTokenHint") }}
-            </p>
-          </div>
-        </template>
+        <BedrockCredentialsSection
+          :auth-mode="editBedrockAuthMode"
+          v-model:access-key-id="editBedrockAccessKeyId"
+          v-model:secret-access-key="editBedrockSecretAccessKey"
+          v-model:session-token="editBedrockSessionToken"
+          v-model:api-key-value="editBedrockApiKeyValue"
+          v-model:region="editBedrockRegion"
+          v-model:force-global="editBedrockForceGlobal"
+          :allow-auth-mode-change="false"
+          :credentials-required="false"
+          region-control="input"
+          secret-access-key-placeholder-key="admin.accounts.bedrockSecretKeyLeaveEmpty"
+          secret-access-key-hint-key="admin.accounts.bedrockSecretKeyLeaveEmpty"
+          session-token-placeholder-key="admin.accounts.bedrockSecretKeyLeaveEmpty"
+          api-key-placeholder-key="admin.accounts.bedrockApiKeyLeaveEmpty"
+          api-key-hint-key="admin.accounts.bedrockApiKeyLeaveEmpty"
+        />
 
-        <!-- API Key field -->
-        <div v-if="isBedrockAPIKeyMode">
-          <label class="input-label">{{
-            t("admin.accounts.bedrockApiKeyInput")
-          }}</label>
-          <input
-            v-model="editBedrockApiKeyValue"
-            type="password"
-            class="input font-mono"
-            :placeholder="t('admin.accounts.bedrockApiKeyLeaveEmpty')"
-          />
-          <p class="input-hint">
-            {{ t("admin.accounts.bedrockApiKeyLeaveEmpty") }}
-          </p>
-        </div>
+        <ModelRestrictionSection
+          v-model:mode="modelRestrictionMode"
+          v-model:allowed-models="allowedModels"
+          platform="anthropic"
+          :mappings="modelMappings"
+          :preset-mappings="bedrockPresets"
+          :mapping-key="getModelMappingKey"
+          from-placeholder-key="admin.accounts.fromModel"
+          to-placeholder-key="admin.accounts.toModel"
+          :show-mapping-notice="false"
+          @add-mapping="addModelMapping"
+          @remove-mapping="removeModelMapping"
+          @add-preset="addPresetMapping"
+          @update-mapping="updateModelMapping"
+        />
 
-        <!-- Shared: Region -->
-        <div>
-          <label class="input-label">{{
-            t("admin.accounts.bedrockRegion")
-          }}</label>
-          <input
-            v-model="editBedrockRegion"
-            type="text"
-            class="input"
-            placeholder="us-east-1"
-          />
-          <p class="input-hint">{{ t("admin.accounts.bedrockRegionHint") }}</p>
-        </div>
-
-        <!-- Shared: Force Global -->
-        <div>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              v-model="editBedrockForceGlobal"
-              type="checkbox"
-              class="edit-account-modal__checkbox rounded"
-            />
-            <span class="edit-account-modal__choice-text text-sm">{{
-              t("admin.accounts.bedrockForceGlobal")
-            }}</span>
-          </label>
-          <p class="input-hint mt-1">
-            {{ t("admin.accounts.bedrockForceGlobalHint") }}
-          </p>
-        </div>
-
-        <!-- Model Restriction for Bedrock -->
-        <div class="form-section">
-          <label class="input-label">{{
-            t("admin.accounts.modelRestriction")
-          }}</label>
-
-          <!-- Mode Toggle -->
-          <div class="mb-4 flex gap-2">
-            <button
-              type="button"
-              @click="modelRestrictionMode = 'whitelist'"
-              :class="
-                getModeToggleClasses(
-                  modelRestrictionMode === 'whitelist',
-                  'accent',
-                )
-              "
-            >
-              {{ t("admin.accounts.modelWhitelist") }}
-            </button>
-            <button
-              type="button"
-              @click="modelRestrictionMode = 'mapping'"
-              :class="
-                getModeToggleClasses(
-                  modelRestrictionMode === 'mapping',
-                  'purple',
-                )
-              "
-            >
-              {{ t("admin.accounts.modelMapping") }}
-            </button>
-          </div>
-
-          <!-- Whitelist Mode -->
-          <div v-if="modelRestrictionMode === 'whitelist'">
-            <ModelWhitelistSelector
-              v-model="allowedModels"
-              platform="anthropic"
-            />
-            <p class="edit-account-modal__muted text-xs">
-              {{
-                t("admin.accounts.selectedModels", {
-                  count: allowedModels.length,
-                })
-              }}
-              <span v-if="allowedModels.length === 0">{{
-                t("admin.accounts.supportsAllModels")
-              }}</span>
-            </p>
-          </div>
-
-          <!-- Mapping Mode -->
-          <div v-else class="space-y-3">
-            <div
-              v-for="(mapping, index) in modelMappings"
-              :key="getModelMappingKey(mapping)"
-              class="flex items-center gap-2"
-            >
-              <input
-                v-model="mapping.from"
-                type="text"
-                class="input flex-1"
-                :placeholder="t('admin.accounts.fromModel')"
-              />
-              <span class="edit-account-modal__muted">→</span>
-              <input
-                v-model="mapping.to"
-                type="text"
-                class="input flex-1"
-                :placeholder="t('admin.accounts.toModel')"
-              />
-              <button
-                type="button"
-                @click="modelMappings.splice(index, 1)"
-                :class="getStatusChipClasses(true, 'danger')"
-              >
-                <Icon name="trash" size="sm" />
-              </button>
-            </div>
-            <button
-              type="button"
-              @click="modelMappings.push({ from: '', to: '' })"
-              class="btn btn-secondary text-sm"
-            >
-              + {{ t("admin.accounts.addMapping") }}
-            </button>
-            <!-- Bedrock Preset Mappings -->
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="preset in bedrockPresets"
-                :key="preset.from"
-                type="button"
-                @click="
-                  modelMappings.push({ from: preset.from, to: preset.to })
-                "
-                :class="getPresetMappingChipClasses(preset.tone)"
-              >
-                + {{ preset.label }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Pool Mode Section for Bedrock -->
-        <div class="form-section">
-          <div class="mb-3 flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.poolMode")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.poolModeHint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="poolModeEnabled = !poolModeEnabled"
-              :class="getSwitchTrackClasses(poolModeEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(poolModeEnabled)" />
-            </button>
-          </div>
-          <div v-if="poolModeEnabled" :class="getToneNoticeClasses('blue')">
-            <p class="text-xs">
-              <Icon
-                name="exclamationCircle"
-                size="sm"
-                class="mr-1 inline"
-                :stroke-width="2"
-              />
-              {{ t("admin.accounts.poolModeInfo") }}
-            </p>
-          </div>
-          <div v-if="poolModeEnabled" class="mt-3">
-            <label class="input-label">{{
-              t("admin.accounts.poolModeRetryCount")
-            }}</label>
-            <input
-              v-model.number="poolModeRetryCount"
-              type="number"
-              min="0"
-              :max="MAX_POOL_MODE_RETRY_COUNT"
-              step="1"
-              class="input"
-            />
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{
-                t("admin.accounts.poolModeRetryCountHint", {
-                  default: DEFAULT_POOL_MODE_RETRY_COUNT,
-                  max: MAX_POOL_MODE_RETRY_COUNT,
-                })
-              }}
-            </p>
-          </div>
-        </div>
+        <PoolModeSection
+          v-model:enabled="poolModeEnabled"
+          v-model:retry-count="poolModeRetryCount"
+        />
       </div>
 
-      <!-- Antigravity model restriction (applies to all antigravity types) -->
-      <!-- Antigravity 只支持模型映射模式，不支持白名单模式 -->
-      <div v-if="account.platform === 'antigravity'" class="form-section">
-        <label class="input-label">{{
-          t("admin.accounts.modelRestriction")
-        }}</label>
+      <AntigravityModelMappingSection
+        v-if="account.platform === 'antigravity'"
+        :mappings="antigravityModelMappings"
+        :preset-mappings="antigravityPresetMappings"
+        :mapping-key="getAntigravityModelMappingKey"
+        @add="addAntigravityModelMapping"
+        @remove="removeAntigravityModelMapping"
+        @add-preset="addAntigravityPresetMapping"
+        @update-mapping="updateAntigravityModelMapping"
+      />
 
-        <!-- Mapping Mode Only (no toggle for Antigravity) -->
-        <div>
-          <div :class="['mb-3', getToneNoticeClasses('purple')]">
-            <p class="text-xs">{{ t("admin.accounts.mapRequestModels") }}</p>
-          </div>
+      <TempUnschedRulesSection
+        v-model:enabled="tempUnschedEnabled"
+        :presets="tempUnschedPresets"
+        :rules="tempUnschedRules"
+        :rule-key="getTempUnschedRuleKey"
+        @add-rule="addTempUnschedRule"
+        @remove-rule="removeTempUnschedRule"
+        @move-rule="moveTempUnschedRule"
+        @update-rule="updateTempUnschedRule"
+      />
 
-          <div
-            v-if="antigravityModelMappings.length > 0"
-            class="mb-3 space-y-2"
-          >
-            <div
-              v-for="(mapping, index) in antigravityModelMappings"
-              :key="getAntigravityModelMappingKey(mapping)"
-              class="space-y-1"
-            >
-              <div class="flex items-center gap-2">
-                <input
-                  v-model="mapping.from"
-                  type="text"
-                  :class="[
-                    'input flex-1',
-                    !isValidWildcardPattern(mapping.from)
-                      ? 'edit-account-modal__input-error'
-                      : '',
-                    mapping.to.includes('*') ? '' : '',
-                  ]"
-                  :placeholder="t('admin.accounts.requestModel')"
-                />
-                <svg
-                  class="edit-account-modal__muted h-4 w-4 flex-shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                  />
-                </svg>
-                <input
-                  v-model="mapping.to"
-                  type="text"
-                  :class="[
-                    'input flex-1',
-                    mapping.to.includes('*')
-                      ? 'edit-account-modal__input-error'
-                      : '',
-                  ]"
-                  :placeholder="t('admin.accounts.actualModel')"
-                />
-                <button
-                  type="button"
-                  @click="removeAntigravityModelMapping(index)"
-                  :class="getStatusChipClasses(true, 'danger')"
-                >
-                  <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <!-- 校验错误提示 -->
-              <p
-                v-if="!isValidWildcardPattern(mapping.from)"
-                class="edit-account-modal__error-text text-xs"
-              >
-                {{ t("admin.accounts.wildcardOnlyAtEnd") }}
-              </p>
-              <p
-                v-if="mapping.to.includes('*')"
-                class="edit-account-modal__error-text text-xs"
-              >
-                {{ t("admin.accounts.targetNoWildcard") }}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            @click="addAntigravityModelMapping"
-            class="btn btn-secondary mb-3 w-full border-2 border-dashed"
-          >
-            <svg
-              class="mr-1 inline h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            {{ t("admin.accounts.addMapping") }}
-          </button>
-
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="preset in antigravityPresetMappings"
-              :key="preset.label"
-              type="button"
-              @click="addAntigravityPresetMapping(preset.from, preset.to)"
-              :class="getPresetMappingChipClasses(preset.tone)"
-            >
-              + {{ preset.label }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Temp Unschedulable Rules -->
-      <div class="form-section space-y-4">
-        <div class="mb-3 flex items-center justify-between">
-          <div>
-            <label class="input-label mb-0">{{
-              t("admin.accounts.tempUnschedulable.title")
-            }}</label>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t("admin.accounts.tempUnschedulable.hint") }}
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="tempUnschedEnabled = !tempUnschedEnabled"
-            :class="getSwitchTrackClasses(tempUnschedEnabled)"
-          >
-            <span :class="getSwitchThumbClasses(tempUnschedEnabled)" />
-          </button>
-        </div>
-
-        <div v-if="tempUnschedEnabled" class="space-y-3">
-          <div :class="getToneNoticeClasses('blue')">
-            <p class="text-xs">
-              <Icon
-                name="exclamationTriangle"
-                size="sm"
-                class="mr-1 inline"
-                :stroke-width="2"
-              />
-              {{ t("admin.accounts.tempUnschedulable.notice") }}
-            </p>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="preset in tempUnschedPresets"
-              :key="preset.label"
-              type="button"
-              @click="addTempUnschedRule(preset.rule)"
-              :class="getStatusChipClasses(false, 'accent')"
-            >
-              + {{ preset.label }}
-            </button>
-          </div>
-
-          <div v-if="tempUnschedRules.length > 0" class="space-y-3">
-            <div
-              v-for="(rule, index) in tempUnschedRules"
-              :key="getTempUnschedRuleKey(rule)"
-              class="edit-account-modal__config-card edit-account-modal__config-card--compact"
-            >
-              <div class="mb-2 flex items-center justify-between">
-                <span class="edit-account-modal__muted text-xs font-medium">
-                  {{
-                    t("admin.accounts.tempUnschedulable.ruleIndex", {
-                      index: index + 1,
-                    })
-                  }}
-                </span>
-                <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    :disabled="index === 0"
-                    @click="moveTempUnschedRule(index, -1)"
-                    class="edit-account-modal__icon-button edit-account-modal__muted transition-colors hover:text-inherit disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Icon name="chevronUp" size="sm" :stroke-width="2" />
-                  </button>
-                  <button
-                    type="button"
-                    :disabled="index === tempUnschedRules.length - 1"
-                    @click="moveTempUnschedRule(index, 1)"
-                    class="edit-account-modal__icon-button edit-account-modal__muted transition-colors hover:text-inherit disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <svg
-                      class="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    @click="removeTempUnschedRule(index)"
-                    :class="getStatusChipClasses(true, 'danger')"
-                  >
-                    <Icon name="x" size="sm" :stroke-width="2" />
-                  </button>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label class="input-label">{{
-                    t("admin.accounts.tempUnschedulable.errorCode")
-                  }}</label>
-                  <input
-                    v-model.number="rule.error_code"
-                    type="number"
-                    min="100"
-                    max="599"
-                    class="input"
-                    :placeholder="
-                      t('admin.accounts.tempUnschedulable.errorCodePlaceholder')
-                    "
-                  />
-                </div>
-                <div>
-                  <label class="input-label">{{
-                    t("admin.accounts.tempUnschedulable.durationMinutes")
-                  }}</label>
-                  <input
-                    v-model.number="rule.duration_minutes"
-                    type="number"
-                    min="1"
-                    class="input"
-                    :placeholder="
-                      t('admin.accounts.tempUnschedulable.durationPlaceholder')
-                    "
-                  />
-                </div>
-                <div class="sm:col-span-2">
-                  <label class="input-label">{{
-                    t("admin.accounts.tempUnschedulable.keywords")
-                  }}</label>
-                  <input
-                    v-model="rule.keywords"
-                    type="text"
-                    class="input"
-                    :placeholder="
-                      t('admin.accounts.tempUnschedulable.keywordsPlaceholder')
-                    "
-                  />
-                  <p class="input-hint">
-                    {{ t("admin.accounts.tempUnschedulable.keywordsHint") }}
-                  </p>
-                </div>
-                <div class="sm:col-span-2">
-                  <label class="input-label">{{
-                    t("admin.accounts.tempUnschedulable.description")
-                  }}</label>
-                  <input
-                    v-model="rule.description"
-                    type="text"
-                    class="input"
-                    :placeholder="
-                      t(
-                        'admin.accounts.tempUnschedulable.descriptionPlaceholder',
-                      )
-                    "
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            @click="addTempUnschedRule()"
-            class="btn btn-secondary w-full border-2 border-dashed"
-          >
-            <svg
-              class="mr-1 inline h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            {{ t("admin.accounts.tempUnschedulable.addRule") }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Intercept Warmup Requests (Anthropic/Antigravity) -->
-      <div v-if="showWarmupSection" class="form-section">
-        <div class="flex items-center justify-between">
-          <div>
-            <label class="input-label mb-0">{{
-              t("admin.accounts.interceptWarmupRequests")
-            }}</label>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t("admin.accounts.interceptWarmupRequestsDesc") }}
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="interceptWarmupRequests = !interceptWarmupRequests"
-            :class="getSwitchTrackClasses(interceptWarmupRequests)"
-          >
-            <span :class="getSwitchThumbClasses(interceptWarmupRequests)" />
-          </button>
-        </div>
-      </div>
+      <WarmupSection
+        v-if="showWarmupSection"
+        v-model:enabled="interceptWarmupRequests"
+      />
 
       <div>
         <label class="input-label">{{ t("admin.accounts.proxy") }}</label>
@@ -1269,228 +224,55 @@
         <p class="input-hint">{{ t("admin.accounts.expiresAtHint") }}</p>
       </div>
 
-      <!-- OpenAI 自动透传开关（OAuth/API Key） -->
-      <div
-        v-if="
-          account?.platform === 'openai' &&
-          (account?.type === 'oauth' || account?.type === 'apikey')
+      <OpenAIOptionsSection
+        v-if="showOpenAIRuntimeSection"
+        v-model:passthrough-enabled="openaiPassthroughEnabled"
+        v-model:ws-mode="openaiResponsesWebSocketV2Mode"
+        v-model:codex-cli-only-enabled="codexCLIOnlyEnabled"
+        :account-category="openAIAccountCategory"
+        :ws-mode-options="openAIWSModeOptions"
+        :ws-mode-concurrency-hint-key="openAIWSModeConcurrencyHintKey"
+      />
+
+      <AnthropicOptionsSection
+        v-if="showAnthropicAPIKeyRuntimeSection"
+        v-model:api-key-passthrough-enabled="anthropicPassthroughEnabled"
+        account-category="apikey"
+      />
+
+      <QuotaLimitSection
+        v-if="showQuotaLimitSection"
+        v-model:total-limit="editQuotaLimit"
+        v-model:daily-limit="editQuotaDailyLimit"
+        v-model:weekly-limit="editQuotaWeeklyLimit"
+        v-model:daily-reset-mode="editDailyResetMode"
+        v-model:daily-reset-hour="editDailyResetHour"
+        v-model:weekly-reset-mode="editWeeklyResetMode"
+        v-model:weekly-reset-day="editWeeklyResetDay"
+        v-model:weekly-reset-hour="editWeeklyResetHour"
+        v-model:reset-timezone="editResetTimezone"
+        v-model:notify-daily-enabled="editQuotaNotifyDailyEnabled"
+        v-model:notify-daily-threshold="editQuotaNotifyDailyThreshold"
+        v-model:notify-daily-threshold-type="
+          editQuotaNotifyDailyThresholdType
         "
-        class="form-section"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <label class="input-label mb-0">{{
-              t("admin.accounts.openai.oauthPassthrough")
-            }}</label>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t("admin.accounts.openai.oauthPassthroughDesc") }}
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="openaiPassthroughEnabled = !openaiPassthroughEnabled"
-            :class="getSwitchTrackClasses(openaiPassthroughEnabled)"
-          >
-            <span :class="getSwitchThumbClasses(openaiPassthroughEnabled)" />
-          </button>
-        </div>
-      </div>
-
-      <!-- OpenAI WS Mode 三态（off/ctx_pool/passthrough） -->
-      <div
-        v-if="
-          account?.platform === 'openai' &&
-          (account?.type === 'oauth' || account?.type === 'apikey')
+        v-model:notify-weekly-enabled="editQuotaNotifyWeeklyEnabled"
+        v-model:notify-weekly-threshold="editQuotaNotifyWeeklyThreshold"
+        v-model:notify-weekly-threshold-type="
+          editQuotaNotifyWeeklyThresholdType
         "
-        class="form-section"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <label class="input-label mb-0">{{
-              t("admin.accounts.openai.wsMode")
-            }}</label>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t("admin.accounts.openai.wsModeDesc") }}
-            </p>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t(openAIWSModeConcurrencyHintKey) }}
-            </p>
-          </div>
-          <div class="w-52">
-            <Select
-              v-model="openaiResponsesWebSocketV2Mode"
-              :options="openAIWSModeOptions"
-            />
-          </div>
-        </div>
-      </div>
+        v-model:notify-total-enabled="editQuotaNotifyTotalEnabled"
+        v-model:notify-total-threshold="editQuotaNotifyTotalThreshold"
+        v-model:notify-total-threshold-type="
+          editQuotaNotifyTotalThresholdType
+        "
+      />
 
-      <!-- Anthropic API Key 自动透传开关 -->
-      <div
-        v-if="account?.platform === 'anthropic' && account?.type === 'apikey'"
-        class="form-section"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <label class="input-label mb-0">{{
-              t("admin.accounts.anthropic.apiKeyPassthrough")
-            }}</label>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t("admin.accounts.anthropic.apiKeyPassthroughDesc") }}
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="anthropicPassthroughEnabled = !anthropicPassthroughEnabled"
-            :class="getSwitchTrackClasses(anthropicPassthroughEnabled)"
-          >
-            <span :class="getSwitchThumbClasses(anthropicPassthroughEnabled)" />
-          </button>
-        </div>
-      </div>
-
-      <!-- Compatible API / Bedrock 账号配额限制 -->
-      <div v-if="showQuotaLimitSection" class="form-section space-y-4">
-        <div class="mb-3">
-          <h3 class="input-label mb-0 text-base font-semibold">
-            {{ t("admin.accounts.quotaLimit") }}
-          </h3>
-          <p class="edit-account-modal__muted mt-1 text-xs">
-            {{ t("admin.accounts.quotaLimitHint") }}
-          </p>
-        </div>
-        <QuotaLimitCard
-          :totalLimit="editQuotaLimit"
-          :dailyLimit="editQuotaDailyLimit"
-          :weeklyLimit="editQuotaWeeklyLimit"
-          :dailyResetMode="editDailyResetMode"
-          :dailyResetHour="editDailyResetHour"
-          :weeklyResetMode="editWeeklyResetMode"
-          :weeklyResetDay="editWeeklyResetDay"
-          :weeklyResetHour="editWeeklyResetHour"
-          :resetTimezone="editResetTimezone"
-          @update:totalLimit="editQuotaLimit = $event"
-          @update:dailyLimit="editQuotaDailyLimit = $event"
-          @update:weeklyLimit="editQuotaWeeklyLimit = $event"
-          @update:dailyResetMode="editDailyResetMode = $event"
-          @update:dailyResetHour="editDailyResetHour = $event"
-          @update:weeklyResetMode="editWeeklyResetMode = $event"
-          @update:weeklyResetDay="editWeeklyResetDay = $event"
-          @update:weeklyResetHour="editWeeklyResetHour = $event"
-          @update:resetTimezone="editResetTimezone = $event"
-        />
-
-        <div
-          class="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dark-600"
-        >
-          <div>
-            <h4 class="input-label mb-1">
-              {{ t("admin.accounts.quotaNotify.title") }}
-            </h4>
-            <p class="edit-account-modal__muted text-xs">
-              {{ t("admin.accounts.quotaNotify.hint") }}
-            </p>
-          </div>
-          <div class="grid gap-3 md:grid-cols-3">
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaNotify.daily")
-              }}</label>
-              <QuotaNotifyToggle
-                :enabled="editQuotaNotifyDailyEnabled"
-                :threshold="editQuotaNotifyDailyThreshold"
-                :threshold-type="editQuotaNotifyDailyThresholdType"
-                @update:enabled="editQuotaNotifyDailyEnabled = $event"
-                @update:threshold="editQuotaNotifyDailyThreshold = $event"
-                @update:thresholdType="
-                  editQuotaNotifyDailyThresholdType = $event
-                "
-              />
-            </div>
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaNotify.weekly")
-              }}</label>
-              <QuotaNotifyToggle
-                :enabled="editQuotaNotifyWeeklyEnabled"
-                :threshold="editQuotaNotifyWeeklyThreshold"
-                :threshold-type="editQuotaNotifyWeeklyThresholdType"
-                @update:enabled="editQuotaNotifyWeeklyEnabled = $event"
-                @update:threshold="editQuotaNotifyWeeklyThreshold = $event"
-                @update:thresholdType="
-                  editQuotaNotifyWeeklyThresholdType = $event
-                "
-              />
-            </div>
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaNotify.total")
-              }}</label>
-              <QuotaNotifyToggle
-                :enabled="editQuotaNotifyTotalEnabled"
-                :threshold="editQuotaNotifyTotalThreshold"
-                :threshold-type="editQuotaNotifyTotalThresholdType"
-                @update:enabled="editQuotaNotifyTotalEnabled = $event"
-                @update:threshold="editQuotaNotifyTotalThreshold = $event"
-                @update:thresholdType="
-                  editQuotaNotifyTotalThresholdType = $event
-                "
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- OpenAI OAuth Codex 官方客户端限制开关 -->
-      <div
-        v-if="account?.platform === 'openai' && account?.type === 'oauth'"
-        class="form-section"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <label class="input-label mb-0">{{
-              t("admin.accounts.openai.codexCLIOnly")
-            }}</label>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t("admin.accounts.openai.codexCLIOnlyDesc") }}
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="codexCLIOnlyEnabled = !codexCLIOnlyEnabled"
-            :class="getSwitchTrackClasses(codexCLIOnlyEnabled)"
-          >
-            <span :class="getSwitchThumbClasses(codexCLIOnlyEnabled)" />
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <div class="flex items-center justify-between">
-          <div>
-            <label class="input-label mb-0">{{
-              t("admin.accounts.autoPauseOnExpired")
-            }}</label>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t("admin.accounts.autoPauseOnExpiredDesc") }}
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="autoPauseOnExpired = !autoPauseOnExpired"
-            :class="getSwitchTrackClasses(autoPauseOnExpired)"
-          >
-            <span :class="getSwitchThumbClasses(autoPauseOnExpired)" />
-          </button>
-        </div>
-      </div>
+      <AutoPauseOnExpiredSection v-model:enabled="autoPauseOnExpired" />
 
       <!-- Quota Control Section (Anthropic OAuth/SetupToken only) -->
       <div
-        v-if="
-          account?.platform === 'anthropic' &&
-          (account?.type === 'oauth' || account?.type === 'setup-token')
-        "
+        v-if="showAnthropicQuotaControls"
         class="form-section space-y-4"
       >
         <div class="mb-3">
@@ -1502,439 +284,46 @@
           </p>
         </div>
 
-        <!-- Window Cost Limit -->
-        <div class="edit-account-modal__config-card">
-          <div class="mb-3 flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.quotaControl.windowCost.label")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.quotaControl.windowCost.hint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="windowCostEnabled = !windowCostEnabled"
-              :class="getSwitchTrackClasses(windowCostEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(windowCostEnabled)" />
-            </button>
-          </div>
+        <WindowCostControlSection
+          v-model:enabled="windowCostEnabled"
+          v-model:limit="windowCostLimit"
+          v-model:sticky-reserve="windowCostStickyReserve"
+        />
 
-          <div
-            v-if="windowCostEnabled"
-            class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4"
-          >
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaControl.windowCost.limit")
-              }}</label>
-              <div class="relative">
-                <span
-                  class="edit-account-modal__muted absolute left-3 top-1/2 -translate-y-1/2"
-                  >$</span
-                >
-                <input
-                  v-model.number="windowCostLimit"
-                  type="number"
-                  min="0"
-                  step="1"
-                  class="input pl-7"
-                  :placeholder="
-                    t('admin.accounts.quotaControl.windowCost.limitPlaceholder')
-                  "
-                />
-              </div>
-              <p class="input-hint">
-                {{ t("admin.accounts.quotaControl.windowCost.limitHint") }}
-              </p>
-            </div>
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaControl.windowCost.stickyReserve")
-              }}</label>
-              <div class="relative">
-                <span
-                  class="edit-account-modal__muted absolute left-3 top-1/2 -translate-y-1/2"
-                  >$</span
-                >
-                <input
-                  v-model.number="windowCostStickyReserve"
-                  type="number"
-                  min="0"
-                  step="1"
-                  class="input pl-7"
-                  :placeholder="
-                    t(
-                      'admin.accounts.quotaControl.windowCost.stickyReservePlaceholder',
-                    )
-                  "
-                />
-              </div>
-              <p class="input-hint">
-                {{
-                  t("admin.accounts.quotaControl.windowCost.stickyReserveHint")
-                }}
-              </p>
-            </div>
-          </div>
-        </div>
+        <SessionLimitControlSection
+          v-model:enabled="sessionLimitEnabled"
+          v-model:max-sessions="maxSessions"
+          v-model:idle-timeout="sessionIdleTimeout"
+        />
 
-        <!-- Session Limit -->
-        <div class="edit-account-modal__config-card">
-          <div class="mb-3 flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.quotaControl.sessionLimit.label")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.quotaControl.sessionLimit.hint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="sessionLimitEnabled = !sessionLimitEnabled"
-              :class="getSwitchTrackClasses(sessionLimitEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(sessionLimitEnabled)" />
-            </button>
-          </div>
+        <RpmLimitControlSection
+          v-model:enabled="rpmLimitEnabled"
+          v-model:base-rpm="baseRpm"
+          v-model:strategy="rpmStrategy"
+          v-model:sticky-buffer="rpmStickyBuffer"
+          v-model:user-msg-queue-mode="userMsgQueueMode"
+          :user-msg-queue-mode-options="umqModeOptions"
+        />
 
-          <div
-            v-if="sessionLimitEnabled"
-            class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4"
-          >
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaControl.sessionLimit.maxSessions")
-              }}</label>
-              <input
-                v-model.number="maxSessions"
-                type="number"
-                min="1"
-                step="1"
-                class="input"
-                :placeholder="
-                  t(
-                    'admin.accounts.quotaControl.sessionLimit.maxSessionsPlaceholder',
-                  )
-                "
-              />
-              <p class="input-hint">
-                {{
-                  t("admin.accounts.quotaControl.sessionLimit.maxSessionsHint")
-                }}
-              </p>
-            </div>
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaControl.sessionLimit.idleTimeout")
-              }}</label>
-              <div class="relative">
-                <input
-                  v-model.number="sessionIdleTimeout"
-                  type="number"
-                  min="1"
-                  step="1"
-                  class="input pr-12"
-                  :placeholder="
-                    t(
-                      'admin.accounts.quotaControl.sessionLimit.idleTimeoutPlaceholder',
-                    )
-                  "
-                />
-                <span
-                  class="edit-account-modal__muted absolute right-3 top-1/2 -translate-y-1/2"
-                  >{{ t("common.minutes") }}</span
-                >
-              </div>
-              <p class="input-hint">
-                {{
-                  t("admin.accounts.quotaControl.sessionLimit.idleTimeoutHint")
-                }}
-              </p>
-            </div>
-          </div>
-        </div>
+        <TlsFingerprintControlSection
+          v-model:enabled="tlsFingerprintEnabled"
+          v-model:profile-id="tlsFingerprintProfileId"
+          :profiles="tlsFingerprintProfiles"
+        />
 
-        <!-- RPM Limit -->
-        <div class="edit-account-modal__config-card">
-          <div class="mb-3 flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.quotaControl.rpmLimit.label")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.quotaControl.rpmLimit.hint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="rpmLimitEnabled = !rpmLimitEnabled"
-              :class="getSwitchTrackClasses(rpmLimitEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(rpmLimitEnabled)" />
-            </button>
-          </div>
+        <SessionIdMaskingControlSection
+          v-model:enabled="sessionIdMaskingEnabled"
+        />
 
-          <div v-if="rpmLimitEnabled" class="space-y-4">
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaControl.rpmLimit.baseRpm")
-              }}</label>
-              <input
-                v-model.number="baseRpm"
-                type="number"
-                min="1"
-                max="1000"
-                step="1"
-                class="input"
-                :placeholder="
-                  t('admin.accounts.quotaControl.rpmLimit.baseRpmPlaceholder')
-                "
-              />
-              <p class="input-hint">
-                {{ t("admin.accounts.quotaControl.rpmLimit.baseRpmHint") }}
-              </p>
-            </div>
+        <CacheTtlOverrideSection
+          v-model:enabled="cacheTTLOverrideEnabled"
+          v-model:target="cacheTTLOverrideTarget"
+        />
 
-            <div>
-              <label class="input-label">{{
-                t("admin.accounts.quotaControl.rpmLimit.strategy")
-              }}</label>
-              <div class="flex gap-2">
-                <button
-                  type="button"
-                  @click="rpmStrategy = 'tiered'"
-                  :class="
-                    getModeToggleClasses(rpmStrategy === 'tiered', 'accent')
-                  "
-                >
-                  <div class="text-center">
-                    <div>
-                      {{
-                        t("admin.accounts.quotaControl.rpmLimit.strategyTiered")
-                      }}
-                    </div>
-                    <div class="mt-0.5 text-[10px] opacity-70">
-                      {{
-                        t(
-                          "admin.accounts.quotaControl.rpmLimit.strategyTieredHint",
-                        )
-                      }}
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  @click="rpmStrategy = 'sticky_exempt'"
-                  :class="
-                    getModeToggleClasses(
-                      rpmStrategy === 'sticky_exempt',
-                      'accent',
-                    )
-                  "
-                >
-                  <div class="text-center">
-                    <div>
-                      {{
-                        t(
-                          "admin.accounts.quotaControl.rpmLimit.strategyStickyExempt",
-                        )
-                      }}
-                    </div>
-                    <div class="mt-0.5 text-[10px] opacity-70">
-                      {{
-                        t(
-                          "admin.accounts.quotaControl.rpmLimit.strategyStickyExemptHint",
-                        )
-                      }}
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <div v-if="rpmStrategy === 'tiered'">
-              <label class="input-label">{{
-                t("admin.accounts.quotaControl.rpmLimit.stickyBuffer")
-              }}</label>
-              <input
-                v-model.number="rpmStickyBuffer"
-                type="number"
-                min="1"
-                step="1"
-                class="input"
-                :placeholder="
-                  t(
-                    'admin.accounts.quotaControl.rpmLimit.stickyBufferPlaceholder',
-                  )
-                "
-              />
-              <p class="input-hint">
-                {{ t("admin.accounts.quotaControl.rpmLimit.stickyBufferHint") }}
-              </p>
-            </div>
-          </div>
-
-          <!-- 用户消息限速模式（独立于 RPM 开关，始终可见） -->
-          <div class="mt-4">
-            <label class="input-label">{{
-              t("admin.accounts.quotaControl.rpmLimit.userMsgQueue")
-            }}</label>
-            <p class="edit-account-modal__muted mt-1 mb-2 text-xs">
-              {{ t("admin.accounts.quotaControl.rpmLimit.userMsgQueueHint") }}
-            </p>
-            <div class="flex space-x-2">
-              <button
-                type="button"
-                v-for="opt in umqModeOptions"
-                :key="opt.value"
-                @click="userMsgQueueMode = opt.value"
-                :class="[
-                  'edit-account-modal__umq-option edit-account-modal__umq-option-control text-sm transition-colors',
-                  userMsgQueueMode === opt.value
-                    ? 'edit-account-modal__umq-option--selected'
-                    : 'edit-account-modal__umq-option--idle',
-                ]"
-              >
-                {{ opt.label }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- TLS Fingerprint -->
-        <div class="edit-account-modal__config-card">
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.quotaControl.tlsFingerprint.label")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.quotaControl.tlsFingerprint.hint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="tlsFingerprintEnabled = !tlsFingerprintEnabled"
-              :class="getSwitchTrackClasses(tlsFingerprintEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(tlsFingerprintEnabled)" />
-            </button>
-          </div>
-          <!-- Profile selector -->
-          <div v-if="tlsFingerprintEnabled" class="mt-3">
-            <select v-model="tlsFingerprintProfileId" class="input">
-              <option :value="null">
-                {{
-                  t("admin.accounts.quotaControl.tlsFingerprint.defaultProfile")
-                }}
-              </option>
-              <option v-if="tlsFingerprintProfiles.length > 0" :value="-1">
-                {{
-                  t("admin.accounts.quotaControl.tlsFingerprint.randomProfile")
-                }}
-              </option>
-              <option
-                v-for="p in tlsFingerprintProfiles"
-                :key="p.id"
-                :value="p.id"
-              >
-                {{ p.name }}
-              </option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Session ID Masking -->
-        <div class="edit-account-modal__config-card">
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.quotaControl.sessionIdMasking.label")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.quotaControl.sessionIdMasking.hint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="sessionIdMaskingEnabled = !sessionIdMaskingEnabled"
-              :class="getSwitchTrackClasses(sessionIdMaskingEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(sessionIdMaskingEnabled)" />
-            </button>
-          </div>
-        </div>
-
-        <!-- Cache TTL Override -->
-        <div class="edit-account-modal__config-card">
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.quotaControl.cacheTTLOverride.label")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.quotaControl.cacheTTLOverride.hint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="cacheTTLOverrideEnabled = !cacheTTLOverrideEnabled"
-              :class="getSwitchTrackClasses(cacheTTLOverrideEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(cacheTTLOverrideEnabled)" />
-            </button>
-          </div>
-          <div v-if="cacheTTLOverrideEnabled" class="mt-3">
-            <label class="input-label text-xs">{{
-              t("admin.accounts.quotaControl.cacheTTLOverride.target")
-            }}</label>
-            <select
-              v-model="cacheTTLOverrideTarget"
-              class="input mt-1 block w-full text-sm"
-            >
-              <option value="5m">5m</option>
-              <option value="1h">1h</option>
-            </select>
-            <p class="edit-account-modal__muted mt-1 text-xs">
-              {{ t("admin.accounts.quotaControl.cacheTTLOverride.targetHint") }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Custom Base URL Relay -->
-        <div class="edit-account-modal__config-card">
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{
-                t("admin.accounts.quotaControl.customBaseUrl.label")
-              }}</label>
-              <p class="edit-account-modal__muted mt-1 text-xs">
-                {{ t("admin.accounts.quotaControl.customBaseUrl.hint") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="customBaseUrlEnabled = !customBaseUrlEnabled"
-              :class="getSwitchTrackClasses(customBaseUrlEnabled)"
-            >
-              <span :class="getSwitchThumbClasses(customBaseUrlEnabled)" />
-            </button>
-          </div>
-          <div v-if="customBaseUrlEnabled" class="mt-3">
-            <input
-              v-model="customBaseUrl"
-              type="text"
-              class="input"
-              :placeholder="
-                t('admin.accounts.quotaControl.customBaseUrl.urlHint')
-              "
-            />
-          </div>
-        </div>
+        <CustomBaseUrlControlSection
+          v-model:enabled="customBaseUrlEnabled"
+          v-model:base-url="customBaseUrl"
+        />
       </div>
 
       <div class="form-section">
@@ -2087,12 +476,27 @@ import type {
 import BaseDialog from "@/components/common/BaseDialog.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import Select from "@/components/common/Select.vue";
-import Icon from "@/components/icons/Icon.vue";
 import ProxySelector from "@/components/common/ProxySelector.vue";
 import GroupSelector from "@/components/common/GroupSelector.vue";
-import ModelWhitelistSelector from "@/components/account/ModelWhitelistSelector.vue";
-import QuotaLimitCard from "@/components/account/QuotaLimitCard.vue";
-import QuotaNotifyToggle from "@/components/account/QuotaNotifyToggle.vue";
+import AnthropicOptionsSection from "@/components/account/AnthropicOptionsSection.vue";
+import AntigravityModelMappingSection from "@/components/account/AntigravityModelMappingSection.vue";
+import AutoPauseOnExpiredSection from "@/components/account/AutoPauseOnExpiredSection.vue";
+import BedrockCredentialsSection from "@/components/account/BedrockCredentialsSection.vue";
+import CacheTtlOverrideSection from "@/components/account/CacheTtlOverrideSection.vue";
+import CompatibleCredentialsSection from "@/components/account/CompatibleCredentialsSection.vue";
+import CustomBaseUrlControlSection from "@/components/account/CustomBaseUrlControlSection.vue";
+import EditGrokSessionCredentialsSection from "@/components/account/EditGrokSessionCredentialsSection.vue";
+import ModelRestrictionSection from "@/components/account/ModelRestrictionSection.vue";
+import OpenAIOptionsSection from "@/components/account/OpenAIOptionsSection.vue";
+import PoolModeSection from "@/components/account/PoolModeSection.vue";
+import QuotaLimitSection from "@/components/account/QuotaLimitSection.vue";
+import RpmLimitControlSection from "@/components/account/RpmLimitControlSection.vue";
+import SessionLimitControlSection from "@/components/account/SessionLimitControlSection.vue";
+import SessionIdMaskingControlSection from "@/components/account/SessionIdMaskingControlSection.vue";
+import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSection.vue";
+import TlsFingerprintControlSection from "@/components/account/TlsFingerprintControlSection.vue";
+import WarmupSection from "@/components/account/WarmupSection.vue";
+import WindowCostControlSection from "@/components/account/WindowCostControlSection.vue";
 import GrokRuntimeSummary from "@/components/account/GrokRuntimeSummary.vue";
 import {
   buildCompatibleBaseUrlPresets,
@@ -2111,18 +515,15 @@ import {
   type EditAccountForm,
 } from "@/components/account/accountModalShared";
 import {
-  getAccountModalModeToggleClasses,
-  getAccountModalStatusChipClasses,
-  getAccountModalSwitchThumbClasses,
-  getAccountModalSwitchTrackClasses,
-  getEditToneNoticeClasses,
-} from "@/components/account/accountModalClasses";
-import {
   createEmptyModelRestrictionState,
   deriveAntigravityModelMappings,
   deriveModelRestrictionStateFromMapping,
   deriveOpenAIExtraState,
 } from "@/components/account/editAccountModalHelpers";
+import type {
+  BedrockAuthMode,
+  CreateAccountCategory,
+} from "@/components/account/createAccountModalHelpers";
 import {
   buildEditAccountMutationPayload,
   resolveAccountMutationPayloadErrorKey,
@@ -2136,7 +537,6 @@ import {
   DEFAULT_POOL_MODE_RETRY_COUNT,
   getDefaultBaseURL,
   loadTempUnschedRuleState,
-  MAX_POOL_MODE_RETRY_COUNT,
   moveItemInPlace,
   normalizePoolModeRetryCount,
   type ModelMapping,
@@ -2161,10 +561,7 @@ import {
 import { resolveRequestErrorMessage } from "@/utils/requestError";
 import {
   ensureModelCatalogLoaded,
-  getPresetMappingChipClasses,
   getPresetMappingsByPlatform,
-  commonErrorCodes,
-  isValidWildcardPattern,
 } from "@/composables/useModelWhitelist";
 
 interface Props {
@@ -2223,6 +620,9 @@ const isBedrockAPIKeyMode = computed(
     props.account?.type === "bedrock" &&
     (props.account?.credentials as Record<string, unknown>)?.auth_mode ===
       "apikey",
+);
+const editBedrockAuthMode = computed<BedrockAuthMode>(() =>
+  isBedrockAPIKeyMode.value ? "apikey" : "sigv4",
 );
 const modelMappings = ref<ModelMapping[]>([]);
 const modelRestrictionMode = ref<"whitelist" | "mapping">("whitelist");
@@ -2359,6 +759,29 @@ const showWarmupSection = computed(() => {
   return accountMutationProfileHasSection(mutationProfile.value, "warmup");
 });
 
+const showOpenAIRuntimeSection = computed(() => {
+  return accountMutationProfileHasSection(
+    mutationProfile.value,
+    "openai-runtime",
+  );
+});
+
+const showAnthropicAPIKeyRuntimeSection = computed(() => {
+  const account = props.account;
+  return account?.platform === "anthropic" && account.type === "apikey";
+});
+
+const showAnthropicQuotaControls = computed(() => {
+  return accountMutationProfileHasSection(
+    mutationProfile.value,
+    "anthropic-runtime",
+  );
+});
+
+const openAIAccountCategory = computed<CreateAccountCategory>(() =>
+  props.account?.type === "apikey" ? "apikey" : "oauth-based",
+);
+
 watch(
   () => props.account?.platform,
   (platform) => {
@@ -2387,19 +810,6 @@ const mixedChannelWarningMessageText = computed(() => {
     t,
   });
 });
-
-const getModeToggleClasses = (isSelected: boolean, tone: "accent" | "purple" | "danger") =>
-  getAccountModalModeToggleClasses("edit-account-modal", isSelected, tone);
-
-const getSwitchTrackClasses = (isEnabled: boolean) =>
-  getAccountModalSwitchTrackClasses("edit-account-modal", isEnabled);
-const getSwitchThumbClasses = (isEnabled: boolean) =>
-  getAccountModalSwitchThumbClasses("edit-account-modal", isEnabled);
-const getStatusChipClasses = (
-  isSelected: boolean,
-  tone: "accent" | "purple" | "danger" = "danger",
-) => getAccountModalStatusChipClasses("edit-account-modal", isSelected, tone);
-const getToneNoticeClasses = getEditToneNoticeClasses;
 
 const resetMixedChannelDialogState = () => {
   showMixedChannelWarning.value = false;
@@ -2753,6 +1163,21 @@ const removeModelMapping = (index: number) => {
   removeModelMappingAt(modelMappings.value, index);
 };
 
+const updateModelMapping = (
+  index: number,
+  field: keyof ModelMapping,
+  value: string,
+) => {
+  const mapping = modelMappings.value[index];
+  if (!mapping) {
+    return;
+  }
+  modelMappings.value[index] = {
+    ...mapping,
+    [field]: value,
+  };
+};
+
 const addPresetMapping = (from: string, to: string) => {
   appendPresetModelMapping(modelMappings.value, from, to, (model) => {
     appStore.showInfo(t("admin.accounts.mappingExists", { model }));
@@ -2765,6 +1190,21 @@ const addAntigravityModelMapping = () => {
 
 const removeAntigravityModelMapping = (index: number) => {
   removeModelMappingAt(antigravityModelMappings.value, index);
+};
+
+const updateAntigravityModelMapping = (
+  index: number,
+  field: keyof ModelMapping,
+  value: string,
+) => {
+  const mapping = antigravityModelMappings.value[index];
+  if (!mapping) {
+    return;
+  }
+  antigravityModelMappings.value[index] = {
+    ...mapping,
+    [field]: value,
+  };
 };
 
 const addAntigravityPresetMapping = (from: string, to: string) => {
@@ -2827,6 +1267,25 @@ const removeTempUnschedRule = (index: number) => {
 
 const moveTempUnschedRule = (index: number, direction: number) => {
   moveItemInPlace(tempUnschedRules.value, index, direction);
+};
+
+const updateTempUnschedRule = (
+  index: number,
+  field: keyof TempUnschedRuleForm,
+  value: TempUnschedRuleForm[keyof TempUnschedRuleForm],
+) => {
+  const rule = tempUnschedRules.value[index];
+  if (!rule) {
+    return;
+  }
+
+  const nextRule = { ...rule };
+  if (field === "error_code" || field === "duration_minutes") {
+    nextRule[field] = typeof value === "number" ? value : null;
+  } else {
+    nextRule[field] = typeof value === "string" ? value : "";
+  }
+  tempUnschedRules.value[index] = nextRule;
 };
 
 // Load quota control settings from account (Anthropic OAuth/SetupToken only)

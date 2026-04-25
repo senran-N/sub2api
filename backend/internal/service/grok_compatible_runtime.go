@@ -15,20 +15,35 @@ type grokCompatibleTextExecutor interface {
 }
 
 type GrokCompatibleRuntime struct {
-	textExecutor grokCompatibleTextExecutor
-	feedbackRepo AccountRepository
+	textExecutor            grokCompatibleTextExecutor
+	feedbackRepo            AccountRepository
+	feedbackOwnedByExecutor bool
 }
 
 func NewGrokCompatibleRuntime(textExecutor grokCompatibleTextExecutor, feedbackRepo AccountRepository) *GrokCompatibleRuntime {
-	return &GrokCompatibleRuntime{textExecutor: textExecutor, feedbackRepo: feedbackRepo}
+	return NewGrokCompatibleRuntimeWithFeedbackOwnership(textExecutor, feedbackRepo, false)
+}
+
+func NewGrokCompatibleRuntimeWithFeedbackOwnership(
+	textExecutor grokCompatibleTextExecutor,
+	feedbackRepo AccountRepository,
+	feedbackOwnedByExecutor bool,
+) *GrokCompatibleRuntime {
+	return &GrokCompatibleRuntime{
+		textExecutor:            textExecutor,
+		feedbackRepo:            feedbackRepo,
+		feedbackOwnedByExecutor: feedbackOwnedByExecutor,
+	}
 }
 
 func ProvideGrokCompatibleRuntime(compatibleTextRuntime *CompatibleGatewayTextRuntime) *GrokCompatibleRuntime {
 	var feedbackRepo AccountRepository
-	if compatibleTextRuntime != nil && compatibleTextRuntime.openaiGatewayService != nil {
-		feedbackRepo = compatibleTextRuntime.openaiGatewayService.accountRepo
+	feedbackOwnedByExecutor := false
+	if compatibleTextRuntime != nil {
+		feedbackRepo = compatibleTextRuntime.FeedbackRepository()
+		feedbackOwnedByExecutor = compatibleTextRuntime.OwnsCompatibleGatewayRuntimeFeedback()
 	}
-	return NewGrokCompatibleRuntime(compatibleTextRuntime, feedbackRepo)
+	return NewGrokCompatibleRuntimeWithFeedbackOwnership(compatibleTextRuntime, feedbackRepo, feedbackOwnedByExecutor)
 }
 
 func (r *GrokCompatibleRuntime) Execute(c *gin.Context, preparation *grokTextPreparation) error {
@@ -56,7 +71,7 @@ func (r *GrokCompatibleRuntime) Execute(c *gin.Context, preparation *grokTextPre
 	default:
 		result, err = r.textExecutor.ForwardResponses(c.Request.Context(), c, preparation.account, preparation.compatibleBody, "")
 	}
-	if _, delegated := r.textExecutor.(*CompatibleGatewayTextRuntime); !delegated {
+	if !r.feedbackOwnedByExecutor {
 		persistGrokRuntimeFeedbackToRepo(c.Request.Context(), r.feedbackRepo, GrokRuntimeFeedbackInput{
 			Account:        preparation.account,
 			RequestedModel: preparation.requestedModel,

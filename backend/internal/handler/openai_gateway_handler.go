@@ -9,7 +9,6 @@ import (
 	"github.com/senran-N/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -207,12 +206,4 @@ func setOpenAIClientTransportHTTP(c *gin.Context) {
 
 func setOpenAIClientTransportWS(c *gin.Context) {
 	service.SetOpenAIClientTransport(c, service.OpenAIClientTransportWS)
-}
-
-func ensureOpenAIPoolModeSessionHash(sessionHash string, account *service.Account) string {
-	if sessionHash != "" || account == nil || !account.IsPoolMode() {
-		return sessionHash
-	}
-	// 为当前请求生成一次性粘性会话键，确保同账号重试不会重新负载均衡到其他账号。
-	return "openai-pool-retry-" + uuid.NewString()
 }

@@ -173,93 +173,83 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 	sessionHash := h.gatewayService.GenerateOpenAIWSIngressSessionHash(c, firstMessage)
 	service.AttachOpenAIResolvedSessionHash(c, sessionHash)
-	initialSelectionModel := schedulingModel
-	schedulerCtx := service.WithOpenAICodexTransportPreference(ctx, profile.NativeClient)
-	selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-		schedulerCtx,
-		apiKey.GroupID,
-		previousResponseID,
-		sessionHash,
-		schedulingModel,
-		nil,
-		service.OpenAIUpstreamTransportResponsesWebsocketV2,
-	)
-	if err != nil {
-		reqLog.Warn("openai.websocket_account_select_failed", zap.Error(err))
-		initialSelectionErr := err
-		defaultModel := resolveOpenAISelectionFallbackModel(
-			c,
-			h.gatewayService,
-			apiKey,
-			schedulingModel,
-			reqLog,
-			"openai.websocket_fallback_to_default_model_skipped",
-		)
-		if defaultModel != "" && defaultModel != schedulingModel {
-			reqLog.Info("openai.websocket_fallback_to_default_model",
-				zap.String("default_mapped_model", defaultModel),
-			)
-			selection, scheduleDecision, err = h.gatewayService.SelectAccountWithScheduler(
-				schedulerCtx,
-				apiKey.GroupID,
-				previousResponseID,
-				sessionHash,
-				defaultModel,
-				nil,
-				service.OpenAIUpstreamTransportResponsesWebsocketV2,
-			)
-			if err == nil && selection != nil {
-				schedulingModel = defaultModel
+	selectionResult := service.NewOpenAIWSIngressSelectionKernel(h.gatewayService).Select(ctx, service.OpenAIWSIngressSelectionRequest{
+		APIKey:             apiKey,
+		PreviousResponseID: previousResponseID,
+		SessionHash:        sessionHash,
+		SchedulingModel:    schedulingModel,
+		SchedulerContext:   ctx,
+		CodexProfile:       &profile,
+		RequiredTransport:  service.OpenAIUpstreamTransportResponsesWebsocketV2,
+		AcquireAccountSlot: func(ctx context.Context, accountID int64, maxConcurrency int) (func(), bool, error) {
+			return h.concurrencyHelper.TryAcquireAccountSlot(ctx, accountID, maxConcurrency)
+		},
+		Hooks: service.OpenAIWSIngressSelectionHooks{
+			ResolveSelectionFallback: func(_ context.Context, selectionModel string, _ error) string {
+				return resolveOpenAISelectionFallbackModel(
+					c,
+					h.gatewayService,
+					apiKey,
+					selectionModel,
+					reqLog,
+					"openai.websocket_fallback_to_default_model_skipped",
+				)
+			},
+			OnAccountSelectFailed: func(err error) {
+				reqLog.Warn("openai.websocket_account_select_failed", zap.Error(err))
+			},
+			OnFallbackSelected: func(defaultModel string) {
+				reqLog.Info("openai.websocket_fallback_to_default_model",
+					zap.String("default_mapped_model", defaultModel),
+				)
 				service.AttachOpenAIWSSelectionFallbackModel(c, defaultModel)
-			}
+			},
+			OnStickySessionBindFailed: func(account *service.Account, err error) {
+				reqLog.Warn("openai.websocket_bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+			},
+		},
+	})
+	switch selectionResult.Outcome {
+	case service.OpenAIWSIngressSelectionSucceeded:
+		// continue below
+	case service.OpenAIWSIngressSelectionError:
+		status, _, message := openAISelectionErrorResponseAfterDefaultFallback(selectionResult.InitialSelectionErr, selectionResult.Err)
+		closeCode := coderws.StatusTryAgainLater
+		if status < http.StatusInternalServerError {
+			closeCode = coderws.StatusPolicyViolation
 		}
-		if err != nil {
-			status, _, message := openAISelectionErrorResponseAfterDefaultFallback(initialSelectionErr, err)
-			closeCode := coderws.StatusTryAgainLater
-			if status < http.StatusInternalServerError {
-				closeCode = coderws.StatusPolicyViolation
-			}
-			closeOpenAIClientWS(wsConn, closeCode, message)
-			return
+		closeOpenAIClientWS(wsConn, closeCode, message)
+		return
+	case service.OpenAIWSIngressSelectionNoAvailable:
+		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
+		return
+	case service.OpenAIWSIngressSelectionAccountBusy:
+		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "account is busy, please retry later")
+		return
+	case service.OpenAIWSIngressSelectionAcquireError:
+		if selectionResult.Account != nil {
+			reqLog.Warn("openai.websocket_account_slot_acquire_failed", zap.Int64("account_id", selectionResult.Account.ID), zap.Error(selectionResult.Err))
+		} else {
+			reqLog.Warn("openai.websocket_account_slot_acquire_failed", zap.Error(selectionResult.Err))
 		}
+		closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "failed to acquire account concurrency slot")
+		return
+	default:
+		reqLog.Warn("openai.websocket_account_select_failed", zap.Error(selectionResult.Err))
+		closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "failed to select account")
+		return
 	}
-	if selection == nil || selection.Account == nil {
+
+	schedulingModel = selectionResult.SchedulingModel
+	initialSelectionModel := selectionResult.InitialSelectionModel
+	scheduleDecision := selectionResult.ScheduleDecision
+	account := selectionResult.Account
+	if account == nil {
 		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
 		return
 	}
-	service.ObserveOpenAICodexSchedulingDecision(profile, scheduleDecision)
-
-	account := selection.Account
-	accountMaxConcurrency := account.Concurrency
-	if selection.WaitPlan != nil && selection.WaitPlan.MaxConcurrency > 0 {
-		accountMaxConcurrency = selection.WaitPlan.MaxConcurrency
-	}
-	accountReleaseFunc := selection.ReleaseFunc
-	if !selection.Acquired {
-		if selection.WaitPlan == nil {
-			closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "account is busy, please retry later")
-			return
-		}
-		fastReleaseFunc, fastAcquired, err := h.concurrencyHelper.TryAcquireAccountSlot(
-			ctx,
-			account.ID,
-			selection.WaitPlan.MaxConcurrency,
-		)
-		if err != nil {
-			reqLog.Warn("openai.websocket_account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "failed to acquire account concurrency slot")
-			return
-		}
-		if !fastAcquired {
-			closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "account is busy, please retry later")
-			return
-		}
-		accountReleaseFunc = fastReleaseFunc
-	}
-	currentAccountRelease = wrapReleaseOnDone(ctx, accountReleaseFunc)
-	if err := h.gatewayService.BindStickySession(ctx, apiKey.GroupID, sessionHash, account.ID); err != nil {
-		reqLog.Warn("openai.websocket_bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-	}
+	accountMaxConcurrency := selectionResult.AccountMaxConcurrency
+	currentAccountRelease = wrapReleaseOnDone(ctx, selectionResult.AccountRelease)
 
 	token, _, err := h.gatewayService.GetAccessToken(ctx, account)
 	if err != nil {

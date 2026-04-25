@@ -29,30 +29,18 @@ func (s *OpenAIGatewayService) SelectAccountWithScheduler(
 	excludedIDs map[int64]struct{},
 	requiredTransport OpenAIUpstreamTransport,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	decision := OpenAIAccountScheduleDecision{}
-	requiredTransport = s.resolveCodexPreferredTransport(ctx, groupID, sessionHash, requiredTransport)
-	scheduler := s.getOpenAIAccountScheduler()
-	if scheduler == nil {
-		selection, err := s.SelectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs)
-		decision.Layer = openAIAccountScheduleLayerLoadBalance
-		return selection, decision, err
-	}
-
-	stickyAccountID := s.resolveCodexChainState(ctx, codexChainStateInput{
-		GroupID:     derefGroupID(groupID),
-		SessionHash: sessionHash,
-		Transport:   requiredTransport,
-	}).SessionStickyAccount
-
-	return scheduler.Select(ctx, OpenAIAccountScheduleRequest{
+	kernel := NewOpenAISelectionKernel(s)
+	selection, decision, err := kernel.Select(ctx, SelectionRequest{
+		Provider:           PlatformOpenAI,
+		Protocol:           GatewayProtocolResponses,
+		Model:              requestedModel,
 		GroupID:            groupID,
 		SessionHash:        sessionHash,
-		StickyAccountID:    stickyAccountID,
 		PreviousResponseID: previousResponseID,
-		RequestedModel:     requestedModel,
-		RequiredTransport:  requiredTransport,
+		Transport:          OpenAIUpstreamTransportToGatewayTransport(requiredTransport),
 		ExcludedIDs:        excludedIDs,
 	})
+	return selection, decision.OpenAI, err
 }
 
 func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(accountID int64, success bool, firstTokenMs *int) {

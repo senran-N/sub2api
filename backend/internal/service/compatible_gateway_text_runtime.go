@@ -20,20 +20,69 @@ import (
 	"go.uber.org/zap"
 )
 
+// CompatibleGatewayTextExecutor executes provider-specific compatible text
+// forwarding behind the neutral runtime entrypoint.
+type CompatibleGatewayTextExecutor interface {
+	ForwardResponses(context.Context, *gin.Context, *Account, []byte, string) (*OpenAIForwardResult, error)
+	ForwardChatCompletions(context.Context, *gin.Context, *Account, []byte, string, string) (*OpenAIForwardResult, error)
+	ForwardMessages(context.Context, *gin.Context, *Account, []byte, string, string) (*OpenAIForwardResult, error)
+}
+
+// CompatibleGatewayRuntimeFeedbackOwner makes runtime feedback ownership
+// explicit for callers that compose runtimes, such as Grok compatible routing.
+type CompatibleGatewayRuntimeFeedbackOwner interface {
+	OwnsCompatibleGatewayRuntimeFeedback() bool
+}
+
 // CompatibleGatewayTextRuntime is the neutral execution seam for compatible
 // text protocols shared by OpenAI-compatible platforms.
 type CompatibleGatewayTextRuntime struct {
+	executor                CompatibleGatewayTextExecutor
+	feedbackRepo            AccountRepository
+	feedbackOwnedByExecutor bool
+}
+
+// OpenAITextExecutor contains the OpenAI-specific compatible text execution
+// implementation. The surrounding runtime stays provider-neutral.
+type OpenAITextExecutor struct {
 	openaiGatewayService *OpenAIGatewayService
 }
 
-func NewCompatibleGatewayTextRuntime(openaiGatewayService *OpenAIGatewayService) *CompatibleGatewayTextRuntime {
-	return &CompatibleGatewayTextRuntime{openaiGatewayService: openaiGatewayService}
-}
-
-func ProvideCompatibleGatewayTextRuntime(openaiGatewayService *OpenAIGatewayService) *CompatibleGatewayTextRuntime {
+func NewOpenAITextExecutor(openaiGatewayService *OpenAIGatewayService) *OpenAITextExecutor {
 	if openaiGatewayService == nil {
 		return nil
 	}
+	return &OpenAITextExecutor{openaiGatewayService: openaiGatewayService}
+}
+
+func (e *OpenAITextExecutor) OwnsCompatibleGatewayRuntimeFeedback() bool {
+	return e != nil && e.openaiGatewayService != nil
+}
+
+func NewCompatibleGatewayTextRuntime(openaiGatewayService *OpenAIGatewayService) *CompatibleGatewayTextRuntime {
+	if openaiGatewayService == nil {
+		return nil
+	}
+	return NewCompatibleGatewayTextRuntimeWithExecutor(
+		NewOpenAITextExecutor(openaiGatewayService),
+		openaiGatewayService.accountRepo,
+		true,
+	)
+}
+
+func NewCompatibleGatewayTextRuntimeWithExecutor(
+	executor CompatibleGatewayTextExecutor,
+	feedbackRepo AccountRepository,
+	feedbackOwnedByExecutor bool,
+) *CompatibleGatewayTextRuntime {
+	return &CompatibleGatewayTextRuntime{
+		executor:                executor,
+		feedbackRepo:            feedbackRepo,
+		feedbackOwnedByExecutor: feedbackOwnedByExecutor,
+	}
+}
+
+func ProvideCompatibleGatewayTextRuntime(openaiGatewayService *OpenAIGatewayService) *CompatibleGatewayTextRuntime {
 	return NewCompatibleGatewayTextRuntime(openaiGatewayService)
 }
 
@@ -43,17 +92,69 @@ func (r *CompatibleGatewayTextRuntime) ForwardResponses(
 	account *Account,
 	body []byte,
 	defaultMappedModel string,
-) (result *OpenAIForwardResult, err error) {
-	if r == nil || r.openaiGatewayService == nil {
+) (*OpenAIForwardResult, error) {
+	if r == nil || r.executor == nil {
 		return nil, errors.New("compatible gateway text runtime is not configured")
 	}
-	s := r.openaiGatewayService
+	return r.executor.ForwardResponses(ctx, c, account, body, defaultMappedModel)
+}
+
+func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	promptCacheKey string,
+	defaultMappedModel string,
+) (*OpenAIForwardResult, error) {
+	if r == nil || r.executor == nil {
+		return nil, errors.New("compatible gateway text runtime is not configured")
+	}
+	return r.executor.ForwardChatCompletions(ctx, c, account, body, promptCacheKey, defaultMappedModel)
+}
+
+func (r *CompatibleGatewayTextRuntime) ForwardMessages(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	promptCacheKey string,
+	defaultMappedModel string,
+) (*OpenAIForwardResult, error) {
+	if r == nil || r.executor == nil {
+		return nil, errors.New("compatible gateway text runtime is not configured")
+	}
+	return r.executor.ForwardMessages(ctx, c, account, body, promptCacheKey, defaultMappedModel)
+}
+
+func (r *CompatibleGatewayTextRuntime) FeedbackRepository() AccountRepository {
+	if r == nil {
+		return nil
+	}
+	return r.feedbackRepo
+}
+
+func (r *CompatibleGatewayTextRuntime) OwnsCompatibleGatewayRuntimeFeedback() bool {
+	return r != nil && r.feedbackOwnedByExecutor
+}
+
+func (e *OpenAITextExecutor) ForwardResponses(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	defaultMappedModel string,
+) (result *OpenAIForwardResult, err error) {
+	if e == nil || e.openaiGatewayService == nil {
+		return nil, errors.New("compatible gateway text runtime is not configured")
+	}
+	s := e.openaiGatewayService
 	startTime := time.Now()
 	requestedModel := strings.TrimSpace(getOpenAIRequestMeta(c, body).Model)
 	upstreamModelForFeedback := requestedModel
 	statusCode := 0
 	defer func() {
-		r.persistRuntimeFeedback(
+		e.persistRuntimeFeedback(
 			ctx,
 			c,
 			account,
@@ -172,7 +273,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardResponses(
 	return s.forwardPreparedOpenAIHTTP(ctx, c, account, prepared, token, startTime, isCodexCLI)
 }
 
-func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
+func (e *OpenAITextExecutor) ForwardChatCompletions(
 	ctx context.Context,
 	c *gin.Context,
 	account *Account,
@@ -180,10 +281,10 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (result *OpenAIForwardResult, err error) {
-	if r == nil || r.openaiGatewayService == nil {
+	if e == nil || e.openaiGatewayService == nil {
 		return nil, errors.New("compatible gateway text runtime is not configured")
 	}
-	s := r.openaiGatewayService
+	s := e.openaiGatewayService
 	startTime := time.Now()
 	var (
 		originalModel            string
@@ -191,7 +292,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 		statusCode               int
 	)
 	defer func() {
-		r.persistRuntimeFeedback(
+		e.persistRuntimeFeedback(
 			ctx,
 			c,
 			account,
@@ -422,7 +523,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardChatCompletions(
 	return result, handleErr
 }
 
-func (r *CompatibleGatewayTextRuntime) ForwardMessages(
+func (e *OpenAITextExecutor) ForwardMessages(
 	ctx context.Context,
 	c *gin.Context,
 	account *Account,
@@ -430,10 +531,10 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (result *OpenAIForwardResult, err error) {
-	if r == nil || r.openaiGatewayService == nil {
+	if e == nil || e.openaiGatewayService == nil {
 		return nil, errors.New("compatible gateway text runtime is not configured")
 	}
-	s := r.openaiGatewayService
+	s := e.openaiGatewayService
 	startTime := time.Now()
 	var (
 		originalModel            string
@@ -441,7 +542,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 		statusCode               int
 	)
 	defer func() {
-		r.persistRuntimeFeedback(
+		e.persistRuntimeFeedback(
 			ctx,
 			c,
 			account,
@@ -640,7 +741,7 @@ func (r *CompatibleGatewayTextRuntime) ForwardMessages(
 	return result, handleErr
 }
 
-func (r *CompatibleGatewayTextRuntime) persistRuntimeFeedback(
+func (e *OpenAITextExecutor) persistRuntimeFeedback(
 	ctx context.Context,
 	c *gin.Context,
 	account *Account,
@@ -651,10 +752,10 @@ func (r *CompatibleGatewayTextRuntime) persistRuntimeFeedback(
 	result *OpenAIForwardResult,
 	runtimeErr error,
 ) {
-	if r == nil || r.openaiGatewayService == nil || account == nil {
+	if e == nil || e.openaiGatewayService == nil || account == nil {
 		return
 	}
-	r.openaiGatewayService.PersistCompatibleGatewayRuntimeFeedback(ctx, CompatibleGatewayRuntimeFeedbackInput{
+	e.openaiGatewayService.PersistCompatibleGatewayRuntimeFeedback(ctx, CompatibleGatewayRuntimeFeedbackInput{
 		Account:        account,
 		RequestedModel: strings.TrimSpace(requestedModel),
 		UpstreamModel:  strings.TrimSpace(upstreamModel),

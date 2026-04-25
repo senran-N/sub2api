@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -253,37 +252,22 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	// 3) select account (sticky session based on request body)
 	// 优先使用 Gemini CLI 的会话标识（privileged-user-id + tmp 目录哈希）
-	sessionHash := extractGeminiCLISessionHash(c, body)
-	if sessionHash == "" {
-		// Fallback: 使用通用的会话哈希生成逻辑（适用于其他客户端）
-		parsedReq, _ := service.ParseGatewayRequest(body, domain.PlatformGemini)
-		if parsedReq != nil {
-			parsedReq.SessionContext = &service.SessionContext{
-				ClientIP:  ip.GetClientIP(c),
-				UserAgent: c.GetHeader("User-Agent"),
-				APIKeyID:  apiKey.ID,
-			}
-		}
-		sessionHash = h.gatewayService.GenerateSessionHash(parsedReq)
-	}
-	sessionKey := sessionHash
-	if sessionHash != "" {
-		sessionKey = "gemini:" + sessionHash
-	}
-
-	// 查询粘性会话绑定的账号 ID（用于检测账号切换）
-	var sessionBoundAccountID int64
-	if sessionKey != "" {
-		sessionBoundAccountID, _ = h.gatewayService.GetCachedSessionAccountID(c.Request.Context(), apiKey.GroupID, sessionKey)
-		if sessionBoundAccountID > 0 {
-			prefetchedGroupID := int64(0)
-			if apiKey.GroupID != nil {
-				prefetchedGroupID = *apiKey.GroupID
-			}
-			ctx := service.WithPrefetchedStickySession(c.Request.Context(), sessionBoundAccountID, prefetchedGroupID, h.metadataBridgeEnabled())
-			c.Request = c.Request.WithContext(ctx)
-		}
-	}
+	session := h.gatewayService.PrepareRuntimeSession(c.Request.Context(), service.RuntimeSessionPrepareRequest{
+		Body:                 body,
+		ParseProtocol:        domain.PlatformGemini,
+		SessionHash:          extractGeminiCLISessionHash(c, body),
+		Model:                modelName,
+		Stream:               stream,
+		ClientIP:             ip.GetClientIP(c),
+		UserAgent:            c.GetHeader("User-Agent"),
+		APIKeyID:             apiKey.ID,
+		GroupID:              apiKey.GroupID,
+		SessionKeyPrefix:     "gemini:",
+		BridgeLegacyMetadata: h.metadataBridgeEnabled(),
+	})
+	c.Request = c.Request.WithContext(session.Context)
+	sessionKey := session.SessionKey
+	sessionBoundAccountID := session.BoundAccountID
 
 	// === Gemini 内容摘要会话 Fallback 逻辑 ===
 	// 当原有会话标识无效时（sessionBoundAccountID == 0），尝试基于内容摘要链匹配
@@ -334,7 +318,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 					)
 
 					// 关键：如果原 sessionKey 为空，使用 prefixHash + uuid 作为 sessionKey
-					// 这样 SelectAccountWithLoadAwareness 的粘性会话逻辑会优先使用匹配到的账号
+					// 这样 selection kernel 的粘性会话逻辑会优先使用匹配到的账号
 					if sessionKey == "" {
 						sessionKey = service.GenerateGeminiDigestSessionKey(geminiPrefixHash, foundUUID)
 					}
@@ -365,22 +349,28 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 
 	for {
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, fs.FailedAccountIDs, "") // Gemini 不使用会话限制
+		selection, _, err := h.selectRuntimeAccount(c.Request.Context(), service.SelectionRequest{
+			Provider:    service.PlatformGemini,
+			Protocol:    service.GatewayProtocolPassthrough,
+			Model:       modelName,
+			GroupID:     apiKey.GroupID,
+			SessionHash: sessionKey,
+			ExcludedIDs: fs.FailedAccountIDs,
+		})
 		if err != nil {
-			if len(fs.FailedAccountIDs) == 0 {
-				googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts: "+err.Error())
+			selectionFailure := fs.HandleSelectionError(c.Request.Context(), err)
+			switch selectionFailure.Outcome {
+			case service.RuntimeSelectionFailureInitialUnavailable:
+				googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts: "+selectionFailure.Err.Error())
 				return
-			}
-			action := fs.HandleSelectionExhausted(c.Request.Context())
-			switch action {
-			case FailoverContinue:
+			case service.RuntimeSelectionFailureRetry:
 				ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
 				c.Request = c.Request.WithContext(ctx)
 				continue
-			case FailoverCanceled:
+			case service.RuntimeSelectionFailureCanceled:
 				return
 			default: // FailoverExhausted
-				h.handleGeminiFailoverExhausted(c, fs.LastFailoverErr)
+				h.handleGeminiFailoverExhausted(c, selectionFailure.FailoverErr)
 				return
 			}
 		}
@@ -411,89 +401,84 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			sessionBoundAccountID = account.ID
 		}
 
-		// 4) account concurrency slot
-		accountReleaseFunc := selection.ReleaseFunc
-		if !selection.Acquired {
-			if selection.WaitPlan == nil {
-				googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts")
-				return
-			}
-			queueResult, err := geminiConcurrency.AcquireAccountSlotOrQueue(
-				c.Request.Context(),
-				account.ID,
-				selection.WaitPlan.MaxConcurrency,
-				selection.WaitPlan.MaxWaiting,
-			)
-			if err != nil {
-				reqLog.Warn("gemini.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-				googleError(c, http.StatusTooManyRequests, err.Error())
-				return
-			}
-			if queueResult.Acquired {
-				accountReleaseFunc = queueResult.ReleaseFunc
-			} else if !queueResult.QueueAllowed {
-				reqLog.Info("gemini.account_wait_queue_full",
-					zap.Int64("account_id", account.ID),
-					zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
-				)
-				googleError(c, http.StatusTooManyRequests, "Too many pending requests, please retry later")
-				return
-			} else {
-				accountWaitCounted := queueResult.WaitCounted
-				defer func() {
-					if accountWaitCounted {
-						geminiConcurrency.DecrementAccountWaitCount(c.Request.Context(), account.ID)
-					}
-				}()
-
-				accountReleaseFunc, err = geminiConcurrency.AcquireAccountSlotAfterQueueingWithWaitTimeout(
+		slot := service.AcquireRuntimeAccountSlot(c.Request.Context(), service.RuntimeAccountSlotRequest{
+			GroupID:        apiKey.GroupID,
+			SessionHash:    sessionKey,
+			Selection:      selection,
+			AcquireOrQueue: geminiConcurrency.AcquireAccountSlotOrQueue,
+			WaitForSlot: func(_ context.Context, wait service.RuntimeAccountSlotWaitRequest) (func(), error) {
+				return geminiConcurrency.AcquireAccountSlotAfterQueueingWithWaitTimeout(
 					c,
-					account.ID,
-					selection.WaitPlan.MaxConcurrency,
-					selection.WaitPlan.Timeout,
+					wait.AccountID,
+					wait.MaxConcurrency,
+					wait.Timeout,
 					stream,
 					&streamStarted,
 				)
-				if err != nil {
-					reqLog.Warn("gemini.account_slot_acquire_failed_after_wait", zap.Int64("account_id", account.ID), zap.Error(err))
-					googleError(c, http.StatusTooManyRequests, err.Error())
-					return
-				}
-				if accountWaitCounted {
-					geminiConcurrency.DecrementAccountWaitCount(c.Request.Context(), account.ID)
-					accountWaitCounted = false
-				}
+			},
+			DecrementWait: func(ctx context.Context, accountID int64) {
+				geminiConcurrency.DecrementAccountWaitCount(ctx, accountID)
+			},
+			BindSticky: h.gatewayService.BindStickySession,
+		})
+		switch slot.Outcome {
+		case service.RuntimeAccountSlotSucceeded:
+			if slot.BindErr != nil {
+				reqLog.Warn("gemini.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(slot.BindErr))
 			}
-			if err := h.gatewayService.BindStickySession(c.Request.Context(), apiKey.GroupID, sessionKey, account.ID); err != nil {
-				reqLog.Warn("gemini.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-			}
+		case service.RuntimeAccountSlotQueueFull:
+			reqLog.Info("gemini.account_wait_queue_full",
+				zap.Int64("account_id", account.ID),
+				zap.Int("max_waiting", runtimeSlotMaxWaiting(slot)),
+			)
+			googleError(c, http.StatusTooManyRequests, "Too many pending requests, please retry later")
+			return
+		case service.RuntimeAccountSlotAcquireError:
+			reqLog.Warn("gemini.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(slot.Err))
+			googleError(c, http.StatusTooManyRequests, slot.Err.Error())
+			return
+		case service.RuntimeAccountSlotWaitAcquireError:
+			reqLog.Warn("gemini.account_slot_acquire_failed_after_wait", zap.Int64("account_id", account.ID), zap.Error(slot.Err))
+			googleError(c, http.StatusTooManyRequests, slot.Err.Error())
+			return
+		default:
+			googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts")
+			return
 		}
 		// 账号槽位/等待计数需要在超时或断开时安全回收
-		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+		accountReleaseFunc := wrapReleaseOnDone(c.Request.Context(), slot.ReleaseFunc)
 
-		// 5) forward (根据平台分流)
+		// 5) forward
 		var result *service.ForwardResult
 		requestCtx := c.Request.Context()
 		if fs.SwitchCount > 0 {
 			requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 		}
-		if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
-			result, err = h.antigravityGatewayService.ForwardGemini(requestCtx, c, account, modelName, action, stream, body, hasBoundSession)
-		} else {
-			result, err = h.geminiCompatService.ForwardNative(requestCtx, c, account, modelName, action, stream, body)
-		}
-		if accountReleaseFunc != nil {
-			accountReleaseFunc()
-		}
+		attempt := h.executeRuntimeForwardAttempt(requestCtx, reqLog, service.RuntimeForwardAttemptRequest{
+			Account: account,
+			Forward: func(ctx context.Context) (*service.ForwardResult, error) {
+				return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
+					Provider:        service.PlatformGemini,
+					Protocol:        service.GatewayProtocolPassthrough,
+					Account:         account,
+					GinContext:      c,
+					Model:           modelName,
+					Action:          action,
+					Stream:          stream,
+					Body:            body,
+					HasBoundSession: hasBoundSession,
+				})
+			},
+			AccountRelease: accountReleaseFunc,
+		})
+		result, err = attempt.Result, attempt.Err
 		if err != nil {
-			var failoverErr *service.UpstreamFailoverError
-			if errors.As(err, &failoverErr) {
-				failoverAction := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
-				switch failoverAction {
+			if failover := fs.HandleForwardError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, err, attempt.ResponseStarted); failover.Handled {
+				switch failover.Action {
 				case FailoverContinue:
 					continue
 				case FailoverExhausted:
-					h.handleGeminiFailoverExhausted(c, fs.LastFailoverErr)
+					h.handleGeminiFailoverExhausted(c, failover.FailoverErr)
 					return
 				case FailoverCanceled:
 					return

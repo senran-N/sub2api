@@ -637,75 +637,54 @@ func (h *CompatibleGatewayTextHandler) acquireResponsesAccountSlot(
 	streamStarted *bool,
 	reqLog *zap.Logger,
 ) (func(), bool) {
-	if selection == nil || selection.Account == nil {
-		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *streamStarted)
-		return nil, false
-	}
-
 	ctx := c.Request.Context()
-	account := selection.Account
-	if selection.Acquired {
-		return wrapReleaseOnDone(ctx, selection.ReleaseFunc), true
-	}
-	if selection.WaitPlan == nil {
-		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *streamStarted)
-		return nil, false
-	}
+	slot := service.AcquireRuntimeAccountSlot(ctx, service.RuntimeAccountSlotRequest{
+		GroupID:        groupID,
+		SessionHash:    sessionHash,
+		Selection:      selection,
+		AcquireOrQueue: h.concurrencyHelper.AcquireAccountSlotOrQueue,
+		WaitForSlot: func(_ context.Context, wait service.RuntimeAccountSlotWaitRequest) (func(), error) {
+			return h.concurrencyHelper.AcquireAccountSlotAfterQueueingWithWaitTimeout(
+				c,
+				wait.AccountID,
+				wait.MaxConcurrency,
+				wait.Timeout,
+				reqStream,
+				streamStarted,
+			)
+		},
+		DecrementWait: func(ctx context.Context, accountID int64) {
+			h.concurrencyHelper.DecrementAccountWaitCount(ctx, accountID)
+		},
+		BindSticky: h.gatewayService.BindStickySession,
+	})
 
-	queueResult, err := h.concurrencyHelper.AcquireAccountSlotOrQueue(
-		ctx,
-		account.ID,
-		selection.WaitPlan.MaxConcurrency,
-		selection.WaitPlan.MaxWaiting,
-	)
-	if err != nil {
-		reqLog.Warn("openai.account_slot_quick_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-		h.handleConcurrencyError(c, err, "account", *streamStarted)
-		return nil, false
-	}
-	if queueResult.Acquired {
-		if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
-			reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+	accountID := runtimeSlotAccountID(slot)
+	switch slot.Outcome {
+	case service.RuntimeAccountSlotSucceeded:
+		if slot.BindErr != nil {
+			reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", accountID), zap.Error(slot.BindErr))
 		}
-		return wrapReleaseOnDone(ctx, queueResult.ReleaseFunc), true
-	}
-	if !queueResult.QueueAllowed {
+		return wrapReleaseOnDone(ctx, slot.ReleaseFunc), true
+	case service.RuntimeAccountSlotQueueFull:
 		reqLog.Info("openai.account_wait_queue_full",
-			zap.Int64("account_id", account.ID),
-			zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
+			zap.Int64("account_id", accountID),
+			zap.Int("max_waiting", runtimeSlotMaxWaiting(slot)),
 		)
 		h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", *streamStarted)
 		return nil, false
-	}
-
-	accountWaitCounted := queueResult.WaitCounted
-	releaseWait := func() {
-		if accountWaitCounted {
-			h.concurrencyHelper.DecrementAccountWaitCount(ctx, account.ID)
-			accountWaitCounted = false
-		}
-	}
-	defer releaseWait()
-
-	accountReleaseFunc, err := h.concurrencyHelper.AcquireAccountSlotAfterQueueingWithWaitTimeout(
-		c,
-		account.ID,
-		selection.WaitPlan.MaxConcurrency,
-		selection.WaitPlan.Timeout,
-		reqStream,
-		streamStarted,
-	)
-	if err != nil {
-		reqLog.Warn("openai.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-		h.handleConcurrencyError(c, err, "account", *streamStarted)
+	case service.RuntimeAccountSlotAcquireError:
+		reqLog.Warn("openai.account_slot_quick_acquire_failed", zap.Int64("account_id", accountID), zap.Error(slot.Err))
+		h.handleConcurrencyError(c, slot.Err, "account", *streamStarted)
+		return nil, false
+	case service.RuntimeAccountSlotWaitAcquireError:
+		reqLog.Warn("openai.account_slot_acquire_failed", zap.Int64("account_id", accountID), zap.Error(slot.Err))
+		h.handleConcurrencyError(c, slot.Err, "account", *streamStarted)
+		return nil, false
+	default:
+		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *streamStarted)
 		return nil, false
 	}
-
-	releaseWait()
-	if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
-		reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-	}
-	return wrapReleaseOnDone(ctx, accountReleaseFunc), true
 }
 
 func (h *CompatibleGatewayTextHandler) ensureResponsesDependencies(c *gin.Context, reqLog *zap.Logger) bool {

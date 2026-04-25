@@ -28,14 +28,32 @@ type CompatibleGatewayRuntimeFeedbackInput struct {
 	Err            error
 }
 
-func (s *OpenAIGatewayService) PersistCompatibleGatewayRuntimeFeedback(ctx context.Context, input CompatibleGatewayRuntimeFeedbackInput) {
-	if s == nil || input.Account == nil {
+// RuntimeFeedbackInput is the provider-neutral feedback envelope emitted by
+// gateway runtimes after an execution attempt.
+type RuntimeFeedbackInput = CompatibleGatewayRuntimeFeedbackInput
+
+// RuntimeFeedbackRecorder is the narrow runtime-state write boundary shared by
+// compatible gateway runtimes.
+type RuntimeFeedbackRecorder interface {
+	RecordRuntimeFeedback(ctx context.Context, input RuntimeFeedbackInput)
+}
+
+type CompatibleGatewayRuntimeFeedbackRecorder struct {
+	accountRepo AccountRepository
+}
+
+func NewCompatibleGatewayRuntimeFeedbackRecorder(accountRepo AccountRepository) *CompatibleGatewayRuntimeFeedbackRecorder {
+	return &CompatibleGatewayRuntimeFeedbackRecorder{accountRepo: accountRepo}
+}
+
+func (r *CompatibleGatewayRuntimeFeedbackRecorder) RecordRuntimeFeedback(ctx context.Context, input RuntimeFeedbackInput) {
+	if r == nil || input.Account == nil {
 		return
 	}
 
 	switch NormalizeCompatibleGatewayPlatform(input.Account.Platform) {
 	case PlatformGrok:
-		s.PersistGrokRuntimeFeedback(ctx, GrokRuntimeFeedbackInput{
+		persistGrokRuntimeFeedbackToRepo(ctx, r.accountRepo, GrokRuntimeFeedbackInput{
 			Account:        input.Account,
 			RequestedModel: input.RequestedModel,
 			UpstreamModel:  input.UpstreamModel,
@@ -46,4 +64,11 @@ func (s *OpenAIGatewayService) PersistCompatibleGatewayRuntimeFeedback(ctx conte
 			Err:            input.Err,
 		})
 	}
+}
+
+func (s *OpenAIGatewayService) PersistCompatibleGatewayRuntimeFeedback(ctx context.Context, input CompatibleGatewayRuntimeFeedbackInput) {
+	if s == nil || input.Account == nil {
+		return
+	}
+	NewCompatibleGatewayRuntimeFeedbackRecorder(s.accountRepo).RecordRuntimeFeedback(ctx, input)
 }

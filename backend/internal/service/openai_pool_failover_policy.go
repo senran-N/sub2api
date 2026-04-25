@@ -1,19 +1,19 @@
-package handler
+package service
 
-import "github.com/senran-N/sub2api/internal/service"
+import "net/http"
 
-type openAIPoolFailoverDecision struct {
-	Action           FailoverAction
+type OpenAIPoolFailoverDecision struct {
+	Action           RuntimeFailoverAction
 	SameAccountRetry bool
 	RetryCount       int
 	RetryLimit       int
 	SwitchCount      int
 }
 
-func applyOpenAIPoolFailoverPolicy(
-	account *service.Account,
-	failoverErr *service.UpstreamFailoverError,
-	codexDecision service.CodexRecoveryDecision,
+func ApplyOpenAIPoolFailoverPolicy(
+	account *Account,
+	failoverErr *UpstreamFailoverError,
+	codexDecision CodexRecoveryDecision,
 	hasSessionAffinity bool,
 	sameAccountRetryCount map[int64]int,
 	failedAccountIDs map[int64]struct{},
@@ -21,8 +21,8 @@ func applyOpenAIPoolFailoverPolicy(
 	maxAccountSwitches int,
 	tempUnscheduleRetryable func(),
 	recordSwitch func(),
-) openAIPoolFailoverDecision {
-	decision := openAIPoolFailoverDecision{Action: FailoverExhausted}
+) OpenAIPoolFailoverDecision {
+	decision := OpenAIPoolFailoverDecision{Action: RuntimeFailoverExhausted}
 	if account == nil || failoverErr == nil || switchCount == nil {
 		return decision
 	}
@@ -39,7 +39,7 @@ func applyOpenAIPoolFailoverPolicy(
 		return decision
 	}
 
-	if !forceSwitchAccount && shouldExhaustFailoverImmediately(failoverErr, hasSessionAffinity) {
+	if !forceSwitchAccount && shouldExhaustOpenAIPoolFailoverImmediately(failoverErr, hasSessionAffinity) {
 		if failedAccountIDs != nil {
 			failedAccountIDs[account.ID] = struct{}{}
 		}
@@ -48,13 +48,13 @@ func applyOpenAIPoolFailoverPolicy(
 
 	if !forceSwitchAccount && failoverErr.RetryableOnSameAccount && sameAccountRetryCount != nil && sameAccountRetryCount[account.ID] < decision.RetryLimit {
 		sameAccountRetryCount[account.ID]++
-		decision.Action = FailoverContinue
+		decision.Action = RuntimeFailoverContinue
 		decision.SameAccountRetry = true
 		decision.RetryCount = sameAccountRetryCount[account.ID]
 		return decision
 	}
 
-	if !forceSwitchAccount && shouldPreserveBoundSessionOnRateLimit(failoverErr, hasSessionAffinity) {
+	if !forceSwitchAccount && shouldPreserveOpenAIPoolBoundSessionOnRateLimit(failoverErr, hasSessionAffinity) {
 		if failedAccountIDs != nil {
 			failedAccountIDs[account.ID] = struct{}{}
 		}
@@ -76,7 +76,25 @@ func applyOpenAIPoolFailoverPolicy(
 		recordSwitch()
 	}
 	*switchCount++
-	decision.Action = FailoverContinue
+	decision.Action = RuntimeFailoverContinue
 	decision.SwitchCount = *switchCount
 	return decision
+}
+
+func shouldExhaustOpenAIPoolFailoverImmediately(failoverErr *UpstreamFailoverError, hasSessionAffinity bool) bool {
+	if failoverErr == nil {
+		return false
+	}
+	switch failoverErr.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return true
+	case http.StatusTooManyRequests:
+		return !hasSessionAffinity
+	default:
+		return false
+	}
+}
+
+func shouldPreserveOpenAIPoolBoundSessionOnRateLimit(failoverErr *UpstreamFailoverError, hasSessionAffinity bool) bool {
+	return hasSessionAffinity && failoverErr != nil && failoverErr.StatusCode == http.StatusTooManyRequests
 }

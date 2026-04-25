@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/senran-N/sub2api/internal/pkg/ip"
@@ -86,193 +85,167 @@ func (h *CompatibleGatewayTextHandler) executeCompatibleGatewayTextFlow(c *gin.C
 		flow.recordUsageComponent = "handler.openai_gateway.responses"
 	}
 
-	maxAccountSwitches := h.maxAccountSwitches
-	switchCount := 0
-	failedAccountIDs := make(map[int64]struct{})
-	sameAccountRetryCount := make(map[int64]int)
-	var lastFailoverErr *service.UpstreamFailoverError
 	codexSchedulingObserved := false
 
-	for {
-		if flow.fallbackContextKey != "" {
-			c.Set(flow.fallbackContextKey, "")
-		}
-		selectionModel := flow.selectionModel()
-		flow.reqLog.Debug(flow.logPrefix+".account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
-		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-			flow.schedulerCtx,
-			flow.apiKey.GroupID,
-			flow.previousResponseID,
-			flow.sessionHash,
-			selectionModel,
-			failedAccountIDs,
-			service.OpenAIUpstreamTransportAny,
-		)
-		if err != nil {
-			flow.reqLog.Warn(flow.logPrefix+".account_select_failed",
-				zap.Error(err),
-				zap.Int("excluded_account_count", len(failedAccountIDs)),
-			)
-			if !h.tryCompatibleGatewayTextSelectionFallback(c, flow, selectionModel, failedAccountIDs, &selection, &scheduleDecision, &err) {
-				h.handleTextFlowSelectionError(c, flow, err, lastFailoverErr, failedAccountIDs)
-				return
-			}
-		}
-		if selection == nil || selection.Account == nil {
-			h.handleTextFlowNoAvailableAccount(c, flow)
-			return
-		}
+	result := service.NewCompatibleTextExecutionKernel(h.gatewayService).Execute(c.Request.Context(), service.CompatibleTextExecutionRequest{
+		ProtocolFamily:            flow.protocolFamily(),
+		Provider:                  service.PlatformOpenAI,
+		APIKey:                    flow.apiKey,
+		Body:                      flow.body,
+		ReqModel:                  flow.reqModel,
+		ReqStream:                 flow.reqStream,
+		SchedulingModel:           flow.schedulingModel,
+		PreferredMappedModel:      flow.preferredMappedModel,
+		PreviousResponseID:        flow.previousResponseID,
+		SessionHash:               flow.sessionHash,
+		ChannelUsage:              flow.channelUsage,
+		RoutingStart:              flow.routingStart,
+		SchedulerContext:          flow.schedulerCtx,
+		CodexProfile:              flow.codexProfile,
+		UseSelectionFallback:      flow.useSelectionFallback,
+		IncludeRequestPayloadHash: flow.includeRequestPayloadHash,
+		MaxAccountSwitches:        h.maxAccountSwitches,
+		Forward: func(ctx context.Context, account *service.Account, defaultMappedModel string) (*service.OpenAIForwardResult, error) {
+			return flow.forward(ctx, c, account, defaultMappedModel)
+		},
+		AcquireAccountSlot: func(_ context.Context, sessionHash string, selection *service.AccountSelectionResult) (func(), bool) {
+			return h.acquireResponsesAccountSlot(c, flow.apiKey.GroupID, sessionHash, selection, flow.reqStream, flow.streamStarted, flow.reqLog)
+		},
+		Hooks: h.compatibleTextExecutionHooks(c, flow, &codexSchedulingObserved),
+	})
 
-		if flow.route == compatibleGatewayTextRouteResponses && flow.previousResponseID != "" {
-			flow.reqLog.Debug("openai.account_selected_with_previous_response_id", zap.Int64("account_id", selection.Account.ID))
-		}
-		h.logCompatibleGatewayTextScheduleDecision(flow, scheduleDecision, &codexSchedulingObserved)
-
-		account := selection.Account
-		flow.sessionHash = ensureOpenAIPoolModeSessionHash(flow.sessionHash, account)
-		flow.reqLog.Debug(flow.logPrefix+".account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
-		setOpsSelectedAccount(c, account.ID, account.Platform)
-
-		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, flow.apiKey.GroupID, flow.sessionHash, selection, flow.reqStream, flow.streamStarted, flow.reqLog)
-		if !acquired {
-			return
-		}
-
-		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(flow.routingStart).Milliseconds())
-		forwardStart := time.Now()
-		defaultMappedModel := flow.forwardDefaultMappedModel(c)
-		result, err := flow.forward(c.Request.Context(), c, account, defaultMappedModel)
-
-		forwardDurationMs := time.Since(forwardStart).Milliseconds()
-		if accountReleaseFunc != nil {
-			accountReleaseFunc()
-		}
-		setCompatibleGatewayTextResponseLatency(c, forwardDurationMs, result)
-
-		if err != nil {
-			var failoverErr *service.UpstreamFailoverError
-			if errors.As(err, &failoverErr) {
-				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
-				lastFailoverErr = failoverErr
-				decision := h.applyCompatibleGatewayTextFailoverPolicy(c, flow, account, failoverErr, sameAccountRetryCount, failedAccountIDs, &switchCount, maxAccountSwitches)
-				if decision.SameAccountRetry {
-					flow.reqLog.Warn(flow.logPrefix+".pool_mode_same_account_retry",
-						zap.Int64("account_id", account.ID),
-						zap.Int("upstream_status", failoverErr.StatusCode),
-						zap.Int("retry_limit", decision.RetryLimit),
-						zap.Int("retry_count", decision.RetryCount),
-					)
-					if !sleepWithContext(c.Request.Context(), sameAccountRetryDelay) {
-						return
-					}
-					continue
-				}
-				if decision.Action == FailoverExhausted {
-					h.handleTextFlowFailoverExhausted(c, flow, failoverErr)
-					return
-				}
-				flow.reqLog.Warn(flow.logPrefix+".upstream_failover_switching",
-					zap.Int64("account_id", account.ID),
-					zap.Int("upstream_status", failoverErr.StatusCode),
-					zap.Int("switch_count", decision.SwitchCount),
-					zap.Int("max_switches", maxAccountSwitches),
-				)
-				continue
-			}
-			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
-			h.handleTextFlowForwardError(c, flow, account, err)
-			return
-		}
-
-		h.reportCompatibleGatewayTextSuccess(c, flow, account, result)
-		flow.reqLog.Debug(flow.logPrefix+".request_completed",
-			zap.Int64("account_id", account.ID),
-			zap.Int("switch_count", switchCount),
-		)
+	flow.sessionHash = result.SessionHash
+	switch result.Outcome {
+	case service.CompatibleTextExecutionSucceeded:
+		h.recordCompatibleGatewayTextUsage(c, flow, result.Account, result.ForwardResult)
+	case service.CompatibleTextExecutionSelectionError:
+		h.handleTextFlowSelectionError(c, flow, result.InitialSelectionErr, result.Err, result.LastFailoverErr, result.FailedAccountIDs)
+	case service.CompatibleTextExecutionNoAvailable:
+		h.handleTextFlowNoAvailableAccount(c, flow)
+	case service.CompatibleTextExecutionAcquireBlocked, service.CompatibleTextExecutionCanceled:
 		return
+	case service.CompatibleTextExecutionFailoverExhausted:
+		h.handleTextFlowFailoverExhausted(c, flow, result.FailoverErr)
+	case service.CompatibleTextExecutionForwardError:
+		h.handleTextFlowForwardError(c, flow, result.Account, result.Err)
+	default:
+		h.handleTextFlowForwardError(c, flow, result.Account, result.Err)
 	}
 }
 
-func (flow compatibleGatewayTextFlow) selectionModel() string {
-	if preferred := strings.TrimSpace(flow.preferredMappedModel); preferred != "" {
-		return preferred
+func (flow compatibleGatewayTextFlow) protocolFamily() service.CompatibleGatewayProtocolFamily {
+	switch flow.route {
+	case compatibleGatewayTextRouteChatCompletions:
+		return service.CompatibleGatewayProtocolFamilyChatCompletions
+	case compatibleGatewayTextRouteMessages:
+		return service.CompatibleGatewayProtocolFamilyMessages
+	default:
+		return service.CompatibleGatewayProtocolFamilyResponses
 	}
-	return flow.schedulingModel
 }
 
-func (flow compatibleGatewayTextFlow) forwardDefaultMappedModel(c *gin.Context) string {
-	if flow.route == compatibleGatewayTextRouteMessages {
-		return strings.TrimSpace(flow.preferredMappedModel)
-	}
-	fallbackModel := ""
-	if flow.fallbackContextKey != "" {
-		fallbackModel = c.GetString(flow.fallbackContextKey)
-	}
-	if fallbackModel == "" && flow.channelUsage.ChannelMappedModel != "" {
-		fallbackModel = flow.channelUsage.ChannelMappedModel
-	}
-	return resolveOpenAIForwardDefaultMappedModel(flow.apiKey, fallbackModel)
-}
-
-func (h *CompatibleGatewayTextHandler) tryCompatibleGatewayTextSelectionFallback(
+func (h *CompatibleGatewayTextHandler) compatibleTextExecutionHooks(
 	c *gin.Context,
 	flow compatibleGatewayTextFlow,
-	selectionModel string,
-	failedAccountIDs map[int64]struct{},
-	selection **service.AccountSelectionResult,
-	scheduleDecision *service.OpenAIAccountScheduleDecision,
-	selectionErr *error,
-) bool {
-	if !flow.useSelectionFallback || len(failedAccountIDs) != 0 {
-		return false
+	codexSchedulingObserved *bool,
+) service.CompatibleTextExecutionHooks {
+	return service.CompatibleTextExecutionHooks{
+		ResetFallbackModel: func() {
+			if flow.fallbackContextKey != "" {
+				c.Set(flow.fallbackContextKey, "")
+			}
+		},
+		ResolveSelectionFallback: func(_ context.Context, selectionModel string, _ error) string {
+			return resolveOpenAISelectionFallbackModel(
+				c,
+				h.gatewayService,
+				flow.apiKey,
+				selectionModel,
+				flow.reqLog,
+				flow.fallbackSkippedLog,
+			)
+		},
+		OnFallbackSelected: func(defaultModel string) {
+			if flow.fallbackContextKey != "" {
+				c.Set(flow.fallbackContextKey, defaultModel)
+			}
+			flow.reqLog.Info(flow.logPrefix+".fallback_to_default_model",
+				zap.String("default_mapped_model", defaultModel),
+			)
+		},
+		OnAccountSelecting: func(_ string, excludedCount int) {
+			flow.reqLog.Debug(flow.logPrefix+".account_selecting", zap.Int("excluded_account_count", excludedCount))
+		},
+		OnAccountSelectFailed: func(err error, excludedCount int) {
+			flow.reqLog.Warn(flow.logPrefix+".account_select_failed",
+				zap.Error(err),
+				zap.Int("excluded_account_count", excludedCount),
+			)
+		},
+		OnPreviousResponseSelected: func(account *service.Account) {
+			flow.reqLog.Debug("openai.account_selected_with_previous_response_id", zap.Int64("account_id", account.ID))
+		},
+		OnScheduleDecision: func(decision service.OpenAIAccountScheduleDecision) {
+			h.logCompatibleGatewayTextScheduleDecision(flow, decision, codexSchedulingObserved)
+		},
+		OnAccountSelected: func(account *service.Account) {
+			flow.reqLog.Debug(flow.logPrefix+".account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
+			setOpsSelectedAccount(c, account.ID, account.Platform)
+		},
+		OnRoutingLatency: func(d time.Duration) {
+			service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, d.Milliseconds())
+		},
+		OnForwardLatency: func(d time.Duration, result *service.OpenAIForwardResult) {
+			setCompatibleGatewayTextResponseLatency(c, d.Milliseconds(), result)
+		},
+		ResolveCodexFailoverRecovery: func(account *service.Account, failoverErr *service.UpstreamFailoverError, stickyContext bool) service.CodexRecoveryDecision {
+			return h.gatewayService.ResolveCodexFailoverRecovery(c, account, failoverErr, stickyContext)
+		},
+		RecordCodexRecoverySwitch: func(account *service.Account, failoverErr *service.UpstreamFailoverError, trackMetrics bool) {
+			h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, trackMetrics)
+		},
+		OnSameAccountRetry: func(account *service.Account, failoverErr *service.UpstreamFailoverError, decision service.OpenAIPoolFailoverDecision) {
+			flow.reqLog.Warn(flow.logPrefix+".pool_mode_same_account_retry",
+				zap.Int64("account_id", account.ID),
+				zap.Int("upstream_status", failoverErr.StatusCode),
+				zap.Int("retry_limit", decision.RetryLimit),
+				zap.Int("retry_count", decision.RetryCount),
+			)
+		},
+		OnFailoverSwitch: func(account *service.Account, failoverErr *service.UpstreamFailoverError, decision service.OpenAIPoolFailoverDecision) {
+			flow.reqLog.Warn(flow.logPrefix+".upstream_failover_switching",
+				zap.Int64("account_id", account.ID),
+				zap.Int("upstream_status", failoverErr.StatusCode),
+				zap.Int("switch_count", decision.SwitchCount),
+				zap.Int("max_switches", h.maxAccountSwitches),
+			)
+		},
+		OnCompleted: func(account *service.Account, switchCount int) {
+			flow.reqLog.Debug(flow.logPrefix+".request_completed",
+				zap.Int64("account_id", account.ID),
+				zap.Int("switch_count", switchCount),
+			)
+		},
 	}
-	initialSelectionErr := *selectionErr
-	defaultModel := resolveOpenAISelectionFallbackModel(
-		c,
-		h.gatewayService,
-		flow.apiKey,
-		selectionModel,
-		flow.reqLog,
-		flow.fallbackSkippedLog,
-	)
-	if defaultModel == "" || defaultModel == selectionModel {
-		status, code, message := openAISelectionErrorResponseAfterDefaultFallback(initialSelectionErr, *selectionErr)
-		h.handleStreamingAwareError(c, status, code, message, *flow.streamStarted)
-		return true
-	}
-	flow.reqLog.Info(flow.logPrefix+".fallback_to_default_model",
-		zap.String("default_mapped_model", defaultModel),
-	)
-	selected, decision, err := h.gatewayService.SelectAccountWithScheduler(
-		flow.schedulerCtx,
-		flow.apiKey.GroupID,
-		flow.previousResponseID,
-		flow.sessionHash,
-		defaultModel,
-		failedAccountIDs,
-		service.OpenAIUpstreamTransportAny,
-	)
-	if err != nil {
-		status, code, message := openAISelectionErrorResponseAfterDefaultFallback(initialSelectionErr, err)
-		h.handleStreamingAwareError(c, status, code, message, *flow.streamStarted)
-		return true
-	}
-	if selected != nil && flow.fallbackContextKey != "" {
-		c.Set(flow.fallbackContextKey, defaultModel)
-	}
-	*selection = selected
-	*scheduleDecision = decision
-	*selectionErr = nil
-	return true
 }
 
-func (h *CompatibleGatewayTextHandler) handleTextFlowSelectionError(c *gin.Context, flow compatibleGatewayTextFlow, err error, lastFailoverErr *service.UpstreamFailoverError, failedAccountIDs map[int64]struct{}) {
+func (h *CompatibleGatewayTextHandler) handleTextFlowSelectionError(
+	c *gin.Context,
+	flow compatibleGatewayTextFlow,
+	initialErr error,
+	err error,
+	lastFailoverErr *service.UpstreamFailoverError,
+	failedAccountIDs map[int64]struct{},
+) {
 	if len(failedAccountIDs) == 0 {
 		if flow.route == compatibleGatewayTextRouteMessages {
 			h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *flow.streamStarted)
 			return
 		}
-		status, code, message := openAISelectionErrorResponseAfterDefaultFallback(err, err)
+		if initialErr == nil {
+			initialErr = err
+		}
+		status, code, message := openAISelectionErrorResponseAfterDefaultFallback(initialErr, err)
 		h.handleStreamingAwareError(c, status, code, message, *flow.streamStarted)
 		return
 	}
@@ -296,6 +269,14 @@ func (h *CompatibleGatewayTextHandler) handleTextFlowNoAvailableAccount(c *gin.C
 }
 
 func (h *CompatibleGatewayTextHandler) handleTextFlowFailoverExhausted(c *gin.Context, flow compatibleGatewayTextFlow, failoverErr *service.UpstreamFailoverError) {
+	if failoverErr == nil {
+		if flow.route == compatibleGatewayTextRouteMessages {
+			h.anthropicStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", *flow.streamStarted)
+			return
+		}
+		h.handleFailoverExhaustedSimple(c, http.StatusBadGateway, *flow.streamStarted)
+		return
+	}
 	if flow.route == compatibleGatewayTextRouteMessages {
 		h.handleAnthropicFailoverExhausted(c, failoverErr, *flow.streamStarted)
 		return
@@ -344,49 +325,6 @@ func (h *CompatibleGatewayTextHandler) logCompatibleGatewayTextScheduleDecision(
 	*observed = true
 }
 
-func (h *CompatibleGatewayTextHandler) applyCompatibleGatewayTextFailoverPolicy(
-	c *gin.Context,
-	flow compatibleGatewayTextFlow,
-	account *service.Account,
-	failoverErr *service.UpstreamFailoverError,
-	sameAccountRetryCount map[int64]int,
-	failedAccountIDs map[int64]struct{},
-	switchCount *int,
-	maxAccountSwitches int,
-) openAIPoolFailoverDecision {
-	codexFailoverDecision := service.CodexRecoveryDecision{}
-	stickyContext := flow.sessionHash != ""
-	if flow.route == compatibleGatewayTextRouteResponses {
-		stickyContext = stickyContext || flow.previousResponseID != ""
-		if flow.codexProfile != nil && flow.codexProfile.NativeClient {
-			codexFailoverDecision = h.gatewayService.ResolveCodexFailoverRecovery(c, account, failoverErr, stickyContext)
-		}
-	}
-	return applyOpenAIPoolFailoverPolicy(
-		account,
-		failoverErr,
-		codexFailoverDecision,
-		stickyContext,
-		sameAccountRetryCount,
-		failedAccountIDs,
-		switchCount,
-		maxAccountSwitches,
-		func() {
-			h.gatewayService.TempUnscheduleRetryableError(c.Request.Context(), account.ID, failoverErr)
-		},
-		func() {
-			h.gatewayService.RecordOpenAIAccountSwitch()
-			if flow.route == compatibleGatewayTextRouteResponses {
-				if flow.codexProfile != nil && flow.codexProfile.NativeClient && codexFailoverDecision.SwitchAccount {
-					h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, true)
-				}
-				return
-			}
-			h.gatewayService.RecordCodexRecoveryAccountSwitch(c, account, failoverErr, false)
-		},
-	)
-}
-
 func setCompatibleGatewayTextResponseLatency(c *gin.Context, forwardDurationMs int64, result *service.OpenAIForwardResult) {
 	upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
 	responseLatencyMs := forwardDurationMs
@@ -399,16 +337,7 @@ func setCompatibleGatewayTextResponseLatency(c *gin.Context, forwardDurationMs i
 	}
 }
 
-func (h *CompatibleGatewayTextHandler) reportCompatibleGatewayTextSuccess(c *gin.Context, flow compatibleGatewayTextFlow, account *service.Account, result *service.OpenAIForwardResult) {
-	if result != nil {
-		if flow.route == compatibleGatewayTextRouteResponses && account.Type == service.AccountTypeOAuth {
-			h.gatewayService.UpdateCodexUsageSnapshotFromHeaders(c.Request.Context(), account.ID, result.ResponseHeaders)
-		}
-		h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
-	} else {
-		h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, nil)
-	}
-
+func (h *CompatibleGatewayTextHandler) recordCompatibleGatewayTextUsage(c *gin.Context, flow compatibleGatewayTextFlow, account *service.Account, result *service.OpenAIForwardResult) {
 	userAgent := c.GetHeader("User-Agent")
 	clientIP := ip.GetClientIP(c)
 	requestPayloadHash := ""
