@@ -294,6 +294,7 @@ import { useEditAccountModelRestrictions } from "@/components/account/useEditAcc
 import { useEditAccountQuotaLimits } from "@/components/account/useEditAccountQuotaLimits";
 import { useEditAccountQuotaControls } from "@/components/account/useEditAccountQuotaControls";
 import { useEditAccountRuntimeOptions } from "@/components/account/useEditAccountRuntimeOptions";
+import { useEditAccountTempUnschedRules } from "@/components/account/useEditAccountTempUnschedRules";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
@@ -320,20 +321,15 @@ import {
   resolveAccountMutationProfile,
 } from "@/components/account/accountMutationProfiles";
 import {
-  createTempUnschedRule,
   DEFAULT_POOL_MODE_RETRY_COUNT,
   getDefaultBaseURL,
-  loadTempUnschedRuleState,
-  moveItemInPlace,
   normalizePoolModeRetryCount,
-  type TempUnschedRuleForm,
 } from "@/components/account/credentialsBuilder";
 import { confirmCustomErrorCodeSelection } from "@/components/account/accountModalInteractions";
 import {
   formatDateTimeLocalInput,
   parseDateTimeLocalInput,
 } from "@/utils/format";
-import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { resolveRequestErrorMessage } from "@/utils/requestError";
 import {
   ensureModelCatalogLoaded,
@@ -428,10 +424,16 @@ const interceptWarmupRequests = ref(false);
 const autoPauseOnExpired = ref(false);
 const mixedScheduling = ref(false); // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false); // For antigravity accounts: enable AI Credits overages
-const tempUnschedEnabled = ref(false);
-const tempUnschedRules = ref<TempUnschedRuleForm[]>([]);
-const getTempUnschedRuleKey =
-  createStableObjectKeyResolver<TempUnschedRuleForm>("edit-temp-unsched-rule");
+const {
+  addTempUnschedRule,
+  getTempUnschedRuleKey,
+  hydrateTempUnschedRulesFromCredentials,
+  moveTempUnschedRule,
+  removeTempUnschedRule,
+  tempUnschedEnabled,
+  tempUnschedRules,
+  updateTempUnschedRule,
+} = useEditAccountTempUnschedRules();
 
 const showMixedChannelWarning = ref(false);
 const mixedChannelWarningDetails = ref<{
@@ -658,9 +660,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   hydrateQuotaControlsFromAccount(newAccount);
 
-  const tempUnschedState = loadTempUnschedRuleState(credentials);
-  tempUnschedEnabled.value = tempUnschedState.enabled;
-  tempUnschedRules.value = tempUnschedState.rules;
+  hydrateTempUnschedRulesFromCredentials(credentials);
 
   // Initialize compatible API key/upstream fields.
   if (
@@ -788,37 +788,6 @@ const removeErrorCode = (code: number) => {
   if (index !== -1) {
     selectedErrorCodes.value.splice(index, 1);
   }
-};
-
-const addTempUnschedRule = (preset?: TempUnschedRuleForm) => {
-  tempUnschedRules.value.push(createTempUnschedRule(preset));
-};
-
-const removeTempUnschedRule = (index: number) => {
-  tempUnschedRules.value.splice(index, 1);
-};
-
-const moveTempUnschedRule = (index: number, direction: number) => {
-  moveItemInPlace(tempUnschedRules.value, index, direction);
-};
-
-const updateTempUnschedRule = (
-  index: number,
-  field: keyof TempUnschedRuleForm,
-  value: TempUnschedRuleForm[keyof TempUnschedRuleForm],
-) => {
-  const rule = tempUnschedRules.value[index];
-  if (!rule) {
-    return;
-  }
-
-  const nextRule = { ...rule };
-  if (field === "error_code" || field === "duration_minutes") {
-    nextRule[field] = typeof value === "number" ? value : null;
-  } else {
-    nextRule[field] = typeof value === "string" ? value : "";
-  }
-  tempUnschedRules.value[index] = nextRule;
 };
 
 const clearMixedChannelDialog = () => {
