@@ -290,6 +290,7 @@ import QuotaLimitSection from "@/components/account/QuotaLimitSection.vue";
 import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSection.vue";
 import WarmupSection from "@/components/account/WarmupSection.vue";
 import GrokRuntimeSummary from "@/components/account/GrokRuntimeSummary.vue";
+import { useEditAccountQuotaLimits } from "@/components/account/useEditAccountQuotaLimits";
 import { useEditAccountQuotaControls } from "@/components/account/useEditAccountQuotaControls";
 import {
   buildCompatibleBaseUrlPresets,
@@ -486,30 +487,27 @@ const openaiAPIKeyResponsesWebSocketV2Mode =
   ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF);
 const codexCLIOnlyEnabled = ref(false);
 const anthropicPassthroughEnabled = ref(false);
-const editQuotaLimit = ref<number | null>(null);
-const editQuotaDailyLimit = ref<number | null>(null);
-const editQuotaWeeklyLimit = ref<number | null>(null);
-const editDailyResetMode = ref<"rolling" | "fixed" | null>(null);
-const editDailyResetHour = ref<number | null>(null);
-const editWeeklyResetMode = ref<"rolling" | "fixed" | null>(null);
-const editWeeklyResetDay = ref<number | null>(null);
-const editWeeklyResetHour = ref<number | null>(null);
-const editResetTimezone = ref<string | null>(null);
-const editQuotaNotifyDailyEnabled = ref<boolean | null>(null);
-const editQuotaNotifyDailyThreshold = ref<number | null>(null);
-const editQuotaNotifyDailyThresholdType = ref<"fixed" | "percentage" | null>(
-  null,
-);
-const editQuotaNotifyWeeklyEnabled = ref<boolean | null>(null);
-const editQuotaNotifyWeeklyThreshold = ref<number | null>(null);
-const editQuotaNotifyWeeklyThresholdType = ref<"fixed" | "percentage" | null>(
-  null,
-);
-const editQuotaNotifyTotalEnabled = ref<boolean | null>(null);
-const editQuotaNotifyTotalThreshold = ref<number | null>(null);
-const editQuotaNotifyTotalThresholdType = ref<"fixed" | "percentage" | null>(
-  null,
-);
+const {
+  editDailyResetHour,
+  editDailyResetMode,
+  editQuotaDailyLimit,
+  editQuotaLimit,
+  editQuotaNotifyDailyEnabled,
+  editQuotaNotifyDailyThreshold,
+  editQuotaNotifyDailyThresholdType,
+  editQuotaNotifyTotalEnabled,
+  editQuotaNotifyTotalThreshold,
+  editQuotaNotifyTotalThresholdType,
+  editQuotaNotifyWeeklyEnabled,
+  editQuotaNotifyWeeklyThreshold,
+  editQuotaNotifyWeeklyThresholdType,
+  editQuotaWeeklyLimit,
+  editResetTimezone,
+  editWeeklyResetDay,
+  editWeeklyResetHour,
+  editWeeklyResetMode,
+  hydrateQuotaLimitsFromAccount,
+} = useEditAccountQuotaLimits();
 const openAIWSModeOptions = computed(() => buildAccountOpenAIWSModeOptions(t));
 const openaiResponsesWebSocketV2Mode = computed({
   get: () => {
@@ -725,71 +723,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     anthropicPassthroughEnabled.value = extra?.anthropic_passthrough === true;
   }
 
-  // Load quota limit for compatible key/upstream and bedrock accounts.
-  if (
-    newAccount.type === "apikey" ||
-    newAccount.type === "upstream" ||
-    newAccount.type === "bedrock"
-  ) {
-    const quotaVal = extra?.quota_limit as number | undefined;
-    editQuotaLimit.value = quotaVal && quotaVal > 0 ? quotaVal : null;
-    const dailyVal = extra?.quota_daily_limit as number | undefined;
-    editQuotaDailyLimit.value = dailyVal && dailyVal > 0 ? dailyVal : null;
-    const weeklyVal = extra?.quota_weekly_limit as number | undefined;
-    editQuotaWeeklyLimit.value = weeklyVal && weeklyVal > 0 ? weeklyVal : null;
-    // Load quota reset mode config
-    editDailyResetMode.value =
-      (extra?.quota_daily_reset_mode as "rolling" | "fixed") || null;
-    editDailyResetHour.value =
-      (extra?.quota_daily_reset_hour as number) ?? null;
-    editWeeklyResetMode.value =
-      (extra?.quota_weekly_reset_mode as "rolling" | "fixed") || null;
-    editWeeklyResetDay.value =
-      (extra?.quota_weekly_reset_day as number) ?? null;
-    editWeeklyResetHour.value =
-      (extra?.quota_weekly_reset_hour as number) ?? null;
-    editResetTimezone.value = (extra?.quota_reset_timezone as string) || null;
-    editQuotaNotifyDailyEnabled.value =
-      (extra?.quota_notify_daily_enabled as boolean) || null;
-    editQuotaNotifyDailyThreshold.value =
-      (extra?.quota_notify_daily_threshold as number) ?? null;
-    editQuotaNotifyDailyThresholdType.value =
-      (extra?.quota_notify_daily_threshold_type as "fixed" | "percentage") ||
-      null;
-    editQuotaNotifyWeeklyEnabled.value =
-      (extra?.quota_notify_weekly_enabled as boolean) || null;
-    editQuotaNotifyWeeklyThreshold.value =
-      (extra?.quota_notify_weekly_threshold as number) ?? null;
-    editQuotaNotifyWeeklyThresholdType.value =
-      (extra?.quota_notify_weekly_threshold_type as "fixed" | "percentage") ||
-      null;
-    editQuotaNotifyTotalEnabled.value =
-      (extra?.quota_notify_total_enabled as boolean) || null;
-    editQuotaNotifyTotalThreshold.value =
-      (extra?.quota_notify_total_threshold as number) ?? null;
-    editQuotaNotifyTotalThresholdType.value =
-      (extra?.quota_notify_total_threshold_type as "fixed" | "percentage") ||
-      null;
-  } else {
-    editQuotaLimit.value = null;
-    editQuotaDailyLimit.value = null;
-    editQuotaWeeklyLimit.value = null;
-    editDailyResetMode.value = null;
-    editDailyResetHour.value = null;
-    editWeeklyResetMode.value = null;
-    editWeeklyResetDay.value = null;
-    editWeeklyResetHour.value = null;
-    editResetTimezone.value = null;
-    editQuotaNotifyDailyEnabled.value = null;
-    editQuotaNotifyDailyThreshold.value = null;
-    editQuotaNotifyDailyThresholdType.value = null;
-    editQuotaNotifyWeeklyEnabled.value = null;
-    editQuotaNotifyWeeklyThreshold.value = null;
-    editQuotaNotifyWeeklyThresholdType.value = null;
-    editQuotaNotifyTotalEnabled.value = null;
-    editQuotaNotifyTotalThreshold.value = null;
-    editQuotaNotifyTotalThresholdType.value = null;
-  }
+  hydrateQuotaLimitsFromAccount(newAccount);
 
   // Load antigravity model mapping (Antigravity 只支持映射模式)
   if (newAccount.platform === "antigravity") {
@@ -860,45 +794,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       typeof retryCount === "number" && retryCount >= 0
         ? retryCount
         : DEFAULT_POOL_MODE_RETRY_COUNT;
-
-    // Load quota limits for bedrock
-    const bedrockExtra = (newAccount.extra as Record<string, unknown>) || {};
-    editQuotaLimit.value =
-      typeof bedrockExtra.quota_limit === "number"
-        ? bedrockExtra.quota_limit
-        : null;
-    editQuotaDailyLimit.value =
-      typeof bedrockExtra.quota_daily_limit === "number"
-        ? bedrockExtra.quota_daily_limit
-        : null;
-    editQuotaWeeklyLimit.value =
-      typeof bedrockExtra.quota_weekly_limit === "number"
-        ? bedrockExtra.quota_weekly_limit
-        : null;
-    editQuotaNotifyDailyEnabled.value =
-      (bedrockExtra.quota_notify_daily_enabled as boolean) || null;
-    editQuotaNotifyDailyThreshold.value =
-      (bedrockExtra.quota_notify_daily_threshold as number) ?? null;
-    editQuotaNotifyDailyThresholdType.value =
-      (bedrockExtra.quota_notify_daily_threshold_type as
-        | "fixed"
-        | "percentage") || null;
-    editQuotaNotifyWeeklyEnabled.value =
-      (bedrockExtra.quota_notify_weekly_enabled as boolean) || null;
-    editQuotaNotifyWeeklyThreshold.value =
-      (bedrockExtra.quota_notify_weekly_threshold as number) ?? null;
-    editQuotaNotifyWeeklyThresholdType.value =
-      (bedrockExtra.quota_notify_weekly_threshold_type as
-        | "fixed"
-        | "percentage") || null;
-    editQuotaNotifyTotalEnabled.value =
-      (bedrockExtra.quota_notify_total_enabled as boolean) || null;
-    editQuotaNotifyTotalThreshold.value =
-      (bedrockExtra.quota_notify_total_threshold as number) ?? null;
-    editQuotaNotifyTotalThresholdType.value =
-      (bedrockExtra.quota_notify_total_threshold_type as
-        | "fixed"
-        | "percentage") || null;
 
     applyModelRestrictionState(bedrockCreds.model_mapping);
   } else if (newAccount.type === "session") {
