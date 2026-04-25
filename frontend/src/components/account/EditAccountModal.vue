@@ -289,6 +289,7 @@ import QuotaLimitSection from "@/components/account/QuotaLimitSection.vue";
 import TempUnschedRulesSection from "@/components/account/TempUnschedRulesSection.vue";
 import WarmupSection from "@/components/account/WarmupSection.vue";
 import GrokRuntimeSummary from "@/components/account/GrokRuntimeSummary.vue";
+import { useEditBedrockCredentials } from "@/components/account/useEditBedrockCredentials";
 import { useEditAccountQuotaLimits } from "@/components/account/useEditAccountQuotaLimits";
 import { useEditAccountQuotaControls } from "@/components/account/useEditAccountQuotaControls";
 import { useEditAccountRuntimeOptions } from "@/components/account/useEditAccountRuntimeOptions";
@@ -313,10 +314,7 @@ import {
   deriveAntigravityModelMappings,
   deriveModelRestrictionStateFromMapping,
 } from "@/components/account/editAccountModalHelpers";
-import type {
-  BedrockAuthMode,
-  CreateAccountCategory,
-} from "@/components/account/createAccountModalHelpers";
+import type { CreateAccountCategory } from "@/components/account/createAccountModalHelpers";
 import {
   buildEditAccountMutationPayload,
   resolveAccountMutationPayloadErrorKey,
@@ -396,22 +394,17 @@ const submitting = ref(false);
 const editBaseUrl = ref(getDefaultBaseURL("anthropic"));
 const editApiKey = ref("");
 const editSessionToken = ref("");
-// Bedrock credentials
-const editBedrockAccessKeyId = ref("");
-const editBedrockSecretAccessKey = ref("");
-const editBedrockSessionToken = ref("");
-const editBedrockRegion = ref("");
-const editBedrockForceGlobal = ref(false);
-const editBedrockApiKeyValue = ref("");
-const isBedrockAPIKeyMode = computed(
-  () =>
-    props.account?.type === "bedrock" &&
-    (props.account?.credentials as Record<string, unknown>)?.auth_mode ===
-      "apikey",
-);
-const editBedrockAuthMode = computed<BedrockAuthMode>(() =>
-  isBedrockAPIKeyMode.value ? "apikey" : "sigv4",
-);
+const {
+  editBedrockAccessKeyId,
+  editBedrockApiKeyValue,
+  editBedrockAuthMode,
+  editBedrockForceGlobal,
+  editBedrockRegion,
+  editBedrockSecretAccessKey,
+  editBedrockSessionToken,
+  hydrateBedrockCredentialsFromAccount,
+  isBedrockAPIKeyMode,
+} = useEditBedrockCredentials(() => props.account);
 const modelMappings = ref<ModelMapping[]>([]);
 const modelRestrictionMode = ref<"whitelist" | "mapping">("whitelist");
 const allowedModels = ref<string[]>([]);
@@ -671,6 +664,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   allowOverages.value = extra?.allow_overages === true;
 
   hydrateRuntimeOptionsFromAccount(newAccount);
+  hydrateBedrockCredentialsFromAccount(newAccount);
   hydrateQuotaLimitsFromAccount(newAccount);
 
   // Load antigravity model mapping (Antigravity 只支持映射模式)
@@ -721,21 +715,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     }
   } else if (newAccount.type === "bedrock" && newAccount.credentials) {
     const bedrockCreds = newAccount.credentials as Record<string, unknown>;
-    const authMode = (bedrockCreds.auth_mode as string) || "sigv4";
-    editBedrockRegion.value = (bedrockCreds.aws_region as string) || "";
-    editBedrockForceGlobal.value =
-      (bedrockCreds.aws_force_global as string) === "true";
-
-    if (authMode === "apikey") {
-      editBedrockApiKeyValue.value = "";
-    } else {
-      editBedrockAccessKeyId.value =
-        (bedrockCreds.aws_access_key_id as string) || "";
-      editBedrockSecretAccessKey.value = "";
-      editBedrockSessionToken.value = "";
-    }
-
-    // Load pool mode for bedrock
     poolModeEnabled.value = bedrockCreds.pool_mode === true;
     const retryCount = bedrockCreds.pool_mode_retry_count;
     poolModeRetryCount.value =
