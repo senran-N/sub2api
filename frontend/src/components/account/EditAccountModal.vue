@@ -295,6 +295,7 @@ import { useEditAccountQuotaLimits } from "@/components/account/useEditAccountQu
 import { useEditAccountQuotaControls } from "@/components/account/useEditAccountQuotaControls";
 import { useEditAccountRuntimeOptions } from "@/components/account/useEditAccountRuntimeOptions";
 import { useEditAccountTempUnschedRules } from "@/components/account/useEditAccountTempUnschedRules";
+import { useEditCustomErrorCodes } from "@/components/account/useEditCustomErrorCodes";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
@@ -417,9 +418,20 @@ const {
 });
 const poolModeEnabled = ref(false);
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT);
-const customErrorCodesEnabled = ref(false);
-const selectedErrorCodes = ref<number[]>([]);
-const customErrorCodeInput = ref<number | null>(null);
+const {
+  addCustomErrorCode,
+  customErrorCodeInput,
+  customErrorCodesEnabled,
+  hydrateCustomErrorCodesFromCredentials,
+  removeErrorCode,
+  resetCustomErrorCodes,
+  selectedErrorCodes,
+  toggleErrorCode,
+} = useEditCustomErrorCodes({
+  confirmSelection: (code) => confirmCustomErrorCodeSelection(code, confirm, t),
+  showDuplicate: () => appStore.showInfo(t("admin.accounts.errorCodeExists")),
+  showInvalid: () => appStore.showError(t("admin.accounts.invalidErrorCode")),
+});
 const interceptWarmupRequests = ref(false);
 const autoPauseOnExpired = ref(false);
 const mixedScheduling = ref(false); // For antigravity accounts: enable mixed scheduling
@@ -634,9 +646,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   resetModelRestrictionState();
   poolModeEnabled.value = false;
   poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT;
-  customErrorCodesEnabled.value = false;
-  selectedErrorCodes.value = [];
-  customErrorCodeInput.value = null;
+  resetCustomErrorCodes();
 
   // Load mixed scheduling setting (only for antigravity accounts)
   mixedScheduling.value = false;
@@ -680,17 +690,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       ),
     );
 
-    // Load custom error codes
-    customErrorCodesEnabled.value =
-      credentials.custom_error_codes_enabled === true;
-    const existingErrorCodes = credentials.custom_error_codes as
-      | number[]
-      | undefined;
-    if (existingErrorCodes && Array.isArray(existingErrorCodes)) {
-      selectedErrorCodes.value = [...existingErrorCodes];
-    } else {
-      selectedErrorCodes.value = [];
-    }
+    hydrateCustomErrorCodesFromCredentials(credentials);
   } else if (newAccount.type === "bedrock" && newAccount.credentials) {
     const bedrockCreds = newAccount.credentials as Record<string, unknown>;
     poolModeEnabled.value = bedrockCreds.pool_mode === true;
@@ -718,8 +718,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     }
     poolModeEnabled.value = false;
     poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT;
-    customErrorCodesEnabled.value = false;
-    selectedErrorCodes.value = [];
+    resetCustomErrorCodes();
   }
 };
 
@@ -750,45 +749,6 @@ async function loadTLSProfiles() {
     setTlsFingerprintProfiles([]);
   }
 }
-
-// Error code toggle helper
-const toggleErrorCode = (code: number) => {
-  const index = selectedErrorCodes.value.indexOf(code);
-  if (index === -1) {
-    if (!confirmCustomErrorCodeSelection(code, confirm, t)) {
-      return;
-    }
-    selectedErrorCodes.value.push(code);
-  } else {
-    selectedErrorCodes.value.splice(index, 1);
-  }
-};
-
-// Add custom error code from input
-const addCustomErrorCode = () => {
-  const code = customErrorCodeInput.value;
-  if (code === null || code < 100 || code > 599) {
-    appStore.showError(t("admin.accounts.invalidErrorCode"));
-    return;
-  }
-  if (selectedErrorCodes.value.includes(code)) {
-    appStore.showInfo(t("admin.accounts.errorCodeExists"));
-    return;
-  }
-  if (!confirmCustomErrorCodeSelection(code, confirm, t)) {
-    return;
-  }
-  selectedErrorCodes.value.push(code);
-  customErrorCodeInput.value = null;
-};
-
-// Remove error code
-const removeErrorCode = (code: number) => {
-  const index = selectedErrorCodes.value.indexOf(code);
-  if (index !== -1) {
-    selectedErrorCodes.value.splice(index, 1);
-  }
-};
 
 const clearMixedChannelDialog = () => {
   resetMixedChannelDialogState();
