@@ -299,6 +299,7 @@ import { useEditCustomErrorCodes } from "@/components/account/useEditCustomError
 import { useEditCredentialFields } from "@/components/account/useEditCredentialFields";
 import { useAccountMutationSections } from "@/components/account/useAccountMutationSections";
 import { useEditMixedChannelWarning } from "@/components/account/useEditMixedChannelWarning";
+import { useEditAccountMutationPayload } from "@/components/account/useEditAccountMutationPayload";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
@@ -309,10 +310,7 @@ import {
   resolveAccountBaseUrlHint,
   resolveAccountBaseUrlPlaceholder,
 } from "@/components/account/accountModalShared";
-import {
-  buildEditAccountMutationPayload,
-  resolveAccountMutationPayloadErrorKey,
-} from "@/components/account/accountMutationPayload";
+import { resolveAccountMutationPayloadErrorKey } from "@/components/account/accountMutationPayload";
 import { getDefaultBaseURL } from "@/components/account/credentialsBuilder";
 import { confirmCustomErrorCodeSelection } from "@/components/account/accountModalInteractions";
 import { resolveRequestErrorMessage } from "@/utils/requestError";
@@ -362,6 +360,7 @@ const bedrockPresets = computed(() => getPresetMappingsByPlatform("bedrock"));
 
 // State
 const submitting = ref(false);
+const credentialFields = useEditCredentialFields();
 const {
   editApiKey,
   editBaseUrl,
@@ -371,7 +370,8 @@ const {
   poolModeEnabled,
   poolModeRetryCount,
   resetCredentialFields,
-} = useEditCredentialFields();
+} = credentialFields;
+const bedrockCredentials = useEditBedrockCredentials(() => props.account);
 const {
   editBedrockAccessKeyId,
   editBedrockApiKeyValue,
@@ -381,8 +381,12 @@ const {
   editBedrockSecretAccessKey,
   editBedrockSessionToken,
   hydrateBedrockCredentialsFromAccount,
-  isBedrockAPIKeyMode,
-} = useEditBedrockCredentials(() => props.account);
+} = bedrockCredentials;
+const modelRestrictions = useEditAccountModelRestrictions({
+  onMappingExists: (model) => {
+    appStore.showInfo(t("admin.accounts.mappingExists", { model }));
+  },
+});
 const {
   addAntigravityModelMapping,
   addAntigravityPresetMapping,
@@ -402,10 +406,11 @@ const {
   syncAntigravityModelRestrictionState,
   updateAntigravityModelMapping,
   updateModelMapping,
-} = useEditAccountModelRestrictions({
-  onMappingExists: (model) => {
-    appStore.showInfo(t("admin.accounts.mappingExists", { model }));
-  },
+} = modelRestrictions;
+const customErrorCodes = useEditCustomErrorCodes({
+  confirmSelection: (code) => confirmCustomErrorCodeSelection(code, confirm, t),
+  showDuplicate: () => appStore.showInfo(t("admin.accounts.errorCodeExists")),
+  showInvalid: () => appStore.showError(t("admin.accounts.invalidErrorCode")),
 });
 const {
   addCustomErrorCode,
@@ -416,12 +421,9 @@ const {
   resetCustomErrorCodes,
   selectedErrorCodes,
   toggleErrorCode,
-} = useEditCustomErrorCodes({
-  confirmSelection: (code) => confirmCustomErrorCodeSelection(code, confirm, t),
-  showDuplicate: () => appStore.showInfo(t("admin.accounts.errorCodeExists")),
-  showInvalid: () => appStore.showError(t("admin.accounts.invalidErrorCode")),
-});
+} = customErrorCodes;
 const interceptWarmupRequests = ref(false);
+const formState = useEditAccountFormState(t);
 const {
   allowOverages,
   autoPauseOnExpired,
@@ -430,7 +432,8 @@ const {
   hydrateFormStateFromAccount,
   mixedScheduling,
   statusOptions,
-} = useEditAccountFormState(t);
+} = formState;
+const tempUnschedRulesState = useEditAccountTempUnschedRules();
 const {
   addTempUnschedRule,
   getTempUnschedRuleKey,
@@ -440,8 +443,9 @@ const {
   tempUnschedEnabled,
   tempUnschedRules,
   updateTempUnschedRule,
-} = useEditAccountTempUnschedRules();
+} = tempUnschedRulesState;
 
+const quotaControls = useEditAccountQuotaControls();
 const {
   baseRpm,
   cacheTTLOverrideEnabled,
@@ -464,20 +468,20 @@ const {
   windowCostEnabled,
   windowCostLimit,
   windowCostStickyReserve,
-} = useEditAccountQuotaControls();
+} = quotaControls;
 const umqModeOptions = computed(() => buildAccountUmqModeOptions(t));
 
+const runtimeOptions = useEditAccountRuntimeOptions(() => props.account);
 const {
   anthropicPassthroughEnabled,
   codexCLIOnlyEnabled,
   hydrateRuntimeOptionsFromAccount,
   isOpenAIModelRestrictionDisabled,
   openAIWSModeConcurrencyHintKey,
-  openaiAPIKeyResponsesWebSocketV2Mode,
-  openaiOAuthResponsesWebSocketV2Mode,
   openaiPassthroughEnabled,
   openaiResponsesWebSocketV2Mode,
-} = useEditAccountRuntimeOptions(() => props.account);
+} = runtimeOptions;
+const quotaLimits = useEditAccountQuotaLimits();
 const {
   editDailyResetHour,
   editDailyResetMode,
@@ -498,7 +502,7 @@ const {
   editWeeklyResetHour,
   editWeeklyResetMode,
   hydrateQuotaLimitsFromAccount,
-} = useEditAccountQuotaLimits();
+} = quotaLimits;
 const openAIWSModeOptions = computed(() => buildAccountOpenAIWSModeOptions(t));
 const {
   openAIAccountCategory,
@@ -547,11 +551,19 @@ const {
   t,
 });
 
-const getAccountCredentials = () =>
-  (props.account?.credentials as Record<string, unknown>) || {};
-
-const getAccountExtra = () =>
-  (props.account?.extra as Record<string, unknown>) || {};
+const { buildEditMutationPayload } = useEditAccountMutationPayload({
+  bedrockCredentials,
+  credentialFields,
+  customErrorCodes,
+  defaultBaseUrl,
+  formState,
+  interceptWarmupRequests,
+  modelRestrictions,
+  quotaControls,
+  quotaLimits,
+  runtimeOptions,
+  tempUnschedRules: tempUnschedRulesState,
+});
 
 // Watchers
 const syncFormFromAccount = (newAccount: Account | null) => {
@@ -698,103 +710,9 @@ const handleSubmit = async () => {
     autoPauseOnExpired.value,
   );
   try {
-    const payloadResult = buildEditAccountMutationPayload({
+    const payloadResult = buildEditMutationPayload({
       account: props.account,
-      anthropicAPIKeyExtra: {
-        anthropicPassthroughEnabled: anthropicPassthroughEnabled.value,
-      },
-      anthropicQuotaExtra: {
-        baseRpm: baseRpm.value,
-        cacheTTLOverrideEnabled: cacheTTLOverrideEnabled.value,
-        cacheTTLOverrideTarget: cacheTTLOverrideTarget.value,
-        customBaseUrl: customBaseUrl.value,
-        customBaseUrlEnabled: customBaseUrlEnabled.value,
-        maxSessions: maxSessions.value,
-        rpmLimitEnabled: rpmLimitEnabled.value,
-        rpmStickyBuffer: rpmStickyBuffer.value,
-        rpmStrategy: rpmStrategy.value,
-        sessionIdMaskingEnabled: sessionIdMaskingEnabled.value,
-        sessionIdleTimeout: sessionIdleTimeout.value,
-        sessionLimitEnabled: sessionLimitEnabled.value,
-        tlsFingerprintEnabled: tlsFingerprintEnabled.value,
-        tlsFingerprintProfileId: tlsFingerprintProfileId.value,
-        userMsgQueueMode: userMsgQueueMode.value,
-        windowCostEnabled: windowCostEnabled.value,
-        windowCostLimit: windowCostLimit.value,
-        windowCostStickyReserve: windowCostStickyReserve.value,
-      },
-      antigravity: {
-        allowOverages: allowOverages.value,
-        mixedScheduling: mixedScheduling.value,
-        modelMappings: antigravityModelMappings.value,
-      },
       basePayload,
-      bedrock: {
-        accessKeyId: editBedrockAccessKeyId.value,
-        allowedModels: allowedModels.value,
-        apiKeyInput: editBedrockApiKeyValue.value,
-        forceGlobal: editBedrockForceGlobal.value,
-        isApiKeyMode: isBedrockAPIKeyMode.value,
-        mode: modelRestrictionMode.value,
-        modelMappings: modelMappings.value,
-        poolModeEnabled: poolModeEnabled.value,
-        poolModeRetryCount: poolModeRetryCount.value,
-        region: editBedrockRegion.value,
-        secretAccessKey: editBedrockSecretAccessKey.value,
-        sessionToken: editBedrockSessionToken.value,
-      },
-      compatible: {
-        allowedModels: allowedModels.value,
-        apiKeyInput: editApiKey.value,
-        baseUrlInput: editBaseUrl.value,
-        customErrorCodesEnabled: customErrorCodesEnabled.value,
-        defaultBaseUrl: defaultBaseUrl.value,
-        isOpenAIModelRestrictionDisabled:
-          isOpenAIModelRestrictionDisabled.value,
-        mode: modelRestrictionMode.value,
-        modelMappings: modelMappings.value,
-        poolModeEnabled: poolModeEnabled.value,
-        poolModeRetryCount: poolModeRetryCount.value,
-        selectedErrorCodes: selectedErrorCodes.value,
-      },
-      currentCredentials: getAccountCredentials(),
-      currentExtra: getAccountExtra(),
-      openAIExtra: {
-        accountType: props.account.type,
-        codexCLIOnlyEnabled: codexCLIOnlyEnabled.value,
-        openaiAPIKeyResponsesWebSocketV2Mode:
-          openaiAPIKeyResponsesWebSocketV2Mode.value,
-        openaiOAuthResponsesWebSocketV2Mode:
-          openaiOAuthResponsesWebSocketV2Mode.value,
-        openaiPassthroughEnabled: openaiPassthroughEnabled.value,
-      },
-      quota: {
-        dailyResetHour: editDailyResetHour.value,
-        dailyResetMode: editDailyResetMode.value,
-        quotaDailyLimit: editQuotaDailyLimit.value,
-        quotaLimit: editQuotaLimit.value,
-        quotaWeeklyLimit: editQuotaWeeklyLimit.value,
-        quotaNotifyDailyEnabled: editQuotaNotifyDailyEnabled.value,
-        quotaNotifyDailyThreshold: editQuotaNotifyDailyThreshold.value,
-        quotaNotifyDailyThresholdType: editQuotaNotifyDailyThresholdType.value,
-        quotaNotifyWeeklyEnabled: editQuotaNotifyWeeklyEnabled.value,
-        quotaNotifyWeeklyThreshold: editQuotaNotifyWeeklyThreshold.value,
-        quotaNotifyWeeklyThresholdType:
-          editQuotaNotifyWeeklyThresholdType.value,
-        quotaNotifyTotalEnabled: editQuotaNotifyTotalEnabled.value,
-        quotaNotifyTotalThreshold: editQuotaNotifyTotalThreshold.value,
-        quotaNotifyTotalThresholdType: editQuotaNotifyTotalThresholdType.value,
-        resetTimezone: editResetTimezone.value,
-        weeklyResetDay: editWeeklyResetDay.value,
-        weeklyResetHour: editWeeklyResetHour.value,
-        weeklyResetMode: editWeeklyResetMode.value,
-      },
-      sessionTokenInput: editSessionToken.value,
-      sharedCredentials: {
-        interceptWarmupRequests: interceptWarmupRequests.value,
-        tempUnschedEnabled: tempUnschedEnabled.value,
-        tempUnschedRules: tempUnschedRules.value,
-      },
     });
     if (payloadResult.error) {
       appStore.showError(
