@@ -11,26 +11,25 @@
       @submit.prevent="handleSubmit"
       class="space-y-5"
     >
-      <div>
-        <label class="input-label">{{ t("common.name") }}</label>
-        <input
-          v-model="form.name"
-          type="text"
-          required
-          class="input"
-          data-tour="edit-account-form-name"
-        />
-      </div>
-      <div>
-        <label class="input-label">{{ t("admin.accounts.notes") }}</label>
-        <textarea
-          v-model="form.notes"
-          rows="3"
-          class="input"
-          :placeholder="t('admin.accounts.notesPlaceholder')"
-        ></textarea>
-        <p class="input-hint">{{ t("admin.accounts.notesHint") }}</p>
-      </div>
+      <EditAccountCoreFieldsSection
+        v-model:name="form.name"
+        v-model:notes="form.notes"
+        v-model:proxy-id="form.proxy_id"
+        v-model:concurrency="form.concurrency"
+        v-model:load-factor="form.load_factor"
+        v-model:priority="form.priority"
+        v-model:rate-multiplier="form.rate_multiplier"
+        v-model:expires-at="expiresAtInput"
+        v-model:status="form.status"
+        v-model:allow-overages="allowOverages"
+        v-model:group-ids="form.group_ids"
+        :proxies="proxies"
+        :platform="account.platform"
+        :mixed-scheduling="mixedScheduling"
+        :groups="groups"
+        :simple-mode="authStore.isSimpleMode"
+        :status-options="statusOptions"
+      />
 
       <GrokRuntimeSummary :account="account" />
 
@@ -138,73 +137,6 @@
         v-model:enabled="interceptWarmupRequests"
       />
 
-      <div>
-        <label class="input-label">{{ t("admin.accounts.proxy") }}</label>
-        <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
-      </div>
-
-      <div
-        class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4"
-      >
-        <div>
-          <label class="input-label">{{
-            t("admin.accounts.concurrency")
-          }}</label>
-          <input
-            v-model.number="form.concurrency"
-            type="number"
-            min="1"
-            class="input"
-            @input="form.concurrency = Math.max(1, form.concurrency || 1)"
-          />
-        </div>
-        <div>
-          <label class="input-label">{{
-            t("admin.accounts.loadFactor")
-          }}</label>
-          <input
-            v-model.number="form.load_factor"
-            type="number"
-            min="1"
-            class="input"
-            :placeholder="String(form.concurrency || 1)"
-            @input="form.load_factor = (form.load_factor &amp;&amp; form.load_factor >= 1) ? form.load_factor : null"
-          />
-          <p class="input-hint">{{ t("admin.accounts.loadFactorHint") }}</p>
-        </div>
-        <div>
-          <label class="input-label">{{ t("admin.accounts.priority") }}</label>
-          <input
-            v-model.number="form.priority"
-            type="number"
-            min="1"
-            class="input"
-            data-tour="account-form-priority"
-          />
-          <p class="input-hint">{{ t("admin.accounts.priorityHint") }}</p>
-        </div>
-        <div>
-          <label class="input-label">{{
-            t("admin.accounts.billingRateMultiplier")
-          }}</label>
-          <input
-            v-model.number="form.rate_multiplier"
-            type="number"
-            min="0"
-            step="0.001"
-            class="input"
-          />
-          <p class="input-hint">
-            {{ t("admin.accounts.billingRateMultiplierHint") }}
-          </p>
-        </div>
-      </div>
-      <div class="form-section">
-        <label class="input-label">{{ t("admin.accounts.expiresAt") }}</label>
-        <input v-model="expiresAtInput" type="datetime-local" class="input" />
-        <p class="input-hint">{{ t("admin.accounts.expiresAtHint") }}</p>
-      </div>
-
       <OpenAIOptionsSection
         v-if="showOpenAIRuntimeSection"
         v-model:passthrough-enabled="openaiPassthroughEnabled"
@@ -275,86 +207,6 @@
         :tls-fingerprint-profiles="tlsFingerprintProfiles"
       />
 
-      <div class="form-section">
-        <div>
-          <label class="input-label">{{ t("common.status") }}</label>
-          <Select v-model="form.status" :options="statusOptions" />
-        </div>
-
-        <!-- Mixed Scheduling (only for antigravity accounts, read-only in edit mode) -->
-        <div
-          v-if="account?.platform === 'antigravity'"
-          class="flex items-center gap-2"
-        >
-          <label class="flex cursor-not-allowed items-center gap-2 opacity-60">
-            <input
-              type="checkbox"
-              v-model="mixedScheduling"
-              disabled
-              class="edit-account-modal__checkbox h-4 w-4 cursor-not-allowed"
-            />
-            <span class="edit-account-modal__choice-text text-sm font-medium">
-              {{ t("admin.accounts.mixedScheduling") }}
-            </span>
-          </label>
-          <div class="group relative">
-            <span
-              class="edit-account-modal__status-chip edit-account-modal__status-chip--idle inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-xs"
-            >
-              ?
-            </span>
-            <!-- Tooltip（向下显示避免被弹窗裁剪） -->
-            <div
-              class="edit-account-modal__tooltip pointer-events-none absolute left-0 top-full z-[100] mt-1.5 text-xs opacity-0 transition-opacity group-hover:opacity-100"
-            >
-              {{ t("admin.accounts.mixedSchedulingTooltip") }}
-              <div
-                class="edit-account-modal__tooltip-arrow absolute bottom-full left-3 border-4 border-transparent"
-              ></div>
-            </div>
-          </div>
-        </div>
-        <div
-          v-if="account?.platform === 'antigravity'"
-          class="mt-3 flex items-center gap-2"
-        >
-          <label class="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              v-model="allowOverages"
-              class="edit-account-modal__checkbox h-4 w-4"
-            />
-            <span class="edit-account-modal__choice-text text-sm font-medium">
-              {{ t("admin.accounts.allowOverages") }}
-            </span>
-          </label>
-          <div class="group relative">
-            <span
-              class="edit-account-modal__status-chip edit-account-modal__status-chip--idle inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-xs"
-            >
-              ?
-            </span>
-            <div
-              class="edit-account-modal__tooltip pointer-events-none absolute left-0 top-full z-[100] mt-1.5 text-xs opacity-0 transition-opacity group-hover:opacity-100"
-            >
-              {{ t("admin.accounts.allowOveragesTooltip") }}
-              <div
-                class="edit-account-modal__tooltip-arrow absolute bottom-full left-3 border-4 border-transparent"
-              ></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Group Selection - 仅标准模式显示 -->
-      <GroupSelector
-        v-if="!authStore.isSimpleMode"
-        v-model="form.group_ids"
-        :groups="groups"
-        :platform="account?.platform"
-        :mixed-scheduling="mixedScheduling"
-        data-tour="account-form-groups"
-      />
     </form>
 
     <template #footer>
@@ -424,15 +276,13 @@ import type {
 } from "@/types";
 import BaseDialog from "@/components/common/BaseDialog.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
-import Select from "@/components/common/Select.vue";
-import ProxySelector from "@/components/common/ProxySelector.vue";
-import GroupSelector from "@/components/common/GroupSelector.vue";
 import AntigravityModelMappingSection from "@/components/account/AntigravityModelMappingSection.vue";
 import AnthropicOptionsSection from "@/components/account/AnthropicOptionsSection.vue";
 import AnthropicQuotaControlsSection from "@/components/account/AnthropicQuotaControlsSection.vue";
 import AutoPauseOnExpiredSection from "@/components/account/AutoPauseOnExpiredSection.vue";
 import CompatibleCredentialsSection from "@/components/account/CompatibleCredentialsSection.vue";
 import EditBedrockCredentialsSection from "@/components/account/EditBedrockCredentialsSection.vue";
+import EditAccountCoreFieldsSection from "@/components/account/EditAccountCoreFieldsSection.vue";
 import EditGrokSessionCredentialsSection from "@/components/account/EditGrokSessionCredentialsSection.vue";
 import ModelRestrictionSection from "@/components/account/ModelRestrictionSection.vue";
 import OpenAIOptionsSection from "@/components/account/OpenAIOptionsSection.vue";
@@ -803,8 +653,8 @@ const syncOpenAIExtraState = (
 
 const form = reactive<EditAccountForm>(createDefaultEditAccountForm());
 
-const statusOptions = computed(() => {
-  const options = [
+const statusOptions = computed<Array<{ value: EditAccountForm["status"]; label: string }>>(() => {
+  const options: Array<{ value: EditAccountForm["status"]; label: string }> = [
     { value: "active", label: t("common.active") },
     { value: "inactive", label: t("common.inactive") },
   ];
@@ -1596,264 +1446,3 @@ const handleMixedChannelCancel = () => {
   clearMixedChannelDialog();
 };
 </script>
-
-<style scoped>
-.form-section {
-  border-top: 1px solid
-    color-mix(in srgb, var(--theme-page-border) 76%, transparent);
-  padding-top: 1rem;
-}
-
-.edit-account-modal__choice-text,
-.edit-account-modal__table-heading,
-.edit-account-modal__table-primary {
-  color: var(--theme-page-text);
-}
-
-.edit-account-modal__muted,
-.edit-account-modal__table-secondary {
-  color: var(--theme-page-muted);
-}
-
-.edit-account-modal__config-card {
-  border-radius: var(--theme-surface-radius);
-  padding: var(--theme-markdown-block-padding);
-  border: 1px solid
-    color-mix(in srgb, var(--theme-card-border) 68%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--theme-surface-soft) 90%,
-    var(--theme-surface)
-  );
-}
-
-.edit-account-modal__config-card--compact {
-  padding: 0.75rem;
-}
-
-.edit-account-modal__notice {
-  border-radius: var(--theme-auth-feedback-radius);
-  border-color: color-mix(in srgb, var(--theme-card-border) 68%, transparent);
-}
-
-.edit-account-modal__notice-card {
-  padding: var(--theme-auth-callback-feedback-padding);
-}
-
-.edit-account-modal__notice--purple,
-.edit-account-modal__tone-tag--purple {
-  --edit-account-tone-rgb: var(--theme-brand-purple-rgb);
-}
-
-.edit-account-modal__notice--amber,
-.edit-account-modal__tone-tag--amber {
-  --edit-account-tone-rgb: var(--theme-warning-rgb);
-}
-
-.edit-account-modal__notice--blue,
-.edit-account-modal__tone-tag--blue {
-  --edit-account-tone-rgb: var(--theme-info-rgb);
-}
-
-.edit-account-modal__notice--danger,
-.edit-account-modal__tone-tag--danger {
-  --edit-account-tone-rgb: var(--theme-danger-rgb);
-}
-
-.edit-account-modal__notice--purple,
-.edit-account-modal__notice--amber,
-.edit-account-modal__notice--blue,
-.edit-account-modal__notice--danger {
-  background: color-mix(
-    in srgb,
-    rgb(var(--edit-account-tone-rgb)) 10%,
-    var(--theme-surface)
-  );
-  color: color-mix(
-    in srgb,
-    rgb(var(--edit-account-tone-rgb)) 84%,
-    var(--theme-page-text)
-  );
-}
-
-.edit-account-modal__tone-tag {
-  display: inline-flex;
-  align-items: center;
-}
-
-.edit-account-modal__tone-tag--purple,
-.edit-account-modal__tone-tag--amber,
-.edit-account-modal__tone-tag--blue,
-.edit-account-modal__tone-tag--danger {
-  background: color-mix(
-    in srgb,
-    rgb(var(--edit-account-tone-rgb)) 16%,
-    var(--theme-surface)
-  );
-  color: color-mix(
-    in srgb,
-    rgb(var(--edit-account-tone-rgb)) 88%,
-    var(--theme-page-text)
-  );
-}
-
-.edit-account-modal__mode-toggle--idle,
-.edit-account-modal__status-chip--idle {
-  background: color-mix(
-    in srgb,
-    var(--theme-surface-soft) 86%,
-    var(--theme-surface)
-  );
-  color: var(--theme-page-muted);
-}
-
-.edit-account-modal__mode-toggle-control {
-  border-radius: var(--theme-button-radius);
-  padding: 0.5rem 1rem;
-}
-
-.edit-account-modal__compact-action {
-  padding-inline: var(--theme-settings-action-padding-x);
-}
-
-.edit-account-modal__status-chip-control {
-  border-radius: var(--theme-button-radius);
-  padding: 0.375rem 0.75rem;
-}
-
-.edit-account-modal__summary-chip {
-  border-radius: 999px;
-  padding: 0.125rem 0.625rem;
-}
-
-.edit-account-modal__icon-button {
-  border-radius: var(--theme-settings-inline-button-radius);
-  padding: var(--theme-settings-inline-button-padding);
-}
-
-.edit-account-modal__mode-toggle--idle:hover,
-.edit-account-modal__status-chip--idle:hover {
-  background: color-mix(
-    in srgb,
-    var(--theme-page-border) 66%,
-    var(--theme-surface)
-  );
-  color: var(--theme-page-text);
-}
-
-.edit-account-modal__mode-toggle--accent {
-  background: color-mix(in srgb, var(--theme-accent) 14%, var(--theme-surface));
-  color: color-mix(in srgb, var(--theme-accent) 90%, var(--theme-page-text));
-}
-
-.edit-account-modal__mode-toggle--purple,
-.edit-account-modal__status-chip--purple {
-  background: color-mix(
-    in srgb,
-    rgb(var(--theme-brand-purple-rgb)) 14%,
-    var(--theme-surface)
-  );
-  color: color-mix(
-    in srgb,
-    rgb(var(--theme-brand-purple-rgb)) 88%,
-    var(--theme-page-text)
-  );
-}
-
-.edit-account-modal__mode-toggle--danger,
-.edit-account-modal__status-chip--danger {
-  background: color-mix(
-    in srgb,
-    rgb(var(--theme-danger-rgb)) 12%,
-    var(--theme-surface)
-  );
-  color: color-mix(
-    in srgb,
-    rgb(var(--theme-danger-rgb)) 88%,
-    var(--theme-page-text)
-  );
-}
-
-.edit-account-modal__umq-option-control {
-  border: 1px solid
-    color-mix(in srgb, var(--theme-input-border) 82%, transparent);
-  border-radius: calc(var(--theme-button-radius) - 2px);
-  padding: 0.375rem 0.75rem;
-}
-
-.edit-account-modal__umq-option--selected {
-  background: var(--theme-accent);
-  color: var(--theme-accent-text);
-  border-color: var(--theme-accent);
-}
-
-.edit-account-modal__umq-option--idle {
-  background: var(--theme-surface);
-  color: var(--theme-page-text);
-}
-
-.edit-account-modal__umq-option--idle:hover {
-  background: color-mix(
-    in srgb,
-    var(--theme-surface-soft) 82%,
-    var(--theme-surface)
-  );
-}
-
-.edit-account-modal__switch {
-  box-shadow: 0 0 0 1px
-    color-mix(in srgb, var(--theme-page-border) 40%, transparent);
-}
-
-.edit-account-modal__switch:focus-visible {
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--theme-accent) 22%, transparent),
-    0 0 0 4px color-mix(in srgb, var(--theme-accent) 12%, transparent);
-}
-
-.edit-account-modal__switch--enabled {
-  background: var(--theme-accent);
-}
-
-.edit-account-modal__switch--disabled {
-  background: color-mix(
-    in srgb,
-    var(--theme-page-border) 76%,
-    var(--theme-surface)
-  );
-}
-
-.edit-account-modal__switch-thumb {
-  background: var(--theme-surface-contrast);
-}
-
-.edit-account-modal__checkbox {
-  border-color: color-mix(in srgb, var(--theme-input-border) 82%, transparent);
-  color: var(--theme-accent);
-}
-
-.edit-account-modal__checkbox:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-accent) 18%, transparent);
-}
-
-.edit-account-modal__input-error {
-  border-color: rgb(var(--theme-danger-rgb));
-}
-
-.edit-account-modal__error-text {
-  color: rgb(var(--theme-danger-rgb));
-}
-
-.edit-account-modal__tooltip {
-  width: 18rem;
-  border-radius: var(--theme-tooltip-radius);
-  padding: 0.5rem 0.75rem;
-  background: var(--theme-surface-contrast);
-  color: var(--theme-filled-text);
-}
-
-.edit-account-modal__tooltip-arrow {
-  border-bottom-color: var(--theme-surface-contrast);
-}
-</style>
