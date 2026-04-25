@@ -298,6 +298,7 @@ import { useEditAccountTempUnschedRules } from "@/components/account/useEditAcco
 import { useEditAccountFormState } from "@/components/account/useEditAccountFormState";
 import { useEditCustomErrorCodes } from "@/components/account/useEditCustomErrorCodes";
 import { useEditCredentialFields } from "@/components/account/useEditCredentialFields";
+import { useAccountMutationSections } from "@/components/account/useAccountMutationSections";
 import {
   buildCompatibleBaseUrlPresets,
   buildAccountOpenAIWSModeOptions,
@@ -311,15 +312,10 @@ import {
   resolveAccountBaseUrlPlaceholder,
   resolveMixedChannelWarningMessage,
 } from "@/components/account/accountModalShared";
-import type { CreateAccountCategory } from "@/components/account/createAccountModalHelpers";
 import {
   buildEditAccountMutationPayload,
   resolveAccountMutationPayloadErrorKey,
 } from "@/components/account/accountMutationPayload";
-import {
-  accountMutationProfileHasSection,
-  resolveAccountMutationProfile,
-} from "@/components/account/accountMutationProfiles";
 import { getDefaultBaseURL } from "@/components/account/credentialsBuilder";
 import { confirmCustomErrorCodeSelection } from "@/components/account/accountModalInteractions";
 import { resolveRequestErrorMessage } from "@/utils/requestError";
@@ -517,51 +513,15 @@ const {
   hydrateQuotaLimitsFromAccount,
 } = useEditAccountQuotaLimits();
 const openAIWSModeOptions = computed(() => buildAccountOpenAIWSModeOptions(t));
-
-const mutationProfile = computed(() => {
-  const account = props.account;
-  return account
-    ? resolveAccountMutationProfile(account.platform, account.type)
-    : null;
-});
-
-const showCompatibleCredentialsForm = computed(() => {
-  return accountMutationProfileHasSection(
-    mutationProfile.value,
-    "compatible-credentials",
-  );
-});
-
-const showQuotaLimitSection = computed(() => {
-  return accountMutationProfileHasSection(mutationProfile.value, "quota-limits");
-});
-
-const showWarmupSection = computed(() => {
-  return accountMutationProfileHasSection(mutationProfile.value, "warmup");
-});
-
-const showOpenAIRuntimeSection = computed(() => {
-  return accountMutationProfileHasSection(
-    mutationProfile.value,
-    "openai-runtime",
-  );
-});
-
-const showAnthropicAPIKeyRuntimeSection = computed(() => {
-  const account = props.account;
-  return account?.platform === "anthropic" && account.type === "apikey";
-});
-
-const showAnthropicQuotaControls = computed(() => {
-  return accountMutationProfileHasSection(
-    mutationProfile.value,
-    "anthropic-runtime",
-  );
-});
-
-const openAIAccountCategory = computed<CreateAccountCategory>(() =>
-  props.account?.type === "apikey" ? "apikey" : "oauth-based",
-);
+const {
+  openAIAccountCategory,
+  showAnthropicAPIKeyRuntimeSection,
+  showAnthropicQuotaControls,
+  showCompatibleCredentialsForm,
+  showOpenAIRuntimeSection,
+  showQuotaLimitSection,
+  showWarmupSection,
+} = useAccountMutationSections(() => props.account);
 
 watch(
   () => props.account?.platform,

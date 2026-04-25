@@ -46,6 +46,7 @@ Current rule:
 - shared modal class assembly lives in `frontend/src/components/account/accountModalClasses.ts`;
 - stale async request guards live in `frontend/src/components/account/accountModalRequestGuard.ts`;
 - account mutation section visibility lives in `frontend/src/components/account/accountMutationProfiles.ts`; create/edit UI should resolve a profile instead of re-stating platform/type matrices inline;
+- account mutation section composition refs live in `frontend/src/components/account/useAccountMutationSections.ts`; modal files should consume its visibility/category refs rather than re-creating profile-derived section booleans locally;
 - create/edit/bulk account mutation payload assembly lives in `frontend/src/components/account/accountMutationPayload.ts`; modal files should call that helper for final request payloads instead of rebuilding JSONB merge sentinels, quota overlays, OpenAI runtime fields, or provider-specific credential mutations locally;
 - lower-level credential and form helpers remain in `accountModalShared.ts`, `createAccountModalHelpers.ts`, `editAccountModalHelpers.ts`, and `credentialsBuilder.ts`;
 - create-account type cards should compose `frontend/src/components/account/CreateAccountChoiceCard.vue` instead of re-implementing selected/idle card and icon styling inside each provider section;
