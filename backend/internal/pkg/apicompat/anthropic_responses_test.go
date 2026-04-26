@@ -181,6 +181,55 @@ func TestResponsesToAnthropic_TextOnly(t *testing.T) {
 	assert.Equal(t, 5, anth.Usage.OutputTokens)
 }
 
+func TestResponsesToAnthropic_CachedTokensUseAnthropicInputSemantics(t *testing.T) {
+	resp := &ResponsesResponse{
+		ID:     "resp_cached",
+		Model:  "gpt-5.2",
+		Status: "completed",
+		Output: []ResponsesOutput{
+			{
+				Type: "message",
+				Content: []ResponsesContentPart{
+					{Type: "output_text", Text: "Cached response"},
+				},
+			},
+		},
+		Usage: &ResponsesUsage{
+			InputTokens:  54006,
+			OutputTokens: 123,
+			TotalTokens:  54129,
+			InputTokensDetails: &ResponsesInputTokensDetails{
+				CachedTokens: 50688,
+			},
+		},
+	}
+
+	anth := ResponsesToAnthropic(resp, "claude-sonnet-4-5-20250929")
+	assert.Equal(t, 3318, anth.Usage.InputTokens)
+	assert.Equal(t, 50688, anth.Usage.CacheReadInputTokens)
+	assert.Equal(t, 123, anth.Usage.OutputTokens)
+}
+
+func TestResponsesToAnthropic_CachedTokensClampInputTokens(t *testing.T) {
+	resp := &ResponsesResponse{
+		ID:     "resp_cached_clamp",
+		Model:  "gpt-5.2",
+		Status: "completed",
+		Usage: &ResponsesUsage{
+			InputTokens:  100,
+			OutputTokens: 5,
+			InputTokensDetails: &ResponsesInputTokensDetails{
+				CachedTokens: 150,
+			},
+		},
+	}
+
+	anth := ResponsesToAnthropic(resp, "claude-sonnet-4-5-20250929")
+	assert.Equal(t, 0, anth.Usage.InputTokens)
+	assert.Equal(t, 150, anth.Usage.CacheReadInputTokens)
+	assert.Equal(t, 5, anth.Usage.OutputTokens)
+}
+
 func TestResponsesToAnthropic_ToolUse(t *testing.T) {
 	resp := &ResponsesResponse{
 		ID:     "resp_456",
@@ -261,6 +310,28 @@ func TestResponsesToAnthropicRequest_PreservesToolCallingPayload(t *testing.T) {
 	require.Len(t, toolResult, 1)
 	assert.Equal(t, "tool_result", toolResult[0].Type)
 	assert.Equal(t, "call_weather", toolResult[0].ToolUseID)
+}
+
+func TestResponsesToAnthropicRequest_MapsSearchToolAliases(t *testing.T) {
+	req := &ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: json.RawMessage(`[
+			{"role":"user","content":"Search the web"}
+		]`),
+		Tools: []ResponsesTool{
+			{Type: "web_search"},
+			{Type: "google_search"},
+			{Type: "web_search_20250305"},
+		},
+	}
+
+	anth, err := ResponsesToAnthropicRequest(req)
+	require.NoError(t, err)
+	require.Len(t, anth.Tools, 3)
+	for _, tool := range anth.Tools {
+		assert.Equal(t, "web_search_20250305", tool.Type)
+		assert.Equal(t, "web_search", tool.Name)
+	}
 }
 
 func TestResponsesToAnthropic_Reasoning(t *testing.T) {
@@ -429,6 +500,36 @@ func TestStreamingTextOnly(t *testing.T) {
 	assert.Equal(t, "end_turn", events[0].Delta.StopReason)
 	assert.Equal(t, 10, events[0].Usage.InputTokens)
 	assert.Equal(t, 5, events[0].Usage.OutputTokens)
+	assert.Equal(t, "message_stop", events[1].Type)
+}
+
+func TestStreamingCachedTokensUseAnthropicInputSemantics(t *testing.T) {
+	state := NewResponsesEventToAnthropicState()
+	ResponsesEventToAnthropicEvents(&ResponsesStreamEvent{
+		Type:     "response.created",
+		Response: &ResponsesResponse{ID: "resp_cached_stream", Model: "gpt-5.2"},
+	}, state)
+
+	events := ResponsesEventToAnthropicEvents(&ResponsesStreamEvent{
+		Type: "response.completed",
+		Response: &ResponsesResponse{
+			Status: "completed",
+			Usage: &ResponsesUsage{
+				InputTokens:  54006,
+				OutputTokens: 123,
+				TotalTokens:  54129,
+				InputTokensDetails: &ResponsesInputTokensDetails{
+					CachedTokens: 50688,
+				},
+			},
+		},
+	}, state)
+
+	require.Len(t, events, 2)
+	assert.Equal(t, "message_delta", events[0].Type)
+	assert.Equal(t, 3318, events[0].Usage.InputTokens)
+	assert.Equal(t, 50688, events[0].Usage.CacheReadInputTokens)
+	assert.Equal(t, 123, events[0].Usage.OutputTokens)
 	assert.Equal(t, "message_stop", events[1].Type)
 }
 

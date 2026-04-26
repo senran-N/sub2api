@@ -2,11 +2,13 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/senran-N/sub2api/internal/pkg/grok"
@@ -114,6 +116,9 @@ func (s *AccountTestService) testCompatibleGatewayAPIKeyConnection(c *gin.Contex
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			s.reconcileOpenAI429State(ctx, account, resp.Header, body)
+		}
 		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
 		s.persistCompatibleGatewayProbeState(ctx, account, testModelID, resp, fmt.Errorf("%s", errMsg), isOAuth)
 		if s.accountRepo != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
@@ -124,6 +129,38 @@ func (s *AccountTestService) testCompatibleGatewayAPIKeyConnection(c *gin.Contex
 	}
 	s.persistCompatibleGatewayProbeState(ctx, account, testModelID, resp, nil, isOAuth)
 	return s.processCompatibleResponsesStream(c, resp.Body)
+}
+
+func (s *AccountTestService) reconcileOpenAI429State(ctx context.Context, account *Account, headers http.Header, body []byte) {
+	if s == nil || s.accountRepo == nil || account == nil || !account.IsOpenAI() {
+		return
+	}
+
+	var resetAt *time.Time
+	if calculated := (&RateLimitService{}).calculateOpenAI429ResetTime(headers); calculated != nil {
+		resetAt = calculated
+	} else if unixTs := parseOpenAIRateLimitResetTime(body); unixTs != nil {
+		t := time.Unix(*unixTs, 0)
+		resetAt = &t
+	}
+	if resetAt == nil {
+		return
+	}
+
+	if err := s.accountRepo.SetRateLimited(ctx, account.ID, *resetAt); err != nil {
+		return
+	}
+	now := time.Now()
+	account.RateLimitedAt = &now
+	account.RateLimitResetAt = resetAt
+
+	if account.Status == StatusError {
+		if err := s.accountRepo.ClearError(ctx, account.ID); err != nil {
+			return
+		}
+		account.Status = StatusActive
+		account.ErrorMessage = ""
+	}
 }
 
 // createCompatibleGatewayTestPayload creates a test payload for compatible Responses APIs.

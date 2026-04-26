@@ -85,11 +85,11 @@ func TestAccountTestService_OpenAISuccessPersistsSnapshotFromHeaders(t *testing.
 	require.Contains(t, recorder.Body.String(), "test_complete")
 }
 
-func TestAccountTestService_OpenAI429PersistsSnapshotWithoutRateLimit(t *testing.T) {
+func TestAccountTestService_OpenAI429PersistsSnapshotAndRateLimitState(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := newAccountTestContext()
 
-	resp := newJSONResponse(http.StatusTooManyRequests, `{"error":{"type":"usage_limit_reached","message":"limit reached"}}`)
+	resp := newJSONResponse(http.StatusTooManyRequests, `{"error":{"type":"usage_limit_reached","message":"limit reached","resets_at":1777283883}}`)
 	resp.Header.Set("x-codex-primary-used-percent", "100")
 	resp.Header.Set("x-codex-primary-reset-after-seconds", "604800")
 	resp.Header.Set("x-codex-primary-window-minutes", "10080")
@@ -104,6 +104,7 @@ func TestAccountTestService_OpenAI429PersistsSnapshotWithoutRateLimit(t *testing
 		ID:          88,
 		Platform:    PlatformOpenAI,
 		Type:        AccountTypeOAuth,
+		Status:      StatusError,
 		Concurrency: 1,
 		Credentials: map[string]any{"access_token": "test-token"},
 	}
@@ -112,9 +113,11 @@ func TestAccountTestService_OpenAI429PersistsSnapshotWithoutRateLimit(t *testing
 	require.Error(t, err)
 	require.NotEmpty(t, repo.updatedExtra)
 	require.Equal(t, 100.0, repo.updatedExtra["codex_5h_used_percent"])
-	require.Zero(t, repo.rateLimitedID)
-	require.Nil(t, repo.rateLimitedAt)
-	require.Nil(t, account.RateLimitResetAt)
+	require.Equal(t, account.ID, repo.rateLimitedID)
+	require.NotNil(t, repo.rateLimitedAt)
+	require.Equal(t, account.ID, repo.clearErrorID)
+	require.Equal(t, StatusActive, account.Status)
+	require.NotNil(t, account.RateLimitResetAt)
 }
 
 func TestAccountTestService_OpenAI401MarksAccountAsAuthFailed(t *testing.T) {

@@ -19,14 +19,20 @@ func TestIsClaudeCodeClient(t *testing.T) {
 		{
 			name:           "Claude Code client",
 			userAgent:      "claude-cli/1.0.62 (darwin; arm64)",
-			metadataUserID: "session_123e4567-e89b-12d3-a456-426614174000",
+			metadataUserID: "user_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2_account__session_123e4567-e89b-12d3-a456-426614174000",
 			want:           true,
 		},
 		{
 			name:           "Claude Code without version suffix",
 			userAgent:      "claude-cli/2.0.0",
-			metadataUserID: "session_abc",
+			metadataUserID: `{"device_id":"d61f76d0aabbccdd00112233445566778899aabbccddeeff0011223344556677","account_uuid":"","session_id":"123e4567-e89b-12d3-a456-426614174001"}`,
 			want:           true,
+		},
+		{
+			name:           "Claude CLI with invalid metadata user_id",
+			userAgent:      "claude-cli/2.0.0",
+			metadataUserID: "session_abc",
+			want:           false,
 		},
 		{
 			name:           "Missing metadata user_id",

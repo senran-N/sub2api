@@ -19,6 +19,11 @@ type MimicProfile struct {
 	TokenCountingBeta            string
 	Context1MBeta                string
 	FastModeBeta                 string
+	PromptCachingScopeBeta       string
+	EffortBeta                   string
+	RedactThinkingBeta           string
+	ContextManagementBeta        string
+	ExtendedCacheTTLBeta         string
 	SystemPrompt                 string
 	SystemPromptPrefixes         []string
 	DefaultHeaders               map[string]string
@@ -37,7 +42,7 @@ func defaultMimicProfile() MimicProfile {
 	return MimicProfile{
 		Source:                       "builtin",
 		PackageName:                  "@anthropic-ai/claude-code",
-		PackageVersion:               "2.1.22",
+		PackageVersion:               CLICurrentVersion,
 		SDKVersion:                   DefaultHeaders["X-Stainless-Package-Version"],
 		UserAgent:                    DefaultHeaders["User-Agent"],
 		XApp:                         StableDefaultHeaders["X-App"],
@@ -48,6 +53,11 @@ func defaultMimicProfile() MimicProfile {
 		TokenCountingBeta:            BetaTokenCounting,
 		Context1MBeta:                BetaContext1M,
 		FastModeBeta:                 BetaFastMode,
+		PromptCachingScopeBeta:       BetaPromptCachingScope,
+		EffortBeta:                   BetaEffort,
+		RedactThinkingBeta:           BetaRedactThinking,
+		ContextManagementBeta:        BetaContextManagement,
+		ExtendedCacheTTLBeta:         BetaExtendedCacheTTL,
 		SystemPrompt:                 "You are Claude Code, Anthropic's official CLI for Claude.",
 		SystemPromptPrefixes: []string{
 			"You are Claude Code, Anthropic's official CLI for Claude.",
@@ -122,6 +132,20 @@ func Context1MBetaToken() string {
 
 func FastModeBetaToken() string {
 	return currentProfile().FastModeBeta
+}
+
+func FullClaudeCodeMimicryBetaTokens() []string {
+	profile := currentProfile()
+	return []string{
+		profile.ClaudeCodeBeta,
+		profile.OAuthBeta,
+		profile.InterleavedThinkingBeta,
+		profile.PromptCachingScopeBeta,
+		profile.EffortBeta,
+		profile.RedactThinkingBeta,
+		profile.ContextManagementBeta,
+		profile.ExtendedCacheTTLBeta,
+	}
 }
 
 func SDKVersion() string {
@@ -218,6 +242,21 @@ func normalizeMimicProfile(profile MimicProfile) MimicProfile {
 	}
 	if strings.TrimSpace(profile.FastModeBeta) == "" {
 		profile.FastModeBeta = fallback.FastModeBeta
+	}
+	if strings.TrimSpace(profile.PromptCachingScopeBeta) == "" {
+		profile.PromptCachingScopeBeta = fallback.PromptCachingScopeBeta
+	}
+	if strings.TrimSpace(profile.EffortBeta) == "" {
+		profile.EffortBeta = fallback.EffortBeta
+	}
+	if strings.TrimSpace(profile.RedactThinkingBeta) == "" {
+		profile.RedactThinkingBeta = fallback.RedactThinkingBeta
+	}
+	if strings.TrimSpace(profile.ContextManagementBeta) == "" {
+		profile.ContextManagementBeta = fallback.ContextManagementBeta
+	}
+	if strings.TrimSpace(profile.ExtendedCacheTTLBeta) == "" {
+		profile.ExtendedCacheTTLBeta = fallback.ExtendedCacheTTLBeta
 	}
 	if strings.TrimSpace(profile.SystemPrompt) == "" {
 		profile.SystemPrompt = fallback.SystemPrompt
