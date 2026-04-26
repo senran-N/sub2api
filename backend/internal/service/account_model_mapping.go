@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/senran-N/sub2api/internal/domain"
+	"github.com/senran-N/sub2api/internal/pkg/openai"
 )
 
 func (a *Account) GetModelMapping() map[string]string {
@@ -64,13 +65,16 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 		}
 	}
 	if len(result) > 0 {
-		if a.Platform == domain.PlatformAntigravity {
-			ensureAntigravityDefaultPassthroughs(result, []string{
+		switch a.Platform {
+		case domain.PlatformAntigravity:
+			ensureDefaultModelPassthroughs(result, []string{
 				"gemini-3-flash",
 				"gemini-3.1-pro-high",
 				"gemini-3.1-pro-low",
 				"gemini-3.1-pro-preview-customtools",
 			})
+		case domain.PlatformOpenAI:
+			ensureOpenAIDefaultImagePassthroughs(result)
 		}
 		return result
 	}
@@ -143,7 +147,7 @@ func modelMappingSignature(rawMapping map[string]any) uint64 {
 	return hasher.Sum64()
 }
 
-func ensureAntigravityDefaultPassthrough(mapping map[string]string, model string) {
+func ensureDefaultModelPassthrough(mapping map[string]string, model string) {
 	if mapping == nil || model == "" {
 		return
 	}
@@ -158,10 +162,33 @@ func ensureAntigravityDefaultPassthrough(mapping map[string]string, model string
 	mapping[model] = model
 }
 
-func ensureAntigravityDefaultPassthroughs(mapping map[string]string, models []string) {
+func ensureDefaultModelPassthroughs(mapping map[string]string, models []string) {
 	for _, model := range models {
-		ensureAntigravityDefaultPassthrough(mapping, model)
+		ensureDefaultModelPassthrough(mapping, model)
 	}
+}
+
+func ensureOpenAIDefaultImagePassthroughs(mapping map[string]string) {
+	for _, model := range openai.DefaultModelIDs() {
+		if isOpenAIImageGenerationModel(model) {
+			ensureOpenAIImagePassthrough(mapping, model)
+		}
+	}
+}
+
+func ensureOpenAIImagePassthrough(mapping map[string]string, model string) {
+	if mapping == nil || model == "" {
+		return
+	}
+	if _, exists := mapping[model]; exists {
+		return
+	}
+	for pattern := range mapping {
+		if isOpenAIImageGenerationModel(pattern) && matchWildcard(pattern, model) {
+			return
+		}
+	}
+	mapping[model] = model
 }
 
 func (a *Account) IsModelSupported(requestedModel string) bool {

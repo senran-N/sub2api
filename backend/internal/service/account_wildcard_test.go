@@ -463,6 +463,65 @@ func TestAccountGetModelMapping_AntigravityRespectsWildcardOverride(t *testing.T
 	}
 }
 
+func TestAccountGetModelMapping_OpenAIEnsuresImagePassthroughs(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.4": "gpt-5.4",
+			},
+		},
+	}
+
+	mapping := account.GetModelMapping()
+	for _, model := range []string{"gpt-image-1", "gpt-image-1.5", "gpt-image-2", "gpt-image-2-2026-04-21"} {
+		if mapping[model] != model {
+			t.Fatalf("expected %s passthrough to be auto-filled, got: %q", model, mapping[model])
+		}
+		if !account.IsModelSupported(model) {
+			t.Fatalf("expected %s to be supported by OpenAI image passthrough", model)
+		}
+	}
+}
+
+func TestAccountGetModelMapping_OpenAIRespectsImageWildcardOverride(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-image-*": "gpt-image-2",
+			},
+		},
+	}
+
+	mapping := account.GetModelMapping()
+	if _, exists := mapping["gpt-image-1"]; exists {
+		t.Fatalf("did not expect explicit gpt-image-1 passthrough when wildcard already exists")
+	}
+	if mapped := account.GetMappedModel("gpt-image-1"); mapped != "gpt-image-2" {
+		t.Fatalf("expected wildcard image mapping to stay effective, got: %q", mapped)
+	}
+}
+
+func TestAccountGetModelMapping_OpenAIImagePassthroughOverridesBroadGPTWildcard(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-*": "gpt-5.4",
+			},
+		},
+	}
+
+	mapping := account.GetModelMapping()
+	if mapping["gpt-image-2"] != "gpt-image-2" {
+		t.Fatalf("expected exact gpt-image-2 passthrough to override broad wildcard, got: %q", mapping["gpt-image-2"])
+	}
+	if mapped := account.GetMappedModel("gpt-image-2"); mapped != "gpt-image-2" {
+		t.Fatalf("expected exact image passthrough to win over broad wildcard, got: %q", mapped)
+	}
+}
+
 func TestAccountGetModelMapping_CacheInvalidatesOnCredentialsReplace(t *testing.T) {
 	account := &Account{
 		Credentials: map[string]any{

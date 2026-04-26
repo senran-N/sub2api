@@ -34,7 +34,7 @@ func setupAvailableModelsRouter(adminSvc service.AdminService) *gin.Engine {
 	return router
 }
 
-func TestAccountHandlerGetAvailableModels_OpenAIOAuthUsesExplicitModelMapping(t *testing.T) {
+func TestAccountHandlerGetAvailableModels_OpenAIOAuthUsesExplicitModelMappingAndImageDefaults(t *testing.T) {
 	svc := &availableModelsAdminService{
 		stubAdminService: newStubAdminService(),
 		account: service.Account{
@@ -65,9 +65,16 @@ func TestAccountHandlerGetAvailableModels_OpenAIOAuthUsesExplicitModelMapping(t 
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Len(t, resp.Data, 2)
-	require.Equal(t, "gpt-5", resp.Data[0].ID)
-	require.Equal(t, "z-custom", resp.Data[1].ID)
+	ids := make([]string, 0, len(resp.Data))
+	for _, model := range resp.Data {
+		ids = append(ids, model.ID)
+	}
+	require.Contains(t, ids, "gpt-5")
+	require.Contains(t, ids, "z-custom")
+	require.Contains(t, ids, "gpt-image-1")
+	require.Contains(t, ids, "gpt-image-1.5")
+	require.Contains(t, ids, "gpt-image-2")
+	require.Contains(t, ids, "gpt-image-2-2026-04-21")
 }
 
 func TestAccountHandlerGetAvailableModels_OpenAIOAuthPassthroughFallsBackToDefaults(t *testing.T) {
