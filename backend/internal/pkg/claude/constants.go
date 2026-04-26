@@ -12,6 +12,11 @@ const (
 	BetaTokenCounting            = "token-counting-2024-11-01"
 	BetaContext1M                = "context-1m-2025-08-07"
 	BetaFastMode                 = "fast-mode-2026-02-01"
+	BetaPromptCachingScope       = "prompt-caching-scope-2026-01-05"
+	BetaEffort                   = "effort-2025-11-24"
+	BetaRedactThinking           = "redact-thinking-2026-02-12"
+	BetaContextManagement        = "context-management-2025-06-27"
+	BetaExtendedCacheTTL         = "extended-cache-ttl-2025-04-11"
 )
 
 // DroppedBetas 是转发时需要从 anthropic-beta header 中移除的 beta token 列表。
@@ -44,10 +49,30 @@ const APIKeyBetaHeader = BetaClaudeCode + "," + BetaInterleavedThinking + "," + 
 // APIKeyHaikuBetaHeader Haiku 模型在 API-key 账号下使用的 anthropic-beta header（不包含 oauth / claude-code）
 const APIKeyHaikuBetaHeader = BetaInterleavedThinking
 
+// DefaultCacheControlTTL 是网关生成 cache_control 块时的默认 ttl。
+const DefaultCacheControlTTL = "5m"
+
+// CLICurrentVersion 是当前伪装的 Claude Code CLI 版本号。
+const CLICurrentVersion = "2.1.92"
+
+// FullClaudeCodeMimicryBetas returns the beta set observed on recent Claude Code CLI traffic.
+func FullClaudeCodeMimicryBetas() []string {
+	return []string{
+		BetaClaudeCode,
+		BetaOAuth,
+		BetaInterleavedThinking,
+		BetaPromptCachingScope,
+		BetaEffort,
+		BetaRedactThinking,
+		BetaContextManagement,
+		BetaExtendedCacheTTL,
+	}
+}
+
 // DefaultHeaders 保留给测试和诊断使用；生产转发链路不应依赖其中的版本化值。
 // 这些字段里的版本号天然易过时，转发逻辑应优先透传/缓存真实客户端值。
 var DefaultHeaders = map[string]string{
-	"User-Agent":                                "claude-cli/2.1.22 (external, cli)",
+	"User-Agent":                                "claude-cli/2.1.92 (external, cli)",
 	"X-Stainless-Lang":                          "js",
 	"X-Stainless-Package-Version":               "0.70.0",
 	"X-Stainless-OS":                            "Linux",

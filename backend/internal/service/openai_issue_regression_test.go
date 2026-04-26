@@ -117,7 +117,7 @@ func TestOpenAIStreamingReadErrorClosesOpenEventBeforeInjectedErrorEvent(t *test
 	resp := &http.Response{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
-		Body:       &errAfterDataReadCloser{data: []byte("data: {\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_boundary\"}}\n")},
+		Body:       &errAfterDataReadCloser{data: []byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n")},
 	}
 
 	svc := &OpenAIGatewayService{}
@@ -125,8 +125,8 @@ func TestOpenAIStreamingReadErrorClosesOpenEventBeforeInjectedErrorEvent(t *test
 	require.Error(t, err)
 	require.True(t, errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(err.Error(), "stream read error"))
 	require.Contains(t, rec.Body.String(), "\"stream_read_error\"")
-	require.Contains(t, rec.Body.String(), "response.in_progress")
-	require.Contains(t, rec.Body.String(), "}}\n\ndata: {\"type\":\"error\"")
+	require.Contains(t, rec.Body.String(), "response.output_item.added")
+	require.Contains(t, rec.Body.String(), "}\n\ndata: {\"type\":\"error\"")
 }
 
 func TestPrepareOpenAIForwardRequest_StripsUnsupportedUserField(t *testing.T) {
@@ -311,6 +311,37 @@ func TestPrepareOpenAIForwardRequest_AppliesDefaultMappedModelForReasoningVarian
 	require.NotNil(t, prepared)
 	require.Equal(t, "gpt-5.2-xhigh", gjson.GetBytes(prepared.body, "model").String())
 	require.Equal(t, "gpt-5.2-xhigh", prepared.reqBody["model"])
+}
+
+func TestPrepareOpenAIForwardRequest_AppliesCompactModelMappingOnlyOnCompactPath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	account := &Account{
+		Name:     "test-openai-oauth",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"compact_model_mapping": map[string]any{
+				"gpt-5.4": "gpt-5.4-compact",
+			},
+		},
+	}
+	body := []byte(`{"model":"gpt-5.4","input":"hello"}`)
+	svc := &OpenAIGatewayService{}
+
+	rec := httptest.NewRecorder()
+	regularCtx, _ := gin.CreateTestContext(rec)
+	regularCtx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	regularPrepared, err := svc.prepareOpenAIForwardRequest(regularCtx, account, body, "gpt-5.4", false, "", "", false, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.4", gjson.GetBytes(regularPrepared.body, "model").String())
+
+	compactRec := httptest.NewRecorder()
+	compactCtx, _ := gin.CreateTestContext(compactRec)
+	compactCtx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses/compact", nil)
+	compactPrepared, err := svc.prepareOpenAIForwardRequest(compactCtx, account, body, "gpt-5.4", false, "", "", false, openAIWSHTTPDecision("test"))
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.4-compact", gjson.GetBytes(compactPrepared.body, "model").String())
+	require.Equal(t, "gpt-5.4-compact", compactPrepared.reqBody["model"])
 }
 
 func TestSetOpenAICompatPromptCacheSessionID_UsesIsolatedPromptCacheKey(t *testing.T) {

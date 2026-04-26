@@ -282,30 +282,6 @@ func (s *RateLimitService) logAccountHealthDecision(account *Account, statusCode
 	)
 }
 
-func (s *RateLimitService) handle401(ctx context.Context, account *Account, upstreamMessage string, responseBody []byte) bool {
-	openAIErrorCode := extractUpstreamErrorCode(responseBody)
-	if account.Platform == PlatformOpenAI && (openAIErrorCode == "token_invalidated" || openAIErrorCode == "token_revoked") {
-		message := "Token revoked (401): account authentication permanently revoked"
-		if upstreamMessage != "" {
-			message = "Token revoked (401): " + upstreamMessage
-		}
-		s.handleAuthError(ctx, account, message)
-		return true
-	}
-
-	if account.Type == AccountTypeOAuth && account.Platform != PlatformAntigravity {
-		s.handleOAuth401(ctx, account, upstreamMessage)
-		return true
-	}
-
-	message := "Authentication failed (401): invalid or expired credentials"
-	if upstreamMessage != "" {
-		message = "Authentication failed (401): " + upstreamMessage
-	}
-	s.handleAuthError(ctx, account, message)
-	return true
-}
-
 func (s *RateLimitService) handleOAuth401(ctx context.Context, account *Account, upstreamMessage string) {
 	if s.tokenCacheInvalidator != nil {
 		if err := s.tokenCacheInvalidator.InvalidateToken(ctx, account); err != nil {
@@ -353,35 +329,6 @@ func (s *RateLimitService) handleOAuth401(ctx context.Context, account *Account,
 	)
 }
 
-func (s *RateLimitService) handle402(ctx context.Context, account *Account, upstreamMessage string, responseBody []byte) bool {
-	if account.Platform == PlatformOpenAI && gjson.GetBytes(responseBody, "detail.code").String() == "deactivated_workspace" {
-		s.handleAuthError(ctx, account, "Workspace deactivated (402): workspace has been deactivated")
-		return true
-	}
-
-	message := "Payment required (402): insufficient balance or billing issue"
-	if upstreamMessage != "" {
-		message = "Payment required (402): " + upstreamMessage
-	}
-	s.handleAuthError(ctx, account, message)
-	return true
-}
-
-func (s *RateLimitService) handleGenericUpstreamError(ctx context.Context, account *Account, statusCode int, upstreamMessage string, customErrorCodesEnabled bool) bool {
-	if customErrorCodesEnabled {
-		message := "Custom error code triggered"
-		if upstreamMessage != "" {
-			message = upstreamMessage
-		}
-		s.handleCustomErrorCode(ctx, account, statusCode, message)
-		return true
-	}
-	if statusCode >= http.StatusInternalServerError {
-		slog.Warn("account_upstream_error", "account_id", account.ID, "status_code", statusCode)
-	}
-	return false
-}
-
 func (s *RateLimitService) GeminiCooldown(ctx context.Context, account *Account) time.Duration {
 	if account == nil || s.geminiQuotaService == nil {
 		return 5 * time.Minute
@@ -395,47 +342,6 @@ func (s *RateLimitService) handleAuthError(ctx context.Context, account *Account
 		return
 	}
 	slog.Warn("account_disabled_auth_error", "account_id", account.ID, "error", errorMsg)
-}
-
-func (s *RateLimitService) handle403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
-	if account.Platform == PlatformAntigravity {
-		return s.handleAntigravity403(ctx, account, upstreamMsg, responseBody)
-	}
-	message := "Access forbidden (403): account may be suspended or lack permissions"
-	if upstreamMsg != "" {
-		message = "Access forbidden (403): " + upstreamMsg
-	}
-	s.handleAuthError(ctx, account, message)
-	return true
-}
-
-func (s *RateLimitService) handleAntigravity403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
-	switch classifyForbiddenType(string(responseBody)) {
-	case forbiddenTypeValidation:
-		message := "Validation required (403): account needs Google verification"
-		if upstreamMsg != "" {
-			message = "Validation required (403): " + upstreamMsg
-		}
-		if validationURL := extractValidationURL(string(responseBody)); validationURL != "" {
-			message += " | validation_url: " + validationURL
-		}
-		s.handleAuthError(ctx, account, message)
-		return true
-	case forbiddenTypeViolation:
-		message := "Account violation (403): terms of service violation"
-		if upstreamMsg != "" {
-			message = "Account violation (403): " + upstreamMsg
-		}
-		s.handleAuthError(ctx, account, message)
-		return true
-	default:
-		message := "Access forbidden (403): account may be suspended or lack permissions"
-		if upstreamMsg != "" {
-			message = "Access forbidden (403): " + upstreamMsg
-		}
-		s.handleAuthError(ctx, account, message)
-		return true
-	}
 }
 
 func (s *RateLimitService) handleCustomErrorCode(ctx context.Context, account *Account, statusCode int, errorMsg string) {

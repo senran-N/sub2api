@@ -167,11 +167,7 @@ func (s *GatewayService) configureMessagesBetaHeader(
 			incomingBeta := getHeaderRaw(req.Header, "anthropic-beta")
 			requiredBetas := []string{claude.OAuthBetaToken(), claude.InterleavedThinkingBetaToken()}
 			if !strings.Contains(strings.ToLower(modelID), "haiku") {
-				requiredBetas = []string{
-					claude.ClaudeCodeBetaToken(),
-					claude.OAuthBetaToken(),
-					claude.InterleavedThinkingBetaToken(),
-				}
+				requiredBetas = claude.FullClaudeCodeMimicryBetaTokens()
 			}
 			setHeaderRaw(req.Header, "anthropic-beta", mergeAnthropicBetaDropping(requiredBetas, incomingBeta, effectiveDropSet))
 			return
@@ -209,12 +205,7 @@ func (s *GatewayService) configureCountTokensBetaHeader(
 		if mimicClaudeCode {
 			applyClaudeCodeMimicHeaders(req, false)
 			incomingBeta := getHeaderRaw(req.Header, "anthropic-beta")
-			requiredBetas := []string{
-				claude.ClaudeCodeBetaToken(),
-				claude.OAuthBetaToken(),
-				claude.InterleavedThinkingBetaToken(),
-				claude.TokenCountingBetaToken(),
-			}
+			requiredBetas := append(claude.FullClaudeCodeMimicryBetaTokens(), claude.TokenCountingBetaToken())
 			setHeaderRaw(req.Header, "anthropic-beta", mergeAnthropicBetaDropping(requiredBetas, incomingBeta, effectiveDropSet))
 			return
 		}

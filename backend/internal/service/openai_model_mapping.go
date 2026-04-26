@@ -92,3 +92,21 @@ func resolveOpenAIForwardModel(account *Account, requestedModel, defaultMappedMo
 	}
 	return applyReasoningVariant(mappedModel)
 }
+
+// resolveOpenAICompactForwardModel determines the compact-only upstream model
+// for /responses/compact requests. It never affects normal /responses traffic.
+func resolveOpenAICompactForwardModel(account *Account, model string) string {
+	trimmedModel := strings.TrimSpace(model)
+	if trimmedModel == "" || account == nil {
+		return trimmedModel
+	}
+
+	mappedModel, matched := account.ResolveCompactMappedModel(trimmedModel)
+	if !matched {
+		return trimmedModel
+	}
+	if trimmedMapped := strings.TrimSpace(mappedModel); trimmedMapped != "" {
+		return trimmedMapped
+	}
+	return trimmedModel
+}

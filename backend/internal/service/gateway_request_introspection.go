@@ -11,10 +11,10 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// isClaudeCodeClient 判断请求是否来自 Claude Code 客户端
-// 简化判断：User-Agent 匹配 + metadata.user_id 存在
+// isClaudeCodeClient 判断请求是否来自真正的 Claude Code 客户端。
+// 必须同时匹配 Claude CLI User-Agent 和可解析的 metadata.user_id，避免第三方客户端伪造任意 user_id 后绕过 OAuth mimicry。
 func isClaudeCodeClient(userAgent string, metadataUserID string) bool {
-	if metadataUserID == "" {
+	if ParseMetadataUserID(metadataUserID) == nil {
 		return false
 	}
 	return claudeCliUserAgentRe.MatchString(userAgent)

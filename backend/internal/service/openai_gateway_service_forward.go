@@ -127,7 +127,6 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 		bodyModified = true
 		markPatchSet("model", mappedModel)
 	}
-
 	if model, ok := reqBody["model"].(string); ok {
 		normalizedModel := normalizeOpenAIModelForUpstream(account, model)
 		if preserveNativeRequestBody {
@@ -178,6 +177,16 @@ func (s *OpenAIGatewayService) prepareOpenAIForwardRequest(
 			if value, ok := reqBody["prompt_cache_key"].(string); ok {
 				promptCacheKey = strings.TrimSpace(value)
 			}
+		}
+	}
+	if policy.Profile.CompactPath {
+		compactMappedModel := resolveOpenAICompactForwardModel(account, mappedModel)
+		if compactMappedModel != "" && compactMappedModel != mappedModel {
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Compact model mapping applied: %s -> %s (account: %s, isCodexCLI: %v)", mappedModel, compactMappedModel, account.Name, isCodexCLI)
+			mappedModel = compactMappedModel
+			reqBody["model"] = compactMappedModel
+			bodyModified = true
+			markPatchSet("model", compactMappedModel)
 		}
 	}
 
