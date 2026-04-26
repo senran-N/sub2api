@@ -19,12 +19,14 @@ type ClaudeTokenCache = GeminiTokenCache
 
 // ClaudeTokenProvider manages access_token for Claude OAuth accounts.
 type ClaudeTokenProvider struct {
-	accountRepo   AccountRepository
-	tokenCache    ClaudeTokenCache
-	oauthService  *OAuthService
-	refreshAPI    *OAuthRefreshAPI
-	executor      OAuthRefreshExecutor
-	refreshPolicy ProviderRefreshPolicy
+	accountRepo      AccountRepository
+	tokenCache       ClaudeTokenCache
+	oauthService     *OAuthService
+	refreshAPI       *OAuthRefreshAPI
+	executor         OAuthRefreshExecutor
+	refreshPolicy    ProviderRefreshPolicy
+	tempUnschedCache TempUnschedCache
+	requestSettings  OAuthRequestPathRefreshSettings
 }
 
 func NewClaudeTokenProvider(
@@ -33,10 +35,11 @@ func NewClaudeTokenProvider(
 	oauthService *OAuthService,
 ) *ClaudeTokenProvider {
 	return &ClaudeTokenProvider{
-		accountRepo:   accountRepo,
-		tokenCache:    tokenCache,
-		oauthService:  oauthService,
-		refreshPolicy: ClaudeProviderRefreshPolicy(),
+		accountRepo:     accountRepo,
+		tokenCache:      tokenCache,
+		oauthService:    oauthService,
+		refreshPolicy:   ClaudeProviderRefreshPolicy(),
+		requestSettings: DefaultOAuthRequestPathRefreshSettings(),
 	}
 }
 
@@ -49,6 +52,14 @@ func (p *ClaudeTokenProvider) SetRefreshAPI(api *OAuthRefreshAPI, executor OAuth
 // SetRefreshPolicy injects caller-side refresh policy.
 func (p *ClaudeTokenProvider) SetRefreshPolicy(policy ProviderRefreshPolicy) {
 	p.refreshPolicy = policy
+}
+
+func (p *ClaudeTokenProvider) SetTempUnschedCache(cache TempUnschedCache) {
+	p.tempUnschedCache = cache
+}
+
+func (p *ClaudeTokenProvider) SetRequestPathRefreshSettings(settings OAuthRequestPathRefreshSettings) {
+	p.requestSettings = normalizeOAuthRequestPathRefreshSettings(settings)
 }
 
 // GetAccessToken returns a valid access_token.
@@ -80,21 +91,33 @@ func (p *ClaudeTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 	refreshFailed := false
 
 	if needsRefresh && p.refreshAPI != nil && p.executor != nil {
-		result, err := p.refreshAPI.RefreshIfNeeded(ctx, account, p.executor, claudeTokenRefreshSkew)
+		settings := p.currentRequestSettings()
+		refreshCtx, cancel := requestPathRefreshContext(ctx, settings)
+		result, err := p.refreshAPI.RefreshIfNeeded(refreshCtx, account, p.executor, claudeTokenRefreshSkew)
+		cancel()
 		if err != nil {
 			if p.refreshPolicy.OnRefreshError == ProviderRefreshErrorReturn {
-				return "", err
+				if ctx.Err() != nil {
+					return "", ctx.Err()
+				}
+				kind := classifyOAuthRefreshFailure(err)
+				markRequestPathRefreshFailure(p.accountRepo, p.tempUnschedCache, account, err, settings, "claude")
+				return "", newOAuthRequestPathFailoverError(account, kind, err)
 			}
 			slog.Warn("claude_token_refresh_failed", "account_id", account.ID, "error", err)
 			refreshFailed = true
 		} else if result.LockHeld {
 			if p.refreshPolicy.OnLockHeld == ProviderLockHeldWaitForCache && p.tokenCache != nil {
-				time.Sleep(claudeLockWaitTime)
-				if token, cacheErr := p.tokenCache.GetAccessToken(ctx, cacheKey); cacheErr == nil && strings.TrimSpace(token) != "" {
+				token, cacheErr := waitForCachedOAuthToken(ctx, p.tokenCache, cacheKey, settings.LockWaitTimeout)
+				if cacheErr != nil {
+					return "", cacheErr
+				}
+				if strings.TrimSpace(token) != "" {
 					slog.Debug("claude_token_cache_hit_after_wait", "account_id", account.ID)
 					return token, nil
 				}
 			}
+			return "", newOAuthRequestPathFailoverError(account, OAuthRefreshFailureLockHeld, errOAuthRefreshLockHeld)
 		} else {
 			account = result.Account
 			expiresAt = account.GetCredentialAsTime("expires_at")
@@ -156,4 +179,11 @@ func (p *ClaudeTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 	}
 
 	return accessToken, nil
+}
+
+func (p *ClaudeTokenProvider) currentRequestSettings() OAuthRequestPathRefreshSettings {
+	if p == nil {
+		return DefaultOAuthRequestPathRefreshSettings()
+	}
+	return normalizeOAuthRequestPathRefreshSettings(p.requestSettings)
 }

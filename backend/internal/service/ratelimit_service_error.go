@@ -22,6 +22,26 @@ const (
 	ErrorPolicyTempUnscheduled
 )
 
+type AccountHealthAction string
+
+const (
+	AccountHealthActionNone        AccountHealthAction = "none"
+	AccountHealthActionSetError    AccountHealthAction = "set_error"
+	AccountHealthActionOAuth401    AccountHealthAction = "oauth_401"
+	AccountHealthActionRateLimit   AccountHealthAction = "rate_limit"
+	AccountHealthActionOverload    AccountHealthAction = "overload"
+	AccountHealthActionCustomError AccountHealthAction = "custom_error"
+	AccountHealthActionLogOnly     AccountHealthAction = "log_only"
+)
+
+type AccountHealthDecision struct {
+	Action          AccountHealthAction
+	FailureKind     string
+	ErrorMessage    string
+	UpstreamMessage string
+	ShouldDisable   bool
+}
+
 func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Account, statusCode int, responseBody []byte) ErrorPolicyResult {
 	if account.IsCustomErrorCodesEnabled() {
 		if account.ShouldHandleErrorCode(statusCode) {
@@ -53,31 +73,9 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		return true
 	}
 
-	upstreamMessage := strings.TrimSpace(extractUpstreamErrorMessage(responseBody))
-	upstreamMessage = sanitizeUpstreamErrorMessage(upstreamMessage)
-	if upstreamMessage != "" {
-		upstreamMessage = truncateForLog([]byte(upstreamMessage), 512)
-	}
+	decision := s.classifyAccountHealthDecision(account, statusCode, responseBody, customErrorCodesEnabled)
 
-	switch statusCode {
-	case http.StatusBadRequest:
-		lowerMessage := strings.ToLower(upstreamMessage)
-		switch {
-		case strings.Contains(lowerMessage, "organization has been disabled"):
-			s.handleAuthError(ctx, account, "Organization disabled (400): "+upstreamMessage)
-			shouldDisable = true
-		case strings.Contains(lowerMessage, "identity verification is required"):
-			s.handleAuthError(ctx, account, "Identity verification required (400): "+upstreamMessage)
-			shouldDisable = true
-		case account.Platform == PlatformAnthropic && strings.Contains(lowerMessage, "credit balance"):
-			s.handleAuthError(ctx, account, "Credit balance exhausted (400): "+upstreamMessage)
-			shouldDisable = true
-		}
-	case http.StatusUnauthorized:
-		shouldDisable = s.handle401(ctx, account, upstreamMessage, responseBody)
-	case http.StatusPaymentRequired:
-		shouldDisable = s.handle402(ctx, account, upstreamMessage, responseBody)
-	case http.StatusForbidden:
+	if statusCode == http.StatusForbidden {
 		logger.LegacyPrintf(
 			"service.ratelimit",
 			"[HandleUpstreamErrorRaw] account_id=%d platform=%s type=%s status=403 request_id=%s cf_ray=%s upstream_msg=%s raw_body=%s",
@@ -86,19 +84,202 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 			account.Type,
 			strings.TrimSpace(headers.Get("x-request-id")),
 			strings.TrimSpace(headers.Get("cf-ray")),
-			upstreamMessage,
+			decision.UpstreamMessage,
 			truncateForLog(responseBody, 1024),
 		)
-		shouldDisable = s.handle403(ctx, account, upstreamMessage, responseBody)
-	case http.StatusTooManyRequests:
-		s.handle429(ctx, account, headers, responseBody)
-	case 529:
-		s.handle529(ctx, account)
-	default:
-		shouldDisable = s.handleGenericUpstreamError(ctx, account, statusCode, upstreamMessage, customErrorCodesEnabled)
 	}
 
-	return shouldDisable
+	s.logAccountHealthDecision(account, statusCode, headers, decision)
+
+	switch decision.Action {
+	case AccountHealthActionSetError:
+		s.handleAuthError(ctx, account, decision.ErrorMessage)
+		return decision.ShouldDisable
+	case AccountHealthActionOAuth401:
+		s.handleOAuth401(ctx, account, decision.UpstreamMessage)
+		return decision.ShouldDisable
+	case AccountHealthActionRateLimit:
+		s.handle429(ctx, account, headers, responseBody)
+		return false
+	case AccountHealthActionOverload:
+		s.handle529(ctx, account)
+		return false
+	case AccountHealthActionCustomError:
+		message := decision.ErrorMessage
+		if message == "" {
+			message = "Custom error code triggered"
+		}
+		s.handleCustomErrorCode(ctx, account, statusCode, message)
+		return decision.ShouldDisable
+	case AccountHealthActionLogOnly:
+		if statusCode >= http.StatusInternalServerError {
+			slog.Warn("account_upstream_error", "account_id", account.ID, "status_code", statusCode)
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func (s *RateLimitService) classifyAccountHealthDecision(account *Account, statusCode int, responseBody []byte, customErrorCodesEnabled bool) AccountHealthDecision {
+	upstreamMessage := strings.TrimSpace(extractUpstreamErrorMessage(responseBody))
+	upstreamMessage = sanitizeUpstreamErrorMessage(upstreamMessage)
+	if upstreamMessage != "" {
+		upstreamMessage = truncateForLog([]byte(upstreamMessage), 512)
+	}
+
+	decision := AccountHealthDecision{
+		Action:          AccountHealthActionNone,
+		FailureKind:     "none",
+		UpstreamMessage: upstreamMessage,
+	}
+
+	switch statusCode {
+	case http.StatusBadRequest:
+		lowerMessage := strings.ToLower(upstreamMessage)
+		switch {
+		case strings.Contains(lowerMessage, "organization has been disabled"):
+			decision.Action = AccountHealthActionSetError
+			decision.FailureKind = "organization_disabled"
+			decision.ErrorMessage = "Organization disabled (400): " + upstreamMessage
+			decision.ShouldDisable = true
+		case strings.Contains(lowerMessage, "identity verification is required"):
+			decision.Action = AccountHealthActionSetError
+			decision.FailureKind = "identity_verification_required"
+			decision.ErrorMessage = "Identity verification required (400): " + upstreamMessage
+			decision.ShouldDisable = true
+		case account.Platform == PlatformAnthropic && strings.Contains(lowerMessage, "credit balance"):
+			decision.Action = AccountHealthActionSetError
+			decision.FailureKind = "credit_balance_exhausted"
+			decision.ErrorMessage = "Credit balance exhausted (400): " + upstreamMessage
+			decision.ShouldDisable = true
+		}
+	case http.StatusUnauthorized:
+		openAIErrorCode := extractUpstreamErrorCode(responseBody)
+		if account.Platform == PlatformOpenAI && (openAIErrorCode == "token_invalidated" || openAIErrorCode == "token_revoked") {
+			message := "Token revoked (401): account authentication permanently revoked"
+			if upstreamMessage != "" {
+				message = "Token revoked (401): " + upstreamMessage
+			}
+			decision.Action = AccountHealthActionSetError
+			decision.FailureKind = openAIErrorCode
+			decision.ErrorMessage = message
+			decision.ShouldDisable = true
+			return decision
+		}
+		if account.Type == AccountTypeOAuth && account.Platform != PlatformAntigravity {
+			decision.Action = AccountHealthActionOAuth401
+			decision.FailureKind = "oauth_401"
+			decision.ShouldDisable = true
+			return decision
+		}
+		message := "Authentication failed (401): invalid or expired credentials"
+		if upstreamMessage != "" {
+			message = "Authentication failed (401): " + upstreamMessage
+		}
+		decision.Action = AccountHealthActionSetError
+		decision.FailureKind = "auth_failed"
+		decision.ErrorMessage = message
+		decision.ShouldDisable = true
+	case http.StatusPaymentRequired:
+		if account.Platform == PlatformOpenAI && gjson.GetBytes(responseBody, "detail.code").String() == "deactivated_workspace" {
+			decision.Action = AccountHealthActionSetError
+			decision.FailureKind = "workspace_deactivated"
+			decision.ErrorMessage = "Workspace deactivated (402): workspace has been deactivated"
+			decision.ShouldDisable = true
+			return decision
+		}
+		message := "Payment required (402): insufficient balance or billing issue"
+		if upstreamMessage != "" {
+			message = "Payment required (402): " + upstreamMessage
+		}
+		decision.Action = AccountHealthActionSetError
+		decision.FailureKind = "payment_required"
+		decision.ErrorMessage = message
+		decision.ShouldDisable = true
+	case http.StatusForbidden:
+		return s.classify403Decision(account, upstreamMessage, responseBody)
+	case http.StatusTooManyRequests:
+		decision.Action = AccountHealthActionRateLimit
+		decision.FailureKind = "rate_limited"
+	case 529:
+		decision.Action = AccountHealthActionOverload
+		decision.FailureKind = "overloaded"
+	default:
+		if customErrorCodesEnabled {
+			message := "Custom error code triggered"
+			if upstreamMessage != "" {
+				message = upstreamMessage
+			}
+			decision.Action = AccountHealthActionCustomError
+			decision.FailureKind = "custom_error_code"
+			decision.ErrorMessage = message
+			decision.ShouldDisable = true
+			return decision
+		}
+		if statusCode >= http.StatusInternalServerError {
+			decision.Action = AccountHealthActionLogOnly
+			decision.FailureKind = "upstream_5xx"
+		}
+	}
+	return decision
+}
+
+func (s *RateLimitService) classify403Decision(account *Account, upstreamMsg string, responseBody []byte) AccountHealthDecision {
+	decision := AccountHealthDecision{
+		Action:          AccountHealthActionSetError,
+		FailureKind:     "forbidden",
+		UpstreamMessage: upstreamMsg,
+		ShouldDisable:   true,
+	}
+	if account.Platform == PlatformAntigravity {
+		switch classifyForbiddenType(string(responseBody)) {
+		case forbiddenTypeValidation:
+			message := "Validation required (403): account needs Google verification"
+			if upstreamMsg != "" {
+				message = "Validation required (403): " + upstreamMsg
+			}
+			if validationURL := extractValidationURL(string(responseBody)); validationURL != "" {
+				message += " | validation_url: " + validationURL
+			}
+			decision.FailureKind = "validation_required"
+			decision.ErrorMessage = message
+			return decision
+		case forbiddenTypeViolation:
+			message := "Account violation (403): terms of service violation"
+			if upstreamMsg != "" {
+				message = "Account violation (403): " + upstreamMsg
+			}
+			decision.FailureKind = "account_violation"
+			decision.ErrorMessage = message
+			return decision
+		}
+	}
+	message := "Access forbidden (403): account may be suspended or lack permissions"
+	if upstreamMsg != "" {
+		message = "Access forbidden (403): " + upstreamMsg
+	}
+	decision.ErrorMessage = message
+	return decision
+}
+
+func (s *RateLimitService) logAccountHealthDecision(account *Account, statusCode int, headers http.Header, decision AccountHealthDecision) {
+	if account == nil {
+		return
+	}
+	var cooldownUntil any
+	if account.RateLimitResetAt != nil {
+		cooldownUntil = *account.RateLimitResetAt
+	}
+	slog.Info("account_health_decision",
+		"account_id", account.ID,
+		"platform", account.Platform,
+		"status_code", statusCode,
+		"decision", decision.Action,
+		"failure_kind", decision.FailureKind,
+		"cooldown_until", cooldownUntil,
+		"request_id", strings.TrimSpace(headers.Get("x-request-id")),
+	)
 }
 
 func (s *RateLimitService) handle401(ctx context.Context, account *Account, upstreamMessage string, responseBody []byte) bool {
@@ -145,14 +326,31 @@ func (s *RateLimitService) handleOAuth401(ctx context.Context, account *Account,
 	if upstreamMessage != "" {
 		message = "OAuth 401: " + upstreamMessage
 	}
-	cooldownMinutes := s.cfg.RateLimit.OAuth401CooldownMinutes
+	cooldownMinutes := 10
+	if s.cfg != nil && s.cfg.RateLimit.OAuth401CooldownMinutes > 0 {
+		cooldownMinutes = s.cfg.RateLimit.OAuth401CooldownMinutes
+	}
 	if cooldownMinutes <= 0 {
 		cooldownMinutes = 10
 	}
-	until := time.Now().Add(time.Duration(cooldownMinutes) * time.Minute)
-	if err := s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, message); err != nil {
-		slog.Warn("oauth_401_set_temp_unschedulable_failed", "account_id", account.ID, "error", err)
+	now := time.Now()
+	until := now.Add(time.Duration(cooldownMinutes) * time.Minute)
+	state := &TempUnschedState{
+		UntilUnix:       until.Unix(),
+		TriggeredAtUnix: now.Unix(),
+		StatusCode:      http.StatusUnauthorized,
+		ErrorMessage:    message,
 	}
+	if err := s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, marshalTempUnschedState(state)); err != nil {
+		slog.Warn("oauth_401_set_temp_unschedulable_failed", "account_id", account.ID, "error", err)
+		return
+	}
+	s.cacheTempUnschedState(ctx, account.ID, state)
+	slog.Info("oauth_401_temp_unschedulable_set",
+		"account_id", account.ID,
+		"platform", account.Platform,
+		"cooldown_until", until,
+	)
 }
 
 func (s *RateLimitService) handle402(ctx context.Context, account *Account, upstreamMessage string, responseBody []byte) bool {

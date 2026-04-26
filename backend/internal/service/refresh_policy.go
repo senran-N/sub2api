@@ -31,7 +31,7 @@ type ProviderRefreshPolicy struct {
 
 func ClaudeProviderRefreshPolicy() ProviderRefreshPolicy {
 	return ProviderRefreshPolicy{
-		OnRefreshError: ProviderRefreshErrorUseExistingToken,
+		OnRefreshError: ProviderRefreshErrorReturn,
 		OnLockHeld:     ProviderLockHeldWaitForCache,
 		FailureTTL:     time.Minute,
 	}
@@ -39,7 +39,7 @@ func ClaudeProviderRefreshPolicy() ProviderRefreshPolicy {
 
 func OpenAIProviderRefreshPolicy() ProviderRefreshPolicy {
 	return ProviderRefreshPolicy{
-		OnRefreshError: ProviderRefreshErrorUseExistingToken,
+		OnRefreshError: ProviderRefreshErrorReturn,
 		OnLockHeld:     ProviderLockHeldWaitForCache,
 		FailureTTL:     time.Minute,
 	}
@@ -48,7 +48,7 @@ func OpenAIProviderRefreshPolicy() ProviderRefreshPolicy {
 func GeminiProviderRefreshPolicy() ProviderRefreshPolicy {
 	return ProviderRefreshPolicy{
 		OnRefreshError: ProviderRefreshErrorReturn,
-		OnLockHeld:     ProviderLockHeldUseExistingToken,
+		OnLockHeld:     ProviderLockHeldWaitForCache,
 		FailureTTL:     0,
 	}
 }
@@ -56,7 +56,7 @@ func GeminiProviderRefreshPolicy() ProviderRefreshPolicy {
 func AntigravityProviderRefreshPolicy() ProviderRefreshPolicy {
 	return ProviderRefreshPolicy{
 		OnRefreshError: ProviderRefreshErrorReturn,
-		OnLockHeld:     ProviderLockHeldUseExistingToken,
+		OnLockHeld:     ProviderLockHeldWaitForCache,
 		FailureTTL:     0,
 	}
 }

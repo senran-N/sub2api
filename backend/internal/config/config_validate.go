@@ -125,6 +125,27 @@ func (c *Config) Validate() error {
 	if c.JWT.RefreshWindowMinutes < 0 {
 		return fmt.Errorf("jwt.refresh_window_minutes must be non-negative")
 	}
+	if c.TokenRefresh.CheckIntervalMinutes < 0 {
+		return fmt.Errorf("token_refresh.check_interval_minutes must be non-negative")
+	}
+	if c.TokenRefresh.RefreshBeforeExpiryHours < 0 {
+		return fmt.Errorf("token_refresh.refresh_before_expiry_hours must be non-negative")
+	}
+	if c.TokenRefresh.MaxRetries < 0 {
+		return fmt.Errorf("token_refresh.max_retries must be non-negative")
+	}
+	if c.TokenRefresh.RetryBackoffSeconds < 0 {
+		return fmt.Errorf("token_refresh.retry_backoff_seconds must be non-negative")
+	}
+	if c.TokenRefresh.RequestPathTimeoutSeconds < 0 {
+		return fmt.Errorf("token_refresh.request_path_timeout_seconds must be non-negative")
+	}
+	if c.TokenRefresh.LockWaitTimeoutMilliseconds < 0 {
+		return fmt.Errorf("token_refresh.lock_wait_timeout_milliseconds must be non-negative")
+	}
+	if c.TokenRefresh.TransientTempUnschedMinutes < 0 {
+		return fmt.Errorf("token_refresh.transient_temp_unsched_minutes must be non-negative")
+	}
 	if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
 		return fmt.Errorf("security.csp.policy is required when CSP is enabled")
 	}

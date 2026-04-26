@@ -266,6 +266,12 @@ type TokenRefreshConfig struct {
 	MaxRetries int `mapstructure:"max_retries"`
 	// 重试退避基础时间（秒）
 	RetryBackoffSeconds int `mapstructure:"retry_backoff_seconds"`
+	// 请求路径 token 刷新的最大等待时间（秒）
+	RequestPathTimeoutSeconds int `mapstructure:"request_path_timeout_seconds"`
+	// 刷新锁被占用时，请求路径短等缓存的最大时间（毫秒）
+	LockWaitTimeoutMilliseconds int `mapstructure:"lock_wait_timeout_milliseconds"`
+	// 可重试刷新失败时临时不可调度时间（分钟）
+	TransientTempUnschedMinutes int `mapstructure:"transient_temp_unsched_minutes"`
 }
 
 type PricingConfig struct {

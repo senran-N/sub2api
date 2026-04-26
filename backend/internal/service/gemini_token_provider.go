@@ -24,6 +24,7 @@ type GeminiTokenProvider struct {
 	executor           OAuthRefreshExecutor
 	refreshPolicy      ProviderRefreshPolicy
 	tempUnschedCache   TempUnschedCache
+	requestSettings    OAuthRequestPathRefreshSettings
 }
 
 func NewGeminiTokenProvider(
@@ -36,6 +37,7 @@ func NewGeminiTokenProvider(
 		tokenCache:         tokenCache,
 		geminiOAuthService: geminiOAuthService,
 		refreshPolicy:      GeminiProviderRefreshPolicy(),
+		requestSettings:    DefaultOAuthRequestPathRefreshSettings(),
 	}
 }
 
@@ -53,6 +55,10 @@ func (p *GeminiTokenProvider) SetRefreshPolicy(policy ProviderRefreshPolicy) {
 // SetTempUnschedCache injects temp unschedulable cache for immediate scheduler sync.
 func (p *GeminiTokenProvider) SetTempUnschedCache(cache TempUnschedCache) {
 	p.tempUnschedCache = cache
+}
+
+func (p *GeminiTokenProvider) SetRequestPathRefreshSettings(settings OAuthRequestPathRefreshSettings) {
+	p.requestSettings = normalizeOAuthRequestPathRefreshSettings(settings)
 }
 
 func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Account) (string, error) {
@@ -77,19 +83,31 @@ func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 	needsRefresh := expiresAt == nil || time.Until(*expiresAt) <= geminiTokenRefreshSkew
 
 	if needsRefresh && p.refreshAPI != nil && p.executor != nil {
-		result, err := p.refreshAPI.RefreshIfNeeded(ctx, account, p.executor, geminiTokenRefreshSkew)
+		settings := p.currentRequestSettings()
+		refreshCtx, cancel := requestPathRefreshContext(ctx, settings)
+		result, err := p.refreshAPI.RefreshIfNeeded(refreshCtx, account, p.executor, geminiTokenRefreshSkew)
+		cancel()
 		if err != nil {
 			if p.refreshPolicy.OnRefreshError == ProviderRefreshErrorReturn {
+				if ctx.Err() != nil {
+					return "", ctx.Err()
+				}
+				kind := classifyOAuthRefreshFailure(err)
 				p.markTempUnschedulable(account, err)
-				return "", err
+				return "", newOAuthRequestPathFailoverError(account, kind, err)
 			}
 		} else if result.LockHeld {
 			if p.refreshPolicy.OnLockHeld == ProviderLockHeldWaitForCache && p.tokenCache != nil {
-				if token, cacheErr := p.tokenCache.GetAccessToken(ctx, cacheKey); cacheErr == nil && strings.TrimSpace(token) != "" {
+				token, cacheErr := waitForCachedOAuthToken(ctx, p.tokenCache, cacheKey, settings.LockWaitTimeout)
+				if cacheErr != nil {
+					return "", cacheErr
+				}
+				if strings.TrimSpace(token) != "" {
 					return token, nil
 				}
 			}
-			slog.Debug("gemini_token_lock_held_use_old", "account_id", account.ID)
+			slog.Debug("gemini_token_lock_held_failover", "account_id", account.ID)
+			return "", newOAuthRequestPathFailoverError(account, OAuthRefreshFailureLockHeld, errOAuthRefreshLockHeld)
 		} else {
 			account = result.Account
 			expiresAt = account.GetCredentialAsTime("expires_at")
@@ -179,43 +197,7 @@ func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 // after a request-path refresh failure so new selections stop hitting it until
 // background refresh or operator action recovers the credentials.
 func (p *GeminiTokenProvider) markTempUnschedulable(account *Account, refreshErr error) {
-	if p.accountRepo == nil || account == nil {
-		return
-	}
-
-	now := time.Now()
-	until := now.Add(tokenRefreshTempUnschedDuration)
-	reason := "token refresh failed on request path: " + refreshErr.Error()
-	writeCtx, cancel := newTempUnschedWriteContext(context.TODO())
-	defer cancel()
-
-	if err := p.accountRepo.SetTempUnschedulable(writeCtx, account.ID, until, reason); err != nil {
-		slog.Warn("gemini_token_provider.set_temp_unschedulable_failed",
-			"account_id", account.ID,
-			"error", err,
-		)
-		return
-	}
-
-	slog.Warn("gemini_token_provider.temp_unschedulable_set",
-		"account_id", account.ID,
-		"until", until.Format(time.RFC3339),
-		"reason", reason,
-	)
-
-	if p.tempUnschedCache != nil {
-		state := &TempUnschedState{
-			UntilUnix:       until.Unix(),
-			TriggeredAtUnix: now.Unix(),
-			ErrorMessage:    reason,
-		}
-		if err := p.tempUnschedCache.SetTempUnsched(writeCtx, account.ID, state); err != nil {
-			slog.Warn("gemini_token_provider.temp_unsched_cache_set_failed",
-				"account_id", account.ID,
-				"error", err,
-			)
-		}
-	}
+	markRequestPathRefreshFailure(p.accountRepo, p.tempUnschedCache, account, refreshErr, p.currentRequestSettings(), "gemini")
 }
 
 func GeminiTokenCacheKey(account *Account) string {
@@ -224,4 +206,11 @@ func GeminiTokenCacheKey(account *Account) string {
 		return "gemini:" + projectID
 	}
 	return "gemini:account:" + strconv.FormatInt(account.ID, 10)
+}
+
+func (p *GeminiTokenProvider) currentRequestSettings() OAuthRequestPathRefreshSettings {
+	if p == nil {
+		return DefaultOAuthRequestPathRefreshSettings()
+	}
+	return normalizeOAuthRequestPathRefreshSettings(p.requestSettings)
 }

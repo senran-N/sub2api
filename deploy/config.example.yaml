@@ -606,6 +606,36 @@ concurrency:
   ping_interval: 10
 
 # =============================================================================
+# OAuth Token Refresh Configuration
+# OAuth Token 刷新配置
+# =============================================================================
+token_refresh:
+  # Enable background OAuth token refresh
+  # 启用后台 OAuth token 刷新
+  enabled: true
+  # Background refresh check interval (minutes)
+  # 后台刷新检查间隔（分钟）
+  check_interval_minutes: 5
+  # Refresh tokens this many hours before expiry
+  # token 到期前多少小时开始刷新
+  refresh_before_expiry_hours: 0.5
+  # Max retries for background refresh attempts
+  # 后台刷新最大重试次数
+  max_retries: 3
+  # Base retry backoff (seconds)
+  # 重试退避基础时间（秒）
+  retry_backoff_seconds: 2
+  # Max time a gateway request may spend refreshing an OAuth token
+  # 请求路径等待 OAuth token 刷新的最大时间（秒）
+  request_path_timeout_seconds: 3
+  # Max time a gateway request waits for another worker's refresh result
+  # 刷新锁被占用时，请求路径等待缓存中新 token 的最大时间（毫秒）
+  lock_wait_timeout_milliseconds: 250
+  # Temporary unschedulable duration after retryable refresh failures
+  # 可重试刷新失败后账号临时不可调度时间（分钟）
+  transient_temp_unsched_minutes: 10
+
+# =============================================================================
 # Database Configuration (PostgreSQL)
 # 数据库配置 (PostgreSQL)
 # =============================================================================

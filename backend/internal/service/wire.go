@@ -85,11 +85,15 @@ func ProvideClaudeTokenProvider(
 	tokenCache GeminiTokenCache,
 	oauthService *OAuthService,
 	refreshAPI *OAuthRefreshAPI,
+	tempUnschedCache TempUnschedCache,
+	cfg *config.Config,
 ) *ClaudeTokenProvider {
 	p := NewClaudeTokenProvider(accountRepo, tokenCache, oauthService)
 	executor := NewClaudeTokenRefresher(oauthService)
 	p.SetRefreshAPI(refreshAPI, executor)
 	p.SetRefreshPolicy(ClaudeProviderRefreshPolicy())
+	p.SetTempUnschedCache(tempUnschedCache)
+	p.SetRequestPathRefreshSettings(OAuthRequestPathRefreshSettingsFromConfig(cfg))
 	return p
 }
 
@@ -99,11 +103,15 @@ func ProvideOpenAITokenProvider(
 	tokenCache GeminiTokenCache,
 	openaiOAuthService *OpenAIOAuthService,
 	refreshAPI *OAuthRefreshAPI,
+	tempUnschedCache TempUnschedCache,
+	cfg *config.Config,
 ) *OpenAITokenProvider {
 	p := NewOpenAITokenProvider(accountRepo, tokenCache, openaiOAuthService)
 	executor := NewOpenAITokenRefresher(openaiOAuthService, accountRepo)
 	p.SetRefreshAPI(refreshAPI, executor)
 	p.SetRefreshPolicy(OpenAIProviderRefreshPolicy())
+	p.SetTempUnschedCache(tempUnschedCache)
+	p.SetRequestPathRefreshSettings(OAuthRequestPathRefreshSettingsFromConfig(cfg))
 	return p
 }
 
@@ -113,11 +121,15 @@ func ProvideGeminiTokenProvider(
 	tokenCache GeminiTokenCache,
 	geminiOAuthService *GeminiOAuthService,
 	refreshAPI *OAuthRefreshAPI,
+	tempUnschedCache TempUnschedCache,
+	cfg *config.Config,
 ) *GeminiTokenProvider {
 	p := NewGeminiTokenProvider(accountRepo, tokenCache, geminiOAuthService)
 	executor := NewGeminiTokenRefresher(geminiOAuthService)
 	p.SetRefreshAPI(refreshAPI, executor)
 	p.SetRefreshPolicy(GeminiProviderRefreshPolicy())
+	p.SetTempUnschedCache(tempUnschedCache)
+	p.SetRequestPathRefreshSettings(OAuthRequestPathRefreshSettingsFromConfig(cfg))
 	return p
 }
 
@@ -128,12 +140,14 @@ func ProvideAntigravityTokenProvider(
 	antigravityOAuthService *AntigravityOAuthService,
 	refreshAPI *OAuthRefreshAPI,
 	tempUnschedCache TempUnschedCache,
+	cfg *config.Config,
 ) *AntigravityTokenProvider {
 	p := NewAntigravityTokenProvider(accountRepo, tokenCache, antigravityOAuthService)
 	executor := NewAntigravityTokenRefresher(antigravityOAuthService)
 	p.SetRefreshAPI(refreshAPI, executor)
 	p.SetRefreshPolicy(AntigravityProviderRefreshPolicy())
 	p.SetTempUnschedCache(tempUnschedCache)
+	p.SetRequestPathRefreshSettings(OAuthRequestPathRefreshSettingsFromConfig(cfg))
 	return p
 }
 

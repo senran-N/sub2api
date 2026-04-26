@@ -14,10 +14,6 @@ const (
 	antigravityTokenRefreshSkew = 3 * time.Minute
 	antigravityTokenCacheSkew   = 5 * time.Minute
 	antigravityBackfillCooldown = 5 * time.Minute
-	// antigravityRequestRefreshTimeout 请求路径上 token 刷新的最大等待时间。
-	// 超过此时间直接放弃刷新、标记账号临时不可调度并触发 failover，
-	// 让后台 TokenRefreshService 在下个周期继续重试。
-	antigravityRequestRefreshTimeout = 8 * time.Second
 )
 
 // AntigravityTokenCache token cache interface.
@@ -33,6 +29,7 @@ type AntigravityTokenProvider struct {
 	executor                OAuthRefreshExecutor
 	refreshPolicy           ProviderRefreshPolicy
 	tempUnschedCache        TempUnschedCache // 用于同步更新 Redis 临时不可调度缓存
+	requestSettings         OAuthRequestPathRefreshSettings
 }
 
 func NewAntigravityTokenProvider(
@@ -45,6 +42,7 @@ func NewAntigravityTokenProvider(
 		tokenCache:              tokenCache,
 		antigravityOAuthService: antigravityOAuthService,
 		refreshPolicy:           AntigravityProviderRefreshPolicy(),
+		requestSettings:         DefaultOAuthRequestPathRefreshSettings(),
 	}
 }
 
@@ -62,6 +60,10 @@ func (p *AntigravityTokenProvider) SetRefreshPolicy(policy ProviderRefreshPolicy
 // SetTempUnschedCache injects temp unschedulable cache for immediate scheduler sync.
 func (p *AntigravityTokenProvider) SetTempUnschedCache(cache TempUnschedCache) {
 	p.tempUnschedCache = cache
+}
+
+func (p *AntigravityTokenProvider) SetRequestPathRefreshSettings(settings OAuthRequestPathRefreshSettings) {
+	p.requestSettings = normalizeOAuthRequestPathRefreshSettings(settings)
 }
 
 // GetAccessToken returns a valid access_token.
@@ -98,23 +100,30 @@ func (p *AntigravityTokenProvider) GetAccessToken(ctx context.Context, account *
 	expiresAt := account.GetCredentialAsTime("expires_at")
 	needsRefresh := expiresAt == nil || time.Until(*expiresAt) <= antigravityTokenRefreshSkew
 	if needsRefresh && p.refreshAPI != nil && p.executor != nil {
-		// 请求路径使用短超时，避免代理不通时阻塞过久（后台刷新服务会继续重试）
-		refreshCtx, cancel := context.WithTimeout(ctx, antigravityRequestRefreshTimeout)
+		settings := p.currentRequestSettings()
+		refreshCtx, cancel := requestPathRefreshContext(ctx, settings)
 		defer cancel()
 		result, err := p.refreshAPI.RefreshIfNeeded(refreshCtx, account, p.executor, antigravityTokenRefreshSkew)
 		if err != nil {
-			// 标记账号临时不可调度，避免后续请求继续命中
-			p.markTempUnschedulable(account, err)
 			if p.refreshPolicy.OnRefreshError == ProviderRefreshErrorReturn {
-				return "", err
+				if ctx.Err() != nil {
+					return "", ctx.Err()
+				}
+				kind := classifyOAuthRefreshFailure(err)
+				p.markTempUnschedulable(account, err)
+				return "", newOAuthRequestPathFailoverError(account, kind, err)
 			}
 		} else if result.LockHeld {
 			if p.refreshPolicy.OnLockHeld == ProviderLockHeldWaitForCache && p.tokenCache != nil {
-				if token, cacheErr := p.tokenCache.GetAccessToken(ctx, cacheKey); cacheErr == nil && strings.TrimSpace(token) != "" {
+				token, cacheErr := waitForCachedOAuthToken(ctx, p.tokenCache, cacheKey, settings.LockWaitTimeout)
+				if cacheErr != nil {
+					return "", cacheErr
+				}
+				if strings.TrimSpace(token) != "" {
 					return token, nil
 				}
 			}
-			// default policy: continue with existing token.
+			return "", newOAuthRequestPathFailoverError(account, OAuthRefreshFailureLockHeld, errOAuthRefreshLockHeld)
 		} else {
 			account = result.Account
 			expiresAt = account.GetCredentialAsTime("expires_at")
@@ -191,44 +200,18 @@ func (p *AntigravityTokenProvider) shouldAttemptBackfill(accountID int64) bool {
 // 同时写 DB 和 Redis 缓存，确保调度器立即跳过该账号。
 // 使用带超时的脱离 context，避免在请求超时后继续无限阻塞热路径。
 func (p *AntigravityTokenProvider) markTempUnschedulable(account *Account, refreshErr error) {
-	if p.accountRepo == nil || account == nil {
-		return
-	}
-	now := time.Now()
-	until := now.Add(tokenRefreshTempUnschedDuration)
-	reason := "token refresh failed on request path: " + refreshErr.Error()
-	writeCtx, cancel := newTempUnschedWriteContext(context.TODO())
-	defer cancel()
-	if err := p.accountRepo.SetTempUnschedulable(writeCtx, account.ID, until, reason); err != nil {
-		slog.Warn("antigravity_token_provider.set_temp_unschedulable_failed",
-			"account_id", account.ID,
-			"error", err,
-		)
-		return
-	}
-	slog.Warn("antigravity_token_provider.temp_unschedulable_set",
-		"account_id", account.ID,
-		"until", until.Format(time.RFC3339),
-		"reason", reason,
-	)
-	// 同步写 Redis 缓存，调度器立即生效
-	if p.tempUnschedCache != nil {
-		state := &TempUnschedState{
-			UntilUnix:       until.Unix(),
-			TriggeredAtUnix: now.Unix(),
-			ErrorMessage:    reason,
-		}
-		if err := p.tempUnschedCache.SetTempUnsched(writeCtx, account.ID, state); err != nil {
-			slog.Warn("antigravity_token_provider.temp_unsched_cache_set_failed",
-				"account_id", account.ID,
-				"error", err,
-			)
-		}
-	}
+	markRequestPathRefreshFailure(p.accountRepo, p.tempUnschedCache, account, refreshErr, p.currentRequestSettings(), "antigravity")
 }
 
 func (p *AntigravityTokenProvider) markBackfillAttempted(accountID int64) {
 	p.backfillCooldown.Store(accountID, time.Now())
+}
+
+func (p *AntigravityTokenProvider) currentRequestSettings() OAuthRequestPathRefreshSettings {
+	if p == nil {
+		return DefaultOAuthRequestPathRefreshSettings()
+	}
+	return normalizeOAuthRequestPathRefreshSettings(p.requestSettings)
 }
 
 func AntigravityTokenCacheKey(account *Account) string {

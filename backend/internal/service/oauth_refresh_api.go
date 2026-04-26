@@ -84,7 +84,9 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 
 	// 0. 获取进程内互斥锁，避免同一进程内并发刷新抢占同一个 refresh_token。
 	localMu := api.getLocalLock(cacheKey)
-	localMu.Lock()
+	if !localMu.TryLock() {
+		return &OAuthRefreshResult{LockHeld: true}, nil
+	}
 	defer localMu.Unlock()
 
 	// 1. 获取分布式锁

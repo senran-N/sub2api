@@ -84,6 +84,8 @@ type OpenAITokenProvider struct {
 	refreshAPI         *OAuthRefreshAPI
 	executor           OAuthRefreshExecutor
 	refreshPolicy      ProviderRefreshPolicy
+	tempUnschedCache   TempUnschedCache
+	requestSettings    OAuthRequestPathRefreshSettings
 }
 
 func NewOpenAITokenProvider(
@@ -97,6 +99,7 @@ func NewOpenAITokenProvider(
 		openAIOAuthService: openAIOAuthService,
 		metrics:            &openAITokenRuntimeMetricsStore{},
 		refreshPolicy:      OpenAIProviderRefreshPolicy(),
+		requestSettings:    DefaultOAuthRequestPathRefreshSettings(),
 	}
 }
 
@@ -109,6 +112,14 @@ func (p *OpenAITokenProvider) SetRefreshAPI(api *OAuthRefreshAPI, executor OAuth
 // SetRefreshPolicy injects caller-side refresh policy.
 func (p *OpenAITokenProvider) SetRefreshPolicy(policy ProviderRefreshPolicy) {
 	p.refreshPolicy = policy
+}
+
+func (p *OpenAITokenProvider) SetTempUnschedCache(cache TempUnschedCache) {
+	p.tempUnschedCache = cache
+}
+
+func (p *OpenAITokenProvider) SetRequestPathRefreshSettings(settings OAuthRequestPathRefreshSettings) {
+	p.requestSettings = normalizeOAuthRequestPathRefreshSettings(settings)
 }
 
 func (p *OpenAITokenProvider) SnapshotRuntimeMetrics() OpenAITokenRuntimeMetrics {
@@ -158,10 +169,19 @@ func (p *OpenAITokenProvider) GetAccessToken(ctx context.Context, account *Accou
 		p.metrics.refreshRequests.Add(1)
 		p.metrics.touchNow()
 
-		result, err := p.refreshAPI.RefreshIfNeeded(ctx, account, p.executor, openAITokenRefreshSkew)
+		settings := p.currentRequestSettings()
+		refreshCtx, cancel := requestPathRefreshContext(ctx, settings)
+		result, err := p.refreshAPI.RefreshIfNeeded(refreshCtx, account, p.executor, openAITokenRefreshSkew)
+		cancel()
 		if err != nil {
 			if p.refreshPolicy.OnRefreshError == ProviderRefreshErrorReturn {
-				return "", err
+				p.metrics.refreshFailure.Add(1)
+				if ctx.Err() != nil {
+					return "", ctx.Err()
+				}
+				kind := classifyOAuthRefreshFailure(err)
+				markRequestPathRefreshFailure(p.accountRepo, p.tempUnschedCache, account, err, settings, "openai")
+				return "", newOAuthRequestPathFailoverError(account, kind, err)
 			}
 			slog.Warn("openai_token_refresh_failed", "account_id", account.ID, "error", err)
 			p.metrics.refreshFailure.Add(1)
@@ -170,7 +190,7 @@ func (p *OpenAITokenProvider) GetAccessToken(ctx context.Context, account *Accou
 			if p.refreshPolicy.OnLockHeld == ProviderLockHeldWaitForCache {
 				p.metrics.lockContention.Add(1)
 				p.metrics.touchNow()
-				token, waitErr := p.waitForTokenAfterLockRace(ctx, cacheKey)
+				token, waitErr := p.waitForTokenAfterLockRace(ctx, cacheKey, settings.LockWaitTimeout)
 				if waitErr != nil {
 					return "", waitErr
 				}
@@ -179,6 +199,7 @@ func (p *OpenAITokenProvider) GetAccessToken(ctx context.Context, account *Accou
 					return token, nil
 				}
 			}
+			return "", newOAuthRequestPathFailoverError(account, OAuthRefreshFailureLockHeld, errOAuthRefreshLockHeld)
 		} else if result.Refreshed {
 			p.metrics.refreshSuccess.Add(1)
 			account = result.Account
@@ -201,7 +222,7 @@ func (p *OpenAITokenProvider) GetAccessToken(ctx context.Context, account *Accou
 		} else {
 			p.metrics.lockContention.Add(1)
 			p.metrics.touchNow()
-			token, waitErr := p.waitForTokenAfterLockRace(ctx, cacheKey)
+			token, waitErr := p.waitForTokenAfterLockRace(ctx, cacheKey, p.currentRequestSettings().LockWaitTimeout)
 			if waitErr != nil {
 				return "", waitErr
 			}
@@ -255,21 +276,33 @@ func (p *OpenAITokenProvider) GetAccessToken(ctx context.Context, account *Accou
 	return accessToken, nil
 }
 
-func (p *OpenAITokenProvider) waitForTokenAfterLockRace(ctx context.Context, cacheKey string) (string, error) {
+func (p *OpenAITokenProvider) waitForTokenAfterLockRace(ctx context.Context, cacheKey string, maxWait time.Duration) (string, error) {
+	if p.tokenCache == nil {
+		return "", nil
+	}
+	if maxWait <= 0 {
+		maxWait = defaultOAuthLockWaitTimeout
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
 	wait := openAILockInitialWait
 	totalWaitMs := int64(0)
 	for i := 0; i < openAILockMaxAttempts; i++ {
 		actualWait := jitterLockWait(wait)
 		timer := time.NewTimer(actualWait)
 		select {
-		case <-ctx.Done():
+		case <-waitCtx.Done():
 			if !timer.Stop() {
 				select {
 				case <-timer.C:
 				default:
 				}
 			}
-			return "", ctx.Err()
+			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+				p.metrics.lockWaitMiss.Add(1)
+				return "", nil
+			}
+			return "", waitCtx.Err()
 		case <-timer.C:
 		}
 
@@ -282,7 +315,7 @@ func (p *OpenAITokenProvider) waitForTokenAfterLockRace(ctx context.Context, cac
 		p.metrics.lockWaitTotalMs.Add(waitMs)
 		p.metrics.touchNow()
 
-		token, err := p.tokenCache.GetAccessToken(ctx, cacheKey)
+		token, err := p.tokenCache.GetAccessToken(waitCtx, cacheKey)
 		if err == nil && strings.TrimSpace(token) != "" {
 			p.metrics.lockWaitHit.Add(1)
 			if totalWaitMs >= openAILockWarnThresholdMs {
@@ -304,6 +337,13 @@ func (p *OpenAITokenProvider) waitForTokenAfterLockRace(ctx context.Context, cac
 		slog.Warn("openai_token_lock_wait_high", "wait_ms", totalWaitMs, "attempts", openAILockMaxAttempts)
 	}
 	return "", nil
+}
+
+func (p *OpenAITokenProvider) currentRequestSettings() OAuthRequestPathRefreshSettings {
+	if p == nil {
+		return DefaultOAuthRequestPathRefreshSettings()
+	}
+	return normalizeOAuthRequestPathRefreshSettings(p.requestSettings)
 }
 
 func jitterLockWait(base time.Duration) time.Duration {

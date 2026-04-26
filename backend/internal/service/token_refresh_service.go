@@ -12,9 +12,6 @@ import (
 	"github.com/senran-N/sub2api/internal/config"
 )
 
-// tokenRefreshTempUnschedDuration token 刷新重试耗尽后临时不可调度的持续时间
-const tokenRefreshTempUnschedDuration = 10 * time.Minute
-
 // TokenRefreshService OAuth token自动刷新服务
 // 定期检查并刷新即将过期的token
 type TokenRefreshService struct {
@@ -324,22 +321,43 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 	s.ensureOpenAIPrivacy(ctx, account)
 	s.ensureAntigravityPrivacy(ctx, account)
 
-	// 设置临时不可调度 10 分钟（不标记 error，保持 status=active 让下个刷新周期能继续尝试）
-	until := time.Now().Add(tokenRefreshTempUnschedDuration)
-	reason := fmt.Sprintf("token refresh retry exhausted: %v", lastErr)
-	if setErr := s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, reason); setErr != nil {
+	s.setRetryExhaustedTempUnschedulable(ctx, account, lastErr)
+
+	return lastErr
+}
+
+func (s *TokenRefreshService) setRetryExhaustedTempUnschedulable(ctx context.Context, account *Account, refreshErr error) {
+	if s == nil || s.accountRepo == nil || account == nil {
+		return
+	}
+	now := time.Now()
+	until := now.Add(s.transientTempUnschedDuration())
+	reason := fmt.Sprintf("token refresh retry exhausted: %v", refreshErr)
+	state := &TempUnschedState{
+		UntilUnix:       until.Unix(),
+		TriggeredAtUnix: now.Unix(),
+		ErrorMessage:    reason,
+	}
+	if setErr := s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, marshalTempUnschedState(state)); setErr != nil {
 		slog.Warn("token_refresh.set_temp_unschedulable_failed",
 			"account_id", account.ID,
 			"error", setErr,
 		)
-	} else {
-		slog.Info("token_refresh.temp_unschedulable_set",
-			"account_id", account.ID,
-			"until", until.Format(time.RFC3339),
-		)
+		return
 	}
-
-	return lastErr
+	if s.tempUnschedCache != nil {
+		if setErr := s.tempUnschedCache.SetTempUnsched(ctx, account.ID, state); setErr != nil {
+			slog.Warn("token_refresh.set_temp_unsched_cache_failed",
+				"account_id", account.ID,
+				"error", setErr,
+			)
+		}
+	}
+	slog.Info("token_refresh.temp_unschedulable_set",
+		"account_id", account.ID,
+		"failure_kind", classifyOAuthRefreshFailure(refreshErr),
+		"until", until.Format(time.RFC3339),
+	)
 }
 
 // postRefreshActions 刷新成功后的后续动作（清除错误状态、缓存失效、调度器同步等）
@@ -408,28 +426,11 @@ func (s *TokenRefreshService) postRefreshActions(ctx context.Context, account *A
 // errRefreshSkipped 表示刷新被跳过（锁竞争或已被其他路径刷新），不计入 failed 或 refreshed
 var errRefreshSkipped = fmt.Errorf("refresh skipped")
 
-// isNonRetryableRefreshError 判断是否为不可重试的刷新错误
-// 这些错误通常表示凭证已失效或配置确实缺失，需要用户重新授权
-// 注意：missing_project_id 错误只在真正缺失（从未获取过）时返回，临时获取失败不会返回此错误
-func isNonRetryableRefreshError(err error) bool {
-	if err == nil {
-		return false
+func (s *TokenRefreshService) transientTempUnschedDuration() time.Duration {
+	if s == nil || s.cfg == nil || s.cfg.TransientTempUnschedMinutes <= 0 {
+		return tokenRefreshTempUnschedDuration
 	}
-	msg := strings.ToLower(err.Error())
-	nonRetryable := []string{
-		"invalid_grant",       // refresh_token 已失效
-		"invalid_client",      // 客户端配置错误
-		"unauthorized_client", // 客户端未授权
-		"access_denied",       // 访问被拒绝
-		"missing_project_id",  // 缺少 project_id
-		"no refresh token available",
-	}
-	for _, needle := range nonRetryable {
-		if strings.Contains(msg, needle) {
-			return true
-		}
-	}
-	return false
+	return time.Duration(s.cfg.TransientTempUnschedMinutes) * time.Minute
 }
 
 // ensureOpenAIPrivacy 检查 OpenAI OAuth 账号是否已设置 privacy_mode，
