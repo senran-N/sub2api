@@ -261,6 +261,9 @@ func normalizeCodexModel(model string) string {
 		parts := strings.Split(modelID, "/")
 		modelID = parts[len(parts)-1]
 	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelID)), "gpt-image-") {
+		return strings.TrimSpace(modelID)
+	}
 
 	if mapped := getNormalizedCodexModel(modelID); mapped != "" {
 		return mapped
@@ -358,6 +361,9 @@ func normalizeCodexUpstreamModel(model string) string {
 	}
 	if modelID == "" {
 		return normalizeCodexModel(trimmed)
+	}
+	if strings.HasPrefix(strings.ToLower(modelID), "gpt-image-") {
+		return modelID
 	}
 
 	if mapped := getNormalizedCodexUpstreamModel(modelID); mapped != "" {

@@ -20,6 +20,9 @@ func TestParsePricingData_ParsesPriorityAndServiceTierFields(t *testing.T) {
 			"cache_creation_input_token_cost": 0.0000025,
 			"cache_read_input_token_cost": 0.00000025,
 			"cache_read_input_token_cost_priority": 0.0000005,
+			"long_context_input_token_threshold": 272000,
+			"long_context_input_cost_multiplier": 2,
+			"long_context_output_cost_multiplier": 1.5,
 			"supports_service_tier": true,
 			"supports_prompt_caching": true,
 			"litellm_provider": "openai",
@@ -34,6 +37,9 @@ func TestParsePricingData_ParsesPriorityAndServiceTierFields(t *testing.T) {
 	require.InDelta(t, 5e-6, pricing.InputCostPerTokenPriority, 1e-12)
 	require.InDelta(t, 3e-5, pricing.OutputCostPerTokenPriority, 1e-12)
 	require.InDelta(t, 5e-7, pricing.CacheReadInputTokenCostPriority, 1e-12)
+	require.Equal(t, 272000, pricing.LongContextInputTokenThreshold)
+	require.InDelta(t, 2.0, pricing.LongContextInputCostMultiplier, 1e-12)
+	require.InDelta(t, 1.5, pricing.LongContextOutputCostMultiplier, 1e-12)
 	require.True(t, pricing.SupportsServiceTier)
 }
 
@@ -100,7 +106,7 @@ func TestGetModelPricing_Gpt54UsesStaticFallbackWhenRemoteMissing(t *testing.T) 
 	require.InDelta(t, 1.5, got.LongContextOutputCostMultiplier, 1e-12)
 }
 
-func TestGetModelPricing_Gpt55UsesGpt54StaticFallbackWhenRemoteMissing(t *testing.T) {
+func TestGetModelPricing_Gpt55UsesDedicatedStaticFallbackWhenRemoteMissing(t *testing.T) {
 	svc := &PricingService{
 		pricingData: map[string]*LiteLLMModelPricing{
 			"gpt-5.1-codex": {InputCostPerToken: 1.25e-6},
@@ -109,12 +115,73 @@ func TestGetModelPricing_Gpt55UsesGpt54StaticFallbackWhenRemoteMissing(t *testin
 
 	got := svc.GetModelPricing("gpt-5.5")
 	require.NotNil(t, got)
-	require.InDelta(t, 2.5e-6, got.InputCostPerToken, 1e-12)
-	require.InDelta(t, 1.5e-5, got.OutputCostPerToken, 1e-12)
-	require.InDelta(t, 2.5e-7, got.CacheReadInputTokenCost, 1e-12)
+	require.InDelta(t, 5e-6, got.InputCostPerToken, 1e-12)
+	require.InDelta(t, 3e-5, got.OutputCostPerToken, 1e-12)
+	require.InDelta(t, 5e-7, got.CacheReadInputTokenCost, 1e-12)
 	require.Equal(t, 272000, got.LongContextInputTokenThreshold)
 	require.InDelta(t, 2.0, got.LongContextInputCostMultiplier, 1e-12)
 	require.InDelta(t, 1.5, got.LongContextOutputCostMultiplier, 1e-12)
+}
+
+func TestGetModelPricing_Gpt55DatedUsesDedicatedStaticFallbackWhenRemoteMissing(t *testing.T) {
+	svc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{}}
+
+	got := svc.GetModelPricing("gpt-5.5-2026-04-23")
+	require.NotNil(t, got)
+	require.InDelta(t, 5e-6, got.InputCostPerToken, 1e-12)
+	require.InDelta(t, 3e-5, got.OutputCostPerToken, 1e-12)
+	require.Equal(t, 272000, got.LongContextInputTokenThreshold)
+}
+
+func TestGetModelPricing_GptImage2FallbackOrder(t *testing.T) {
+	image2 := &LiteLLMModelPricing{InputCostPerToken: 5e-6, OutputCostPerImageToken: 30e-6}
+	image15 := &LiteLLMModelPricing{InputCostPerToken: 4e-6, OutputCostPerImageToken: 32e-6}
+	image1 := &LiteLLMModelPricing{InputCostPerToken: 3e-6, OutputCostPerImageToken: 40e-6}
+
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2":   image2,
+			"gpt-image-1.5": image15,
+			"gpt-image-1":   image1,
+		},
+	}
+
+	require.Same(t, image2, svc.GetModelPricing("gpt-image-2"))
+	require.Same(t, image2, svc.GetModelPricing("gpt-image-2-2026-04-21"))
+
+	delete(svc.pricingData, "gpt-image-2")
+	require.Same(t, image15, svc.GetModelPricing("gpt-image-2"))
+	require.Same(t, image15, svc.GetModelPricing("gpt-image-2-2026-04-21"))
+
+	delete(svc.pricingData, "gpt-image-1.5")
+	require.Same(t, image1, svc.GetModelPricing("gpt-image-2"))
+}
+
+func TestParsePricingData_GptImage2PreservesTextAndImageTokenPrices(t *testing.T) {
+	svc := &PricingService{}
+	body := []byte(`{
+		"gpt-image-2": {
+			"input_cost_per_token": 0.000005,
+			"cache_read_input_token_cost": 0.00000125,
+			"input_cost_per_image_token": 0.000008,
+			"cache_read_input_image_token_cost": 0.000002,
+			"output_cost_per_image_token": 0.00003,
+			"litellm_provider": "openai",
+			"mode": "image_generation"
+		}
+	}`)
+
+	data, err := svc.parsePricingData(body)
+
+	require.NoError(t, err)
+	pricing := data["gpt-image-2"]
+	require.NotNil(t, pricing)
+	require.InDelta(t, 5e-6, pricing.InputCostPerToken, 1e-12)
+	require.InDelta(t, 1.25e-6, pricing.CacheReadInputTokenCost, 1e-12)
+	require.InDelta(t, 8e-6, pricing.InputCostPerImageToken, 1e-12)
+	require.InDelta(t, 2e-6, pricing.CacheReadInputImageTokenCost, 1e-12)
+	require.InDelta(t, 30e-6, pricing.OutputCostPerImageToken, 1e-12)
+	require.Equal(t, "image_generation", pricing.Mode)
 }
 
 func TestGetModelPricing_Gpt54MiniUsesDedicatedStaticFallbackWhenRemoteMissing(t *testing.T) {

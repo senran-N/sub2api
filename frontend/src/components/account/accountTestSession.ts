@@ -131,13 +131,20 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
         options.account.value?.type === 'apikey')
     )
   })
+  const supportsOpenAIImageTest = computed(() => {
+    const modelId = selectedModelId.value.toLowerCase()
+    return options.account.value?.platform === 'openai' && modelId.startsWith('gpt-image-')
+  })
+  const supportsImageTest = computed(
+    () => supportsGeminiImageTest.value || supportsOpenAIImageTest.value
+  )
   const showCustomPromptComposer = computed(
     () =>
       options.allowCustomPrompt.value &&
-      !supportsGeminiImageTest.value
+      !supportsImageTest.value
   )
   const requestPrompt = computed(() => {
-    if (supportsGeminiImageTest.value || options.allowCustomPrompt.value) {
+    if (supportsImageTest.value || options.allowCustomPrompt.value) {
       return testPrompt.value.trim()
     }
     return ''
@@ -160,8 +167,8 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
   })
   const testTargetLabel = computed(() => options.t('admin.accounts.testModel'))
   const testModeLabel = computed(() => {
-    if (supportsGeminiImageTest.value) {
-      return options.t('admin.accounts.geminiImageTestMode')
+    if (supportsImageTest.value) {
+      return options.t('admin.accounts.imageTestMode')
     }
     if (showCustomPromptComposer.value && testPrompt.value.trim()) {
       return options.t('admin.accounts.customPromptMode')
@@ -264,8 +271,8 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
           addLine(options.t('admin.accounts.usingModel', { model: event.model }), 'accent')
         }
         addLine(
-          supportsGeminiImageTest.value
-            ? options.t('admin.accounts.sendingGeminiImageRequest')
+          supportsImageTest.value
+            ? options.t('admin.accounts.sendingImageRequest')
             : options.t('admin.accounts.sendingTestMessage'),
           'muted'
         )
@@ -286,7 +293,7 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
           mimeType: event.mime_type
         })
         addLine(
-          options.t('admin.accounts.geminiImageReceived', {
+          options.t('admin.accounts.imageReceived', {
             count: generatedImages.value.length
           }),
           'highlight'
@@ -402,7 +409,7 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
 
     if (generatedImages.value.length > 0) {
       lines.push('')
-      lines.push(options.t('admin.accounts.geminiImagePreview'))
+      lines.push(options.t('admin.accounts.imagePreview'))
       lines.push(...generatedImages.value.map((image) => image.url))
     }
 
@@ -425,8 +432,8 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
   )
 
   watch(selectedModelId, () => {
-    if (supportsGeminiImageTest.value && !testPrompt.value.trim()) {
-      testPrompt.value = options.t('admin.accounts.geminiImagePromptDefault')
+    if (supportsImageTest.value && !testPrompt.value.trim()) {
+      testPrompt.value = options.t('admin.accounts.imagePromptDefault')
     }
   })
 
@@ -446,6 +453,8 @@ export function useAccountTestSession(options: UseAccountTestSessionOptions) {
     loadingModels,
     generatedImages,
     supportsGeminiImageTest,
+    supportsOpenAIImageTest,
+    supportsImageTest,
     showCustomPromptComposer,
     showCopyButton,
     isPrimaryActionDisabled,

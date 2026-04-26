@@ -43,6 +43,73 @@ func (s *OpenAIGatewayService) SelectAccountWithScheduler(
 	return selection, decision.OpenAI, err
 }
 
+func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
+	ctx context.Context,
+	groupID *int64,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredCapability OpenAIImagesCapability,
+) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	selection, decision, err := s.selectAccountWithSchedulerForImagesCapability(
+		ctx,
+		groupID,
+		sessionHash,
+		requestedModel,
+		excludedIDs,
+		requiredCapability,
+	)
+	if err == nil && selection != nil && selection.Account != nil {
+		return selection, decision, nil
+	}
+	if requiredCapability == OpenAIImagesCapabilityNative {
+		return s.selectAccountWithSchedulerForImagesCapability(
+			ctx,
+			groupID,
+			sessionHash,
+			requestedModel,
+			excludedIDs,
+			OpenAIImagesCapabilityBasic,
+		)
+	}
+	return selection, decision, err
+}
+
+func (s *OpenAIGatewayService) selectAccountWithSchedulerForImagesCapability(
+	ctx context.Context,
+	groupID *int64,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredCapability OpenAIImagesCapability,
+) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	effectiveExcluded := cloneExcludedAccountIDs(excludedIDs)
+	for {
+		selection, decision, err := s.SelectAccountWithScheduler(
+			ctx,
+			groupID,
+			"",
+			sessionHash,
+			requestedModel,
+			effectiveExcluded,
+			OpenAIUpstreamTransportHTTPSSE,
+		)
+		if err != nil || selection == nil || selection.Account == nil {
+			return selection, decision, err
+		}
+		if selection.Account.SupportsOpenAIImageCapability(requiredCapability) {
+			return selection, decision, nil
+		}
+		if selection.ReleaseFunc != nil {
+			selection.ReleaseFunc()
+		}
+		if _, exists := effectiveExcluded[selection.Account.ID]; exists {
+			return nil, decision, ErrNoAvailableAccounts
+		}
+		effectiveExcluded[selection.Account.ID] = struct{}{}
+	}
+}
+
 func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(accountID int64, success bool, firstTokenMs *int) {
 	scheduler := s.getOpenAIAccountScheduler()
 	if scheduler == nil {

@@ -17,6 +17,7 @@ type compatibleGatewayProtocolHandler interface {
 	ResponsesWebSocket(*gin.Context)
 	ChatCompletions(*gin.Context)
 	Passthrough(*gin.Context)
+	Images(*gin.Context)
 }
 
 // CompatibleGatewayHandler owns the shared OpenAI-compatible HTTP entrypoints.
@@ -178,6 +179,15 @@ func (h *CompatibleGatewayHandler) Passthrough(c *gin.Context) {
 		return
 	}
 	protocolHandler.Passthrough(c)
+}
+
+func (h *CompatibleGatewayHandler) Images(c *gin.Context) {
+	protocolHandler := h.protocolHandler(c)
+	if protocolHandler == nil {
+		writeCompatibleGatewayMisconfigured(c, h.compatibleGatewayPlatform(c))
+		return
+	}
+	protocolHandler.Images(c)
 }
 
 func writeCompatibleGatewayModelResponse(

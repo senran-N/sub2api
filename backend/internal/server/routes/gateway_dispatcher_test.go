@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +13,20 @@ import (
 	"github.com/senran-N/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+type markerCompatiblePassthroughRuntime struct{}
+
+func (markerCompatiblePassthroughRuntime) ResponsesWebSocket(c *gin.Context) {
+	c.String(http.StatusAccepted, "websocket")
+}
+
+func (markerCompatiblePassthroughRuntime) Passthrough(c *gin.Context) {
+	c.String(http.StatusAccepted, "passthrough")
+}
+
+func (markerCompatiblePassthroughRuntime) Images(c *gin.Context) {
+	c.String(http.StatusAccepted, "images")
+}
 
 func TestGatewayProtocolDispatcherModels_UsesCompatibleGatewayForGrok(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -89,6 +104,66 @@ func TestGatewayProtocolDispatcherModels_UsesNativeGatewayForAnthropic(t *testin
 	modelIDs := decodeGatewayModelIDs(t, w.Body.Bytes())
 	require.Contains(t, modelIDs, "claude-opus-4-6")
 	require.NotContains(t, modelIDs, "grok-3")
+}
+
+func TestGatewayProtocolDispatcherOpenAIImagesUsesImagesRuntimeOnlyForExactOpenAIImagesPaths(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	runtime := handler.NewCompatibleGatewayRuntimeHandler(
+		&handler.CompatibleGatewayTextHandler{},
+		markerCompatiblePassthroughRuntime{},
+	)
+	grokGateway := handler.NewGrokGatewayHandler(runtime, nil, nil, nil)
+	dispatcher := newGatewayProtocolDispatcher(&handler.Handlers{
+		CompatibleGateway: handler.NewCompatibleGatewayHandler(runtime, grokGateway, nil, nil),
+		GrokGateway:       grokGateway,
+	})
+
+	tests := []struct {
+		name     string
+		platform string
+		path     string
+		wantBody string
+	}{
+		{
+			name:     "openai exact image generations uses images runtime",
+			platform: service.PlatformOpenAI,
+			path:     "/v1/images/generations",
+			wantBody: "images",
+		},
+		{
+			name:     "openai non image-api image path remains passthrough",
+			platform: service.PlatformOpenAI,
+			path:     "/v1/images/variations",
+			wantBody: "passthrough",
+		},
+		{
+			name:     "grok exact image generations remains grok passthrough path",
+			platform: service.PlatformGrok,
+			path:     "/v1/images/generations",
+			wantBody: "passthrough",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(`{"model":"gpt-image-2"}`))
+			groupID := int64(10)
+			c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
+				GroupID: &groupID,
+				Group: &service.Group{
+					ID:       groupID,
+					Platform: tt.platform,
+				},
+			})
+
+			dispatcher.OpenAICompatiblePassthrough(c)
+
+			require.Equal(t, http.StatusAccepted, w.Code)
+			require.Equal(t, tt.wantBody, w.Body.String())
+		})
+	}
 }
 
 func decodeGatewayModelIDs(t *testing.T, body []byte) []string {

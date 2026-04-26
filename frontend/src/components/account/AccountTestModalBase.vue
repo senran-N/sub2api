@@ -41,12 +41,12 @@
         />
       </div>
 
-      <div v-if="supportsGeminiImageTest" class="space-y-1.5">
+      <div v-if="supportsImageTest" class="space-y-1.5">
         <TextArea
           v-model="testPrompt"
-          :label="t('admin.accounts.geminiImagePromptLabel')"
-          :placeholder="t('admin.accounts.geminiImagePromptPlaceholder')"
-          :hint="t('admin.accounts.geminiImageTestHint')"
+          :label="t('admin.accounts.imagePromptLabel')"
+          :placeholder="t('admin.accounts.imagePromptPlaceholder')"
+          :hint="t('admin.accounts.imageTestHint')"
           :disabled="status === 'connecting'"
           rows="3"
         />
@@ -112,7 +112,7 @@
 
       <div v-if="generatedImages.length > 0" class="space-y-2">
         <div class="account-test-modal__section-label">
-          {{ t('admin.accounts.geminiImagePreview') }}
+          {{ t('admin.accounts.imagePreview') }}
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <a
@@ -273,7 +273,7 @@ const {
   testPrompt,
   loadingModels,
   generatedImages,
-  supportsGeminiImageTest,
+  supportsImageTest,
   showCustomPromptComposer,
   showCopyButton,
   isPrimaryActionDisabled,

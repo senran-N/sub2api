@@ -550,20 +550,25 @@ func (s *OpenAIGatewayService) parseSSEUsageBytes(data []byte, usage *OpenAIUsag
 	if usage == nil || len(data) == 0 || bytes.Equal(data, []byte("[DONE]")) {
 		return
 	}
-	if parsedUsage, ok := extractOpenAIUsageFromJSONBytes(data); ok {
-		*usage = parsedUsage
-		return
-	}
-
 	eventType := gjson.GetBytes(data, "type").String()
 	switch eventType {
 	case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
 	default:
+		if strings.HasPrefix(eventType, "response.") {
+			return
+		}
+	}
+	if parsedUsage, ok := extractOpenAIUsageFromJSONBytes(data); ok {
+		*usage = parsedUsage
 		return
 	}
 	usage.InputTokens = int(gjson.GetBytes(data, "response.usage.input_tokens").Int())
 	usage.OutputTokens = int(gjson.GetBytes(data, "response.usage.output_tokens").Int())
 	usage.CacheReadInputTokens = int(gjson.GetBytes(data, "response.usage.input_tokens_details.cached_tokens").Int())
+	usage.ImageOutputTokens = int(gjson.GetBytes(data, "response.usage.output_tokens_details.image_tokens").Int())
+	if usage.ImageOutputTokens == 0 {
+		usage.ImageOutputTokens = int(gjson.GetBytes(data, "response.tool_usage.image_gen.output_tokens_details.image_tokens").Int())
+	}
 }
 
 func extractOpenAIUsageFromJSONBytes(body []byte) (OpenAIUsage, bool) {
@@ -574,13 +579,31 @@ func extractOpenAIUsageFromJSONBytes(body []byte) (OpenAIUsage, bool) {
 		body,
 		"usage.input_tokens",
 		"usage.prompt_tokens",
+		"response.usage.input_tokens",
+		"input_tokens",
 		"usage.output_tokens",
 		"usage.completion_tokens",
+		"response.usage.output_tokens",
+		"output_tokens",
 		"usage.input_tokens_details.cached_tokens",
 		"usage.prompt_tokens_details.cached_tokens",
+		"response.usage.input_tokens_details.cached_tokens",
+		"input_tokens_details.cached_tokens",
+		"usage.output_tokens_details.image_tokens",
+		"usage.completion_tokens_details.image_tokens",
+		"response.usage.output_tokens_details.image_tokens",
+		"response.tool_usage.image_gen.output_tokens_details.image_tokens",
+		"output_tokens_details.image_tokens",
 	)
 
-	if !values[0].Exists() && !values[1].Exists() && !values[2].Exists() && !values[3].Exists() && !values[4].Exists() && !values[5].Exists() {
+	anyExists := false
+	for _, value := range values {
+		if value.Exists() {
+			anyExists = true
+			break
+		}
+	}
+	if !anyExists {
 		return OpenAIUsage{}, false
 	}
 
@@ -588,19 +611,54 @@ func extractOpenAIUsageFromJSONBytes(body []byte) (OpenAIUsage, bool) {
 	if inputTokens == 0 {
 		inputTokens = int(values[1].Int())
 	}
-	outputTokens := int(values[2].Int())
-	if outputTokens == 0 {
-		outputTokens = int(values[3].Int())
+	if inputTokens == 0 {
+		inputTokens = int(values[2].Int())
 	}
-	cacheReadTokens := int(values[4].Int())
+	if inputTokens == 0 {
+		inputTokens = int(values[3].Int())
+	}
+
+	outputTokens := int(values[4].Int())
+	if outputTokens == 0 {
+		outputTokens = int(values[5].Int())
+	}
+	if outputTokens == 0 {
+		outputTokens = int(values[6].Int())
+	}
+	if outputTokens == 0 {
+		outputTokens = int(values[7].Int())
+	}
+
+	cacheReadTokens := int(values[8].Int())
 	if cacheReadTokens == 0 {
-		cacheReadTokens = int(values[5].Int())
+		cacheReadTokens = int(values[9].Int())
+	}
+	if cacheReadTokens == 0 {
+		cacheReadTokens = int(values[10].Int())
+	}
+	if cacheReadTokens == 0 {
+		cacheReadTokens = int(values[11].Int())
+	}
+
+	imageOutputTokens := int(values[12].Int())
+	if imageOutputTokens == 0 {
+		imageOutputTokens = int(values[13].Int())
+	}
+	if imageOutputTokens == 0 {
+		imageOutputTokens = int(values[14].Int())
+	}
+	if imageOutputTokens == 0 {
+		imageOutputTokens = int(values[15].Int())
+	}
+	if imageOutputTokens == 0 {
+		imageOutputTokens = int(values[16].Int())
 	}
 
 	return OpenAIUsage{
 		InputTokens:          inputTokens,
 		OutputTokens:         outputTokens,
 		CacheReadInputTokens: cacheReadTokens,
+		ImageOutputTokens:    imageOutputTokens,
 	}, true
 }
 

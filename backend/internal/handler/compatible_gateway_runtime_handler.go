@@ -11,6 +11,7 @@ import (
 type compatibleGatewayPassthroughRuntime interface {
 	ResponsesWebSocket(*gin.Context)
 	Passthrough(*gin.Context)
+	Images(*gin.Context)
 }
 
 // CompatibleGatewayRuntimeHandler is the shared protocol runtime for
@@ -79,4 +80,12 @@ func (h *CompatibleGatewayRuntimeHandler) Passthrough(c *gin.Context) {
 		return
 	}
 	h.passthroughRuntime.Passthrough(c)
+}
+
+func (h *CompatibleGatewayRuntimeHandler) Images(c *gin.Context) {
+	if h == nil || h.passthroughRuntime == nil {
+		writeCompatibleGatewayMisconfigured(c, h.runtimePlatform(c))
+		return
+	}
+	h.passthroughRuntime.Images(c)
 }

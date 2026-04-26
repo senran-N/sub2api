@@ -178,6 +178,22 @@ func (s *AccountTestService) testCompatibleGatewayAccountConnection(c *gin.Conte
 	if account.Type == AccountTypeSession {
 		return s.sendErrorAndEnd(c, compatibleGatewayUnsupportedSessionTestError(account.Platform))
 	}
+	if account.IsOpenAI() && isOpenAIImageGenerationModel(modelID) {
+		imagePrompt := strings.TrimSpace(prompt)
+		if imagePrompt == "" {
+			imagePrompt = defaultOpenAIImageTestPrompt
+		}
+		testModelID := strings.TrimSpace(modelID)
+		switch account.Type {
+		case AccountTypeAPIKey, AccountTypeUpstream:
+			testModelID = resolveOpenAIForwardModel(account, testModelID, "")
+			return s.testOpenAIImageAPIKey(c, c.Request.Context(), account, testModelID, imagePrompt)
+		case AccountTypeOAuth:
+			return s.testOpenAIImageOAuth(c, c.Request.Context(), account, testModelID, imagePrompt)
+		default:
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
+		}
+	}
 	return s.testCompatibleGatewayAPIKeyConnection(c, account, modelID, prompt)
 }
 

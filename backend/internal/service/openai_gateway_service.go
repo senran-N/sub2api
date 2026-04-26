@@ -121,6 +121,9 @@ type OpenAIForwardResult struct {
 	ResponseHeaders http.Header
 	Duration        time.Duration
 	FirstTokenMs    *int
+	ImageCount      int
+	ImageSize       string
+	MediaType       string
 }
 
 type OpenAIWSRetryMetricsSnapshot struct {

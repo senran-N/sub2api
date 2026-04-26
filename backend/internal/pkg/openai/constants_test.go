@@ -11,12 +11,17 @@ func TestDefaultModels_ContainsCurrentOpenAICatalog(t *testing.T) {
 	}
 
 	expected := map[string]string{
-		"gpt-5.5":             "GPT-5.5",
-		"gpt-5.4":             "GPT-5.4",
-		"gpt-5.4-mini":        "GPT-5.4 Mini",
-		"gpt-5.3-codex":       "GPT-5.3 Codex",
-		"gpt-5.3-codex-spark": "GPT-5.3 Codex Spark",
-		"gpt-5.2":             "GPT-5.2",
+		"gpt-5.5":                "GPT-5.5",
+		"gpt-5.5-2026-04-23":     "GPT-5.5 2026-04-23",
+		"gpt-5.4":                "GPT-5.4",
+		"gpt-5.4-mini":           "GPT-5.4 Mini",
+		"gpt-5.3-codex":          "GPT-5.3 Codex",
+		"gpt-5.3-codex-spark":    "GPT-5.3 Codex Spark",
+		"gpt-5.2":                "GPT-5.2",
+		"gpt-image-1":            "GPT Image 1",
+		"gpt-image-1.5":          "GPT Image 1.5",
+		"gpt-image-2":            "GPT Image 2",
+		"gpt-image-2-2026-04-21": "GPT Image 2 2026-04-21",
 	}
 
 	ids := DefaultModelIDs()

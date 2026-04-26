@@ -257,6 +257,20 @@ func (a *Account) IsOpenAICompatibleUpstream() bool {
 	return a != nil && a.IsCompatibleGatewayPlatformAccount() && (a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream)
 }
 
+func (a *Account) SupportsOpenAIImageCapability(capability OpenAIImagesCapability) bool {
+	if a == nil || !a.IsOpenAI() {
+		return false
+	}
+	switch capability {
+	case OpenAIImagesCapabilityBasic:
+		return a.Type == AccountTypeOAuth || a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream
+	case OpenAIImagesCapabilityNative:
+		return a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream
+	default:
+		return false
+	}
+}
+
 func (a *Account) SupportsCompatibleGatewaySharedRuntime() bool {
 	if a == nil || !a.IsCompatibleGatewayPlatformAccount() {
 		return false

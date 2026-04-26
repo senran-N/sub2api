@@ -115,6 +115,10 @@ func (d gatewayProtocolDispatcher) OpenAICompatiblePassthrough(c *gin.Context) {
 			}
 			return
 		}
+		if handler.GetInboundEndpoint(c) == handler.EndpointImages && isOpenAIImagesAPIPath(c.Request.URL.Path) {
+			d.handlers.CompatibleGateway.Images(c)
+			return
+		}
 		d.handlers.CompatibleGateway.Passthrough(c)
 		return
 	}
@@ -164,4 +168,10 @@ func (d gatewayProtocolDispatcher) bindCompatiblePlatform(c *gin.Context, platfo
 	ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, platform)
 	c.Request = c.Request.WithContext(ctx)
 	c.Set(string(middleware.ContextKeyForcePlatform), platform)
+}
+
+func isOpenAIImagesAPIPath(path string) bool {
+	trimmed := strings.TrimSuffix(strings.TrimSpace(path), "/")
+	return strings.HasSuffix(trimmed, "/v1/images/generations") ||
+		strings.HasSuffix(trimmed, "/v1/images/edits")
 }

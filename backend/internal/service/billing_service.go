@@ -215,8 +215,17 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextInputMultiplier:     openAIGPT54LongContextInputMultiplier,
 		LongContextOutputMultiplier:    openAIGPT54LongContextOutputMultiplier,
 	}
-	// GPT-5.5 先沿用 GPT-5.4 的计费与长上下文策略，避免新模型上线时计费中断。
-	s.fallbackPrices["gpt-5.5"] = s.fallbackPrices["gpt-5.4"]
+	// OpenAI GPT-5.5（官方价格）
+	s.fallbackPrices["gpt-5.5"] = &ModelPricing{
+		InputPricePerToken:          5e-6,   // $5 per MTok
+		OutputPricePerToken:         30e-6,  // $30 per MTok
+		CacheCreationPricePerToken:  5e-6,   // $5 per MTok
+		CacheReadPricePerToken:      0.5e-6, // $0.50 per MTok
+		SupportsCacheBreakdown:      false,
+		LongContextInputThreshold:   openAIGPT54LongContextInputThreshold,
+		LongContextInputMultiplier:  openAIGPT54LongContextInputMultiplier,
+		LongContextOutputMultiplier: openAIGPT54LongContextOutputMultiplier,
+	}
 	s.fallbackPrices["gpt-5.4-mini"] = &ModelPricing{
 		InputPricePerToken:     7.5e-7,
 		OutputPricePerToken:    4.5e-6,

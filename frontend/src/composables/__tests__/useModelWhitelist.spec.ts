@@ -18,19 +18,25 @@ import {
 } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
-  it('openai 模型列表包含 GPT-5.5 与 GPT-5.4 官方快照', () => {
+  it('openai 模型列表包含 GPT-5.5 与 GPT Image 官方快照', () => {
     const models = getModelsByPlatform('openai')
 
     expect(models).toContain('gpt-5.5')
+    expect(models).toContain('gpt-5.5-2026-04-23')
     expect(models).toContain('gpt-5.4')
     expect(models).toContain('gpt-5.4-mini')
     expect(models).toContain('gpt-5.4-2026-03-05')
+    expect(models).toContain('gpt-image-1')
+    expect(models).toContain('gpt-image-1.5')
+    expect(models).toContain('gpt-image-2')
+    expect(models).toContain('gpt-image-2-2026-04-21')
   })
 
-  it('openai 预设映射包含 GPT-5.5 透传项', () => {
+  it('openai 预设映射包含 GPT-5.5 与 GPT Image 2 透传项', () => {
     expect(getPresetMappingsByPlatform('openai')).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ from: 'gpt-5.5', to: 'gpt-5.5' })
+        expect.objectContaining({ from: 'gpt-5.5', to: 'gpt-5.5' }),
+        expect.objectContaining({ from: 'gpt-image-2', to: 'gpt-image-2' })
       ])
     )
   })

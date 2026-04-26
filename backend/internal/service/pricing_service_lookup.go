@@ -236,6 +236,13 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		}
 	}
 
+	for _, fallback := range openAIImageGenerationPricingFallbacks(model) {
+		if pricing, ok := s.pricingData[fallback]; ok {
+			logger.With(zap.String("component", "service.pricing")).Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, fallback))
+			return pricing
+		}
+	}
+
 	if strings.HasPrefix(model, "gpt-5.3-codex") {
 		if pricing, ok := s.pricingData["gpt-5.2-codex"]; ok {
 			logger.With(zap.String("component", "service.pricing")).Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.2-codex"))
@@ -243,8 +250,8 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		}
 	}
 	if strings.HasPrefix(model, "gpt-5.5") {
-		logger.With(zap.String("component", "service.pricing")).Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.4(static)"))
-		return openAIGPT54FallbackPricing
+		logger.With(zap.String("component", "service.pricing")).Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.5(static)"))
+		return openAIGPT55FallbackPricing
 	}
 	if strings.HasPrefix(model, "gpt-5.4-mini") {
 		logger.With(zap.String("component", "service.pricing")).Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.4-mini(static)"))
@@ -265,6 +272,20 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		return pricing
 	}
 	return nil
+}
+
+func openAIImageGenerationPricingFallbacks(model string) []string {
+	model = strings.ToLower(strings.TrimSpace(model))
+	switch {
+	case strings.HasPrefix(model, "gpt-image-2"):
+		return []string{"gpt-image-2", "gpt-image-1.5", "gpt-image-1"}
+	case strings.HasPrefix(model, "gpt-image-1.5"):
+		return []string{"gpt-image-1.5", "gpt-image-1"}
+	case strings.HasPrefix(model, "gpt-image-1"):
+		return []string{"gpt-image-1"}
+	default:
+		return nil
+	}
 }
 
 // generateOpenAIModelVariants 生成 OpenAI 模型的回退变体列表

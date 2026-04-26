@@ -3501,6 +3501,7 @@ export default {
       connectedToApi: "已连接到 API",
       usingModel: "使用模型：{model}",
       sendingTestMessage: '发送测试消息："hi"',
+      sendingImageRequest: "发送生图测试请求...",
       sendingGeminiImageRequest: "发送 Gemini 生图测试请求...",
       response: "响应：",
       startTest: "开始测试",
@@ -3516,6 +3517,16 @@ export default {
       customPromptPlaceholder: '输入自定义提示词（留空则默认使用 "hi"）',
       customPromptHint: "可选。自定义发送到上游 API 的测试提示词。",
       customPromptMode: "模式：自定义提示词",
+      imagePromptLabel: "生图提示词",
+      imagePromptPlaceholder:
+        "例如：生成一只戴宇航员头盔的橘猫，像素插画风格，纯色背景。",
+      imagePromptDefault:
+        "Generate a cute orange cat astronaut sticker on a clean pastel background.",
+      imageTestHint:
+        "选择图片模型后，这里会直接发起生图测试，并在下方展示返回图片。",
+      imageTestMode: "模式：生图测试",
+      imagePreview: "生成结果：",
+      imageReceived: "已收到第 {count} 张测试图片",
       geminiImagePromptLabel: "生图提示词",
       geminiImagePromptPlaceholder:
         "例如：生成一只戴宇航员头盔的橘猫，像素插画风格，纯色背景。",

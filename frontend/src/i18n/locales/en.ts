@@ -3499,6 +3499,8 @@ export default {
       connectedToApi: "Connected to API",
       usingModel: "Using model: {model}",
       sendingTestMessage: 'Sending test message: "hi"',
+      sendingImageRequest:
+        "Sending image generation test request...",
       sendingGeminiImageRequest:
         "Sending Gemini image generation test request...",
       response: "Response:",
@@ -3518,6 +3520,16 @@ export default {
       customPromptHint:
         "Optional. Customize the prompt sent to the upstream API for testing.",
       customPromptMode: "Mode: Custom prompt",
+      imagePromptLabel: "Image prompt",
+      imagePromptPlaceholder:
+        "Example: Generate an orange cat astronaut sticker in pixel-art style on a solid background.",
+      imagePromptDefault:
+        "Generate a cute orange cat astronaut sticker on a clean pastel background.",
+      imageTestHint:
+        "When an image model is selected, this test sends a real image-generation request and previews the returned image below.",
+      imageTestMode: "Mode: Image generation test",
+      imagePreview: "Generated images:",
+      imageReceived: "Received test image #{count}",
       geminiImagePromptLabel: "Image prompt",
       geminiImagePromptPlaceholder:
         "Example: Generate an orange cat astronaut sticker in pixel-art style on a solid background.",

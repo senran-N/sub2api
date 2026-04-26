@@ -9,6 +9,7 @@ import (
 	"github.com/senran-N/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -175,6 +176,10 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 	compatibleTextHandlerFromOpenAIHandler(h).handleFailoverExhausted(c, failoverErr, streamStarted)
 }
 
+func (h *OpenAIGatewayHandler) handleFailoverExhaustedSimple(c *gin.Context, statusCode int, streamStarted bool) {
+	compatibleTextHandlerFromOpenAIHandler(h).handleFailoverExhaustedSimple(c, statusCode, streamStarted)
+}
+
 // handleStreamingAwareError handles errors that may occur after streaming has started
 func (h *OpenAIGatewayHandler) handleStreamingAwareError(c *gin.Context, status int, errType, message string, streamStarted bool) {
 	compatibleTextHandlerFromOpenAIHandler(h).handleStreamingAwareError(c, status, errType, message, streamStarted)
@@ -206,4 +211,11 @@ func setOpenAIClientTransportHTTP(c *gin.Context) {
 
 func setOpenAIClientTransportWS(c *gin.Context) {
 	service.SetOpenAIClientTransport(c, service.OpenAIClientTransportWS)
+}
+
+func ensureOpenAIPoolModeSessionHash(sessionHash string, account *service.Account) string {
+	if sessionHash != "" || account == nil || !account.IsPoolMode() {
+		return sessionHash
+	}
+	return "openai-pool-retry-" + uuid.NewString()
 }

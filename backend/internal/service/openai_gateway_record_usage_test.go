@@ -287,20 +287,34 @@ func TestOpenAIGatewayServiceRecordUsage_ImageOnlyUsageStillRecordsUsageLog(t *t
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 		Result: &OpenAIForwardResult{
-			RequestID: "resp_image_only",
-			Usage:     usage,
-			Model:     "gpt-image-only",
-			Duration:  time.Second,
+			RequestID:  "resp_image_only",
+			Usage:      usage,
+			Model:      "gpt-image-only",
+			Duration:   time.Second,
+			ImageCount: 2,
+			ImageSize:  "1K",
+			MediaType:  "image",
 		},
-		APIKey:  &APIKey{ID: 10102},
-		User:    &User{ID: 20102},
-		Account: &Account{ID: 30102},
+		APIKey:           &APIKey{ID: 10102},
+		User:             &User{ID: 20102},
+		Account:          &Account{ID: 30102},
+		InboundEndpoint:  "/v1/images/generations",
+		UpstreamEndpoint: "/v1/images/generations",
 	})
 
 	require.NoError(t, err)
 	require.Equal(t, 1, usageRepo.calls)
 	require.NotNil(t, usageRepo.lastLog)
 	require.Equal(t, 12, usageRepo.lastLog.ImageOutputTokens)
+	require.Equal(t, 2, usageRepo.lastLog.ImageCount)
+	require.NotNil(t, usageRepo.lastLog.ImageSize)
+	require.Equal(t, "1K", *usageRepo.lastLog.ImageSize)
+	require.NotNil(t, usageRepo.lastLog.MediaType)
+	require.Equal(t, "image", *usageRepo.lastLog.MediaType)
+	require.NotNil(t, usageRepo.lastLog.InboundEndpoint)
+	require.Equal(t, "/v1/images/generations", *usageRepo.lastLog.InboundEndpoint)
+	require.NotNil(t, usageRepo.lastLog.UpstreamEndpoint)
+	require.Equal(t, "/v1/images/generations", *usageRepo.lastLog.UpstreamEndpoint)
 	require.Zero(t, userRepo.deductCalls)
 }
 

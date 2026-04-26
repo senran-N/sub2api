@@ -112,6 +112,24 @@ describe('accountTestSession helpers', () => {
     ])
   })
 
+  it('enables image test mode for OpenAI GPT image models', async () => {
+    getAvailableModels.mockResolvedValue([
+      createModel('gpt-5.5', 'GPT-5.5'),
+      createModel('gpt-image-2', 'GPT Image 2')
+    ])
+
+    const wrapper = mountSessionHarness(createAccount({ platform: 'openai', type: 'apikey' }))
+    await flushPromises()
+
+    ;(wrapper.vm as any).selectedModelId = 'gpt-image-2'
+    await flushPromises()
+
+    expect((wrapper.vm as any).supportsImageTest).toBe(true)
+    expect((wrapper.vm as any).supportsOpenAIImageTest).toBe(true)
+    expect((wrapper.vm as any).testPrompt).toBe('admin.accounts.imagePromptDefault')
+    expect((wrapper.vm as any).testModeLabel).toBe('admin.accounts.imageTestMode')
+  })
+
   it('parses sse chunks while preserving an unfinished trailing buffer', () => {
     const first = parseSSEDataChunk(
       '',

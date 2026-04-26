@@ -24,11 +24,13 @@ const openaiModels = [
   'gpt-5.2', 'gpt-5.2-2025-12-11', 'gpt-5.2-chat-latest',
   'gpt-5.2-pro', 'gpt-5.2-pro-2025-12-11',
   // GPT-5.5 系列
-  'gpt-5.5',
+  'gpt-5.5', 'gpt-5.5-2026-04-23',
   // GPT-5.4 系列
   'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-2026-03-05',
   // GPT-5.3 系列
   'gpt-5.3-codex', 'gpt-5.3-codex-spark',
+  // GPT Image 系列
+  'gpt-image-1', 'gpt-image-1.5', 'gpt-image-2', 'gpt-image-2-2026-04-21',
   'chatgpt-4o-latest',
   'gpt-4o-audio-preview', 'gpt-4o-realtime-preview'
 ]
@@ -434,6 +436,7 @@ const openaiPresetMappings: PresetMapping[] = [
   { label: 'GPT-5.2', from: 'gpt-5.2', to: 'gpt-5.2', tone: 'danger' },
   { label: 'GPT-5.5', from: 'gpt-5.5', to: 'gpt-5.5', tone: 'warning' },
   { label: 'GPT-5.4', from: 'gpt-5.4', to: 'gpt-5.4', tone: 'brand-rose' },
+  { label: 'GPT Image 2', from: 'gpt-image-2', to: 'gpt-image-2', tone: 'info' },
   { label: 'Haiku→5.4', from: 'claude-haiku-4-5-20251001', to: 'gpt-5.4', tone: 'success' },
   { label: 'Opus→5.4', from: 'claude-opus-4-6', to: 'gpt-5.4', tone: 'brand-purple' },
   { label: 'Sonnet→5.4', from: 'claude-sonnet-4-6', to: 'gpt-5.4', tone: 'info' }
