@@ -28,6 +28,8 @@ OpenAI 调度在 `strict` 下仍会在同一优先级内使用既有负载、排
 
 原生 Gemini/Anthropic/Antigravity 路由的 load-aware 选号入口也通过 `backend/internal/service/selection_kernel.go`。在迁移完成前，通用 runtime failover 状态由 `backend/internal/service/runtime_failover_state.go` 承载。Handler 只消费 `HandleSelectionError` / `HandleForwardError` 的 outcome 并渲染路由错误；同账号重试、失败账号排除、绑定会话 429 保留、强制缓存计费、首次无账号判断和单账号 503 退避不应在 handler 中重新实现。
 
+原生路由需要完整 select -> slot -> admission -> forward -> failover 序列时，应通过 `backend/internal/service/runtime_pipeline.go`。该 pipeline 返回 `RuntimePipelineOutcome`，handler 只负责把 outcome 映射到 Anthropic/OpenAI/Google 的协议错误形态。Native Anthropic `/v1/messages`、OpenAI-compatible native Anthropic `/v1/chat/completions`、`/v1/responses` 和 Gemini native `/v1beta/models/*` 已使用该 pipeline；新增 native route 不应复制 handler 内层 failover 循环。
+
 原生路由的运行时 session 准备由 `backend/internal/service/runtime_session.go` 统一处理。`PrepareRuntimeSession` 负责基于已校验 body、已解析 `ParsedRequest` 或 provider 显式传入的 `SessionHash` 补充 `SessionContext`、生成 session hash/key，并通过 `PrefetchRuntimeStickySession` 把已绑定 sticky 账号写入 request metadata context；handler 只传入客户端 IP、User-Agent、API key ID 和必要的 session key prefix。`/v1/messages`、`count_tokens`、Gemini native `/v1beta/models/*`、以及 OpenAI-compatible native Anthropic text flow 都应复用该入口。
 
 `count_tokens` 不占用用户或账号并发槽位，但账号选择仍应通过 `backend/internal/service/runtime_count_tokens_selection.go`。该 helper 负责维护 failed-account exclusion set，并在 RPM admission 明确拒绝时继续选择下一个账号；RPM 预留异常仍按 fail-open 允许请求继续，handler 只记录 admission event 并渲染最终选路失败。选中账号后的 count_tokens 转发也应通过 `backend/internal/service/native_gateway_runtime.go` 的 `ForwardCountTokens`，handler 不应直接调用 `GatewayService.ForwardCountTokens`。

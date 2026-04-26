@@ -44,140 +44,158 @@ func (h *GatewayHandler) runAnthropicCompatibleTextFlow(c *gin.Context, reqLog *
 	sessionHash := session.SessionHash
 	sessionBoundAccountID := session.BoundAccountID
 
-	fs := NewFailoverState(h.maxAccountSwitches, false)
-	for {
-		selection, _, err := h.selectRuntimeAccount(c.Request.Context(), service.SelectionRequest{
+	pipelineResult := service.NewRuntimePipeline().Execute(c.Request.Context(), service.RuntimePipelineRequest{
+		Subject: service.RuntimeSubject{
+			UserID:   req.APIKey.UserID,
+			APIKeyID: req.APIKey.ID,
+			GroupID:  req.APIKey.GroupID,
+			Provider: service.PlatformAnthropic,
+			Protocol: req.Protocol,
+		},
+		Session: service.RuntimeSessionState{
+			SessionHash:    sessionHash,
+			BoundAccountID: sessionBoundAccountID,
+			HasBound:       sessionBoundAccountID > 0,
+		},
+		Selection: service.SelectionRequest{
 			Provider:    service.PlatformAnthropic,
 			Protocol:    req.Protocol,
 			Model:       req.RequestedModel,
 			GroupID:     req.APIKey.GroupID,
 			SessionHash: sessionHash,
-			ExcludedIDs: fs.FailedAccountIDs,
-		})
-		if err != nil {
-			selectionFailure := fs.HandleSelectionError(c.Request.Context(), err)
-			switch selectionFailure.Outcome {
-			case service.RuntimeSelectionFailureInitialUnavailable:
-				req.WriteError(http.StatusServiceUnavailable, "api_error", "No available accounts: "+selectionFailure.Err.Error())
-				return
-			case service.RuntimeSelectionFailureRetry:
-				continue
-			case service.RuntimeSelectionFailureCanceled:
-				return
-			default:
-				if selectionFailure.FailoverErr != nil {
-					req.HandleExhausted(selectionFailure.FailoverErr, *req.StreamStarted)
-				} else {
-					req.WriteError(http.StatusBadGateway, "server_error", "All available accounts exhausted")
+		},
+		MaxSwitches:     h.maxAccountSwitches,
+		TempUnscheduler: h.gatewayService,
+		Select: func(ctx context.Context, selectionReq service.SelectionRequest) (*service.AccountSelectionResult, service.SelectionDecision, error) {
+			return h.selectRuntimeAccount(ctx, selectionReq)
+		},
+		AcquireSlot: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeAccountSlotResult {
+			slot := h.acquireRuntimeAccountSlot(ctx, c, state.Selection, nil, "", req.Stream, req.StreamStarted, false)
+			slot.ReleaseFunc = wrapReleaseOnDone(ctx, slot.ReleaseFunc)
+			return slot
+		},
+		Admit: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeAdmissionResult {
+			account := state.Account
+			if !h.tryReserveAccountRPMForForward(ctx, reqLog, account, sessionBoundAccountID, req.APIKey.GroupID, sessionHash) {
+				return service.RuntimeAdmissionResult{
+					Outcome: service.RuntimeAdmissionRPMDenied,
+					Account: account,
+					Cleanup: service.RuntimeAdmissionCleanupRequest{
+						AccountRelease: state.AccountRelease,
+					},
 				}
-				return
 			}
-		}
 
-		account := selection.Account
-		setOpsSelectedAccount(c, account.ID, account.Platform)
-
-		slot := h.acquireRuntimeAccountSlot(c.Request.Context(), c, selection, nil, "", req.Stream, req.StreamStarted, false)
-		switch slot.Outcome {
-		case service.RuntimeAccountSlotSucceeded:
-		case service.RuntimeAccountSlotQueueFull:
-			reqLog.Info(req.LogPrefix+".account_wait_queue_full",
-				zap.Int64("account_id", account.ID),
-				zap.Int("max_waiting", runtimeSlotMaxWaiting(slot)),
+			billingModel := parsedReq.Model
+			if req.ChannelMapping.Mapped {
+				billingModel = req.ChannelMapping.MappedModel
+			}
+			windowCostReservation, windowCostAllowed := h.tryReserveAccountWindowCostForForward(
+				ctx,
+				reqLog,
+				account,
+				req.APIKey,
+				parsedReq,
+				billingModel,
+				sessionBoundAccountID,
+				req.APIKey.GroupID,
+				sessionHash,
 			)
-			req.WriteError(http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later")
-			return
-		case service.RuntimeAccountSlotAcquireError:
-			reqLog.Warn(req.LogPrefix+".account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(slot.Err))
-			h.handleConcurrencyError(c, slot.Err, "account", *req.StreamStarted)
-			return
-		case service.RuntimeAccountSlotWaitAcquireError:
-			reqLog.Warn(req.LogPrefix+".account_slot_acquire_failed_after_wait", zap.Int64("account_id", account.ID), zap.Error(slot.Err))
-			h.handleConcurrencyError(c, slot.Err, "account", *req.StreamStarted)
-			return
-		default:
-			req.WriteError(http.StatusServiceUnavailable, "api_error", "No available accounts")
-			return
-		}
-
-		accountReleaseFunc := wrapReleaseOnDone(c.Request.Context(), slot.ReleaseFunc)
-		if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, req.APIKey.GroupID, sessionHash) {
-			service.CleanupRuntimeAdmissionDenied(service.RuntimeAdmissionCleanupRequest{
-				Account:          account,
-				FailedAccountIDs: fs.FailedAccountIDs,
-				AccountRelease:   accountReleaseFunc,
+			if !windowCostAllowed {
+				return service.RuntimeAdmissionResult{
+					Outcome: service.RuntimeAdmissionWindowCostDenied,
+					Account: account,
+					Cleanup: service.RuntimeAdmissionCleanupRequest{
+						AccountRelease: state.AccountRelease,
+					},
+				}
+			}
+			return service.RuntimeAdmissionResult{
+				Outcome:               service.RuntimeAdmissionSucceeded,
+				Account:               account,
+				WindowCostReservation: windowCostReservation,
+			}
+		},
+		Forward: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeForwardResult {
+			account := state.Account
+			forwardBody := req.Body
+			if req.ChannelMapping.Mapped {
+				forwardBody = h.gatewayService.ReplaceModelInBody(req.Body, req.ChannelMapping.MappedModel)
+			}
+			attempt := h.executeRuntimeForwardAttempt(ctx, reqLog, service.RuntimeForwardAttemptRequest{
+				Account: account,
+				Forward: func(ctx context.Context) (*service.ForwardResult, error) {
+					return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
+						Provider:   service.PlatformAnthropic,
+						Protocol:   req.Protocol,
+						Account:    account,
+						GinContext: c,
+						Body:       forwardBody,
+						Parsed:     parsedReq,
+					})
+				},
+				WriterSize:            c.Writer.Size,
+				AccountRelease:        state.AccountRelease,
+				WindowCostReservation: state.WindowCostReservation,
 			})
-			continue
-		}
-
-		billingModel := parsedReq.Model
-		if req.ChannelMapping.Mapped {
-			billingModel = req.ChannelMapping.MappedModel
-		}
-		windowCostReservation, windowCostAllowed := h.tryReserveAccountWindowCostForForward(
-			c.Request.Context(),
-			reqLog,
-			account,
-			req.APIKey,
-			parsedReq,
-			billingModel,
-			sessionBoundAccountID,
-			req.APIKey.GroupID,
-			sessionHash,
-		)
-		if !windowCostAllowed {
-			service.CleanupRuntimeAdmissionDenied(service.RuntimeAdmissionCleanupRequest{
-				Account:          account,
-				FailedAccountIDs: fs.FailedAccountIDs,
-				AccountRelease:   accountReleaseFunc,
-			})
-			continue
-		}
-
-		forwardBody := req.Body
-		if req.ChannelMapping.Mapped {
-			forwardBody = h.gatewayService.ReplaceModelInBody(req.Body, req.ChannelMapping.MappedModel)
-		}
-		attempt := h.executeRuntimeForwardAttempt(c.Request.Context(), reqLog, service.RuntimeForwardAttemptRequest{
-			Account: account,
-			Forward: func(ctx context.Context) (*service.ForwardResult, error) {
-				return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
-					Provider:   service.PlatformAnthropic,
-					Protocol:   req.Protocol,
-					Account:    account,
-					GinContext: c,
-					Body:       forwardBody,
-					Parsed:     parsedReq,
-				})
+			return service.RuntimeForwardResult{
+				Result:          attempt.Result,
+				Err:             attempt.Err,
+				ResponseStarted: attempt.ResponseStarted,
+				Attempt:         attempt,
+			}
+		},
+		Hooks: service.RuntimePipelineHooks{
+			OnAccountSelected: func(_ context.Context, state *service.RuntimePipelineState) service.RuntimePipelineHookResult {
+				setOpsSelectedAccount(c, state.Account.ID, state.Account.Platform)
+				return service.RuntimePipelineHookResult{}
 			},
-			WriterSize:            c.Writer.Size,
-			AccountRelease:        accountReleaseFunc,
-			WindowCostReservation: windowCostReservation,
-		})
-		result, err := attempt.Result, attempt.Err
+		},
+	})
 
-		if err != nil {
-			if failover := fs.HandleForwardError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, err, attempt.ResponseStarted); failover.Handled {
-				switch failover.Action {
-				case FailoverContinue:
-					continue
-				case FailoverExhausted:
-					req.HandleExhausted(failover.FailoverErr, *req.StreamStarted || failover.ResponseStarted)
-					return
-				case FailoverCanceled:
-					return
-				}
-			}
-			h.ensureForwardErrorResponse(c, *req.StreamStarted)
-			reqLog.Error(req.LogPrefix+".forward_failed",
-				zap.Int64("account_id", account.ID),
-				zap.Error(err),
-			)
+	switch pipelineResult.Outcome {
+	case service.RuntimePipelineSucceeded:
+		h.recordAnthropicCompatibleTextUsage(c, reqLog, req, pipelineResult.Account, pipelineResult.ForwardResult)
+	case service.RuntimePipelineSelectionInitialUnavailable:
+		message := "No available accounts"
+		if pipelineResult.SelectionFailure.Err != nil {
+			message += ": " + pipelineResult.SelectionFailure.Err.Error()
+		}
+		req.WriteError(http.StatusServiceUnavailable, "api_error", message)
+	case service.RuntimePipelineSelectionRetryCanceled, service.RuntimePipelineFailoverCanceled:
+		return
+	case service.RuntimePipelineSelectionExhausted:
+		if pipelineResult.SelectionFailure.FailoverErr != nil {
+			req.HandleExhausted(pipelineResult.SelectionFailure.FailoverErr, *req.StreamStarted)
 			return
 		}
-
-		h.recordAnthropicCompatibleTextUsage(c, reqLog, req, account, result)
-		return
+		req.WriteError(http.StatusBadGateway, "server_error", "All available accounts exhausted")
+	case service.RuntimePipelineAccountSlotQueueFull:
+		reqLog.Info(req.LogPrefix+".account_wait_queue_full",
+			zap.Int64("account_id", runtimeSlotAccountID(pipelineResult.Slot)),
+			zap.Int("max_waiting", runtimeSlotMaxWaiting(pipelineResult.Slot)),
+		)
+		req.WriteError(http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later")
+	case service.RuntimePipelineAccountSlotAcquireError:
+		reqLog.Warn(req.LogPrefix+".account_slot_acquire_failed", zap.Int64("account_id", runtimeSlotAccountID(pipelineResult.Slot)), zap.Error(pipelineResult.Slot.Err))
+		h.handleConcurrencyError(c, pipelineResult.Slot.Err, "account", *req.StreamStarted)
+	case service.RuntimePipelineAccountSlotWaitAcquireError:
+		reqLog.Warn(req.LogPrefix+".account_slot_acquire_failed_after_wait", zap.Int64("account_id", runtimeSlotAccountID(pipelineResult.Slot)), zap.Error(pipelineResult.Slot.Err))
+		h.handleConcurrencyError(c, pipelineResult.Slot.Err, "account", *req.StreamStarted)
+	case service.RuntimePipelineAccountSlotUnavailable, service.RuntimePipelineNoAvailableAccount:
+		req.WriteError(http.StatusServiceUnavailable, "api_error", "No available accounts")
+	case service.RuntimePipelineFailoverExhausted:
+		req.HandleExhausted(pipelineResult.Failover.FailoverErr, *req.StreamStarted || pipelineResult.Failover.ResponseStarted)
+	case service.RuntimePipelineForwardError, service.RuntimePipelineMisconfigured, service.RuntimePipelineForwardHookAborted:
+		h.ensureForwardErrorResponse(c, *req.StreamStarted)
+		fields := []zap.Field{zap.Error(pipelineResult.Err)}
+		if pipelineResult.Account != nil {
+			fields = append([]zap.Field{zap.Int64("account_id", pipelineResult.Account.ID)}, fields...)
+		}
+		reqLog.Error(req.LogPrefix+".forward_failed", fields...)
+	default:
+		h.ensureForwardErrorResponse(c, *req.StreamStarted)
+		reqLog.Error(req.LogPrefix+".forward_failed", zap.Error(pipelineResult.Err))
 	}
 }
 

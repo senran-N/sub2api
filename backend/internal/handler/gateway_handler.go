@@ -287,8 +287,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 
 	if platform == service.PlatformGemini {
-		fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
-
 		// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 		// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
 		if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), apiKey.GroupID) {
@@ -296,146 +294,109 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			c.Request = c.Request.WithContext(ctx)
 		}
 
-		for {
-			selection, _, err := h.selectRuntimeAccount(c.Request.Context(), service.SelectionRequest{
+		pipelineResult := service.NewRuntimePipeline().Execute(c.Request.Context(), service.RuntimePipelineRequest{
+			Subject: service.RuntimeSubject{
+				UserID:      subject.UserID,
+				APIKeyID:    apiKey.ID,
+				GroupID:     apiKey.GroupID,
+				Concurrency: subject.Concurrency,
+				Provider:    service.PlatformGemini,
+				Protocol:    service.GatewayProtocolMessages,
+			},
+			Session: service.RuntimeSessionState{
+				SessionHash:    sessionKey,
+				SessionKey:     sessionKey,
+				BoundAccountID: sessionBoundAccountID,
+				HasBound:       hasBoundSession,
+			},
+			Selection: service.SelectionRequest{
 				Provider:    service.PlatformGemini,
 				Protocol:    service.GatewayProtocolMessages,
 				Model:       reqModel,
 				GroupID:     apiKey.GroupID,
 				SessionHash: sessionKey,
-				ExcludedIDs: fs.FailedAccountIDs,
-			})
-			if err != nil {
-				selectionFailure := fs.HandleSelectionError(c.Request.Context(), err)
-				switch selectionFailure.Outcome {
-				case service.RuntimeSelectionFailureInitialUnavailable:
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+selectionFailure.Err.Error(), streamStarted)
-					return
-				case service.RuntimeSelectionFailureRetry:
-					ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
-					c.Request = c.Request.WithContext(ctx)
-					continue
-				case service.RuntimeSelectionFailureCanceled:
-					return
-				default: // FailoverExhausted
-					if selectionFailure.FailoverErr != nil {
-						h.handleFailoverExhausted(c, selectionFailure.FailoverErr, service.PlatformGemini, streamStarted)
-					} else {
-						h.handleFailoverExhaustedSimple(c, 502, streamStarted)
-					}
-					return
+			},
+			MaxSwitches:     h.maxAccountSwitchesGemini,
+			TempUnscheduler: h.gatewayService,
+			Select: func(ctx context.Context, selectionReq service.SelectionRequest) (*service.AccountSelectionResult, service.SelectionDecision, error) {
+				return h.selectRuntimeAccount(ctx, selectionReq)
+			},
+			AcquireSlot: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeAccountSlotResult {
+				slot := h.acquireRuntimeAccountSlot(ctx, c, state.Selection, apiKey.GroupID, sessionKey, reqStream, &streamStarted, true)
+				slot.ReleaseFunc = wrapReleaseOnDone(ctx, slot.ReleaseFunc)
+				if slot.Outcome == service.RuntimeAccountSlotSucceeded && slot.BindErr != nil {
+					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", runtimeSlotAccountID(slot)), zap.Error(slot.BindErr))
 				}
-			}
-			account := selection.Account
-			setOpsSelectedAccount(c, account.ID, account.Platform)
-
-			// 检查请求拦截（预热请求、SUGGESTION MODE等）
-			if account.IsInterceptWarmupEnabled() {
-				interceptType := detectInterceptType(body, reqModel, parsedReq.MaxTokens, reqStream, isClaudeCodeClient)
-				if interceptType != InterceptTypeNone {
-					if selection.Acquired && selection.ReleaseFunc != nil {
-						selection.ReleaseFunc()
-					}
-					if reqStream {
-						sendMockInterceptStream(c, reqModel, interceptType)
-					} else {
-						sendMockInterceptResponse(c, reqModel, interceptType)
-					}
-					return
+				return slot
+			},
+			Admit: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeAdmissionResult {
+				if h.tryReserveAccountRPMForForward(ctx, reqLog, state.Account, sessionBoundAccountID, apiKey.GroupID, sessionKey) {
+					return service.RuntimeAdmissionResult{Outcome: service.RuntimeAdmissionSucceeded, Account: state.Account}
 				}
-			}
-
-			slot := h.acquireRuntimeAccountSlot(c.Request.Context(), c, selection, apiKey.GroupID, sessionKey, reqStream, &streamStarted, true)
-			switch slot.Outcome {
-			case service.RuntimeAccountSlotSucceeded:
-				if slot.BindErr != nil {
-					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(slot.BindErr))
+				return service.RuntimeAdmissionResult{
+					Outcome: service.RuntimeAdmissionRPMDenied,
+					Account: state.Account,
+					Cleanup: service.RuntimeAdmissionCleanupRequest{AccountRelease: state.AccountRelease},
 				}
-			case service.RuntimeAccountSlotQueueFull:
-				reqLog.Info("gateway.account_wait_queue_full",
-					zap.Int64("account_id", account.ID),
-					zap.Int("max_waiting", runtimeSlotMaxWaiting(slot)),
-				)
-				h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
-				return
-			case service.RuntimeAccountSlotAcquireError, service.RuntimeAccountSlotWaitAcquireError:
-				reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(slot.Err))
-				h.handleConcurrencyError(c, slot.Err, "account", streamStarted)
-				return
-			default:
-				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
-				return
-			}
-			// 账号槽位/等待计数需要在超时或断开时安全回收
-			accountReleaseFunc := wrapReleaseOnDone(c.Request.Context(), slot.ReleaseFunc)
-			if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, apiKey.GroupID, sessionKey) {
-				service.CleanupRuntimeAdmissionDenied(service.RuntimeAdmissionCleanupRequest{
-					Account:          account,
-					FailedAccountIDs: fs.FailedAccountIDs,
-					AccountRelease:   accountReleaseFunc,
+			},
+			Forward: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeForwardResult {
+				account := state.Account
+				requestCtx := ctx
+				if state.FailoverState != nil && state.FailoverState.SwitchCount > 0 {
+					requestCtx = service.WithAccountSwitchCount(requestCtx, state.FailoverState.SwitchCount, h.metadataBridgeEnabled())
+				}
+				attempt := h.executeRuntimeForwardAttempt(requestCtx, reqLog, service.RuntimeForwardAttemptRequest{
+					Account: account,
+					Forward: func(ctx context.Context) (*service.ForwardResult, error) {
+						return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
+							Provider:        service.PlatformGemini,
+							Protocol:        service.GatewayProtocolMessages,
+							Account:         account,
+							GinContext:      c,
+							Model:           reqModel,
+							Action:          "generateContent",
+							Stream:          reqStream,
+							Body:            body,
+							HasBoundSession: hasBoundSession,
+						})
+					},
+					WriterSize:     c.Writer.Size,
+					AccountRelease: state.AccountRelease,
 				})
-				continue
-			}
-
-			// 转发请求 - 具体 provider forward 分发由 service runtime 负责
-			var result *service.ForwardResult
-			requestCtx := c.Request.Context()
-			if fs.SwitchCount > 0 {
-				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
-			}
-			attempt := h.executeRuntimeForwardAttempt(requestCtx, reqLog, service.RuntimeForwardAttemptRequest{
-				Account: account,
-				Forward: func(ctx context.Context) (*service.ForwardResult, error) {
-					return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
-						Provider:        service.PlatformGemini,
-						Protocol:        service.GatewayProtocolMessages,
-						Account:         account,
-						GinContext:      c,
-						Model:           reqModel,
-						Action:          "generateContent",
-						Stream:          reqStream,
-						Body:            body,
-						HasBoundSession: hasBoundSession,
-					})
-				},
-				WriterSize:     c.Writer.Size,
-				AccountRelease: accountReleaseFunc,
-			})
-			result, err = attempt.Result, attempt.Err
-			if err != nil {
-				if failover := fs.HandleForwardError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, err, attempt.ResponseStarted); failover.Handled {
-					switch failover.Action {
-					case FailoverContinue:
-						continue
-					case FailoverExhausted:
-						h.handleFailoverExhausted(c, failover.FailoverErr, service.PlatformGemini, streamStarted || failover.ResponseStarted)
-						return
-					case FailoverCanceled:
-						return
+				return service.RuntimeForwardResult{
+					Result:          attempt.Result,
+					Err:             attempt.Err,
+					ResponseStarted: attempt.ResponseStarted,
+					Attempt:         attempt,
+				}
+			},
+			Hooks: service.RuntimePipelineHooks{
+				OnAccountSelected: func(_ context.Context, state *service.RuntimePipelineState) service.RuntimePipelineHookResult {
+					account := state.Account
+					setOpsSelectedAccount(c, account.ID, account.Platform)
+					if account.IsInterceptWarmupEnabled() {
+						interceptType := detectInterceptType(body, reqModel, parsedReq.MaxTokens, reqStream, isClaudeCodeClient)
+						if interceptType != InterceptTypeNone {
+							if state.Selection.Acquired && state.Selection.ReleaseFunc != nil {
+								state.Selection.ReleaseFunc()
+							}
+							if reqStream {
+								sendMockInterceptStream(c, reqModel, interceptType)
+							} else {
+								sendMockInterceptResponse(c, reqModel, interceptType)
+							}
+							return service.RuntimePipelineHookResult{Abort: true, Outcome: service.RuntimePipelineForwardHookAborted}
+						}
 					}
-				}
-				wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
-				forwardFailedFields := []zap.Field{
-					zap.Int64("account_id", account.ID),
-					zap.String("account_name", account.Name),
-					zap.String("account_platform", account.Platform),
-					zap.Bool("fallback_error_response_written", wroteFallback),
-					zap.Error(err),
-				}
-				if account.Proxy != nil {
-					forwardFailedFields = append(forwardFailedFields,
-						zap.Int64("proxy_id", account.Proxy.ID),
-						zap.String("proxy_name", account.Proxy.Name),
-						zap.String("proxy_host", account.Proxy.Host),
-						zap.Int("proxy_port", account.Proxy.Port),
-					)
-				} else if account.ProxyID != nil {
-					forwardFailedFields = append(forwardFailedFields, zap.Int64p("proxy_id", account.ProxyID))
-				}
-				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
-				return
-			}
+					return service.RuntimePipelineHookResult{}
+				},
+			},
+		})
 
+		switch pipelineResult.Outcome {
+		case service.RuntimePipelineSucceeded:
+			account := pipelineResult.Account
+			result := pipelineResult.ForwardResult
 			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
@@ -460,7 +421,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					UserAgent:          userAgent,
 					IPAddress:          clientIP,
 					RequestPayloadHash: requestPayloadHash,
-					ForceCacheBilling:  fs.ForceCacheBilling,
+					ForceCacheBilling:  pipelineResult.ForceCacheBilling,
 					APIKeyService:      h.apiKeyService,
 					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
 				}); err != nil {
@@ -474,8 +435,63 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					).Error("gateway.record_usage_failed", zap.Error(err))
 				}
 			})
+		case service.RuntimePipelineSelectionInitialUnavailable:
+			message := "No available accounts"
+			if pipelineResult.SelectionFailure.Err != nil {
+				message += ": " + pipelineResult.SelectionFailure.Err.Error()
+			}
+			h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", message, streamStarted)
+		case service.RuntimePipelineSelectionRetryCanceled, service.RuntimePipelineFailoverCanceled, service.RuntimePipelineForwardHookAborted:
 			return
+		case service.RuntimePipelineSelectionExhausted:
+			if pipelineResult.SelectionFailure.FailoverErr != nil {
+				h.handleFailoverExhausted(c, pipelineResult.SelectionFailure.FailoverErr, service.PlatformGemini, streamStarted)
+			} else {
+				h.handleFailoverExhaustedSimple(c, 502, streamStarted)
+			}
+		case service.RuntimePipelineAccountSlotQueueFull:
+			reqLog.Info("gateway.account_wait_queue_full",
+				zap.Int64("account_id", runtimeSlotAccountID(pipelineResult.Slot)),
+				zap.Int("max_waiting", runtimeSlotMaxWaiting(pipelineResult.Slot)),
+			)
+			h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
+		case service.RuntimePipelineAccountSlotAcquireError, service.RuntimePipelineAccountSlotWaitAcquireError:
+			reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", runtimeSlotAccountID(pipelineResult.Slot)), zap.Error(pipelineResult.Slot.Err))
+			h.handleConcurrencyError(c, pipelineResult.Slot.Err, "account", streamStarted)
+		case service.RuntimePipelineAccountSlotUnavailable, service.RuntimePipelineNoAvailableAccount:
+			h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
+		case service.RuntimePipelineFailoverExhausted:
+			h.handleFailoverExhausted(c, pipelineResult.Failover.FailoverErr, service.PlatformGemini, streamStarted || pipelineResult.Failover.ResponseStarted)
+		case service.RuntimePipelineForwardError, service.RuntimePipelineMisconfigured:
+			account := pipelineResult.Account
+			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
+			forwardFailedFields := []zap.Field{
+				zap.Bool("fallback_error_response_written", wroteFallback),
+				zap.Error(pipelineResult.Err),
+			}
+			if account != nil {
+				forwardFailedFields = append([]zap.Field{
+					zap.Int64("account_id", account.ID),
+					zap.String("account_name", account.Name),
+					zap.String("account_platform", account.Platform),
+				}, forwardFailedFields...)
+				if account.Proxy != nil {
+					forwardFailedFields = append(forwardFailedFields,
+						zap.Int64("proxy_id", account.Proxy.ID),
+						zap.String("proxy_name", account.Proxy.Name),
+						zap.String("proxy_host", account.Proxy.Host),
+						zap.Int("proxy_port", account.Proxy.Port),
+					)
+				} else if account.ProxyID != nil {
+					forwardFailedFields = append(forwardFailedFields, zap.Int64p("proxy_id", account.ProxyID))
+				}
+			}
+			reqLog.Error("gateway.forward_failed", forwardFailedFields...)
+		default:
+			h.ensureForwardErrorResponse(c, streamStarted)
+			reqLog.Error("gateway.forward_failed", zap.Error(pipelineResult.Err))
 		}
+		return
 	}
 
 	currentAPIKey := apiKey
@@ -494,198 +510,267 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 
 	for {
-		fs := NewFailoverState(h.maxAccountSwitches, hasBoundSession)
 		retryWithFallback := false
+		mappedBodyPrepared := false
 
-		for {
-			// 选择支持该模型的账号
-			selection, _, err := h.selectRuntimeAccount(c.Request.Context(), service.SelectionRequest{
+		pipelineResult := service.NewRuntimePipeline().Execute(c.Request.Context(), service.RuntimePipelineRequest{
+			Subject: service.RuntimeSubject{
+				UserID:      subject.UserID,
+				APIKeyID:    currentAPIKey.ID,
+				GroupID:     currentAPIKey.GroupID,
+				Concurrency: subject.Concurrency,
+				Provider:    platform,
+				Protocol:    service.GatewayProtocolMessages,
+			},
+			Session: service.RuntimeSessionState{
+				SessionHash:    sessionKey,
+				SessionKey:     sessionKey,
+				BoundAccountID: sessionBoundAccountID,
+				HasBound:       hasBoundSession,
+			},
+			Selection: service.SelectionRequest{
 				Provider:    platform,
 				Protocol:    service.GatewayProtocolMessages,
 				Model:       reqModel,
 				GroupID:     currentAPIKey.GroupID,
 				SessionHash: sessionKey,
-				ExcludedIDs: fs.FailedAccountIDs,
-			})
-			if err != nil {
-				selectionFailure := fs.HandleSelectionError(c.Request.Context(), err)
-				switch selectionFailure.Outcome {
-				case service.RuntimeSelectionFailureInitialUnavailable:
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+selectionFailure.Err.Error(), streamStarted)
-					return
-				case service.RuntimeSelectionFailureRetry:
-					ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
-					c.Request = c.Request.WithContext(ctx)
-					continue
-				case service.RuntimeSelectionFailureCanceled:
-					return
-				default: // FailoverExhausted
-					if selectionFailure.FailoverErr != nil {
-						h.handleFailoverExhausted(c, selectionFailure.FailoverErr, platform, streamStarted)
+			},
+			MaxSwitches:     h.maxAccountSwitches,
+			TempUnscheduler: h.gatewayService,
+			Select: func(ctx context.Context, selectionReq service.SelectionRequest) (*service.AccountSelectionResult, service.SelectionDecision, error) {
+				return h.selectRuntimeAccount(ctx, selectionReq)
+			},
+			AcquireSlot: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeAccountSlotResult {
+				slot := h.acquireRuntimeAccountSlot(ctx, c, state.Selection, currentAPIKey.GroupID, sessionKey, reqStream, &streamStarted, true)
+				slot.ReleaseFunc = wrapReleaseOnDone(ctx, slot.ReleaseFunc)
+				if slot.Outcome == service.RuntimeAccountSlotSucceeded && slot.BindErr != nil {
+					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", runtimeSlotAccountID(slot)), zap.Error(slot.BindErr))
+				}
+				return slot
+			},
+			Admit: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeAdmissionResult {
+				account := state.Account
+				var queueRelease func()
+				umqMode := h.getUserMsgQueueMode(account, parsedReq)
+				switch umqMode {
+				case config.UMQModeSerialize:
+					baseRPM := account.GetBaseRPM()
+					release, qErr := h.userMsgQueueHelper.AcquireWithWait(
+						c, account.ID, baseRPM, reqStream, &streamStarted,
+						h.cfg.Gateway.UserMessageQueue.WaitTimeout(),
+						reqLog,
+					)
+					if qErr != nil {
+						reqLog.Warn("gateway.umq_acquire_failed",
+							zap.Int64("account_id", account.ID),
+							zap.Error(qErr),
+						)
 					} else {
-						h.handleFailoverExhaustedSimple(c, 502, streamStarted)
+						queueRelease = release
 					}
-					return
-				}
-			}
-			account := selection.Account
-			setOpsSelectedAccount(c, account.ID, account.Platform)
-
-			// 检查请求拦截（预热请求、SUGGESTION MODE等）
-			if account.IsInterceptWarmupEnabled() {
-				interceptType := detectInterceptType(body, reqModel, parsedReq.MaxTokens, reqStream, isClaudeCodeClient)
-				if interceptType != InterceptTypeNone {
-					if selection.Acquired && selection.ReleaseFunc != nil {
-						selection.ReleaseFunc()
+				case config.UMQModeThrottle:
+					baseRPM := account.GetBaseRPM()
+					if tErr := h.userMsgQueueHelper.ThrottleWithPing(
+						c, account.ID, baseRPM, reqStream, &streamStarted,
+						h.cfg.Gateway.UserMessageQueue.WaitTimeout(),
+						reqLog,
+					); tErr != nil {
+						reqLog.Warn("gateway.umq_throttle_failed",
+							zap.Int64("account_id", account.ID),
+							zap.Error(tErr),
+						)
 					}
-					if reqStream {
-						sendMockInterceptStream(c, reqModel, interceptType)
-					} else {
-						sendMockInterceptResponse(c, reqModel, interceptType)
+				default:
+					if umqMode != "" {
+						reqLog.Warn("gateway.umq_unknown_mode",
+							zap.String("mode", umqMode),
+							zap.Int64("account_id", account.ID),
+						)
 					}
-					return
 				}
-			}
-
-			slot := h.acquireRuntimeAccountSlot(c.Request.Context(), c, selection, currentAPIKey.GroupID, sessionKey, reqStream, &streamStarted, true)
-			switch slot.Outcome {
-			case service.RuntimeAccountSlotSucceeded:
-				if slot.BindErr != nil {
-					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(slot.BindErr))
-				}
-			case service.RuntimeAccountSlotQueueFull:
-				reqLog.Info("gateway.account_wait_queue_full",
-					zap.Int64("account_id", account.ID),
-					zap.Int("max_waiting", runtimeSlotMaxWaiting(slot)),
-				)
-				h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
-				return
-			case service.RuntimeAccountSlotAcquireError, service.RuntimeAccountSlotWaitAcquireError:
-				reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(slot.Err))
-				h.handleConcurrencyError(c, slot.Err, "account", streamStarted)
-				return
-			default:
-				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
-				return
-			}
-			// 账号槽位/等待计数需要在超时或断开时安全回收
-			accountReleaseFunc := wrapReleaseOnDone(c.Request.Context(), slot.ReleaseFunc)
-
-			// ===== 用户消息串行队列 START =====
-			var queueRelease func()
-			umqMode := h.getUserMsgQueueMode(account, parsedReq)
-
-			switch umqMode {
-			case config.UMQModeSerialize:
-				// 串行模式：获取锁 + RPM 延迟 + 释放（当前行为不变）
-				baseRPM := account.GetBaseRPM()
-				release, qErr := h.userMsgQueueHelper.AcquireWithWait(
-					c, account.ID, baseRPM, reqStream, &streamStarted,
-					h.cfg.Gateway.UserMessageQueue.WaitTimeout(),
-					reqLog,
-				)
-				if qErr != nil {
-					// fail-open: 记录 warn，不阻止请求
-					reqLog.Warn("gateway.umq_acquire_failed",
-						zap.Int64("account_id", account.ID),
-						zap.Error(qErr),
-					)
-				} else {
-					queueRelease = release
-				}
-
-			case config.UMQModeThrottle:
-				// 软性限速：仅施加 RPM 自适应延迟，不阻塞并发
-				baseRPM := account.GetBaseRPM()
-				if tErr := h.userMsgQueueHelper.ThrottleWithPing(
-					c, account.ID, baseRPM, reqStream, &streamStarted,
-					h.cfg.Gateway.UserMessageQueue.WaitTimeout(),
-					reqLog,
-				); tErr != nil {
-					reqLog.Warn("gateway.umq_throttle_failed",
-						zap.Int64("account_id", account.ID),
-						zap.Error(tErr),
-					)
-				}
-
-			default:
-				if umqMode != "" {
-					reqLog.Warn("gateway.umq_unknown_mode",
-						zap.String("mode", umqMode),
-						zap.Int64("account_id", account.ID),
-					)
-				}
-			}
-
-			// 用 wrapReleaseOnDone 确保 context 取消时自动释放（仅 serialize 模式有 queueRelease）
-			queueRelease = wrapReleaseOnDone(c.Request.Context(), queueRelease)
-			// 注入回调到 ParsedRequest：使用外层 wrapper 以便提前清理 AfterFunc
-			parsedReq.OnUpstreamAccepted = queueRelease
-			// ===== 用户消息串行队列 END =====
-
-			if channelMapping.Mapped {
-				parsedReq.Model = channelMapping.MappedModel
-				parsedReq.Body = h.gatewayService.ReplaceModelInBody(parsedReq.Body, channelMapping.MappedModel)
-				body = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
-			}
-			if !h.tryReserveAccountRPMForForward(c.Request.Context(), reqLog, account, sessionBoundAccountID, currentAPIKey.GroupID, sessionKey) {
-				service.CleanupRuntimeAdmissionDenied(service.RuntimeAdmissionCleanupRequest{
-					Account:               account,
-					FailedAccountIDs:      fs.FailedAccountIDs,
-					AccountRelease:        accountReleaseFunc,
+				queueRelease = wrapReleaseOnDone(ctx, queueRelease)
+				parsedReq.OnUpstreamAccepted = queueRelease
+				cleanup := service.RuntimeAdmissionCleanupRequest{
+					AccountRelease:        state.AccountRelease,
 					QueueRelease:          queueRelease,
 					ClearUpstreamAccepted: func() { parsedReq.OnUpstreamAccepted = nil },
-				})
-				continue
-			}
-			windowCostReservation, windowCostAllowed := h.tryReserveAccountWindowCostForForward(
-				c.Request.Context(),
-				reqLog,
-				account,
-				currentAPIKey,
-				parsedReq,
-				parsedReq.Model,
-				sessionBoundAccountID,
-				currentAPIKey.GroupID,
-				sessionKey,
-			)
-			if !windowCostAllowed {
-				service.CleanupRuntimeAdmissionDenied(service.RuntimeAdmissionCleanupRequest{
-					Account:               account,
-					FailedAccountIDs:      fs.FailedAccountIDs,
-					AccountRelease:        accountReleaseFunc,
-					QueueRelease:          queueRelease,
-					ClearUpstreamAccepted: func() { parsedReq.OnUpstreamAccepted = nil },
-				})
-				continue
-			}
+				}
 
-			// 转发请求 - 具体 provider forward 分发由 service runtime 负责
-			var result *service.ForwardResult
-			requestCtx := c.Request.Context()
-			if fs.SwitchCount > 0 {
-				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
-			}
-			attempt := h.executeRuntimeForwardAttempt(requestCtx, reqLog, service.RuntimeForwardAttemptRequest{
-				Account: account,
-				Forward: func(ctx context.Context) (*service.ForwardResult, error) {
-					return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
-						Provider:        platform,
-						Protocol:        service.GatewayProtocolMessages,
-						Account:         account,
-						GinContext:      c,
-						Body:            body,
-						Parsed:          parsedReq,
-						HasBoundSession: hasBoundSession,
-					})
+				if channelMapping.Mapped && !mappedBodyPrepared {
+					parsedReq.Model = channelMapping.MappedModel
+					parsedReq.Body = h.gatewayService.ReplaceModelInBody(parsedReq.Body, channelMapping.MappedModel)
+					body = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
+					mappedBodyPrepared = true
+				}
+				if !h.tryReserveAccountRPMForForward(ctx, reqLog, account, sessionBoundAccountID, currentAPIKey.GroupID, sessionKey) {
+					return service.RuntimeAdmissionResult{
+						Outcome: service.RuntimeAdmissionRPMDenied,
+						Account: account,
+						Cleanup: cleanup,
+					}
+				}
+				windowCostReservation, windowCostAllowed := h.tryReserveAccountWindowCostForForward(
+					ctx,
+					reqLog,
+					account,
+					currentAPIKey,
+					parsedReq,
+					parsedReq.Model,
+					sessionBoundAccountID,
+					currentAPIKey.GroupID,
+					sessionKey,
+				)
+				if !windowCostAllowed {
+					return service.RuntimeAdmissionResult{
+						Outcome: service.RuntimeAdmissionWindowCostDenied,
+						Account: account,
+						Cleanup: cleanup,
+					}
+				}
+				return service.RuntimeAdmissionResult{
+					Outcome:               service.RuntimeAdmissionSucceeded,
+					Account:               account,
+					WindowCostReservation: windowCostReservation,
+					Cleanup:               cleanup,
+				}
+			},
+			Forward: func(ctx context.Context, state *service.RuntimePipelineState) service.RuntimeForwardResult {
+				account := state.Account
+				requestCtx := ctx
+				if state.FailoverState != nil && state.FailoverState.SwitchCount > 0 {
+					requestCtx = service.WithAccountSwitchCount(requestCtx, state.FailoverState.SwitchCount, h.metadataBridgeEnabled())
+				}
+				attempt := h.executeRuntimeForwardAttempt(requestCtx, reqLog, service.RuntimeForwardAttemptRequest{
+					Account: account,
+					Forward: func(ctx context.Context) (*service.ForwardResult, error) {
+						return h.nativeGatewayRuntime().Forward(ctx, service.NativeGatewayForwardRequest{
+							Provider:        platform,
+							Protocol:        service.GatewayProtocolMessages,
+							Account:         account,
+							GinContext:      c,
+							Body:            body,
+							Parsed:          parsedReq,
+							HasBoundSession: hasBoundSession,
+						})
+					},
+					WriterSize:            c.Writer.Size,
+					AccountRelease:        state.AccountRelease,
+					QueueRelease:          state.Admission.Cleanup.QueueRelease,
+					ClearUpstreamAccepted: state.Admission.Cleanup.ClearUpstreamAccepted,
+					WindowCostReservation: state.WindowCostReservation,
+				})
+				return service.RuntimeForwardResult{
+					Result:          attempt.Result,
+					Err:             attempt.Err,
+					ResponseStarted: attempt.ResponseStarted,
+					Attempt:         attempt,
+				}
+			},
+			Hooks: service.RuntimePipelineHooks{
+				OnSelectionRetry: func(ctx context.Context, _ *service.RuntimePipelineState) context.Context {
+					nextCtx := service.WithSingleAccountRetry(ctx, true, h.metadataBridgeEnabled())
+					c.Request = c.Request.WithContext(nextCtx)
+					return nextCtx
 				},
-				WriterSize:            c.Writer.Size,
-				AccountRelease:        accountReleaseFunc,
-				QueueRelease:          queueRelease,
-				ClearUpstreamAccepted: func() { parsedReq.OnUpstreamAccepted = nil },
-				WindowCostReservation: windowCostReservation,
+				OnAccountSelected: func(_ context.Context, state *service.RuntimePipelineState) service.RuntimePipelineHookResult {
+					account := state.Account
+					setOpsSelectedAccount(c, account.ID, account.Platform)
+					if account.IsInterceptWarmupEnabled() {
+						interceptType := detectInterceptType(body, reqModel, parsedReq.MaxTokens, reqStream, isClaudeCodeClient)
+						if interceptType != InterceptTypeNone {
+							if state.Selection.Acquired && state.Selection.ReleaseFunc != nil {
+								state.Selection.ReleaseFunc()
+							}
+							if reqStream {
+								sendMockInterceptStream(c, reqModel, interceptType)
+							} else {
+								sendMockInterceptResponse(c, reqModel, interceptType)
+							}
+							return service.RuntimePipelineHookResult{Abort: true, Outcome: service.RuntimePipelineForwardHookAborted}
+						}
+					}
+					return service.RuntimePipelineHookResult{}
+				},
+			},
+		})
+
+		switch pipelineResult.Outcome {
+		case service.RuntimePipelineSucceeded:
+			account := pipelineResult.Account
+			result := pipelineResult.ForwardResult
+			userAgent := c.GetHeader("User-Agent")
+			clientIP := ip.GetClientIP(c)
+			requestPayloadHash := service.HashUsageRequestPayload(body)
+			inboundEndpoint := GetInboundEndpoint(c)
+			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
+
+			if result.ReasoningEffort == nil {
+				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
+			}
+
+			h.submitUsageRecordTaskWithParent(c.Request.Context(), func(ctx context.Context) {
+				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+					Result:             result,
+					APIKey:             currentAPIKey,
+					User:               currentAPIKey.User,
+					Account:            account,
+					Subscription:       currentSubscription,
+					InboundEndpoint:    inboundEndpoint,
+					UpstreamEndpoint:   upstreamEndpoint,
+					UserAgent:          userAgent,
+					IPAddress:          clientIP,
+					RequestPayloadHash: requestPayloadHash,
+					ForceCacheBilling:  pipelineResult.ForceCacheBilling,
+					APIKeyService:      h.apiKeyService,
+					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+				}); err != nil {
+					logger.L().With(
+						zap.String("component", "handler.gateway.messages"),
+						zap.Int64("user_id", subject.UserID),
+						zap.Int64("api_key_id", currentAPIKey.ID),
+						zap.Any("group_id", currentAPIKey.GroupID),
+						zap.String("model", reqModel),
+						zap.Int64("account_id", account.ID),
+					).Error("gateway.record_usage_failed", zap.Error(err))
+				}
 			})
-			result, err = attempt.Result, attempt.Err
+			return
+		case service.RuntimePipelineSelectionInitialUnavailable:
+			message := "No available accounts"
+			if pipelineResult.SelectionFailure.Err != nil {
+				message += ": " + pipelineResult.SelectionFailure.Err.Error()
+			}
+			h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", message, streamStarted)
+			return
+		case service.RuntimePipelineSelectionRetryCanceled, service.RuntimePipelineFailoverCanceled, service.RuntimePipelineForwardHookAborted:
+			return
+		case service.RuntimePipelineSelectionExhausted:
+			if pipelineResult.SelectionFailure.FailoverErr != nil {
+				h.handleFailoverExhausted(c, pipelineResult.SelectionFailure.FailoverErr, platform, streamStarted)
+			} else {
+				h.handleFailoverExhaustedSimple(c, 502, streamStarted)
+			}
+			return
+		case service.RuntimePipelineAccountSlotQueueFull:
+			reqLog.Info("gateway.account_wait_queue_full",
+				zap.Int64("account_id", runtimeSlotAccountID(pipelineResult.Slot)),
+				zap.Int("max_waiting", runtimeSlotMaxWaiting(pipelineResult.Slot)),
+			)
+			h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
+			return
+		case service.RuntimePipelineAccountSlotAcquireError, service.RuntimePipelineAccountSlotWaitAcquireError:
+			reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", runtimeSlotAccountID(pipelineResult.Slot)), zap.Error(pipelineResult.Slot.Err))
+			h.handleConcurrencyError(c, pipelineResult.Slot.Err, "account", streamStarted)
+			return
+		case service.RuntimePipelineAccountSlotUnavailable, service.RuntimePipelineNoAvailableAccount:
+			h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
+			return
+		case service.RuntimePipelineFailoverExhausted:
+			h.handleFailoverExhausted(c, pipelineResult.Failover.FailoverErr, platform, streamStarted || pipelineResult.Failover.ResponseStarted)
+			return
+		case service.RuntimePipelineForwardError, service.RuntimePipelineMisconfigured:
+			account := pipelineResult.Account
+			err := pipelineResult.Err
 			if err != nil {
 				// Beta policy block: return 400 immediately, no failover
 				var betaBlockedErr *service.BetaBlockedError
@@ -749,25 +834,18 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					}
 					return
 				}
-				if failover := fs.HandleForwardError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, err, attempt.ResponseStarted); failover.Handled {
-					switch failover.Action {
-					case FailoverContinue:
-						continue
-					case FailoverExhausted:
-						h.handleFailoverExhausted(c, failover.FailoverErr, account.Platform, streamStarted || failover.ResponseStarted)
-						return
-					case FailoverCanceled:
-						return
-					}
-				}
-				wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
-				forwardFailedFields := []zap.Field{
+			}
+			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
+			forwardFailedFields := []zap.Field{
+				zap.Bool("fallback_error_response_written", wroteFallback),
+				zap.Error(err),
+			}
+			if account != nil {
+				forwardFailedFields = append([]zap.Field{
 					zap.Int64("account_id", account.ID),
 					zap.String("account_name", account.Name),
 					zap.String("account_platform", account.Platform),
-					zap.Bool("fallback_error_response_written", wroteFallback),
-					zap.Error(err),
-				}
+				}, forwardFailedFields...)
 				if account.Proxy != nil {
 					forwardFailedFields = append(forwardFailedFields,
 						zap.Int64("proxy_id", account.Proxy.ID),
@@ -778,48 +856,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				} else if account.ProxyID != nil {
 					forwardFailedFields = append(forwardFailedFields, zap.Int64p("proxy_id", account.ProxyID))
 				}
-				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
-				return
 			}
-
-			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
-			userAgent := c.GetHeader("User-Agent")
-			clientIP := ip.GetClientIP(c)
-			requestPayloadHash := service.HashUsageRequestPayload(body)
-			inboundEndpoint := GetInboundEndpoint(c)
-			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
-
-			if result.ReasoningEffort == nil {
-				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
-			}
-
-			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
-			h.submitUsageRecordTaskWithParent(c.Request.Context(), func(ctx context.Context) {
-				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-					Result:             result,
-					APIKey:             currentAPIKey,
-					User:               currentAPIKey.User,
-					Account:            account,
-					Subscription:       currentSubscription,
-					InboundEndpoint:    inboundEndpoint,
-					UpstreamEndpoint:   upstreamEndpoint,
-					UserAgent:          userAgent,
-					IPAddress:          clientIP,
-					RequestPayloadHash: requestPayloadHash,
-					ForceCacheBilling:  fs.ForceCacheBilling,
-					APIKeyService:      h.apiKeyService,
-					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
-				}); err != nil {
-					logger.L().With(
-						zap.String("component", "handler.gateway.messages"),
-						zap.Int64("user_id", subject.UserID),
-						zap.Int64("api_key_id", currentAPIKey.ID),
-						zap.Any("group_id", currentAPIKey.GroupID),
-						zap.String("model", reqModel),
-						zap.Int64("account_id", account.ID),
-					).Error("gateway.record_usage_failed", zap.Error(err))
-				}
-			})
+			reqLog.Error("gateway.forward_failed", forwardFailedFields...)
+			return
+		default:
+			h.ensureForwardErrorResponse(c, streamStarted)
+			reqLog.Error("gateway.forward_failed", zap.Error(pipelineResult.Err))
 			return
 		}
 		if !retryWithFallback {

@@ -67,6 +67,7 @@ func ProvideTokenRefreshService(
 	privacyClientFactory PrivacyClientFactory,
 	proxyRepo ProxyRepository,
 	refreshAPI *OAuthRefreshAPI,
+	lifecycle *LifecycleRegistry,
 ) *TokenRefreshService {
 	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cacheInvalidator, schedulerCache, cfg, tempUnschedCache)
 	// 注入 OpenAI privacy opt-out 依赖
@@ -75,8 +76,7 @@ func ProvideTokenRefreshService(
 	svc.SetRefreshAPI(refreshAPI)
 	// 调用侧显式注入后台刷新策略，避免策略漂移
 	svc.SetRefreshPolicy(DefaultBackgroundRefreshPolicy())
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "TokenRefreshService", svc)
 }
 
 // ProvideClaudeTokenProvider creates ClaudeTokenProvider with OAuthRefreshAPI injection
@@ -249,10 +249,10 @@ func ProvideOpsAggregationService(
 	db *sql.DB,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsAggregationService {
 	svc := NewOpsAggregationService(opsRepo, settingRepo, db, redisClient, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "OpsAggregationService", svc)
 }
 
 // ProvideOpsAlertEvaluatorService creates and starts OpsAlertEvaluatorService.
@@ -262,10 +262,10 @@ func ProvideOpsAlertEvaluatorService(
 	emailService *EmailService,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsAlertEvaluatorService {
 	svc := NewOpsAlertEvaluatorService(opsService, opsRepo, emailService, redisClient, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "OpsAlertEvaluatorService", svc)
 }
 
 // ProvideOpsCleanupService creates and starts OpsCleanupService (cron scheduled).
@@ -277,15 +277,15 @@ func ProvideOpsCleanupService(
 	redisClient *redis.Client,
 	cfg *config.Config,
 	channelMonitorSvc *ChannelMonitorService,
+	lifecycle *LifecycleRegistry,
 ) *OpsCleanupService {
 	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg, channelMonitorSvc)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "OpsCleanupService", svc)
 }
 
-func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
+func ProvideOpsSystemLogSink(opsRepo OpsRepository, lifecycle *LifecycleRegistry) *OpsSystemLogSink {
 	sink := NewOpsSystemLogSink(opsRepo)
-	sink.Start()
+	manageStartStopLifecycle(lifecycle, "OpsSystemLogSink", sink)
 	logger.SetSink(sink)
 	return sink
 }
@@ -323,10 +323,9 @@ func ProvideSystemOperationLockService(repo IdempotencyRepository, cfg *config.C
 	return NewSystemOperationLockService(repo, buildIdempotencyConfig(cfg))
 }
 
-func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
+func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config, lifecycle *LifecycleRegistry) *IdempotencyCleanupService {
 	svc := NewIdempotencyCleanupService(repo, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "IdempotencyCleanupService", svc)
 }
 
 // ProvideScheduledTestService creates ScheduledTestService.
@@ -344,10 +343,10 @@ func ProvideScheduledTestRunnerService(
 	accountTestSvc *AccountTestService,
 	rateLimitSvc *RateLimitService,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *ScheduledTestRunnerService {
 	svc := NewScheduledTestRunnerService(planRepo, scheduledSvc, accountTestSvc, rateLimitSvc, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "ScheduledTestRunnerService", svc)
 }
 
 // ProvideOpsScheduledReportService creates and starts OpsScheduledReportService.
@@ -357,10 +356,10 @@ func ProvideOpsScheduledReportService(
 	emailService *EmailService,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	lifecycle *LifecycleRegistry,
 ) *OpsScheduledReportService {
 	svc := NewOpsScheduledReportService(opsService, userService, emailService, redisClient, cfg)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "OpsScheduledReportService", svc)
 }
 
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
@@ -381,10 +380,10 @@ func ProvideBackupService(
 	encryptor SecretEncryptor,
 	storeFactory BackupObjectStoreFactory,
 	dumper DBDumper,
+	lifecycle *LifecycleRegistry,
 ) *BackupService {
 	svc := NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "BackupService", svc)
 }
 
 // ProvideSettingService wires SettingService with group reader and proxy repo.
@@ -606,10 +605,9 @@ func ProvideBalanceNotifyService(emailService *EmailService, settingRepo Setting
 }
 
 // ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
-func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService) *PaymentOrderExpiryService {
+func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lifecycle *LifecycleRegistry) *PaymentOrderExpiryService {
 	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
-	svc.Start()
-	return svc
+	return manageStartStopLifecycle(lifecycle, "PaymentOrderExpiryService", svc)
 }
 
 // ProvideChannelMonitorService 创建渠道监控服务（CRUD + RunCheck + 用户视图聚合）。
@@ -625,9 +623,8 @@ func ProvideChannelMonitorService(
 // 通过 SetScheduler 注入回 service 后再 Start，确保启动时加载所有 enabled monitor，
 // 后续 CRUD 也能即时同步任务表。Runner.Stop 由 cleanup function 调用。
 // settingService 用于 runner 每次 fire 读取功能开关。
-func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *SettingService) *ChannelMonitorRunner {
+func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *SettingService, lifecycle *LifecycleRegistry) *ChannelMonitorRunner {
 	r := NewChannelMonitorRunner(svc, settingService)
 	svc.SetScheduler(r)
-	r.Start()
-	return r
+	return manageStartStopLifecycle(lifecycle, "ChannelMonitorRunner", r)
 }
