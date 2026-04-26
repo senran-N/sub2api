@@ -37,7 +37,8 @@ func (h *CompatibleGatewayRuntimeHandler) runtimePlatform(c *gin.Context) string
 	if c != nil && c.Request != nil {
 		return service.ResolveCompatibleGatewayPlatform(c.Request.Context(), platform)
 	}
-	return service.ResolveCompatibleGatewayPlatform(context.TODO(), platform)
+	// Compatibility fallback for tests/helpers that call without a request.
+	return service.ResolveCompatibleGatewayPlatform(context.Background(), platform)
 }
 
 func (h *CompatibleGatewayRuntimeHandler) Messages(c *gin.Context) {

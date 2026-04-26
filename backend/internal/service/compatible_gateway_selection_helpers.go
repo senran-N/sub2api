@@ -10,10 +10,15 @@ func resolveCompatibleSelectionPlatform(ctx context.Context, fallback string) st
 }
 
 func isCompatibleSelectionPlatformAccount(account *Account, platform string) bool {
+	// Compatibility wrapper for callers that do not carry request context.
+	return isCompatibleSelectionPlatformAccountWithContext(context.Background(), account, platform)
+}
+
+func isCompatibleSelectionPlatformAccountWithContext(ctx context.Context, account *Account, platform string) bool {
 	if account == nil {
 		return false
 	}
-	return NormalizeCompatibleGatewayPlatform(account.Platform) == ResolveCompatibleGatewayPlatform(context.TODO(), platform)
+	return NormalizeCompatibleGatewayPlatform(account.Platform) == ResolveCompatibleGatewayPlatform(ctx, platform)
 }
 
 func isCompatibleAccountBaseEligibleForPlatform(account *Account, platform string) bool {
@@ -21,7 +26,17 @@ func isCompatibleAccountBaseEligibleForPlatform(account *Account, platform strin
 }
 
 func isCompatibleAccountModelEligible(account *Account, requestedModel string, platform string) bool {
-	switch ResolveCompatibleGatewayPlatform(context.TODO(), platform) {
+	// Compatibility wrapper for pure model checks that do not carry request context.
+	return isCompatibleAccountModelEligibleWithContext(context.Background(), account, requestedModel, platform)
+}
+
+func isCompatibleAccountModelEligibleWithContext(
+	ctx context.Context,
+	account *Account,
+	requestedModel string,
+	platform string,
+) bool {
+	switch ResolveCompatibleGatewayPlatform(ctx, platform) {
 	case PlatformGrok:
 		return defaultGrokAccountSelector.IsModelEligible(account, requestedModel)
 	default:
@@ -35,11 +50,11 @@ func isCompatibleAccountRuntimeEligibleForPlatformWithContext(
 	requestedModel string,
 	platform string,
 ) bool {
-	switch ResolveCompatibleGatewayPlatform(context.TODO(), platform) {
+	switch ResolveCompatibleGatewayPlatform(ctx, platform) {
 	case PlatformGrok:
 		return defaultGrokAccountSelector.IsRuntimeEligibleWithContext(ctx, account, requestedModel)
 	}
-	if account == nil || !isCompatibleSelectionPlatformAccount(account, platform) {
+	if account == nil || !isCompatibleSelectionPlatformAccountWithContext(ctx, account, platform) {
 		return false
 	}
 	if !account.IsSchedulable() {
@@ -48,7 +63,7 @@ func isCompatibleAccountRuntimeEligibleForPlatformWithContext(
 	if oauthSelectionCredentialIssue(account) != "" {
 		return false
 	}
-	if requestedModel != "" && !isCompatibleAccountModelEligible(account, requestedModel, platform) {
+	if requestedModel != "" && !isCompatibleAccountModelEligibleWithContext(ctx, account, requestedModel, platform) {
 		return false
 	}
 	return true
@@ -61,7 +76,7 @@ func filterSchedulableCompatibleCandidatesForPlatformWithContext(
 	excludedIDs map[int64]struct{},
 	platform string,
 ) []*Account {
-	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
+	if ResolveCompatibleGatewayPlatform(ctx, platform) == PlatformGrok {
 		return defaultGrokAccountSelector.FilterSchedulableCandidatesWithContext(ctx, accounts, requestedModel, excludedIDs)
 	}
 
@@ -86,7 +101,7 @@ func filterSchedulableCompatibleAccountPointersForPlatformWithContext(
 	excludedIDs map[int64]struct{},
 	platform string,
 ) []*Account {
-	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
+	if ResolveCompatibleGatewayPlatform(ctx, platform) == PlatformGrok {
 		return defaultGrokAccountSelector.FilterSchedulableAccountPointersWithContext(ctx, accounts, requestedModel, excludedIDs)
 	}
 
@@ -115,10 +130,10 @@ func compatibleRequestedModelAvailableForScheduling(
 	if strings.TrimSpace(requestedModel) == "" {
 		return true
 	}
-	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
+	if ResolveCompatibleGatewayPlatform(ctx, platform) == PlatformGrok {
 		return defaultGrokAccountSelector.IsModelAvailableWithContext(ctx, account, requestedModel)
 	}
-	return isCompatibleAccountModelEligible(account, requestedModel, platform)
+	return isCompatibleAccountModelEligibleWithContext(ctx, account, requestedModel, platform)
 }
 
 func compatibleRequestedModelAvailableForPlatformWithContext(
@@ -131,15 +146,15 @@ func compatibleRequestedModelAvailableForPlatformWithContext(
 	if model == "" {
 		return true
 	}
-	if ResolveCompatibleGatewayPlatform(context.TODO(), platform) == PlatformGrok {
+	if ResolveCompatibleGatewayPlatform(ctx, platform) == PlatformGrok {
 		return defaultGrokAccountSelector.RequestedModelAvailableWithContext(ctx, accounts, model)
 	}
 	for i := range accounts {
 		account := &accounts[i]
-		if !isCompatibleSelectionPlatformAccount(account, platform) {
+		if !isCompatibleSelectionPlatformAccountWithContext(ctx, account, platform) {
 			continue
 		}
-		if isCompatibleAccountModelEligible(account, model, platform) {
+		if isCompatibleAccountModelEligibleWithContext(ctx, account, model, platform) {
 			return true
 		}
 	}

@@ -455,11 +455,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
 import {
-  claudeModels,
   ensureModelCatalogLoaded,
   getPresetMappingsByPlatform,
   getModelsByPlatform,
@@ -469,9 +468,9 @@ import { useAuthStore } from "@/stores/auth";
 import { adminAPI } from "@/api/admin";
 import {
   useAccountOAuth,
-  type AddMethod,
   type AuthInputMethod,
 } from "@/composables/useAccountOAuth";
+import type { GrokSessionBatchImportResult } from "@/api/admin/accounts";
 import { useOpenAIOAuth } from "@/composables/useOpenAIOAuth";
 import { useGeminiOAuth } from "@/composables/useGeminiOAuth";
 import { useAntigravityOAuth } from "@/composables/useAntigravityOAuth";
@@ -482,7 +481,6 @@ import type {
   AccountType,
   CreateAccountRequest,
 } from "@/types";
-import type { GrokSessionBatchImportResult } from "@/api/admin/accounts";
 import BaseDialog from "@/components/common/BaseDialog.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import BedrockCredentialsSection from "@/components/account/BedrockCredentialsSection.vue";
@@ -517,30 +515,16 @@ import {
   buildAccountOpenAIWSModeOptions,
   buildAccountTempUnschedPresets,
   buildAccountUmqModeOptions,
-  createDefaultCreateAccountForm,
   geminiHelpLinks,
   geminiQuotaDocs,
-  resetCreateAccountForm,
   resolveAccountApiKeyHint,
   resolveAccountApiKeyPlaceholder,
   resolveAccountBaseUrlHint,
   resolveAccountBaseUrlPlaceholder,
   resolveCreateAccountOAuthStepTitle,
-  type CreateAccountForm,
 } from "@/components/account/accountModalShared";
 import { buildCreateAccountMutationPayload } from "@/components/account/accountMutationPayload";
 import {
-  createPlatformRequestGuard,
-  createSequenceRequestGuard,
-  type AccountModalPlatformRequestContext,
-} from "@/components/account/accountModalRequestGuard";
-import {
-  type BedrockAuthMode,
-  type CreateAccountCategory,
-  type GeminiAIStudioTier,
-  type GeminiGcpTier,
-  type GeminiGoogleOneTier,
-  type GeminiOAuthType,
   buildCreateAccountSharedPayload,
   buildCreateApiKeyCredentials,
   buildCreateAnthropicOAuthAccountPayload,
@@ -558,6 +542,17 @@ import {
   resolveCreateAccountOAuthFlow,
 } from "@/components/account/createAccountModalHelpers";
 import {
+  getDefaultCreateAccountCategory,
+  useCreateAccountFormState,
+} from "@/components/account/useCreateAccountFormState";
+import {
+  useCreateAccountProviderState,
+} from "@/components/account/useCreateAccountProviderState";
+import {
+  useCreateAccountRequestGuards,
+  type CreateAccountRequestContext,
+} from "@/components/account/useCreateAccountRequestGuards";
+import {
   appendEmptyModelMapping,
   appendPresetModelMapping,
   applyTempUnschedCredentialsState,
@@ -568,7 +563,6 @@ import {
   assignBuiltModelMapping,
   buildTempUnschedRules,
   createTempUnschedRule,
-  DEFAULT_POOL_MODE_RETRY_COUNT,
   getDefaultBaseURL,
   moveItemInPlace,
   type ModelMapping,
@@ -584,7 +578,6 @@ import {
 } from "@/utils/grokSessionToken";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import {
-  OPENAI_WS_MODE_OFF,
   resolveOpenAIWSModeConcurrencyHintKey,
   type OpenAIWSMode,
 } from "@/utils/openaiWsMode";
@@ -692,12 +685,138 @@ const emit = defineEmits<{
   created: [];
 }>();
 
-type CreateRequestContext =
-  AccountModalPlatformRequestContext<AccountPlatform>;
-
-type GrokSessionInputMode = "single" | "batch";
+type CreateRequestContext = CreateAccountRequestContext;
 
 const appStore = useAppStore();
+
+const {
+  accountCategory,
+  addMethod,
+  apiKeyBaseUrl,
+  apiKeyValue,
+  form,
+  resetBaseFormState,
+  step,
+  submitting,
+} = useCreateAccountFormState();
+
+const {
+  allowOverages,
+  allowedModels,
+  anthropicPassthroughEnabled,
+  antigravityAccountType,
+  antigravityModelMappings,
+  antigravityModelRestrictionMode,
+  antigravityWhitelistModels,
+  autoPauseOnExpired,
+  baseRpm,
+  bedrockAccessKeyId,
+  bedrockApiKeyValue,
+  bedrockAuthMode,
+  bedrockForceGlobal,
+  bedrockRegion,
+  bedrockSecretAccessKey,
+  bedrockSessionToken,
+  cacheTTLOverrideEnabled,
+  cacheTTLOverrideTarget,
+  clearGrokSessionBatchResult,
+  codexCLIOnlyEnabled,
+  customBaseUrl,
+  customBaseUrlEnabled,
+  customErrorCodeInput,
+  customErrorCodesEnabled,
+  editDailyResetHour,
+  editDailyResetMode,
+  editQuotaDailyLimit,
+  editQuotaLimit,
+  editQuotaNotifyDailyEnabled,
+  editQuotaNotifyDailyThreshold,
+  editQuotaNotifyDailyThresholdType,
+  editQuotaNotifyTotalEnabled,
+  editQuotaNotifyTotalThreshold,
+  editQuotaNotifyTotalThresholdType,
+  editQuotaNotifyWeeklyEnabled,
+  editQuotaNotifyWeeklyThreshold,
+  editQuotaNotifyWeeklyThresholdType,
+  editQuotaWeeklyLimit,
+  editResetTimezone,
+  editWeeklyResetDay,
+  editWeeklyResetHour,
+  editWeeklyResetMode,
+  geminiAIStudioOAuthEnabled,
+  geminiOAuthType,
+  geminiTierAIStudio,
+  geminiTierGcp,
+  geminiTierGoogleOne,
+  grokSessionBatchDryRun,
+  grokSessionBatchInput,
+  grokSessionBatchResult,
+  grokSessionBatchTestAfterCreate,
+  grokSessionInputMode,
+  grokSessionToken,
+  interceptWarmupRequests,
+  maxSessions,
+  mixedScheduling,
+  modelMappings,
+  modelRestrictionMode,
+  openaiAPIKeyResponsesWebSocketV2Mode,
+  openaiOAuthResponsesWebSocketV2Mode,
+  openaiPassthroughEnabled,
+  poolModeEnabled,
+  poolModeRetryCount,
+  resetAntigravityModelState,
+  resetBedrockCredentialState,
+  resetCreateProviderState,
+  resetGrokSessionImportState,
+  resetOpenAICreateState,
+  rpmLimitEnabled,
+  rpmStickyBuffer,
+  rpmStrategy,
+  selectedErrorCodes,
+  sessionIdMaskingEnabled,
+  sessionIdleTimeout,
+  sessionLimitEnabled,
+  tempUnschedEnabled,
+  tempUnschedRules,
+  tlsFingerprintEnabled,
+  tlsFingerprintProfileId,
+  tlsFingerprintProfiles,
+  upstreamApiKey,
+  upstreamBaseUrl,
+  userMsgQueueMode,
+  windowCostEnabled,
+  windowCostLimit,
+  windowCostStickyReserve,
+} = useCreateAccountProviderState();
+
+const requestGuards = useCreateAccountRequestGuards({
+  getAccountCategory: () => accountCategory.value,
+  getPlatform: () => form.platform,
+  isModalOpen: () => props.show,
+});
+
+const {
+  beginAntigravityDefaultMappingsRequest,
+  beginCreateRequestContext,
+  beginGeminiCapabilitiesRequest,
+  beginTlsFingerprintProfilesRequest,
+  getCurrentCreateRequestSequence,
+  invalidateAntigravityDefaultMappingsRequests,
+  invalidateCreateModalAsyncLoads,
+  invalidateGeminiCapabilitiesRequests,
+  isActiveAntigravityDefaultMappingsRequest,
+  isActiveCreateRequest,
+  isActiveGeminiCapabilitiesRequest,
+  isActiveTlsFingerprintProfilesRequest,
+  isCurrentAllowedModelsSync,
+  isCurrentCreateRequestSequence,
+  nextAllowedModelsSyncSequence,
+} = requestGuards;
+
+const invalidateCreateRequests = () => {
+  requestGuards.invalidateCreateRequests();
+  submitting.value = false;
+};
 
 // OAuth composables
 const oauth = useAccountOAuth(); // For Anthropic OAuth
@@ -738,105 +857,12 @@ const currentOAuthState = computed(() => {
   };
 });
 
-// Refs
 const oauthFlowRef = ref<OAuthFlowExposed | null>(null);
-
-const getDefaultAccountCategoryForPlatform = (
-  platform: AccountPlatform,
-): CreateAccountCategory => {
-  switch (platform) {
-    case "grok":
-      return "apikey";
-    case "anthropic":
-    case "openai":
-    case "gemini":
-    case "antigravity":
-    default:
-      return "oauth-based";
-  }
-};
-
-// State
-const step = ref(1);
-const submitting = ref(false);
-const accountCategory = ref<CreateAccountCategory>(
-  getDefaultAccountCategoryForPlatform("anthropic"),
-); // UI selection for account category
-const addMethod = ref<AddMethod>("oauth"); // For oauth-based: 'oauth' or 'setup-token'
-const apiKeyBaseUrl = ref(getDefaultBaseURL("anthropic"));
-const apiKeyValue = ref("");
-const grokSessionInputMode = ref<GrokSessionInputMode>("single");
-const grokSessionToken = ref("");
-const grokSessionBatchInput = ref("");
-const grokSessionBatchDryRun = ref(false);
-const grokSessionBatchTestAfterCreate = ref(true);
-const grokSessionBatchResult = ref<GrokSessionBatchImportResult | null>(null);
-const editQuotaLimit = ref<number | null>(null);
-const editQuotaDailyLimit = ref<number | null>(null);
-const editQuotaWeeklyLimit = ref<number | null>(null);
-const editDailyResetMode = ref<"rolling" | "fixed" | null>(null);
-const editDailyResetHour = ref<number | null>(null);
-const editWeeklyResetMode = ref<"rolling" | "fixed" | null>(null);
-const editWeeklyResetDay = ref<number | null>(null);
-const editWeeklyResetHour = ref<number | null>(null);
-const editResetTimezone = ref<string | null>(null);
-const editQuotaNotifyDailyEnabled = ref<boolean | null>(null);
-const editQuotaNotifyDailyThreshold = ref<number | null>(null);
-const editQuotaNotifyDailyThresholdType = ref<"fixed" | "percentage" | null>(
-  null,
-);
-const editQuotaNotifyWeeklyEnabled = ref<boolean | null>(null);
-const editQuotaNotifyWeeklyThreshold = ref<number | null>(null);
-const editQuotaNotifyWeeklyThresholdType = ref<"fixed" | "percentage" | null>(
-  null,
-);
-const editQuotaNotifyTotalEnabled = ref<boolean | null>(null);
-const editQuotaNotifyTotalThreshold = ref<number | null>(null);
-const editQuotaNotifyTotalThresholdType = ref<"fixed" | "percentage" | null>(
-  null,
-);
-const modelMappings = ref<ModelMapping[]>([]);
-const modelRestrictionMode = ref<"whitelist" | "mapping">("whitelist");
-const allowedModels = ref<string[]>([]);
-const poolModeEnabled = ref(false);
-const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT);
-const customErrorCodesEnabled = ref(false);
-const selectedErrorCodes = ref<number[]>([]);
-const customErrorCodeInput = ref<number | null>(null);
-const interceptWarmupRequests = ref(false);
-const autoPauseOnExpired = ref(true);
-const openaiPassthroughEnabled = ref(false);
-const openaiOAuthResponsesWebSocketV2Mode =
-  ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF);
-const openaiAPIKeyResponsesWebSocketV2Mode =
-  ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF);
-const codexCLIOnlyEnabled = ref(false);
-const anthropicPassthroughEnabled = ref(false);
-const mixedScheduling = ref(false); // For antigravity accounts: enable mixed scheduling
-const allowOverages = ref(false); // For antigravity accounts: enable AI Credits overages
-const antigravityAccountType = ref<"oauth" | "upstream">("oauth"); // For antigravity: oauth or upstream
-const upstreamBaseUrl = ref(""); // For upstream type: base URL
-const upstreamApiKey = ref(""); // For upstream type: API key
-const antigravityModelRestrictionMode = ref<"whitelist" | "mapping">(
-  "whitelist",
-);
-const antigravityWhitelistModels = ref<string[]>([]);
-const antigravityModelMappings = ref<ModelMapping[]>([]);
 const antigravityPresetMappings = computed(() =>
   getPresetMappingsByPlatform("antigravity"),
 );
 const bedrockPresets = computed(() => getPresetMappingsByPlatform("bedrock"));
 
-// Bedrock credentials
-const bedrockAuthMode = ref<BedrockAuthMode>("sigv4");
-const bedrockAccessKeyId = ref("");
-const bedrockSecretAccessKey = ref("");
-const bedrockSessionToken = ref("");
-const bedrockRegion = ref("us-east-1");
-const bedrockForceGlobal = ref(false);
-const bedrockApiKeyValue = ref("");
-const tempUnschedEnabled = ref(false);
-const tempUnschedRules = ref<TempUnschedRuleForm[]>([]);
 const getModelMappingKey = createStableObjectKeyResolver<ModelMapping>(
   "create-model-mapping",
 );
@@ -848,9 +874,6 @@ const getTempUnschedRuleKey =
   createStableObjectKeyResolver<TempUnschedRuleForm>(
     "create-temp-unsched-rule",
   );
-const geminiOAuthType = ref<GeminiOAuthType>("google_one");
-const geminiAIStudioOAuthEnabled = ref(false);
-
 const showGeminiHelpDialog = ref(false);
 const {
   ensureMixedChannelConfirmed,
@@ -870,32 +893,7 @@ const {
   t,
 });
 
-// Quota control state (Anthropic OAuth/SetupToken only)
-const windowCostEnabled = ref(false);
-const windowCostLimit = ref<number | null>(null);
-const windowCostStickyReserve = ref<number | null>(null);
-const sessionLimitEnabled = ref(false);
-const maxSessions = ref<number | null>(null);
-const sessionIdleTimeout = ref<number | null>(null);
-const rpmLimitEnabled = ref(false);
-const baseRpm = ref<number | null>(null);
-const rpmStrategy = ref<"tiered" | "sticky_exempt">("tiered");
-const rpmStickyBuffer = ref<number | null>(null);
-const userMsgQueueMode = ref("");
 const umqModeOptions = computed(() => buildAccountUmqModeOptions(t));
-const tlsFingerprintEnabled = ref(false);
-const tlsFingerprintProfileId = ref<number | null>(null);
-const tlsFingerprintProfiles = ref<{ id: number; name: string }[]>([]);
-const sessionIdMaskingEnabled = ref(false);
-const cacheTTLOverrideEnabled = ref(false);
-const cacheTTLOverrideTarget = ref<string>("5m");
-const customBaseUrlEnabled = ref(false);
-const customBaseUrl = ref("");
-
-// Gemini tier selection (used as fallback when auto-detection is unavailable/fails)
-const geminiTierGoogleOne = ref<GeminiGoogleOneTier>("google_one_free");
-const geminiTierGcp = ref<GeminiGcpTier>("gcp_standard");
-const geminiTierAIStudio = ref<GeminiAIStudioTier>("aistudio_free");
 
 const geminiSelectedTier = computed(() => {
   return resolveCreateAccountGeminiSelectedTier({
@@ -949,89 +947,15 @@ const presetMappings = computed(() =>
 );
 const tempUnschedPresets = computed(() => buildAccountTempUnschedPresets(t));
 
-const form = reactive<CreateAccountForm>(createDefaultCreateAccountForm());
-let allowedModelsSyncSequence = 0;
-
-const createRequestGuard = createPlatformRequestGuard<AccountPlatform>(
-  (platform) => props.show && form.platform === platform,
-);
-const tlsFingerprintProfilesRequestGuard = createSequenceRequestGuard(
-  () => props.show,
-);
-const antigravityDefaultMappingsRequestGuard = createSequenceRequestGuard(
-  () => props.show && form.platform === "antigravity",
-);
-const geminiCapabilitiesRequestGuard = createSequenceRequestGuard(
-  () =>
-    props.show &&
-    form.platform === "gemini" &&
-    accountCategory.value === "oauth-based",
-);
-
-const beginCreateRequestContext = (
-  platform: AccountPlatform = form.platform,
-): CreateRequestContext => createRequestGuard.begin(platform);
-
-const invalidateCreateRequests = () => {
-  createRequestGuard.invalidate();
-  submitting.value = false;
-};
-
-const isActiveCreateRequest = (requestContext: CreateRequestContext) =>
-  createRequestGuard.isActive(requestContext);
-
-const isCurrentCreateRequestSequence = (requestContext: CreateRequestContext) =>
-  createRequestGuard.isCurrentSequence(requestContext);
-
-const getCurrentCreateRequestSequence = () =>
-  createRequestGuard.currentSequence();
-
-const beginTlsFingerprintProfilesRequest = () =>
-  tlsFingerprintProfilesRequestGuard.begin();
-
-const invalidateTlsFingerprintProfilesRequests = () => {
-  tlsFingerprintProfilesRequestGuard.invalidate();
-};
-
-const isActiveTlsFingerprintProfilesRequest = (requestSequence: number) =>
-  tlsFingerprintProfilesRequestGuard.isActive(requestSequence);
-
-const beginAntigravityDefaultMappingsRequest = () =>
-  antigravityDefaultMappingsRequestGuard.begin();
-
-const invalidateAntigravityDefaultMappingsRequests = () => {
-  antigravityDefaultMappingsRequestGuard.invalidate();
-};
-
-const isActiveAntigravityDefaultMappingsRequest = (requestSequence: number) =>
-  antigravityDefaultMappingsRequestGuard.isActive(requestSequence);
-
-const beginGeminiCapabilitiesRequest = () =>
-  geminiCapabilitiesRequestGuard.begin();
-
-const invalidateGeminiCapabilitiesRequests = () => {
-  geminiCapabilitiesRequestGuard.invalidate();
-};
-
-const isActiveGeminiCapabilitiesRequest = (requestSequence: number) =>
-  geminiCapabilitiesRequestGuard.isActive(requestSequence);
-
-const invalidateCreateModalAsyncLoads = () => {
-  invalidateTlsFingerprintProfilesRequests();
-  invalidateAntigravityDefaultMappingsRequests();
-  invalidateGeminiCapabilitiesRequests();
-  allowedModelsSyncSequence += 1;
-};
-
 const syncAllowedModelsForPlatform = async (
   platform: AccountPlatform = form.platform,
 ) => {
-  const requestSequence = ++allowedModelsSyncSequence;
+  const requestSequence = nextAllowedModelsSyncSequence();
   if (platform === "grok") {
     await ensureModelCatalogLoaded(platform);
   }
   if (
-    requestSequence !== allowedModelsSyncSequence ||
+    !isCurrentAllowedModelsSync(requestSequence) ||
     !props.show ||
     form.platform !== platform
   ) {
@@ -1108,9 +1032,7 @@ const applyAntigravityModelDefaults = () => {
 
 const clearAntigravityModelState = () => {
   invalidateAntigravityDefaultMappingsRequests();
-  antigravityModelRestrictionMode.value = "mapping";
-  antigravityWhitelistModels.value = [];
-  antigravityModelMappings.value = [];
+  resetAntigravityModelState();
 };
 
 const resetOAuthClientsState = (includeFlowState = false) => {
@@ -1197,7 +1119,7 @@ watch(
       clearAntigravityModelState();
       allowOverages.value = false;
     }
-    accountCategory.value = getDefaultAccountCategoryForPlatform(newPlatform);
+    accountCategory.value = getDefaultCreateAccountCategory(newPlatform);
     resetBedrockCredentialState();
     // Reset Anthropic/Antigravity-specific settings when switching to other platforms
     if (newPlatform !== "anthropic" && newPlatform !== "antigravity") {
@@ -1456,86 +1378,6 @@ const submitCreateAccount = async (
   }
 };
 
-const resetBedrockCredentialState = () => {
-  bedrockAccessKeyId.value = "";
-  bedrockSecretAccessKey.value = "";
-  bedrockSessionToken.value = "";
-  bedrockRegion.value = "us-east-1";
-  bedrockForceGlobal.value = false;
-  bedrockAuthMode.value = "sigv4";
-  bedrockApiKeyValue.value = "";
-};
-
-const resetOpenAICreateState = () => {
-  openaiPassthroughEnabled.value = false;
-  openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF;
-  openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF;
-  codexCLIOnlyEnabled.value = false;
-};
-
-const resetAnthropicQuotaControlState = () => {
-  windowCostEnabled.value = false;
-  windowCostLimit.value = null;
-  windowCostStickyReserve.value = null;
-  sessionLimitEnabled.value = false;
-  maxSessions.value = null;
-  sessionIdleTimeout.value = null;
-  rpmLimitEnabled.value = false;
-  baseRpm.value = null;
-  rpmStrategy.value = "tiered";
-  rpmStickyBuffer.value = null;
-  userMsgQueueMode.value = "";
-  tlsFingerprintEnabled.value = false;
-  tlsFingerprintProfileId.value = null;
-  sessionIdMaskingEnabled.value = false;
-  cacheTTLOverrideEnabled.value = false;
-  cacheTTLOverrideTarget.value = "5m";
-  customBaseUrlEnabled.value = false;
-  customBaseUrl.value = "";
-};
-
-const resetAntigravityCreateState = () => {
-  allowOverages.value = false;
-  antigravityAccountType.value = "oauth";
-  upstreamBaseUrl.value = "";
-  upstreamApiKey.value = "";
-  clearAntigravityModelState();
-};
-
-const resetGeminiSelectionState = () => {
-  geminiOAuthType.value = "code_assist";
-  geminiTierGoogleOne.value = "google_one_free";
-  geminiTierGcp.value = "gcp_standard";
-  geminiTierAIStudio.value = "aistudio_free";
-};
-
-const resetCustomErrorCodeState = () => {
-  customErrorCodesEnabled.value = false;
-  selectedErrorCodes.value = [];
-  customErrorCodeInput.value = null;
-};
-
-const resetQuotaResetState = () => {
-  editQuotaLimit.value = null;
-  editQuotaDailyLimit.value = null;
-  editQuotaWeeklyLimit.value = null;
-  editDailyResetMode.value = null;
-  editDailyResetHour.value = null;
-  editWeeklyResetMode.value = null;
-  editWeeklyResetDay.value = null;
-  editWeeklyResetHour.value = null;
-  editResetTimezone.value = null;
-  editQuotaNotifyDailyEnabled.value = null;
-  editQuotaNotifyDailyThreshold.value = null;
-  editQuotaNotifyDailyThresholdType.value = null;
-  editQuotaNotifyWeeklyEnabled.value = null;
-  editQuotaNotifyWeeklyThreshold.value = null;
-  editQuotaNotifyWeeklyThresholdType.value = null;
-  editQuotaNotifyTotalEnabled.value = null;
-  editQuotaNotifyTotalThreshold.value = null;
-  editQuotaNotifyTotalThresholdType.value = null;
-};
-
 async function syncGeminiAIStudioOAuthAvailability(
   show: boolean,
   platform: AccountPlatform,
@@ -1563,30 +1405,8 @@ async function syncGeminiAIStudioOAuthAvailability(
 
 // Methods
 const resetForm = () => {
-  step.value = 1;
-  resetCreateAccountForm(form);
-  accountCategory.value = getDefaultAccountCategoryForPlatform(form.platform);
-  addMethod.value = "oauth";
-  apiKeyBaseUrl.value = getDefaultBaseURL("anthropic");
-  apiKeyValue.value = "";
-  resetGrokSessionImportState();
-  resetQuotaResetState();
-  modelMappings.value = [];
-  modelRestrictionMode.value = "whitelist";
-  allowedModels.value = [...claudeModels]; // Default fill related models
-  poolModeEnabled.value = false;
-  poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT;
-  resetCustomErrorCodeState();
-  interceptWarmupRequests.value = false;
-  autoPauseOnExpired.value = true;
-  resetOpenAICreateState();
-  anthropicPassthroughEnabled.value = false;
-  resetAnthropicQuotaControlState();
-  resetAntigravityCreateState();
-  tempUnschedEnabled.value = false;
-  tempUnschedRules.value = [];
-  resetGeminiSelectionState();
-  resetBedrockCredentialState();
+  resetBaseFormState();
+  resetCreateProviderState();
   resetOAuthClientsState(true);
   resetMixedChannelState();
 };
@@ -1754,21 +1574,6 @@ const handleBatchCreateOutcome = (
 
 const resolveBatchCreateUnexpectedError = (error: any) =>
   error?.response?.data?.detail || error?.message || "Unknown error";
-
-const clearGrokSessionBatchResult = () => {
-  grokSessionBatchResult.value = null;
-};
-
-const resetGrokSessionImportState = (resetMode = true) => {
-  if (resetMode) {
-    grokSessionInputMode.value = "single";
-  }
-  grokSessionToken.value = "";
-  grokSessionBatchInput.value = "";
-  grokSessionBatchDryRun.value = false;
-  grokSessionBatchTestAfterCreate.value = true;
-  clearGrokSessionBatchResult();
-};
 
 const normalizeOptionalText = (value: string) => {
   const trimmed = value.trim();

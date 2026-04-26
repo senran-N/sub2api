@@ -42,12 +42,16 @@ npm install -g pnpm
 
 ## 三、CI/CD 流水线
 
+### Main-only 工作方式
+
+当前 fork 直接在 `main` 上做整理、重构、修复和选择性上游移植，不默认创建 `feature/*`、`sync/*`、`port/*` 或 `backup/*` 分支。涉及上游更新时先审计 `upstream/main`，只移植当前 fork 需要的提交或行为；详细规则见 [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md)。
+
 ### GitHub Actions Workflows
 
 | Workflow | 触发条件 | 检查内容 |
 |----------|----------|----------|
-| **backend-ci.yml** | push, pull_request | 单元测试 + 集成测试 + 迁移校验 + 覆盖率门槛 + golangci-lint v2.9 |
-| **security-scan.yml** | push, pull_request, 每周一 | Trivy（依赖/配置）+ govulncheck + pnpm audit |
+| **backend-ci.yml** | push, pull_request | 后端测试 + 迁移校验 + 覆盖率门槛 + golangci-lint v2.9 + 前端 lint/typecheck + 工具脚本测试 |
+| **security-scan.yml** | push, pull_request, 每周一 | Trivy（依赖/配置）+ govulncheck + pnpm audit exception 校验 |
 | **release.yml** | tag `v*` / workflow_dispatch | GoReleaser 发布 + Trivy + Cosign 签名 + GHCR 冒烟测试 |
 
 ### CI 要求
@@ -58,20 +62,21 @@ npm install -g pnpm
 ### 本地测试命令
 
 ```bash
-# 后端单元测试
-cd backend && go test -tags=unit ./...
+# 仓库级测试入口
+make test
 
-# 后端集成测试
-cd backend && go test -tags=integration ./...
+# 后端完整测试 + lint
+make -C backend test
 
 # 代码质量检查
-cd backend && golangci-lint run ./...
+make lint
 
 # 数据库迁移与回滚伴生文件校验
-cd backend && make migrate-validate
+make migrate-validate
 
-# 前端依赖安装（必须用 pnpm）
-cd frontend && pnpm install
+# 前端 lint/typecheck
+pnpm --dir frontend run lint:check
+pnpm --dir frontend run typecheck
 ```
 
 ## 四、常见坑点 & 解决方案
@@ -234,14 +239,16 @@ git add ent/       # 生成的文件也要提交
 
 ---
 
-### 坑 11：PR 提交前检查清单
+### 坑 11：Main 推送前检查清单
 
-提交 PR 前务必本地验证：
+推送 `main` 前务必本地验证：
 
-- [ ] `go test -tags=unit ./...` 通过
-- [ ] `go test -tags=integration ./...` 通过
-- [ ] `make migrate-validate` 通过
-- [ ] `golangci-lint run ./...` 无新增问题
+- [ ] `make -C backend test` 通过
+- [ ] `make -C backend migrate-validate` 通过
+- [ ] `make -C backend lint` 无新增问题
+- [ ] `pnpm --dir frontend run lint:check` 通过
+- [ ] `pnpm --dir frontend run typecheck` 通过
+- [ ] `make test-tools` 通过
 - [ ] `pnpm-lock.yaml` 已同步（如果改了 package.json）
 - [ ] 所有 test stub 补全新接口方法（如果改了 interface）
 - [ ] Ent 生成的代码已提交（如果改了 schema）
@@ -267,18 +274,18 @@ psql -U sub2api -h 127.0.0.1 -d sub2api -f migration.sql
 ### Git 操作
 
 ```bash
-# 同步上游
-git fetch upstream
+# 开始 main-only 工作
 git checkout main
-git merge upstream/main
-git push origin main
+git pull origin main
+git status --short --branch
 
-# 创建功能分支
-git checkout -b feature/xxx
+# 审计上游更新，不默认整体 merge
+git fetch upstream origin
+git log --oneline main..upstream/main
+git diff --stat main..upstream/main
 
-# Rebase 到最新 main
-git fetch upstream
-git rebase upstream/main
+# 必要时在 main 上选择性移植，保留来源信息
+git cherry-pick -x <commit-sha>
 ```
 
 ### 前端操作
@@ -319,7 +326,7 @@ make migrate-validate
 ## 六、项目结构速览
 
 ```
-sub2api-bmai/
+sub2api/
 ├── backend/
 │   ├── cmd/server/          # 主程序入口
 │   ├── ent/                 # Ent ORM 生成代码
@@ -340,8 +347,9 @@ sub2api-bmai/
 │   │   └── i18n/            # 国际化
 │   ├── package.json         # 依赖配置
 │   └── pnpm-lock.yaml       # pnpm 锁文件（必须提交）
-└── .claude/
-    └── CLAUDE.md            # 本文档
+├── docs/                    # 工程实践、架构、集成和维护约束
+├── deploy/                  # 部署配置、安装脚本和 Docker Compose 示例
+└── tools/                   # 仓库级辅助验证脚本
 ```
 
 ## 七、参考资源

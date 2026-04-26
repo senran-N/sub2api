@@ -1,6 +1,6 @@
 # Git Workflow
 
-本文档定义当前 fork 的分支模型、上游同步方式和选择性移植流程。目标是在持续开发自有特性的同时，能够安全、可追踪地吸收 `upstream` 中真正需要的更新。
+本文档定义当前 fork 的 main-only 工作方式、上游审计方式和选择性移植规则。当前目标是让 `main` 成为唯一长期开发主线，减少分支漂移和语义不清。
 
 ## 1. 远端角色
 
@@ -8,8 +8,8 @@
 
 | 远端 | 作用 | 写入规则 |
 | --- | --- | --- |
-| `origin` | 自己的 fork，承载当前项目主线和自有特性 | 可以 fetch / push |
-| `upstream` | 原项目，只作为更新来源 | 只允许 fetch，不向上游 push |
+| `origin` | 自己的 fork，承载当前项目主线 | 可以 fetch / push |
+| `upstream` | 原项目，只作为审计和选择性移植来源 | 只允许 fetch，不向上游 push |
 
 检查远端配置：
 
@@ -23,112 +23,77 @@ git remote -v
 git remote set-url --push upstream DISABLED
 ```
 
-## 2. 分支模型
+## 2. Main-Only 主线策略
 
-| 分支模式 | 用途 | 生命周期 |
-| --- | --- | --- |
-| `main` | 当前 fork 的稳定主线，只放验证过的改动 | 长期保留 |
-| `feature/<name>` | 自有特性开发 | 合入 `main` 后删除 |
-| `sync/upstream-YYYYMMDD` | 整体同步上游的临时集成分支 | 验证通过并合入后删除 |
-| `port/upstream-<name>` | 选择性移植上游某个特性、修复或提交组 | 验证通过并合入后删除 |
-| `backup/pre-<action>-YYYYMMDD-HHMMSS` | 高风险操作前的本地保护点 | 确认稳定后按需清理 |
+当前 fork 不默认创建 `feature/*`、`sync/*`、`port/*` 或 `backup/*` 分支。日常整理、重构、修复和选择性上游移植都直接在 `main` 上完成。
 
-`main` 必须保持可构建、可测试、可回滚。不要在 `main` 上长期堆积未完成代码。
+`main` 必须满足：
 
-## 3. 开发自有特性
+- 本地开始修改前先确认 `git status --short --branch`。
+- 每组改动保持聚焦，避免把文档、格式化、业务行为和大规模重构混成不可审计的一团。
+- 修改接口、配置、脚本、架构、部署或开发流程时，同步更新 `docs/`。
+- 合入远端前运行与改动范围匹配的验证，失败必须记录具体阻塞和恢复步骤。
 
-从最新 `main` 拉出特性分支：
+## 3. 在 Main 上开发
 
-```bash
-git checkout main
-git pull origin main
-git checkout -b feature/my-feature
-```
-
-开发过程中保持提交聚焦：
-
-- 一个提交只表达一个明确意图。
-- 不把重构、格式化、业务行为变更混在同一个提交里。
-- 涉及接口、配置、脚本、架构、部署或开发流程时，同步更新 `docs/`。
-
-合回主线前先更新本地状态并验证：
-
-```bash
-git fetch origin upstream
-git checkout feature/my-feature
-git status --short
-```
-
-合入 `main`：
+开始前：
 
 ```bash
 git checkout main
 git pull origin main
-git merge --no-ff feature/my-feature
-git push origin main
+git status --short --branch
 ```
 
-## 4. 整体同步上游
+实施中：
 
-当需要吸收上游近期整体更新时，不直接在 `main` 上合并，先创建同步分支：
+- 小步修改，小步验证。
+- 用 `git diff --stat` 和 `git diff` 审计真实改动。
+- 不使用 `git reset --hard` 或 `git checkout -- <file>` 覆盖未确认来源的改动。
+- 如遇到无关未提交改动，保留并绕开；如影响当前任务，先理解再处理。
+
+完成后：
+
+```bash
+git status --short --branch
+git diff --check
+```
+
+根据改动范围运行 [docs/DEVELOPMENT_GUIDELINES.md](/home/senran/Desktop/sub2api/docs/DEVELOPMENT_GUIDELINES.md) 中的验证命令。
+
+## 4. 上游更新审计
+
+默认不整体 merge `upstream/main`。上游只作为更新来源，先审计，再决定是否移植。
+
+查看上游变化：
 
 ```bash
 git fetch upstream origin
-git checkout main
-git pull origin main
-git branch backup/pre-upstream-merge-$(date +%Y%m%d-%H%M%S)
-sync_branch=sync/upstream-$(date +%Y%m%d)
-git checkout -b "$sync_branch"
-git merge upstream/main
-```
-
-合并后必须检查差异：
-
-```bash
-git diff --stat main...HEAD
-git diff main...HEAD
-```
-
-验证通过后再合入 `main`：
-
-```bash
-git checkout main
-git merge --no-ff "$sync_branch"
-git push origin main
-```
-
-整体同步适合下面场景：
-
-- 上游改动规模可控，且与当前 fork 的差异不冲突。
-- 需要跟随上游结构、依赖、接口或安全修复。
-- 当前 fork 没有大量长期偏离上游的核心逻辑。
-
-如果上游改动很大，优先选择第 5 节的选择性移植。
-
-## 5. 选择性移植上游更新
-
-当只需要上游某个特性或修复时，优先使用 `cherry-pick -x`，不要手工复制代码。
-
-先查看上游比当前 `main` 多出的提交：
-
-```bash
-git fetch upstream
 git log --oneline --decorate main..upstream/main
+git diff --stat main..upstream/main
 ```
 
-查看目标提交内容：
+查看单个提交：
 
 ```bash
 git show --stat <commit-sha>
 git show <commit-sha>
 ```
 
-创建移植分支并挑选提交：
+移植前先按主题分类：
+
+- 必须移植：安全修复、兼容性修复、会影响当前 fork 正常使用的上游改进。
+- 可评估：和当前 fork 架构方向一致，但需要适配已有重构边界。
+- 暂缓：大功能、迁移、UI 大改或与当前 fork 方向冲突的变更。
+- 跳过：版本号、上游 CI 噪音、与当前 fork 无关的改动。
+
+## 5. 选择性移植
+
+优先使用 `cherry-pick -x` 保留来源信息，但仍然直接在 `main` 上操作：
 
 ```bash
 git checkout main
 git pull origin main
-git checkout -b port/upstream-some-feature
+git fetch upstream
 git cherry-pick -x <commit-sha>
 ```
 
@@ -138,21 +103,17 @@ git cherry-pick -x <commit-sha>
 git cherry-pick -x <oldest-sha>^..<newest-sha>
 ```
 
-`-x` 会在提交信息中记录来源提交，后续排查问题时可以快速追溯到上游。
-
-移植完成后验证并合入：
+如果冲突或方向不对，立即中止当前移植：
 
 ```bash
-git checkout main
-git merge --no-ff port/upstream-some-feature
-git push origin main
+git cherry-pick --abort
 ```
 
 只有在上游提交无法直接适配当前 fork 时，才允许手工移植。手工移植必须满足：
 
-- 提交信息写明上游来源提交、PR 或文件路径。
+- 在提交说明或 LongCodex handoff 中写明上游来源提交、PR 或文件路径。
 - 只移植当前真正需要的行为，不顺手带入无关重构。
-- 不复制重复逻辑，必要时先抽取已有公共能力。
+- 不复制重复逻辑，必要时先复用已有公共能力。
 - 同步检查 `docs/` 中对应契约是否需要更新。
 
 ## 6. 冲突处理规则
@@ -171,23 +132,7 @@ git diff --cc
 ```bash
 git add <resolved-file>
 git status --short
-```
-
-继续当前操作：
-
-```bash
-# merge 场景
-git commit
-
-# cherry-pick 场景
 git cherry-pick --continue
-```
-
-如果发现方向错误，及时中止：
-
-```bash
-git merge --abort
-git cherry-pick --abort
 ```
 
 冲突解决必须遵守以下原则：
@@ -195,18 +140,18 @@ git cherry-pick --abort
 - 保留当前 fork 已验证的自有特性，不被上游同名逻辑覆盖。
 - 吸收上游修复时要消除根因，不为了通过编译加入无意义兜底。
 - 对公共模块的修改优先保持低耦合、高内聚，不引入平行实现。
-- 高频路径中的移植代码要检查内存分配、缓存和重复查询问题。
+- 高频路径中的移植代码要检查资源释放、缓存和重复查询问题。
 
-## 7. 同步前后检查清单
+## 7. 检查清单
 
-同步或移植前：
+修改或移植前：
 
-- `git status --short` 必须干净，或确认未提交改动与本次操作无关。
-- `git fetch origin upstream` 已执行。
-- 高风险操作前创建 `backup/pre-*` 分支。
-- 已确认要整体同步，还是只移植目标提交。
+- `git status --short --branch` 已确认。
+- `git fetch origin upstream` 已执行，或明确本次不需要上游状态。
+- 已确认本次是本 fork 自有改动、上游选择性移植，还是纯文档/流程整理。
+- 高风险改动已有 LongCodex handoff 或证据文件记录恢复点；不通过临时分支表达恢复点。
 
-同步或移植后：
+修改或移植后：
 
 - 用 `git diff` 检查真实改动，而不是只看冲突文件。
 - 按 [docs/DEVELOPMENT_GUIDELINES.md](/home/senran/Desktop/sub2api/docs/DEVELOPMENT_GUIDELINES.md) 运行与改动范围匹配的验证。
@@ -221,13 +166,3 @@ git log --oneline main..upstream/main
 git diff --stat main..upstream/main
 git diff main..upstream/main
 ```
-
-## 8. 推荐策略
-
-默认策略是“小步同步、明确来源、先验后合”：
-
-1. 自有功能用 `feature/*` 独立开发。
-2. 上游大范围更新用 `sync/*` 先集成验证。
-3. 上游单点能力用 `port/*` 和 `cherry-pick -x` 移植。
-4. 每次高风险操作前保留 `backup/pre-*`。
-5. 合入 `main` 前完成最小但足够的验证和文档同步。

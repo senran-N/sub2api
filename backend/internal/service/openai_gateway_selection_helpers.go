@@ -12,8 +12,8 @@ func resolveOpenAISelectionPlatform(ctx context.Context) string {
 	return resolveCompatibleSelectionPlatform(ctx, PlatformOpenAI)
 }
 
-func isOpenAISelectionPlatformAccount(account *Account, platform string) bool {
-	return isCompatibleSelectionPlatformAccount(account, platform)
+func isOpenAISelectionPlatformAccountWithContext(ctx context.Context, account *Account, platform string) bool {
+	return isCompatibleSelectionPlatformAccountWithContext(ctx, account, platform)
 }
 
 func isOpenAIAccountBaseEligibleForPlatform(account *Account, platform string) bool {
@@ -65,7 +65,8 @@ func filterSchedulableOpenAICandidates(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 ) []*Account {
-	return filterSchedulableOpenAICandidatesForPlatformWithContext(context.TODO(), accounts, requestedModel, excludedIDs, PlatformOpenAI)
+	// Compatibility wrapper for callers outside request-scoped scheduling.
+	return filterSchedulableOpenAICandidatesForPlatformWithContext(context.Background(), accounts, requestedModel, excludedIDs, PlatformOpenAI)
 }
 
 func filterSchedulableOpenAICandidatesForPlatform(
@@ -74,7 +75,8 @@ func filterSchedulableOpenAICandidatesForPlatform(
 	excludedIDs map[int64]struct{},
 	platform string,
 ) []*Account {
-	return filterSchedulableOpenAICandidatesForPlatformWithContext(context.TODO(), accounts, requestedModel, excludedIDs, platform)
+	// Compatibility wrapper for callers outside request-scoped scheduling.
+	return filterSchedulableOpenAICandidatesForPlatformWithContext(context.Background(), accounts, requestedModel, excludedIDs, platform)
 }
 
 func filterSchedulableOpenAICandidatesForPlatformWithContext(

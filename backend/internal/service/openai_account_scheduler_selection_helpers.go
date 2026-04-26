@@ -58,7 +58,7 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePage(
 
 	for i := range accounts {
 		account := &accounts[i]
-		if !isOpenAISelectionPlatformAccount(account, platform) {
+		if !isOpenAISelectionPlatformAccountWithContext(ctx, account, platform) {
 			continue
 		}
 		if isCompatibleGatewayRequestedModelAvailableForScheduling(ctx, account, req.RequestedModel, platform) {
@@ -100,7 +100,7 @@ func (s *defaultOpenAIAccountScheduler) prepareLoadBalanceCandidatePointers(
 	}
 
 	for _, account := range accounts {
-		if !isOpenAISelectionPlatformAccount(account, platform) {
+		if !isOpenAISelectionPlatformAccountWithContext(ctx, account, platform) {
 			continue
 		}
 		if isCompatibleGatewayRequestedModelAvailableForScheduling(ctx, account, req.RequestedModel, platform) {

@@ -61,7 +61,8 @@ func (GrokAccountSelector) IsSelectionPlatformAccount(account *Account) bool {
 }
 
 func (selector GrokAccountSelector) IsBaseEligible(account *Account) bool {
-	return selector.IsBaseEligibleWithContext(context.TODO(), account)
+	// Compatibility wrapper for callers outside request-scoped Grok session routing.
+	return selector.IsBaseEligibleWithContext(context.Background(), account)
 }
 
 func (selector GrokAccountSelector) IsBaseEligibleWithContext(ctx context.Context, account *Account) bool {
@@ -95,7 +96,8 @@ func (selector GrokAccountSelector) IsModelAvailableWithContext(
 }
 
 func (selector GrokAccountSelector) IsRuntimeEligible(account *Account, requestedModel string) bool {
-	return selector.IsRuntimeEligibleWithContext(context.TODO(), account, requestedModel)
+	// Compatibility wrapper for callers outside request-scoped Grok session routing.
+	return selector.IsRuntimeEligibleWithContext(context.Background(), account, requestedModel)
 }
 
 func (selector GrokAccountSelector) IsRuntimeEligibleWithContext(ctx context.Context, account *Account, requestedModel string) bool {
@@ -116,7 +118,8 @@ func (selector GrokAccountSelector) IsRuntimeEligibleWithContext(ctx context.Con
 }
 
 func (selector GrokAccountSelector) RequestedModelAvailable(accounts []Account, requestedModel string) bool {
-	return selector.RequestedModelAvailableWithContext(context.TODO(), accounts, requestedModel)
+	// Compatibility wrapper for callers outside request-scoped Grok session routing.
+	return selector.RequestedModelAvailableWithContext(context.Background(), accounts, requestedModel)
 }
 
 func (selector GrokAccountSelector) RequestedModelAvailableWithContext(
@@ -140,7 +143,8 @@ func (selector GrokAccountSelector) FilterSchedulableCandidates(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 ) []*Account {
-	return selector.FilterSchedulableCandidatesWithContext(context.TODO(), accounts, requestedModel, excludedIDs)
+	// Compatibility wrapper for callers outside request-scoped Grok session routing.
+	return selector.FilterSchedulableCandidatesWithContext(context.Background(), accounts, requestedModel, excludedIDs)
 }
 
 func (selector GrokAccountSelector) FilterSchedulableCandidatesWithContext(
@@ -168,7 +172,8 @@ func (selector GrokAccountSelector) FilterSchedulableAccountPointers(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 ) []*Account {
-	return selector.FilterSchedulableAccountPointersWithContext(context.TODO(), accounts, requestedModel, excludedIDs)
+	// Compatibility wrapper for callers outside request-scoped Grok session routing.
+	return selector.FilterSchedulableAccountPointersWithContext(context.Background(), accounts, requestedModel, excludedIDs)
 }
 
 func (selector GrokAccountSelector) FilterSchedulableAccountPointersWithContext(

@@ -59,7 +59,8 @@ func (h *CompatibleGatewayHandler) compatibleGatewayPlatform(c *gin.Context) str
 	if c != nil && c.Request != nil {
 		return service.ResolveCompatibleGatewayPlatform(c.Request.Context(), platform)
 	}
-	return service.ResolveCompatibleGatewayPlatform(context.TODO(), platform)
+	// Compatibility fallback for tests/helpers that call without a request.
+	return service.ResolveCompatibleGatewayPlatform(context.Background(), platform)
 }
 
 func (h *CompatibleGatewayHandler) protocolHandler(c *gin.Context) compatibleGatewayProtocolHandler {

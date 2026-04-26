@@ -95,6 +95,9 @@ Current rule:
 - edit-account base form state lives in `frontend/src/components/account/useEditAccountFormState.ts`; the edit modal should consume form refs, status options, expiration input, auto-pause, mixed scheduling, and overage hydration there instead of owning form defaults inline;
 - edit-account mixed-channel warning state lives in `frontend/src/components/account/useEditMixedChannelWarning.ts`; the edit modal should delegate risk precheck, confirmation dialog state, conflict retry, and `confirm_mixed_channel_risk` payload flag handling there instead of rebuilding that flow inline;
 - create-account mixed-channel warning state lives in `frontend/src/components/account/useCreateMixedChannelWarning.ts`; the create modal should delegate create-time risk precheck, stale-request guarding, conflict retry, and `confirm_mixed_channel_risk` payload flag handling there instead of rebuilding that flow inline;
+- create-account base form state lives in `frontend/src/components/account/useCreateAccountFormState.ts`; the create modal should consume the form, step, submitting, account-category, add-method, API-key base URL/value refs and reset them through `resetBaseFormState()` instead of owning local defaults;
+- create-account provider state lives in `frontend/src/components/account/useCreateAccountProviderState.ts`; the create modal should consume provider-specific refs and reset helpers there instead of keeping Bedrock, OpenAI, Gemini, Grok batch import, Antigravity, quota, pool-mode, and temporary-unschedulable reset machines inline;
+- create-account async request guards live in `frontend/src/components/account/useCreateAccountRequestGuards.ts`; the create modal should begin/invalidate create requests, stale async loads, Gemini capability checks, Antigravity default mappings, TLS profile loads, and allowed-model sync through that composable instead of owning local counters or request guard instances;
 - reusable Grok create-account type selection lives in `frontend/src/components/account/GrokAccountTypeSection.vue`; the create modal should bind `accountCategory` into that section instead of rendering Grok API key/upstream/session cards inline;
 - reusable Grok session credential/import UI lives in `frontend/src/components/account/GrokSessionCredentialsSection.vue`; the create modal should bind session token, batch import, dry-run, and result state there instead of mounting `GrokSessionBatchImportPanel` directly;
 - reusable Grok session edit-token UI lives in `frontend/src/components/account/EditGrokSessionCredentialsSection.vue`; the edit modal should bind replacement session-token state there and leave existing-token preservation in payload helpers;
@@ -172,6 +175,7 @@ Current rule:
 - `backend/internal/handler/handler.go` should expose both `Handlers.CompatibleGateway` for shared compatible helpers and `Handlers.GrokGateway` for Grok-owned control-plane entrypoints.
 - `openai` and `grok` both attach through that helper layer and may reuse the same HTTP/streaming forwarding stack.
 - Route forcing and request context decide platform ownership; selection and scheduler code must resolve the effective compatible platform from context instead of hardcoding `PlatformOpenAI`.
+- Selection helpers that can observe request state should use the `WithContext` variants (`isCompatible...WithContext`, `filterSchedulable...WithContext`, `openAIRequestedModelAvailable...WithContext`, and Grok selector `...WithContext` methods). Legacy no-context wrappers may remain for compatibility, but they must make their detached behavior explicit with `context.Background()` rather than `context.TODO()`.
 - `backend/internal/handler/gateway_handler.go` should retain only native Anthropic/Gemini/Antigravity ownership; compatible control-plane entrypoints should move behind the shared compatible layer instead of growing more platform branches there.
 - New compatible platforms should extend the platform helper/context path first, then reuse the shared gateway/service primitives, instead of branching more platform special cases inside OpenAI-only code.
 
@@ -262,6 +266,18 @@ Why:
 - logging shape is consistent
 - tests can wait on the returned completion channel when needed
 
+### Handler usage record tasks
+
+Use `backend/internal/handler/usage_record_task_submitter.go` for handler-side
+usage recording tasks that may run through `UsageRecordWorkerPool` or a direct
+fallback.
+
+Current rule:
+
+- `GatewayHandler`, `CompatibleGatewayTextHandler`, and OpenAI-compatible text delegates should submit usage record tasks through `submitUsageRecordTaskWithPool`;
+- the helper owns the nil-task guard, worker-pool fast path, detached fallback timeout, panic recovery, and logging shape;
+- request handlers should pass the request context as the parent when it is available; compatibility wrappers with no request context may pass `context.Background()` explicitly.
+
 ### Admin handler service ports
 
 Admin HTTP handlers should depend on the narrow interfaces in
@@ -281,4 +297,4 @@ The next structural cleanup should focus on:
 
 1. Continuing account modal section extraction so provider-specific form blocks move out of the top-level modal files.
 2. Reducing overlap between legacy service entry points and newer admin-specific service flows on the backend.
-3. Extracting account modal state hydration/reset helpers now that create/edit/bulk payload construction shares the same helper/profile layer.
+3. Continuing create/edit account modal orchestration cleanup so submit payload adapters and provider-specific validation stay behind helper/composable boundaries.

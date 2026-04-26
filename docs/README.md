@@ -8,7 +8,7 @@
 
 1. [AGENT.md](/home/senran/Desktop/sub2api/AGENT.md)
 2. [DEVELOPMENT_GUIDELINES.md](/home/senran/Desktop/sub2api/docs/DEVELOPMENT_GUIDELINES.md)
-3. 如果涉及分支管理、fork 同步或上游移植，阅读 [GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md)
+3. 如果涉及 main-only 工作方式、fork 同步或上游移植，阅读 [GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md)
 4. 再阅读与你当前改动直接相关的专项文档
 
 ## 文档地图
@@ -16,7 +16,7 @@
 | 文档 | 作用 | 什么时候必须更新 |
 | --- | --- | --- |
 | [docs/DEVELOPMENT_GUIDELINES.md](/home/senran/Desktop/sub2api/docs/DEVELOPMENT_GUIDELINES.md) | 仓库级开发规范、验证方式、文档维护规则 | 变更开发流程、测试入口、代码生成方式、文档维护规则时 |
-| [docs/GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md) | fork 分支模型、上游同步、选择性移植和冲突处理流程 | 变更分支策略、远端角色、同步流程、移植规则时 |
+| [docs/GIT_WORKFLOW.md](/home/senran/Desktop/sub2api/docs/GIT_WORKFLOW.md) | main-only fork 工作方式、上游审计、选择性移植和冲突处理流程 | 变更 main 策略、远端角色、同步流程、移植规则时 |
 | [docs/ARCHITECTURE_EXTENSIBILITY.md](/home/senran/Desktop/sub2api/docs/ARCHITECTURE_EXTENSIBILITY.md) | 复用型扩展点和当前推荐架构边界 | 新增/替换共享扩展 seam、抽象层归属变更时 |
 | [docs/OPENAI_DEFAULT_MODEL_CATALOG.md](/home/senran/Desktop/sub2api/docs/OPENAI_DEFAULT_MODEL_CATALOG.md) | OpenAI 内建默认模型目录及其后台/兼容网关影响范围 | 修改 `backend/internal/pkg/openai/constants.go`、默认模型暴露范围或相关回归测试时 |
 | [docs/GATEWAY_ROUTING_AND_FALLBACK.md](/home/senran/Desktop/sub2api/docs/GATEWAY_ROUTING_AND_FALLBACK.md) | 兼容网关优先级调度、OpenAI strict/weighted 策略和模型回退语义 | 修改 `gateway.scheduling` 配置、账号选择优先级、`default_mapped_model` 或模型回退行为时 |

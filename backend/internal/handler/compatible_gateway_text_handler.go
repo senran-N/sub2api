@@ -730,28 +730,18 @@ func (h *CompatibleGatewayTextHandler) missingResponsesDependencies() []string {
 }
 
 func (h *CompatibleGatewayTextHandler) submitUsageRecordTask(task service.UsageRecordTask) {
-	h.submitUsageRecordTaskWithParent(context.TODO(), task)
+	// Compatibility wrapper for callers without a request context.
+	h.submitUsageRecordTaskWithParent(context.Background(), task)
 }
 
 func (h *CompatibleGatewayTextHandler) submitUsageRecordTaskWithParent(parent context.Context, task service.UsageRecordTask) {
-	if task == nil {
-		return
-	}
-	if h.usageRecordWorkerPool != nil {
-		h.usageRecordWorkerPool.Submit(task)
-		return
-	}
-	ctx, cancel := newDetachedTimeoutContext(parent, usageRecordFallbackTaskTimeout)
-	defer cancel()
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			logger.L().With(
-				zap.String("component", "handler.openai_gateway.responses"),
-				zap.Any("panic", recovered),
-			).Error("openai.usage_record_task_panic_recovered")
-		}
-	}()
-	task(ctx)
+	submitUsageRecordTaskWithPool(
+		parent,
+		h.usageRecordWorkerPool,
+		"handler.openai_gateway.responses",
+		"openai.usage_record_task_panic_recovered",
+		task,
+	)
 }
 
 func (h *CompatibleGatewayTextHandler) handleConcurrencyError(c *gin.Context, err error, slotType string, streamStarted bool) {

@@ -179,7 +179,8 @@ func markRequestPathRefreshFailure(
 	switch kind {
 	case OAuthRefreshFailurePermanent, OAuthRefreshFailureNoRefreshToken:
 		message := fmt.Sprintf("Token refresh failed (%s): %v", kind, refreshErr)
-		writeCtx, cancel := newTempUnschedWriteContext(context.TODO())
+		// Persist the refresh outcome even if the client request has already ended.
+		writeCtx, cancel := newTempUnschedWriteContext(context.Background())
 		defer cancel()
 		if err := accountRepo.SetError(writeCtx, account.ID, message); err != nil {
 			slog.Warn("oauth_refresh_request_path_set_error_failed",
@@ -209,7 +210,8 @@ func markRequestPathRefreshFailure(
 			TriggeredAtUnix: now.Unix(),
 			ErrorMessage:    reason,
 		}
-		writeCtx, cancel := newTempUnschedWriteContext(context.TODO())
+		// Persist the refresh outcome even if the client request has already ended.
+		writeCtx, cancel := newTempUnschedWriteContext(context.Background())
 		defer cancel()
 		if err := accountRepo.SetTempUnschedulable(writeCtx, account.ID, until, marshalTempUnschedState(state)); err != nil {
 			slog.Warn("oauth_refresh_request_path_temp_unsched_failed",

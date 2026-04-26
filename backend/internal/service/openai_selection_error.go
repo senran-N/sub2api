@@ -45,11 +45,13 @@ func extractOpenAIRequestedModelUnavailable(err error) string {
 }
 
 func openAIRequestedModelAvailable(accounts []Account, requestedModel string) bool {
-	return openAIRequestedModelAvailableForPlatformWithContext(context.TODO(), accounts, requestedModel, PlatformOpenAI)
+	// Compatibility wrapper for callers that do not have a request context.
+	return openAIRequestedModelAvailableForPlatformWithContext(context.Background(), accounts, requestedModel, PlatformOpenAI)
 }
 
 func openAIRequestedModelAvailableForPlatform(accounts []Account, requestedModel string, platform string) bool {
-	return openAIRequestedModelAvailableForPlatformWithContext(context.TODO(), accounts, requestedModel, platform)
+	// Compatibility wrapper for callers that do not have a request context.
+	return openAIRequestedModelAvailableForPlatformWithContext(context.Background(), accounts, requestedModel, platform)
 }
 
 func openAIRequestedModelAvailableForPlatformWithContext(
