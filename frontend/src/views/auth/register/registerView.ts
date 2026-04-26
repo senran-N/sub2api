@@ -9,6 +9,7 @@ export interface RegisterFormData {
   password: string
   promo_code: string
   invitation_code: string
+  aff_code: string
 }
 
 export interface RegisterFormErrors {
@@ -62,7 +63,8 @@ export function createRegisterFormData(): RegisterFormData {
     email: '',
     password: '',
     promo_code: '',
-    invitation_code: ''
+    invitation_code: '',
+    aff_code: ''
   }
 }
 
@@ -245,7 +247,8 @@ export function buildRegisterSessionPayload(
     password: formData.password,
     turnstile_token: turnstileToken,
     promo_code: formData.promo_code || undefined,
-    invitation_code: formData.invitation_code || undefined
+    invitation_code: formData.invitation_code || undefined,
+    aff_code: formData.aff_code || undefined
   }
 }
 
@@ -259,6 +262,7 @@ export function buildRegisterSubmitPayload(
     password: formData.password,
     turnstile_token: turnstileEnabled ? turnstileToken : undefined,
     promo_code: formData.promo_code || undefined,
-    invitation_code: formData.invitation_code || undefined
+    invitation_code: formData.invitation_code || undefined,
+    aff_code: formData.aff_code || undefined
   }
 }

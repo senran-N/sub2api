@@ -610,6 +610,9 @@ const userNavItems = computed((): NavItem[] => {
       ? [{ path: '/monitor', label: t('nav.channelStatus'), icon: ChartIcon, hideInSimpleMode: true }]
       : []),
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
+    ...(appStore.cachedPublicSettings?.affiliate_enabled
+      ? [{ path: '/affiliate', label: t('nav.affiliate'), icon: GiftIcon, hideInSimpleMode: true }]
+      : []),
     ...(appStore.cachedPublicSettings?.payment_enabled
       ? [
           {
@@ -654,6 +657,9 @@ const personalNavItems = computed((): NavItem[] => {
       ? [{ path: '/monitor', label: t('nav.channelStatus'), icon: ChartIcon, hideInSimpleMode: true }]
       : []),
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
+    ...(appStore.cachedPublicSettings?.affiliate_enabled
+      ? [{ path: '/affiliate', label: t('nav.affiliate'), icon: GiftIcon, hideInSimpleMode: true }]
+      : []),
     ...(appStore.cachedPublicSettings?.payment_enabled
       ? [
           {

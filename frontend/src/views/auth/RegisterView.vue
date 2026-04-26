@@ -186,6 +186,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { AuthLayout } from '@/components/layout'
 import { useAppStore, useAuthStore } from '@/stores'
 import { buildAuthErrorMessage } from '@/utils/authError'
+import { resolveAffiliateReferralCode, storeOAuthAffiliateCode } from '@/utils/oauthAffiliate'
 import RegisterCodeField from './register/RegisterCodeField.vue'
 import RegisterPasswordField from './register/RegisterPasswordField.vue'
 import {
@@ -465,6 +466,9 @@ async function handleRegister(): Promise<void> {
 }
 
 onMounted(async () => {
+  formData.aff_code = resolveAffiliateReferralCode(route.query.aff, route.query.aff_code)
+  storeOAuthAffiliateCode(formData.aff_code)
+
   try {
     const publicSettings = await getPublicSettings()
     applyRegisterPublicSettings(settings, publicSettings)

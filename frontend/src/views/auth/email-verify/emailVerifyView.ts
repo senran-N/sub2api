@@ -12,6 +12,7 @@ export interface EmailVerifySessionState {
   initialTurnstileToken: string
   promoCode: string
   invitationCode: string
+  affiliateCode: string
   pendingProvider: string
   adoptDisplayName: boolean
   hasRegisterData: boolean
@@ -34,6 +35,7 @@ interface StoredRegisterSession {
   turnstile_token?: string
   promo_code?: string
   invitation_code?: string
+  aff_code?: string
   pending_provider?: string
   adopt_display_name?: boolean
 }
@@ -52,6 +54,7 @@ export function createEmailVerifySessionState(): EmailVerifySessionState {
     initialTurnstileToken: '',
     promoCode: '',
     invitationCode: '',
+    affiliateCode: '',
     pendingProvider: '',
     adoptDisplayName: false,
     hasRegisterData: false
@@ -80,6 +83,7 @@ export function parseRegisterSession(storageValue: string | null): EmailVerifySe
     session.initialTurnstileToken = parsed.turnstile_token || ''
     session.promoCode = parsed.promo_code || ''
     session.invitationCode = parsed.invitation_code || ''
+    session.affiliateCode = parsed.aff_code || ''
     session.pendingProvider = parsed.pending_provider || ''
     session.adoptDisplayName = parsed.adopt_display_name === true
     session.hasRegisterData = Boolean(session.email && session.password)
@@ -151,6 +155,7 @@ export function buildEmailVerifyRegisterPayload(
     verify_code: verifyCode.trim(),
     turnstile_token: session.initialTurnstileToken || undefined,
     promo_code: session.promoCode || undefined,
-    invitation_code: session.invitationCode || undefined
+    invitation_code: session.invitationCode || undefined,
+    aff_code: session.affiliateCode || undefined
   }
 }

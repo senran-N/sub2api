@@ -190,6 +190,12 @@ import {
 } from '@/api/auth'
 import { resolveErrorMessage } from '@/utils/errorMessage'
 import { sanitizeRedirectPath } from '@/utils/url'
+import {
+  clearOAuthAffiliateCode,
+  loadOAuthAffiliateCode,
+  resolveAffiliateReferralCode,
+  storeOAuthAffiliateCode
+} from '@/utils/oauthAffiliate'
 
 const route = useRoute()
 const router = useRouter()
@@ -303,6 +309,7 @@ async function completeLogin(tokens: { access_token?: string; refresh_token?: st
     localStorage.setItem('token_expires_at', String(Date.now() + tokens.expires_in * 1000))
   }
   await authStore.setToken(tokens.access_token)
+  clearOAuthAffiliateCode()
   appStore.showSuccess(t('auth.loginSuccess'))
   await router.replace(sanitizeRedirectPath(redirect || redirectTo.value || '/dashboard'))
 }
@@ -362,6 +369,7 @@ async function handleCreateAccount() {
       email: createEmail.value.trim(),
       password: createPassword.value,
       invitation_code: invitationCode.value.trim(),
+      aff_code: loadOAuthAffiliateCode() || undefined,
       pending_provider: 'linuxdo',
       adopt_display_name: adoptDisplayName.value,
     }))
@@ -377,6 +385,7 @@ async function handleCreateAccount() {
       password: createPassword.value,
       verify_code: verifyCode.value.trim() || undefined,
       invitation_code: invitationCode.value.trim() || undefined,
+      aff_code: loadOAuthAffiliateCode() || undefined,
       adoptDisplayName: adoptDisplayName.value,
     })
 
@@ -424,6 +433,14 @@ onMounted(async () => {
   )
   const error = params.get('error')
   const errorDesc = params.get('error_description') || params.get('error_message') || ''
+  storeOAuthAffiliateCode(
+    resolveAffiliateReferralCode(
+      params.get('aff'),
+      params.get('aff_code'),
+      route.query.aff,
+      route.query.aff_code
+    )
+  )
 
   if (error) {
     errorMessage.value = errorDesc || error

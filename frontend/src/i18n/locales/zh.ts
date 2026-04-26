@@ -353,6 +353,7 @@ export default {
     apiKeys: "API 密钥",
     usage: "使用记录",
     redeem: "兑换",
+    affiliate: "邀请返利",
     profile: "个人资料",
     users: "用户管理",
     groups: "分组管理",
@@ -977,6 +978,45 @@ export default {
     empty: {
       title: '暂无可显示的渠道',
       description: '管理员尚未配置可监控的渠道。'
+    }
+  },
+
+  affiliate: {
+    title: '邀请返利',
+    description: '邀请用户注册，将获得的返利额度转入账户余额',
+    yourCode: '邀请码',
+    inviteLink: '邀请链接',
+    copyCode: '复制邀请码',
+    copyLink: '复制链接',
+    codeCopied: '邀请码已复制',
+    linkCopied: '邀请链接已复制',
+    loadFailed: '加载邀请返利信息失败',
+    transferFailed: '转出返利额度失败',
+    stats: {
+      rebateRate: '返利比例',
+      rebateRateHint: '对符合条件的充值订单生效',
+      invitedUsers: '邀请用户',
+      availableQuota: '可用返利',
+      totalQuota: '累计返利',
+      frozenQuota: '冻结'
+    },
+    transfer: {
+      title: '转出返利',
+      description: '将可用返利额度转入账户余额。',
+      button: '转入余额',
+      transferring: '转出中...',
+      empty: '暂无可转出的返利额度。',
+      success: '已转入 {amount} 到账户余额'
+    },
+    invitees: {
+      title: '邀请记录',
+      empty: '暂无邀请用户。',
+      columns: {
+        email: '邮箱',
+        username: '用户名',
+        rebate: '返利',
+        joinedAt: '注册时间'
+      }
     }
   },
 
@@ -5210,6 +5250,20 @@ export default {
         rechargeUrl: "充值链接",
         quotaEmails: "配额告警收件人",
         emailPlaceholder: "admin@example.com"
+      },
+      affiliate: {
+        title: "邀请返利设置",
+        description: "配置邀请返利开关、比例和限制。",
+        enabled: "启用邀请返利",
+        enabledHint: "显示邀请入口，并对符合条件的充值订单发放返利。",
+        rebateRate: "默认返利比例 (%)",
+        rebateRateHint: "邀请人获得的默认返利百分比。",
+        freezeHours: "冻结小时数",
+        freezeHoursHint: "新返利在可转出前的冻结时间。填 0 表示不冻结。",
+        durationDays: "有效天数",
+        durationDaysHint: "受邀用户注册后多少天内充值可产生返利。填 0 表示不限。",
+        perInviteeCap: "单受邀用户上限",
+        perInviteeCapHint: "单个受邀用户可产生的累计返利上限。填 0 表示不限。"
       },
       defaults: {
         title: "用户默认设置",

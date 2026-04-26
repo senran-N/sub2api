@@ -342,6 +342,7 @@ async function handleVerify(): Promise<void> {
         password: session.password,
         verify_code: verifyCode.value.trim(),
         invitation_code: session.invitationCode || undefined,
+        aff_code: session.affiliateCode || undefined,
         adoptDisplayName: session.adoptDisplayName,
       })
 

@@ -35,6 +35,11 @@ type SystemSettings struct {
 	InvitationCodeEnabled            bool     `json:"invitation_code_enabled"`
 	TotpEnabled                      bool     `json:"totp_enabled"`                   // TOTP 双因素认证
 	TotpEncryptionKeyConfigured      bool     `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
+	AffiliateEnabled                 bool     `json:"affiliate_enabled"`
+	AffiliateRebateRatePercent       float64  `json:"affiliate_rebate_rate"`
+	AffiliateRebateFreezeHours       int      `json:"affiliate_rebate_freeze_hours"`
+	AffiliateRebateDurationDays      int      `json:"affiliate_rebate_duration_days"`
+	AffiliateRebatePerInviteeCap     float64  `json:"affiliate_rebate_per_invitee_cap"`
 
 	SMTPHost               string `json:"smtp_host"`
 	SMTPPort               int    `json:"smtp_port"`
@@ -209,6 +214,7 @@ type PublicSettings struct {
 	PasswordResetEnabled             bool             `json:"password_reset_enabled"`
 	InvitationCodeEnabled            bool             `json:"invitation_code_enabled"`
 	TotpEnabled                      bool             `json:"totp_enabled"` // TOTP 双因素认证
+	AffiliateEnabled                 bool             `json:"affiliate_enabled"`
 	TurnstileEnabled                 bool             `json:"turnstile_enabled"`
 	TurnstileSiteKey                 string           `json:"turnstile_site_key"`
 	SiteName                         string           `json:"site_name"`

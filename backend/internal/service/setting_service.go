@@ -424,6 +424,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyPasswordResetEnabled,
 		SettingKeyInvitationCodeEnabled,
 		SettingKeyTotpEnabled,
+		SettingKeyAffiliateEnabled,
 		SettingKeyTurnstileEnabled,
 		SettingKeyTurnstileSiteKey,
 		SettingKeySiteName,
@@ -522,6 +523,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		PasswordResetEnabled:             passwordResetEnabled,
 		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
+		AffiliateEnabled:                 settings[SettingKeyAffiliateEnabled] == "true",
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
 		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
@@ -666,6 +668,7 @@ type PublicSettingsInjectionPayload struct {
 	PasswordResetEnabled             bool            `json:"password_reset_enabled"`
 	InvitationCodeEnabled            bool            `json:"invitation_code_enabled"`
 	TotpEnabled                      bool            `json:"totp_enabled"`
+	AffiliateEnabled                 bool            `json:"affiliate_enabled"`
 	TurnstileEnabled                 bool            `json:"turnstile_enabled"`
 	TurnstileSiteKey                 string          `json:"turnstile_site_key"`
 	SiteName                         string          `json:"site_name"`
@@ -722,6 +725,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		PasswordResetEnabled:             settings.PasswordResetEnabled,
 		InvitationCodeEnabled:            settings.InvitationCodeEnabled,
 		TotpEnabled:                      settings.TotpEnabled,
+		AffiliateEnabled:                 settings.AffiliateEnabled,
 		TurnstileEnabled:                 settings.TurnstileEnabled,
 		TurnstileSiteKey:                 settings.TurnstileSiteKey,
 		SiteName:                         settings.SiteName,
@@ -1080,6 +1084,17 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyFrontendURL] = settings.FrontendURL
 	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
+	settings.AffiliateRebateRatePercent = clampAffiliateRebateRate(settings.AffiliateRebateRatePercent)
+	settings.AffiliateRebateFreezeHours = clampAffiliateFreezeHours(settings.AffiliateRebateFreezeHours)
+	settings.AffiliateRebateDurationDays = clampAffiliateDurationDays(settings.AffiliateRebateDurationDays)
+	if settings.AffiliateRebatePerInviteeCap < 0 {
+		settings.AffiliateRebatePerInviteeCap = AffiliateRebatePerInviteeCapDefault
+	}
+	updates[SettingKeyAffiliateEnabled] = strconv.FormatBool(settings.AffiliateEnabled)
+	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(settings.AffiliateRebateRatePercent, 'f', 8, 64)
+	updates[SettingKeyAffiliateRebateFreezeHours] = strconv.Itoa(settings.AffiliateRebateFreezeHours)
+	updates[SettingKeyAffiliateRebateDurationDays] = strconv.Itoa(settings.AffiliateRebateDurationDays)
+	updates[SettingKeyAffiliateRebatePerInviteeCap] = strconv.FormatFloat(settings.AffiliateRebatePerInviteeCap, 'f', 8, 64)
 
 	// 邮件服务设置（只有非空才更新密码）
 	updates[SettingKeySMTPHost] = settings.SMTPHost
@@ -1497,6 +1512,46 @@ func (s *SettingService) IsInvitationCodeEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+func (s *SettingService) IsAffiliateEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateEnabled)
+	if err != nil {
+		return AffiliateEnabledDefault
+	}
+	return value == "true"
+}
+
+func (s *SettingService) GetAffiliateRebateRatePercent(ctx context.Context) float64 {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateRate)
+	if err != nil {
+		return AffiliateRebateRateDefault
+	}
+	return parseAffiliateRebateRate(value)
+}
+
+func (s *SettingService) GetAffiliateRebateFreezeHours(ctx context.Context) int {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateFreezeHours)
+	if err != nil {
+		return AffiliateRebateFreezeHoursDefault
+	}
+	return parseAffiliateFreezeHours(value)
+}
+
+func (s *SettingService) GetAffiliateRebateDurationDays(ctx context.Context) int {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateDurationDays)
+	if err != nil {
+		return AffiliateRebateDurationDaysDefault
+	}
+	return parseAffiliateDurationDays(value)
+}
+
+func (s *SettingService) GetAffiliateRebatePerInviteeCap(ctx context.Context) float64 {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebatePerInviteeCap)
+	if err != nil {
+		return AffiliateRebatePerInviteeCapDefault
+	}
+	return parseAffiliatePerInviteeCap(value)
+}
+
 // IsPasswordResetEnabled 检查是否启用密码重置功能
 // 要求：必须同时开启邮件验证
 func (s *SettingService) IsPasswordResetEnabled(ctx context.Context) bool {
@@ -1691,6 +1746,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyEmailVerifyEnabled:                       "false",
 		SettingKeyRegistrationEmailSuffixWhitelist:         "[]",
 		SettingKeyPromoCodeEnabled:                         "true", // 默认启用优惠码功能
+		SettingKeyAffiliateEnabled:                         strconv.FormatBool(AffiliateEnabledDefault),
+		SettingKeyAffiliateRebateRate:                      strconv.FormatFloat(AffiliateRebateRateDefault, 'f', 8, 64),
+		SettingKeyAffiliateRebateFreezeHours:               strconv.Itoa(AffiliateRebateFreezeHoursDefault),
+		SettingKeyAffiliateRebateDurationDays:              strconv.Itoa(AffiliateRebateDurationDaysDefault),
+		SettingKeyAffiliateRebatePerInviteeCap:             strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 8, 64),
 		SettingKeySiteName:                                 "Sub2API",
 		SettingKeySiteLogo:                                 "",
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
@@ -1815,6 +1875,11 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		FrontendURL:                      settings[SettingKeyFrontendURL],
 		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
+		AffiliateEnabled:                 settings[SettingKeyAffiliateEnabled] == "true",
+		AffiliateRebateRatePercent:       parseAffiliateRebateRate(settings[SettingKeyAffiliateRebateRate]),
+		AffiliateRebateFreezeHours:       parseAffiliateFreezeHours(settings[SettingKeyAffiliateRebateFreezeHours]),
+		AffiliateRebateDurationDays:      parseAffiliateDurationDays(settings[SettingKeyAffiliateRebateDurationDays]),
+		AffiliateRebatePerInviteeCap:     parseAffiliatePerInviteeCap(settings[SettingKeyAffiliateRebatePerInviteeCap]),
 		SMTPHost:                         settings[SettingKeySMTPHost],
 		SMTPUsername:                     settings[SettingKeySMTPUsername],
 		SMTPFrom:                         settings[SettingKeySMTPFrom],
@@ -2149,6 +2214,68 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 
 	return result
+}
+
+func parseAffiliateRebateRate(raw string) float64 {
+	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil {
+		return AffiliateRebateRateDefault
+	}
+	return clampAffiliateRebateRate(v)
+}
+
+func clampAffiliateRebateRate(v float64) float64 {
+	if v < AffiliateRebateRateMin {
+		return AffiliateRebateRateMin
+	}
+	if v > AffiliateRebateRateMax {
+		return AffiliateRebateRateMax
+	}
+	return v
+}
+
+func parseAffiliateFreezeHours(raw string) int {
+	v, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return AffiliateRebateFreezeHoursDefault
+	}
+	return clampAffiliateFreezeHours(v)
+}
+
+func clampAffiliateFreezeHours(v int) int {
+	if v < 0 {
+		return AffiliateRebateFreezeHoursDefault
+	}
+	if v > AffiliateRebateFreezeHoursMax {
+		return AffiliateRebateFreezeHoursMax
+	}
+	return v
+}
+
+func parseAffiliateDurationDays(raw string) int {
+	v, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return AffiliateRebateDurationDaysDefault
+	}
+	return clampAffiliateDurationDays(v)
+}
+
+func clampAffiliateDurationDays(v int) int {
+	if v < 0 {
+		return AffiliateRebateDurationDaysDefault
+	}
+	if v > AffiliateRebateDurationDaysMax {
+		return AffiliateRebateDurationDaysMax
+	}
+	return v
+}
+
+func parseAffiliatePerInviteeCap(raw string) float64 {
+	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || v < 0 {
+		return AffiliateRebatePerInviteeCapDefault
+	}
+	return v
 }
 
 func isFalseSettingValue(value string) bool {

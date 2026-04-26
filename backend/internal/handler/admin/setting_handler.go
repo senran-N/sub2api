@@ -136,6 +136,11 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		InvitationCodeEnabled:                    settings.InvitationCodeEnabled,
 		TotpEnabled:                              settings.TotpEnabled,
 		TotpEncryptionKeyConfigured:              h.settingService.IsTotpEncryptionKeyConfigured(),
+		AffiliateEnabled:                         settings.AffiliateEnabled,
+		AffiliateRebateRatePercent:               settings.AffiliateRebateRatePercent,
+		AffiliateRebateFreezeHours:               settings.AffiliateRebateFreezeHours,
+		AffiliateRebateDurationDays:              settings.AffiliateRebateDurationDays,
+		AffiliateRebatePerInviteeCap:             settings.AffiliateRebatePerInviteeCap,
 		SMTPHost:                                 settings.SMTPHost,
 		SMTPPort:                                 settings.SMTPPort,
 		SMTPUsername:                             settings.SMTPUsername,
@@ -275,6 +280,11 @@ type UpdateSettingsRequest struct {
 	FrontendURL                      string   `json:"frontend_url"`
 	InvitationCodeEnabled            bool     `json:"invitation_code_enabled"`
 	TotpEnabled                      bool     `json:"totp_enabled"` // TOTP 双因素认证
+	AffiliateEnabled                 *bool    `json:"affiliate_enabled"`
+	AffiliateRebateRatePercent       *float64 `json:"affiliate_rebate_rate"`
+	AffiliateRebateFreezeHours       *int     `json:"affiliate_rebate_freeze_hours"`
+	AffiliateRebateDurationDays      *int     `json:"affiliate_rebate_duration_days"`
+	AffiliateRebatePerInviteeCap     *float64 `json:"affiliate_rebate_per_invitee_cap"`
 
 	// 邮件服务设置
 	SMTPHost     string `json:"smtp_host"`
@@ -980,13 +990,43 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FrontendURL:                      req.FrontendURL,
 		InvitationCodeEnabled:            req.InvitationCodeEnabled,
 		TotpEnabled:                      req.TotpEnabled,
-		SMTPHost:                         req.SMTPHost,
-		SMTPPort:                         req.SMTPPort,
-		SMTPUsername:                     req.SMTPUsername,
-		SMTPPassword:                     req.SMTPPassword,
-		SMTPFrom:                         req.SMTPFrom,
-		SMTPFromName:                     req.SMTPFromName,
-		SMTPUseTLS:                       req.SMTPUseTLS,
+		AffiliateEnabled: func() bool {
+			if req.AffiliateEnabled != nil {
+				return *req.AffiliateEnabled
+			}
+			return previousSettings.AffiliateEnabled
+		}(),
+		AffiliateRebateRatePercent: func() float64 {
+			if req.AffiliateRebateRatePercent != nil {
+				return *req.AffiliateRebateRatePercent
+			}
+			return previousSettings.AffiliateRebateRatePercent
+		}(),
+		AffiliateRebateFreezeHours: func() int {
+			if req.AffiliateRebateFreezeHours != nil {
+				return *req.AffiliateRebateFreezeHours
+			}
+			return previousSettings.AffiliateRebateFreezeHours
+		}(),
+		AffiliateRebateDurationDays: func() int {
+			if req.AffiliateRebateDurationDays != nil {
+				return *req.AffiliateRebateDurationDays
+			}
+			return previousSettings.AffiliateRebateDurationDays
+		}(),
+		AffiliateRebatePerInviteeCap: func() float64 {
+			if req.AffiliateRebatePerInviteeCap != nil {
+				return *req.AffiliateRebatePerInviteeCap
+			}
+			return previousSettings.AffiliateRebatePerInviteeCap
+		}(),
+		SMTPHost:     req.SMTPHost,
+		SMTPPort:     req.SMTPPort,
+		SMTPUsername: req.SMTPUsername,
+		SMTPPassword: req.SMTPPassword,
+		SMTPFrom:     req.SMTPFrom,
+		SMTPFromName: req.SMTPFromName,
+		SMTPUseTLS:   req.SMTPUseTLS,
 		BalanceLowNotifyEnabled: func() bool {
 			if req.BalanceLowNotifyEnabled != nil {
 				return *req.BalanceLowNotifyEnabled
@@ -1282,6 +1322,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		InvitationCodeEnabled:                    updatedSettings.InvitationCodeEnabled,
 		TotpEnabled:                              updatedSettings.TotpEnabled,
 		TotpEncryptionKeyConfigured:              h.settingService.IsTotpEncryptionKeyConfigured(),
+		AffiliateEnabled:                         updatedSettings.AffiliateEnabled,
+		AffiliateRebateRatePercent:               updatedSettings.AffiliateRebateRatePercent,
+		AffiliateRebateFreezeHours:               updatedSettings.AffiliateRebateFreezeHours,
+		AffiliateRebateDurationDays:              updatedSettings.AffiliateRebateDurationDays,
+		AffiliateRebatePerInviteeCap:             updatedSettings.AffiliateRebatePerInviteeCap,
 		SMTPHost:                                 updatedSettings.SMTPHost,
 		SMTPPort:                                 updatedSettings.SMTPPort,
 		SMTPUsername:                             updatedSettings.SMTPUsername,
@@ -1493,6 +1538,21 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.TotpEnabled != after.TotpEnabled {
 		changed = append(changed, "totp_enabled")
+	}
+	if before.AffiliateEnabled != after.AffiliateEnabled {
+		changed = append(changed, "affiliate_enabled")
+	}
+	if before.AffiliateRebateRatePercent != after.AffiliateRebateRatePercent {
+		changed = append(changed, "affiliate_rebate_rate")
+	}
+	if before.AffiliateRebateFreezeHours != after.AffiliateRebateFreezeHours {
+		changed = append(changed, "affiliate_rebate_freeze_hours")
+	}
+	if before.AffiliateRebateDurationDays != after.AffiliateRebateDurationDays {
+		changed = append(changed, "affiliate_rebate_duration_days")
+	}
+	if before.AffiliateRebatePerInviteeCap != after.AffiliateRebatePerInviteeCap {
+		changed = append(changed, "affiliate_rebate_per_invitee_cap")
 	}
 	if before.SMTPHost != after.SMTPHost {
 		changed = append(changed, "smtp_host")

@@ -139,6 +139,7 @@ func TestAuthService_RefreshTokenPair_DeleteOldTokenFailureFailsClosed(t *testin
 		nil,
 		nil,
 		nil,
+		nil,
 	)
 
 	pair, err := svc.RefreshTokenPair(context.Background(), refreshToken)

@@ -497,6 +497,7 @@ export async function completeLinuxDoOAuthRegistration(
     password: string
     verify_code?: string
     invitation_code?: string
+    aff_code?: string
   } & OAuthAdoptionDecision
 ): Promise<PendingOAuthCreateAccountResponse> {
   const { data } = await apiClient.post<PendingOAuthCreateAccountResponse>('/auth/oauth/linuxdo/complete-registration', {
@@ -504,6 +505,7 @@ export async function completeLinuxDoOAuthRegistration(
     password: request.password,
     verify_code: request.verify_code,
     invitation_code: request.invitation_code,
+    aff_code: request.aff_code,
     ...serializeOAuthAdoptionDecision(request)
   })
   return data
@@ -516,6 +518,7 @@ export async function completeOIDCOAuthRegistration(
     password: string
     verify_code?: string
     invitation_code?: string
+    aff_code?: string
   } & OAuthAdoptionDecision
 ): Promise<PendingOAuthCreateAccountResponse> {
   const { data } = await apiClient.post<PendingOAuthCreateAccountResponse>('/auth/oauth/pending/create-account', {
@@ -523,6 +526,7 @@ export async function completeOIDCOAuthRegistration(
     password: request.password,
     verify_code: request.verify_code,
     invitation_code: request.invitation_code,
+    aff_code: request.aff_code,
     ...serializeOAuthAdoptionDecision(request)
   })
   return data

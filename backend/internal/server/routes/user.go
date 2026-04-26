@@ -28,6 +28,8 @@ func RegisterUserRoutes(
 			user.POST("/account-bindings/email/send-code", h.User.SendEmailBindingCode)
 			user.POST("/account-bindings/email", h.User.BindEmailIdentity)
 			user.DELETE("/account-bindings/:provider", h.User.UnbindIdentity)
+			user.GET("/aff", h.User.GetAffiliate)
+			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
 
 			notifyEmail := user.Group("/notify-email")
 			{

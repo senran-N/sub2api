@@ -48,7 +48,8 @@ describe('emailVerifyView', () => {
           password: 'password123',
           turnstile_token: 'turnstile-token',
           promo_code: 'PROMO',
-          invitation_code: 'INVITE'
+          invitation_code: 'INVITE',
+          aff_code: 'AFF123'
         })
       )
     ).toEqual({
@@ -57,6 +58,7 @@ describe('emailVerifyView', () => {
       initialTurnstileToken: 'turnstile-token',
       promoCode: 'PROMO',
       invitationCode: 'INVITE',
+      affiliateCode: 'AFF123',
       pendingProvider: '',
       adoptDisplayName: false,
       hasRegisterData: true
@@ -68,6 +70,7 @@ describe('emailVerifyView', () => {
       initialTurnstileToken: '',
       promoCode: '',
       invitationCode: '',
+      affiliateCode: '',
       pendingProvider: '',
       adoptDisplayName: false,
       hasRegisterData: false
@@ -112,6 +115,9 @@ describe('emailVerifyView', () => {
           initialTurnstileToken: 'initial-token',
           promoCode: 'PROMO',
           invitationCode: '',
+          affiliateCode: 'AFF123',
+          pendingProvider: '',
+          adoptDisplayName: false,
           hasRegisterData: true
         },
         '123456'
@@ -122,7 +128,8 @@ describe('emailVerifyView', () => {
       verify_code: '123456',
       turnstile_token: 'initial-token',
       promo_code: 'PROMO',
-      invitation_code: undefined
+      invitation_code: undefined,
+      aff_code: 'AFF123'
     })
   })
 })

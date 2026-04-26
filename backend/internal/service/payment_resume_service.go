@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -69,6 +70,11 @@ type PaymentResumeService struct {
 	verifyKeys [][]byte
 }
 
+type visibleMethodLoadBalancer struct {
+	inner         payment.LoadBalancer
+	configService *PaymentConfigService
+}
+
 func NewPaymentResumeService(signingKey []byte, verifyFallbacks ...[]byte) *PaymentResumeService {
 	svc := &PaymentResumeService{}
 	if len(signingKey) > 0 {
@@ -92,6 +98,33 @@ func NewPaymentResumeService(signingKey []byte, verifyFallbacks ...[]byte) *Paym
 		}
 	}
 	return svc
+}
+
+func newVisibleMethodLoadBalancer(inner payment.LoadBalancer, configService *PaymentConfigService) payment.LoadBalancer {
+	if inner == nil || configService == nil || configService.entClient == nil {
+		return inner
+	}
+	return &visibleMethodLoadBalancer{inner: inner, configService: configService}
+}
+
+func (lb *visibleMethodLoadBalancer) GetInstanceConfig(ctx context.Context, instanceID int64) (map[string]string, error) {
+	return lb.inner.GetInstanceConfig(ctx, instanceID)
+}
+
+func (lb *visibleMethodLoadBalancer) SelectInstance(ctx context.Context, providerKey string, paymentType payment.PaymentType, strategy payment.Strategy, orderAmount float64) (*payment.InstanceSelection, error) {
+	visibleMethod := NormalizeVisibleMethod(string(paymentType))
+	if providerKey != "" || (visibleMethod != payment.TypeAlipay && visibleMethod != payment.TypeWxpay) {
+		return lb.inner.SelectInstance(ctx, providerKey, paymentType, strategy, orderAmount)
+	}
+
+	inst, err := lb.configService.resolveEnabledVisibleMethodInstance(ctx, visibleMethod)
+	if err != nil {
+		return nil, err
+	}
+	if inst == nil {
+		return nil, fmt.Errorf("visible payment method %s has no enabled provider instance", visibleMethod)
+	}
+	return lb.inner.SelectInstance(ctx, inst.ProviderKey, paymentType, strategy, orderAmount)
 }
 
 func NormalizeVisibleMethod(method string) string {

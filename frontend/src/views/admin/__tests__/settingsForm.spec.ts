@@ -61,6 +61,11 @@ function createSettingsForm(overrides: Partial<SettingsForm> = {}): SettingsForm
     hide_ccs_import_button: false,
     purchase_subscription_enabled: false,
     purchase_subscription_url: '',
+    affiliate_enabled: false,
+    affiliate_rebate_rate: 20,
+    affiliate_rebate_freeze_hours: 0,
+    affiliate_rebate_duration_days: 0,
+    affiliate_rebate_per_invitee_cap: 0,
     custom_menu_items: [],
     custom_endpoints: [],
     frontend_url: '',
@@ -278,6 +283,11 @@ describe('buildSettingsUpdatePayload', () => {
     expect(result.payload.frontend_url).toBe('')
     expect(result.payload.doc_url).toBe('https://docs.example.com')
     expect(result.payload.purchase_subscription_url).toBe('')
+    expect(result.payload.affiliate_enabled).toBe(false)
+    expect(result.payload.affiliate_rebate_rate).toBe(20)
+    expect(result.payload.affiliate_rebate_freeze_hours).toBe(0)
+    expect(result.payload.affiliate_rebate_duration_days).toBe(0)
+    expect(result.payload.affiliate_rebate_per_invitee_cap).toBe(0)
     expect(result.payload.default_subscriptions).toEqual([
       {
         group_id: 5,

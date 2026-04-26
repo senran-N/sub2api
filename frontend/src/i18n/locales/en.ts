@@ -356,6 +356,7 @@ export default {
     apiKeys: "API Keys",
     usage: "Usage",
     redeem: "Redeem",
+    affiliate: "Affiliate",
     profile: "Profile",
     users: "Users",
     groups: "Groups",
@@ -1007,6 +1008,45 @@ export default {
     empty: {
       title: 'No channels available',
       description: 'No monitored channels have been configured yet.'
+    }
+  },
+
+  affiliate: {
+    title: 'Affiliate',
+    description: 'Invite users and transfer earned rebate quota to your balance',
+    yourCode: 'Invite Code',
+    inviteLink: 'Invite Link',
+    copyCode: 'Copy Code',
+    copyLink: 'Copy Link',
+    codeCopied: 'Invite code copied',
+    linkCopied: 'Invite link copied',
+    loadFailed: 'Failed to load affiliate details',
+    transferFailed: 'Failed to transfer affiliate quota',
+    stats: {
+      rebateRate: 'Rebate Rate',
+      rebateRateHint: 'Applied to eligible recharge orders',
+      invitedUsers: 'Invited Users',
+      availableQuota: 'Available Quota',
+      totalQuota: 'Total Rebate',
+      frozenQuota: 'Frozen'
+    },
+    transfer: {
+      title: 'Transfer Rebate',
+      description: 'Move available affiliate quota into your account balance.',
+      button: 'Transfer',
+      transferring: 'Transferring...',
+      empty: 'No available affiliate quota to transfer.',
+      success: 'Transferred {amount} to your balance'
+    },
+    invitees: {
+      title: 'Invitees',
+      empty: 'No invited users yet.',
+      columns: {
+        email: 'Email',
+        username: 'Username',
+        rebate: 'Rebate',
+        joinedAt: 'Joined'
+      }
     }
   },
 
@@ -5230,6 +5270,20 @@ export default {
         rechargeUrl: "Recharge URL",
         quotaEmails: "Quota alert recipients",
         emailPlaceholder: "admin@example.com"
+      },
+      affiliate: {
+        title: "Affiliate Settings",
+        description: "Configure invite rebate availability and limits.",
+        enabled: "Enable Affiliate",
+        enabledHint: "Show affiliate entry points and apply eligible recharge rebates.",
+        rebateRate: "Default Rebate Rate (%)",
+        rebateRateHint: "Default percentage credited to the inviter.",
+        freezeHours: "Freeze Hours",
+        freezeHoursHint: "Hold new rebate quota before it becomes transferable. Use 0 for no freeze.",
+        durationDays: "Eligible Days",
+        durationDaysHint: "Only recharge orders within this many days after invitee signup earn rebates. Use 0 for no limit.",
+        perInviteeCap: "Per-Invitee Cap",
+        perInviteeCapHint: "Maximum total rebate one invitee can generate. Use 0 for no cap."
       },
       defaults: {
         title: "Default User Settings",

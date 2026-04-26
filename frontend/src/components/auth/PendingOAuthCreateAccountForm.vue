@@ -93,12 +93,14 @@ import { useI18n } from 'vue-i18n'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { getPublicSettings, sendPendingOAuthVerifyCode } from '@/api/auth'
 import { useAppStore } from '@/stores'
+import { loadAffiliateReferralCode, loadOAuthAffiliateCode } from '@/utils/oauthAffiliate'
 
 export type PendingOAuthCreateAccountPayload = {
   email: string
   password: string
   verifyCode: string
   invitationCode?: string
+  affCode?: string
 }
 
 const props = defineProps<{
@@ -248,7 +250,8 @@ function handleSubmit() {
     email: trimmedEmail,
     password: password.value,
     verifyCode: verifyCode.value.trim(),
-    invitationCode: invitationCode.value.trim() || undefined
+    invitationCode: invitationCode.value.trim() || undefined,
+    affCode: loadOAuthAffiliateCode() || loadAffiliateReferralCode() || undefined
   })
 }
 

@@ -90,6 +90,13 @@ const (
 	SettingKeyFrontendURL                      = "frontend_url"                        // 前端基础URL，用于生成邮件中的重置密码链接
 	SettingKeyInvitationCodeEnabled            = "invitation_code_enabled"             // 是否启用邀请码注册
 
+	// 邀请返利设置
+	SettingKeyAffiliateEnabled             = "affiliate_enabled"
+	SettingKeyAffiliateRebateRate          = "affiliate_rebate_rate"
+	SettingKeyAffiliateRebateFreezeHours   = "affiliate_rebate_freeze_hours"
+	SettingKeyAffiliateRebateDurationDays  = "affiliate_rebate_duration_days"
+	SettingKeyAffiliateRebatePerInviteeCap = "affiliate_rebate_per_invitee_cap"
+
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址
 	SettingKeySMTPPort     = "smtp_port"      // SMTP端口
@@ -327,6 +334,18 @@ const (
 	SettingKeyEnableMetadataPassthrough = "enable_metadata_passthrough"
 	// SettingKeyEnableCCHSigning 是否对 x-anthropic-billing-header 中的 cch 占位符签名（默认 false）
 	SettingKeyEnableCCHSigning = "enable_cch_signing"
+)
+
+const (
+	AffiliateEnabledDefault             = false
+	AffiliateRebateRateDefault          = 20.0
+	AffiliateRebateRateMin              = 0.0
+	AffiliateRebateRateMax              = 100.0
+	AffiliateRebateFreezeHoursDefault   = 0
+	AffiliateRebateFreezeHoursMax       = 720
+	AffiliateRebateDurationDaysDefault  = 0
+	AffiliateRebateDurationDaysMax      = 3650
+	AffiliateRebatePerInviteeCapDefault = 0.0
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

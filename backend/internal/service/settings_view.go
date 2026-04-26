@@ -20,6 +20,11 @@ type SystemSettings struct {
 	FrontendURL                      string
 	InvitationCodeEnabled            bool
 	TotpEnabled                      bool // TOTP 双因素认证
+	AffiliateEnabled                 bool
+	AffiliateRebateRatePercent       float64
+	AffiliateRebateFreezeHours       int
+	AffiliateRebateDurationDays      int
+	AffiliateRebatePerInviteeCap     float64
 
 	SMTPHost               string
 	SMTPPort               int
@@ -201,6 +206,7 @@ type PublicSettings struct {
 	PasswordResetEnabled             bool
 	InvitationCodeEnabled            bool
 	TotpEnabled                      bool // TOTP 双因素认证
+	AffiliateEnabled                 bool
 	TurnstileEnabled                 bool
 	TurnstileSiteKey                 string
 	SiteName                         string

@@ -83,6 +83,32 @@ export interface RegisterRequest {
   turnstile_token?: string
   promo_code?: string
   invitation_code?: string
+  aff_code?: string
+}
+
+export interface AffiliateInvitee {
+  user_id: number
+  email: string
+  username: string
+  created_at?: string
+  total_rebate: number
+}
+
+export interface UserAffiliateDetail {
+  user_id: number
+  aff_code: string
+  inviter_id?: number | null
+  aff_count: number
+  aff_quota: number
+  aff_frozen_quota: number
+  aff_history_quota: number
+  effective_rebate_rate_percent: number
+  invitees: AffiliateInvitee[]
+}
+
+export interface AffiliateTransferResponse {
+  transferred_quota: number
+  balance: number
 }
 
 export interface SendVerifyCodeRequest {
@@ -144,6 +170,7 @@ export interface PublicSettings {
   purchase_subscription_enabled: boolean
   purchase_subscription_url: string
   payment_enabled?: boolean
+  affiliate_enabled?: boolean
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
   linuxdo_oauth_enabled: boolean

@@ -76,6 +76,15 @@ export type SettingsPurchaseFields = Pick<
   'purchase_subscription_enabled' | 'purchase_subscription_url'
 >
 
+export type SettingsAffiliateFields = Pick<
+  SettingsForm,
+  | 'affiliate_enabled'
+  | 'affiliate_rebate_rate'
+  | 'affiliate_rebate_freeze_hours'
+  | 'affiliate_rebate_duration_days'
+  | 'affiliate_rebate_per_invitee_cap'
+>
+
 export type SettingsLinuxdoFields = Pick<
   SettingsForm,
   | 'linuxdo_connect_enabled'
@@ -268,6 +277,11 @@ export function createDefaultSettingsForm(): SettingsForm {
     hide_ccs_import_button: false,
     purchase_subscription_enabled: false,
     purchase_subscription_url: '',
+    affiliate_enabled: false,
+    affiliate_rebate_rate: 20,
+    affiliate_rebate_freeze_hours: 0,
+    affiliate_rebate_duration_days: 0,
+    affiliate_rebate_per_invitee_cap: 0,
     custom_menu_items: [],
     custom_endpoints: [],
     frontend_url: '',
@@ -606,6 +620,11 @@ export function buildSettingsUpdatePayload(
       hide_ccs_import_button: form.hide_ccs_import_button,
       purchase_subscription_enabled: form.purchase_subscription_enabled,
       purchase_subscription_url: normalizedUrls.purchaseSubscriptionUrl,
+      affiliate_enabled: form.affiliate_enabled,
+      affiliate_rebate_rate: form.affiliate_rebate_rate,
+      affiliate_rebate_freeze_hours: form.affiliate_rebate_freeze_hours,
+      affiliate_rebate_duration_days: form.affiliate_rebate_duration_days,
+      affiliate_rebate_per_invitee_cap: form.affiliate_rebate_per_invitee_cap,
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: normalizedUrls.frontendUrl,

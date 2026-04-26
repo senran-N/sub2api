@@ -124,7 +124,8 @@ describe('registerView', () => {
       email: 'user@example.com',
       password: 'password123',
       promo_code: 'PROMO',
-      invitation_code: ''
+      invitation_code: '',
+      aff_code: 'AFF123'
     }
 
     expect(buildRegisterSessionPayload(formData, 'turnstile-token')).toEqual({
@@ -132,7 +133,8 @@ describe('registerView', () => {
       password: 'password123',
       turnstile_token: 'turnstile-token',
       promo_code: 'PROMO',
-      invitation_code: undefined
+      invitation_code: undefined,
+      aff_code: 'AFF123'
     })
 
     expect(buildRegisterSubmitPayload(formData, false, 'turnstile-token')).toEqual({
@@ -140,7 +142,8 @@ describe('registerView', () => {
       password: 'password123',
       turnstile_token: undefined,
       promo_code: 'PROMO',
-      invitation_code: undefined
+      invitation_code: undefined,
+      aff_code: 'AFF123'
     })
   })
 })

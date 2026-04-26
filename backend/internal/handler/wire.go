@@ -7,9 +7,10 @@ import (
 	"github.com/google/wire"
 )
 
-func ProvideUserHandler(userService *service.UserService, authService *service.AuthService, emailService *service.EmailService, emailCache service.EmailCache) *UserHandler {
+func ProvideUserHandler(userService *service.UserService, authService *service.AuthService, affiliateService *service.AffiliateService, emailService *service.EmailService, emailCache service.EmailCache) *UserHandler {
 	handler := NewUserHandler(userService)
 	handler.SetAuthService(authService)
+	handler.SetAffiliateService(affiliateService)
 	handler.SetEmailDeps(emailService, emailCache)
 	return handler
 }
@@ -30,6 +31,7 @@ func ProvideAdminHandlers(
 	proxyHandler *admin.ProxyHandler,
 	redeemHandler *admin.RedeemHandler,
 	promoHandler *admin.PromoHandler,
+	affiliateHandler *admin.AffiliateHandler,
 	settingHandler *admin.SettingHandler,
 	opsHandler *admin.OpsHandler,
 	systemHandler *admin.SystemHandler,
@@ -60,6 +62,7 @@ func ProvideAdminHandlers(
 		Proxy:                  proxyHandler,
 		Redeem:                 redeemHandler,
 		Promo:                  promoHandler,
+		Affiliate:              affiliateHandler,
 		Setting:                settingHandler,
 		Ops:                    opsHandler,
 		System:                 systemHandler,
@@ -172,6 +175,7 @@ var ProviderSet = wire.NewSet(
 	admin.ProvideProxyHandler,
 	admin.ProvideRedeemHandler,
 	admin.NewPromoHandler,
+	admin.NewAffiliateHandler,
 	admin.NewSettingHandler,
 	admin.NewOpsHandler,
 	ProvideSystemHandler,

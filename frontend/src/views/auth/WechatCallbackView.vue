@@ -263,6 +263,12 @@ import {
   type OAuthTokenResponse,
   type PendingOAuthExchangeResponse
 } from '@/api/auth'
+import {
+  clearOAuthAffiliateCode,
+  loadOAuthAffiliateCode,
+  resolveAffiliateReferralCode,
+  storeOAuthAffiliateCode
+} from '@/utils/oauthAffiliate'
 
 const route = useRoute()
 const router = useRouter()
@@ -598,6 +604,7 @@ async function finalizeCompletion(completion: PendingOAuthExchangeResponse, redi
 
   persistOAuthTokenContext(completion)
   await authStore.setToken(completion.access_token)
+  clearOAuthAffiliateCode()
   appStore.showSuccess(t('auth.loginSuccess'))
   await router.replace(redirect)
 }
@@ -652,6 +659,7 @@ async function handleSubmitInvitation() {
       password: payload.password,
       verify_code: payload.verifyCode || undefined,
       invitation_code: invitationCode.value.trim(),
+      aff_code: payload.affCode || loadOAuthAffiliateCode() || undefined,
       ...serializeAdoptionDecision(currentAdoptionDecision())
     })
     await finalizePendingAccountResponse(data)
@@ -687,6 +695,7 @@ async function handleCreateAccount(payload: PendingOAuthCreateAccountPayload) {
       password: payload.password,
       verify_code: payload.verifyCode || undefined,
       invitation_code: payload.invitationCode || undefined,
+      aff_code: payload.affCode || loadOAuthAffiliateCode() || undefined,
       ...serializeAdoptionDecision(currentAdoptionDecision())
     })
     await finalizePendingAccountResponse(data)
@@ -753,6 +762,14 @@ onMounted(async () => {
   const errorDesc = params.get('error_description') || params.get('error_message') || ''
   const redirect = sanitizeRedirectPath(
     params.get('redirect') || (route.query.redirect as string | undefined) || '/dashboard'
+  )
+  storeOAuthAffiliateCode(
+    resolveAffiliateReferralCode(
+      params.get('aff'),
+      params.get('aff_code'),
+      route.query.aff,
+      route.query.aff_code
+    )
   )
 
   try {

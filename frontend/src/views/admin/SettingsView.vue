@@ -106,6 +106,8 @@
             @add-auth-source-default-subscription="addAuthSourceDefaultSubscription"
             @remove-auth-source-default-subscription="removeAuthSourceDefaultSubscription"
           />
+
+          <SettingsAffiliateCard :form="form" />
         </div>
 
         <div v-if="activeTab === 'gateway'" class="space-y-6">
@@ -507,6 +509,7 @@ import type { AdminPaymentConfig } from '@/api/admin/payment'
 import type { ProviderInstance } from '@/types/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import SettingsAdminApiKeyCard from './settings/SettingsAdminApiKeyCard.vue'
+import SettingsAffiliateCard from './settings/SettingsAffiliateCard.vue'
 import SettingsBetaPolicyCard from './settings/SettingsBetaPolicyCard.vue'
 import SettingsClaudeCodeCard from './settings/SettingsClaudeCodeCard.vue'
 import SettingsCustomMenuCard from './settings/SettingsCustomMenuCard.vue'

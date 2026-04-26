@@ -55,6 +55,9 @@ func RegisterAdminRoutes(
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
+		// 邀请返利
+		registerAffiliateRoutes(admin, h)
+
 		// 数据管理
 		registerDataManagementRoutes(admin, h)
 
@@ -93,6 +96,17 @@ func RegisterAdminRoutes(
 
 		// 渠道监控
 		registerChannelMonitorRoutes(admin, h)
+	}
+}
+
+func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	affiliates := admin.Group("/affiliates")
+	{
+		affiliates.GET("/users", h.Admin.Affiliate.ListUsers)
+		affiliates.GET("/users/lookup", h.Admin.Affiliate.LookupUsers)
+		affiliates.PUT("/users/:user_id", h.Admin.Affiliate.UpdateUserSettings)
+		affiliates.DELETE("/users/:user_id", h.Admin.Affiliate.ClearUserSettings)
+		affiliates.POST("/users/batch-rate", h.Admin.Affiliate.BatchSetRate)
 	}
 }
 
